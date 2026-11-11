@@ -13,7 +13,6 @@
   "exclude": [
     "../src/renderer/src/components/retained-bare-workspace.test.tsx",
     "../src/renderer/src/components/retained-bare-workspace.test-fixture.ts",
-    "../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-main-surface.test.ts",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
   ],

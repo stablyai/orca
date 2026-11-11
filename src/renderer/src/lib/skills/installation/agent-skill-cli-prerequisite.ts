@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../../shared/cli-install-types'
 import { translate } from '@/i18n/i18n'
-import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 type EnsureOrcaCliAvailableOptions = {
   onStatusChange?: (status: CliInstallStatus) => void

@@ -48,8 +48,8 @@ import {
 } from '../crash-reporting/gpu-crash-fallback-decision'
 import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
-import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
-import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/database/profile-state-storage-classification'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 
 export type ProfileStateStartupMetadata = {
   backend: 'sqlite'

@@ -15,6 +15,8 @@ import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
 import { reportWorkerTurnStop } from './worker-turn-stop-report'
+import type { ChatWorkerPrompt } from '../approvals/chat-worker-approval-prompt'
+import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -32,7 +34,11 @@ function setup(assignee = HANDLE) {
   const dispatch = createRootDispatch(db, task.id, assignee, assignee === HANDLE ? PANE : undefined)
   const waiting = new Set<string>()
   const notify = vi.fn()
-  const deps = { getDb: () => db, isWaitingForMail: (m: string) => waiting.has(m), notify }
+  const deps = {
+    getDb: (): OrchestrationDb | null => db,
+    isWaitingForMail: (m: string) => waiting.has(m),
+    notify
+  }
   const mail = () => db.getUnreadRunMailbox(run.id, 100, ['escalation'])
   return { db, run, dispatch, waiting, notify, deps, mail }
 }
@@ -72,6 +78,7 @@ function terminal(ctx: ReturnType<typeof setup>, current: { row: AgentStatusIpcP
     },
     getHandle: () => HANDLE,
     getProcessIncarnation: () => null,
+    takeOpenApproval: () => null,
     readScreen: async () => ({
       handle: HANDLE,
       status: 'running',
@@ -506,5 +513,274 @@ describe('remote worker turn stops', () => {
     enqueueFederationRelay.mockClear()
     reportWorkerTurnStop(db, target, { ...stop, stopKey: 'k2' }, deps)
     expect(enqueueFederationRelay).not.toHaveBeenCalled()
+  })
+})
+
+describe('chat worker approvals', () => {
+  const promptEvent = (promptId: string): AgentSessionTurnCompletionEvent => ({
+    type: 'prompt',
+    prompt: {
+      scope: {
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        wslDistro: null,
+        workspaceId: 'repo::/tmp/wt',
+        workspaceKind: 'git-worktree'
+      },
+      sessionId: CHAT_SESSION,
+      promptId,
+      raisedAt: 1
+    }
+  })
+  const approval = (selected: string | null): AgentJournalApprovalItem => ({
+    kind: 'approval',
+    title: 'Allow Bash?',
+    detail: 'rm -rf build',
+    options: [
+      { id: 'allow', label: 'Allow', intent: 'allow_once' },
+      { id: 'deny', label: 'Deny', intent: 'reject_once' }
+    ],
+    resolution: selected
+      ? {
+          state: 'resolved',
+          selectedOptionId: selected,
+          resolvedBy: 'desktop-renderer',
+          resolvedAt: 2
+        }
+      : { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+  })
+
+  function chat() {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const prompts = new Map<string, ChatWorkerPrompt>()
+    const unreadable = { now: false }
+    // The worker's journal publishing a change, as when its own chat answers a prompt.
+    const journalChanged = new Map<string, () => void>()
+    const report = chatWorkerTurnStopReporter(
+      ctx.deps,
+      (run) => run(),
+      async (_sessionId, itemId) => {
+        if (unreadable.now) {
+          throw new Error('journal unreadable')
+        }
+        return prompts.get(itemId) ?? null
+      },
+      (sessionId, onChange) => {
+        journalChanged.set(sessionId, onChange)
+        return () => journalChanged.delete(sessionId)
+      }
+    )
+    const publish = () => journalChanged.get(CHAT_SESSION)?.()
+    const idle = () => ({ status: 'idle' as const, lastAssistantMessage: '' })
+    const all = () => ctx.db.getUnreadRunMailbox(ctx.run.id, 100)
+    return { ctx, prompts, unreadable, report, publish, idle, all }
+  }
+
+  it('escalates one open approval once, with its structured payload', async () => {
+    const { ctx, prompts, report, idle } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+
+    report(promptEvent('item_1'), idle)
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    const mail = ctx.mail()
+    expect(mail).toHaveLength(1)
+    expect(mail[0].subject).toBe('Worker is waiting for permission')
+    expect(mail[0].body).toContain(
+      `orchestration deny --dispatch ${ctx.dispatch.id} --prompt item_1`
+    )
+    expect(mail[0].body).not.toContain('Answer it with')
+    expect(JSON.parse(mail[0].payload ?? '{}').approval).toEqual({
+      v: 1,
+      approvalId: 'item_1',
+      state: 'open',
+      worker: {
+        handle: formatOrcaSessionAddress(CHAT_SESSION),
+        dispatchId: ctx.dispatch.id,
+        taskId: ctx.dispatch.task_id
+      },
+      summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
+      allowedActions: ['allow', 'deny']
+    })
+  })
+
+  it("words an approval for the coordinator's surface, and offers deny only when the prompt has one", () => {
+    const report = (chatCoordinator: boolean | undefined, actions: ('allow' | 'deny')[]) => {
+      const ctx = setup()
+      reportWorkerTurnStop(
+        ctx.db,
+        { kind: 'local', dispatch: ctx.dispatch },
+        {
+          from: HANDLE,
+          stopKey: 's1',
+          reason: 'needs-input',
+          lastOutput: undefined,
+          approval: {
+            v: 1,
+            approvalId: 'apr_1',
+            state: 'open',
+            worker: { handle: HANDLE, dispatchId: ctx.dispatch.id, taskId: ctx.dispatch.task_id },
+            summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
+            allowedActions: actions
+          }
+        },
+        chatCoordinator === undefined
+          ? ctx.deps
+          : { ...ctx.deps, isChatMailbox: () => chatCoordinator }
+      )
+      return { body: ctx.mail()[0].body, dispatchId: ctx.dispatch.id }
+    }
+
+    const chat = report(true, ['allow', 'deny'])
+    expect(chat.body).toContain('The user has been shown Allow/Deny in your chat in Orca.')
+    expect(chat.body).toContain(`orchestration deny --dispatch ${chat.dispatchId} --prompt apr_1`)
+    for (const terminal of [report(false, ['allow', 'deny']), report(undefined, ['allow'])]) {
+      expect(terminal.body).toContain(
+        `No one has been shown this prompt in Orca. Tell the user that worker ${HANDLE} is waiting for permission in its terminal.`
+      )
+      expect(terminal.body).not.toContain('The user has been shown')
+    }
+    const chatWorker = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    reportWorkerTurnStop(
+      chatWorker.db,
+      { kind: 'local', dispatch: chatWorker.dispatch },
+      {
+        from: formatOrcaSessionAddress(CHAT_SESSION),
+        stopKey: 's1',
+        reason: 'needs-input',
+        lastOutput: undefined,
+        approval: {
+          v: 1,
+          approvalId: 'item_1',
+          state: 'open',
+          worker: {
+            handle: formatOrcaSessionAddress(CHAT_SESSION),
+            dispatchId: chatWorker.dispatch.id,
+            taskId: chatWorker.dispatch.task_id
+          },
+          summary: { title: 'Allow Bash?', detail: null, reason: null },
+          allowedActions: ['allow', 'deny']
+        }
+      },
+      chatWorker.deps
+    )
+    // A chat worker's own chat in Orca shows the prompt, even when the coordinator has no card.
+    expect(chatWorker.mail()[0].body).toContain(
+      "Your chat has no approval card for it; only the worker's own chat in Orca shows it."
+    )
+    const noDeny = report(true, ['allow']).body
+    expect(noDeny).toContain('The user has been shown Allow in your chat in Orca.')
+    expect(noDeny).not.toContain('orchestration deny')
+    expect(noDeny).toContain('stop the worker or tell the user')
+  })
+
+  it('closes a reported approval once, as soon as the worker chat answers it', async () => {
+    const { prompts, report, publish, idle, all } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    // No turn edge: the journal change alone closes it.
+    prompts.set('item_1', { revision: 2, body: approval('deny') })
+    publish()
+    publish()
+    await settle()
+
+    const closing = all().filter((message) => message.type === 'status')
+    expect(closing).toHaveLength(1)
+    expect(closing[0].body).toContain("Denied in the worker's own chat")
+    expect(JSON.parse(closing[0].payload ?? '{}').approval).toMatchObject({
+      approvalId: 'item_1',
+      state: 'answered',
+      allowedActions: [],
+      outcome: { by: 'worker-chat', decision: 'deny' }
+    })
+  })
+
+  it('keeps watching a reported approval through an unreadable chat', async () => {
+    const { prompts, unreadable, report, publish, idle, all } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    prompts.set('item_1', { revision: 2, body: approval('deny') })
+    unreadable.now = true
+    publish()
+    await settle()
+    expect(all().filter((message) => message.type === 'status')).toHaveLength(0)
+
+    unreadable.now = false
+    publish()
+    await settle()
+    const closing = all().filter((message) => message.type === 'status')
+    expect(closing).toHaveLength(1)
+    expect(closing[0].body).toContain("Denied in the worker's own chat")
+  })
+
+  it('keeps a settled approval until its closing line can be written', async () => {
+    const { ctx, prompts, report, publish, idle, all } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    prompts.set('item_1', { revision: 2, body: approval('deny') })
+    const getDb = ctx.deps.getDb
+    ctx.deps.getDb = () => null
+    publish()
+    await settle()
+    ctx.deps.getDb = getDb
+    publish()
+    await settle()
+
+    const closing = all().filter((message) => message.subject === 'Worker approval answered')
+    expect(closing).toHaveLength(1)
+  })
+
+  it('reports a prompt Orca can answer neither way as a plain prompt, with no card', async () => {
+    const { ctx, prompts, report, idle } = chat()
+    prompts.set('item_1', {
+      revision: 1,
+      body: {
+        ...approval(null),
+        options: [{ id: 'always', label: 'Always allow', intent: 'allow_always' }]
+      }
+    })
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    const [mail] = ctx.mail()
+    expect(mail.subject).toBe('Worker is waiting on a prompt')
+    expect(JSON.parse(mail.payload ?? '{}').approval).toBeUndefined()
+  })
+
+  it('closes an approval left open by an earlier run once its worker is gone', async () => {
+    const { ctx, prompts, report, idle, all } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+    report(promptEvent('item_1'), idle)
+    await settle()
+    ctx.db.db
+      .prepare(`UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?`)
+      .run(ctx.dispatch.id)
+
+    // A restart builds a new reporter; it picks up approvals whose closing line never came.
+    chatWorkerTurnStopReporter(ctx.deps, (run) => run())
+    chatWorkerTurnStopReporter(ctx.deps, (run) => run())
+    await settle()
+
+    const closing = all().filter((message) => message.subject === 'Worker approval closed')
+    expect(closing).toHaveLength(1)
+    expect(closing[0].body).toContain('Closed without an answer Orca can name: approval item_1')
+  })
+
+  it('tells the coordinator a plain prompt needs a person, not a message', async () => {
+    const { ctx, report, idle } = chat()
+
+    report(promptEvent('question_1'), idle)
+    await settle()
+
+    const [mail] = ctx.mail()
+    expect(mail.subject).toBe('Worker is waiting on a prompt')
+    expect(mail.body).toContain('A message does not answer it')
+    expect(mail.body).not.toContain('Answer it with')
   })
 })

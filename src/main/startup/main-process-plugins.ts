@@ -306,7 +306,8 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   watchPluginWorkspaceContext({
     delegate: pluginDelegate,
     events: pluginService,
-    onSessionWritten: (listener) => store.onWorkspaceSessionWritten(listener)
+    onSessionWritten: (listener) => store.onWorkspaceSessionWritten(listener),
+    onStateWritten: (listener) => store.onStateWritten(listener)
   })
   runtime.onWorktreeLifecycle(emitPluginWorktreeLifecycle)
 }
