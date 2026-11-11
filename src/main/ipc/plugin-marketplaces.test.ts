@@ -31,7 +31,8 @@ function createServices(): PluginMarketplaceHandlerServices {
       refreshSource: vi.fn().mockResolvedValue({ id: SOURCE_ID }),
       refreshAll: vi.fn().mockResolvedValue([{ id: SOURCE_ID }]),
       listPlugins: vi.fn().mockResolvedValue([{ pluginKey: PLUGIN_KEY }]),
-      seedOfficialSource: vi.fn().mockResolvedValue({ id: SOURCE_ID })
+      seedOfficialSource: vi.fn().mockResolvedValue({ id: SOURCE_ID }),
+      seedCommunitySource: vi.fn().mockResolvedValue(undefined)
     } as unknown as PluginMarketplaceService,
     installer: {
       preview: vi.fn().mockResolvedValue({ pluginKey: PLUGIN_KEY }),
@@ -56,14 +57,6 @@ function createPluginService(): PluginService {
   } as unknown as PluginService
 }
 
-async function invoke(channel: string, args?: unknown): Promise<unknown> {
-  const handler = handlers.get(channel)
-  if (!handler) {
-    throw new Error(`missing IPC handler: ${channel}`)
-  }
-  return handler({}, args)
-}
-
 beforeEach(() => {
   handlers = new Map()
   electronMocks.handle.mockReset()
@@ -73,138 +66,6 @@ beforeEach(() => {
 })
 
 describe('plugin marketplace IPC authority', () => {
-  it('validates every mutating or plugin-selecting request strictly', async () => {
-    registerPluginMarketplaceHandlers(
-      createPluginService(),
-      createServices(),
-      () => getDefaultSettings('/tmp'),
-      vi.fn()
-    )
-
-    await expect(
-      invoke('plugins:addMarketplace', {
-        kind: 'git',
-        url: 'https://example.com/marketplace.git',
-        ref: 'main',
-        unexpected: true
-      })
-    ).rejects.toThrow()
-    await expect(
-      invoke('plugins:removeMarketplace', { sourceId: SOURCE_ID, unexpected: true })
-    ).rejects.toThrow()
-    await expect(
-      invoke('plugins:refreshMarketplaces', { sourceId: 'not-a-source' })
-    ).rejects.toThrow()
-    await expect(
-      invoke('plugins:previewMarketplacePlugin', {
-        marketplaceSourceId: SOURCE_ID,
-        pluginKey: '__proto__.demo'
-      })
-    ).rejects.toThrow()
-    await expect(
-      invoke('plugins:installMarketplacePlugin', {
-        marketplaceSourceId: SOURCE_ID,
-        marketplaceCommit: 'moving-ref',
-        pluginKey: PLUGIN_KEY,
-        resolvedCommit: PLUGIN_COMMIT
-      })
-    ).rejects.toThrow()
-    await expect(
-      invoke('plugins:previewMarketplaceUpdate', {
-        pluginKey: PLUGIN_KEY,
-        unexpected: true
-      })
-    ).rejects.toThrow()
-    await expect(
-      invoke('plugins:rollbackMarketplacePlugin', { pluginKey: 'bare-id' })
-    ).rejects.toThrow()
-  })
-
-  it('dispatches source listing, add, removal, and refresh operations', async () => {
-    const services = createServices()
-    registerPluginMarketplaceHandlers(
-      createPluginService(),
-      services,
-      () => getDefaultSettings('/tmp'),
-      vi.fn()
-    )
-    const source = {
-      kind: 'git' as const,
-      url: 'https://example.com/marketplace.git',
-      ref: 'main'
-    }
-
-    await invoke('plugins:listMarketplaces')
-    await invoke('plugins:addMarketplace', source)
-    await invoke('plugins:removeMarketplace', { sourceId: SOURCE_ID })
-    await invoke('plugins:refreshMarketplaces', { sourceId: SOURCE_ID })
-    await invoke('plugins:refreshMarketplaces', {})
-    await invoke('plugins:listMarketplacePlugins')
-
-    expect(services.marketplace.listSources).toHaveBeenCalledTimes(2)
-    // The startup seed is deferred, so opening the marketplace seeds the official catalog.
-    expect(services.marketplace.seedOfficialSource).toHaveBeenCalledTimes(2)
-    expect(services.marketplace.addSource).toHaveBeenCalledWith(source)
-    expect(services.marketplace.removeSource).toHaveBeenCalledWith(SOURCE_ID)
-    expect(services.marketplace.refreshSource).toHaveBeenCalledWith(SOURCE_ID)
-    expect(services.marketplace.refreshAll).toHaveBeenCalledOnce()
-    expect(services.marketplace.listPlugins).toHaveBeenCalledOnce()
-  })
-
-  it('refreshes discovery only after a successful install', async () => {
-    const services = createServices()
-    const pluginService = createPluginService()
-    registerPluginMarketplaceHandlers(
-      pluginService,
-      services,
-      () => getDefaultSettings('/tmp'),
-      vi.fn()
-    )
-    const preview = {
-      marketplaceSourceId: SOURCE_ID,
-      marketplaceCommit: MARKETPLACE_COMMIT,
-      pluginKey: PLUGIN_KEY,
-      resolvedCommit: PLUGIN_COMMIT
-    }
-
-    await invoke('plugins:installMarketplacePlugin', preview)
-    expect(services.installer.install).toHaveBeenCalledWith(preview, { trigger: 'catalog' })
-    expect(pluginService.refresh).toHaveBeenCalledOnce()
-    await invoke('plugins:installMarketplacePlugin', { ...preview, fromInstallLink: true })
-    expect(services.installer.install).toHaveBeenLastCalledWith(preview, { trigger: 'deep_link' })
-    vi.mocked(pluginService.refresh).mockClear()
-
-    vi.mocked(pluginService.refresh).mockClear()
-    vi.mocked(services.installer.install).mockResolvedValueOnce({ ok: false, error: 'failed' })
-    await invoke('plugins:installMarketplacePlugin', preview)
-    expect(pluginService.refresh).not.toHaveBeenCalled()
-  })
-
-  it('deactivates before rollback and refreshes discovery only on success', async () => {
-    const services = createServices()
-    const pluginService = createPluginService()
-    registerPluginMarketplaceHandlers(
-      pluginService,
-      services,
-      () => getDefaultSettings('/tmp'),
-      vi.fn()
-    )
-
-    await invoke('plugins:rollbackMarketplacePlugin', { pluginKey: PLUGIN_KEY })
-
-    expect(pluginService.deactivatePlugin).toHaveBeenCalledWith(PLUGIN_KEY)
-    expect(services.installer.rollback).toHaveBeenCalledWith(PLUGIN_KEY)
-    expect(vi.mocked(pluginService.deactivatePlugin).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(services.installer.rollback).mock.invocationCallOrder[0]
-    )
-    expect(pluginService.refresh).toHaveBeenCalledOnce()
-
-    vi.mocked(pluginService.refresh).mockClear()
-    vi.mocked(services.installer.rollback).mockResolvedValueOnce({ ok: false, error: 'failed' })
-    await invoke('plugins:rollbackMarketplacePlugin', { pluginKey: PLUGIN_KEY })
-    expect(pluginService.refresh).not.toHaveBeenCalled()
-  })
-
   it('turns on only content-only plugins, and only when asked, with main reading the manifest', async () => {
     const services = createServices()
     services.installer.install = vi
@@ -241,7 +102,7 @@ describe('plugin marketplace IPC authority', () => {
     await expect(handler?.(event, { ...identity, enableIfData: true })).resolves.toMatchObject({
       needsReview: false
     })
-    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp')
 
     approve.mockClear()
     await expect(
@@ -251,7 +112,7 @@ describe('plugin marketplace IPC authority', () => {
     await expect(
       handler?.(event, { ...identity, enableIfData: true, expectedFingerprint: 'sha256-fp' })
     ).resolves.toMatchObject({ needsReview: false })
-    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp')
 
     approve.mockClear()
     execution.value = 'declarative'

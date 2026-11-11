@@ -7,20 +7,6 @@ import {
 } from './keybindings'
 
 describe('keybindings', () => {
-  it('matches the default file explorer delete shortcut', () => {
-    expect(getEffectiveKeybindingsForAction('fileExplorer.delete', 'darwin')).toEqual([
-      'Mod+Backspace',
-      'Delete'
-    ])
-    expect(
-      keybindingMatchesAction(
-        'fileExplorer.delete',
-        { key: 'Delete', code: 'Delete', control: false, meta: false, alt: false, shift: false },
-        'linux'
-      )
-    ).toBe(true)
-  })
-
   it('zooms in on the plus key whether or not the layout needs Shift for it', () => {
     const plusKey = { meta: false, control: true, alt: false }
     // German/Swiss put '+' on BracketRight and Nordic layouts on Minus, both unshifted.

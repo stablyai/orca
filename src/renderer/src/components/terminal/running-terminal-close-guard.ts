@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
-import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
+import type { TerminalTabCloseReason } from '@/store/terminals/terminal-tab-retirement'
+import type { TerminalTabCloseIntent } from './terminal-tab-close-intent'
 import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'
 import { probePtyRunningWork } from './pty-running-work-probe'
@@ -8,7 +9,7 @@ import { probePtyRunningWork } from './pty-running-work-probe'
 export type RunningTerminalCloseGuardOptions = {
   force?: boolean
   rejectPinned?: boolean
-  reason?: TerminalTabCloseReason
+  reason?: TerminalTabCloseIntent
   hostCloseReason?: TerminalTabCloseReason
   lifecyclePtyId?: string
   skipRunningProcessConfirm?: boolean
@@ -27,7 +28,7 @@ export function shouldConfirmRunningTerminalClose(
   if (options?.skipRunningProcessConfirm === true || options?.lifecyclePtyId !== undefined) {
     return false
   }
-  const isUserReason = (reason: TerminalTabCloseReason | undefined): boolean =>
+  const isUserReason = (reason: TerminalTabCloseIntent | undefined): boolean =>
     reason === undefined || reason === 'user'
   return isUserReason(options?.reason) && isUserReason(options?.hostCloseReason)
 }
@@ -55,13 +56,15 @@ export function collectTabPtyIds(
 export function guardRunningTerminalClose(params: {
   terminalTabId: string
   tabLabel: string
+  /** Work the user already agreed to stop is not running work to ask about. */
+  consentedPtyId?: string
   onClose: () => void
   onCancel?: () => void
 }): void {
-  const { terminalTabId, tabLabel, onClose, onCancel } = params
+  const { terminalTabId, tabLabel, consentedPtyId, onClose, onCancel } = params
   const state = useAppStore.getState()
   const settings = state.settings
-  const ptyIds = collectTabPtyIds(state, terminalTabId)
+  const ptyIds = collectTabPtyIds(state, terminalTabId).filter((id) => id !== consentedPtyId)
   // Opt-out and no-PTY closes stay synchronous.
   if (ptyIds.length === 0 || settings?.skipCloseTerminalWithRunningProcessConfirm === true) {
     onClose()
@@ -103,9 +106,14 @@ export function guardRunningTerminalClose(params: {
         confirmClose(ptyIds)
         return
       }
-      // Answered probe failures/stale handles fail open like Cmd+W; they provide no live-child evidence and must not disable closing.
+      // "Could not tell" must not kill a bound pty's work (#33265); layout-only ids are often stale leaves that never answer.
+      const boundPtyIds = new Set(useAppStore.getState().ptyIdsByTabId?.[terminalTabId] ?? [])
       const busyPtyIds = probes
-        .filter((probe) => probe.verdict === 'live')
+        .filter(
+          (probe) =>
+            probe.verdict === 'live' ||
+            (probe.verdict === 'unverifiable' && boundPtyIds.has(probe.ptyId))
+        )
         .map((probe) => probe.ptyId)
       if (busyPtyIds.length === 0) {
         closeNow()

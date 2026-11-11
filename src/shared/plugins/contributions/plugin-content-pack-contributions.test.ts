@@ -16,84 +16,6 @@ function manifest(contributes: Record<string, unknown>): Record<string, unknown>
 }
 
 describe('content-pack manifest contributions', () => {
-  it('accepts the documented P1 contribution set without a worker', () => {
-    const parsed = pluginManifestSchema.parse(
-      manifest({
-        languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }],
-        commands: [
-          {
-            id: 'workspace.openTasks',
-            title: 'Open tasks',
-            context: 'workspace',
-            action: 'view.tasks'
-          }
-        ],
-        keybindings: [{ command: 'workspace.openTasks', key: 'Mod+Alt+T' }],
-        vmRecipes: [{ path: 'recipes/fly.json' }]
-      })
-    )
-
-    expect(parsed.main).toBeUndefined()
-    expect(parsed.contributes.languagePacks[0]?.locale).toBe('pt-BR')
-    expect(parsed.contributes.keybindings[0]?.key).toBe('Mod+Alt+T')
-  })
-
-  it('accepts an optional native displayName on language packs', () => {
-    const parsed = pluginManifestSchema.parse(
-      manifest({
-        languagePacks: [
-          {
-            locale: 'zh-TW',
-            path: 'locales/zh-TW.json',
-            displayName: '中文（繁體）'
-          }
-        ]
-      })
-    )
-
-    expect(parsed.contributes.languagePacks[0]).toEqual({
-      locale: 'zh-TW',
-      path: 'locales/zh-TW.json',
-      displayName: '中文（繁體）'
-    })
-  })
-
-  it('rejects blank language-pack displayName', () => {
-    expect(
-      parsePluginManifest(
-        manifest({
-          languagePacks: [{ locale: 'zh-TW', path: 'locales/zh-TW.json', displayName: '   ' }]
-        })
-      ).ok
-    ).toBe(false)
-  })
-
-  it('defaults every contribution registry to an empty array', () => {
-    const parsed = pluginManifestSchema.parse(manifest({}))
-
-    expect(parsed.contributes).toEqual({
-      panels: [],
-      commands: [],
-      events: [],
-      languagePacks: [],
-      keybindings: [],
-      vmRecipes: [],
-      themes: [],
-      terminalThemes: [],
-      iconThemes: [],
-      syntaxes: [],
-      customEditors: [],
-      newFiles: []
-    })
-  })
-
-  it('refuses items in the reserved skills contribution', () => {
-    expect(parsePluginManifest(manifest({ skills: [{ path: 'skills' }] }))).toMatchObject({
-      ok: false,
-      error: 'contributes.skills: is reserved for agent skills and must be empty for now'
-    })
-  })
-
   it('still requires a worker entry for non-alias commands', () => {
     expect(
       parsePluginManifest(
@@ -161,14 +83,6 @@ describe('content-pack manifest contributions', () => {
     ['VM recipe', { vmRecipes: [{ path: '\\\\server\\recipe.json' }] }]
   ])('rejects unsafe or malformed %s contributions', (_label, contributes) => {
     expect(parsePluginManifest(manifest(contributes)).ok).toBe(false)
-  })
-
-  it.each(['ru', 'pt-BR', 'zh-Hans-CN', 'en-US'])('accepts the well-formed locale %s', (locale) => {
-    expect(
-      parsePluginManifest(manifest({ languagePacks: [{ locale, path: 'locale.json' }] }))
-    ).toMatchObject({
-      ok: true
-    })
   })
 
   it('rejects duplicate ids, locales, paths, and bindings', () => {

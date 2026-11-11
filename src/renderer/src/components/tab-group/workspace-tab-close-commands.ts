@@ -1,14 +1,16 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { editorContentIsReferenced } from '@/store/slices/editor/tabs/workspace-editor-files'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
-import { requestEditorFileClose } from '../editor/editor-autosave'
+import { requestEditorFileClose } from '../editor/autosave/editor-autosave'
+import { runAfterEditorFramesFlush } from '../editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
+import { closeWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-close'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
-import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { readStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 
 export function createWorkspaceTabCloseCommands({
   worktreeId,
@@ -17,26 +19,23 @@ export function createWorkspaceTabCloseCommands({
   worktreeId: string
   groupTabs: Tab[]
 }) {
-  const { closeUnifiedTab, closeFile } = useAppStore.getState()
+  const { closeUnifiedTab } = useAppStore.getState()
 
   const closeEditorIfUnreferenced = (
     entityId: string,
     closingTabId: string,
     whenEmptied: (() => void) | null
   ) => {
-    const otherReference = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).some(
-      (item) =>
-        item.id !== closingTabId &&
-        item.entityId === entityId &&
-        isEditorTabContentType(item.contentType)
-    )
+    const otherReference = editorContentIsReferenced(useAppStore.getState(), entityId, closingTabId)
     if (!otherReference) {
       if (needsSavePromptOnClose(useAppStore.getState(), entityId)) {
         // Why: route through Terminal.tsx so the unsaved-confirmation save/discard queue stays centralized across all close paths.
-        requestEditorFileClose(entityId, whenEmptied ? { onClosed: whenEmptied } : undefined)
+        requestEditorFileClose(entityId, {
+          tabId: closingTabId,
+          ...(whenEmptied ? { onClosed: whenEmptied } : {})
+        })
         return false
       }
-      closeFile(entityId)
     }
     return true
   }
@@ -97,6 +96,7 @@ export function createWorkspaceTabCloseCommands({
     if (item.contentType === 'terminal') {
       // Run the empty check only after deferred pin/process confirmations actually close the tab.
       closeTerminalTab(item.entityId, {
+        reason: 'user',
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
         ...(whenEmptied ? { onClosed: whenEmptied } : {})
       })
@@ -111,11 +111,23 @@ export function createWorkspaceTabCloseCommands({
     } else if (item.contentType === 'simulator') {
       closeUnifiedTab(item.id)
     } else {
-      const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id, whenEmptied)
-      if (!canCloseTab) {
-        return
-      }
-      closeUnifiedTab(item.id)
+      // Why: a custom editor frame may still hold edits the dirty check must see.
+      runAfterEditorFramesFlush(useAppStore.getState(), [item.entityId], (deferred) => {
+        // A rename during the flush keeps the tab id but moves its entity; act on the live one.
+        const live = deferred
+          ? (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
+              (tab) => tab.id === item.id
+            )
+          : item
+        if (!live || !isEditorTabContentType(live.contentType)) {
+          return
+        }
+        if (closeEditorIfUnreferenced(live.entityId, item.id, whenEmptied)) {
+          closeUnifiedTab(item.id)
+          whenEmptied?.()
+        }
+      })
+      return
     }
     whenEmptied?.()
   }

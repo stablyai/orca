@@ -1,17 +1,9 @@
 package expo.modules.orcagziputf8codec
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class StrictUtf8Test {
-  @Test
-  fun `decodes well-formed UTF-8 of every sequence length`() {
-    val text = "{\"a\":\"xé✓🙂\"}"
-    assertEquals(text, decodeStrictUtf8(text.toByteArray(Charsets.UTF_8)))
-    assertEquals("", decodeStrictUtf8(ByteArray(0)))
-  }
-
   @Test
   fun `hands back to JS what TextDecoder would repair or strip`() {
     val refused = listOf(

@@ -1,15 +1,19 @@
-// All main/IPC telemetry shares shutdown → burst cap → consent → validation → capture ordering. Cap before settings reads to bound renderer flood cost; disable person profiles per capture because the Node SDK lacks an init-time equivalent.
+// All main/IPC telemetry shares shutdown → sampling → burst cap → consent → validation → capture ordering. Cap before settings reads to bound renderer flood cost; disable person profiles per capture because the Node SDK lacks an init-time equivalent.
 
 import { randomUUID } from 'node:crypto'
 import type { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
+import { telemetryEventSampleRate } from './event-sampling'
+import * as protectedMilestones from './protected-milestones'
+import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
 import { isConsentEnvOverridden, resolveConsent } from './consent'
 import * as postHogStart from './posthog-client-start'
-import { buildCommonProps, createPostHogClient, waitForCaptureEnqueue } from './posthog-transport'
+import { buildCommonProps, createPostHogClient } from './posthog-transport'
+import { captureOptOutBeforeSdkOptOut } from './opt-out-capture'
 import { commonPropsSchema, validate } from './validator'
 
 export { shouldOptOutSdkAtInit } from './posthog-transport'
@@ -40,6 +44,8 @@ let storeRef: Store | null = null
 
 let testTransportEnabled = false
 
+type CaptureProperties = Readonly<Record<string, unknown>>
+
 // Banner resolution gates first app_opened; mark and emit atomically.
 let appOpenedTrackedThisSession = false
 const trackedDashboardActiveDays = new Map<AgentDashboardSurface, number>()
@@ -52,6 +58,7 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   // Reset banner/app-open gating each launch, not once per install.
   appOpenedTrackedThisSession = false
   trackedDashboardActiveDays.clear()
+  protectedMilestones.bindSession(store, enqueueCapture, isTelemetryEnabled)
   postHogStart.resetStart()
 
   if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD || BUILD_IDENTITY === null || WRITE_KEY === null) {
@@ -69,10 +76,8 @@ export function initTelemetry(store: Store, scheduleStart: postHogStart.StartSch
   sessionId = randomUUID()
   commonProps = buildCommonProps(installId, sessionId, BUILD_IDENTITY)
 
-  const languageCohort = settings.telemetry?.onboardingLanguageCohort
-  if (languageCohort === 'control' || languageCohort === 'treatment') {
-    commonProps.onboarding_language_v1 = languageCohort
-  }
+  // Official builds only; contributor builds retain the original announcement behavior.
+  Object.assign(commonProps, experimentCohortProps(store))
 
   // Validate singleton common properties once; invalid identity would collapse installs into one subject.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)
@@ -102,6 +107,8 @@ function ensurePostHogClient(): PostHog | null {
   return posthog
 }
 
+export const isTelemetryInitialized = (): boolean => storeRef !== null
+
 /** Lets producers avoid preparing usage payloads when transmission is disabled. */
 export function isTelemetryEnabled(): boolean {
   return (
@@ -130,16 +137,21 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     return false
   }
 
+  const sampleRate = telemetryEventSampleRate(name)
   // Reject late IPC while the client flushes.
-  if (shuttingDown) {
-    return false
-  }
   if (
+    shuttingDown ||
     (!posthog && !postHogStart.isStartDeferred()) ||
     !commonProps ||
     !storeRef ||
     posthog?.optedOut
   ) {
+    return false
+  }
+  const sampledOut = sampleRate < 1 && Math.random() >= sampleRate
+  // Milestones derive from every observation, so sampling and budgets cannot hide them.
+  const milestoneDay = protectedMilestones.observationDay(name)
+  if (sampledOut && milestoneDay === null) {
     return false
   }
 
@@ -161,7 +173,8 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   }
 
   // Cap floods before expensive live consent reads, including opted-out renderers.
-  if (!consumeBurstToken(name)) {
+  const withinBudget = !sampledOut && consumeBurstToken(name)
+  if (!withinBudget && milestoneDay === null) {
     return false
   }
 
@@ -175,6 +188,12 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   // Validate schemas, exact keys, enums and bounded strings at one entry point.
   const result = validate(name, props)
   if (!result.ok) {
+    return false
+  }
+  if (milestoneDay !== null) {
+    protectedMilestones.record(name, result.props, settings, milestoneDay)
+  }
+  if (!withinBudget) {
     return false
   }
   if (dashboardActiveSurface) {
@@ -192,24 +211,11 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
       ? {
           agent_dashboard_enabled: settings.experimentalAgentDashboardPopout === true
         }
-      : {}
+      : sampleRate < 1
+        ? { sample_rate: sampleRate }
+        : {}
 
-  // Node SDK requires per-capture person-profile suppression.
-  const message = {
-    distinctId: commonProps.install_id,
-    event: name,
-    properties: {
-      ...commonProps,
-      ...result.props,
-      ...mainOwnedProps,
-      $process_person_profile: false
-    }
-  }
-  if (posthog) {
-    posthog.capture(message)
-  } else {
-    postHogStart.holdCapture(message, ensurePostHogClient)
-  }
+  enqueueCapture(name, { ...result.props, ...mainOwnedProps })
   if (dashboardActiveSurface && settings.telemetry) {
     trackedDashboardActiveDays.set(dashboardActiveSurface, dashboardActiveDay)
     try {
@@ -227,6 +233,23 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     }
   }
   return true
+}
+
+function enqueueCapture(name: EventName, props: CaptureProperties): void {
+  if (!commonProps) {
+    throw new Error('telemetry common props missing')
+  }
+  // Node SDK requires per-capture person-profile suppression.
+  const message = {
+    distinctId: commonProps.install_id,
+    event: name,
+    properties: { ...commonProps, ...props, $process_person_profile: false }
+  }
+  if (posthog) {
+    posthog.capture(message)
+  } else {
+    postHogStart.holdCapture(message, ensurePostHogClient)
+  }
 }
 
 export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
@@ -259,27 +282,9 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
     if (!client || isConsentEnvOverridden()) {
       return
     }
-    // Enqueue opt-out directly before disabling SDK; track would reject it under the newly stored preference.
     try {
-      if (!shuttingDown && commonProps && consumeBurstToken('telemetry_opted_out')) {
-        const validated = validate('telemetry_opted_out', { via })
-        if (validated.ok) {
-          const uuid = randomUUID()
-          const enqueued = waitForCaptureEnqueue(client, 'telemetry_opted_out', uuid)
-          client.capture({
-            distinctId: commonProps.install_id,
-            event: 'telemetry_opted_out',
-            uuid,
-            properties: {
-              ...commonProps,
-              ...validated.props,
-              $process_person_profile: false
-            }
-          })
-          if (!(await enqueued)) {
-            console.warn('[telemetry] telemetry_opted_out did not enqueue before SDK opt-out')
-          }
-        }
+      if (!shuttingDown && commonProps) {
+        await captureOptOutBeforeSdkOptOut(client, commonProps, via)
       }
     } catch (err) {
       console.warn('[telemetry] telemetry_opted_out capture failed before SDK opt-out:', err)

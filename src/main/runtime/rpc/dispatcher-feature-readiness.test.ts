@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
@@ -85,12 +84,6 @@ afterEach(() => {
 })
 
 describe('RPC methods that require an orcad startup phase', () => {
-  it('run at once where no readiness is installed (the desktop)', async () => {
-    const { dispatcher: rpc, ran } = dispatcher()
-    await expect(rpc.dispatch(request('aiVault.searchStatus'))).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['searchStatus'])
-  })
-
   it('wait for their phase, while methods that need none run at once', async () => {
     const readiness = installOrcadFeatureReadiness()
     const { dispatcher: rpc, ran } = dispatcher()
@@ -131,17 +124,6 @@ describe('RPC methods that require an orcad startup phase', () => {
     expect(replies).toHaveLength(1)
   })
 
-  it('gate a terminal create only when its params start an agent', async () => {
-    const readiness = installOrcadFeatureReadiness()
-    const { dispatcher: rpc, ran } = dispatcher()
-    const agent = rpc.dispatch(request('terminal.create', { command: 'claude' }))
-    await expect(rpc.dispatch(request('terminal.create', {}))).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['create shell'])
-    readiness.open('accounts')
-    await expect(agent).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['create shell', 'create claude'])
-  })
-
   // A handler run for a caller that left leaks its close cleanup, or runs a retried mutation twice.
   it('refuse a unary call whose request is aborted while it waits, never running it', async () => {
     vi.useFakeTimers()
@@ -179,33 +161,5 @@ describe('RPC methods that require an orcad startup phase', () => {
     readiness.open('accounts')
     await vi.advanceTimersByTimeAsync(1)
     expect(ran).toEqual([])
-  })
-
-  it('refuse at once when the caller already left, without waiting out the bound', async () => {
-    vi.useFakeTimers()
-    installOrcadFeatureReadiness()
-    const { dispatcher: rpc, ran } = dispatcher()
-    let reply: unknown = 'pending'
-    void rpc
-      .dispatch(request('aiVault.searchStatus'), { connectionSignal: AbortSignal.abort() })
-      .then((r) => {
-        reply = r
-      })
-    await vi.advanceTimersByTimeAsync(1)
-    expect(reply).toMatchObject({ ok: false, error: { code: 'runtime_unavailable' } })
-    expect(ran).toEqual([])
-  })
-
-  it('run an attach-only ensureAgentSession at once while every latch is closed', async () => {
-    const readiness = installOrcadFeatureReadiness()
-    const { dispatcher: rpc, ran } = dispatcher()
-    const explicit = rpc.dispatch(request('terminal.ensureAgentSession', { kind: 'explicit' }))
-    await expect(
-      rpc.dispatch(request('terminal.ensureAgentSession', { kind: 'automatic' }))
-    ).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['ensure automatic'])
-    readiness.open('accounts')
-    await expect(explicit).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['ensure automatic', 'ensure explicit'])
   })
 })

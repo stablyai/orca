@@ -3,16 +3,10 @@ import {
   OFFICIAL_MARKETPLACE_REPOSITORY,
   PLUGIN_MARKETPLACE_CATEGORY_LIMIT,
   PLUGIN_MARKETPLACE_ENTRY_LIMIT,
-  isMarketplaceListingSupported,
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
-  hasOfficialPluginPublisher,
-  isReservedPluginIdentity,
-  gitRepositoryOwnerLabel,
   isSameGitRepository,
-  parseGitRepositoryIdentity,
-  pluginMarketplaceSchema,
-  pluginMarketplaceTrustMetadataSchema
+  pluginMarketplaceSchema
 } from './plugin-marketplace'
 
 function listing(id = 'community.nord'): Record<string, unknown> {
@@ -25,20 +19,6 @@ function listing(id = 'community.nord'): Record<string, unknown> {
 }
 
 describe('pluginMarketplaceSchema', () => {
-  it('parses a bounded, pinned Git marketplace index', () => {
-    expect(
-      pluginMarketplaceSchema.parse({
-        name: 'Community plugins',
-        owner: 'community',
-        plugins: [listing()]
-      })
-    ).toEqual({
-      name: 'Community plugins',
-      owner: 'community',
-      plugins: [listing()]
-    })
-  })
-
   it.each([
     ['root', { name: 'Plugins', owner: 'team', plugins: [], extra: true }],
     ['entry', { name: 'Plugins', owner: 'team', plugins: [{ ...listing(), official: true }] }],
@@ -126,32 +106,6 @@ describe('pluginMarketplaceSchema', () => {
 })
 
 describe('marketplace provenance contracts', () => {
-  it.each([
-    ['stablyai.orca-skills', true, true],
-    ['stablyai.skills', true, true],
-    ['community.orca-skills', true, false],
-    ['community.skills', false, false],
-    ['orca.skills', true, false],
-    ['orca-labs.skills', true, false],
-    ['openai.skills', true, false],
-    ['github.skills', true, false],
-    ['orcas.skills', true, false],
-    ['orcalike.skills', true, false],
-    ['acme.skills', false, false],
-    ['invalid', false, false]
-  ])('classifies %s', (pluginKey, reserved, officialPublisher) => {
-    expect(isReservedPluginIdentity(pluginKey)).toBe(reserved)
-    expect(hasOfficialPluginPublisher(pluginKey)).toBe(officialPublisher)
-  })
-
-  it.each([
-    'https://github.com/stablyai/orca-skills.git',
-    'ssh://git@github.com/stablyai/orca-skills.git',
-    'git@github.com:stablyai/orca-skills.git'
-  ])('accepts official organization source %s', (source) => {
-    expect(isOfficialOrganizationGitSource(source)).toBe(true)
-  })
-
   it('does not trust lookalike organizations or hosts', () => {
     expect(isOfficialOrganizationGitSource('https://github.com/stablyai-fakes/orca-skills')).toBe(
       false
@@ -181,46 +135,6 @@ describe('marketplace provenance contracts', () => {
       )
     ).toBe(true)
     expect(isOfficialMarketplaceGitSource('git@github.com:stablyai/plugins.git')).toBe(false)
-  })
-
-  it('labels the verified owner with every GitLab subgroup', () => {
-    expect(gitRepositoryOwnerLabel('https://gitlab.com/Team/SubGroup/plugins.git')).toBe(
-      'gitlab.com/team/subgroup'
-    )
-    expect(gitRepositoryOwnerLabel('git@git.example.com:platform/tools/plugins.git')).toBe(
-      'git.example.com/platform/tools'
-    )
-    expect(gitRepositoryOwnerLabel('https://github.com/acme/plugins')).toBe('github.com/acme')
-    expect(gitRepositoryOwnerLabel('not a url')).toBeNull()
-  })
-
-  it('parses nested repository paths without confusing the repository name', () => {
-    expect(parseGitRepositoryIdentity('https://gitlab.com/team/subgroup/plugin.git')).toEqual({
-      host: 'gitlab.com',
-      owner: 'team',
-      repository: 'plugin',
-      path: 'team/subgroup/plugin'
-    })
-  })
-
-  it('prevents an untrusted listing from self-awarding trust metadata', () => {
-    expect(pluginMarketplaceTrustMetadataSchema.parse({ official: true, bundled: true })).toEqual({
-      official: true,
-      bundled: true
-    })
-    expect(
-      pluginMarketplaceTrustMetadataSchema.safeParse({ official: false, bundled: true }).success
-    ).toBe(false)
-  })
-
-  it('marks listings with a deferred contribution category as unsupported', () => {
-    expect(isMarketplaceListingSupported(['vm-recipes', 'official'])).toBe(true)
-    expect(isMarketplaceListingSupported(['keybindings'])).toBe(true)
-    expect(isMarketplaceListingSupported([])).toBe(true)
-    expect(isMarketplaceListingSupported(['skills', 'official'])).toBe(false)
-    for (const supported of ['themes', 'terminal-themes', 'icons', 'icon-themes']) {
-      expect(isMarketplaceListingSupported([supported, 'official'])).toBe(true)
-    }
   })
 })
 

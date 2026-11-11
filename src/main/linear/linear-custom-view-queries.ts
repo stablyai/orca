@@ -30,6 +30,7 @@ import {
 } from './linear-project-models'
 import { readCollection, readConcreteCollection } from './linear-project-collection-read'
 import { readIssueConnectionPages } from './linear-project-issue-queries'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function listCustomViews(
   model: LinearCustomViewModel,
@@ -53,7 +54,7 @@ export async function listCustomViews(
         items: (connection?.nodes ?? [])
           .map((view) => mapCustomViewForWorkspace(entry, view))
           .filter((view): view is LinearCustomViewSummary => !!view && view.model === model),
-        hasMore: !!connection?.pageInfo?.hasNextPage
+        hasMore: linearConnectionHasNextPage(connection)
       }
     },
     force
@@ -161,7 +162,7 @@ export async function listCustomViewProjects(
       const connection = view?.projects
       return {
         items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
-        hasMore: !!connection?.pageInfo?.hasNextPage
+        hasMore: linearConnectionHasNextPage(connection)
       }
     },
     force

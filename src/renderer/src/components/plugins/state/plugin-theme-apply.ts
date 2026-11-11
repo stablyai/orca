@@ -1,15 +1,25 @@
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { resolveDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
+import {
+  hasTerminalColorOverrides,
+  TERMINAL_COLOR_OVERRIDES_SETTING
+} from '../../../../../shared/terminal-themes/terminal-color-overrides'
+import { withTerminalPluginPalettes } from '@/lib/terminal/themes/terminal-plugin-palettes'
+import { BUILTIN_TERMINAL_THEME_NAMES } from '@/lib/terminal/appearance/terminal-theme'
+import { disambiguatedPluginContentLabels } from '../presentation/plugin-name-disambiguation'
+import type { PluginContentLabelItem } from '../presentation/plugin-name-disambiguation'
+import { useAppStore } from '@/store/index'
+import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
+import { usePluginIconThemeStore } from '@/store/plugins/appearance/plugin-icon-themes'
+import {
+  usePluginThemeStore,
+  usePluginTerminalThemeStore
+} from '@/store/plugins/appearance/plugin-themes'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { PluginThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import { translate } from '@/i18n/i18n'
-import { resolveDocumentTheme } from '@/lib/document-theme'
-import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
-import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
-import { useAppStore } from '@/store'
-import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
-import { usePluginIconThemeStore } from '@/store/plugin-icon-themes'
-import { usePluginThemeStore, usePluginTerminalThemeStore } from '@/store/plugin-themes'
 
 export function isPluginAppThemeSelected(
   settings: Pick<GlobalSettings, 'pluginAppThemeDark' | 'pluginAppThemeLight'>,
@@ -43,25 +53,64 @@ export function isPluginTerminalThemeSelected(
   )
 }
 
+export function terminalThemeSlotUpdate(
+  theme: Pick<PluginTerminalThemeRegistration, 'id' | 'mode'>,
+  dark: boolean
+): Partial<
+  Pick<GlobalSettings, 'terminalThemeDark' | 'terminalThemeLight' | 'terminalUseSeparateLightTheme'>
+> {
+  const slot = terminalSlot(theme.mode, dark)
+  return {
+    [slot]: theme.id,
+    ...(slot === 'terminalThemeLight' ? { terminalUseSeparateLightTheme: true } : {})
+  }
+}
+
 export function terminalThemeUpdate(
   settings: GlobalSettings,
   theme: PluginTerminalThemeRegistration,
   dark: boolean,
   terminalThemes: readonly PluginTerminalThemeRegistration[]
 ): Partial<GlobalSettings> {
-  const slot = terminalSlot(theme.mode, dark)
+  const slot = terminalSlot(theme.mode, dark) === 'terminalThemeLight' ? 'light' : 'dark'
   return withTerminalPluginPalettes(
     settings,
     {
-      [slot]: theme.id,
-      ...(slot === 'terminalThemeLight' ? { terminalUseSeparateLightTheme: true } : {}),
-      // A selected theme must replace overrides or they mask its palette.
-      ...(Object.keys(settings.terminalColorOverrides ?? {}).length > 0
-        ? { terminalColorOverrides: undefined }
+      ...terminalThemeSlotUpdate(theme, dark),
+      // A selected theme must replace its slot's overrides or they mask its palette.
+      ...(hasTerminalColorOverrides(settings, slot)
+        ? { [TERMINAL_COLOR_OVERRIDES_SETTING[slot]]: undefined }
         : {})
     },
     terminalThemes
   )
+}
+
+/** The name the theme's picker shows it by, so the toast names the same one. */
+function shownLabel(
+  theme: { id: string; label: string },
+  pickerThemes: readonly PluginContentLabelItem[],
+  builtInLabels: readonly string[] = []
+): string {
+  return disambiguatedPluginContentLabels(pickerThemes, builtInLabels).get(theme.id) ?? theme.label
+}
+
+/** Puts one just-installed app theme in its mode's slot, as picking it there would. */
+export async function applyPluginAppThemeToSlot(
+  pluginKey: string,
+  pick: Pick<PluginThemeRegistration, 'base' | 'label'>
+): Promise<boolean> {
+  const own = (await usePluginThemeStore.getState().fetchEntries()).filter(
+    (candidate) => candidate.pluginKey === pluginKey && candidate.base === pick.base
+  )
+  // Why the lone fallback: a catalog preview's label is display text and may differ from the title.
+  const theme =
+    own.find((candidate) => candidate.label === pick.label) ?? (own.length === 1 ? own[0] : null)
+  if (!theme) {
+    return false
+  }
+  await useAppStore.getState().updateSettings(pluginAppThemeSlotUpdate(pick.base, theme.id))
+  return true
 }
 
 /**
@@ -114,6 +163,7 @@ export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> 
     terminalThemeLight: settings.terminalThemeLight,
     terminalUseSeparateLightTheme: settings.terminalUseSeparateLightTheme,
     terminalColorOverrides: settings.terminalColorOverrides,
+    terminalColorOverridesLight: settings.terminalColorOverridesLight,
     terminalPluginPalettes: settings.terminalPluginPalettes ?? []
   }
   let next: Partial<GlobalSettings> = {}
@@ -129,7 +179,16 @@ export async function applyPluginThemesNow(pluginKey: string): Promise<boolean> 
   }
   await updateSettings(next)
   const shown = appSlots.find((theme) => (theme.base === 'dark') === dark)
-  const label = (shown ?? icon ?? terminalPicks[0])?.label ?? ''
+  const label = shown
+    ? shownLabel(
+        shown,
+        apps.filter((theme) => theme.base === shown.base)
+      )
+    : icon
+      ? shownLabel(icon, icons)
+      : terminalPicks[0]
+        ? shownLabel(terminalPicks[0], terminals, BUILTIN_TERMINAL_THEME_NAMES)
+        : ''
   toast.success(
     translate('auto.components.settings.pluginThemeApply.nowUsing', 'Now using {{value0}}', {
       value0: label

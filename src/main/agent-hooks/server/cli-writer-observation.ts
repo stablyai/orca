@@ -2,14 +2,14 @@ import {
   resolveAgentStatusBinding,
   type AgentStatusRuntimeEnrichment
 } from '../../ipc/agent-status-ipc-boundary'
-import type { AgentStatusObservedPaneIdentities } from '../../runtime/agent-status-observed-pane-identity'
+import type { AgentStatusObservedPaneIdentities } from '../../runtime/terminal/identity/agent-status-observed-pane-identity'
 import {
   isSameAgentProcess,
   type AgentProcessIdentity,
   type AgentProcessVerdict
-} from '../../../shared/agent-process-presence'
+} from '../../../shared/agent-status/process/agent-process-presence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 
 // Execution metadata follows the conversation binding and disappears at serialization.
 export const OPEN_CODE_WRITER_TOPOLOGY = Symbol('openCodeWriterTopology')

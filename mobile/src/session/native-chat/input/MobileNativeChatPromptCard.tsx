@@ -1,9 +1,24 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  Animated,
+  Easing,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent
+} from 'react-native'
+import { SHEET_CURVE, SHEET_HEIGHT_DURATION_MS } from '../../../components/sheet-motion-values'
+import { useReducedMotionEnabled } from '../../../platform/use-reduced-motion'
+import { colors, pressedStyle, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
+import type {
+  AskAnswerSelection,
+  NativeChatAnswerSource
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
@@ -12,10 +27,16 @@ import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import { MobileNativeChatPromptStrip } from './MobileNativeChatPromptStrip'
+import {
+  useMobileNativeChatLowerGeometry,
+  useMobileNativeChatLowerRegion
+} from '../mobile-native-chat-lower-region-context'
 
 // Keep dismissal in the controller across chat/terminal toggles; the shared resolver already chose the terminal card.
 export function MobileNativeChatPromptCard({
   ask,
+  askPending,
+  askSendSource,
   answering = false,
   askKey,
   onDismissAsk,
@@ -33,11 +54,17 @@ export function MobileNativeChatPromptCard({
   onAnswerQuestion
 }: {
   ask?: AskPrompt | null
+  askSendSource?: NativeChatAnswerSource
+  askPending?: boolean
   // The keyboard is up for this card's reply, so it may take the whole conversation area.
   answering?: boolean
   askKey?: string | null
   onDismissAsk?: () => void
-  onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  onAnswerAsk?: (
+    prompt: AskPrompt,
+    selections: AskAnswerSelection[],
+    onCreated?: (id: string) => void
+  ) => Promise<boolean>
   requiresTerminal?: boolean
   onAnswerInTerminal?: () => void
   onCancelAsk?: () => Promise<boolean>
@@ -64,7 +91,7 @@ export function MobileNativeChatPromptCard({
           accessibilityState={{ disabled: !onAnswerInTerminal }}
           disabled={!onAnswerInTerminal}
           onPress={onAnswerInTerminal}
-          style={styles.terminalButton}
+          style={({ pressed }) => [styles.terminalButton, pressed && pressedStyle]}
         >
           <Text style={styles.terminalButtonText}>
             {t('chat.promptCard.answerInTerminal', 'Answer in terminal')}
@@ -75,9 +102,11 @@ export function MobileNativeChatPromptCard({
       <MobileNativeChatAsk
         key={askKey ?? 'ask'}
         prompt={ask}
-        onAnswer={async (selections) => {
-          const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
-          if (accepted) {
+        answerPending={askPending}
+        answerSendSource={askSendSource}
+        onAnswer={async (selections, onCreated) => {
+          const accepted = (await onAnswerAsk?.(ask, selections, onCreated)) ?? false
+          if (accepted && !ask.replyAsMessage) {
             onDismissAsk?.()
           }
           return accepted
@@ -94,11 +123,13 @@ export function MobileNativeChatPromptCard({
       />
     ) : permission ? (
       <MobileNativeChatPermission
-        key={JSON.stringify(permission)}
+        // Re-aimed options stay one occurrence, so an in-flight answer keeps its card locked.
+        key={JSON.stringify({ ...permission, options: undefined })}
         permission={permission}
         onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
         onCancel={onCancelPrompt}
         onCollapse={onCollapsePrompt}
+        onAnswerInTerminal={onAnswerInTerminal}
       />
     ) : question?.questions ? (
       <MobileNativeChatStructuredAsk
@@ -115,14 +146,18 @@ export function MobileNativeChatPromptCard({
         onCancel={onCancelPrompt}
       />
     ) : null
+  const arrival = usePromptCardArrival(card !== null)
   // Hide without remounting so a collapsed prompt keeps partial selections.
   return (
     <>
-      <View
-        style={collapsedPrompt ? styles.collapsed : [styles.shown, answering && styles.answering]}
+      <PromptCardSlot
+        collapsed={Boolean(collapsedPrompt)}
+        answering={answering}
+        arriving={arrival.arriving}
+        onLayout={arrival.onLayout}
       >
-        {card}
-      </View>
+        <Animated.View style={[styles.arrivalLayer, arrival.style]}>{card}</Animated.View>
+      </PromptCardSlot>
       {collapsedPrompt ? (
         <MobileNativeChatPromptStrip
           title={collapsedPrompt.title}
@@ -133,8 +168,96 @@ export function MobileNativeChatPromptCard({
   )
 }
 
+function PromptCardSlot({
+  collapsed,
+  answering,
+  arriving,
+  onLayout,
+  children
+}: {
+  collapsed: boolean
+  answering: boolean
+  arriving: boolean
+  onLayout: (event: LayoutChangeEvent) => void
+  children: ReactNode
+}) {
+  const lower = useMobileNativeChatLowerRegion()
+  const { allocationHeight } = useMobileNativeChatLowerGeometry()
+  return (
+    <View
+      style={
+        collapsed
+          ? styles.collapsed
+          : [
+              styles.shown,
+              answering && styles.answering,
+              lower && { maxHeight: (allocationHeight ?? 0) * (answering ? 1 : 0.6) },
+              arriving && styles.arriving
+            ]
+      }
+      onLayout={(event) => {
+        if (!lower || allocationHeight !== null) {
+          onLayout(event)
+        }
+      }}
+    >
+      {children}
+    </View>
+  )
+}
+
+const ARRIVAL_EASING = Easing.bezier(...SHEET_CURVE)
+const REDUCED_ARRIVAL_MS = 200
+
+// A card that appears rises out of the composer's edge, so the ask reads as coming from below.
+function usePromptCardArrival(hasCard: boolean) {
+  const reducedMotion = useReducedMotionEnabled() === true
+  const progress = useRef(new Animated.Value(1)).current
+  // The card's own height, read on the layout after it appears; null while that read is pending.
+  const [travel, setTravel] = useState<number | null>(0)
+  useLayoutEffect(() => {
+    if (!hasCard) {
+      return
+    }
+    progress.setValue(0)
+    setTravel(null)
+    return () => progress.stopAnimation()
+  }, [hasCard, progress])
+  const onLayout = (event: LayoutChangeEvent) => {
+    if (travel !== null) {
+      return
+    }
+    setTravel(event.nativeEvent.layout.height)
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: reducedMotion ? REDUCED_ARRIVAL_MS : SHEET_HEIGHT_DURATION_MS,
+      easing: ARRIVAL_EASING,
+      useNativeDriver: Platform.OS !== 'web'
+    }).start(({ finished }) => {
+      if (finished) {
+        setTravel(0)
+      }
+    })
+  }
+  const style =
+    travel === null
+      ? { opacity: 0 }
+      : reducedMotion
+        ? { opacity: progress }
+        : {
+            transform: [
+              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [travel, 0] }) }
+            ]
+          }
+  return { arriving: travel !== 0, onLayout, style }
+}
+
 const styles = themedStyleSheet(() => ({
   collapsed: { display: 'none' },
+  // Clips the rising card to its own slot so it never draws over the composer.
+  arriving: { overflow: 'hidden' },
+  // Passes the slot's height cap through to the card, so a tall card still scrolls inside it.
+  arrivalLayer: { flexShrink: 1, minHeight: 0 },
   // Leave the conversation visible above the question, as desktop caps its card.
   shown: { flexShrink: 1, minHeight: 0, maxHeight: '60%' },
   answering: { maxHeight: '100%' },
@@ -151,7 +274,7 @@ const styles = themedStyleSheet(() => ({
     minHeight: 44,
     justifyContent: 'center',
     backgroundColor: colors.surfaceBright,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md
   },
   terminalButtonText: {

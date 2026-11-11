@@ -1,11 +1,11 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { retryFailedWorktreeRemoval } from '../../../worktree-background-removal'
-import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/runtime-interrupted-local-worktree-removal'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../registered-worktree-roots-scoped-invalidation'
+import { retryFailedWorktreeRemoval } from '../../../workspaces/removal/worktree-background-removal'
+import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/workspaces/removal/runtime-interrupted-local-worktree-removal'
+import { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
-import type { WorktreeRemovalRecord } from '../../../worktree-removal-records'
+import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
 import {
   preserveBranchHeadFallback,
   rememberPreservedBranchCleanupTarget

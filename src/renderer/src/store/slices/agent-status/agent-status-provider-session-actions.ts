@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -10,24 +11,28 @@ import {
   type ResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
-import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
-import { resolveAgentPaneAuthorityKey } from '../agent-pane-authority'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
+import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   findAgentPaneWorktreeId,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
-import { registryEntryMatchesStatus } from './agent-status-launch-config'
-import { copyLaunchConfig } from '../../../../../shared/agent-resume-record-from-status'
-import { agentVerdictFields } from '../../../../../shared/agent-main-agent-verdict'
+import {
+  invocationLaunchConfig,
+  ownerLaunchAttested,
+  registryEntryMatchesStatus
+} from './agent-status-launch-config'
+import { copyLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { agentVerdictFields } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
 
 export function createAgentStatusProviderSessionActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'recordAgentProviderSession'> {
-  const { get, set, requestFreshness } = runtime
+  const { get, set, requestFreshness, projectConversation } = runtime
   return {
     recordAgentProviderSession: (
       paneKey: string,
@@ -90,9 +95,14 @@ export function createAgentStatusProviderSessionActions(
           // Why: an explicit quit capture must remain the resume handle until a new provider session replaces it.
           const preservesQuitOrigin =
             existingRecordMatchesProviderSession && existingRecord?.origin === 'quit'
-          const launchConfig =
-            (registryMatches ? registryEntry?.launchConfig : undefined) ??
-            (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
+          const launchConfig = invocationLaunchConfig({
+            statement: metadata?.launchConfig,
+            launchAttested: ownerLaunchAttested(metadata?.launchConfig, existingStatus, agent),
+            registry: registryMatches ? registryEntry?.launchConfig : undefined,
+            record: existingRecord,
+            agentType: agent,
+            providerSession
+          })
           const record: SleepingAgentSessionRecord = {
             paneKey,
             ...(tabId ? { tabId } : {}),
@@ -136,7 +146,8 @@ export function createAgentStatusProviderSessionActions(
           const retiredPaneKeys = new Set([paneKey])
           // Identity mismatch clears sleeping launch config; clear registry too or returning old identity reuses stale args/env.
           let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
-          if (registryMatches && registryEntry) {
+          // An owner's none ends the launch, so its registry entry goes rather than re-stamped.
+          if (registryMatches && registryEntry && metadata?.launchConfig !== null) {
             nextLaunchConfigs = {
               ...nextLaunchConfigs,
               [paneKey]: {
@@ -148,13 +159,16 @@ export function createAgentStatusProviderSessionActions(
             nextLaunchConfigs = { ...nextLaunchConfigs }
             delete nextLaunchConfigs[paneKey]
           }
+          const nextConversations = projectConversation(s, { ...record, agentType: agent })
           return {
             agentStatusByPaneKey: nextLive,
+            ...(nextConversations !== s.agentConversationsByPaneKey
+              ? { agentConversationsByPaneKey: nextConversations }
+              : {}),
             retainedAgentsByPaneKey: nextRetained,
-            sleepingAgentSessionsByPaneKey: {
-              ...s.sleepingAgentSessionsByPaneKey,
-              [paneKey]: record
-            },
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
+              [paneKey, record]
+            ]),
             agentLaunchConfigByPaneKey: nextLaunchConfigs,
             acknowledgedAgentsByPaneKey: removePaneKeys(
               s.acknowledgedAgentsByPaneKey,

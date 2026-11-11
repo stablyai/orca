@@ -2,9 +2,9 @@ import { ipcRenderer } from 'electron'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceScanProgress
-} from '../../shared/workspace-space-types'
+} from '../../shared/workspace-disk-space/workspace-space-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSpaceChange } from '../../shared/workspace-space-change'
+import type { WorkspaceSpaceChange } from '../../shared/workspace-disk-space/workspace-space-change'
 import type { PreloadApi } from '../api-types'
 
 export const workspaceSpaceApi = {
@@ -21,6 +21,8 @@ export const workspaceSpaceApi = {
     change?: WorkspaceSpaceChange
   ) => ipcRenderer.invoke('workspaceSpace:revealWorktree', worktreeId, executionHostId, change),
   requestWorktreeRefresh: () => ipcRenderer.invoke('workspaceSpace:requestWorktreeRefresh'),
+  requestIssueRefresh: (worktreeId: string, executionHostId?: ExecutionHostId) =>
+    ipcRenderer.invoke('workspaceSpace:requestIssueRefresh', worktreeId, executionHostId),
   publishWindowAnalysis: (analysis: WorkspaceSpaceAnalysis) =>
     ipcRenderer.invoke('workspaceSpace:publishWindowAnalysis', analysis),
   onWindowAnalysis: (callback: (analysis: WorkspaceSpaceAnalysis) => void) => {
@@ -64,6 +66,17 @@ export const workspaceSpaceApi = {
     const listener = (): void => callback()
     ipcRenderer.on('workspaceSpace:worktreeRefreshRequested', listener)
     return () => ipcRenderer.removeListener('workspaceSpace:worktreeRefreshRequested', listener)
+  },
+  onIssueRefreshRequested: (
+    callback: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      worktreeId: string,
+      executionHostId?: ExecutionHostId
+    ): void => callback(worktreeId, executionHostId)
+    ipcRenderer.on('workspaceSpace:issueRefreshRequested', listener)
+    return () => ipcRenderer.removeListener('workspaceSpace:issueRefreshRequested', listener)
   },
   onProgress: (callback) => {
     const listener = (

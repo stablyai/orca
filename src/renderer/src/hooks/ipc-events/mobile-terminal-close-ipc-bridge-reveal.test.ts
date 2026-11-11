@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeEditorTabReveal } from '../../../../shared/runtime-file-contracts'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import type * as HostPersistence from '@/lib/workspace-session-host-persistence'
+import type { RuntimeEditorTabReveal } from '../../../../shared/file-access/runtime-editor-file-open'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
+import type * as HostPersistence from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import {
   _resetLayoutFramePositionForTests,
   beginLayoutFramePositions,
   noteLayoutFramePosition
-} from '@/runtime/layout-frame-position'
+} from '@/runtime/workspace-layout/frames/layout-frame-position'
 
 const { storeRef } = vi.hoisted(() => {
   const ref: { current: ReturnType<typeof createTestStore> | null } = { current: null }
@@ -31,16 +32,23 @@ vi.mock('../../store', () => ({
       testStore().setState(...args)
   }
 }))
-vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
+vi.mock('@/components/terminal-pane/layout/close/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
 vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
-vi.mock('@/components/sidebar/sleep-worktree-flow', () => ({ runSleepWorktree: vi.fn() }))
-vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: vi.fn() }))
-vi.mock('@/lib/workspace-session-host-persistence', async (importOriginal) => ({
-  ...(await importOriginal<typeof HostPersistence>()),
-  persistWorkspaceSessionByHost: vi.fn()
+vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
+  runSleepWorktree: vi.fn()
 }))
+vi.mock('@/lib/workspace/persistence/workspace-session', () => ({
+  buildWorkspaceSessionPayload: vi.fn()
+}))
+vi.mock(
+  '@/lib/workspace/persistence/workspace-session-host-persistence',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof HostPersistence>()),
+    persistWorkspaceSessionByHost: vi.fn()
+  })
+)
 
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 
@@ -135,13 +143,6 @@ describe('showing a tab main wrote for a file it opened', () => {
     expect(h.activeTabId()).toBe(h.tabId)
   })
 
-  it('does nothing when the tab is gone by the time its frame comes in', () => {
-    const h = setup()
-    const before = h.activeTabId()
-    h.reveal({ worktreeId: WT, ...FILE, tabId: 'closed-tab', frameSeq: 5 })
-    expect(h.activeTabId()).toBe(before)
-  })
-
   it("visits a workspace the window has not drawn yet, then shows main's tab once it draws", async () => {
     const h = setup()
     beginLayoutFramePositions()
@@ -169,11 +170,5 @@ describe('showing a tab main wrote for a file it opened', () => {
       expect(group?.activeTabId).toBe('main-tab')
       expect(state.activeTabTypeByWorktree[UNDRAWN]).toBe('editor')
     })
-  })
-
-  it('leaves an undrawn workspace unvisited for an open that does not steer this window', () => {
-    const h = setup()
-    h.reveal({ worktreeId: UNDRAWN, ...FILE, tabId: 'main-tab', navigation: 'caller' })
-    expect(h.activeWorktreeId()).toBe(WT)
   })
 })

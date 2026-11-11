@@ -6,12 +6,23 @@ import {
   type PluginContributionPoint
 } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import { languageDisplayName } from '@/i18n/ui-intl-formatters'
+import { customEditorTakeover } from './plugin-custom-editor-takeover'
+import { fileList } from './plugin-contribution-file-list'
+import {
+  fontContributionRows,
+  statusBarContributionRows,
+  statusBarItemTitles,
+  withMode
+} from './plugin-contribution-row-labels'
 
-/** The manifest points shown as named rows; commands, shortcuts and events have their own lists. */
+/** The manifest points shown as named rows; commands, shortcuts, events and settings have their
+ *  own lists, and hooks show as the trusted-worker access they need. */
 export type PluginContributionKind = Exclude<
   PluginContributionPoint,
-  'commands' | 'keybindings' | 'events'
+  'commands' | 'keybindings' | 'events' | 'hooks' | 'settings'
 >
 
 /** One named thing a plugin adds, ready to show as a row. */
@@ -28,6 +39,8 @@ export type PluginContributionSource = {
   themes: readonly { id: string; label: string; base?: 'light' | 'dark' }[]
   terminalThemes: readonly { id: string; label: string; mode?: 'light' | 'dark' | 'unknown' }[]
   iconThemes: readonly { id: string; label: string }[]
+  /** Family names as the manifest writes them. */
+  fonts: readonly string[]
   syntaxes: readonly {
     id: string
     label: string
@@ -42,24 +55,27 @@ export type PluginContributionSource = {
     title: string
     extensions: readonly string[]
     filenames: readonly string[]
+    /** Absent when only a catalog summary names the editor. */
+    priority?: 'default' | 'option'
   }[]
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
+  statusBarItems: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   themes: [],
   terminalThemes: [],
   iconThemes: [],
+  fonts: [],
   syntaxes: [],
   languagePacks: [],
   panels: [],
   customEditors: [],
   vmRecipes: [],
-  newFiles: []
+  newFiles: [],
+  statusBarItems: []
 }
-
-const FILE_LIST_LIMIT = 4
 
 /** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
 export function nameFromContributionPath(path: string): string {
@@ -69,14 +85,6 @@ export function nameFromContributionPath(path: string): string {
     .replace(/[-_.]+/g, ' ')
     .trim()
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : path
-}
-
-export function languageDisplayName(locale: string): string {
-  try {
-    return new Intl.DisplayNames(getIntlLocale(), { type: 'language' }).of(locale) ?? locale
-  } catch {
-    return locale
-  }
 }
 
 export function manifestContributionSource(manifest: PluginManifest): PluginContributionSource {
@@ -90,12 +98,18 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     themes: contributes.themes.map(titled),
     terminalThemes: contributes.terminalThemes.map(titled),
     iconThemes: contributes.iconThemes.map(titled),
+    fonts: contributes.fonts.map((font) => font.family),
     syntaxes: contributes.syntaxes.map(titled),
     languagePacks: contributes.languagePacks,
     panels: contributes.panels.map((panel) => panel.title),
-    customEditors: contributes.customEditors,
+    // An omitted priority opens files by default.
+    customEditors: contributes.customEditors.map((editor) => ({
+      ...editor,
+      priority: editor.priority ?? 'default'
+    })),
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
-    newFiles: contributes.newFiles
+    newFiles: contributes.newFiles,
+    statusBarItems: statusBarItemTitles(contributes.statusBarItems)
   }
 }
 
@@ -119,6 +133,7 @@ export function summaryContributionSource(
       mode: base(item.name)
     })),
     iconThemes: of('iconThemes').map((item) => ({ id: item.name, label: item.name })),
+    fonts: of('fonts').map((item) => item.name),
     syntaxes: of('syntaxes').map((item) => ({
       id: item.name,
       label: item.name,
@@ -133,28 +148,16 @@ export function summaryContributionSource(
       filenames: []
     })),
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
-    newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' }))
+    newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
+    statusBarItems: of('statusBarItems').map((item) => item.name)
   }
 }
 
-function withMode(kindLabel: string, mode: 'light' | 'dark' | 'unknown' | undefined): string {
-  if (mode === 'dark') {
-    return `${kindLabel} · ${translate('auto.components.settings.pluginContributions.dark', 'Dark')}`
-  }
-  if (mode === 'light') {
-    return `${kindLabel} · ${translate('auto.components.settings.pluginContributions.light', 'Light')}`
-  }
-  return kindLabel
-}
-
-function fileList(extensions: readonly string[], filenames: readonly string[]): string {
-  const files = [...extensions, ...filenames]
-  const shown = files.slice(0, FILE_LIST_LIMIT).join(', ')
-  return files.length > FILE_LIST_LIMIT ? `${shown} +${files.length - FILE_LIST_LIMIT}` : shown
-}
-
-function languageDetail(coverage: number | undefined): Pick<PluginContribution, 'detail' | 'tone'> {
-  const label = translate(
+function languageDetail(
+  coverage: number | undefined,
+  t: Translate = translate
+): Pick<PluginContribution, 'detail' | 'tone'> {
+  const label = t(
     'auto.components.settings.PluginDetailSections.typeLanguagePack',
     'Interface language'
   )
@@ -163,7 +166,7 @@ function languageDetail(coverage: number | undefined): Pick<PluginContribution, 
   }
   if (coverage < PLUGIN_LANGUAGE_PACK_MIN_COVERAGE) {
     return {
-      detail: translate(
+      detail: t(
         'auto.components.settings.pluginContributions.languageIncomplete',
         '{{value0}}% translated, too incomplete to use as Orca’s language',
         { value0: coverage }
@@ -172,7 +175,7 @@ function languageDetail(coverage: number | undefined): Pick<PluginContribution, 
     }
   }
   return {
-    detail: translate(
+    detail: t(
       'auto.components.settings.pluginContributions.languageCoverage',
       'Interface language · {{value0}}% translated',
       { value0: coverage }
@@ -183,7 +186,9 @@ function languageDetail(coverage: number | undefined): Pick<PluginContribution, 
 
 /** Every named contribution as a row, in the order a reader scans: looks, languages, then UI. */
 export function describePluginContributions(
-  source: PluginContributionSource
+  source: PluginContributionSource,
+  t: Translate = translate,
+  intlLocale?: string
 ): PluginContribution[] {
   const rows: PluginContribution[] = []
   for (const theme of source.themes) {
@@ -192,8 +197,9 @@ export function describePluginContributions(
       kind: 'themes',
       title: theme.label,
       detail: withMode(
-        translate('auto.components.settings.PluginDetailSections.typeAppTheme', 'App theme'),
-        theme.base
+        t('auto.components.settings.PluginDetailSections.typeAppTheme', 'App theme'),
+        theme.base,
+        t
       ),
       tone: 'default'
     })
@@ -204,11 +210,9 @@ export function describePluginContributions(
       kind: 'terminalThemes',
       title: theme.label,
       detail: withMode(
-        translate(
-          'auto.components.settings.PluginDetailSections.typeTerminalTheme',
-          'Terminal theme'
-        ),
-        theme.mode
+        t('auto.components.settings.PluginDetailSections.typeTerminalTheme', 'Terminal theme'),
+        theme.mode,
+        t
       ),
       tone: 'default'
     })
@@ -218,16 +222,14 @@ export function describePluginContributions(
       key: `iconThemes:${theme.id}`,
       kind: 'iconThemes',
       title: theme.label,
-      detail: translate(
-        'auto.components.settings.PluginDetailSections.typeIconTheme',
-        'File icon theme'
-      ),
+      detail: t('auto.components.settings.PluginDetailSections.typeIconTheme', 'File icon theme'),
       tone: 'default'
     })
   }
+  rows.push(...fontContributionRows(source.fonts, t))
   for (const syntax of source.syntaxes) {
     const files = fileList(syntax.extensions, syntax.filenames)
-    const label = translate(
+    const label = t(
       'auto.components.settings.PluginDetailSections.typeSyntax',
       'Syntax highlighting'
     )
@@ -236,7 +238,7 @@ export function describePluginContributions(
       kind: 'syntaxes',
       title: syntax.label,
       detail: syntax.failed
-        ? translate(
+        ? t(
             'auto.components.settings.PluginSettingsRow.syntaxFailed',
             'Highlighting stopped: this grammar failed.'
           )
@@ -250,8 +252,8 @@ export function describePluginContributions(
     rows.push({
       key: `languagePacks:${language.locale}`,
       kind: 'languagePacks',
-      title: languageDisplayName(language.locale),
-      ...languageDetail(language.coverage)
+      title: languageDisplayName(language.locale, intlLocale),
+      ...languageDetail(language.coverage, t)
     })
   }
   for (const [index, title] of source.panels.entries()) {
@@ -259,24 +261,25 @@ export function describePluginContributions(
       key: `panels:${index}`,
       kind: 'panels',
       title,
-      detail: translate('auto.components.settings.PluginDetailSections.panel', 'Sidebar panel'),
+      detail: t('auto.components.settings.PluginDetailSections.panel', 'Sidebar panel'),
       tone: 'default'
     })
   }
   for (const [index, editor] of source.customEditors.entries()) {
-    const label = translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
+    const label = t('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
     const files = fileList(editor.extensions, editor.filenames)
+    const takeover = customEditorTakeover(editor, t)
     rows.push({
       key: `customEditors:${index}`,
       kind: 'customEditors',
       title: editor.title,
-      detail: files ? `${label} · ${files}` : label,
-      tone: 'default'
+      detail: [label, files, takeover].filter(Boolean).join(' · '),
+      tone: takeover ? 'warning' : 'default'
     })
   }
   for (const [index, newFile] of source.newFiles.entries()) {
     // Why no name: the row title is the menu item itself, so title and detail read as one line.
-    const label = translate(
+    const label = t(
       'auto.components.settings.pluginContributions.newFileMenu',
       'Adds to the + menu'
     )
@@ -288,12 +291,13 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
+  rows.push(...statusBarContributionRows(source.statusBarItems, t))
   for (const [index, title] of source.vmRecipes.entries()) {
     rows.push({
       key: `vmRecipes:${index}`,
       kind: 'vmRecipes',
       title,
-      detail: translate('auto.components.settings.PluginDetailSections.recipe', 'Machine recipe'),
+      detail: t('auto.components.settings.PluginDetailSections.recipe', 'Machine recipe'),
       tone: 'default'
     })
   }

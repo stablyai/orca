@@ -1,4 +1,4 @@
-import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { compareFileNames } from '../../../src/shared/file-listing/file-name-sort'
 import { translate } from '../i18n/mobile-i18n'
 import type {
   MobileGitBranchChangeEntry,
@@ -28,38 +28,6 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
     title: translate('sourceControl.branchCompare.sectionTitle', 'Committed on Branch'),
     data
   }
-}
-
-export function formatMobileBranchCompareSummary(
-  summary: MobileGitBranchCompareSummary
-): string | null {
-  if (summary.status !== 'ready') {
-    return summary.errorMessage ?? null
-  }
-  const files = branchCompareFiles(summary.changedFiles)
-  if (summary.commitsAhead === undefined) {
-    return translate('sourceControl.branchCompare.summary', '{{files}} - vs {{baseRef}}', {
-      files,
-      baseRef: summary.baseRef
-    })
-  }
-  return translate(
-    'sourceControl.branchCompare.summaryWithCommits',
-    '{{files}} - {{commits}} - vs {{baseRef}}',
-    { files, commits: branchCompareCommits(summary.commitsAhead), baseRef: summary.baseRef }
-  )
-}
-
-function branchCompareFiles(count: number): string {
-  return count === 1
-    ? translate('sourceControl.branchCompare.files_one', '{{count}} file', { count })
-    : translate('sourceControl.branchCompare.files_other', '{{count}} files', { count })
-}
-
-function branchCompareCommits(count: number): string {
-  return count === 1
-    ? translate('sourceControl.branchCompare.commits_one', '{{count}} commit', { count })
-    : translate('sourceControl.branchCompare.commits_other', '{{count}} commits', { count })
 }
 
 export function canOpenMobileBranchCompareDiff(summary: MobileGitBranchCompareSummary): boolean {

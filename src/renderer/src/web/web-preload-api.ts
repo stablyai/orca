@@ -37,6 +37,7 @@ import { createNotificationsApi } from './preload-api/web-notifications-api'
 import { createWebOnboardingApi } from './preload-api/web-onboarding-api'
 import { createWebOrcaProfilesApi } from './preload-api/web-orca-profiles-api'
 import { createWebPlatformApi } from './preload-api/web-platform-api'
+import { createWebPluginsApi } from './preload-api/web-plugins-api'
 import { createRateLimitsApi } from './preload-api/web-rate-limits-api'
 import { createReposApi } from './preload-api/web-repositories-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
@@ -47,6 +48,7 @@ import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environm
 import { webRuntimeState } from './preload-api/web-runtime-session'
 import { createWebSettingsApi } from './preload-api/web-settings-api'
 import { createShellApi } from './preload-api/web-shell-api'
+import { createWebSpeechApi } from './preload-api/web-speech-api'
 import { createWebStarNagApi } from './preload-api/web-star-nag-api'
 import { createWebTelemetryApi } from './preload-api/web-telemetry-api'
 import { createPtyApi, createSshApi } from './preload-api/web-terminal-api'
@@ -65,7 +67,11 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
-function createWebPreloadApi(): Partial<PreloadApi> {
+function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins' | 'speech'> & {
+  settings: Partial<PreloadApi['settings']>
+  plugins: Partial<PreloadApi['plugins']>
+  speech: Partial<PreloadApi['speech']>
+} {
   return {
     ...createWebAppApi(),
     ...createWebStarNagApi(),
@@ -77,12 +83,14 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ...createWebSettingsApi(),
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
+    plugins: createWebPluginsApi(),
     ...createWebDiagnosticsApi(),
     ...createWebWorkspaceSessionApi(),
     ...createWebOnboardingApi(),
     ...createWebGithubCacheApi(),
     runtime: createWebRuntimeApi(),
     nativeChat: createWebNativeChatApi(),
+    speech: createWebSpeechApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),

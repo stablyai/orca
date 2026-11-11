@@ -1,4 +1,7 @@
+import { readCurrentReviewHead } from '../../../source-control/review-current-head'
+import { shouldHideMergedImplicitReview } from '../../../source-control/branch-review-selection'
 import type {
+  GitHubOwnerRepo,
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
   PRMergeableState,
@@ -14,15 +17,15 @@ import {
   normalizeReviewDecision,
   isAutoMergeEnabled
 } from './../map/work-item-field-coercion'
-import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { githubRepositoryWebHost } from '../../github-repository-host'
 export type PullRequestLookupData = {
   number: number
   title: string
   state: string
   url: string
   statusCheckRollup: unknown[]
+  checksUnavailable?: boolean
   updatedAt: string
   isDraft?: boolean
   mergeable: string
@@ -37,6 +40,7 @@ export type PullRequestLookupData = {
   headRefName?: string
   baseRefOid?: string
   headRefOid?: string
+  isCrossRepository?: boolean
   headRepositoryOwner?: { login?: string } | null
   headRepository?: { name?: string } | null
   headDefaultBranchName?: string
@@ -78,15 +82,20 @@ export type RestPullRequest = {
 }
 
 export const PR_LOOKUP_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+  'number,title,state,url,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export const PR_BRANCH_LIST_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+  'number,title,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
+  userRefresh?: boolean
   acceptMergedFallbackPR?: boolean
   // Supply the actual worktree head without probing a different main-repo checkout.
   currentHeadOid?: string | null
+  /** Bounds check pagination for CI-line watch reads only; absent reads every page. */
+  checkPageLimit?: number
+  /** A CI-line watch's own PR repository: lookups read only it, never another remote by number. */
+  exactRepository?: GitHubOwnerRepo
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
@@ -128,6 +137,7 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
     state: pr.merged_at ? 'MERGED' : pr.state,
     url: pr.html_url ?? pr.url ?? '',
     statusCheckRollup: [],
+    checksUnavailable: true,
     updatedAt: pr.updated_at ?? '',
     isDraft: pr.draft,
     mergeable: mapRestPRMergeable(pr),
@@ -162,11 +172,34 @@ export function pullRequestMatchesHeadRepository(
   expectedHeadRepo: OwnerRepo | null
 ): boolean {
   const actualHeadRepo = pullRequestHeadRepository(data, prRepo)
-  if (!actualHeadRepo || !expectedHeadRepo || sameOwnerRepo(actualHeadRepo, expectedHeadRepo)) {
+  // A renamed repository still answers at its old remote URL; its own PRs report the new name.
+  if (sameOwnerRepo(expectedHeadRepo, prRepo) && isSameRepositoryPullRequest(data, prRepo)) {
     return true
   }
-  // A renamed repository still answers at its old remote URL; its own PRs report the new name.
-  return sameOwnerRepo(expectedHeadRepo, prRepo) && isSameRepositoryPullRequest(data, prRepo)
+  const owner = data.headRepositoryOwner?.login?.trim().toLowerCase()
+  const baseRepo = ownerRepoFromPullRequestUrl(data.url)
+  const isCrossRepository =
+    data.isCrossRepository ??
+    (actualHeadRepo && baseRepo
+      ? !sameOwnerRepo(actualHeadRepo, baseRepo)
+      : owner && baseRepo && owner !== baseRepo.owner.toLowerCase()
+        ? true
+        : undefined)
+  if (!expectedHeadRepo) {
+    return isCrossRepository !== true
+  }
+  const actualHostRepo = prRepo ?? baseRepo
+  if (
+    (actualHostRepo &&
+      githubRepositoryWebHost(actualHostRepo).toLowerCase() !==
+        githubRepositoryWebHost(expectedHeadRepo).toLowerCase()) ||
+    (owner && owner !== expectedHeadRepo.owner.toLowerCase())
+  ) {
+    return false
+  }
+  return actualHeadRepo
+    ? sameOwnerRepo(actualHeadRepo, expectedHeadRepo)
+    : isCrossRepository !== true || Boolean(owner)
 }
 
 // Canonical PR URLs name the current base repository even when remote URLs are stale.
@@ -193,11 +226,14 @@ export function shouldHideMergedImplicitPR(
   linkedPRNumber: number | null | undefined,
   currentHeadOid: string | null
 ): boolean {
-  if (!data || !isMergedImplicitPR(data, linkedPRNumber)) {
-    return false
-  }
-  // Preserve historical merged reviews only when their head matches the current checkout.
-  return !currentHeadOid || data.headRefOid !== currentHeadOid
+  return data
+    ? shouldHideMergedImplicitReview(
+        mapPRState(data.state, data.isDraft),
+        linkedPRNumber,
+        data.headRefOid,
+        currentHeadOid
+      )
+    : false
 }
 
 export async function linkedMergedPRDivergedHeadOid(
@@ -234,15 +270,5 @@ export async function getCurrentHeadOid(
   connectionId?: string | null,
   localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<string | null> {
-  requireReachableGitRoute(getConnectionExecutionHostId(connectionId))
-  try {
-    const result = await gitExecFileAsync(['rev-parse', 'HEAD'], {
-      cwd: repoPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-      ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
-    })
-    return result.stdout.trim() || null
-  } catch {
-    return null
-  }
+  return readCurrentReviewHead(repoPath, connectionId, localGitOptions, gitExecFileAsync)
 }

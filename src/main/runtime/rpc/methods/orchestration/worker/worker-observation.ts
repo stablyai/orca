@@ -1,18 +1,19 @@
-import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
-import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/orchestration/workers/worker-terminal-host-scope'
+import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-terminal-contracts'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
-import { observeChatAssignee } from '../../../../orchestration/chat-assignee'
+import { createSessionWorkerLivenessReader } from '../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import { inspectSessionWorker } from './session-worker-observation'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
   WorkerDispatchRow
-} from '../../../../orchestration/types'
+} from '../../../../orchestration/db/orchestration-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { exposeDispatchContext } from './dispatch-context-exposure'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 
 /** Recover live handles by recorded process incarnation so stale durable handles cannot hide and leak running workers. */
 export async function inspectWorkerTerminal(
@@ -167,34 +168,6 @@ function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
   }
 }
 
-// Hide authority hashes and decode host_scope; emit one camelCase shape matching exposeWorker.
-export function exposeDispatchContext(dispatch: DispatchContextRow) {
-  return {
-    id: dispatch.id,
-    runId: dispatch.run_id,
-    taskId: dispatch.task_id,
-    // Keep dispatch.task_id beside the rename because shipped CLIs still read it.
-    task_id: dispatch.task_id,
-    contractVersion: dispatch.contract_version,
-    assigneeHandle: dispatch.assignee_handle,
-    assigneePaneKey: dispatch.assignee_pane_key,
-    processIncarnation: dispatch.process_incarnation,
-    capabilityRevokedAt: dispatch.capability_revoked_at,
-    retryOfDispatchId: dispatch.retry_of_dispatch_id,
-    creatorDispatchId: dispatch.creator_dispatch_id,
-    hostScope: parseWorkerTerminalHostScope(dispatch.host_scope),
-    status: dispatch.status,
-    failureCount: dispatch.failure_count,
-    lastFailure: dispatch.last_failure,
-    terminationReason: dispatch.termination_reason,
-    depth: dispatch.depth,
-    dispatchedAt: dispatch.dispatched_at,
-    completedAt: dispatch.completed_at,
-    createdAt: dispatch.created_at,
-    lastHeartbeatAt: dispatch.last_heartbeat_at
-  }
-}
-
 export async function showContextOnlyWorker(
   runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
@@ -241,13 +214,14 @@ export function projectFleetWorkerPage(
     return null
   }
   const now = Date.now()
+  const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
   return projectWorkerFleet({
     rows,
     attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
-    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
+    statuses,
     limit: 1,
     now,
-    observeChat: (sessionId) => observeChatAssignee(sessionId, db)
+    observeSession: createSessionWorkerLivenessReader(db, statuses)
   })
 }
 
@@ -277,19 +251,7 @@ export function exposeFederatedWorkerObservation(
   }
 }
 
-export function resolvePinnedFederatedServer(
-  runtime: WorkerTerminalReleaseRuntime,
-  federated: FederatedDispatchRow
-) {
-  const server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
-  if (server.peerFingerprint !== federated.peer_fingerprint) {
-    throw new OrchestrationError(
-      'peer_changed',
-      `Saved environment ${federated.environment_name} now identifies a different Orca server.`
-    )
-  }
-  return server
-}
+export { resolvePinnedFederatedServer }
 
 export async function callFederatedWorkerShow(
   runtime: WorkerTerminalReleaseRuntime,
@@ -306,6 +268,10 @@ export async function callFederatedWorkerShow(
     effects: unknown[]
     residualResources: unknown[]
   }
+  /** Absent from hosts that predate automatic release. */
+  autoReleaseAt?: string | null
+  /** Absent from hosts that predate Keep open. */
+  keptOpen?: boolean
   terminal: unknown
   observation: {
     status: string

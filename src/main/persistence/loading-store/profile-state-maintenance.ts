@@ -4,7 +4,8 @@ import type { StoreDomains } from './store-domain-composition'
 import type { StoreRuntimeState } from './store-runtime-state'
 import { drainProfileStateOperations } from './profile-state-flush-lifetime'
 import { flushCurrentStateAsync } from './write-flush-barriers'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave } from './write-scheduling'
+import { persistGithubCache, suspendGithubCachePersistence } from './github-cache-persistence'
 
 export type ProfileStateMaintenanceOptions = {
   signal?: AbortSignal
@@ -21,6 +22,7 @@ export function freezeProfileStateWrites(runtime: StoreRuntimeState): void {
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
   }
+  suspendGithubCachePersistence(runtime)
   runtime.profileStateAuthority?.close?.()
 }
 
@@ -30,6 +32,7 @@ export async function freezeProfileStateWritesAsync(runtime: StoreRuntimeState):
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
   }
+  suspendGithubCachePersistence(runtime)
   try {
     await drainProfileStateOperations([
       runtime.pendingProfileMaintenance,
@@ -56,13 +59,16 @@ export function beginProfileStateMaintenance(
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
   }
+  suspendGithubCachePersistence(runtime)
   const resumePreference = runtime.activeViewPreference.pauseForMaintenance()
   const resumeScheduling = () => {
     runtime.writesFrozen = false
     runtime.profileMaintenancePending = false
     runtime.pendingProfileMaintenance = null
     resumePreference()
-    scheduleSave(domains.scheduling)
+    scheduleFullProfileSave(domains.scheduling)
+    // Updates admitted while paused (or a retry it skipped) resume their routine save.
+    persistGithubCache(runtime, 'routine')
   }
   const paused = pauseProfileState(runtime, domains, options).then((authority) => {
     let consumed = false
@@ -162,7 +168,7 @@ async function drainProfileFileWork(runtime: StoreRuntimeState): Promise<void> {
     runtime.staleProfileStateTempCleanup,
     runtime.pendingWrite,
     runtime.pendingSnapshotFileWork,
-    runtime.pendingGithubCacheWrite,
+    runtime.staleGithubCacheTempCleanup,
     runtime.activeViewPreference.waitForPendingWrite(),
     runtime.profileStateAuthority?.drainBackups?.(
       runtime.profileMaintenancePending || runtime.quitFlushStarted

@@ -1,14 +1,12 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
-import { COMPOSER_INSET_TOP } from '../composer/mobile-native-chat-composer-styles'
+import { COMPOSER_INSET_TOP, COMPOSER_TUCK } from '../composer/mobile-native-chat-composer-styles'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 // Keep 44pt targets inside the parent row because Android drops outside touches.
 const MIN_TOUCH_TARGET = 44
 const HEADER_HEIGHT = spacing.xl + spacing.sm
 const META_LINE_HEIGHT = typography.metaSize + spacing.xs
-
-const COMPOSER_TUCK = 12
 
 export const queuedMessageStyles = themedStyleSheet(() => ({
   list: {
@@ -19,8 +17,8 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
   box: {
     paddingBottom: COMPOSER_TUCK,
     backgroundColor: colors.bgPanel,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: radii.surface,
+    borderTopRightRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
     borderColor: colors.composerBorder,
@@ -95,7 +93,7 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   chevron: {
     width: 36,
@@ -137,6 +135,12 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
+  editorHeading: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
   captionReturned: {
     color: colors.statusRed
   },
@@ -151,14 +155,14 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   iconAction: {
     minHeight: MIN_TOUCH_TARGET,
     width: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   lastIconAction: {
     width: MIN_TOUCH_TARGET

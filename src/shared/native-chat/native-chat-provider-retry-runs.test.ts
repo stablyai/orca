@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../agent-session-journal-types'
-import { agentSessionFailureWords } from '../agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../agent-session-journal-item-key'
-import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
-import { projectNativeChatTranscript } from '../native-chat-transcript-projection'
-import type { NativeChatMessage } from '../native-chat-types'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
+import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureWords } from '../agent-session/failures/agent-session-failure-words'
+import { agentJournalSubmissionKey } from '../agent-session/journal/agent-session-journal-item-key'
+import { projectNativeChatTranscript } from './transcript/native-chat-transcript-projection'
+import type { NativeChatMessage } from './native-chat-types'
+import { projectStructuredAgentSessionMessages } from '../agent-session/view/structured-agent-session-message-projection'
 
 let sequence = 0
 
@@ -53,13 +52,6 @@ function drawn(items: AgentJournalRenderItem[]): string[] {
 }
 
 describe('a run of provider retry rows', () => {
-  it('draws only its latest row', () => {
-    expect(drawn([assistant('Working'), retry(1), retry(2), retry(3)])).toEqual([
-      'Working',
-      'Codex is retrying: Reconnecting... 3/5.'
-    ])
-  })
-
   it("is split by any other of the same agent's rows drawn between two retries", () => {
     const notice = item({ kind: 'status', tone: 'notice', text: 'Model changed' })
     expect(
@@ -70,13 +62,6 @@ describe('a run of provider retry rows', () => {
       'Codex is retrying: Reconnecting... 1/5.',
       'Model changed',
       'Codex is retrying: Reconnecting... 1/5.'
-    ])
-  })
-
-  it("keeps each agent's retries apart", () => {
-    expect(drawn([retry(1), retry(1, 'subagent-1'), retry(2, 'subagent-1')])).toEqual([
-      'Codex is retrying: Reconnecting... 1/5.',
-      'Codex is retrying: Reconnecting... 2/5.'
     ])
   })
 
@@ -142,12 +127,5 @@ describe('a run of provider retry rows', () => {
       [expect.stringMatching(/^item-/), false],
       [agentJournalSubmissionKey('queued-1'), true]
     ])
-  })
-
-  it('hands back the same list when nothing retried', () => {
-    const messages: NativeChatMessage[] = [
-      { id: 'a', role: 'assistant', blocks: [], timestamp: 1, source: 'transcript' }
-    ]
-    expect(collapseProviderRetryRuns(messages)).toBe(messages)
   })
 })

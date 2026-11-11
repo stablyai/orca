@@ -6,16 +6,14 @@ import {
 import {
   getWorkspaceAttachments,
   normalizeWorkspaceAttachmentUpdate
-} from '../../../../../../shared/workspace-attachments'
+} from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { normalizeGitHubPRSuppressionUpdate } from '../../../../../../shared/worktree/github-pr-suppression'
-import type { WorktreeSlice } from '../../worktree-helpers'
-import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
-import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
+import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   findKnownWorktreeById,
   getFolderWorkspaceMetaUpdates
@@ -31,12 +29,16 @@ import {
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
 import { buildWorktreeMetaStateUpdate } from './worktree-meta-state-update'
-import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
+import { withPendingSidebarRowWrites } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 
-import { findRepoForHost } from '../../repo-host-identity'
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -118,7 +120,8 @@ export function createUpdateWorktreeMeta(
       return { ok: true }
     }
     normalizedUpdates = normalizeGitHubPRSuppressionUpdate(
-      normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates)
+      normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates),
+      worktreeForUpdate?.linkedPR
     )
     const currentResolvedPushTarget =
       normalizedUpdates.linkedPR === linkedPrForPushTarget ? resolvedPushTarget : undefined
@@ -138,12 +141,10 @@ export function createUpdateWorktreeMeta(
     const shouldRefreshHostedReview = Boolean(
       worktreeForUpdate && hasChangedHostedReviewLinkUpdates(normalizedUpdates, worktreeForUpdate)
     )
-    const reviewRepo = shouldRefreshHostedReview
-      ? (findRepoForHost(get().repos, worktreeForUpdate?.repoId ?? '', {
-          hostId: executionHostId,
-          settings: get().settings
-        }) ?? undefined)
-      : undefined
+    const reviewRepo =
+      shouldRefreshHostedReview && worktreeForUpdate
+        ? (resolveReviewRepository(get().repos, worktreeForUpdate) ?? undefined)
+        : undefined
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
@@ -215,13 +216,18 @@ export function createUpdateWorktreeMeta(
       if (
         !options?.suppressHostedReviewRefresh &&
         reviewRepo &&
+        hasUniqueIndexedRepositoryHost(
+          get().repos,
+          reviewRepo.id,
+          getRepoExecutionHostId(reviewRepo)
+        ) &&
         reviewBranch &&
         typeof get().fetchHostedReviewForBranch === 'function'
       ) {
         // Why: refetch against post-update links so a cache entry from the previous provider link can't keep showing the removed review.
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
-          repoOwnerExecutionHostId: executionHostId ?? worktreeForUpdate?.hostId,
+          repoOwnerExecutionHostId: getRepoExecutionHostId(reviewRepo),
           ...getWorkspaceReviewRefreshHints(targetEnriched, worktreeForUpdate),
           force: true
         })

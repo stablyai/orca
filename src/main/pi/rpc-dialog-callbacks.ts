@@ -1,11 +1,13 @@
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import { piRpcDialogPresentation, type PiRpcDialogPresentation } from './rpc-extension-dialogs'
+import { PiRpcBackgroundWork } from './rpc-background-work'
 
 type Callback = { presentation: PiRpcDialogPresentation; claimed: boolean; bytes: number }
 const DECORATION = new Set(['notify', 'setStatus', 'setWidget', 'setTitle', 'setEditorText'])
@@ -13,13 +15,27 @@ const DECORATION = new Set(['notify', 'setStatus', 'setWidget', 'setTitle', 'set
 export class PiRpcDialogCallbacks {
   private readonly pending = new Map<string, Callback>()
   private pendingBytes = 0
+  /** Its frames never reach presentation, the pending cap, or cancelAll at turn end. */
+  readonly backgroundWork: PiRpcBackgroundWork
   constructor(
     private readonly lane: JsonlRpcTimelineLane,
     private readonly send: (frame: JsonlRpcRecord) => Promise<void>,
-    private readonly onFailed: (error: Error) => void
-  ) {}
+    private readonly onFailed: (error: Error) => void,
+    backgroundWorkDirectory: string | null = null
+  ) {
+    this.backgroundWork = new PiRpcBackgroundWork(backgroundWorkDirectory)
+  }
+
+  /** The child exited: its dialogs and any probe awaiting an answer can never be answered. */
+  close(): void {
+    this.cancelAll()
+    this.backgroundWork.end()
+  }
 
   receive(frame: JsonlRpcRecord): void {
+    if (this.backgroundWork.receive(frame)) {
+      return
+    }
     if (typeof frame.method === 'string' && DECORATION.has(frame.method)) {
       return
     }

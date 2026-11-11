@@ -103,7 +103,10 @@ const REOPEN_MAX_ATTEMPTS = 3
 const REOPEN_RETRY_DELAY_MS = 300
 
 function openWindowWithRetry(
-  opts: Pick<FocusExistingMainWindowOptions, 'app' | 'getWindow' | 'openWindow' | 'warn'>,
+  opts: Pick<
+    FocusExistingMainWindowOptions,
+    'app' | 'getWindow' | 'openWindow' | 'canOpenWindow' | 'warn'
+  >,
   platform: NodeJS.Platform,
   setTimer: FocusTimer,
   attempt: number
@@ -118,10 +121,15 @@ function openWindowWithRetry(
     setTimer(() => {
       // openWindow constructs each time; adopt windows created by concurrent/partially failed attempts to avoid orphaning duplicates.
       const existing = opts.getWindow()
-      const window =
-        existing && !existing.isDestroyed()
-          ? existing
-          : openWindowWithRetry(opts, platform, setTimer, attempt + 1)
+      if (existing && !existing.isDestroyed()) {
+        activateWindow(existing, opts.app, platform, setTimer)
+        return
+      }
+      // Opening may have become forbidden (e.g. quit teardown) since this retry was scheduled.
+      if (opts.canOpenWindow?.() === false) {
+        return
+      }
+      const window = openWindowWithRetry(opts, platform, setTimer, attempt + 1)
       if (window) {
         activateWindow(window, opts.app, platform, setTimer)
       }

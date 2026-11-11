@@ -1,14 +1,16 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
-import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
-import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-send-mutation'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionSendBody } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type {
   AgentLaunchIntent,
   AgentLaunchPromptDisposal,
-  AgentLaunchResult
-} from '../../shared/agent-launch-intent'
-import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
-import type { AgentLaunchModeReceipt } from './agent-launch-mode'
+  AgentLaunchResult,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { agentPromptRidesLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-startup'
+
 import type { CreatedSurface } from './agent-launch-executor'
 import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
 import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
@@ -66,14 +68,20 @@ export async function settleLaunchPromptDisposal(
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
-  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, { freshLaunch: true })
+  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, {
+    freshLaunch: true,
+    terminalCreation: created.terminalCreation
+  })
 }
 
 /** PTY writes prove handoff, not consumption; drafts remain undelivered because acceptance is unobservable. */
 export async function deliverTerminalLaunchPrompt(
   execution: AgentLaunchSurfaceExecution,
   handle: string,
-  { freshLaunch }: { freshLaunch: boolean }
+  {
+    freshLaunch,
+    terminalCreation
+  }: { freshLaunch: boolean; terminalCreation?: RuntimeTerminalCreate }
 ): Promise<AgentLaunchPromptDisposal> {
   const { intent, surfaces, signal } = execution
   if (!intent.prompt || intent.prompt.delivery !== 'submit' || signal?.aborted) {
@@ -83,6 +91,7 @@ export async function deliverTerminalLaunchPrompt(
     handle,
     agent: intent.agent,
     freshLaunch,
+    terminalCreation,
     prompt: intent.prompt,
     ...(signal ? { signal } : {})
   })

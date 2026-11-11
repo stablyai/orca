@@ -1,0 +1,158 @@
+import { translate } from '@/i18n/i18n'
+import {
+  AGENT_SESSION_FAILURE_COPY as COPY,
+  type AgentSessionFailureCopyId,
+  type AgentSessionFailureCopyValues
+} from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
+
+type AvailabilityCopyId = Extract<
+  AgentSessionFailureCopyId,
+  | 'forkOriginalMissing'
+  | 'forkOriginalUnavailable'
+  | 'forkOriginalMissingNamed'
+  | 'forkOriginalUnavailableNamed'
+  | 'forkOriginalLatestOnly'
+  | 'forkOriginalLatestOnlyNamed'
+  | 'claudeSystemNotSignedIn'
+  | 'claudeManagedNotSignedIn'
+  | 'codexSystemNotSignedIn'
+  | 'codexManagedNotSignedIn'
+  | 'antigravityNotSignedIn'
+  | 'antigravitySystemNotSignedIn'
+  | 'agentCommandNotSignedIn'
+  | 'interactiveAgentNotSignedIn'
+  | 'agentNotSignedIn'
+  | 'thenSendAgain'
+  | 'cliMissing'
+  | 'cliMissingInWslDistro'
+  | 'cliTooOld'
+  | 'modelUnavailable'
+  | 'modelUnavailableUpdate'
+  | 'modelNotSelected'
+>
+
+export const AVAILABILITY_PIECES: Record<
+  AvailabilityCopyId,
+  (values: AgentSessionFailureCopyValues) => string
+> = {
+  forkOriginalMissing: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalMissing',
+      COPY.forkOriginalMissing,
+      values
+    ),
+  forkOriginalUnavailable: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalUnavailable',
+      COPY.forkOriginalUnavailable,
+      values
+    ),
+  forkOriginalMissingNamed: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalMissingNamed',
+      COPY.forkOriginalMissingNamed,
+      values
+    ),
+  forkOriginalUnavailableNamed: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalUnavailableNamed',
+      COPY.forkOriginalUnavailableNamed,
+      values
+    ),
+  forkOriginalLatestOnly: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalLatestOnly',
+      COPY.forkOriginalLatestOnly,
+      values
+    ),
+  forkOriginalLatestOnlyNamed: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalLatestOnlyNamed',
+      COPY.forkOriginalLatestOnlyNamed,
+      values
+    ),
+  agentCommandNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.agentCommandNotSignedIn',
+      COPY.agentCommandNotSignedIn,
+      values
+    ),
+  interactiveAgentNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.interactiveAgentNotSignedIn',
+      COPY.interactiveAgentNotSignedIn,
+      values
+    ),
+  agentNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.agentNotSignedIn',
+      COPY.agentNotSignedIn,
+      values
+    ),
+  thenSendAgain: () =>
+    translate('components.native-chat.failureWords.thenSendAgain', COPY.thenSendAgain),
+  claudeSystemNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.claudeSystemNotSignedIn',
+      COPY.claudeSystemNotSignedIn,
+      values
+    ),
+  claudeManagedNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.claudeManagedNotSignedIn',
+      COPY.claudeManagedNotSignedIn,
+      values
+    ),
+  codexSystemNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.codexSystemNotSignedIn',
+      COPY.codexSystemNotSignedIn,
+      values
+    ),
+  codexManagedNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.codexManagedNotSignedIn',
+      COPY.codexManagedNotSignedIn,
+      values
+    ),
+  antigravityNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.antigravityNotSignedIn',
+      COPY.antigravityNotSignedIn,
+      values
+    ),
+  antigravitySystemNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.antigravitySystemNotSignedIn',
+      COPY.antigravitySystemNotSignedIn,
+      values
+    ),
+  modelUnavailable: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelUnavailable',
+      COPY.modelUnavailable,
+      values
+    ),
+  modelNotSelected: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelNotSelected',
+      COPY.modelNotSelected,
+      values
+    ),
+  modelUnavailableUpdate: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelUnavailableUpdate',
+      COPY.modelUnavailableUpdate,
+      values
+    ),
+  cliMissing: (values) =>
+    translate('components.native-chat.failureWords.cliMissing', COPY.cliMissing, values),
+  cliMissingInWslDistro: (values) =>
+    translate(
+      'components.native-chat.failureWords.cliMissingInWslDistro',
+      COPY.cliMissingInWslDistro,
+      values
+    ),
+  cliTooOld: (values) =>
+    translate('components.native-chat.failureWords.cliTooOld', COPY.cliTooOld, values)
+}

@@ -5,8 +5,10 @@ import type {
   PluginMarketplaceHostSourceState
 } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { useTranslate } from '@/i18n/use-translate'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { PluginPreviewCache } from './plugin-preview-cache'
+import { requestPluginInstallCounts } from '@/store/plugins/installation/plugin-install-counts'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -16,6 +18,22 @@ export type PluginPagePreview =
 function marketplaceError(cause: unknown, fallback: string): string {
   console.warn('[plugins] marketplace action failed:', cause)
   return fallback
+}
+
+/** Reads each listing's install preview once; a failed read is retried on the next ask. */
+export function createPluginPagePreviewCache(): PluginPreviewCache {
+  return new PluginPreviewCache((listing) =>
+    window.api.plugins
+      .previewMarketplacePlugin({
+        marketplaceSourceId: listing.marketplaceSourceId,
+        pluginKey: listing.pluginKey
+      })
+      .then((preview): PluginPagePreview => ({ ok: true, preview }))
+      .catch((cause: unknown): PluginPagePreview => {
+        console.warn('[plugins] plugin page preview failed:', cause)
+        return { ok: false }
+      })
+  )
 }
 
 /**
@@ -30,6 +48,7 @@ export function usePluginCatalog({
   /** A plugin asked for from outside Settings (a file-type suggestion); opens its page. */
   onOpenRequested?: (pluginKey: string) => void
 }) {
+  const t = useTranslate()
   const [sources, setSources] = useState<PluginMarketplaceHostSourceState[]>([])
   const [listings, setListings] = useState<PluginMarketplaceHostListing[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,24 +56,11 @@ export function usePluginCatalog({
   const [error, setError] = useState<string | null>(null)
   const mountedRef = useRef(false)
   const requestRef = useRef(0)
-  const [previewCache] = useState(
-    () =>
-      new PluginPreviewCache((listing) =>
-        window.api.plugins
-          .previewMarketplacePlugin({
-            marketplaceSourceId: listing.marketplaceSourceId,
-            pluginKey: listing.pluginKey
-          })
-          .then((preview): PluginPagePreview => ({ ok: true, preview }))
-          .catch((cause: unknown): PluginPagePreview => {
-            console.warn('[plugins] plugin page preview failed:', cause)
-            return { ok: false }
-          })
-      )
-  )
+  const [previewCache] = useState(createPluginPagePreviewCache)
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
+    requestPluginInstallCounts()
     try {
       const [nextSources, nextListings] = await Promise.all([
         window.api.plugins.listMarketplaces(),
@@ -105,7 +111,7 @@ export function usePluginCatalog({
         setError(
           marketplaceError(
             cause,
-            translate(
+            t(
               'auto.components.settings.PluginMarketplaceBrowser.refreshFailed',
               "Couldn't refresh catalogs. Try again."
             )

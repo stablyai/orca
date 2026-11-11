@@ -11,6 +11,15 @@ describe('tab agent task-title identity', () => {
       })
     ).toBe(false)
     expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: false,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
+    expect(
       hasObservedTabAgentSignal({
         title: 'Codex',
         launchAgent: 'codex',
@@ -30,32 +39,26 @@ describe('tab agent task-title identity', () => {
     }
   )
 
-  it('keeps a Claude-owned pane Claude when its task title mentions another agent', () => {
-    for (const title of [
-      '⠋ Fix the codex plugin launcher',
-      '⠙ add grok support to the tab bar',
-      '⠹ port the gemini status parser'
-    ]) {
-      for (const signals of [
-        { hasObservedAgentSignal: true, isRemote: false },
-        {
-          hasObservedAgentSignal: true,
-          isRemote: false,
-          focusedCompletedHookAgent: 'claude' as const
-        },
-        { hasObservedAgentSignal: true, isRemote: true }
-      ]) {
-        expect(
-          resolveTabAgentFromSignals({
-            ...signals,
-            title,
-            hookAgent: null,
-            launchAgent: 'claude'
-          })
-        ).toBe('claude')
-      }
-    }
+  it.each([
+    { title: '⠋ Fix the codex plugin launcher', isRemote: false },
+    {
+      title: '⠙ add grok support to the tab bar',
+      isRemote: false,
+      focusedCompletedHookAgent: 'claude' as const
+    },
+    { title: '⠹ port the gemini status parser', isRemote: true }
+  ])('keeps Claude ownership for task text: $title', (signals) => {
+    expect(
+      resolveTabAgentFromSignals({
+        ...signals,
+        hasObservedAgentSignal: true,
+        hookAgent: null,
+        launchAgent: 'claude'
+      })
+    ).toBe('claude')
+  })
 
+  it('allows a newer explicit identity title to take ownership', () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,

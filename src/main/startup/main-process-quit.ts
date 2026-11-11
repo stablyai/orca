@@ -1,42 +1,45 @@
-import { killWslChannelsInCloseGrace } from '../wsl/wsl-command-channel'
-import { markHostShuttingDown } from '../host-shutdown-state'
+import { killWslChannelsInCloseGrace } from '../wsl/execution/wsl-command-channel'
+import { markHostShuttingDown } from './quit/host-shutdown-state'
 import { app, type Event } from 'electron'
 import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'
-import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
+import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../ipc/pty/kill-all'
-import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-provider-state'
+import {
+  disconnectDaemon,
+  shutdownDaemon
+} from '../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
-import { agentHookServer } from '../agent-hooks/server'
-import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
-import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
+import { removeManagedAgentHooksAsync } from '../agent-hooks/installation/managed-agent-hook-controls'
+import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
-import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
-import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
-import { disposeDesktopBrowserBridge } from '../ipc/desktop-browser-bridge-wiring'
-import { browserManager } from '../browser/browser-manager'
-import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
-import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
-import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
-import { stopBackgroundWorktreeRemovals } from '../worktree-background-removal'
-import { settleTeardownWithinDeadline, settleWithinMs } from '../quit-teardown-deadline'
-import { quitTeardownStartGate } from '../quit-teardown-start-gate'
+import { clearRuntimeMetadataIfOwned } from '../runtime/rpc/server/runtime-metadata'
+import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { disposeDesktopBrowserBridge } from '../ipc/browser/desktop-browser-bridge-wiring'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { stopCodexStateDbBackfillRecoveries } from '../codex/history/index/codex-state-db-backfill-recovery'
+import { stopCodexAccountSessionBridges } from '../codex/history/bridges/codex-account-session-bridge'
+import { awaitPackedRefsLockRelease } from '../git/refs/maintenance/local-repo-ref-maintenance'
+import { stopBackgroundWorktreeRemovals } from '../workspaces/removal/worktree-background-removal'
+import { settleTeardownWithinDeadline, settleWithinMs } from './quit/quit-teardown-deadline'
+import { quitTeardownStartGate } from './quit/quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
 import { shutdownTelemetry } from '../telemetry/client'
-import { shutdownObservability } from '../observability'
-import { isQuittingForUpdate } from '../updater'
-import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
-import { stopTccPromptNotice } from '../macos-tcc-prompt-notice'
-import { cancelHistoryGc } from '../terminal-history-gc'
+import { shutdownObservability } from '../observability/index'
+import { isQuittingForUpdate } from '../updater/updater-service'
+import { recordUpdaterLifecycle } from '../updater/updater-lifecycle-diagnostics'
+import { stopTccPromptNotice } from '../macos-permissions/macos-tcc-prompt-notice'
+import { cancelHistoryGc } from '../pty/history/terminal-history-gc'
 import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
-import { getCanonicalUserDataPath } from '../persistence'
-import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
@@ -143,6 +146,7 @@ function installWillQuitHandler(): void {
     state.pluginMarketplaceInstaller = null
     state.pluginAutoUpdater?.dispose()
     state.pluginAutoUpdater = null
+    state.pluginUpdateReviewNotices = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     stopCodexAccountSessionBridges()
@@ -195,10 +199,12 @@ function installWillQuitHandler(): void {
       await state.runtime?.getAgentBrowserBridge()?.destroyAllSessions()
     })()
     // Local SSH browser routes own loopback listeners and ssh -N -D children that must not outlive the app (P2-4).
-    const localSshRouteShutdown = import('../browser/local-ssh-browser-route')
-      .then((routes) => routes.closeAllLocalSshBrowserRoutes())
-      .catch(() => {})
+    const localSshRouteShutdown =
+      import('../browser/routing/local-host-partitions/local-ssh-browser-route')
+        .then((routes) => routes.closeAllLocalSshBrowserRoutes())
+        .catch(() => {})
     browserManager.setBrowserGuestStateChangedListener(null)
+    browserManager.setOffscreenTabOpener(null)
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
     const finalStore = state.store

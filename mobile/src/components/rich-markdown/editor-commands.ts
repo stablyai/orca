@@ -1,4 +1,4 @@
-import { emitChange, syncTaskCheckboxesDisabled } from './editor-content'
+import { emitChange } from './editor-content'
 import {
   rememberSelection,
   restoreRememberedSelection,
@@ -156,6 +156,5 @@ export async function runCommand(
       return
     }
   }
-  syncTaskCheckboxesDisabled(scope)
   emitChange(scope)
 }

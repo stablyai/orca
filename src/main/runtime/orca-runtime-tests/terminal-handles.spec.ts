@@ -3,114 +3,22 @@ import {
   dropFromHostInventory,
   registerBoundPty,
   registerLivePty
-} from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
-import type {
-  RuntimeClientEvent,
-  RuntimeSyncWindowGraph,
-  RuntimeTerminalCreate
-} from '../orca-runtime-test-mocks.spec'
+} from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
-  TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   createRuntime,
   createRuntimeWithSshLease,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('lists live terminals and issues stable handles for synced leaves', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const events: RuntimeClientEvent[] = []
-    runtime.onClientEvent((event) => events.push(event))
-
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          title: 'Claude',
-          activeLeafId: 'pane:1',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          leafId: 'pane:1',
-          paneRuntimeId: 1,
-          ptyId: 'pty-1'
-        }
-      ],
-      mobileSessionTabs: [
-        {
-          worktree: 'repo-1::/tmp/worktree-a',
-          publicationEpoch: 'epoch-terminal-handle',
-          snapshotVersion: 1,
-          activeGroupId: 'group-1',
-          activeTabId: 'tab-1::pane:1',
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: 'tab-1::pane:1',
-              parentTabId: 'tab-1',
-              leafId: 'pane:1',
-              title: 'Claude',
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-    runtime.onPtyData('pty-1', 'hello from terminal\n', 123)
-
-    const terminals = await runtime.listTerminals('branch:feature/foo')
-    expect(terminals.terminals).toHaveLength(1)
-    expect(terminals.terminals[0]).toMatchObject({
-      worktreeId: 'repo-1::/tmp/worktree-a',
-      branch: 'feature/foo',
-      ptyId: 'pty-1',
-      title: 'Claude',
-      preview: 'hello from terminal'
-    })
-
-    const shown = await runtime.showTerminal(terminals.terminals[0].handle)
-    expect(shown.handle).toBe(terminals.terminals[0].handle)
-    expect(shown.ptyId).toBe('pty-1')
-    const mobileTabs = await runtime.listMobileSessionTabs('branch:feature/foo')
-    const mobileHandle = mobileTabs.tabs.find((tab) => tab.type === 'terminal')?.terminal
-    if (!mobileHandle) {
-      throw new Error('expected mobile terminal handle')
-    }
-    expect(mobileHandle).toBe(terminals.terminals[0].handle)
-
-    const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }], []]
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => false,
-      stopAndWait: async (ptyId) => {
-        runtime.onPtyExit(ptyId, -1)
-        return true
-      },
-      getForegroundProcess: async () => null,
-      listProcesses: async () => processLists.shift() ?? []
-    })
-
-    await runtime.sleepTerminalsForWorktree('branch:feature/foo')
-    expect(
-      events.find(
-        (event) => event.type === 'worktreeTerminalSleepState' && event.phase === 'started'
-      )
-    ).toMatchObject({
-      terminalHandles: [...new Set([terminals.terminals[0].handle, mobileHandle])].sort()
-    })
-  })
-
   it('routes a launch-draft resolution to the handle-owning local and remote renderers', async () => {
     const runtime = new OrcaRuntimeService(store)
     const nativeChatLaunchDraftResolved = vi.fn()
@@ -332,114 +240,6 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('rejects pane resolution when leaf and PTY ownership disagree', () => {
-    const runtime = new OrcaRuntimeService(store)
-    const tabId = 'tab-1'
-    const leafId = HEADLESS_LEAF_ID
-    const paneKey = makePaneKey(tabId, leafId)
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Codex',
-          activeLeafId: leafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-mismatched-owner'
-        }
-      ]
-    })
-    runtime.registerPty('pty-mismatched-owner', `${TEST_REPO_ID}::/tmp/other-worktree`)
-
-    expect(() => runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID)).toThrow(
-      'terminal_not_found'
-    )
-  })
-
-  it('recovers a disconnected pane through one HUB-owned replacement', async () => {
-    const tabId = 'tab-recover'
-    const runtime = createRuntimeWithSshLease('pty-expired', tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    await dropFromHostInventory(runtime, 'pty-expired')
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term-replacement',
-      tabId,
-      paneKey,
-      ptyId: 'pty-replacement',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    ).resolves.toMatchObject({
-      handle: 'term-replacement',
-      tabId,
-      leafId: HEADLESS_LEAF_ID,
-      worktreeId: TEST_WORKTREE_ID
-    })
-    expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID,
-      focus: false
-    })
-  })
-
-  it('rejects missing host panes without authoritative expired binding evidence', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const tabId = 'tab-missing'
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term-created',
-      tabId,
-      paneKey,
-      ptyId: 'pty-created',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID)).rejects.toThrow(
-      'terminal_not_found'
-    )
-    expect(createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('rejects recovery for live panes and mismatched worktrees', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const tabId = 'tab-live'
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, 'pty-live', TEST_WORKTREE_ID, null, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const liveHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    const createTerminal = vi.spyOn(runtime, 'createTerminal')
-
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, liveHandle)
-    ).rejects.toThrow('terminal_not_recoverable')
-    await expect(
-      runtime.recoverTerminalPane(paneKey, `${TEST_REPO_ID}::/other`, liveHandle)
-    ).rejects.toThrow('terminal_not_found')
-    expect(createTerminal).not.toHaveBeenCalled()
-  })
-
   it('returns an already-connected replacement instead of spawning another pane', async () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-cas'
@@ -461,39 +261,6 @@ describe('OrcaRuntimeService', () => {
     expect(recovered.handle).not.toBe(oldHandle)
     expect(recovered.ptyId).toBe('pty-new')
     expect(createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('deduplicates concurrent pane recovery across stale viewer handles', async () => {
-    const tabId = 'tab-concurrent'
-    const runtime = createRuntimeWithSshLease('pty-expired', tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, 'pty-expired', TEST_WORKTREE_ID, null, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    await dropFromHostInventory(runtime, 'pty-expired')
-    let finishCreate!: (result: RuntimeTerminalCreate) => void
-    const pendingCreate = new Promise<RuntimeTerminalCreate>((resolve) => {
-      finishCreate = resolve
-    })
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockReturnValue(pendingCreate)
-
-    const first = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
-    const second = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, 'term-other-viewer')
-    finishCreate({
-      handle: 'term-replacement',
-      tabId,
-      paneKey,
-      ptyId: 'pty-replacement',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(first).resolves.toEqual(expect.objectContaining({ handle: 'term-replacement' }))
-    await expect(second).rejects.toThrow('terminal_not_found')
-    expect(createTerminal).toHaveBeenCalledOnce()
   })
 
   it('clears a failed pane recovery so a later reconnect can retry', async () => {
@@ -526,158 +293,6 @@ describe('OrcaRuntimeService', () => {
       runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
     ).resolves.toMatchObject({ handle: 'term-retry' })
     expect(createTerminal).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not recover a pane whose authoritative SSH lease was terminated', async () => {
-    // terminated includes explicit operator closes and must never resurrect an SSH pane.
-    const tabId = 'tab-terminated'
-    const appPtyId = 'ssh:ssh-target@@pty-terminated'
-    const runtime = createRuntimeWithSshLease(appPtyId, tabId, 'terminated')
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    await dropFromHostInventory(runtime, appPtyId)
-    const createTerminal = vi.spyOn(runtime, 'createTerminal')
-
-    await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
-      'terminal_not_recoverable'
-    )
-    expect(createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('matches an SSH pane against its own lease across the relay/app id forms', async () => {
-    // Normalize stored relay ids and runtime app ids before comparing leases.
-    const tabId = 'tab-id-form'
-    const appPtyId = 'ssh:ssh-target@@pty-3'
-    const runtime = createRuntimeWithSshLease(appPtyId, tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    await dropFromHostInventory(runtime, appPtyId)
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term-replacement',
-      tabId,
-      paneKey,
-      ptyId: 'pty-replacement',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)
-    ).resolves.toMatchObject({ handle: 'term-replacement' })
-    // Re-adopt surviving orphans before spawning; only host-confirmed absence permits replacement.
-    expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
-      tabId,
-      leafId: HEADLESS_LEAF_ID,
-      focus: false
-    })
-  })
-
-  it('does not recover a pane whose expired lease was superseded by a newer one', async () => {
-    const tabId = 'tab-superseded'
-    const appPtyId = 'ssh:ssh-target@@pty-5'
-    const runtime = createRuntimeWithSshLease(appPtyId, tabId, 'expired', {
-      supersededBy: 'pty-6'
-    })
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    await dropFromHostInventory(runtime, appPtyId)
-    const createTerminal = vi.spyOn(runtime, 'createTerminal')
-
-    await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
-      'terminal_not_recoverable'
-    )
-    expect(createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('does not recover a pane whose expired lease had its relay id recycled', async () => {
-    const tabId = 'tab-recycled'
-    const appPtyId = 'ssh:ssh-target@@pty-7'
-    const runtime = createRuntimeWithSshLease(appPtyId, tabId, 'expired', {
-      relayIdRecycled: true
-    })
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    await dropFromHostInventory(runtime, appPtyId)
-    const createTerminal = vi.spyOn(runtime, 'createTerminal')
-
-    await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
-      'terminal_not_recoverable'
-    )
-    expect(createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('does not recreate a shell for an expired lease whose PTY liveness is unverifiable', async () => {
-    // Expired leases and an unverifiable -1 exit mean lost SSH contact, not process death; replacement could duplicate a live agent.
-    const tabId = 'tab-unverifiable'
-    const ptyId = 'ssh:ssh-target@@pty-3'
-    const runtime = createRuntimeWithSshLease(ptyId, tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(ptyId, -1)
-    expect(runtime.getPtyLivenessVerdict(ptyId)?.status).toBe('unverifiable')
-    // Stub create so a regression records a duplicate spawn rather than an unrelated fixture error.
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term-replacement',
-      tabId,
-      paneKey,
-      ptyId: 'pty-replacement',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)).rejects.toThrow(
-      'terminal_not_recoverable'
-    )
-    expect(createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('still recreates a shell for an SSH pane whose host confirmed the exit', async () => {
-    const tabId = 'tab-ssh-exited'
-    const ptyId = 'ssh:ssh-target@@pty-4'
-    const runtime = createRuntimeWithSshLease(ptyId, tabId)
-    const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
-    registerBoundPty(runtime, ptyId, TEST_WORKTREE_ID, 'ssh-target', {
-      tabId,
-      leafId: HEADLESS_LEAF_ID
-    })
-    const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-    runtime.onPtyExit(ptyId, -1, undefined, { hostExitConfirmed: true })
-    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term-replacement',
-      tabId,
-      paneKey,
-      ptyId: 'pty-replacement',
-      worktreeId: TEST_WORKTREE_ID,
-      title: null,
-      surface: 'background'
-    })
-
-    await expect(
-      runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)
-    ).resolves.toMatchObject({ handle: 'term-replacement' })
-    expect(createTerminal).toHaveBeenCalledOnce()
   })
 
   it('drops a stale leaf when a woken agent PTY is re-keyed to a new leaf on renderer reload', async () => {

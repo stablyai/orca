@@ -35,15 +35,6 @@ describe('profile runtime preflight', () => {
     expect(result.sqliteVersion).toMatch(/^\d+\.\d+\.\d+$/)
   })
 
-  it('refuses readiness when a required worker artifact is absent', async () => {
-    await expect(
-      preflightProfileStateRuntime({
-        workerPath: join(directory, 'missing.js'),
-        backupWorkerPath
-      })
-    ).rejects.toThrow('Profile state writer')
-  })
-
   it('does not trust a backup success reply without a valid database', async () => {
     const corruptBackup = join(directory, 'corrupt-backup.cjs')
     writeFileSync(

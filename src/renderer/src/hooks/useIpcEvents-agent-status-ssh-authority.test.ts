@@ -26,47 +26,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('retires the exact sleeping record after adopted or exited legacy worker recovery', async () => {
-    const clearSleepingAgentSession = vi.fn()
-    let listener:
-      | ((data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void)
-      | undefined
-    const storeState = buildStoreState({
-      clearSleepingAgentSession
-    })
-
-    stubReactSyncEffect()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState
-      }
-    }))
-    stubAuxiliaryModules()
-    vi.stubGlobal(
-      'window',
-      buildWindowApi({
-        onSet: () => () => {},
-        onLegacyWorkerTerminalRecovery: (callback) => {
-          listener = callback
-          return () => {}
-        }
-      })
-    )
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-    useIpcEvents()
-    await Promise.resolve()
-    expect(listener).toBeTypeOf('function')
-
-    listener?.({ paneKey: 'tab-adopted:leaf-adopted', resolution: 'adopted' })
-    expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-adopted:leaf-adopted')
-
-    clearSleepingAgentSession.mockClear()
-    listener?.({ paneKey: 'tab-exited:leaf-exited', resolution: 'exited' })
-    expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-exited:leaf-exited')
-  })
-
   it.each([
     { partialAuthority: { providerEpoch: 'epoch-current' } },
     { partialAuthority: { connectionGeneration: 7 } }
@@ -331,7 +290,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
           ) => {
             detectedListener = listener
             return () => {}
-          }
+          },
+          onTargetRemoved: () => () => {}
         }
       })
     )

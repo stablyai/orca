@@ -1,16 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Gauge, RefreshCw } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { cn } from '@/lib/class-names'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import type {
   GetRateLimitResult,
   GitHubRateLimitSnapshot
 } from '../../../../shared/github/rate-limit-types'
-import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
-import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
+import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
+import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const REFRESH_INTERVAL_MS = 60_000
 
@@ -88,11 +90,15 @@ export function useGitHubRateLimitSnapshot(
   const [hasError, setHasError] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
   const latestToken = useRef(0)
+  const hasSnapshot = useRef(false)
   const autoRefresh = options?.autoRefresh ?? true
 
   const refresh = useCallback(
     async (force = false): Promise<void> => {
       const token = ++latestToken.current
+      // A stopped WSL distro (where the CLI lives) is no failure: keep the last numbers if any.
+      const keepsLastSnapshot = (error: unknown): boolean =>
+        hasSnapshot.current && isWslDistroNotRunningRefusal(error)
       setIsFetching(true)
       try {
         const params = force ? { force: true } : undefined
@@ -106,13 +112,14 @@ export function useGitHubRateLimitSnapshot(
           return
         }
         if (res?.ok) {
+          hasSnapshot.current = true
           setSnapshot(res.snapshot)
           setHasError(false)
-        } else {
+        } else if (!keepsLastSnapshot(res?.error)) {
           setHasError(true)
         }
-      } catch {
-        if (token === latestToken.current) {
+      } catch (error) {
+        if (token === latestToken.current && !keepsLastSnapshot(error)) {
           setHasError(true)
         }
       } finally {
@@ -142,6 +149,7 @@ function GitHubRateLimitRows({
 }: {
   snapshot: GitHubRateLimitSnapshot
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col gap-1 text-xs">
       {BUCKETS.map((b) => {
@@ -157,7 +165,7 @@ function GitHubRateLimitRows({
                 tone === 'warn' && 'text-amber-700 dark:text-amber-300'
               )}
             >
-              {translate(
+              {t(
                 'auto.components.github.github.rate.limit.display.remainingOfLimitResetsIn',
                 '{{remaining}} of {{limit}} left · resets in {{reset}}',
                 {
@@ -182,8 +190,9 @@ export function GitHubRateLimitPanel({
   /** The host chosen at the top of Settings. */
   target: RuntimeClientTarget
 }): React.JSX.Element {
+  const t = useTranslate()
   const { snapshot, hasError, isFetching, refresh } = useGitHubRateLimitSnapshot(target)
-  const budgetScope = getProviderRateLimitScope(target, 'GitHub')
+  const budgetScope = getProviderRateLimitScope(target, 'GitHub', t)
 
   return (
     <div className={cn('space-y-3 rounded-md border border-border/60 p-3', className)}>
@@ -191,19 +200,16 @@ export function GitHubRateLimitPanel({
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
             <Gauge className="size-4" />
-            {translate(
-              'auto.components.github.github.rate.limit.display.58c5f88216',
-              'GitHub API Budget'
-            )}
+            {t('auto.components.github.github.rate.limit.display.58c5f88216', 'GitHub API Budget')}
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.github.github.rate.limit.display.d5e5de9070',
               'Orca uses REST, Search, and GraphQL through the GitHub CLI.'
             )}
           </p>
           <ProviderHostScopeControl
-            labelPrefix={translate(
+            labelPrefix={t(
               'auto.components.github.github.rate.limit.display.budget_scope_prefix',
               'Budget scope'
             )}
@@ -216,7 +222,7 @@ export function GitHubRateLimitPanel({
           onClick={() => void refresh(true)}
           disabled={isFetching}
           className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-secondary text-secondary-foreground transition hover:bg-accent disabled:opacity-50"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.github.github.rate.limit.display.d12d3d6f33',
             'Refresh GitHub API budget'
           )}
@@ -226,7 +232,7 @@ export function GitHubRateLimitPanel({
       </div>
       {hasError ? (
         <div className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.github.github.rate.limit.display.34973d4695',
             'GitHub API budget is unavailable.'
           )}
@@ -235,7 +241,7 @@ export function GitHubRateLimitPanel({
         <GitHubRateLimitRows snapshot={snapshot} />
       ) : (
         <div className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.github.github.rate.limit.display.5509443543',
             'Loading GitHub API budget…'
           )}

@@ -9,18 +9,18 @@ import {
 } from '../../src/cli/runtime-client'
 import { createWorktreeWithAgent } from '../../src/cli/handlers/worktree-create-agent-launch'
 import { formatCliError } from '../../src/cli/cli-error'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../src/shared/agent-launch-runtime-capability'
-import { WorktreeCreateSetupChoiceRefusedError } from '../../src/main/runtime/worktree-create-setup-choice-refusal'
-import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-test-harness'
-import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { WorktreeCreateSetupChoiceRefusedError } from '../../src/main/runtime/workspaces/creation/worktree-create-setup-choice-refusal'
+import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mapDispatcherError } from '../../src/main/runtime/rpc/dispatcher-error-response'
 import {
   methodNamed,
   rpcContext,
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
-import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch'
+} from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
+import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch'
 
 const SETUP_CHOICE = 'Setup decision required for this repository'
 const create = { repo: 'id:repo-1', name: 'task', activate: false }
@@ -35,7 +35,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   vi.restoreAllMocks()
   await rm(directory, { recursive: true, force: true })
 })
@@ -113,7 +113,7 @@ describe('CLI setup choice across durable launch admission', () => {
     }
 
     setAgentLaunchRecordStore(null)
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     store = await openTestAgentSessionRecordStore(directory)
     setAgentLaunchRecordStore(store)
     const replay = runtimeStub({ settings: {} })

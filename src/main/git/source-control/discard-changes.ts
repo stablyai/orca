@@ -2,14 +2,14 @@ import * as path from 'node:path'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
-} from '../../../shared/git-discard-path-safety'
-import { partitionTrackedPathSpecs } from '../../../shared/git-tracked-pathspecs'
+} from '../../../shared/git/paths/git-discard-path-safety'
+import { partitionTrackedPathSpecs } from '../../../shared/git/paths/git-tracked-pathspecs'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 import { bulkPathspecCommands, literalPathspec } from './git-pathspec'
-import { encodeGitPathspecs } from '../../../shared/git-pathspec-stdin'
+import { encodeGitPathspecs } from '../../../shared/git/paths/git-pathspec-stdin'
 import { redoWriteForDriveCheckoutSuspects } from './drive-checkout-suspect-writes'
 
 const DISCARD_WRITE = ['restore', '--worktree'] as const
@@ -57,7 +57,7 @@ export async function discardChanges(
   }
 }
 
-async function listTrackedPathSpecs(
+export async function listTrackedPathSpecs(
   worktreePath: string,
   filePaths: readonly string[],
   options: GitRuntimeOptions = {}
@@ -65,11 +65,7 @@ async function listTrackedPathSpecs(
   const trackedPaths: string[] = []
   const commands = bulkPathspecCommands(['ls-files', '-z', '--'], filePaths, worktreePath, options)
   for (const args of commands) {
-    const { stdout } = await gitExecFileAsync(args, {
-      ...gitOptionsForWorktree(worktreePath, options),
-      // Fence WSL rc banners: a corrupted first NUL record could misclassify a tracked path as untracked.
-      captureWslLoginShellOutput: true
-    })
+    const { stdout } = await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
     // Iterate instead of spreading: tracked directories can exceed the JS argument limit.
     for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {

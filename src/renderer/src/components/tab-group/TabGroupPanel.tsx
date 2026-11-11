@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useMemo } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
@@ -12,16 +12,20 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { registerTabGroupBody } from './tab-group-body-geometry'
-import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
-import { translate } from '@/i18n/i18n'
+import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TabGroup } from '../../../../shared/tab-types'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
-import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
+import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { EditorRevealFlash } from './EditorRevealFlash'
+import { SplitPaneLanding } from './SplitPaneLanding'
+import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -68,6 +72,7 @@ export default function TabGroupPanel({
   isTabDragActive?: boolean
   hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
@@ -80,6 +85,9 @@ export default function TabGroupPanel({
     tabBarOrder,
     terminalTabs
   } = model
+  const showsSplitLanding = useAppStore((state) =>
+    isSplitLandingGroup(state, worktreeId, model.group ?? undefined)
+  )
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
@@ -117,6 +125,7 @@ export default function TabGroupPanel({
     [groupId, setBodyDropRef]
   )
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
+  const backdropActive = useWindowBackdropActive()
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
@@ -147,7 +156,7 @@ export default function TabGroupPanel({
           return
         }
         // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
-        closeTerminalTab(terminalId)
+        closeTerminalTab(terminalId, { reason: 'user' })
       }}
       onCloseOthers={(visibleId) => {
         // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
@@ -261,7 +270,12 @@ export default function TabGroupPanel({
             }`
           : ''
       }`}
-      style={hasSplitGroups && !isFocused ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY } : undefined}
+      // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
+      style={
+        hasSplitGroups && !isFocused && !backdropActive
+          ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
+          : undefined
+      }
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
@@ -270,7 +284,7 @@ export default function TabGroupPanel({
       {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-card"
+          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-tab-bar"
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
@@ -321,6 +335,13 @@ export default function TabGroupPanel({
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
+        // Why: the pane overlays paint terminals and chats above this body; only they show the backdrop.
+        data-translucent-tab-body={
+          activeTab?.contentType === 'terminal' ||
+          (activeTab && isStructuredTab(activeTab) && backdropActive)
+            ? ''
+            : undefined
+        }
         data-worktree-id={worktreeId}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
@@ -330,6 +351,8 @@ export default function TabGroupPanel({
           <div
             className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
             data-contextual-tour-target="workspace-agent-terminal-tip"
+            // Picks the chat or terminal split step of the agent-sessions tour.
+            data-active-content-type={activeTab?.contentType}
           />
         ) : null}
         {activeTab &&
@@ -343,10 +366,7 @@ export default function TabGroupPanel({
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    {translate(
-                      'auto.components.tab.group.TabGroupPanel.814fb04c43',
-                      'Loading editor...'
-                    )}
+                    {t('auto.components.tab.group.TabGroupPanel.814fb04c43', 'Loading editor...')}
                   </div>
                 }
               >
@@ -361,6 +381,15 @@ export default function TabGroupPanel({
               <EditorRevealFlash viewStateId={activeTab.id} />
             </div>
           )}
+
+        {showsSplitLanding ? (
+          <SplitPaneLanding
+            worktreeId={worktreeId}
+            groupId={groupId}
+            autoFocus={isFocused}
+            onClosePane={hasSplitGroups ? commands.closeGroup : undefined}
+          />
+        ) : null}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>

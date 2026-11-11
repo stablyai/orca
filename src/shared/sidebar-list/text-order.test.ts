@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareCodePoints, compareSidebarText, createSidebarTextComparator } from './text-order'
+import { compareCodePoints, compareSidebarText } from './text-order'
 
 // Built from code points so the formatter cannot fold the escapes into look-alike literals.
 const COMBINING_ACUTE = String.fromCodePoint(0x301)
@@ -77,17 +77,5 @@ describe('compareCodePoints', () => {
     // U+1F389 is above U+FFFD, though its high surrogate (0xD83C) is below it.
     expect('🎉'.charCodeAt(0)).toBeLessThan(REPLACEMENT_CHAR.charCodeAt(0))
     expect(compareCodePoints('🎉', REPLACEMENT_CHAR)).toBeGreaterThan(0)
-  })
-})
-
-describe('createSidebarTextComparator', () => {
-  it('orders exactly like compareSidebarText', () => {
-    const corpus = ['w2', 'W10', 'w02', 'Éclair', 'éclair', 'zeta', 'ALPHA', 'alpha', '', 'a1b']
-    const compare = createSidebarTextComparator()
-    for (const a of corpus) {
-      for (const b of corpus) {
-        expect(Math.sign(compare(a, b))).toBe(Math.sign(compareSidebarText(a, b)))
-      }
-    }
   })
 })

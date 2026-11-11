@@ -1,13 +1,13 @@
 import { memo } from 'react'
-import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../platform/haptics'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { WorkspaceListItem, Worktree, WorktreeRowView } from '../worktree/workspace-list-types'
 import type { WorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { isRemoteExecutionHostId } from '../../../src/shared/execution-host'
 import type { AgentActivityDisplayMode } from '../../../src/shared/ui-chrome-types'
@@ -20,16 +20,14 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
-
-// Match desktop formatBranchName by hiding refs/heads/ prefix.
-function displayBranch(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
+import { PrStateIcon } from './PrStateIcon'
+import { WorktreeUnsavedName } from './WorktreeUnsavedName'
+import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
 
 type Props = {
   item: Worktree
+  view: WorktreeRowView
   isReadOnly: boolean
-  now: number
   repoColor: string
   repoIcon?: MobileRenderableRepoIcon | null
   // Grouped repo header already identifies project; omit duplicate icon/name on each row.
@@ -37,18 +35,21 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeStatus
+  /** Null until a live read says (rows from the phone's store carry no agent state). */
+  status: WorktreeStatus | null
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean
   onLongPress?: (item: Worktree) => void
-  onToggleLineage?: (item: Worktree) => void
+  onToggleLineage?: (item: WorkspaceListItem) => void
+  /** A rename the desktop hasn't taken yet; the row keeps its real name and points to this one. */
+  unsavedName?: string
 }
 
 function WorktreeListRowComponent({
   item,
+  view,
   isReadOnly,
-  now,
   repoColor,
   repoIcon,
   hideRepo = false,
@@ -59,26 +60,43 @@ function WorktreeListRowComponent({
   onAgentPress,
   statusLive,
   onLongPress,
-  onToggleLineage
+  onToggleLineage,
+  unsavedName
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta =
     item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
-  const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
-  const lineageDepth = Math.max(0, item.lineageDepth ?? 0)
-  const indent = projectGroupRowIndent(item) + lineageDepth * 18
-  const count = item.lineageChildCount ?? 0
-  const shouldHideRepo = hideRepo && !item.showProjectName
+  // Match desktop formatBranchName by hiding refs/heads/ prefix.
+  const metaText = isFolderWorkspace ? folderMeta : item.branch.replace(/^refs\/heads\//, '')
+  const lineageDepth = Math.max(0, view.lineageDepth ?? 0)
+  const indent = projectGroupRowIndent(item, view) + lineageDepth * 18
+  const count = view.lineageChildCount ?? 0
+  const shouldHideRepo = hideRepo && !view.showProjectName
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
-  const hostId = item.hostContextHostId ?? item.hostId
-  const hostAccessibilityLabel = [item.hostContextLabel, item.hostContextHealthLabel]
+  const hostId = view.hostContextHostId ?? item.hostId
+  const prState = item.linkedPR?.state ?? ''
+  const prColor = prStateColor(prState)
+  const hostAccessibilityLabel = [view.hostContextLabel, view.hostContextHealthLabel]
     .filter(Boolean)
     .join(', ')
   // Why: the desktop's compact card keeps an icon-only glyph for remote projects after the host badge goes.
   const showHostGlyph = !cardDetails.metaRow && isRemoteExecutionHostId(hostId)
+  const showHostBadge =
+    cardDetails.host && Boolean(view.hostContextLabel || view.hostContextHealthLabel)
+  // Why: like the desktop, skip a blank meta lane when every part of it is off.
+  const showMetaRow =
+    cardDetails.metaRow &&
+    (lineageDepth > 0 || showHostBadge || showRepoInMetaRow || cardDetails.identity)
+  // Agent rows take their own taps, so they share the card's long-press menu.
+  const openActions = onLongPress
+    ? () => {
+        triggerMediumImpact()
+        onLongPress(item)
+      }
+    : undefined
 
   return (
     <Pressable
@@ -86,18 +104,11 @@ function WorktreeListRowComponent({
         styles.worktreeRow,
         indent > 0 && { paddingLeft: spacing.lg + indent },
         item.isActive && styles.worktreeRowActive,
-        pressed && styles.worktreeRowPressed
+        pressed && (item.isActive ? styles.worktreeRowActivePressed : styles.worktreeRowPressed)
       ]}
       disabled={isReadOnly}
       onPress={() => onPress(item)}
-      onLongPress={
-        onLongPress
-          ? () => {
-              triggerMediumImpact()
-              onLongPress(item)
-            }
-          : undefined
-      }
+      onLongPress={openActions}
       delayLongPress={400}
     >
       <View style={styles.indicatorCol}>
@@ -145,10 +156,8 @@ function WorktreeListRowComponent({
           </Text>
           {cardDetails.pr && item.linkedPR && (
             <View style={styles.prBadge}>
-              <GitPullRequest size={10} color={prStateColor(item.linkedPR.state)} />
-              <Text style={[styles.prNumber, { color: prStateColor(item.linkedPR.state) }]}>
-                #{item.linkedPR.number}
-              </Text>
+              <PrStateIcon state={prState} size={10} color={prColor} />
+              <Text style={[styles.prNumber, { color: prColor }]}>#{item.linkedPR.number}</Text>
             </View>
           )}
           {isFolderWorkspace && (
@@ -159,8 +168,11 @@ function WorktreeListRowComponent({
             </View>
           )}
           <WorktreeMetaGlyphs presence={getWorktreeMetaGlyphPresence(item, cardDetails)} />
+          {item.liveTerminalCount > 0 ? (
+            <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
+          ) : null}
         </View>
-        {cardDetails.metaRow && (
+        {showMetaRow && (
           <View style={styles.worktreeMetaRow}>
             {lineageDepth > 0 && (
               <View style={styles.childBadge}>
@@ -170,23 +182,23 @@ function WorktreeListRowComponent({
                 </Text>
               </View>
             )}
-            {cardDetails.host && (item.hostContextLabel || item.hostContextHealthLabel) ? (
+            {showHostBadge ? (
               <View
                 style={[styles.childBadge, styles.hostBadge]}
                 accessibilityLabel={hostAccessibilityLabel}
               >
                 <HostKindIcon hostId={hostId} size={10} />
-                {item.hostContextLabel ? (
+                {view.hostContextLabel ? (
                   <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
-                    {item.hostContextLabel}
+                    {view.hostContextLabel}
                   </Text>
                 ) : null}
                 {/* Why separate Text: the name truncates first so the health word stays readable. */}
-                {item.hostContextHealthLabel ? (
+                {view.hostContextHealthLabel ? (
                   <Text style={[styles.childBadgeText, styles.hostHealthText]}>
-                    {item.hostContextLabel
-                      ? `· ${item.hostContextHealthLabel}`
-                      : item.hostContextHealthLabel}
+                    {view.hostContextLabel
+                      ? `· ${view.hostContextHealthLabel}`
+                      : view.hostContextHealthLabel}
                   </Text>
                 ) : null}
               </View>
@@ -200,32 +212,36 @@ function WorktreeListRowComponent({
                 </Text>
               </>
             )}
-            <Text style={styles.branchName} numberOfLines={1}>
-              {metaText}
-            </Text>
+            {cardDetails.identity && (
+              <Text style={styles.branchName} numberOfLines={1}>
+                {metaText}
+              </Text>
+            )}
           </View>
         )}
+        {unsavedName ? <WorktreeUnsavedName name={unsavedName} /> : null}
         {/* Match desktop agent activity only; plain terminal shell-output tails stay hidden. */}
         {cardDetails.inlineAgents && item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList
             agents={item.agents}
-            now={now}
             unvisited={item.unread}
             statusLive={statusLive}
             isReadOnly={isReadOnly}
             onAgentPress={onAgentPress ? (paneKey) => onAgentPress(item, paneKey) : undefined}
+            onAgentLongPress={openActions}
             fullList={agentActivityDisplayMode === 'full'}
           />
         ) : null}
         {count > 0 && onToggleLineage ? (
           <Pressable
-            style={styles.lineageToggle}
+            style={({ pressed }) => [styles.lineageToggle, pressed && styles.lineageTogglePressed]}
+            hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
             onPress={(event) => {
               event.stopPropagation()
-              onToggleLineage(item)
+              onToggleLineage({ row: item, view })
             }}
           >
-            {item.lineageCollapsed ? (
+            {view.lineageCollapsed ? (
               <ChevronRight size={12} color={colors.textSecondary} />
             ) : (
               <ChevronDown size={12} color={colors.textSecondary} />
@@ -239,29 +255,32 @@ function WorktreeListRowComponent({
           </Pressable>
         ) : null}
       </View>
-
-      {item.liveTerminalCount > 0 && (
-        <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
-      )}
     </Pressable>
   )
 }
 
 export const WorktreeListRow = memo(WorktreeListRowComponent, areStructurallyEqual)
 
+// Grows the 20 pt pill to a 44 pt target without pushing the row apart.
+const LINEAGE_TOGGLE_HIT_SLOP = { top: 12, bottom: 12, left: 8, right: 8 } as const
+
 const styles = themedStyleSheet(() => ({
   worktreeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
     paddingLeft: spacing.lg,
     paddingRight: spacing.lg,
     // Reserve the active accent bar width so active/inactive rows align.
-    borderLeftWidth: 2,
+    borderLeftWidth: WORKTREE_ROW_LAYOUT.accentWidth,
     borderLeftColor: 'transparent'
   },
   worktreeRowPressed: {
     backgroundColor: colors.bgRaised
+  },
+  // The active row already wears bgPanel, so its press needs a wash that reads over it.
+  worktreeRowActivePressed: {
+    backgroundColor: colors.translucentFill
   },
   // Match desktop focused-worktree card with raised fill and left accent.
   worktreeRowActive: {
@@ -270,7 +289,7 @@ const styles = themedStyleSheet(() => ({
     borderLeftColor: colors.textSecondary
   },
   indicatorCol: {
-    width: 20,
+    width: WORKTREE_ROW_LAYOUT.indicatorWidth,
     alignItems: 'center',
     paddingTop: 6,
     marginRight: spacing.sm,
@@ -280,8 +299,7 @@ const styles = themedStyleSheet(() => ({
     marginTop: 2
   },
   worktreeMain: {
-    flex: 1,
-    marginRight: spacing.sm
+    flex: 1
   },
   worktreeNameRow: {
     flexDirection: 'row',
@@ -307,7 +325,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   prNumber: {
     fontSize: 10,
@@ -319,7 +337,7 @@ const styles = themedStyleSheet(() => ({
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 4,
+    borderRadius: radii.mark,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -328,7 +346,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   folderBadgeText: {
     fontSize: 10,
@@ -359,7 +377,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   childBadgeText: {
     fontSize: 10,
@@ -380,12 +398,15 @@ const styles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     marginTop: spacing.xs,
     backgroundColor: colors.bgRaised,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radii.button
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.control
+  },
+  lineageTogglePressed: {
+    opacity: feedback.pressedOpacity
   },
   lineageToggleText: {
     fontSize: 11,
@@ -393,10 +414,8 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '600'
   },
   terminalCount: {
+    marginLeft: 'auto',
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    minWidth: 16,
-    textAlign: 'right',
-    paddingTop: 3
+    color: colors.textMuted
   }
 }))

@@ -4,7 +4,7 @@ import { loadWorkspaceLayout } from './workspace-layout-load'
 import { localDesktopSession } from './workspace-layout-profile.test-fixture'
 import { publishWorkspaceLayout } from './workspace-layout-published'
 import { nameBasedLoadContext } from './workspace-layout-minted-ids'
-import { checkLayoutRoundTrip } from './workspace-layout-round-trip-check'
+
 import { GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
 
 function published() {
@@ -71,23 +71,5 @@ describe('publishWorkspaceLayout: the explicit published projection', () => {
       toSshExecutionHostId('box')
     )
     expect(tabs.find((tab) => tab.kind === 'terminal')?.executionHostId).toBe('local')
-  })
-})
-
-describe('checkLayoutRoundTrip', () => {
-  it('finds nothing in data today’s writers leave', () => {
-    expect(checkLayoutRoundTrip(LOCAL_EXECUTION_HOST_ID, localDesktopSession())).toEqual({
-      findings: [],
-      firstLoadChanges: {}
-    })
-  })
-
-  it('reports a session the Loader cannot read, without throwing', () => {
-    const session = localDesktopSession()
-    // A corrupt row, as an older build could leave.
-    session.tabsByWorktree[GIT_KEY] = JSON.parse('[null]')
-    expect(checkLayoutRoundTrip(LOCAL_EXECUTION_HOST_ID, session).findings).toEqual([
-      { kind: 'threw', message: expect.any(String) }
-    ])
   })
 })

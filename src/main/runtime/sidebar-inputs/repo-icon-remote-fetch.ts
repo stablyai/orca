@@ -1,4 +1,4 @@
-import { isKnownRasterImageMimeType } from '../../../shared/raster-image-preview-limits'
+import { isKnownRasterImageMimeType } from '../../../shared/file-preview/raster-image-preview-limits'
 
 export const REPO_ICON_FETCH_MAX_BYTES = 64 * 1024
 export const REPO_ICON_FETCH_MAX_REDIRECTS = 3

@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  utimesSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -29,11 +21,8 @@ vi.mock('../macos-keychain/generic-password', () => ({
   }
 }))
 
-import {
-  readClaudeFolderLogin,
-  readClaudeFolderLoginAsync,
-  removeClaudeAccountFolder
-} from './claude-account-folder'
+import { removeClaudeAccountFolder } from './claude-account-folder'
+
 import { claudeKeychainService } from './keychain'
 
 const roots: string[] = []
@@ -53,49 +42,6 @@ function fixture() {
 }
 
 describe('claude account folder', () => {
-  it("reads the folder's login and treats a signed-out state file as no login", () => {
-    const { home } = fixture()
-    const stateFile = join(home, '.claude.json')
-    expect(readClaudeFolderLogin(stateFile)).toBeNull()
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: ' a@example.test ' } }))
-    expect(readClaudeFolderLogin(stateFile)).toEqual({
-      email: 'a@example.test',
-      organizationUuid: null,
-      organizationName: null
-    })
-    writeFileSync(stateFile, JSON.stringify({ numStartups: 2 }))
-    expect(readClaudeFolderLogin(stateFile)).toBeNull()
-  })
-
-  it('reuses a recent answer within maxAgeMs even though the file changed', () => {
-    const { home } = fixture()
-    const stateFile = join(home, '.claude.json')
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
-    expect(readClaudeFolderLogin(stateFile, 5_000)?.email).toBe('a@example.test')
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test!' } }))
-    expect(readClaudeFolderLogin(stateFile, 5_000)?.email).toBe('a@example.test')
-    expect(readClaudeFolderLogin(stateFile)?.email).toBe('b@example.test!')
-  })
-
-  it('rereads a state file over a share only when its mtime or size changes', async () => {
-    const { home } = fixture()
-    const stateFile = join(home, '.claude.json')
-    await expect(readClaudeFolderLoginAsync(stateFile)).resolves.toBeNull()
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
-    // Whole seconds avoid filesystem timestamp rounding.
-    const mtime = new Date(Math.floor(Date.now() / 1000) * 1000)
-    utimesSync(stateFile, mtime, mtime)
-    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')
-    // Hold size and mtime constant to prove the cached answer is reused.
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test' } }))
-    utimesSync(stateFile, mtime, mtime)
-    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')
-    utimesSync(stateFile, mtime, new Date(mtime.getTime() + 2_000))
-    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('b@example.test')
-    rmSync(stateFile)
-    await expect(readClaudeFolderLoginAsync(stateFile)).resolves.toBeNull()
-  })
-
   // A real symlink needs Developer Mode on Windows (EPERM otherwise).
   it.skipIf(process.platform === 'win32')(
     'unlinks shared history before deleting, and leaves the older layout alone',

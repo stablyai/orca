@@ -2,8 +2,8 @@ import { profileStateDatabaseFiles } from '../profile-state-storage-classificati
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parseProfileStateRoot } from '../profile-state-document-validation'
-import { durableWriteTempPath, writeFileDurableSync } from '../../../durable-file-write'
-import { bestEffortFsyncDirectorySync } from '../../../../shared/secure-file'
+import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
+import { bestEffortFsyncDirectorySync } from '../../../../shared/secure-storage/secure-file'
 import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine

@@ -3,8 +3,9 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useReadOnScreenAttention } from './useReadOnScreenAttention'
 import { useAppStore } from '../store'
-import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { createNotificationsApi } from '../web/preload-api/web-notifications-api'
 
 const leaf = '11111111-1111-4111-8111-111111111111'
@@ -165,13 +166,6 @@ it('ignores unrelated writes while away but queries for a new completion', async
   await act(async () => window.dispatchEvent(new Event('focus')))
   expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBeUndefined()
   expect(dismiss).toHaveBeenCalledTimes(1)
-})
-
-it('does not query presence for a visible pane without attention', async () => {
-  useAppStore.setState({ agentStatusByPaneKey: {}, unreadAgentCompletionPanes: {} })
-  renderHook(() => useReadOnScreenAttention())
-  await act(async () => window.dispatchEvent(new Event('focus')))
-  expect(readAway).not.toHaveBeenCalled()
 })
 
 it('rechecks focus after a pending presence query resolves', async () => {

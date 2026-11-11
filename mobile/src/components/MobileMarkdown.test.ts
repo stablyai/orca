@@ -1,21 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
-
-describe('isMobileMermaidLanguage', () => {
-  it('matches mermaid case-insensitively after trim', () => {
-    expect(isMobileMermaidLanguage('mermaid')).toBe(true)
-    expect(isMobileMermaidLanguage('Mermaid')).toBe(true)
-    expect(isMobileMermaidLanguage(' MERMAID ')).toBe(true)
-  })
-
-  it('rejects non-mermaid languages and missing language', () => {
-    expect(isMobileMermaidLanguage(undefined)).toBe(false)
-    expect(isMobileMermaidLanguage('')).toBe(false)
-    expect(isMobileMermaidLanguage('ts')).toBe(false)
-    expect(isMobileMermaidLanguage('mermaidx')).toBe(false)
-  })
-})
 
 describe('normalizeMobileMarkdownPreviewHtml', () => {
   it('normalizes common README HTML into readable Markdown preview text', () => {

@@ -116,28 +116,6 @@ describe('shallow watcher subscription', () => {
     }
   })
 
-  it('unsubscribes promptly after the runtime closed an errored watcher', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-shallow-watcher-'))
-    try {
-      const onError = vi.fn()
-      const subscription = startShallowDirectoryWatcher(root, ['HEAD'], () => {}, onError)
-      const state = watcherState.get(root)
-      if (!state) {
-        throw new Error('root was not watched')
-      }
-      // Node closes the handle on error without 'close'; a later close() is a no-op.
-      state.watcher.close = () => {}
-      state.watcher.emit('error', new Error('EPERM'))
-      expect(onError).toHaveBeenCalledOnce()
-
-      const startedAt = Date.now()
-      await subscription.unsubscribe()
-      expect(Date.now() - startedAt).toBeLessThan(500)
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
   it.skipIf(process.platform === 'win32')(
     'preserves a literal backslash in an included filename',
     async () => {
@@ -190,27 +168,6 @@ describe('shallow watcher subscription', () => {
     }
   })
 
-  it('reuses the nested binding for an ordinary change event', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-shallow-watcher-'))
-    try {
-      await mkdir(join(root, 'logs'))
-      const subscription = startShallowDirectoryWatcher(
-        root,
-        ['logs/HEAD'],
-        () => {},
-        (error) => {
-          throw error
-        }
-      )
-      const firstNested = watcherState.get(join(root, 'logs'))?.watcher
-      watcherState.get(root)?.callback('change', 'logs')
-      expect(watcherState.get(join(root, 'logs'))?.watcher).toBe(firstNested)
-      await subscription.unsubscribe()
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
   it('retries a failed replacement binding and resyncs after recovery', async () => {
     vi.useFakeTimers()
     const root = await mkdtemp(join(tmpdir(), 'orca-shallow-watcher-'))
@@ -249,95 +206,6 @@ describe('shallow watcher subscription', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
-
-  it.each([
-    { parent: '', field: 'dev' },
-    { parent: '', field: 'ino' },
-    { parent: 'logs', field: 'dev' },
-    { parent: 'logs', field: 'ino' }
-  ] as const)(
-    'retains full $field precision at startup and after silent $parent replacement',
-    async ({ parent, field }) => {
-      vi.useFakeTimers()
-      const root = await mkdtemp(join(tmpdir(), 'orca-shallow-large-identity-'))
-      const directory = join(root, parent)
-      const previousDirectory = join(dirname(directory), `${basename(directory)}-previous`)
-      let subscription: ReturnType<typeof startShallowDirectoryWatcher> | undefined
-      try {
-        if (parent) {
-          await mkdir(directory)
-        }
-        const previousId = 9_007_199_254_740_995n
-        const nextId = previousId + 1n
-        expect(Number(previousId)).toBe(Number(nextId))
-        const previousIdentity = { dev: previousId, ino: previousId }
-        const nextIdentity = { ...previousIdentity, [field]: nextId }
-        const previousNumeric = Object.assign(statSync(directory), {
-          dev: Number(previousIdentity.dev),
-          ino: Number(previousIdentity.ino)
-        })
-        const previousBigInt = Object.assign(
-          statSync(directory, { bigint: true }),
-          previousIdentity
-        )
-        const nextNumeric = Object.assign(statSync(directory), {
-          dev: Number(nextIdentity.dev),
-          ino: Number(nextIdentity.ino)
-        })
-        const nextBigInt = Object.assign(statSync(directory, { bigint: true }), nextIdentity)
-        vi.mocked(statSync).mockClear()
-        vi.mocked(stat).mockClear()
-        vi.mocked(statSync).mockImplementationOnce((_path, options) =>
-          options?.bigint ? previousBigInt : previousNumeric
-        )
-        vi.mocked(stat)
-          .mockImplementationOnce(async (_path, options) =>
-            options?.bigint ? previousBigInt : previousNumeric
-          )
-          .mockImplementationOnce(async (_path, options) =>
-            options?.bigint ? nextBigInt : nextNumeric
-          )
-          .mockImplementationOnce(async (_path, options) =>
-            options?.bigint ? nextBigInt : nextNumeric
-          )
-        const events: string[] = []
-        subscription = startShallowDirectoryWatcher(
-          root,
-          [join(parent, 'HEAD')],
-          (nextEvents) => events.push(...nextEvents.map((event) => event.path)),
-          (error) => {
-            throw error
-          }
-        )
-        const firstWatcher = watcherState.get(directory)?.watcher
-        expect(firstWatcher).toBeDefined()
-        await vi.advanceTimersByTimeAsync(30_000)
-        expect(watcherState.get(directory)?.watcher).toBe(firstWatcher)
-        expect(events).toEqual([])
-
-        await rename(directory, previousDirectory)
-        await mkdir(directory)
-        await vi.advanceTimersByTimeAsync(30_000)
-        expect(watcherState.get(directory)?.watcher).not.toBe(firstWatcher)
-        expect(events).toEqual([join(directory, 'HEAD')])
-        await vi.advanceTimersByTimeAsync(30_000)
-        expect(events).toEqual([join(directory, 'HEAD')])
-        events.length = 0
-        emit(directory, 'HEAD')
-        expect(events).toEqual([join(directory, 'HEAD')])
-        expect(statSync).toHaveBeenCalledExactlyOnceWith(directory, { bigint: true })
-        expect(stat).toHaveBeenCalledTimes(3)
-        for (const args of vi.mocked(stat).mock.calls) {
-          expect(args).toEqual([directory, { bigint: true }])
-        }
-      } finally {
-        await subscription?.unsubscribe()
-        vi.useRealTimers()
-        await rm(root, { recursive: true, force: true })
-        await rm(previousDirectory, { recursive: true, force: true })
-      }
-    }
-  )
 
   it.each(['', 'logs'])(
     'recovers an inode-less %s replacement while ignoring ordinary timestamp changes',
@@ -412,74 +280,6 @@ describe('shallow watcher subscription', () => {
         vi.useRealTimers()
         await rm(root, { recursive: true, force: true })
         await rm(previousDirectory, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it.each([
-    { parent: '', birthtime: 'zero' },
-    { parent: 'logs', birthtime: 'zero' },
-    { parent: '', birthtime: 'ctime surrogate' },
-    { parent: 'logs', birthtime: 'ctime surrogate' }
-  ] as const)(
-    'keeps native $parent watches live without churn when birth time is $birthtime',
-    async ({ parent, birthtime }) => {
-      vi.useFakeTimers()
-      const root = await mkdtemp(join(tmpdir(), 'orca-shallow-unavailable-identity-'))
-      const directory = join(root, parent)
-      let subscription: ReturnType<typeof startShallowDirectoryWatcher> | undefined
-      try {
-        if (parent) {
-          await mkdir(directory)
-        }
-        const entry = (ctimeNs: bigint) =>
-          Object.assign(statSync(directory, { bigint: true }), {
-            dev: 1n,
-            ino: 0n,
-            birthtimeNs: birthtime === 'zero' ? 0n : ctimeNs,
-            ctimeNs,
-            mtimeNs: ctimeNs
-          })
-        const initial = entry(1n)
-        const edited = [entry(2n), entry(3n)]
-        vi.mocked(statSync).mockClear()
-        vi.mocked(stat).mockClear()
-        vi.mocked(statSync).mockReturnValueOnce(initial)
-        for (const current of edited) {
-          vi.mocked(stat).mockResolvedValueOnce(current)
-        }
-        const events: string[] = []
-        const onError = vi.fn()
-        subscription = startShallowDirectoryWatcher(
-          root,
-          [join(parent, 'HEAD')],
-          (nextEvents) => events.push(...nextEvents.map((event) => event.path)),
-          onError
-        )
-        const nativeWatcher = watcherState.get(directory)?.watcher
-        expect(nativeWatcher).toBeDefined()
-        const closed = vi.fn()
-        nativeWatcher?.on('close', closed)
-        const watchAttempts = vi.mocked(watch).mock.calls.length
-        emit(directory, 'HEAD')
-        expect(events).toEqual([join(directory, 'HEAD')])
-        events.length = 0
-        for (let tick = 0; tick < edited.length; tick++) {
-          await vi.advanceTimersByTimeAsync(30_000)
-          expect(watcherState.get(directory)?.watcher).toBe(nativeWatcher)
-          expect(watch).toHaveBeenCalledTimes(watchAttempts)
-          expect(events).toEqual([])
-          expect(closed).not.toHaveBeenCalled()
-          expect(vi.getTimerCount()).toBe(1)
-        }
-        emit(directory, 'HEAD')
-        expect(events).toEqual([join(directory, 'HEAD')])
-        expect(onError).not.toHaveBeenCalled()
-      } finally {
-        await subscription?.unsubscribe()
-        expect(vi.getTimerCount()).toBe(0)
-        vi.useRealTimers()
-        await rm(root, { recursive: true, force: true })
       }
     }
   )

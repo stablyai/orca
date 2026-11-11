@@ -54,7 +54,9 @@ import { computerUsePermissionsApi } from './api/computer-use-permissions-bridge
 import { shellApi } from './api/shell-bridge'
 import { skillsApi } from './api/skills-bridge'
 import { petApi } from './api/pet-bridge'
-import { browserApi } from './api/browser-bridge'
+import { appIconApi } from './api/app-icon-bridge'
+import { browserPasswordsApi } from './api/browser-passwords-bridge'
+import { browserApi } from './api/browser/browser-bridge'
 import { emulatorApi } from './api/emulator-bridge'
 import { hooksApi } from './api/hooks-bridge'
 import { ephemeralVmApi } from './api/ephemeral-vm-bridge'
@@ -158,7 +160,9 @@ const api = {
   shell: shellApi,
   skills: skillsApi,
   pet: petApi,
+  appIcon: appIconApi,
   browser: browserApi,
+  browserPasswords: browserPasswordsApi,
   emulator: emulatorApi,
   hooks: hooksApi,
   ephemeralVm: ephemeralVmApi,

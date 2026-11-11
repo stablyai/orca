@@ -1,6 +1,6 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
-import { SSH_CONNECTION_STATUS } from '../transport/ssh-connection-status-arms'
+import { SSH_CONNECTION_STATUS } from '../transport/connection/ssh-connection-status-arms'
 import { SETUP_RUN_POLICIES } from '../components/new-workspace-reply-schema'
 
 const sourceText = (name: string) => salvagedOptional(name, z.string())
@@ -87,12 +87,3 @@ export const repoSparsePresetListSchema = z
 export const repoSparsePresetSaveSchema = z
   .looseObject({ preset: salvagedOptional('preset', sparsePreset) })
   .transform((reply) => reply.preset)
-
-// Both search representations are supported; consumers choose refDetails or refs without requiring both.
-export const repoBaseRefSearchSchema = z.looseObject({
-  refs: salvagedOptional('refs', salvagingArray(z.string())),
-  refDetails: salvagedOptional(
-    'refDetails',
-    salvagingArray(z.looseObject({ refName: z.string(), localBranchName: z.string() }))
-  )
-})

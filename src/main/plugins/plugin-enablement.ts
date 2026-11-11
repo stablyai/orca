@@ -2,7 +2,7 @@ import {
   normalizePluginConsents,
   normalizePluginIdList
 } from '../../shared/plugins/approval/plugin-consent-state'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PluginService } from './plugin-service'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import { verifyDeclarativePluginContent } from './plugin-declarative-content-integrity'
@@ -16,7 +16,6 @@ export async function applyPluginConsent(input: {
   pluginKey: PluginConsentRequest['pluginKey']
   reviewedFingerprint: PluginConsentRequest['reviewedFingerprint']
   decision: PluginConsentRequest['decision']
-  originWebContentsId?: number
 }): Promise<void> {
   const { store, pluginService, pluginKey } = input
   const plugin = pluginService.findValidPlugin(pluginKey)
@@ -41,10 +40,32 @@ export async function applyPluginConsent(input: {
   } else {
     disabled.add(pluginKey)
   }
+  // Why every window, the clicking one too: its store never applied this write itself, and
+  // theme resolution reads `disabledPlugins` from it.
   store.updateSettings(
     { disabledPlugins: [...disabled], pluginConsents: consents },
-    { notifyListeners: true, originWebContentsId: input.originWebContentsId }
+    { notifyListeners: true }
   )
+  await pluginService.reconcileActivationState()
+}
+
+/** Drops a plugin's recorded approval without disabling it, so it waits for review. */
+export async function revokePluginConsent(input: {
+  store: Store
+  pluginService: PluginService | null
+  pluginKey: string
+}): Promise<void> {
+  const { store, pluginService, pluginKey } = input
+  // Why throw: an install that cannot drop the old approval must not publish.
+  if (!pluginService) {
+    throw new Error('plugin service is not running')
+  }
+  const consents = normalizePluginConsents(store.getSettings().pluginConsents)
+  if (!(pluginKey in consents)) {
+    return
+  }
+  delete consents[pluginKey]
+  store.updateSettings({ pluginConsents: consents }, { notifyListeners: true })
   await pluginService.reconcileActivationState()
 }
 
@@ -54,7 +75,6 @@ export async function applyPluginEnablement(input: {
   pluginService: PluginService
   pluginKey: string
   enabled: boolean
-  originWebContentsId?: number
 }): Promise<void> {
   const { store, pluginService, pluginKey, enabled } = input
   const plugin = pluginService.findValidPlugin(pluginKey)
@@ -68,9 +88,6 @@ export async function applyPluginEnablement(input: {
   } else {
     disabled.add(pluginKey)
   }
-  store.updateSettings(
-    { disabledPlugins: [...disabled] },
-    { notifyListeners: true, originWebContentsId: input.originWebContentsId }
-  )
+  store.updateSettings({ disabledPlugins: [...disabled] }, { notifyListeners: true })
   await pluginService.reconcileActivationState()
 }

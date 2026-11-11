@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
-import { getRetiredNameRegistryForRepo } from '../../../worktree-name-retirement'
+import { getRetiredNameRegistryForRepo } from '../../../workspaces/removal/retirement/worktree-name-retirement'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 
 export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): void {

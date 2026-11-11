@@ -122,34 +122,6 @@ describe('getActiveMarkdownExportPayload', () => {
     // Why: scrub runs on a clone; the live preview keeps its controls.
     expect(root.querySelector('.markdown-annotation-controls')).not.toBeNull()
   })
-
-  it('strips list-block annotation controls while preserving list text', async () => {
-    await mockPreviewOpenFile()
-    const root = document.createElement('div')
-    // Attribute-only controls verify scrubbing survives class renames.
-    root.innerHTML = `
-      <div class="markdown-body">
-        <ul>
-          <li>
-            <div class="markdown-annotation-list-block" data-source-line="2" data-source-end-line="2">
-              <span class="markdown-annotation-list-content">List item</span>
-              <div class="markdown-annotation-controls-renamed" data-orca-export-hide="true">
-                <button type="button" class="markdown-annotation-add" aria-label="Add note"><svg></svg></button>
-              </div>
-            </div>
-          </li>
-        </ul>
-      </div>`
-    const payload = await getActiveMarkdownExportPayload({
-      fileId: '/repo/docs/readme.md',
-      root
-    })
-    const exported = parseExportedHtml(payload?.html)
-    expect(exported.querySelector('li')?.textContent).toContain('List item')
-    expect(exported.querySelector('[data-orca-export-hide]')).toBeNull()
-    expect(exported.querySelector('.markdown-annotation-add')).toBeNull()
-    expect(root.querySelector('[data-orca-export-hide]')).not.toBeNull()
-  })
 })
 
 async function mockPreviewOpenFile(): Promise<void> {

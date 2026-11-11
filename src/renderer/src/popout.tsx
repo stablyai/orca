@@ -1,26 +1,26 @@
 // Install the import-free hook before react-dom reads it during evaluation; the observer below wraps a per-commit property and can load later.
-import './lib/react-devtools-commit-hook-shim'
-import './lib/react-commit-cascade-observer'
+import './diagnostics/react-commits/react-devtools-commit-hook-shim'
+import './diagnostics/react-commits/react-commit-cascade-observer'
 import './assets/main.css'
 
 import { StrictMode, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
-import {
-  installRendererCrashDiagnostics,
-  recordRendererCrashBreadcrumb
-} from './lib/crash-diagnostics'
-import { applyDocumentTheme } from './lib/document-theme'
-import { buildAppFontFamily } from './lib/app-font-family'
+import { installRendererCrashDiagnostics } from './diagnostics/crash-reporting/crash-diagnostics'
+import { recordRendererCrashBreadcrumb } from './diagnostics/crash-reporting/crash-breadcrumb-recorder'
+import { applyDocumentTheme } from './app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from './app-shell/appearance/terminal-app-theme'
+import { buildAppFontFamily } from './app-shell/appearance/app-font-family'
+import { applyCodeFontSmoothing } from './lib/editor/appearance/code-font-smoothing'
 import { I18nProvider } from './i18n/I18nProvider'
-import { translate } from './i18n/i18n'
-import { useAppStore } from './store'
+import { useTranslate } from './i18n/use-translate'
+import { useAppStore } from './store/index'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { getOrCreateRendererRoot } from './lib/react-renderer-root'
-import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
-import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
-import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
+import { setReactCommitCascadeRendererSurface } from './diagnostics/react-commits/react-commit-cascade-telemetry'
+import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
+import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
+import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -32,11 +32,12 @@ installRendererCrashDiagnostics('dashboard-popout')
 setReactCommitCascadeRendererSurface('dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
-  applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
+  applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
   document.documentElement.style.setProperty(
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)
   )
+  applyCodeFontSmoothing(settings?.codeFontSmoothing)
 }
 
 // Seed this separate store synchronously to prevent OS-theme flash before async appearance hydration.
@@ -59,6 +60,7 @@ if (!rootElement) {
 
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
+  useReduceVisualEffects(settings?.reduceVisualEffects)
 
   useEffect(() => {
     let disposed = false
@@ -91,7 +93,7 @@ function PopoutSettingsSync(): null {
       return
     }
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme('system')
+    const handleChange = (): void => applyDocumentTheme(resolvePaintedTheme(settings))
     media.addEventListener('change', handleChange)
     return () => media.removeEventListener('change', handleChange)
   }, [settings])
@@ -100,13 +102,16 @@ function PopoutSettingsSync(): null {
 }
 
 function PopoutRoot(): React.JSX.Element {
-  useTranslation()
+  const t = useTranslate()
+  useEffect(() => {
+    document.title = t('auto.main.window.dashboard.popout.window.title', 'Orca Agent Dashboard')
+  }, [t])
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="dashboard-popout.root"
       surface="dashboard-popout"
-      title={translate('dashboardPopout.recoverableError.title', 'Orca dashboard hit an error.')}
-      description={translate(
+      title={t('dashboardPopout.recoverableError.title', 'Orca dashboard hit an error.')}
+      description={t(
         'dashboardPopout.recoverableError.description',
         'The dashboard could not finish rendering. Retry to remount it, or reopen it.'
       )}

@@ -1,9 +1,9 @@
 import { resolveConfiguredRemoteBranchName } from './repo-base-ref-search'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './runner'
-import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
+import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
+import { isShowRefNoMatchError } from '../../shared/git/refs/git-show-ref-no-match'
 import {
-  isShowRefNoMatchError,
   probeAnyExactRef,
   probeAnyExactRefBatched,
   type ExactRefProbeExec,
@@ -12,6 +12,8 @@ import {
 } from './exact-ref-probe'
 
 export type BranchConflictKind = 'local' | 'remote'
+/** Exact-name creates must refuse when a probe could not decide. */
+export type StrictBranchConflictKind = BranchConflictKind | 'unknown'
 
 function runGit(
   exec: ExactRefProbeExec,
@@ -42,10 +44,10 @@ async function probeLocalBranchRef(
   }
 }
 
-async function listRemoteNamesViaExec(
+async function readRemoteNames(
   exec: ExactRefProbeExec,
   options: ExactRefProbeExecOptions
-): Promise<string[]> {
+): Promise<string[] | null> {
   try {
     const { stdout } = await runGit(exec, ['remote'], options)
     return stdout
@@ -54,8 +56,15 @@ async function listRemoteNamesViaExec(
       .filter(Boolean)
       .sort((a, b) => b.length - a.length)
   } catch {
-    return []
+    return null
   }
+}
+
+async function listRemoteNamesViaExec(
+  exec: ExactRefProbeExec,
+  options: ExactRefProbeExecOptions
+): Promise<string[]> {
+  return (await readRemoteNames(exec, options)) ?? []
 }
 
 async function hasCaseFoldedLocalConflict(
@@ -120,11 +129,11 @@ async function probeAnyRemoteConflictRef(
   batchedExec: ExactRefProbeStdinExec | undefined,
   candidateRefs: readonly string[],
   probeOptions: ExactRefProbeExecOptions
-): Promise<{ found: boolean }> {
+): Promise<{ found: boolean; unknown: boolean }> {
   if (batchedExec) {
     const batched = await probeAnyExactRefBatched(batchedExec, candidateRefs, probeOptions)
     if (!batched.unknown) {
-      return { found: batched.found }
+      return { found: batched.found, unknown: false }
     }
   }
   return probeAnyExactRef(exec, candidateRefs, probeOptions)
@@ -180,6 +189,80 @@ export async function getBranchConflictKindViaExec(
   }
 }
 
+/** Same policy as getBranchConflictKindViaExec, but a probe that could not decide is 'unknown', not free.
+ * A known conflict still wins over 'unknown'. */
+export async function getBranchConflictKindStrictViaExec(
+  exec: ExactRefProbeExec,
+  branchName: string,
+  allowedBaseRef?: string,
+  options: ExactRefProbeExecOptions = {},
+  batchedExec?: ExactRefProbeStdinExec
+): Promise<StrictBranchConflictKind | null> {
+  if (!canQueryRemoteBranchName(branchName)) {
+    return null
+  }
+  const localRef = `refs/heads/${branchName}`
+  try {
+    const presence = await probeLocalBranchRef(exec, localRef, options)
+    if (presence === 'present') {
+      return 'local'
+    }
+    let unknown = presence === 'unknown'
+    try {
+      if (await hasCaseFoldedLocalConflict(exec, localRef, options)) {
+        return 'local'
+      }
+    } catch {
+      unknown = true
+    }
+    const remoteNames = await readRemoteNames(exec, options)
+    if (remoteNames === null) {
+      return 'unknown'
+    }
+    const candidateRefs = buildRemoteBranchConflictRefs(remoteNames, branchName, allowedBaseRef)
+    if (candidateRefs.length > 0) {
+      const remote = await probeAnyRemoteConflictRef(exec, batchedExec, candidateRefs, options)
+      if (remote.found) {
+        return 'remote'
+      }
+      unknown ||= remote.unknown
+    }
+    return unknown ? 'unknown' : null
+  } catch {
+    return 'unknown'
+  }
+}
+
+function localGitProbeExec(path: string, options: LocalGitExecOptions) {
+  const execOptions = gitExecOptions(path, options)
+  return (
+    argv: string[],
+    commandOptions?: ExactRefProbeExecOptions & { stdin?: string }
+  ): Promise<{ stdout: string }> =>
+    gitExecFileAsync(argv, {
+      ...execOptions,
+      ...(commandOptions?.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
+      ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs }),
+      ...(commandOptions?.stdin === undefined ? {} : { stdin: commandOptions.stdin })
+    })
+}
+
+export function getBranchConflictKindStrict(
+  path: string,
+  branchName: string,
+  allowedBaseRef?: string,
+  options: LocalGitExecOptions = {}
+): Promise<StrictBranchConflictKind | null> {
+  const runLocalGit = localGitProbeExec(path, options)
+  return getBranchConflictKindStrictViaExec(
+    runLocalGit,
+    branchName,
+    allowedBaseRef,
+    {},
+    runLocalGit
+  )
+}
+
 export function getBranchConflictKind(
   path: string,
   branchName: string,
@@ -187,26 +270,13 @@ export function getBranchConflictKind(
   options: LocalGitExecOptions = {},
   allowLocalBranch?: () => Promise<boolean>
 ): Promise<BranchConflictKind | null> {
-  const execOptions = gitExecOptions(path, options)
-  const runLocalGit = (
-    argv: string[],
-    commandOptions?: ExactRefProbeExecOptions & { stdin?: string },
-    captureWslLoginShellOutput = false
-  ): Promise<{ stdout: string }> =>
-    gitExecFileAsync(argv, {
-      ...execOptions,
-      ...(captureWslLoginShellOutput ? { captureWslLoginShellOutput: true } : {}),
-      ...(commandOptions?.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
-      ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs }),
-      ...(commandOptions?.stdin === undefined ? {} : { stdin: commandOptions.stdin })
-    })
+  const runLocalGit = localGitProbeExec(path, options)
   return getBranchConflictKindViaExec(
-    (argv, commandOptions) => runLocalGit(argv, commandOptions, argv[0] === 'for-each-ref'),
+    runLocalGit,
     branchName,
     allowedBaseRef,
     {},
-    // Fence login banners to preserve one stdout line per ref; quiet exit-code probes need no markers.
-    (argv, commandOptions) => runLocalGit(argv, commandOptions, true),
+    runLocalGit,
     allowLocalBranch
   )
 }

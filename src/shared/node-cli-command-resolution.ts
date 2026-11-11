@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { delimiter, dirname, isAbsolute, join } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { firstWindowsPathEnvKey, isNativeExecutable } from './cli-runtime-pairing-inputs'
 import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
 import { getNvmVersionDirectories, nvmVersionDirectories } from './nvm-version-directories'
@@ -34,6 +34,46 @@ function splitPath(
     .split(pathDelimiter)
     .map((entry) => entry.trim())
     .filter(Boolean)
+}
+
+/** Like execvp, relative and empty PATH entries search from the launch cwd. */
+export function pathEnvRelativeTo(pathEnv: string | undefined, cwd: string): string | undefined {
+  return pathEnv
+    ?.split(delimiter)
+    .map((entry) => (isAbsolute(entry) ? entry : resolve(cwd, entry)))
+    .join(delimiter)
+}
+
+/** Whether a command line may name files relative to where it runs: a relative command, or any
+ *  user-configured argument (no rule can tell `settings.json` or `--env-file=work env` from a
+ *  word), so it may mean something else from another working directory. */
+function invocationDependsOnCwd(command: string, userArgs: readonly string[]): boolean {
+  return userArgs.length > 0 || (!isAbsolute(command) && /[\\/]/.test(command))
+}
+
+/** Where a catalog listing runs: `listIn`, unless the command line may mean something else
+ *  outside the chat's `launchDirectory`. */
+export function catalogListingDirectory(
+  command: string,
+  userArgs: readonly string[],
+  listIn: string | undefined,
+  launchDirectory: string | undefined
+): string | undefined {
+  return listIn &&
+    launchDirectory &&
+    launchDirectory !== listIn &&
+    invocationDependsOnCwd(command, userArgs)
+    ? launchDirectory
+    : listIn
+}
+
+/** The environment for a child that runs elsewhere but must find what it would from `cwd`. */
+export function envWithPathRelativeTo<T extends Record<string, string | undefined>>(
+  env: T,
+  cwd: string
+): T {
+  const key = env.PATH !== undefined ? 'PATH' : env.Path !== undefined ? 'Path' : null
+  return key ? { ...env, [key]: pathEnvRelativeTo(env[key], cwd) } : env
 }
 
 function* firstRunnable(

@@ -1,5 +1,6 @@
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import type { CheckRunDetailsTabPatch } from '@/components/editor/check-run-details-tab'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
   CombinedDiffAlternate,
   ConflictReviewEntry,
@@ -10,8 +11,8 @@ import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import type {
   BranchCompareLike,
@@ -35,6 +36,8 @@ import type {
 } from './restored-editor-owner'
 
 export type OpenFileOptions = {
+  placementWorkspaceId?: string
+  executionHostId?: ExecutionHostId
   preview?: boolean
   targetGroupId?: string
   recordReplacedPreview?: boolean
@@ -85,13 +88,19 @@ export type EditorFilesSlice = {
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  acquireEditorFileOperationProvenance: (
+    file: OpenFile,
+    selected?: OpenFile['operationProvenance']
+  ) => OpenFile & {
+    operationProvenance: NonNullable<OpenFile['operationProvenance']>
+  }
   /** Creates a plugin's new-file type at the active workspace root and opens it. */
   openNewPluginFileInActiveWorkspace: (
     newFile: { pluginKey: string; id: string; title: string; extension: string },
     groupId?: string
   ) => Promise<void>
-  /** Creates an untitled file of `extension` holding `content` at the active workspace root. */
-  openSampleFileInActiveWorkspace: (sample: { extension: string; content: string }) => Promise<void>
+  /** Opens an empty `untitled<extension>` at the active workspace root. */
+  openBlankFileInActiveWorkspace: (extension: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
@@ -113,8 +122,13 @@ export type EditorFilesSlice = {
       | 'runtimeEnvironmentId'
       | 'externalSshTargetId'
     > &
-      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly'>>,
-    options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
+      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly' | 'operationProvenance'>>,
+    options?: {
+      anchor?: string | null
+      targetGroupId?: string
+      sourceFileId?: string
+      placementWorkspaceId?: string
+    }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void
   pinFile: (fileId: string, tabId?: string) => void
@@ -124,7 +138,11 @@ export type EditorFilesSlice = {
    */
   closeFile: (
     fileId: string,
-    opts?: { captureRecentlyClosed?: boolean; keepEditorBuffer?: EditorBufferKeepRequest }
+    opts?: {
+      captureRecentlyClosed?: boolean
+      keepEditorBuffer?: EditorBufferKeepRequest
+      placementWorkspaceId?: string
+    }
   ) => void
   closeAllFiles: () => void
   /** Most recently closed editor tabs per worktree (for Cmd/Ctrl+Shift+T). */
@@ -156,7 +174,7 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection }
+    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection; oldPath?: string }
   ) => void
   openBranchDiff: (
     worktreeId: string,
@@ -179,7 +197,8 @@ export type EditorFilesSlice = {
     worktreePath: string,
     alternate?: CombinedDiffAlternate,
     areaFilter?: string,
-    entriesSnapshot?: GitStatusEntry[]
+    entriesSnapshot?: GitStatusEntry[],
+    options?: EditorOpenTargetOptions
   ) => void
   openConflictFile: (
     worktreeId: string,
@@ -199,7 +218,8 @@ export type EditorFilesSlice = {
     worktreeId: string,
     worktreePath: string,
     entries: ConflictReviewEntry[],
-    source: ConflictReviewState['source']
+    source: ConflictReviewState['source'],
+    options?: EditorOpenTargetOptions
   ) => void
   openCheckRunDetails: (
     worktreeId: string,
@@ -218,7 +238,8 @@ export type EditorFilesSlice = {
     worktreeId: string,
     worktreePath: string,
     compare: GitBranchCompareSummary,
-    alternate?: CombinedDiffAlternate
+    alternate?: CombinedDiffAlternate,
+    options?: EditorOpenTargetOptions
   ) => void
   openCommitAllDiffs: (
     worktreeId: string,
@@ -226,6 +247,7 @@ export type EditorFilesSlice = {
     compare: GitCommitCompareSummary,
     entries: GitBranchChangeEntry[],
     subject?: string,
-    message?: string
+    message?: string,
+    options?: EditorOpenTargetOptions
   ) => void
 }

@@ -4,7 +4,6 @@ import { cancelDocumentFrame, scheduleDocumentFrame } from './document-frame-reg
 import { touchesInRoot } from './document-host-seams'
 import { clampPan } from './fit-scale'
 import { notify } from './host-notify'
-import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
@@ -22,6 +21,9 @@ import {
 import { updateTransform } from './viewport-transform'
 import { viewportPoint } from './viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
+import { stopSurfaceTouchGestures } from './surface-touch-gesture-stop'
+
+export { stopSurfaceTouchGestures }
 
 const RELEASE_VELOCITY_MAX_AGE_MS = 100
 
@@ -102,6 +104,7 @@ export function attachSurfaceEventHandlers(
       if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
+      notify(scope, { type: 'terminal-interaction' })
       if (scope.touchGesture.momentumId) {
         cancelDocumentFrame(scope, scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
@@ -304,25 +307,4 @@ export function attachSurfaceEventHandlers(
 
 export function startSurfaceTouchGestures(scope: TerminalDocumentScope) {
   attachSurfaceEventHandlers(scope, scope.surface!)
-}
-
-export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
-  const interruptedPinch = scope.touchGesture.isPinching
-  scope.touchGesture.active = false
-  if (scope.touchGesture.momentumId !== null) {
-    cancelDocumentFrame(scope, scope.touchGesture.momentumId)
-    scope.touchGesture.momentumId = null
-  }
-  scope.touchGesture.velY = 0
-  scope.touchGesture.accumDelta = 0
-  scope.touchGesture.isPinching = false
-  if (interruptedPinch) {
-    scope.userScale = 1
-    scope.panX = 0
-    scope.panY = 0
-    if (scope.surface) {
-      updateTransform(scope)
-    }
-    emitKeyboardAvoidanceMetrics(scope)
-  }
 }

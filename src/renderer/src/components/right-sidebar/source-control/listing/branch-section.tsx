@@ -1,12 +1,12 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { SourceControlTreeNode } from '../../source-control-tree'
+import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
 import type { SourceControlRowOpenEvent } from './split-open'
 import { BranchEntryRow } from './branch-entry-row'
 import { SectionHeader } from './section-header'
@@ -15,6 +15,7 @@ import { SourceControlBranchTreeDirectoryRow } from './tree-directory-rows'
 import { VirtualizedList } from '../../../virtualized-list'
 
 export function SourceControlBranchSection({
+  activeOpenRowKeys,
   branchSummary,
   filteredBranchEntries,
   totalBranchEntryCount,
@@ -33,6 +34,7 @@ export function SourceControlBranchSection({
   openBranchAllDiffs,
   diffCommentCountByPath
 }: {
+  activeOpenRowKeys: ReadonlySet<string>
   branchSummary: GitBranchCompareSummary
   filteredBranchEntries: GitBranchChangeEntry[]
   totalBranchEntryCount: number
@@ -55,12 +57,13 @@ export function SourceControlBranchSection({
   ) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
+  const t = useTranslate()
   const baseRef = branchSummary.baseRef?.trim()
   const fileCount = filteredBranchEntries.length
   // Counts measure current base differences, not historical touches; omit the total label when filters narrow the list.
   const countTitle =
     baseRef && fileCount === totalBranchEntryCount
-      ? translate(
+      ? t(
           'auto.components.right.sidebar.SourceControl.branchFilesChangedVsBase',
           '{{count}} files changed vs {{ref}}',
           {
@@ -74,10 +77,7 @@ export function SourceControlBranchSection({
   return (
     <div>
       <SectionHeader
-        label={translate(
-          'auto.components.right.sidebar.SourceControl.d7ae61269b',
-          'Committed on Branch'
-        )}
+        label={t('auto.components.right.sidebar.SourceControl.d7ae61269b', 'Committed on Branch')}
         count={fileCount}
         countTitle={countTitle}
         isCollapsed={collapsedSections.has('branch')}
@@ -95,7 +95,7 @@ export function SourceControlBranchSection({
               }
             }}
           >
-            {translate('auto.components.right.sidebar.SourceControl.48db37cca9', 'View all')}
+            {t('auto.components.right.sidebar.SourceControl.48db37cca9', 'View all')}
           </Button>
         }
       />
@@ -123,6 +123,7 @@ export function SourceControlBranchSection({
                   currentWorktreeId={currentWorktreeId}
                   worktreePath={worktreePath}
                   depth={node.depth}
+                  isOpenFile={activeOpenRowKeys.has(node.key)}
                   onRevealInExplorer={revealInExplorer}
                   connectionId={activeConnectionId}
                   onOpen={(event) => openCommittedDiff(node.entry, event)}
@@ -136,10 +137,11 @@ export function SourceControlBranchSection({
           <VirtualizedList
             rows={filteredBranchEntries}
             scrollElement={fileListScrollElement}
-            getRowKey={(entry) => `branch:${entry.path}`}
+            getRowKey={(entry) => `branch::${entry.path}`}
             renderRow={(entry) => (
               <BranchEntryRow
-                key={`branch:${entry.path}`}
+                key={`branch::${entry.path}`}
+                isOpenFile={activeOpenRowKeys.has(`branch::${entry.path}`)}
                 entry={entry}
                 currentWorktreeId={currentWorktreeId}
                 worktreePath={worktreePath}

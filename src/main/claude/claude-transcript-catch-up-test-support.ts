@@ -3,12 +3,12 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, type Mock, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
 
 export const SESSION = 'session-claude-catch-up'
@@ -108,7 +108,7 @@ export async function chat(project = '-work', cwd = '/work') {
     agent: 'claude',
     providerHandle: claudeProviderHandle(SID, 'a1')
   } satisfies AgentSessionJournalIdentity
-  const journal = await journals.open({
+  let journal = await journals.open({
     identity,
     stateDirectory: root,
     now: () => 1_000
@@ -123,8 +123,16 @@ export async function chat(project = '-work', cwd = '/work') {
   const warn: Mock<(...args: unknown[]) => void> = vi.fn()
   return {
     identity,
-    journal,
-    replay: () => journals.open({ identity, stateDirectory: root, now: () => 1_000 }),
+    get journal() {
+      return journal
+    },
+    replay: async () => {
+      await deferred.drained()
+      await journal.close()
+      journal = await journals.open({ identity, stateDirectory: root, now: () => 1_000 })
+      deferred.bind({ journal, fence: 1, publish: () => {} })
+      return journal
+    },
     warn,
     deferred,
     write: (rows: readonly Record<string, unknown>[]) =>

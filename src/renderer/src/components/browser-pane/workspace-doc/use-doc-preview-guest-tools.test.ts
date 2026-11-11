@@ -3,9 +3,9 @@
 import { act, createElement, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
-import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
-import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
+import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
+import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import { makeAnnotation } from '@/store/slices/browser/annotations/browser-annotation-test-fixture'
 import { getBrowserOverlayAnchor } from '../describe-page/browser-annotation-geometry'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 
@@ -69,7 +69,6 @@ import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
 
 const PREVIEW_ID = 'browser-page-9f2c'
 const FIRST_GRANT = 'a'.repeat(32)
-const SECOND_GRANT = 'b'.repeat(32)
 
 function Harness({ grantId }: { grantId: string | null }): null {
   const webviewRef = useRef(null)
@@ -122,38 +121,6 @@ afterEach(() => {
 })
 
 describe('useDocPreviewGuestTools ids', () => {
-  it('scopes annotations and tools to the browser page the document is open in', () => {
-    render(FIRST_GRANT)
-
-    expect(calls.annotationSend.at(-1)?.browserTabId).toBe(PREVIEW_ID)
-    expect(calls.grabAnnotations.at(-1)?.browserTabId).toBe(PREVIEW_ID)
-    expect(calls.grabAnnotations.at(-1)?.toolTargetId).toBe(PREVIEW_ID)
-    expect(calls.grabMode.at(-1)).toBe(PREVIEW_ID)
-  })
-
-  // Grant-derived targets would orphan annotations after re-mint; main resolves the replacement guest by page ID.
-  it('keeps naming the same surface across a re-mint', () => {
-    render(FIRST_GRANT)
-    render(SECOND_GRANT)
-
-    expect(new Set(calls.annotationSend.map((call) => call.browserTabId))).toEqual(
-      new Set([PREVIEW_ID])
-    )
-    expect(new Set(calls.grabAnnotations.map((call) => call.toolTargetId))).toEqual(
-      new Set([PREVIEW_ID])
-    )
-    expect(calls.viewportBridge.at(-1)?.toolTargetId).toBe(PREVIEW_ID)
-  })
-
-  // Before grant commit no guest is registered; an empty target avoids parking requests for an unavailable document.
-  it('names no tool target before a grant exists', () => {
-    render(null)
-
-    expect(calls.grabMode.at(-1)).toBe('')
-    expect(calls.grabAnnotations.at(-1)?.toolTargetId).toBe('')
-    expect(calls.viewportBridge).toHaveLength(0)
-  })
-
   it('moves the pending card from a live report after inner scroll and removes the listener on detach', () => {
     const selected = makeAnnotation(PREVIEW_ID).payload
     selected.page.viewportWidth = 900

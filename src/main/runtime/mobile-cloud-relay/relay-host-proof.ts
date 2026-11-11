@@ -6,7 +6,7 @@ import {
   openHostChallengeEnvelope,
   parseHostChallengeTranscript,
   readTranscriptUint64
-} from '../host-challenge-envelope'
+} from '../hosts/identity/host-challenge-envelope'
 
 const HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-relay-host-proof/v1'
 const HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-relay-host-challenge/v1'

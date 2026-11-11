@@ -1,24 +1,31 @@
+import { normalizeAgentDefaultSurface } from '../../../shared/native-chat/native-chat-providers'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
-import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
-import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
+import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
+import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
-import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
-import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
-import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
-import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
-import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import {
-  expandWorkspaceDirHome,
-  savedChatUiWithTerminalDefaultView,
+  hasLegacyMatchTerminalSidebar,
+  syncLegacyMatchTerminalSidebar
+} from '../../../shared/plugin-theme-settings'
+import { normalizeTerminalDefaultShell } from '../../../shared/shell/launch/terminal-default-shell'
+import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
+import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
+import { publishedLegacyChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import {
+  normalizeLoadedWorkspaceDirSetting,
   stripRetiredGlobalSettings
 } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { replaceRetiredSpeechModelId } from '../../speech/model-catalog'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { VoiceSettings } from '../../../shared/speech-types'
+import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 
@@ -31,11 +38,13 @@ export function normalizeLoadedGlobalSettings(
     defaults,
     migratedExternalVisibility,
     migratedTerminalScrollback,
+    migratedTerminalFontWeight,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,
+    migratedTerminalColorOverrides,
     migratedFloatingTerminalCwd,
     migratedFloatingTerminalTrustedCwds
   } = terminal
@@ -44,6 +53,7 @@ export function normalizeLoadedGlobalSettings(
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedPluginSystemEnabled,
+    migratedNestedWorkerMaxDepth,
     migratedTerminalCursorStyle,
     migratedTerminalLineHeight,
     terminalRightClickToPasteDefaultedForPlatform,
@@ -63,20 +73,33 @@ export function normalizeLoadedGlobalSettings(
     normalizedNotifications,
     normalizedSourceControlGroupOrder
   } = profile
+  const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
+  const voice = {
+    ...getDefaultVoiceSettings(),
+    ...parsed.settings?.voice,
+    ...migrateDictationShortcutMode(parsed.settings)
+  }
+  const matchTerminalSidebarInputs = {
+    pluginAppThemeLight: pluginOwnedSettings.pluginAppThemeLight,
+    pluginAppThemeDark: pluginOwnedSettings.pluginAppThemeDark,
+    leftSidebarAppearanceMode: parsed.settings?.leftSidebarAppearanceMode
+  }
 
   return {
     ...defaults.settings,
     // Legacy stored booleans cannot distinguish opt-in from the old default; retain explicit true.
-    ...expandWorkspaceDirHome(stripRetiredGlobalSettings(parsed.settings)),
-    // Preserve terminal-first new tabs when retiring the old default-view switch.
-    ...(savedChatUiWithTerminalDefaultView(parsed.settings)
-      ? { experimentalNativeChat: false }
-      : {}),
+    ...normalizeLoadedWorkspaceDirSetting(
+      stripRetiredGlobalSettings(parsed.settings),
+      defaults.settings
+    ),
+    agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance
     ),
     worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
     prBotAuthorOverrides: normalizePRBotAuthorOverrides(parsed.settings?.prBotAuthorOverrides),
+    // Only fresh profiles take the on default; a stored profile saved before the key existed was off.
+    artifactSharingEnabled: parsed.settings?.artifactSharingEnabled === true,
     // Carry the retired sidekick flag into pet settings.
     experimentalPet: parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
     // Migrate old platform defaults once; retain later opt-outs.
@@ -91,8 +114,10 @@ export function normalizeLoadedGlobalSettings(
       primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
     ...migratedAutoRenameBranchFromWork,
     ...migratedPluginSystemEnabled,
+    ...migratedNestedWorkerMaxDepth,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,
+    ...migratedTerminalFontWeight,
     // False was always explicit; the old true default may be reset once.
     terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
       ? (parsed.settings?.terminalRightClickToPaste ?? defaults.settings.terminalRightClickToPaste)
@@ -114,6 +139,7 @@ export function normalizeLoadedGlobalSettings(
     localAccountRuntime: migratedLocalAccountRuntime,
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
     ...migratedOsc52Clipboard,
+    ...migratedTerminalColorOverrides,
     floatingTerminalEnabled: migratedFloatingTerminalEnabled,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -123,7 +149,11 @@ export function normalizeLoadedGlobalSettings(
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
-    ...normalizePluginOwnedSettings(parsed.settings ?? {}),
+    ...pluginOwnedSettings,
+    ...syncLegacyMatchTerminalSidebar(
+      matchTerminalSidebarInputs,
+      hasLegacyMatchTerminalSidebar(matchTerminalSidebarInputs)
+    ),
     appIcon: normalizeAppIconId(parsed.settings?.appIcon),
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,
@@ -153,6 +183,7 @@ export function normalizeLoadedGlobalSettings(
     ...migratedAgentPermission,
     claudeAgentTeamsDefaultDisabledMigrated: true,
     sshRemoteCliControlExistingHostsMigrated: true,
+    agentWorkspaceTrustExistingReposMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
       seedDefaults: true
     }),
@@ -164,9 +195,23 @@ export function normalizeLoadedGlobalSettings(
       migratedSourceControlAi,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
-    voice: {
-      ...getDefaultVoiceSettings(),
-      ...parsed.settings?.voice
-    }
+    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) },
+    voiceDictationModeDefaultedToAuto: true
   }
+}
+
+function migrateDictationShortcutMode(
+  settings: PersistedState['settings'] | undefined
+): Pick<VoiceSettings, 'dictationMode' | 'dictationHoldToRecord'> {
+  const stored: { dictationMode?: unknown; dictationHoldToRecord?: unknown } = settings?.voice ?? {}
+  if (stored.dictationMode === 'hold') {
+    return dictationShortcutModeSettings('hold')
+  }
+  // Builds from 3d2b0b12812 stored Auto as 'auto'. A 'toggle' saved before the marker was everyone's old default.
+  const dictationHoldToRecord =
+    stored.dictationMode === 'auto' ||
+    (typeof stored.dictationHoldToRecord === 'boolean'
+      ? stored.dictationHoldToRecord
+      : settings?.voiceDictationModeDefaultedToAuto !== true)
+  return dictationShortcutModeSettings(dictationHoldToRecord ? 'auto' : 'toggle')
 }

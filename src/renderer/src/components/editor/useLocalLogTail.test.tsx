@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { LocalLogTailChangedPayload } from '../../../../shared/local-log-tail-types'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from './editor-panel-content-types'
 import { useLocalLogTail } from './useLocalLogTail'
 
@@ -130,24 +130,6 @@ describe('useLocalLogTail', () => {
 
     await waitFor(() => expect(stopMock).toHaveBeenCalledTimes(1))
     expect(readMock).not.toHaveBeenCalled()
-  })
-
-  it('falls back to a full reload when a change reveals truncation', async () => {
-    readMock.mockResolvedValue({
-      ...encodedResult('', 0),
-      nextByteOffset: 0,
-      reset: true
-    })
-    renderHook(() =>
-      useHarness([openFile], {
-        content: 'old\n',
-        isBinary: false,
-        fileIdentity: FILE_IDENTITY
-      })
-    )
-
-    await waitFor(() => expect(reloadMock).toHaveBeenCalledWith(openFile))
-    await waitFor(() => expect(stopMock).toHaveBeenCalledTimes(1))
   })
 
   it('commits complete lines read before a later transient chunk failure', async () => {

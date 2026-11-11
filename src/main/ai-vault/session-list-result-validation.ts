@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AiVaultSessionAccountHomeSchema } from '../../shared/ai-vault/contracts/ai-vault-session-account-home'
 import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
@@ -6,9 +7,9 @@ import {
   type AiVaultListResult,
   type AiVaultScanIssue,
   type AiVaultSession
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
-import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
+import { aiVaultScanIssueText } from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 
 const aiVaultAgentSet = new Set<string>(AI_VAULT_AGENTS)
 
@@ -46,12 +47,15 @@ const sessionPreviewMessageSchema = z.object({
 })
 
 const aiVaultSessionSchema = z.object({
+  accountHome: AiVaultSessionAccountHomeSchema,
+  accountWslDistro: z.string().nullable().optional().catch(undefined),
   id: z.string(),
   executionHostId: executionHostIdSchema,
   executionHostPlatform: nodePlatformSchema.nullable().optional(),
   agent: z.string().min(1),
   sessionId: z.string(),
   title: z.string(),
+  titleKind: z.enum(['named', 'fallback']).optional().catch(undefined),
   cwd: z.string().nullable(),
   // Malformed aliases must not discard the entire session.
   cwdAliases: z

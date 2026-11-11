@@ -27,7 +27,8 @@ import type {
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import { hostSortsByStamps, sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
-import { resolveWorktreeHostId } from './worktree-host-context-labels'
+import { NO_WORKTREE_HOST_CONTEXT, resolveWorktreeHostId } from './worktree-host-context-labels'
+import type { WorktreeHostContextOf } from './worktree-host-context-labels'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import {
   buildProjectGroupingIndex,
@@ -82,12 +83,15 @@ export function buildSectionRepoMap(
 }
 export { getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
 
+// A section before lineage expansion: host rows only, no per-row view yet.
+type PlannedSection = Omit<Section, 'data'> & { data: Worktree[] }
+
 function makeSection(
   key: string,
   title: string,
   data: readonly Worktree[],
   decoration: { icon?: 'pin'; repo?: SectionRepo } = {}
-): Section {
+): PlannedSection {
   return {
     key,
     title,
@@ -170,7 +174,8 @@ export function buildMobileWorkspacePlan(
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_WORKSPACE_STATUSES,
   _collapsedGroups: ReadonlySet<string> = new Set(),
   showPinnedInGroups = false,
-  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
+  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map(),
+  lineageStores?: Parameters<typeof getMobileWorkspaceLineageChildren>[1]
 ) {
   const groupLabels = {
     pinned: translate('worktree.workspaceListSections.pinned', 'Pinned'),
@@ -183,9 +188,9 @@ export function buildMobileWorkspacePlan(
   const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId)
   const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
-    filters.filterRepoIds.length > 0
-      ? worktrees.filter((w) => filters.filterRepoIds.includes(w.repoId))
-      : worktrees
+    worktrees,
+    lineageStores,
+    filters.filterRepoIds
   )
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)
@@ -199,7 +204,7 @@ export function buildMobileWorkspacePlan(
       getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural: canonicalGroupWorktrees, displayRootByIdentity }) => {
-      const sections: Section[] = []
+      const sections: PlannedSection[] = []
       if (pinned.length > 0) {
         sections.push(makeSection('pinned', groupLabels.pinned, pinned, { icon: 'pin' }))
       }
@@ -235,7 +240,7 @@ export function buildMobileWorkspacePlan(
         )
         for (const [key, section] of projectSections) {
           sections.push(
-            makeSection(key, section.label, orderMainWorktreeFirst(section.items), {
+            makeSection(key, section.label, orderMainWorktreeFirst(section.items, sortMode), {
               repo: section.repo
             })
           )
@@ -289,7 +294,7 @@ export function buildMobileWorkspacePlan(
           }
         }
       }
-      return sections.map((section): Section & WorktreeOccurrenceSection<Worktree> => ({
+      return sections.map((section): PlannedSection & WorktreeOccurrenceSection<Worktree> => ({
         ...section,
         items: section.data,
         placement: section.key === 'pinned' ? 'pinned' : 'natural'
@@ -298,13 +303,16 @@ export function buildMobileWorkspacePlan(
   })
   return {
     occurrencePlan,
-    render: (collapsed: ReadonlySet<string>): Section[] =>
+    render: (
+      collapsed: ReadonlySet<string>,
+      hostContextOf: WorktreeHostContextOf = NO_WORKTREE_HOST_CONTEXT
+    ): Section[] =>
       occurrencePlan.sections.map((section) => ({
         key: section.key,
         title: section.title,
         ...(section.icon ? { icon: section.icon } : {}),
         ...(section.repo ? { repo: section.repo } : {}),
-        data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed)
+        data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf)
       }))
   }
 }

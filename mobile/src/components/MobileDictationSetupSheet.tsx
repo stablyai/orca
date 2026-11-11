@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { MobileSwitch } from './MobileSwitch'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -9,7 +9,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
@@ -103,11 +103,13 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
     intervalMs: POLL_INTERVAL_MS
   })
 
-  useEffect(() => {
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
     if (visible) {
       setError(null)
     }
-  }, [visible])
+  }
 
   const handleDownload = useCallback(
     async (model: MobileSpeechModel) => {
@@ -332,8 +334,8 @@ const styles = themedStyleSheet(() => ({
     gap: 5,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
+    borderRadius: radii.control,
+    backgroundColor: colors.sheetGroup
   },
   actionPressed: { opacity: 0.7 },
   actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },

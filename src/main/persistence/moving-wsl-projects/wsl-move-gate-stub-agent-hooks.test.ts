@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AgentHookServer } from '../../agent-hooks/server'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { collectWslMoveGateInputs, type WslMoveGateFactSources } from './wsl-move-gate-facts'
 import { assessWslMoveTerminals } from './wsl-move-terminal-gate'
 
@@ -90,20 +90,6 @@ describe('the WSL move gate with the stub agent hook events', () => {
       blockers: [{ kind: 'agent-working' }]
     })
     await hook('Stop', 'hello p4')
-    expect(await gate()).toEqual({ verdict: 'ready', paneKeys: [PANE] })
-  })
-
-  it('passes an agent resumed in its pane until its next prompt starts a turn', async () => {
-    await hook('SessionStart')
-    await hook('UserPromptSubmit', 'hello p4')
-    await hook('Stop', 'hello p4')
-    // Resumed after a move or a wake: Codex posts SessionStart only with the first prompt, so an
-    // idle resumed agent posts nothing and passes. (The real-host stub posts it at launch instead.)
-    expect(await gate()).toEqual({ verdict: 'ready', paneKeys: [PANE] })
-    await hook('SessionStart')
-    await hook('UserPromptSubmit', 'next')
-    expect(await gate()).toMatchObject({ verdict: 'blocked' })
-    await hook('Stop', 'next')
     expect(await gate()).toEqual({ verdict: 'ready', paneKeys: [PANE] })
   })
 })

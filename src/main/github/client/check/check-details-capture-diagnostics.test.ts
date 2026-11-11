@@ -1,4 +1,3 @@
-import '../../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type { ChildProcess } from 'node:child_process'
 import { getEventListeners } from 'node:events'
 import type * as ProcessHostModule from '@orca/process-host'
@@ -9,7 +8,7 @@ import {
 } from '../../../../shared/__fixtures__/fake-spawned-child'
 import * as capture from '../../../git/command-runner/exec-file-capture'
 import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'
-import { GITHUB_PULL_REQUEST_METHODS } from '../../../runtime/rpc/methods/github-pull-request-methods'
+import { GITHUB_PULL_REQUEST_METHODS } from '../../../runtime/rpc/methods/source-control/github/github-pull-request-methods'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import * as ghUtils from '../../gh-utils'
 import { getPRCheckDetails } from './get-pr-check-details'

@@ -4,13 +4,19 @@ import { z } from 'zod'
 export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.v1'
 /** Send cancel only when negotiated: older desktops drop the whole attachment on unknown event types. */
 export const DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY = 'browser.desktopBridge.cancel.v1'
+/** Older desktops re-parse params and would drop expectUrl, so commands carrying it need this. */
+export const DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY = 'browser.desktopBridge.expect-url.v1'
+/** Older desktops drop the whole attachment on a method they don't allow, so tab annotations need this. */
+export const DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY =
+  'browser.desktopBridge.tab-annotations.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
 export const DESKTOP_BROWSER_BRIDGE_SCOPE_CODE = 'desktop_browser_bridge_out_of_scope'
 export const DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE = 'desktop_browser_bridge_unrouted'
 
-export const DESKTOP_BROWSER_BRIDGE_SETTING_LABEL = "Allow this host's orca CLI to control Orca"
+export const DESKTOP_BROWSER_BRIDGE_SETTING_LABEL =
+  'Allow this host to control Orca browser tabs in its workspaces'
 
 /** The desktop also withholds the bridge while this host's pages browse from the desktop's own network. */
 export const DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL = 'Settings › Browser › SSH workspaces'
@@ -24,6 +30,7 @@ export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.tabList',
   'browser.tabCurrent',
   'browser.tabShow',
+  'browser.tabAnnotations',
   'browser.tabSwitch',
   'browser.tabCreate',
   'browser.tabClose',
@@ -122,7 +129,8 @@ export type DesktopBrowserBridgeEvent = z.infer<typeof DesktopBrowserBridgeEvent
 
 const BridgeError = z.object({
   code: z.string().min(1).max(128),
-  message: z.string().max(4096)
+  message: z.string().max(4096),
+  data: z.unknown().optional()
 })
 
 export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [
@@ -140,3 +148,22 @@ export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [
   })
 ])
 export type DesktopBrowserBridgeResultParams = z.infer<typeof DesktopBrowserBridgeResultParams>
+
+// Routed tabs can still display local files; those remain off-limits to hosts.
+// Allow chrome-error: so hosts can navigate away from failed loads.
+const HOST_REACHABLE_DOCUMENT_PROTOCOLS = new Set([
+  'http:',
+  'https:',
+  'about:',
+  'blob:',
+  'data:',
+  'chrome-error:'
+])
+
+export function isHostReachableDocument(url: string): boolean {
+  try {
+    return HOST_REACHABLE_DOCUMENT_PROTOCOLS.has(new URL(url).protocol)
+  } catch {
+    return url === ''
+  }
+}

@@ -1,10 +1,12 @@
 import { memo } from 'react'
-import { ArrowUpRight, ChevronRight, Terminal } from 'lucide-react'
+import { ArrowUpRight, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { cn } from '@/lib/class-names'
 import type { ResourcePtyRow as PtyRow } from './resource-pty-view-model'
 import { ResourcePtyDetails, resourcePtyBindingLabel } from './ResourcePtyDetails'
 import { ptyTerminationReason } from './use-resource-pty-actions'
@@ -15,6 +17,8 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
   unverifiable,
   ending,
   error,
+  selected,
+  onSelect,
   onEnd,
   onNavigate
 }: {
@@ -23,50 +27,58 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
   unverifiable: boolean
   ending: boolean
   error?: string
+  selected: boolean
+  onSelect: (row: PtyRow) => void
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const endUnavailable = unverifiable
-    ? translate(
-        'resourceManager.pty.refreshBeforeEnd',
-        'End is unavailable until PTYs are refreshed.'
-      )
+    ? t('resourceManager.pty.refreshBeforeEnd', 'End is unavailable until PTYs are refreshed.')
     : !row.session.incarnationId || !row.session.fencedTermination
-      ? ptyTerminationReason('unsupported')
+      ? ptyTerminationReason('unsupported', t)
       : null
   const processName = row.session.foregroundProcess?.trim()
   const context = processName
-    ? translate('resourceManager.pty.lastProcess', 'Last seen process: {{process}}', {
+    ? t('resourceManager.pty.lastProcess', 'Last seen process: {{process}}', {
         process: processName
       })
     : null
   const folder = !row.workspace ? row.session.cwd : null
   return (
-    <div data-resource-pty-row={row.identity} className="px-2 py-1">
+    <div
+      data-resource-pty-row={row.identity}
+      data-selected={selected}
+      className={cn('rounded-md px-2 py-1', selected && 'bg-accent text-accent-foreground')}
+    >
       <Collapsible>
         <div className="flex min-w-0 items-center gap-1">
+          <Checkbox
+            className="ml-1"
+            checked={selected}
+            disabled={ending || !!endUnavailable}
+            aria-label={t('resourceManager.pty.selectNamed', 'Select {{terminal}}', {
+              terminal: row.label
+            })}
+            onCheckedChange={() => onSelect(row)}
+          />
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
               className="group min-w-0 flex-1 justify-start"
-              aria-label={translate(
-                'resourceManager.pty.detailsNamed',
-                'Details for {{terminal}}',
-                {
-                  terminal: row.label
-                }
-              )}
+              aria-label={t('resourceManager.pty.detailsNamed', 'Details for {{terminal}}', {
+                terminal: row.label
+              })}
             >
               <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
-              <Terminal className="size-3 shrink-0 text-muted-foreground" />
               <span className="truncate text-xs">{row.label}</span>
             </Button>
           </CollapsibleTrigger>
           {row.binding === 'unbound' && (
             <span className="shrink-0 text-2xs text-muted-foreground">
-              {resourcePtyBindingLabel(row.binding)}
+              {resourcePtyBindingLabel(row.binding, t)}
             </span>
           )}
           {row.tabId && (
@@ -75,7 +87,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate('resourceManager.pty.openNamed', 'Open {{terminal}}', {
+                  aria-label={t('resourceManager.pty.openNamed', 'Open {{terminal}}', {
                     terminal: row.label
                   })}
                   onClick={() => {
@@ -88,7 +100,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {translate('resourceManager.pty.goToTerminal', 'Go to terminal')}
+                {t('resourceManager.pty.goToTerminal', 'Go to terminal')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -99,23 +111,20 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
                   variant="ghost"
                   size="xs"
                   disabled={ending || !!endUnavailable}
-                  aria-label={translate('resourceManager.pty.endNamed', 'End {{terminal}}', {
+                  aria-label={t('resourceManager.pty.endNamed', 'End {{terminal}}', {
                     terminal: row.label
                   })}
                   onClick={() => onEnd(row)}
                 >
                   {ending
-                    ? translate('resourceManager.pty.ending', 'Ending…')
-                    : translate('resourceManager.pty.endShort', 'End')}
+                    ? t('resourceManager.pty.ending', 'Ending…')
+                    : t('resourceManager.pty.endShort', 'End')}
                 </Button>
               </span>
             </TooltipTrigger>
             <TooltipContent>
               {endUnavailable ??
-                translate(
-                  'resourceManager.pty.endHint',
-                  'End this terminal and its child processes.'
-                )}
+                t('resourceManager.pty.endHint', 'End this terminal and its child processes.')}
             </TooltipContent>
           </Tooltip>
         </div>

@@ -1,7 +1,8 @@
 import type { JSX, ReactNode } from 'react'
 import { ClaudeIcon } from '@/components/status-bar/icons'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import {
   BROWSER_PROMPT_TEXT,
   browserPhaseAtLeast,
@@ -21,7 +22,7 @@ type PhasedTerminalEntry = {
   minPhase: BrowserVisualPhase
 }
 
-function terminalEntries(): readonly PhasedTerminalEntry[] {
+function terminalEntries(t: Translate = translate): readonly PhasedTerminalEntry[] {
   return [
     {
       id: 'change-prompt',
@@ -35,12 +36,9 @@ function terminalEntries(): readonly PhasedTerminalEntry[] {
         kind: 'ok',
         content: (
           <>
-            {translate(
-              'auto.components.feature.wall.BrowserAnimatedVisual.4fa59ca545',
-              '✓ Updated'
-            )}{' '}
+            {t('auto.components.feature.wall.BrowserAnimatedVisual.4fa59ca545', '✓ Updated')}{' '}
             <code className="text-emerald-600 dark:text-emerald-400">
-              {translate(
+              {t(
                 'auto.components.feature.wall.BrowserAnimatedVisual.051c97d15a',
                 '.pp-card[data-card="starter"] .pp-cta'
               )}
@@ -72,7 +70,7 @@ function terminalEntries(): readonly PhasedTerminalEntry[] {
       id: 'verified',
       entry: {
         kind: 'ok',
-        content: translate(
+        content: t(
           'auto.components.feature.wall.BrowserAnimatedVisual.eb88125c6f',
           '✓ Verified — Try free still works.'
         )
@@ -86,6 +84,7 @@ export function BrowserAgentVerificationPane(props: {
   phase: BrowserVisualPhase
   splitVisible: boolean
 }): JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className={cn(
@@ -95,12 +94,10 @@ export function BrowserAgentVerificationPane(props: {
     >
       <div className="flex h-5 shrink-0 items-center gap-1.5 border-b border-border bg-muted/40 px-2 text-[9.5px] font-medium text-foreground">
         <ClaudeIcon size={11} />
-        <span>
-          {translate('auto.components.feature.wall.BrowserAnimatedVisual.6e4616d039', 'Claude')}
-        </span>
+        <span>{t('auto.components.feature.wall.BrowserAnimatedVisual.6e4616d039', 'Claude')}</span>
       </div>
       <div className="flex flex-1 flex-col gap-1 px-2 py-2 leading-snug">
-        {terminalEntries().map(({ id, entry, minPhase }) => (
+        {terminalEntries(t).map(({ id, entry, minPhase }) => (
           <TerminalLine key={id} visible={browserPhaseAtLeast(props.phase, minPhase)}>
             <TerminalEntryView entry={entry} />
           </TerminalLine>
@@ -111,12 +108,13 @@ export function BrowserAgentVerificationPane(props: {
 }
 
 function TerminalEntryView(props: { entry: TerminalEntry }): JSX.Element {
+  const t = useTranslate()
   const { entry } = props
   if (entry.kind === 'prompt') {
     return (
       <span className="text-card-foreground">
         <span className="text-muted-foreground">
-          {translate('auto.components.feature.wall.BrowserAnimatedVisual.f2034c4930', '>')}
+          {t('auto.components.feature.wall.BrowserAnimatedVisual.f2034c4930', '>')}
         </span>{' '}
         {entry.text}
       </span>
@@ -126,7 +124,7 @@ function TerminalEntryView(props: { entry: TerminalEntry }): JSX.Element {
     return (
       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
         <span className="size-1.5 animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400" />
-        {translate('auto.components.feature.wall.BrowserAnimatedVisual.0ce7c24b4d', 'Working…')}
+        {t('auto.components.feature.wall.BrowserAnimatedVisual.0ce7c24b4d', 'Working…')}
       </span>
     )
   }

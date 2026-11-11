@@ -1,7 +1,4 @@
-import { writeFileSync, renameSync, unlinkSync } from 'node:fs'
-import { rename, rm, writeFile } from 'node:fs/promises'
-import { durableWriteTempPath } from '../../durable-file-write'
-import { getGithubCacheFile } from './user-data-path'
+import { persistGithubCache } from './github-cache-persistence'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
@@ -16,16 +13,18 @@ type WriteFlushBarrierOperationsRuntime = Pick<
   | 'dataFile'
   | 'firstPendingSaveAt'
   | 'githubCacheDirty'
-  | 'githubCacheGeneration'
+  | 'githubCachePersistedAt'
+  | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
+  | 'githubCachePersistTimer'
+  | 'githubCacheRetryDelayMs'
   | 'lastDurableWriteGeneration'
-  | 'pendingGithubCacheWrite'
   | 'pendingProfileFlushes'
   | 'pendingProfileMaintenance'
   | 'profileMaintenancePending'
   | 'profileStateAuthority'
   | 'quitFlushPromise'
   | 'quitFlushStarted'
-  | 'staleGithubCacheTempCleanup'
   | 'staleProfileStateTempCleanup'
   | 'state'
   | 'writeGeneration'
@@ -70,7 +69,7 @@ export class WriteFlushBarrierOperations {
     } catch (err) {
       console.error('[active-view] Failed to flush preference:', err)
     }
-    writeGithubCacheSnapshotSync(this)
+    persistGithubCache(runtime, 'routine')
   }
 
   flushAsync(): Promise<void> {
@@ -177,7 +176,11 @@ export async function flushCurrentStateAsync(
         await (final
           ? runtime.activeViewPreference.flushAsync()
           : runtime.activeViewPreference.flushPendingAsync(signal))
-        await writeGithubCacheSnapshotAsync(owner, final, signal)
+        // Quit and explicit barriers save the cache now; best-effort flushes may wait.
+        persistGithubCache(
+          runtime,
+          final || requireInitialGenerationDurable ? 'barrier' : 'routine'
+        )
         if (final || runtime.profileMaintenancePending) {
           await runtime.profileStateAuthority?.drainBackups?.(true)
         }
@@ -199,84 +202,4 @@ export async function flushCurrentStateAsync(
       }
     }
   })
-}
-
-export async function writeGithubCacheSnapshotAsync(
-  owner: WriteFlushBarrierOperations,
-  drainToStableGeneration = true,
-  signal?: AbortSignal
-): Promise<void> {
-  const { runtime } = owner[writeFlushBarrierOperationsContext]
-  if (!runtime.githubCacheDirty) {
-    return
-  }
-  const previousWrite = runtime.pendingGithubCacheWrite ?? runtime.staleGithubCacheTempCleanup
-  const nextWrite = previousWrite
-    .then(async () => {
-      while (runtime.githubCacheDirty) {
-        if (signal?.aborted) {
-          throw new Error('GitHub cache flush aborted')
-        }
-        const generation = runtime.githubCacheGeneration
-        const cacheFile = getGithubCacheFile(runtime.dataFile)
-        const tmpFile = durableWriteTempPath(cacheFile)
-        let renamed = false
-        try {
-          await writeFile(tmpFile, JSON.stringify(runtime.state.githubCache), 'utf-8')
-          if (generation === runtime.githubCacheGeneration) {
-            await rename(tmpFile, cacheFile)
-            renamed = true
-            if (generation === runtime.githubCacheGeneration) {
-              runtime.githubCacheDirty = false
-            }
-          }
-        } finally {
-          if (!renamed) {
-            await rm(tmpFile).catch(() => {})
-          }
-        }
-        if (signal?.aborted) {
-          throw new Error('GitHub cache flush aborted')
-        }
-        if (!drainToStableGeneration) {
-          break
-        }
-      }
-    })
-    .catch((err) => {
-      console.warn('[persistence] Failed to write github cache snapshot:', err)
-    })
-    .finally(() => {
-      if (runtime.pendingGithubCacheWrite === nextWrite) {
-        runtime.pendingGithubCacheWrite = null
-      }
-    })
-  runtime.pendingGithubCacheWrite = nextWrite
-  await nextWrite
-}
-
-export function writeGithubCacheSnapshotSync(owner: WriteFlushBarrierOperations): void {
-  const { runtime } = owner[writeFlushBarrierOperationsContext]
-  if (!runtime.githubCacheDirty) {
-    return
-  }
-  if (runtime.pendingGithubCacheWrite) {
-    void writeGithubCacheSnapshotAsync(owner)
-    return
-  }
-  const cacheFile = getGithubCacheFile(runtime.dataFile)
-  const generation = runtime.githubCacheGeneration
-  const tmpFile = durableWriteTempPath(cacheFile)
-  try {
-    writeFileSync(tmpFile, JSON.stringify(runtime.state.githubCache), 'utf-8')
-    renameSync(tmpFile, cacheFile)
-    if (generation === runtime.githubCacheGeneration) {
-      runtime.githubCacheDirty = false
-    }
-  } catch (err) {
-    try {
-      unlinkSync(tmpFile)
-    } catch {}
-    console.warn('[persistence] Failed to write github cache snapshot:', err)
-  }
 }

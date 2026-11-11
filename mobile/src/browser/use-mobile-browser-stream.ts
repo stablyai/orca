@@ -1,7 +1,8 @@
+import { translate } from '../i18n/mobile-i18n'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { PixelRatio } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
-import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
 import {
   buildMobileBrowserScreencastRequest,
   type MobileBrowserViewMode
@@ -19,7 +20,7 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
-import type { MobileBrowserTab } from './MobileBrowserPane'
+import type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
 import {
   handleBrowserScreencastEvent,
   type BrowserDialogState,
@@ -169,13 +170,22 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       setBusy(false)
       if (!binaryScreencastGranted) {
         // Check app-local limitation before desktop reply; desktop updates cannot change phone build.
-        setError('Update the Orca app to stream browser tabs here.')
+        setError(
+          translate('browser.stream.updateApp', 'Update the Orca app to stream browser tabs here.')
+        )
       } else if (screencastSupported === false) {
-        setError('Update desktop Orca to stream browser tabs on mobile.')
+        setError(
+          translate(
+            'browser.stream.updateDesktop',
+            'Update desktop Orca to stream browser tabs on mobile.'
+          )
+        )
       } else if (screencastSupported === null) {
-        setError('Checking desktop browser streaming support.')
+        setError(
+          translate('browser.stream.checking', 'Checking desktop browser streaming support.')
+        )
       } else if (!tab.browserPageId) {
-        setError('Browser page is not available yet.')
+        setError(translate('browser.stream.pageUnavailable', 'Browser page is not available yet.'))
       }
       return
     }
@@ -187,7 +197,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       }
       busyRef.current = false
       setBusy(false)
-      setError('Browser stream timed out.')
+      setError(translate('browser.stream.timedOut', 'Browser stream timed out.'))
     }, 15_000)
     const clearStartupTimer = (): void => {
       if (startupTimer) {
@@ -195,16 +205,24 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
         startupTimer = null
       }
     }
+    const worktree = `id:${worktreeId}`
+    // Set once `ready` echoes frameAck; hosts that strip the opt-in never get an ack.
+    let ackSubscriptionId: string | null = null
     const unsubscribe = client.subscribe(
       'browser.screencast',
       {
-        worktree: `id:${worktreeId}`,
+        worktree,
         page: tab.browserPageId,
-        ...streamRequest
+        ...streamRequest,
+        frameAck: 1
       },
       (payload) => {
         if (streamGenerationRef.current !== generation) {
           return
+        }
+        const ready = readScreencastReady(payload)
+        if (ready) {
+          ackSubscriptionId = ready.frameAck === true ? ready.subscriptionId : null
         }
         handleBrowserScreencastEvent({
           busyRef,
@@ -224,6 +242,16 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
             return
           }
           clearStartupTimer()
+          if (ackSubscriptionId) {
+            // Cumulative, so a frame the shell dropped is covered by the next one's ack.
+            void client
+              .sendRequest('browser.screencast.ack', {
+                worktree,
+                subscriptionId: ackSubscriptionId,
+                seq: frame.seq
+              })
+              .catch(() => {})
+          }
           if (cacheKey) {
             framePacer.push(frame, cacheKey)
           }
@@ -257,5 +285,24 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     pageParams,
     renderedFrameSource,
     sendBrowserRequest
+  }
+}
+
+function readScreencastReady(
+  payload: unknown
+): { subscriptionId: string; frameAck: unknown } | null {
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    !('type' in payload) ||
+    payload.type !== 'ready' ||
+    !('subscriptionId' in payload) ||
+    typeof payload.subscriptionId !== 'string'
+  ) {
+    return null
+  }
+  return {
+    subscriptionId: payload.subscriptionId,
+    frameAck: 'frameAck' in payload ? payload.frameAck : undefined
   }
 }

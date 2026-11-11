@@ -1,4 +1,4 @@
-import type { AutomationRun } from '../shared/automations-types'
+import type { AutomationRun } from '../shared/automations/history/automation-run'
 import type { RuntimeRpcSuccess } from '../shared/runtime-rpc-envelope'
 import { RuntimeClientError, type RuntimeClient } from './runtime-client'
 

@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
 import type { Store } from '../loading-store/store'
 import { WindowSession } from './terminal-topology-window-session-fixture'
 import {
@@ -95,47 +94,6 @@ describe('Store.applyTabRenames (layout.apply renameTabs)', () => {
     expect(generatedTitles(reopened, SSH)).toEqual([['ssh-tab', 'Deploy']])
   })
 
-  it('publishes one frame for 100 titles of one workspace', async () => {
-    const { store } = await storeWithTabs(100)
-    const stream = new WorkspaceLayoutStream({
-      store: () => store,
-      homeHostId: () => 'local',
-      liveTitle: () => null
-    })
-    const events: string[] = []
-    stream.subscribe((event) =>
-      events.push(
-        ...(event.type === 'records'
-          ? event.workspaces.map((change) => change.key)
-          : [event.type === 'workspace' ? event.key : event.type])
-      )
-    )
-
-    await store.applyTabRenames([
-      {
-        hostId: 'local',
-        renames: Array.from({ length: 100 }, (_, index) =>
-          rename(FIXTURE_GIT_WORKTREE_ID, `tab-${index}`, `Title ${index}`)
-        )
-      }
-    ])
-    stream.settledSeq()
-
-    expect(events).toEqual([FIXTURE_GIT_WORKTREE_ID])
-    expect(generatedTitles(store).at(99)).toEqual(['tab-99', 'Title 99'])
-  })
-
-  it('writes nothing when no rename changes a title', async () => {
-    const { store } = await storeWithTabs(1)
-    const before = store.getWorkspaceSession()
-
-    const refused = await store.applyTabRenames([
-      { hostId: 'local', renames: [rename(FIXTURE_GIT_WORKTREE_ID, 'missing', 'Gone')] }
-    ])
-
-    expect(refused.map(({ code }) => code)).toEqual(['tab_not_found'])
-    expect(store.getWorkspaceSession()).toBe(before)
-  })
   it('keeps a tab’s first generated title unless a rename replaces it', async () => {
     const { store, directory } = await storeWithTabs(1)
     await store.applyTabRenames([

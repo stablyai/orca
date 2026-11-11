@@ -3,18 +3,21 @@ import { ExternalLink, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { WorkspaceEmojiPickerButton } from '@/components/workspace-emoji/WorkspaceEmojiPickerButton'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { isBlockingJiraUrlIntent } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { isBlockingLinearUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
-import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace-emoji-shortcodes'
-import { cn } from '@/lib/utils'
+import { replaceCompletedWorkspaceEmojiShortcode } from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { SelectionIcon } from './smart-workspace-source-row-content'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
 
 export function renderSmartWorkspaceNameInput(
-  controller: SmartWorkspaceNameFieldController
+  controller: SmartWorkspaceNameFieldController,
+  t: Translate = translate
 ): React.JSX.Element {
   const {
     selectedSource,
@@ -53,8 +56,12 @@ export function renderSmartWorkspaceNameInput(
     jiraStatusId,
     linearStatusId,
     unresolvedLinearUrlIntent,
-    blockingTaskUrlResolution
+    blockingTaskUrlResolution,
+    handleEmojiPickerOpenChange,
+    handleEmojiPickerValueChange
   } = controller
+  // Emoji only make sense where the user types a name, not a search query.
+  const showEmojiPickerButton = mode === 'smart' || mode === 'text'
 
   if (selectedSource) {
     return (
@@ -123,7 +130,7 @@ export function renderSmartWorkspaceNameInput(
                 tabIndex={-1}
                 onClick={openSelectedSource}
                 className="size-6 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.new.workspace.SmartWorkspaceNameField.2c69728c2a',
                   'Open link in browser'
                 )}
@@ -132,7 +139,7 @@ export function renderSmartWorkspaceNameInput(
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6}>
-              {translate(
+              {t(
                 'auto.components.new.workspace.SmartWorkspaceNameField.370a1faf67',
                 'Open in browser'
               )}
@@ -148,7 +155,7 @@ export function renderSmartWorkspaceNameInput(
               tabIndex={-1}
               onClick={onClearSelectedSource}
               className="size-6 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.new.workspace.SmartWorkspaceNameField.7199ff19c7',
                 'Clear selected source'
               )}
@@ -157,7 +164,7 @@ export function renderSmartWorkspaceNameInput(
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={6}>
-            {translate('auto.components.new.workspace.SmartWorkspaceNameField.0c9e668e3a', 'Clear')}
+            {t('auto.components.new.workspace.SmartWorkspaceNameField.0c9e668e3a', 'Clear')}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -300,8 +307,19 @@ export function renderSmartWorkspaceNameInput(
         aria-describedby={
           jiraSource.intent ? jiraStatusId : unresolvedLinearUrlIntent ? linearStatusId : undefined
         }
+        adornment={showEmojiPickerButton ? 'trailing' : 'none'}
         className="h-9 bg-background pl-8 text-sm"
       />
+      {showEmojiPickerButton ? (
+        <WorkspaceEmojiPickerButton
+          className="absolute top-1/2 right-1.5 -translate-y-1/2"
+          disabled={disabled}
+          skipTabStop
+          inputRef={localInputRef}
+          onOpenChange={handleEmojiPickerOpenChange}
+          onValueChange={handleEmojiPickerValueChange}
+        />
+      ) : null}
     </>
   )
 }

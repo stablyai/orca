@@ -1,5 +1,11 @@
+import type * as GithubPrRpcModule from '../../../source-control/review/github-pr-rpc'
+import type * as GithubPrMutationsModule from '../../../source-control/review/github-pr-mutations'
+import type * as PrAiTriageLaunchModule from '../../../source-control/review/pr-ai-triage-launch'
+import type * as UseMobilePrBranchContextModule from '../../../source-control/review/use-mobile-pr-branch-context'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as LineMutations from '../../../source-control/review/github-pr-review-line-mutations'
+import { legacyShellStatusFixture } from '../legacy-shell-status-fixture'
 
 const WORKTREE = 'repo-9::/w'
 const PR_NUMBER = 12
@@ -9,9 +15,10 @@ export function githubPrMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
-    'session.pr-reads': ({ client }) => {
-      const reads = modules.load<typeof import('../../../session/github-pr-rpc')>(
-        'mobile/src/session/github-pr-rpc.ts'
+    'session.pr-reads': ({ client: suppliedClient }) => {
+      const client = legacyShellStatusFixture(suppliedClient)
+      const reads = modules.load<typeof GithubPrRpcModule>(
+        'mobile/src/source-control/review/github-pr-rpc.ts'
       )
       const results: Record<string, unknown> = {}
       function send(name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -47,7 +54,7 @@ export function githubPrMountAdapters(
           })
         }
         if (name === 'assignable') {
-          return reads.fetchAssignableUsers(client, WORKTREE)
+          return reads.fetchAssignableUsers(client, WORKTREE, prRepo)
         }
         throw new Error(`Unknown pr read action: ${name}`)
       }
@@ -62,9 +69,13 @@ export function githubPrMountAdapters(
       }
     },
     'session.pr-mutations': ({ client }) => {
-      const mutations = modules.load<typeof import('../../../session/github-pr-mutations')>(
-        'mobile/src/session/github-pr-mutations.ts'
+      const mutations = modules.load<typeof GithubPrMutationsModule>(
+        'mobile/src/source-control/review/github-pr-mutations.ts'
       )
+      const lineMutations = () =>
+        modules.load<typeof LineMutations>(
+          'mobile/src/source-control/review/github-pr-review-line-mutations.ts'
+        )
       const results: Record<string, unknown> = {}
       function send(name: string, args: Record<string, unknown>): Promise<unknown> {
         const prRepo = args.fork === true ? FORK_REPO : null
@@ -130,6 +141,25 @@ export function githubPrMountAdapters(
             prRepo
           })
         }
+        if (name === 'line-comment') {
+          return lineMutations().fetchAddPRReviewComment(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            commitId: 'head-sha-1',
+            path: 'src/app.ts',
+            startLine: 3,
+            line: 5,
+            body: 'recorded line comment',
+            prRepo
+          })
+        }
+        if (name === 'file-viewed') {
+          return lineMutations().fetchSetPRFileViewed(client, WORKTREE, {
+            pullRequestId: 'PR_kwDO',
+            path: 'src/app.ts',
+            viewed: true,
+            prRepo
+          })
+        }
         if (name === 'resolve-thread') {
           return mutations.fetchResolveReviewThread(client, WORKTREE, {
             threadId: 'thread-1',
@@ -163,8 +193,8 @@ export function githubPrMountAdapters(
       }
     },
     'session.pr-triage-launch': ({ client }) => {
-      const launch = modules.load<typeof import('../../../session/pr-ai-triage-launch')>(
-        'mobile/src/session/pr-ai-triage-launch.ts'
+      const launch = modules.load<typeof PrAiTriageLaunchModule>(
+        'mobile/src/source-control/review/pr-ai-triage-launch.ts'
       ).launchAgentWithPrompt
       let launched: unknown = 'unlaunched'
       return {
@@ -187,8 +217,8 @@ export function githubPrMountAdapters(
       }
     },
     'session.pr-branch-context': ({ client }) => {
-      const context = modules.load<typeof import('../../../session/use-mobile-pr-branch-context')>(
-        'mobile/src/session/use-mobile-pr-branch-context.ts'
+      const context = modules.load<typeof UseMobilePrBranchContextModule>(
+        'mobile/src/source-control/review/use-mobile-pr-branch-context.ts'
       )
       let repoContext: unknown = 'unread'
       let identity: unknown = 'unread'

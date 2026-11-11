@@ -2,11 +2,11 @@ import {
   isTerminalLeafId,
   makePaneKey,
   parseLegacyNumericPaneKey
-} from '../../../../shared/stable-pane-id'
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
+import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
 import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'

@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { useRepoSlugIndex } from '@/lib/repo-slug-index'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import { useAppStore } from '@/store'
+import { useRepoSlugIndex } from '@/lib/workspace/catalog/repo-slug-index'
+import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
+import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
 import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -16,7 +16,7 @@ import {
 import { resolveSelectedProjectRowRepo } from './project-row-filtering'
 import { buildProjectWorkItem } from './project-work-item'
 import { useProjectRowMutations } from './useProjectRowMutations'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type DialogRepoItem = {
   workItem: GitHubWorkItem
