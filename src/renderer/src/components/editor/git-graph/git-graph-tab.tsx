@@ -1,4 +1,4 @@
-import { setGitGraphViewport } from './git-graph-tab-controllers'
+import { getGitGraphViewport, setGitGraphViewport } from './git-graph-tab-controllers'
 import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import {
   GitGraphCommitActionControls,
@@ -64,7 +64,10 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     onDraftWidthChange: setDraftGraphWidth
   })
   const columns = `160px ${draftGraphWidth}px minmax(200px,1fr) 120px 100px`
-  const getScrollOffset = useCallback(() => controller.scrollOffset, [controller])
+  const getScrollOffset = useCallback(
+    () => getGitGraphViewport(controller, 'scrollOffset'),
+    [controller]
+  )
   const saveScrollOffset = useCallback(
     (offset: number) => setGitGraphViewport(controller, 'scrollOffset', offset),
     [controller]

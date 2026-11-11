@@ -23,3 +23,10 @@ export function setGitGraphViewport(
 ): void {
   controller[field] = value
 }
+
+export function getGitGraphViewport(
+  controller: GitGraphHistoryController,
+  field: 'scrollOffset' | 'graphWidth'
+): number {
+  return controller[field]
+}
