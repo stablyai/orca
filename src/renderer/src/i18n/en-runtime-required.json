@@ -415,8 +415,6 @@
       "new": {
         "workspace": {
           "RunTargetCombobox": {
-            "orcaCloudIdleSleep_one": "Sleeps after {{count}} minute idle",
-            "orcaCloudIdleSleep_other": "Sleeps after {{count}} minutes idle",
             "orcaCloudSandboxHoursLeft_one": "{{hours}} sandbox hour left",
             "orcaCloudSandboxHoursLeft_other": "{{hours}} sandbox hours left"
           }

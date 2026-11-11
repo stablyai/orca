@@ -82,16 +82,16 @@ function ComposerModalBody({
   }, [onClose])
   const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
   const visibleModalData = useCloudAutoStartReveal(modalData)
-  const body = (data: ComposerModalData): React.JSX.Element => (
+  const body = (
     <QuickTabBody
-      modalData={data}
+      modalData={visibleModalData ?? modalData}
       onClose={onClose}
       isSubmissionCancelled={isSubmissionCancelled}
       active
     />
   )
   if (!visibleModalData) {
-    return <HiddenComposer>{body(modalData)}</HiddenComposer>
+    return <HiddenComposer>{body}</HiddenComposer>
   }
 
   return (
@@ -111,7 +111,7 @@ function ComposerModalBody({
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        {body(visibleModalData)}
+        {body}
       </DialogContent>
     </Dialog>
   )
@@ -212,11 +212,10 @@ function QuickTabBody({
   )
 
   // Orca Cloud with an agent that has no account there starts a plain terminal, never the agent's
-  // /login: the cloud hook sets this for one create.
+  // /login: the cloud hook sets this around one create (read before the first await).
   const noAgentRef = useRef(false)
   const handleCreate = useCallback(async (): Promise<void> => {
     const agent = noAgentRef.current ? null : quickAgent
-    noAgentRef.current = false
     if (createDisabled) {
       return
     }

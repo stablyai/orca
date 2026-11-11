@@ -20,7 +20,7 @@ async function freshLink(sessionId: string): Promise<string | null> {
 function linkUnavailable(): void {
   toast.error(
     translate(
-      'components.newWorkspace.cloudSetup.linkUnavailable',
+      'components.newWorkspace.cloudSetup.linkUnavailableRetry',
       'Couldn’t get a setup link. Try Continue in browser again.'
     )
   )

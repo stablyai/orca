@@ -26,6 +26,7 @@ import {
   type CloudSetupPageRequest
 } from '@/lib/orca-cloud/cloud-setup-page-store'
 import { reportCloudSetupProgress } from '@/lib/orca-cloud/cloud-setup-telemetry'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
 import {
@@ -64,11 +65,12 @@ function useLiveAvailability(
         .catch(() => undefined)
     }
     read()
-    const timer = window.setInterval(read, BILLING_POLL_MS)
+    // Paused while the window is hidden; returning from the browser re-reads at once.
+    const stop = installWindowVisibilityInterval({ run: read, intervalMs: BILLING_POLL_MS })
     window.addEventListener('focus', read)
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      stop()
       window.removeEventListener('focus', read)
     }
   }, [enabled, repoId])
@@ -135,8 +137,10 @@ export function useCloudSetupFlow(
     if (!waiting || accessOverride) {
       return
     }
-    const timer = window.setInterval(() => void prefetchOrcaCloudBilling(true), BILLING_POLL_MS)
-    return () => window.clearInterval(timer)
+    return installWindowVisibilityInterval({
+      run: () => void prefetchOrcaCloudBilling(true),
+      intervalMs: BILLING_POLL_MS
+    })
   }, [accessOverride, waiting])
 
   useEffect(() => {
