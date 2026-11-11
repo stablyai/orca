@@ -1,10 +1,20 @@
+import { Users } from 'lucide-react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { Button } from '@/components/ui/button'
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 import { CloudSetupPage } from './CloudSetupPage'
 import { cloudSetupPageModel } from './cloud-setup-page-model'
 import type { CloudSetupFlow } from './use-cloud-setup-flow'
 
 const noop = (): void => {}
+
+// What the app's team-switch hook supplies on "Switch to your team" (its one action).
+const switchTeamAction = (
+  <Button size="sm" variant="outline">
+    <Users aria-hidden />
+    Switch to Orca Staging Eval Team
+  </Button>
+)
 
 function flow(rows: CloudSetupStep[], teamSwitch = false): CloudSetupFlow {
   return {
@@ -17,7 +27,7 @@ function flow(rows: CloudSetupStep[], teamSwitch = false): CloudSetupFlow {
     inBrowser: false,
     error: null,
     canManageBilling: true,
-    teamAction: null,
+    teamAction: teamSwitch ? switchTeamAction : null,
     continueInBrowser: noop,
     startTrial: noop,
     fixBilling: noop,
@@ -120,7 +130,12 @@ export const teamSwitchPlanUnknown = defineFixture({
     page(
       [
         { id: 'account', state: 'done' },
-        { id: 'team', state: 'needed' },
+        {
+          id: 'team',
+          state: 'needed',
+          detail:
+            'Cloud workspaces belong to a team. Orca Staging Eval Team has a Team plan. Switch to start this workspace there.'
+        },
         { id: 'github', state: 'needed', need: 'github', canFix: true },
         { id: 'agent', state: 'optional' }
       ],
