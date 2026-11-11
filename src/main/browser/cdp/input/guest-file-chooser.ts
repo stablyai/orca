@@ -8,8 +8,8 @@ import { runOutsideRemoteCliBrowserScope } from '../../../runtime/desktop-browse
 
 // A click's user activation lasts 5s in Chromium, so its picker cannot open any later.
 const FILE_CHOOSER_OPEN_TIMEOUT_MS = 5_000
-// Page.enable waits on the renderer; a hung page must not wedge its command queue.
-const PAGE_ENABLE_TIMEOUT_MS = 2_000
+// A hung page must not wedge its command queue on setup or cleanup.
+const PAGE_REPLY_TIMEOUT_MS = 2_000
 
 export type OpenedFileChooser = { backendNodeId: number | null; sessionId: string | undefined }
 
@@ -58,12 +58,17 @@ export async function interceptFileChooser(
     await runOutsideRemoteCliBrowserScope(() =>
       Promise.all(
         sessionIds.map((sessionId) =>
-          sendGuestCdpCommand(
-            wc,
-            'Page.setInterceptFileChooserDialog',
-            { enabled: false },
-            sessionId
-          ).catch(() => {})
+          // Best-effort: a page that never answers keeps its queue moving.
+          withTimeout(
+            sendGuestCdpCommand(
+              wc,
+              'Page.setInterceptFileChooserDialog',
+              { enabled: false },
+              sessionId
+            ),
+            PAGE_REPLY_TIMEOUT_MS,
+            undefined
+          )
         )
       )
     )
@@ -74,7 +79,7 @@ export async function interceptFileChooser(
         // Chromium reports choosers only with Page on; a page with no agent session may not have it.
         await rejectAfterTimeout(
           sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId),
-          PAGE_ENABLE_TIMEOUT_MS,
+          PAGE_REPLY_TIMEOUT_MS,
           'The page is not responding, so Orca did not send the input.'
         )
         await sendGuestCdpCommand(
