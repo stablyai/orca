@@ -151,8 +151,9 @@ export type TuiIdleEvaluationInput = {
   /** Waiting for a just-launched agent to open its composer, where a name-only title proves
    *  nothing until the stream goes quiet. */
   launchReadiness?: boolean
-  /** Whether the running command has drawn anything since the shell started it; true when the
-   *  shell sends no command-start marker. Corroborates name-only titles alongside quiet. */
+  /** Whether the running command has painted since the shell started it: the agent's own
+   *  composer marker where it draws one (Claude), else any visible byte after the command-start
+   *  marker; true when the shell sends no marker. Corroborates name-only titles alongside quiet. */
   readCommandPainted?: () => boolean
 }
 

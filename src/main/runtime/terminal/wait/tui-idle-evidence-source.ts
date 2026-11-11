@@ -14,7 +14,7 @@ import {
   type AgentStateVerdict
 } from '../../agent-state-rules/agent-state-rules-engine'
 import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
-import { hasTerminalCommandPainted } from '../input/terminal-command-paint'
+import { hasTerminalAgentPainted } from '../input/terminal-command-paint'
 import type {
   FirstPartyAgentStatus,
   TuiIdleEvaluationInput,
@@ -142,6 +142,7 @@ export function ptyTuiIdleEvidence(
     firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,
-    readCommandPainted: () => hasTerminalCommandPainted(pty)
+    // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
+    readCommandPainted: () => hasTerminalAgentPainted(pty, agent)
   }
 }

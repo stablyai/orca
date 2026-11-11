@@ -1,5 +1,16 @@
 import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type {
+  DraftPasteMarkerSignal,
+  TuiAgentConfig
+} from '../../../../shared/agent-launch/catalog/tui-agent-config-types'
+import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  createDraftPasteReadyScanner,
+  draftPasteReadySignalHasMarker,
+  type DraftPasteReadyScanner
+} from '../../../../shared/draft-paste-ready-scanner'
 import { normalizeTerminalChunk } from '../output/terminal-ansi-normalization'
 
 // eslint-disable-next-line no-control-regex -- control bytes are exactly what is not visible.
@@ -9,10 +20,47 @@ function hasVisibleText(normalizedText: string): boolean {
   return VISIBLE_CHARACTER_RE.test(stripAnsiEscapeSequences(normalizedText))
 }
 
+/**
+ * The composer marker that says this agent's command painted, for agents whose bare-name title
+ * is weak and whose composer draws a marker only the agent emits (Claude: `❯`+NBSP after
+ * DECSET 2031, which no shell sends). Why not any visible byte: Orca's zsh OSC 133;C hook runs
+ * first in `preexec_functions`, so a later user or framework preexec hook can print before the
+ * agent process exists, and a cold-starting agent can print a banner long before its composer
+ * (STA-2380). Null for agents whose name-only idle keeps any post-marker paint as corroboration.
+ */
+function paintSignalOf(config: TuiAgentConfig): DraftPasteMarkerSignal | null {
+  const signal = config.draftPasteReadySignal
+  return config.workerStartReadsComposerMarker === true &&
+    signal !== undefined &&
+    draftPasteReadySignalHasMarker(signal)
+    ? signal
+    : null
+}
+
+export function agentPaintSignal(
+  agent: TuiAgent | null | undefined
+): DraftPasteMarkerSignal | null {
+  return agent ? paintSignalOf(TUI_AGENT_CONFIG[agent]) : null
+}
+
+/** One scanner per distinct agent-owned marker, so every PTY attributes paint the same way. */
+const AGENT_PAINT_SIGNALS: readonly DraftPasteMarkerSignal[] = [
+  ...new Set(
+    Object.values(TUI_AGENT_CONFIG)
+      .map(paintSignalOf)
+      .filter((signal): signal is DraftPasteMarkerSignal => signal !== null)
+  )
+]
+
 /** OSC 133;C follows the prompt/echo; only visible bytes after it prove the running command painted. */
 export class TerminalCommandPaint {
   private awaitingPaint = false
   private markerEndInChunk = -1
+  /** Armed at each command start; absent before the first marker, where no command is attributable. */
+  private composers: Map<
+    DraftPasteMarkerSignal,
+    { scanner: DraftPasteReadyScanner; seen: boolean }
+  > | null = null
   private readonly scanner = createOsc133CommandFinishedScanner(
     () => {},
     (endInChunk) => {
@@ -25,18 +73,41 @@ export class TerminalCommandPaint {
     this.scanner.scan(data)
     if (this.markerEndInChunk !== -1) {
       // Why the rest of this chunk counts: a fast binary can paint in the same read as the marker.
-      this.awaitingPaint = !hasVisibleText(
-        normalizeTerminalChunk(data.slice(this.markerEndInChunk)).text
+      const commandOutput = data.slice(this.markerEndInChunk)
+      this.awaitingPaint = !hasVisibleText(normalizeTerminalChunk(commandOutput).text)
+      this.composers = new Map(
+        AGENT_PAINT_SIGNALS.map((signal) => [
+          signal,
+          { scanner: createDraftPasteReadyScanner(signal), seen: false }
+        ])
       )
+      this.observeComposers(commandOutput)
       return
     }
     if (this.awaitingPaint && hasVisibleText(normalizedText)) {
       this.awaitingPaint = false
     }
+    this.observeComposers(data)
+  }
+
+  private observeComposers(data: string): void {
+    if (!this.composers || data.length === 0) {
+      return
+    }
+    for (const composer of this.composers.values()) {
+      if (!composer.seen && composer.scanner.observe(data).ready) {
+        composer.seen = true
+      }
+    }
   }
 
   hasPainted(): boolean {
     return !this.awaitingPaint
+  }
+
+  /** Whether the agent's own composer marker has arrived since the command started; true before any marker, like paint. */
+  hasAgentComposer(signal: DraftPasteMarkerSignal): boolean {
+    return this.composers === null || (this.composers.get(signal)?.seen ?? false)
   }
 }
 
@@ -55,4 +126,17 @@ export function observeTerminalCommandPaint(
 /** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */
 export function hasTerminalCommandPainted(record: TerminalCommandPaintRecord): boolean {
   return record.commandPaint?.hasPainted() ?? true
+}
+
+/** Whether `agent`'s command painted: its own composer marker where it has one, else any visible
+ *  post-marker byte. Shares the markerless and lost-history defaults of `hasTerminalCommandPainted`. */
+export function hasTerminalAgentPainted(
+  record: TerminalCommandPaintRecord,
+  agent: TuiAgent | null | undefined
+): boolean {
+  const signal = agentPaintSignal(agent)
+  if (signal === null) {
+    return hasTerminalCommandPainted(record)
+  }
+  return record.commandPaint?.hasAgentComposer(signal) ?? true
 }
