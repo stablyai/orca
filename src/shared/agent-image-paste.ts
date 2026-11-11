@@ -3,7 +3,7 @@ import {
   separateImagePasteFromFollowingText
 } from './image-paste-following-text'
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
-import { filesystemPathToFileUri } from './file-uri-path'
+import { filesystemPathToFileUri } from './file-links/file-uri-path'
 
 // Whether raw-path paste is verified to create an attachment; others use file references.
 export type AgentImageHandling = 'attachment' | 'unsupported'
@@ -16,15 +16,16 @@ const IMAGE_ATTACHMENT_AGENTS: ReadonlySet<string> = new Set<string>([
   'cursor',
   'copilot',
   'droid',
-  // Why: Grok CLI pastes images via bracketed path / image chips (see xAI
-  // terminal docs + pager paste.rs). Keep it on the same attachment path as
-  // Claude/Codex rather than treating path paste as unsupported text.
+  // Grok supports bracketed path/image chips (xAI terminal docs and pager paste.rs).
   'grok'
 ])
 
 export function getAgentImageHandling(agent: string | null | undefined): AgentImageHandling {
   return agent && IMAGE_ATTACHMENT_AGENTS.has(agent) ? 'attachment' : 'unsupported'
 }
+
+/** Quoted file references can resemble image markers when paths contain whitespace. */
+export const NATIVE_CHAT_QUOTED_FILE_REFERENCE = /@"(?:\\"|[^"])*"|@'[^']*'/
 
 export function formatNativeChatFileReference(filePath: string): string {
   if (!/[\s@]/.test(filePath)) {

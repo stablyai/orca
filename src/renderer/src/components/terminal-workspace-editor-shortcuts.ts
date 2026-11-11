@@ -3,9 +3,9 @@ import { useAppStore } from '../store'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
-} from './editor/editor-autosave'
-import { getEditorCmdSaveFileId } from './editor/editor-cmd-save-target'
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
+} from './editor/autosave/editor-autosave'
+import { getEditorCmdSaveFileId } from './editor/save/commands/editor-cmd-save-target'
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 
 type EditorShortcutContext = {
   event: KeyboardEvent
@@ -14,15 +14,14 @@ type EditorShortcutContext = {
   notifyTerminalCapture: (actionId: KeybindingActionId) => void
 }
 
-// Returns true only when the chord was consumed, so unclaimed editor chords still
-// fall through to the remaining workspace shortcuts.
+// Return false for unclaimed chords so remaining workspace shortcuts can handle them.
 export function handleTerminalWorkspaceEditorShortcut({
   event,
   floatingWorkspaceFocused,
   matchShortcut,
   notifyTerminalCapture
 }: EditorShortcutContext): boolean {
-  // Save active editor file — fallback for when focus is outside the editor (tab bar/sidebar); editor-local handlers own save when the editor is focused.
+  // Save fallback for focus outside the editor; editor-local handlers own focused saves.
   if (!event.repeat && matchShortcut('editor.save')) {
     const target = event.target as HTMLElement | null
     const inEditor =

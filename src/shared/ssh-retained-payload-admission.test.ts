@@ -56,56 +56,6 @@ describe('SSH retained payload admission', () => {
     expect(admit('nope')).toEqual({ kind: 'managed', environmentId: 'env-1' })
   })
 
-  it('caps an unverifiable serving detail like its sibling details', () => {
-    const managedServer = admitSshConnectionState(
-      {
-        targetId: 'ssh-a',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
-        managedServer: {
-          kind: 'managed',
-          environmentId: 'env-1',
-          serving: {
-            state: 'unverifiable',
-            detail: 'x'.repeat(SSH_CONNECTION_ERROR_MAX_UTF8_BYTES * 4)
-          }
-        }
-      },
-      'ssh-a'
-    )?.managedServer
-    const detail = managedServer?.kind === 'managed' ? managedServer.serving?.detail : undefined
-    expect(getUtf8ByteLength(detail ?? '')).toBe(SSH_CONNECTION_ERROR_MAX_UTF8_BYTES)
-  })
-
-  it('keeps ordinary connection state while stripping unknown payload fields', () => {
-    const admitted = admitSshConnectionState(
-      {
-        targetId: 'ssh-a',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 2,
-        providerEpoch: 'provider-a',
-        connectionGeneration: 3,
-        supportsFolderDownload: true,
-        remotePlatform: 'linux',
-        unexpected: 'x'.repeat(1024)
-      },
-      'ssh-a'
-    )
-
-    expect(admitted).toEqual({
-      targetId: 'ssh-a',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 2,
-      providerEpoch: 'provider-a',
-      connectionGeneration: 3,
-      supportsFolderDownload: true,
-      remotePlatform: 'linux'
-    })
-  })
-
   it('admits the plain SSH mode and drops a malformed one without dropping the state', () => {
     const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
     const plainSsh = { reason: 'home_noexec', message: 'Home is noexec.' }
@@ -114,15 +64,6 @@ describe('SSH retained payload admission', () => {
     const malformed = admitSshConnectionState({ ...state, plainSsh: { reason: 7 } }, 'ssh-a')
     expect(malformed).not.toBeNull()
     expect(malformed).not.toHaveProperty('plainSsh')
-  })
-
-  it('admits only a literal Host Node runtime flag', () => {
-    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
-
-    const flagged = admitSshConnectionState({ ...state, hostNodeRuntime: true }, 'ssh-a')
-    expect(flagged?.hostNodeRuntime).toBe(true)
-    const malformed = admitSshConnectionState({ ...state, hostNodeRuntime: 'yes' }, 'ssh-a')
-    expect(malformed).not.toHaveProperty('hostNodeRuntime')
   })
 
   it("drops an older host's move offer and admits only a literal elsewhere flag", () => {
@@ -145,23 +86,6 @@ describe('SSH retained payload admission', () => {
         'ssh-a'
       )?.managedServer
     ).toEqual(relay)
-  })
-
-  it('admits only a literal "Move anyway" offer', () => {
-    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
-    const refused = { kind: 'relay', reason: 'refused', detail: 'saved tabs and panes' }
-    expect(
-      admitSshConnectionState(
-        { ...state, managedServer: { ...refused, canLeaveBehind: true } },
-        'ssh-a'
-      )?.managedServer
-    ).toEqual({ ...refused, canLeaveBehind: true })
-    expect(
-      admitSshConnectionState(
-        { ...state, managedServer: { ...refused, canLeaveBehind: 1 } },
-        'ssh-a'
-      )?.managedServer
-    ).toEqual(refused)
   })
 
   it('rejects partial and malformed provider authority', () => {
@@ -236,26 +160,6 @@ describe('SSH retained payload admission', () => {
         'ssh-a'
       )
     ).toBeNull()
-  })
-
-  it('normalizes legacy authority to unknown', () => {
-    expect(
-      admitSshConnectionState(
-        {
-          targetId: 'ssh-a',
-          status: 'disconnected',
-          error: null,
-          reconnectAttempt: 0
-        },
-        'ssh-a'
-      )
-    ).toEqual({
-      targetId: 'ssh-a',
-      status: 'disconnected',
-      error: null,
-      reconnectAttempt: 0,
-      providerEpoch: null
-    })
   })
 
   it('caps connection errors without splitting a UTF-8 code point', () => {

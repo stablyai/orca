@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { Store } from './loading-store/store'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   REPO_ID,
@@ -13,7 +13,7 @@ import {
   WORKTREE_ID,
   WORKTREE_PATH,
   makeSession
-} from '../runtime/__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
+} from '../runtime/__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
 import { advanceTerminalTopologyRevision } from './terminal-topology/terminal-topology-membership'
 
 const SSH_HOST_ID = 'ssh:target-1'
@@ -60,7 +60,6 @@ function createPersistedStore() {
   }
 }
 
-/** A session holding TAB_ID (and OTHER_TAB_ID) for one worktree, with its unified tab and group. */
 function sessionFor(worktreeId: string): WorkspaceSessionState {
   const base = makeSession()
   const rows = base.tabsByWorktree[WORKTREE_ID]!.map((tab) => ({ ...tab, worktreeId }))
@@ -90,8 +89,7 @@ function sessionFor(worktreeId: string): WorkspaceSessionState {
 }
 
 describe('a write cannot bring back a tab its partition recorded as closed (#12447)', () => {
-  // The close lands before the renderer save that first lists the tab, so no topology revision
-  // fences that save: only the close record can refuse it.
+  // Close predates the first save, so only its record can fence resurrection.
   it.each([
     ['local', undefined, WORKTREE_ID],
     ['SSH', SSH_HOST_ID, SSH_WORKTREE_ID]
@@ -151,7 +149,6 @@ describe('a write cannot bring back a tab its partition recorded as closed (#124
     ])
   })
 
-  // A host slice with no terminal rows omits the terminal maps altogether.
   it.each(['set', 'stage-before-unload'] as const)(
     'accepts a browser-only host slice once the partition has a close record (%s)',
     async (write) => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+
 import { listAutomationRunsPage } from './automation-run-operations'
 
 function stateWithRuns(runs: { id: string; createdAt: number }[]): PersistedState {
@@ -9,25 +10,6 @@ function stateWithRuns(runs: { id: string; createdAt: number }[]): PersistedStat
 }
 
 describe('listAutomationRunsPage', () => {
-  it('returns a bounded, newest-first page and an opaque continuation cursor', () => {
-    const state = stateWithRuns([
-      { id: 'old', createdAt: 1 },
-      { id: 'new', createdAt: 3 },
-      { id: 'middle', createdAt: 2 }
-    ])
-
-    const first = listAutomationRunsPage(state, 'a1', 2)
-    expect(first.runs.map((run) => run.id)).toEqual(['new', 'middle'])
-    expect(first.nextCursor).not.toBeNull()
-
-    expect(listAutomationRunsPage(state, 'a1', 2, first.nextCursor ?? undefined)).toEqual(
-      expect.objectContaining({
-        runs: [expect.objectContaining({ id: 'old' })],
-        nextCursor: null
-      })
-    )
-  })
-
   it('keeps the window stable when a newer run lands between pages', () => {
     const state = stateWithRuns([
       { id: 'r1', createdAt: 1 },

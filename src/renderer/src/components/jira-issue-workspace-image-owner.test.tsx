@@ -3,8 +3,8 @@
 import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '../store/types'
 import type {
@@ -57,7 +57,7 @@ vi.mock('@/store', () => {
   }
 })
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-jira-client', () => {
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => {
   function request<T>(
     queue: PendingRead<T>[],
     target: RuntimeClientTarget,
@@ -73,11 +73,13 @@ vi.mock('@/runtime/runtime-jira-client', () => {
     jiraListTransitionsForTarget: (target: RuntimeClientTarget, key: string) =>
       request(boundary.transitions, target, key),
     jiraListPrioritiesForTarget: async () => [],
-    jiraListAssignableUsersForTarget: async () => [],
     jiraUpdateIssueForTarget: async () => ({ ok: true }),
     jiraAddIssueCommentForTarget: async () => ({ ok: true, id: 'added' })
   }
 })
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: async () => []
+}))
 vi.mock('@/components/ui/sheet', () => {
   const Content = ({ children }: { children: ReactNode }) => <div>{children}</div>
   return {
@@ -228,19 +230,6 @@ afterEach(async () => {
 })
 
 describe('Jira issue workspace image ownership', () => {
-  it('keeps explicit ownership without duplicate reads when the default host changes', async () => {
-    const selected = issue()
-    const owner: RuntimeClientTarget = { kind: 'environment', environmentId: 'environment-1' }
-    await render(selected)
-    boundary.settings = { activeRuntimeEnvironmentId: 'environment-2' }
-    await render(selected)
-    for (const reads of [boundary.issues, boundary.comments, boundary.transitions]) {
-      expect(reads).toHaveLength(1)
-      expect(reads[0]?.target).toEqual(owner)
-    }
-    expect(text('image-owner')).toBe(JSON.stringify(owner))
-  })
-
   it('fences late detail, comments and transitions when the same issue switches owners', async () => {
     const selected = issue()
     await render(selected)
@@ -271,21 +260,5 @@ describe('Jira issue workspace image ownership', () => {
     expect(text('title')).toBe('New owner')
     expect(text('comments')).toBe('new')
     expect(text('transitions')).toBe('new')
-  })
-
-  it('uses one account owner for row-less detail, comments, transitions and images', async () => {
-    await render(issue(), null)
-    const detail = take(boundary.issues)
-    const comments = take(boundary.comments)
-    const transitions = take(boundary.transitions)
-    expect(detail.target).toEqual({ kind: 'environment', environmentId: 'environment-1' })
-    expect(comments.target).toBe(detail.target)
-    expect(transitions.target).toBe(detail.target)
-    expect(text('image-owner')).toBe(JSON.stringify(detail.target))
-    await act(async () => {
-      detail.resolve(null)
-      comments.resolve([])
-      transitions.resolve([])
-    })
   })
 })

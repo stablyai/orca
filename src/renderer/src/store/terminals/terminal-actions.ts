@@ -1,32 +1,41 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type {
   AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
-import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
-import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
+  SleepingAgentLaunchConfig,
+  SleepingAgentSessionRecord
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
+import type { AgentStartedTelemetry } from '../../lib/workspace/creation/worktree-startup-payload'
+import type { AiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import type { GeneratedTabTitleUpdate, TerminalTabTitleUpdate } from './terminal-tab-title-batch'
 import type {
-  GeneratedTabTitleUpdate,
-  TerminalTabTitleUpdate
-} from '../slices/terminal-tab-title-batch'
-import type { NativeChatLaunchDraft, NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
-import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status'
+  NativeChatLaunchDraft,
+  NativeChatLaunchPrompt
+} from '@/components/native-chat/drafts/native-chat-launch-prompt'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
+import type { TerminalTabCloseReason, TerminalTabRetirementPlan } from './terminal-tab-retirement'
 import type {
-  TerminalTabCloseReason,
-  TerminalTabRetirementPlan
-} from '../slices/terminal-tab-retirement'
-import type {
+  AccountRestartAgent,
+  TerminalCreationExecutionFacts,
   AutomaticAgentResumeClaim,
   CodexRestartNotice,
   HydrateWorkspaceSessionOptions
 } from './terminal-contracts'
+
+/** Main's answer to a sleep it ran; on success, the wake records it keeps (null: another host's). */
+export type HostTerminalStop =
+  | { failed: false; records: readonly SleepingAgentSessionRecord[] | null }
+  | { failed: true; stoppedPtyIds: readonly string[] }
 
 export type TerminalActions = {
   setTerminalStartupRestorationReady: (value: boolean) => void
@@ -62,6 +71,7 @@ export type TerminalActions = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
+      executionFacts?: TerminalCreationExecutionFacts
       /** Stable leaf identity: an already-live pane's, or a host launch's pane before its process. */
       initialLeafId?: string
       /** Published atomically with the tab so its first mount cannot spawn a bare shell. */
@@ -73,6 +83,8 @@ export type TerminalActions = {
       split?: TabSplitTarget
       recordInteraction?: boolean
       id?: string
+      /** `id` is a mirrored host tab's `web-terminal-` id, minted here and never taken from IPC. */
+      mirroredHostTab?: boolean
       launchAgent?: TuiAgent
       /** The pane a host `agent.launch` laid out before its agent existed, while its fate is open. */
       agentLaunchPane?: TerminalTab['agentLaunchPane']
@@ -91,6 +103,8 @@ export type TerminalActions = {
       reason?: TerminalTabCloseReason
       captureRecentlyClosed?: boolean
       remoteCloseOwnedByHost?: boolean
+      /** See closeUnifiedTab. */
+      preserveWorktreeSelection?: boolean
       localPtyTeardownOwnedExternally?: boolean
       precomputedRetirementPlan?: TerminalTabRetirementPlan
     }
@@ -122,7 +136,7 @@ export type TerminalActions = {
       recordInteraction?: boolean
     }
   ) => void
-  setTabColor: (tabId: string, color: string | null) => void
+  setTabColor: (tabId: string, color: string | null, opts?: { recordInteraction?: boolean }) => void
   /** What the tab keeps about the launch that laid out one of its panes; undefined clears it.
    *  `remount` remounts the tab's panes, so one whose spawn was refused spawns again. */
   setTabAgentLaunchPane: (
@@ -147,6 +161,9 @@ export type TerminalActions = {
       sleepingPaneKeys?: string[]
       expectedRuntimePtyIds?: string[]
       backendOwnsPtyTeardown?: boolean
+      /** Main stops these terminals itself: the window only guards and then commits its panes. */
+      hostStop?: Promise<HostTerminalStop>
+      onAdmitted?: () => void
     }
   ) => Promise<void>
   /** Captures resumable pane evidence and publishes suppression before exact physical teardown. */
@@ -163,8 +180,9 @@ export type TerminalActions = {
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
-  queueCodexPaneRestarts: (ptyIds: string[]) => void
-  consumePendingCodexPaneRestart: (ptyId: string) => boolean
+  /** Codex also marks its restart notices answered. */
+  queuePaneAccountRestarts: (ptyIds: string[], agent: AccountRestartAgent) => void
+  consumePendingPaneAccountRestart: (ptyId: string) => AccountRestartAgent | null
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
@@ -190,15 +208,17 @@ export type TerminalActions = {
   queueTabStartupCommand: (
     tabId: string,
     startup: {
-      command: string
+      command?: string
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      resumeOrigin?: 'saved'
       launchToken?: string
       launchAgent?: TuiAgent
+      freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>
@@ -216,15 +236,17 @@ export type TerminalActions = {
     tabId: string,
     expected?: TerminalState['pendingStartupByTabId'][string]
   ) => {
-    command: string
+    command?: string
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    freshAgentLaunch?: FreshWorkspaceAgentLaunch
     agentArgsOverride?: string | null
     draftPrompt?: string
     sessionOptions?: Record<string, SessionOptionValue>

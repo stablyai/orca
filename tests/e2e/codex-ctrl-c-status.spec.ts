@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import {
   buildShellCommandFromArgv,
   resolveStartupShell
-} from '../../src/shared/tui-agent-startup-shell'
+} from '../../src/shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../src/shared/windows-terminal-shell'
 import { test, expect } from './helpers/orca-app'
 import { emitCodexHookStatus, readHookEndpoint } from './helpers/agent-hook-endpoint'
@@ -62,7 +62,7 @@ process.stdout.write('ORCA_CODEX_INPUT_READY\\n')
 `
       )
       const terminalWindowsShell = await orcaPage.evaluate(
-        () => window.__store?.getState().settings.terminalWindowsShell
+        () => window.__store?.getState().settings?.terminalWindowsShell
       )
       const shell = resolveStartupShell(
         process.platform,

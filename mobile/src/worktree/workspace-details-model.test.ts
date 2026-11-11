@@ -160,7 +160,6 @@ describe('buildWorkspaceDetailLinks', () => {
   })
 
   it('drops attachments this build cannot place and never opens a non-web link', () => {
-    // Rows arrive unvalidated, so the list may hold anything.
     const linkedItems = JSON.parse(
       JSON.stringify([
         'garbage',

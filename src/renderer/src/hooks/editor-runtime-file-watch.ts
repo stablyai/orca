@@ -1,15 +1,17 @@
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
-import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-watch-client'
-import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
-import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
+import { subscribeRuntimeFileChanges } from '@/runtime/files/watching/runtime-file-watch-client'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
+import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function subscribeEditorRuntimeFileWatch(
   target: EditorExternalWatchTarget & { runtimeEnvironmentId: string },
   onPayload: (payload: FsChangedPayload) => void,
-  onError: (error: unknown) => void
+  onError: (error: unknown) => void,
+  onFirstReady?: () => void
 ): () => void {
+  let readySeen = false
   let disposed = false
   let attempt = 0
   let unsubscribe: (() => void) | null = null
@@ -38,6 +40,12 @@ export function subscribeEditorRuntimeFileWatch(
         if (isCurrent()) {
           onError(error)
         }
+      },
+      () => {
+        if (isCurrent() && !readySeen) {
+          readySeen = true
+          onFirstReady?.()
+        }
       }
     )
       .then((stop) => {
@@ -50,7 +58,8 @@ export function subscribeEditorRuntimeFileWatch(
         if (resync) {
           onPayload({
             worktreePath: target.worktreePath,
-            events: [{ kind: 'overflow', absolutePath: target.worktreePath }]
+            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+            resync: true
           })
         }
       })

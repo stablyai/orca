@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   deferred,
   fixture
-} from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
-import { RuntimeClientSettingsController } from '../../src/main/runtime/runtime-client-settings'
-import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/HostAgentLaunchSettings'
+} from '../../src/main/persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
+import { RuntimeClientSettingsController } from '../../src/main/runtime/client/settings/runtime-client-settings'
+import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/agents/launch/HostAgentLaunchSettings'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
-import { getAgentCatalog } from '../../src/renderer/src/lib/agent-catalog'
+import { getAgentCatalog } from '../../src/renderer/src/lib/agent-catalog/agent-catalog'
 
 const transport = vi.hoisted(() => ({ read: vi.fn(), mutate: vi.fn() }))
 const hooks = vi.hoisted(() => ({ apply: vi.fn(async () => {}) }))
@@ -17,17 +17,24 @@ vi.mock('../../src/main/telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../src/main/telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../src/main/ssh/ssh-config-parser', () => ({
+vi.mock('../../src/main/ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-vi.mock('../../src/main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../src/main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: hooks.apply
 }))
-vi.mock('../../src/renderer/src/components/settings/agent-launch-settings-transport', () => ({
-  readHostAgentLaunchSettings: transport.read,
-  mutateHostAgentLaunchSettings: transport.mutate
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/agent-launch-settings/agent-launch-settings-transport',
+  () => ({
+    readHostAgentLaunchSettings: transport.read,
+    mutateHostAgentLaunchSettings: transport.mutate,
+    hostSupportsLaunchChoices: async () => false,
+    hostSupportsOwnChatPermissions: async () => true,
+    hostSupportsAutoPermissions: async () => true,
+    hostSupportsNativeChatPermissions: async () => true
+  })
+)
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: () => ({
     detectedIds: ['claude'],
@@ -60,7 +67,7 @@ describe('host form and committed-settings contract', () => {
     render(
       createElement(
         TooltipProvider,
-        {},
+        null,
         createElement(HostAgentLaunchSettings, {
           environmentId: 'ssh-host',
           pairingRevision: 17,

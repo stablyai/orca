@@ -3,25 +3,15 @@ import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
+import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/task-page-github-work-item-status'
+import type { Translate } from '@/i18n/use-translate'
 
-export function formatRelativeTime(input: string): string {
-  return formatUiRelativeTimeFromDate(input)
+export function formatRelativeTime(input: string, intlLocale?: string): string {
+  return formatUiRelativeTimeFromDate(input, undefined, intlLocale)
 }
 
-export function getStateLabel(item: GitHubWorkItem): string {
-  if (item.type === 'pr') {
-    if (item.state === 'merged') {
-      return 'Merged'
-    }
-    if (item.state === 'draft') {
-      return 'Draft'
-    }
-    if (item.state === 'closed') {
-      return 'Closed'
-    }
-    return 'Open'
-  }
-  return item.state === 'closed' ? 'Closed' : 'Open'
+export function getStateLabel(item: GitHubWorkItem, t?: Translate): string {
+  return getTaskPageGitHubWorkItemStateLabel(item, t)
 }
 export function ReviewerAvatar({
   login,

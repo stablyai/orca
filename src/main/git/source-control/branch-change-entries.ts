@@ -1,5 +1,5 @@
-import type { GitBranchChangeEntry } from '../../../shared/git-diff-compare-types'
-import { gitChangeListArgs, parseGitChangeList } from '../../../shared/git-change-list'
+import type { GitBranchChangeEntry } from '../../../shared/git/diff/git-diff-compare-types'
+import { gitChangeListArgs, parseGitChangeList } from '../../../shared/git/diff/git-change-list'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
@@ -7,11 +7,11 @@ import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
 
 export async function loadBranchChanges(
   worktreePath: string,
-  mergeBase: string,
+  baseOid: string,
   headOid: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitBranchChangeEntry[]> {
-  return loadCommitChanges(worktreePath, mergeBase, headOid, options)
+  return loadCommitChanges(worktreePath, baseOid, headOid, options)
 }
 
 export async function loadCommitChanges(

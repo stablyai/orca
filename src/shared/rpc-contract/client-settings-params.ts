@@ -1,16 +1,16 @@
 import { z } from 'zod'
-import { isTaskProvider } from '../task-providers'
-import type { TaskProvider } from '../task-providers'
-import { isTuiAgent } from '../tui-agent-config'
-import { normalizeDisabledTuiAgents } from '../tui-agent-selection'
+import { isTaskProvider } from '../work-items/task-providers'
+import type { TaskProvider } from '../work-items/task-providers'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { normalizeDisabledTuiAgents } from '../agent-launch/catalog/tui-agent-selection'
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
-} from '../tui-agent-launch-defaults'
+} from '../agent-launch/choices/tui-agent-launch-defaults'
 import { MACHINE_NAME_MAX_LENGTH } from '../machine-name'
-import { normalizePRBotAuthorOverrides } from '../pr-bot-author-overrides'
+import { normalizePRBotAuthorOverrides } from '../source-control/review-comments/pr-bot-author-overrides'
 import { WorktreeVisibilityDefaultsUpdate } from './worktree-visibility-defaults-params'
-import { AGENT_CHAT_PERMISSION_MODES } from '../agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODES } from '../agent-launch/permissions/agent-chat-permission-mode'
 
 export const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
@@ -112,7 +112,11 @@ export const SettingsUpdate = z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
+    /** No UI: the host-side switch for connectors, so a headless server can be turned on. */
+    experimentalConnectors: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
+    codexShareHistoryAcrossAccounts: z.boolean().optional(),
+    claudeSubagentNavigationEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     compactWorktreeCards: z.boolean().optional(),
@@ -125,6 +129,7 @@ export const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizePRBotAuthorOverrides(value))
       .optional(),
+    nativeChatAutoContinueAfterUsageLimit: z.boolean().optional(),
     nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional()
   })
   .strict()

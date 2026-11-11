@@ -1,8 +1,16 @@
 import { isMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
-import { getAgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import {
+  getAgentModelProbeSpec,
+  type AgentModelProbeSpec
+} from '../../shared/agent-model-probe-spec'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
+import {
+  runClaudeBackgroundAttempts,
+  type ClaudeBackgroundFailedExit
+} from '../../shared/claude-background-run-isolation'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import {
@@ -15,6 +23,12 @@ import {
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from './source-control-generation-limits'
 import { runCodexProcessWithHomeLock } from './source-control-local-generation'
+import { formatAgentCliFailureMessage } from './source-control-agent-failure'
+import {
+  settleCodexModelListing,
+  startCodexModelListDiscovery,
+  type CodexModelListDiscovery
+} from './codex-model-list-discovery'
 import { killSourceControlAgentProcess } from './source-control-local-process'
 import type {
   DiscoverCommitMessageModelsResult,
@@ -28,16 +42,20 @@ export type CommitMessageModelDiscoveryLocalOptions = {
   wslDistro?: string
 }
 
-export async function discoverModelsLocal(input: {
+type DiscoverModelsLocalInput = {
   agentId: TuiAgent
   env: NodeJS.ProcessEnv | undefined
   agentCommandOverride?: string
   options: CommitMessageModelDiscoveryLocalOptions
   backslash: CommandTemplateBackslash
   spawnAgent: SpawnSourceControlAgent
-  /** The command actually spawned, when the caller replaces the plan's; a missing one is typed. */
+  /** Actual spawned command when it differs from the plan; missing binaries return a typed failure. */
   binary?: string
-}): Promise<DiscoverCommitMessageModelsResult> {
+}
+
+export async function discoverModelsLocal(
+  input: DiscoverModelsLocalInput
+): Promise<DiscoverCommitMessageModelsResult> {
   const spec = getAgentModelProbeSpec(input.agentId)
   if (!spec) {
     return { success: false, error: `Agent "${input.agentId}" does not support model discovery.` }
@@ -55,8 +73,30 @@ export async function discoverModelsLocal(input: {
     planned.plan.env,
     input.options.wslDistro ? 'linux' : process.platform
   )
+  const attempt = await runClaudeBackgroundAttempts({
+    agentId: input.agentId,
+    run: (strictMcp): ReturnType<typeof discoverModelsOnce> => {
+      const rebuilt = strictMcp
+        ? planned
+        : planModelDiscovery(spec, input.agentCommandOverride, input.backslash, strictMcp)
+      return rebuilt.ok
+        ? discoverModelsOnce(input, spec, rebuilt.plan, env)
+        : Promise.resolve({ result: { success: false as const, error: rebuilt.error } })
+    },
+    failedExit: (outcome) => (outcome.result.success ? undefined : outcome.failedExit)
+  })
+  return attempt.result
+}
 
-  const binary = input.binary ?? planned.plan.binary
+async function discoverModelsOnce(
+  input: DiscoverModelsLocalInput,
+  spec: AgentModelProbeSpec,
+  plan: CommitMessagePlan,
+  env: NodeJS.ProcessEnv | undefined
+): Promise<{ result: DiscoverCommitMessageModelsResult; failedExit?: ClaudeBackgroundFailedExit }> {
+  let failedExit: ClaudeBackgroundFailedExit | undefined
+
+  const binary = input.binary ?? plan.binary
   const couldNotStart = `${spec.label} model discovery could not be started. Check the agent CLI configuration and try again.`
   const startFailure = (error: unknown): DiscoverCommitMessageModelsResult => ({
     success: false,
@@ -65,6 +105,8 @@ export async function discoverModelsLocal(input: {
       : {}),
     error: couldNotStart
   })
+  // The app-server answers `model/list` over the stdin it must keep open.
+  const appServer = spec.modelDiscovery !== undefined && 'listing' in spec.modelDiscovery
   const startDiscovery = (): LocalProcessExecution<DiscoverCommitMessageModelsResult> => {
     let markProcessClosed!: () => void
     const processClosed = new Promise<void>((resolve) => {
@@ -72,20 +114,25 @@ export async function discoverModelsLocal(input: {
     })
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: SpawnedSourceControlAgentProcess
+      let listing: CodexModelListDiscovery | null = null
       try {
         child = input.spawnAgent({
           binary,
-          args: planned.plan.args,
+          args: plan.args,
           cwd: input.options.cwd,
           env: input.options.wslDistro ? input.env : env,
-          commandEnv: planned.plan.env,
+          commandEnv: plan.env,
           wslDistro: input.options.wslDistro,
-          stdinMode: planned.plan.stdinPayload === null ? 'ignore' : 'pipe',
+          stdinMode: plan.stdinPayload === null && !appServer ? 'ignore' : 'pipe',
           useCwdForNative: false
         })
-        if (planned.plan.stdinPayload !== null) {
+        if (appServer && child.stdin) {
+          const stdin = child.stdin
+          listing = startCodexModelListDiscovery(stdin)
+          stdin.on('error', (error) => listing?.fail(error))
+        } else if (plan.stdinPayload !== null) {
           child.stdin?.on?.('error', () => {})
-          child.stdin?.end(planned.plan.stdinPayload)
+          child.stdin?.end(plan.stdinPayload)
         }
       } catch (error) {
         markProcessClosed()
@@ -95,6 +142,8 @@ export async function discoverModelsLocal(input: {
       }
 
       let stdout = ''
+      // Count bytes read from both streams; the budget bounds raw input, not retained text.
+      let outputBytes = 0
       let stderr = ''
       let outputLimitExceeded = false
       let settled = false
@@ -117,6 +166,8 @@ export async function discoverModelsLocal(input: {
           timer = null
         }
         detachChildListeners()
+        // Waiting listing requests have no timers of their own.
+        listing?.fail(new Error(`${spec.label} model discovery ended`))
         if (input.agentId !== 'codex') {
           markProcessClosed()
         }
@@ -131,10 +182,8 @@ export async function discoverModelsLocal(input: {
       }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
 
       const onData = (chunk: Buffer, append: (text: string) => void): void => {
-        if (
-          stdout.length + stderr.length + chunk.byteLength >
-          MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES
-        ) {
+        outputBytes += chunk.byteLength
+        if (outputBytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
           outputLimitExceeded = true
           startTermination()
           finish({ success: false, error: `${spec.label} returned too much model data.` })
@@ -142,7 +191,10 @@ export async function discoverModelsLocal(input: {
         }
         append(chunk.toString('utf-8'))
       }
-      const onStdoutData = (chunk: Buffer): void => onData(chunk, (text) => (stdout += text))
+      const onStdoutData = (chunk: Buffer): void =>
+        listing
+          ? onData(chunk, () => listing?.receive(chunk))
+          : onData(chunk, (text) => (stdout += text))
       const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
       const onError = (error: Error): void => {
         if (!child.pid) {
@@ -161,7 +213,7 @@ export async function discoverModelsLocal(input: {
       }
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
-        // A supervised spawn failure reads as the same failure a direct spawn reports.
+        listing?.fail(new Error(`${spec.label} app-server exited`))
         const spawnFailure = outputLimitExceeded
           ? null
           : supervisedProviderSpawnFailure(code, stderr)
@@ -174,11 +226,37 @@ export async function discoverModelsLocal(input: {
           onError(spawnFailure.error)
           return
         }
+        if (!settled && !outputLimitExceeded) {
+          failedExit = { exitCode: code, stdout, stderr }
+        }
         finish(
           outputLimitExceeded
             ? { success: false, error: `${spec.label} returned too much model data.` }
-            : finalizeModelDiscoveryOutput(spec, stdout, stderr, code)
+            : listing
+              ? listingFailure(code)
+              : finalizeModelDiscoveryOutput(spec, stdout, stderr, code)
         )
+      }
+      const listingFailure = (code: number | null): DiscoverCommitMessageModelsResult => {
+        console.error('[commit-message] Model discovery failed:', {
+          label: spec.label,
+          exitCode: code,
+          stderr
+        })
+        return {
+          success: false,
+          error: formatAgentCliFailureMessage(spec.label, '', stderr, code)
+        }
+      }
+      if (listing) {
+        settleCodexModelListing({
+          listing,
+          spec,
+          child,
+          isSettled: () => settled,
+          stop: startTermination,
+          finish
+        })
       }
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)
@@ -197,10 +275,11 @@ export async function discoverModelsLocal(input: {
     })
     return { result, processClosed }
   }
-  return input.agentId === 'codex'
+  const result = await (input.agentId === 'codex'
     ? runCodexProcessWithHomeLock(
-        resolveCodexHomeProcessLockKeyForSpawnEnv(env, input.options.wslDistro, planned.plan.env),
+        resolveCodexHomeProcessLockKeyForSpawnEnv(env, input.options.wslDistro, plan.env),
         startDiscovery
       )
-    : startDiscovery().result
+    : startDiscovery().result)
+  return { result, failedExit }
 }

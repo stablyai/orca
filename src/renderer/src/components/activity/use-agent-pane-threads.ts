@@ -1,22 +1,21 @@
 import { useDeferredValue, useMemo, useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import type { AppState } from '@/store/types'
+import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
+import { buildActivityEvents } from './activity-event-builder'
+import { createActivityEventBuildCache } from '@/components/activity/activity-event-build-cache'
+import { freshActivityLiveAgentState, isRunningActivityState } from './activity-event-state'
 import {
-  getSettingsFocusedExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { buildActivityEvents, createActivityEventBuildCache } from './activity-event-builder'
-import { projectActivityTabs, type ActivityTabProjection } from './activity-tab-projection'
+  useAgentPaneThreadsDefaultHostId,
+  useAllAgentPaneThreadStoreData,
+  type AgentPaneThreadsStoreData,
+  type AllAgentPaneThreadsStoreData
+} from './use-agent-pane-thread-store-data'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
-import { collectChildAgentPaneKeys } from './activity-thread-child-agent'
+import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
 } from '../../../../shared/workspace-creator-visibility'
-
-const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
 import {
   createActivityThreadSearchMatcher,
@@ -25,61 +24,127 @@ import {
 } from './activity-thread-grouping'
 import type {
   ActivityGroupBy,
-  ActivityThreadGroup,
-  AgentPaneThread,
   ThreadReadFilter
-} from './activity-thread-types'
+} from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
-export type AgentPaneThreadsStoreData = Pick<
-  AppState,
-  | 'agentStatusByPaneKey'
-  | 'runtimeAgentOrchestrationByPaneKey'
-  | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
-  | 'tabsByWorktree'
-  | 'repos'
-  | 'worktreesByRepo'
-  | 'folderWorkspaces'
-  | 'floatingWorkspacePath'
-  | 'detectedWorktreesByRepo'
-  | 'getKnownWorktreeById'
-  | 'acknowledgedAgentsByPaneKey'
-  | 'activityClearedAtByPaneKey'
-  | 'acknowledgeAgents'
-  | 'unacknowledgeAgents'
-> & {
-  /** Terminal and agent-session tabs only, identity-stable across focus writes. */
-  activityTabs: ActivityTabProjection
-  worktreeMap: ReturnType<typeof getWorktreeMapFromState>
-  repoMap: ReturnType<typeof getRepoMapFromState>
-  generatedTitlesEnabled: boolean
-  /** Focused-host fallback for hostless worktrees, shared by the scope filter and the row actions. */
-  defaultHostId: ExecutionHostId
+const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
+const EMPTY_THREADS: AgentPaneThread[] = []
+const EMPTY_GROUPS: ActivityThreadGroup[] = []
+const EMPTY_ACTIVITY_BUILD: ReturnType<typeof buildActivityEvents> = {
+  events: [],
+  liveAgentByPaneKey: {},
+  paneEntryByPaneKey: {}
 }
 
-/** The Activity thread pipeline (store read -> events -> threads -> filter ->
- *  groups), shared by the Activity page and the sidebar agents list. */
+/** Every Activity thread before any view filter: store data to events and threads. */
+export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: boolean } = {}): {
+  storeData: AllAgentPaneThreadsStoreData
+  allThreads: AgentPaneThread[]
+} {
+  const storeData = useAllAgentPaneThreadStoreData()
+  // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
+  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const chatNames = useStructuredChatTabNames()
+
+  // Per-hook caches preserve unchanged pane/event/thread identities across status writes, including repeated StrictMode/deferred builds.
+  const eventBuildCacheRef = useRef<ReturnType<typeof createActivityEventBuildCache>>(undefined!)
+  eventBuildCacheRef.current ??= createActivityEventBuildCache()
+  const threadReuseCacheRef = useRef<ReturnType<typeof createAgentPaneThreadReuseCache>>(undefined!)
+  threadReuseCacheRef.current ??= createAgentPaneThreadReuseCache()
+
+  const {
+    events: allEvents,
+    liveAgentByPaneKey,
+    paneEntryByPaneKey
+  } = useMemo(
+    () => {
+      const now = Date.now()
+      if (
+        badgeOnly &&
+        Object.keys(storeData.migrationUnsupportedByPtyId).length === 0 &&
+        !Object.values(storeData.agentStatusByPaneKey).some((entry) =>
+          freshActivityLiveAgentState(entry, now)
+        )
+      ) {
+        eventBuildCacheRef.current.panes.clear()
+        eventBuildCacheRef.current.tabs = undefined
+        return EMPTY_ACTIVITY_BUILD
+      }
+      // Global history caps affect live-thread unread and search state.
+      return buildActivityEvents(
+        {
+          chatNames,
+          agentStatusByPaneKey: storeData.agentStatusByPaneKey,
+          runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
+          migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
+          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
+          tabsByWorktree: storeData.tabsByWorktree,
+          ptyIdsByTabId: storeData.ptyIdsByTabId,
+          unifiedTabsByWorktree: storeData.activityTabs,
+          worktreeMap: storeData.worktreeMap,
+          repoMap: storeData.repoMap,
+          repos: storeData.repos,
+          resolveWorktree: storeData.getKnownWorktreeById,
+          acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
+          activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
+          // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
+          now
+        },
+        eventBuildCacheRef.current
+      )
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [storeData, agentStatusEpoch, chatNames, badgeOnly]
+  )
+
+  const allThreads = useMemo(
+    () =>
+      buildAgentPaneThreads(
+        {
+          events: badgeOnly
+            ? allEvents.filter((event) => liveAgentByPaneKey[event.entry.paneKey])
+            : allEvents,
+          liveAgentByPaneKey,
+          paneEntryByPaneKey,
+          generatedTitlesEnabled: storeData.generatedTitlesEnabled
+        },
+        threadReuseCacheRef.current
+      ),
+    [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled, badgeOnly]
+  )
+
+  return { storeData, allThreads }
+}
+
+/** Shared Activity/sidebar pipeline: store data to events, threads, filters and groups. */
 export function useAgentPaneThreads(args: {
   query: string
   readFilter: ThreadReadFilter
   groupBy: ActivityGroupBy
   selectedPaneKey: string | null
   showChildAgents?: boolean
+  /** Prepare only live badge rows, omitting list groups and bulk-action sets. */
+  badgeOnly?: boolean
 }): {
   storeData: AgentPaneThreadsStoreData
   allThreads: AgentPaneThread[]
   selectedPaneKeyIsLive: boolean
   effectiveSelectedPaneKey: string | null
-  /** Threads shown after every active filter; Clear completed operates on exactly
-   *  this set so it never destroys rows the user cannot see. */
+  /** Every active view filter applies here; destructive Clear completed must not touch hidden rows. */
   visibleThreads: AgentPaneThread[]
-  /** Threads after the child-agent classification only — the set the Agents-tab
-   *  badge counts and Mark all read clears; transient search/scope/read narrowing
-   *  is ignored so the badge is always clearable. */
+  /** Badge-coherent threads after child classification; ignore transient search/scope/read filters so Mark all read can clear the badge. */
   markAllReadThreads: AgentPaneThread[]
   visibleThreadGroups: ActivityThreadGroup[]
 } {
-  const { query, readFilter, groupBy, selectedPaneKey, showChildAgents = false } = args
+  const {
+    query,
+    readFilter,
+    groupBy,
+    selectedPaneKey,
+    showChildAgents = false,
+    badgeOnly = false
+  } = args
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
@@ -101,97 +166,11 @@ export function useAgentPaneThreads(args: {
         : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     [runtimeEnvironments, runtimeStatusByEnvironmentId]
   )
-  // Why project: the unified tab map is rewritten on every tab focus; the projection keeps
-  // its identity (and each tab's) unless a field this pipeline reads actually changed.
-  const tabProjectionRef = useRef<{
-    raw: AppState['unifiedTabsByWorktree'] | null
-    projected: ActivityTabProjection | null
-  }>({ raw: null, projected: null })
-  const storeData = useAppStore(
-    useShallow((s) => ({
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
-      migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
-      retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
-      tabsByWorktree: s.tabsByWorktree,
-      activityTabs: (() => {
-        const cache = tabProjectionRef.current
-        if (cache.raw === s.unifiedTabsByWorktree && cache.projected) {
-          return cache.projected
-        }
-        const projected = projectActivityTabs(s.unifiedTabsByWorktree, cache.projected)
-        tabProjectionRef.current = { raw: s.unifiedTabsByWorktree, projected }
-        return projected
-      })(),
-      repos: s.repos,
-      worktreesByRepo: s.worktreesByRepo,
-      folderWorkspaces: s.folderWorkspaces,
-      floatingWorkspacePath: s.floatingWorkspacePath,
-      detectedWorktreesByRepo: s.detectedWorktreesByRepo,
-      getKnownWorktreeById: s.getKnownWorktreeById,
-      worktreeMap: getWorktreeMapFromState(s),
-      repoMap: getRepoMapFromState(s),
-      acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
-      activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
-      acknowledgeAgents: s.acknowledgeAgents,
-      unacknowledgeAgents: s.unacknowledgeAgents,
-      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true,
-      defaultHostId: getSettingsFocusedExecutionHostId(s.settings)
-    }))
-  )
-  // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-
-  // Why per-hook caches: unchanged panes keep their exact event/snapshot/thread object
-  // identities across rebuilds, so a status write to one agent leaves every other row's
-  // memo bail-out and cached search text intact. Rebuilds are deterministic, so a repeated
-  // (StrictMode/deferred) memo invocation returns identical objects from the cache.
-  const eventBuildCacheRef = useRef<ReturnType<typeof createActivityEventBuildCache>>(undefined!)
-  eventBuildCacheRef.current ??= createActivityEventBuildCache()
-  const threadReuseCacheRef = useRef<ReturnType<typeof createAgentPaneThreadReuseCache>>(undefined!)
-  threadReuseCacheRef.current ??= createAgentPaneThreadReuseCache()
-
-  const {
-    events: allEvents,
-    liveAgentByPaneKey,
-    paneEntryByPaneKey
-  } = useMemo(
-    () =>
-      buildActivityEvents(
-        {
-          agentStatusByPaneKey: storeData.agentStatusByPaneKey,
-          runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
-          migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
-          tabsByWorktree: storeData.tabsByWorktree,
-          unifiedTabsByWorktree: storeData.activityTabs,
-          worktreeMap: storeData.worktreeMap,
-          repoMap: storeData.repoMap,
-          repos: storeData.repos,
-          resolveWorktree: storeData.getKnownWorktreeById,
-          acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
-          activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
-          // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
-          now: Date.now()
-        },
-        eventBuildCacheRef.current
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeData, agentStatusEpoch]
-  )
-
-  const allThreads = useMemo(
-    () =>
-      buildAgentPaneThreads(
-        {
-          events: allEvents,
-          liveAgentByPaneKey,
-          paneEntryByPaneKey,
-          generatedTitlesEnabled: storeData.generatedTitlesEnabled
-        },
-        threadReuseCacheRef.current
-      ),
-    [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled]
+  const { storeData: unscopedStoreData, allThreads } = useAllAgentPaneThreads({ badgeOnly })
+  const defaultHostId = useAgentPaneThreadsDefaultHostId()
+  const storeData = useMemo(
+    () => ({ ...unscopedStoreData, defaultHostId }),
+    [unscopedStoreData, defaultHostId]
   )
 
   const selectedPaneKeyIsLive =
@@ -229,45 +208,41 @@ export function useAgentPaneThreads(args: {
     ]
   )
 
-  // Why over allThreads (not the scoped list): child classification asks whether the
-  // parent pane still exists at all, and a scope filter hiding the parent must not
-  // reclassify its workers as orphans.
-  // Skipped entirely when children are shown: nothing reads the set then.
-  const childAgentPaneKeys = useMemo(
-    () => (showChildAgents ? EMPTY_PANE_KEYS : collectChildAgentPaneKeys(allThreads)),
-    [allThreads, showChildAgents]
+  // Classify children over all threads so scoped-out parents do not orphan workers; skip when children are shown.
+  const hiddenChildAgentPaneKeys = useMemo(
+    () =>
+      badgeOnly || showChildAgents ? EMPTY_PANE_KEYS : collectHiddenChildAgentPaneKeys(allThreads),
+    [allThreads, showChildAgents, badgeOnly]
   )
 
-  // Why deferred: filtering hundreds of threads is interruptible background work; the input
-  // echoes the keystroke at full priority while the list catches up on the deferred value.
+  // Defer list filtering while typed input updates at full priority.
   const deferredQuery = useDeferredValue(query)
   const visibleThreads = useMemo(() => {
     const normalizedQuery = isActivitySearchQueryTooLarge(deferredQuery)
       ? null
       : deferredQuery.trim().toLowerCase()
-    let matchesSearchQuery: ReturnType<typeof createActivityThreadSearchMatcher> | undefined
+    const matchesSearchQuery =
+      normalizedQuery === null ? null : createActivityThreadSearchMatcher(normalizedQuery)
     return scopeVisibleThreads.filter((thread) => {
-      // Why: keep the just-selected thread visible after auto-mark-read flips it to read, else unread-only mode makes the clicked row vanish from the list.
+      // Keep live agents and the selected row visible after marking read; migration blocks are unavailable.
       if (
         readFilter === 'unread' &&
         !thread.unread &&
+        (!isRunningActivityState(thread.currentAgentState) ||
+          thread.migrationUnsupportedPtyId !== undefined) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false
       }
-      // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks.
+      // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks; a live child always keeps its own row.
       if (
         !showChildAgents &&
-        childAgentPaneKeys.has(thread.paneKey) &&
+        hiddenChildAgentPaneKeys.has(thread.paneKey) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false
       }
-      if (normalizedQuery === null) {
-        return false
-      }
-      matchesSearchQuery ??= createActivityThreadSearchMatcher(normalizedQuery)
-      return matchesSearchQuery(thread)
+      return matchesSearchQuery !== null && matchesSearchQuery(thread)
     })
   }, [
     scopeVisibleThreads,
@@ -275,23 +250,25 @@ export function useAgentPaneThreads(args: {
     deferredQuery,
     effectiveSelectedPaneKey,
     showChildAgents,
-    childAgentPaneKeys
+    hiddenChildAgentPaneKeys
   ])
 
   const markAllReadThreads = useMemo(
     () =>
-      allThreads.filter(
-        (thread) =>
-          showChildAgents ||
-          !childAgentPaneKeys.has(thread.paneKey) ||
-          thread.paneKey === effectiveSelectedPaneKey
-      ),
-    [allThreads, showChildAgents, childAgentPaneKeys, effectiveSelectedPaneKey]
+      badgeOnly
+        ? EMPTY_THREADS
+        : allThreads.filter(
+            (thread) =>
+              showChildAgents ||
+              !hiddenChildAgentPaneKeys.has(thread.paneKey) ||
+              thread.paneKey === effectiveSelectedPaneKey
+          ),
+    [allThreads, showChildAgents, hiddenChildAgentPaneKeys, effectiveSelectedPaneKey, badgeOnly]
   )
 
   const visibleThreadGroups = useMemo(
-    () => buildActivityThreadGroups(visibleThreads, groupBy),
-    [visibleThreads, groupBy]
+    () => (badgeOnly ? EMPTY_GROUPS : buildActivityThreadGroups(visibleThreads, groupBy)),
+    [visibleThreads, groupBy, badgeOnly]
   )
 
   return {

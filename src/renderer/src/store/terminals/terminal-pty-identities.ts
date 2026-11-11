@@ -1,5 +1,13 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { replaceTabBuckets } from '@/store/keyed-record-transitions'
+import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 
 export function getPendingActivationSpawnCount(value: boolean | number | undefined): number {
   if (value === true) {
@@ -44,22 +52,24 @@ export function resolvePrimaryLayoutPtyId(layout: TerminalLayoutSnapshot): strin
   return activePtyId ?? Object.values(ptyIdsByLeafId)[0] ?? null
 }
 
-export function withTerminalTabPtyId(
+export function withTerminalTabPtyIds(
   tabsByWorktree: Record<string, TerminalTab[]>,
-  tabId: string,
-  ptyId: string | null
+  changes: readonly { tabId: string; ptyId: string | null }[]
 ): Record<string, TerminalTab[]> {
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const index = tabs.findIndex((tab) => tab.id === tabId)
-    if (index === -1) {
+  const replacements = new Map<string, TerminalTab[]>()
+  for (const { tabId, ptyId } of changes) {
+    const worktreeId = getFirstTerminalTabOwnerWorktreeId(tabsByWorktree, tabId)
+    if (!worktreeId) {
       continue
     }
-    if (tabs[index]?.ptyId === ptyId) {
-      return tabsByWorktree
+    const tabs = replacements.get(worktreeId) ?? tabsByWorktree[worktreeId] ?? []
+    const index = tabs.findIndex((tab) => tab.id === tabId)
+    if (index === -1 || tabs[index]?.ptyId === ptyId) {
+      continue
     }
     const nextTabs = [...tabs]
     nextTabs[index] = { ...nextTabs[index]!, ptyId }
-    return { ...tabsByWorktree, [worktreeId]: nextTabs }
+    replacements.set(worktreeId, nextTabs)
   }
-  return tabsByWorktree
+  return replacements.size > 0 ? replaceTabBuckets(tabsByWorktree, replacements) : tabsByWorktree
 }

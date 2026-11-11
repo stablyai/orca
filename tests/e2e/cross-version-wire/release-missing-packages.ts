@@ -52,7 +52,6 @@ function importedNames(clause: string): string[] {
   return names
 }
 
-/** Record what one release source file imports from packages. */
 export function collectPackageImports(source: string, imports: PackageImports): void {
   for (const [, , specifier] of source.matchAll(BARE_IMPORT)) {
     if (isPackageSpecifier(specifier!) && !imports.has(specifier!)) {
@@ -117,14 +116,8 @@ function standInModule(release: string, specifier: string, names: Set<string>): 
   return `${lines.join('\n')}\n`
 }
 
-/**
- * Why: release source runs against the current install, and the release's RPC dispatcher
- * imports its whole method table, so one package the current tree no longer has fails every
- * wire suite at import time. Each package that does not resolve from the checkout and that
- * the current tree does not declare gets a stand-in in the checkout's own `node_modules`:
- * it loads, but any use throws naming the package, so a wire path that needs it still fails.
- * A package the current tree declares but cannot resolve is a broken install; it stays loud.
- */
+// Released dispatchers import their whole method table; stub only packages removed from today’s manifest to permit import.
+// Any actual use throws; declared but unresolved packages remain install failures.
 export async function installMissingPackageStandIns(
   root: string,
   release: string,

@@ -1,18 +1,21 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
-import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
-import { splitWorktreeId, worktreeIdComparisonKey } from '../../shared/worktree/id'
-import { getDaemonProvider } from '../daemon/daemon-provider-state'
-import { getAllDaemonAdapters, type DaemonProvider } from '../daemon/daemon-provider-routing'
-import type { SessionInfo } from '../daemon/types'
+import { splitWorktreeId, worktreeIdentityKey } from '../../shared/worktree/id'
+import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
+import {
+  getAllDaemonAdapters,
+  type DaemonProvider
+} from '../daemon/providers/lifecycle/daemon-provider-routing'
+import type { SessionInfo } from '../daemon/protocol/daemon-session-info'
 import { isFolderWorkspaceIdForRepo } from '../ipc/worktrees/folder-workspace-model'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import { listLocalRepoWorktreesStrict } from '../repo-worktrees'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
+import { listLocalRepoWorktreesStrict } from '../workspaces/catalog/repo-worktrees'
 import { listRegisteredPtys, registerPty } from './pty-registry'
 import { getVerifiedLocalFolderWorkspaceKeys } from './verified-local-folder-workspaces'
 import { errorMessage } from '../../shared/error-message'
@@ -29,7 +32,7 @@ type LocalRepoCatalog = {
   ownerCountById: Map<string, number>
 }
 
-// Why: matches existing local Git/read startup budgets while allowing for Defender-heavy repos.
+// Match local startup budgets while allowing for Defender-heavy repositories.
 export const LOCAL_PTY_REGISTRY_BOOT_HYDRATION_DEADLINE_MS = 5_000
 export const LOCAL_PTY_REGISTRY_GIT_ENUMERATION_CONCURRENCY = 4
 
@@ -144,14 +147,12 @@ async function hydrateLocalPtyRegistry(
       const { repo, worktrees } = result.value
       for (const worktree of worktrees) {
         const worktreeId = `${repo.id}::${worktree.path}`
-        const key = worktreeIdComparisonKey(worktreeId)
-        if (key) {
-          const existing = liveGitWorktreeIdsByKey.get(key)
-          liveGitWorktreeIdsByKey.set(
-            key,
-            existing === undefined || existing === worktreeId ? worktreeId : null
-          )
-        }
+        const key = worktreeIdentityKey(worktreeId)
+        const existing = liveGitWorktreeIdsByKey.get(key)
+        liveGitWorktreeIdsByKey.set(
+          key,
+          existing === undefined || existing === worktreeId ? worktreeId : null
+        )
       }
     }
 
@@ -190,8 +191,7 @@ async function hydrateLocalPtyRegistry(
     if (verifiedLocalFolderKeys.has(worktreeId) || verifiedFolderWorktreeIds.has(worktreeId)) {
       return true
     }
-    const key = worktreeIdComparisonKey(worktreeId)
-    return key !== null && typeof liveGitWorktreeIdsByKey.get(key) === 'string'
+    return typeof liveGitWorktreeIdsByKey.get(worktreeIdentityKey(worktreeId)) === 'string'
   }
 }
 

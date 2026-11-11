@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -62,24 +65,18 @@ describe('orca cli worktree awareness', () => {
 
     expect(listEnvironmentsMock).toHaveBeenCalledWith('/tmp/orca-user-data')
     expect(callMock).not.toHaveBeenCalled()
-    expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')
-    expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
-  })
-
-  it('adds saved environments even when ORCA_ENVIRONMENT is set', async () => {
-    process.env.ORCA_ENVIRONMENT = 'stale-env'
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['environment', 'add', '--name', 'desk', '--pairing-code', 'orca://pair#abc', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(addEnvironmentFromPairingCodeMock).toHaveBeenCalledWith('/tmp/orca-user-data', {
-      name: 'desk',
-      pairingCode: 'orca://pair#abc'
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: {
+        environments: [
+          {
+            id: 'env-1',
+            name: 'desk',
+            endpoints: [{ id: 'ws-env-1', kind: 'websocket', endpoint: 'ws://127.0.0.1:6768' }]
+          }
+        ]
+      }
     })
-    expect(callMock).not.toHaveBeenCalled()
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
   })

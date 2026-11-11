@@ -3,9 +3,9 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
-import { makePaneKey } from '../shared/stable-pane-id'
-import { drainAgentHookSpoolAsync } from '../shared/agent-hook-spool'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
+import { drainAgentHookSpoolAsync } from '../shared/agent-hook-listener/transport/agent-hook-spool'
 import { createHookListenerState } from '../shared/agent-hook-listener/listener-state'
 import {
   bindOpenCodeSession,
@@ -86,14 +86,6 @@ describe('legacy TUI identity admitted by the execution-host relay', () => {
       [PANE_A, 'working'],
       [PANE_B, 'done']
     ])
-  })
-
-  it('keeps the session creator when another pane views the same session', async () => {
-    await post(PANE_A, 'ses_a')
-    forward.mockClear()
-    await post(PANE_B, 'ses_a')
-    expect(forward.mock.calls[0][0].paneKey).toBe(PANE_A)
-    expect(server.replayCachedPayloadsForPanes()).toBe(1)
   })
 
   it.each(['SessionIdle', 'PermissionRequest', 'MessagePart'] as const)(

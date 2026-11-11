@@ -1,11 +1,7 @@
-// A new Codex chat's picker reads the catalog under the account key the record-less resolver
-// answers; the chat it launches saves under the key launch preparation pins. Both run for real
-// here, wired as the runtime service wires them, so a drift between the two fails this test.
-
 import type * as NodeOs from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAccountRecord,
@@ -35,24 +31,26 @@ vi.mock('node:os', async () => {
 })
 
 // Hook install and session bridges are launch chores outside the key; keep them off disk.
-vi.mock('../codex/hook-service', () => ({
+vi.mock('../codex/hooks/installation/hook-service', () => ({
   codexHookService: { prepareRuntimeHomeForLaunch: async () => ({ state: 'installed' }) }
 }))
-vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: async () => {} }))
-vi.mock('../codex/codex-session-bridge', () => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', () => ({
+  reconcileCodexHooksForLaunch: async () => {}
+}))
+vi.mock('../codex/history/bridges/codex-session-bridge', () => ({
   startSystemCodexSessionBridgeInBackground: async () => {}
 }))
-vi.mock('../codex/codex-account-session-bridge', () => ({
+vi.mock('../codex/history/bridges/codex-account-session-bridge', () => ({
   startCodexAccountSessionBridgeInBackground: async () => {}
 }))
 
-/** The production wiring: the host's one runtime home service behind both resolvers. */
+// Use production wiring so catalog reads and launches cannot silently drift apart.
 async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) {
   const { CodexRuntimeHomeService } = await import('./runtime-home-service')
   const { mainProcessState } = await import('../startup/main-process-state')
   const { codexStructuredLaunchHomeResolvers } = await import('../startup/codex-launch-preparation')
   const { structuredAgentRuntimeRegistration } =
-    await import('../runtime/structured-agent-runtime-registrations')
+    await import('../runtime/agent-session/installation/structured-agent-runtime-registrations')
   const { agentModelCatalogFingerprint } =
     await import('../native-chat/agent-model-catalog/agent-model-catalog-fingerprint')
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the settings read/update surface the service uses.
@@ -61,10 +59,13 @@ async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) 
   const codex = structuredAgentRuntimeRegistration('codex')!
   const services = {
     getClaudeConfigDirectory: () => null,
-    // The resolvers main-process-runtime-service hands the runtime.
     prepareCodexLaunchHome: codexStructuredLaunchHomeResolvers.prepareCodexStructuredLaunch,
     readCodexLaunchHome: codexStructuredLaunchHomeResolvers.resolveCodexStructuredLaunchHome,
-    workspaceTrustSettings: () => settings
+    workspaceTrustSettings: () => settings,
+    workspaceTrustRepoDecision: () => undefined,
+    stateDirectory: '/orca-data',
+    hostLaunchEnvironment: async () => ({}),
+    hostSettings: () => ({})
   }
   const resolve = (purpose: 'launch' | 'read') =>
     codex.resolveAccountHome(
@@ -94,7 +95,6 @@ describe('Codex catalog account key: picker read vs launch', () => {
     release = wired.release
     const before = await wired.resolve('read')
     const launched = await wired.resolve('launch')
-    // Launch preparation syncs homes; the next picker read must still land on the same key.
     const after = await wired.resolve('read')
 
     expect(launched).toMatchObject({ variable: 'CODEX_HOME', path: expectedPath })

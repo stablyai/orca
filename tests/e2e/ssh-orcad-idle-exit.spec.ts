@@ -1,16 +1,6 @@
-/**
- * A managed orcad that stops is started again by the client, on a real host:
- *
- * 1. Idle: quit the client, the server exits and records an idle stop; a relaunched client
- *    reconnects and the server is running again with that record consumed.
- * 2. Killed, then a reboot: a killed server comes back on the next call and adopts the daemon
- *    that kept its terminal; once both are gone, the next connect starts fresh.
- * 3. A new desktop on the same build finds the server it would deploy recorded active but gone
- *    (#27284): its first connect starts it instead of failing on the stale record.
- *
- * Docker only. `ORCA_E2E_ORCAD_CONVERT_TEMPLATE` names the linux-x64-glibc orcad build, and the
- * client forwards a short test-only quiet period to the server it launches.
- */
+// Recover real managed orcad after idle exit, kill/reboot and stale active-slot records on a fresh desktop (#27284).
+// Reuse surviving daemon PTYs after kill; start fresh after reboot and consume idle-stop records.
+// Docker only: ORCA_E2E_ORCAD_CONVERT_TEMPLATE must be linux-x64-glibc; forward a short test quiet period.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
@@ -285,6 +275,54 @@ test('a killed managed orcad comes back with its terminal, and starts fresh afte
     expect(await callEnvironment(page, environmentId, 'terminal.list', {})).toMatchObject({
       ok: true
     })
+  } finally {
+    if (app) {
+      await session.close(app)
+    }
+    await session.dispose()
+    cleanupDockerSshHostTarget(target)
+  }
+})
+
+// Slim images ship no ps, and after a reboot the slot's recorded PID often names a new process (#34149).
+test('after a reboot on a host without ps, a recycled server PID does not keep the server down', async (// oxlint-disable-next-line no-empty-pattern -- This test owns its isolated app and host.
+{}, testInfo) => {
+  test.skip(
+    HOST !== 'docker' || !TEMPLATE_SOURCE,
+    `Set ${ORCAD_CONVERT_HOST_ENV}=docker and ORCA_E2E_ORCAD_CONVERT_TEMPLATE`
+  )
+  // Deploys a real server, then reconnects after a simulated reboot.
+  test.setTimeout(10 * 60_000)
+  const target = startDockerSshHostTarget(testInfo)
+  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  let app: ElectronApplication | null = null
+  try {
+    const launched = await session.launch()
+    app = launched.app
+    const page = launched.page
+    await waitForSessionReady(page)
+    const { targetId, environmentId } = await connectManagedHost(page, target)
+    await page.evaluate((targetId) => window.api.ssh.disconnect({ targetId }), targetId)
+
+    execDockerSshHostTargetCommand(target, "pkill -KILL -f '/root/[.]orca-remote/' || true")
+    await expect.poll(() => runningOrcadPids(target), { timeout: 60_000 }).toEqual([])
+    const marker = String(800_000 + Math.floor(Math.random() * 100_000))
+    // The stale pid file now names a live process of the same user that is not orcad.
+    execDockerSshHostTargetCommand(
+      target,
+      `setsid sleep ${marker} </dev/null >/dev/null 2>&1 & ` +
+        'for f in /root/.orca-remote/orcad-*/.orcad-pid; do echo $! > "$f"; done; ' +
+        'mv "$(command -v ps)" /usr/local/ps-hidden'
+    )
+    await expect.poll(() => processAlive(target, marker), { timeout: 10_000 }).toBe(true)
+
+    const connected = JSON.parse(await reconnect(page, targetId))
+    expect(connected).toMatchObject({ kind: 'managed', environmentId })
+    expect(connected).not.toHaveProperty('serving')
+    expect(await callEnvironment(page, environmentId, 'terminal.list', {})).toMatchObject({
+      ok: true
+    })
+    expect(processAlive(target, marker)).toBe(true)
   } finally {
     if (app) {
       await session.close(app)

@@ -1,4 +1,4 @@
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import type { ProviderTimelineRequestBody } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { piRpcDialogSchema } from './rpc-protocol'
 
@@ -30,8 +30,8 @@ export function piRpcDialogPresentation(value: unknown): PiRpcDialogPresentation
         title: dialog.title,
         detail: dialog.message ?? null,
         options: [
-          { id: 'yes', label: 'Yes' },
-          { id: 'no', label: 'No' }
+          { id: 'yes', label: 'Yes', intent: 'allow_once' },
+          { id: 'no', label: 'No', intent: 'reject_once' }
         ],
         resolution: pendingResolution
       },

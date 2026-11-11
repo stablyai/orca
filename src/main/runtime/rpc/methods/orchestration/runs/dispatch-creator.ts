@@ -1,23 +1,16 @@
 import type { DispatchCreator } from '../../../../orchestration/db/dispatch-depth'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { orchestrationCallerIdentity } from './run-scope'
 
-/**
- * Identify a CLI caller for nesting-depth purposes.
- *
- * Pane key and process incarnation come from the runtime's dispatch authority
- * rather than the caller's params: remote attachment matching needs the exact
- * incarnation, and a caller cannot be trusted to report its own.
- */
+/** Use runtime-attested pane/incarnation for nesting identity; remote attachment matching requires the exact process and params are untrusted. */
 export function resolveDispatchCreator(
   runtime: OrcaRuntimeService,
   callerHandle: string | undefined,
-  callerSession: OrchestrationSessionCaller | undefined
+  callerSession: OrchestrationEntryCaller | undefined
 ): DispatchCreator {
   if (!callerHandle) {
-    // No declared caller means no resolvable parent. Depth 0 is the same answer
-    // the pre-existing Run-binding check already gives this case.
+    // No declared caller resolves no parent; retain legacy Run-binding depth zero.
     return { kind: 'system' }
   }
   const caller = orchestrationCallerIdentity(runtime, {

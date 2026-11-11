@@ -7,6 +7,7 @@ import { getPRForBranchOutcome } from './client'
 import {
   aliasFromCandidate,
   hostedReviewOptionArgs,
+  isBackground,
   MANUAL_MERGEABILITY_PENDING_REFRESH_MS,
   refreshKey,
   shouldBroadcastQueued,
@@ -18,10 +19,17 @@ import {
 } from './pr-refresh-event-publisher'
 import { PRRefreshPacing } from './pr-refresh-pacing'
 import { PRRefreshQueue } from './pr-refresh-queue'
-import { PRRefreshQueueDrainer } from './pr-refresh-queue-drainer'
+import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
+import {
+  prWatchQueueKey,
+  schedulePRWatchEntry,
+  type PRWatchJob,
+  type PRWatchJobHooks
+} from './pr-refresh-watch-jobs'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 const retry = new PRRefreshRetryState()
 const queue = new PRRefreshQueue((key) => retry.reset(key))
@@ -30,8 +38,42 @@ const visibility = new PRRefreshVisibility()
 const events = new PRRefreshEventPublisher()
 const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
 
-export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
-  events.setOutcomeObserver(observer)
+export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
+  return events.addOutcomeObserver(observer)
+}
+
+export function setPRRefreshRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
+  drainer.setRegistrationCheck(check)
+}
+
+export function setPRWatchJobHooks(hooks: PRWatchJobHooks | null): void {
+  drainer.watchJobs.setHooks(hooks)
+}
+
+/** Queue a watch read; `defer` only moves a queued one later, as another surface just read it. */
+export function schedulePRWatchRead(
+  job: PRWatchJob,
+  candidate: GitHubPRRefreshCandidate,
+  dueAt: number,
+  options: { defer?: boolean } = {}
+): void {
+  schedulePRWatchEntry(queue, job, candidate, dueAt, options.defer === true)
+  drainer.schedule()
+}
+
+export function cancelPRWatchRead(job: PRWatchJob): void {
+  queue.delete(prWatchQueueKey(job))
+}
+
+/** A read a paired server made for a client reaches every observer. It takes no queue ownership,
+ *  so a desktop read in flight for the same checkout keeps its follow-up. */
+export async function runHostedPRRead(
+  candidate: GitHubPRRefreshCandidate,
+  read: () => Promise<PRRefreshOutcome>
+): Promise<PRRefreshOutcome> {
+  const outcome = await read()
+  events.observe(candidate, outcome)
+  return outcome
 }
 
 function removeInvisibleVisibleRefreshes(): void {
@@ -135,7 +177,8 @@ export function _getPRRefreshAliasCountForTests(key: string): number {
 
 export async function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
-  reason: GitHubPRRefreshReason = 'manual'
+  reason: GitHubPRRefreshReason = 'manual',
+  options: { userRefresh?: boolean } = {}
 ): Promise<PRRefreshOutcome> {
   const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
@@ -154,6 +197,21 @@ export async function refreshPRNow(
     }
     events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason })
     return outcome
+  }
+  // E9: renderer fallbacks reach here with automatic reasons; only a manual refresh may start a stopped distro.
+  if (
+    isBackground(reason) &&
+    wslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro) &&
+    (await blockedWslDistroForPath(candidate.repoPath, candidate.localGitOptions?.wslDistro))
+  ) {
+    events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason: 'fresh' })
+    // Local callers keep their cached PR on an upstream error; nothing is recorded or retried here.
+    return {
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'WSL distro is not running',
+      fetchedAt: Date.now()
+    }
   }
 
   const primaryGateUntil = await prRefreshRateLimitPausedUntil(candidate, false)
@@ -198,7 +256,7 @@ export async function refreshPRNow(
     candidate.linkedPRNumber ?? null,
     candidate.connectionId ?? null,
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-    ...hostedReviewOptionArgs(candidate, reason)
+    ...hostedReviewOptionArgs(candidate, reason, options)
   )
   if (!queue.ownsRequest(key, requestSequence)) {
     events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)
@@ -210,7 +268,7 @@ export async function refreshPRNow(
     plannedRetryAt = retry.nextVisibleErrorRetryAt(key, visibility.candidate(key, candidate))
     broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
   }
-  events.observe(candidate, outcome)
+  events.observe(candidate, outcome, aliases)
   retry.noteManualGate(key, broadcastOutcome)
   events.broadcast(
     { aliases, reason, outcome: broadcastOutcome, requestStartedAt },

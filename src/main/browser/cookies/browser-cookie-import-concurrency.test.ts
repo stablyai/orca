@@ -1,0 +1,265 @@
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CookiesGetFilter } from 'electron'
+
+const {
+  appGetPathMock,
+  sessionFromPartitionMock,
+  snapshotClearIdentitiesMock,
+  writeCookieIdentityMock,
+  copyFileWithWindowsRetryMock,
+  setPendingCookieImportMock,
+  clearPendingCookieImportMock
+} = vi.hoisted(() => ({
+  appGetPathMock: vi.fn(),
+  sessionFromPartitionMock: vi.fn(),
+  snapshotClearIdentitiesMock: vi.fn(),
+  writeCookieIdentityMock: vi.fn(),
+  copyFileWithWindowsRetryMock: vi.fn(),
+  setPendingCookieImportMock: vi.fn(),
+  clearPendingCookieImportMock: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  app: { getPath: appGetPathMock },
+  dialog: { showOpenDialog: vi.fn() },
+  session: { fromPartition: sessionFromPartitionMock }
+}))
+// Implement CDP writes so swallowed missing-method errors cannot make ordering assertions pass.
+vi.mock('./browser-cookie-clear-store', () => ({
+  openCookieClearStore: (targetSession: {
+    cookies: {
+      get: (filter: CookiesGetFilter) => Promise<unknown>
+      remove: (url: string, name: string) => Promise<void>
+    }
+  }) => ({
+    get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
+    remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
+    snapshotClearIdentities: snapshotClearIdentitiesMock,
+    restoreClearIdentities: async () => undefined,
+    writeCookieIdentity: writeCookieIdentityMock,
+    dispose: () => undefined
+  })
+}))
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
+  browserSessionRegistry: {
+    setPendingCookieImport: setPendingCookieImportMock,
+    clearPendingCookieImport: clearPendingCookieImportMock
+  }
+}))
+
+vi.mock('../../../shared/windows-retry-file-operations', () => ({
+  copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
+}))
+
+import { importCookiesFromBrowser } from './browser-cookie-import'
+import { importCookiesFromFile } from './imports/import-cookie-file'
+import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
+
+describe('two concurrent imports into one partition', () => {
+  let tmpDir: string
+  let events: string[]
+  let cookiesGetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+  let releaseFirstWrite: () => void
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-concurrency-'))
+    appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
+    events = []
+    copyFileWithWindowsRetryMock
+      .mockReset()
+      .mockImplementation((source: string, destination: string) => {
+        copyFileSync(source, destination)
+      })
+    // A complete snapshot lets each import reach the write whose ordering this test checks.
+    snapshotClearIdentitiesMock
+      .mockReset()
+      .mockImplementation(async (items: { cookie: Record<string, unknown>; url: string }[]) =>
+        items.map(({ cookie: entry, url }) => ({ url, ...entry }))
+      )
+
+    cookiesGetMock = vi.fn().mockResolvedValue([
+      { domain: '.a.example', name: 'old-a', value: 'v', path: '/', secure: true },
+      { domain: '.b.example', name: 'old-b', value: 'v', path: '/', secure: true }
+    ])
+    cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {
+      events.push(`remove:${name}`)
+    })
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve
+    })
+    writeCookieIdentityMock.mockReset().mockImplementation(async (identity: { name: string }) => {
+      events.push(`set:${identity.name}`)
+      // Hold the first write so the second import has an opportunity to interleave.
+      if (identity.name === 'new-a') {
+        await firstWrite
+      }
+    })
+    // Direct cookies.set would drop partition keys.
+    cookiesSetMock = vi.fn()
+
+    // Return the same Session for each partition, matching Electron’s lock identity.
+    const stableSession = {
+      cookies: { get: cookiesGetMock, remove: cookiesRemoveMock, set: cookiesSetMock }
+    }
+    sessionFromPartitionMock.mockReset().mockReturnValue(stableSession)
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  function writeSource(name: string, domain: string): string {
+    const filePath = join(tmpDir, `${name}.json`)
+    writeFileSync(
+      filePath,
+      JSON.stringify([{ domain, name, value: 'imported', path: '/', secure: true }])
+    )
+    return filePath
+  }
+
+  it('does not let the second import touch the jar until the first has finished writing', async () => {
+    const fileA = writeSource('new-a', '.a.example')
+    const fileB = writeSource('new-b', '.b.example')
+
+    const first = importCookiesFromFile(fileA, 'persist:concurrency-test')
+    await vi.waitFor(() => expect(events).toContain('set:new-a'))
+    const second = importCookiesFromFile(fileB, 'persist:concurrency-test')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(events).not.toContain('remove:old-b')
+    expect(events).not.toContain('set:new-b')
+
+    releaseFirstWrite()
+    const [resultA, resultB] = await Promise.all([first, second])
+
+    expect(resultA.ok).toBe(true)
+    expect(resultB.ok).toBe(true)
+    // Assert both imports reached CDP writes; swallowed errors could otherwise preserve ordering.
+    expect(writeCookieIdentityMock).toHaveBeenCalledTimes(2)
+    expect(cookiesSetMock).not.toHaveBeenCalled()
+
+    expect(events).toContain('set:new-a')
+    expect(events).toContain('set:new-b')
+    expect(events.indexOf('set:new-a')).toBeLessThan(events.indexOf('set:new-b'))
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('two concurrent NATIVE imports into one partition', () => {
+  let tmpDir: string
+  let events: string[]
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+  let clearDataMock: ReturnType<typeof vi.fn>
+  let releaseFirstWrite: () => void
+  let platformSpy: { mockRestore: () => void }
+
+  function chromeBrowser(cookiesPath: string) {
+    return {
+      family: 'chrome' as const,
+      label: 'Google Chrome',
+      cookiesPath,
+      keychainService: 'Chrome Safe Storage',
+      keychainAccount: 'Chrome',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default'
+    }
+  }
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-native-concurrency-'))
+    appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
+    events = []
+    copyFileWithWindowsRetryMock.mockReset().mockImplementation(copyFileSync)
+    // Seed in-scope cookies so the second import’s clear would expose a missing lock.
+    snapshotClearIdentitiesMock
+      .mockReset()
+      .mockImplementation(async (items: { cookie: Record<string, unknown>; url: string }[]) =>
+        items.map(({ cookie: entry, url }) => ({ url, ...entry }))
+      )
+    platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve
+    })
+    writeCookieIdentityMock.mockReset().mockImplementation(async (identity: { name: string }) => {
+      events.push(`set:${identity.name}`)
+      if (identity.name === 'first') {
+        await firstWrite
+      }
+    })
+    cookiesSetMock = vi.fn()
+    cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {
+      events.push(`remove:${name}`)
+    })
+    clearDataMock = vi.fn(async () => {
+      events.push('clearData')
+    })
+    const stableSession = {
+      cookies: {
+        get: vi.fn().mockResolvedValue([
+          { domain: '.a.example', name: 'old-a', value: 'v', path: '/', secure: true },
+          { domain: '.b.example', name: 'old-b', value: 'v', path: '/', secure: true }
+        ]),
+        remove: cookiesRemoveMock,
+        set: cookiesSetMock,
+        flushStore: vi.fn(async () => {
+          events.push('flushStore')
+        })
+      },
+      clearData: clearDataMock,
+      getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'native-conc'),
+      setUserAgent: vi.fn()
+    }
+    sessionFromPartitionMock.mockReset().mockReturnValue(stableSession)
+  })
+
+  afterEach(() => {
+    platformSpy.mockRestore()
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('serializes native source preparation and live writes', async () => {
+    const sourceA = join(tmpDir, 'ChromeA', 'Default', 'Network', 'Cookies')
+    const sourceB = join(tmpDir, 'ChromeB', 'Default', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceA, [
+      { domain: '.a.example', name: 'first', value: 'v' }
+    ]).close()
+    createChromiumCookieTestDatabase(sourceB, [
+      { domain: '.b.example', name: 'second', value: 'v' }
+    ]).close()
+    // Existing target databases are never copied by the importer.
+    createChromiumCookieTestDatabase(
+      join(tmpDir, 'userData', 'Partitions', 'native-conc', 'Network', 'Cookies'),
+      []
+    ).close()
+
+    // Native preparation and live writes share the same Session admission.
+    const first = importCookiesFromBrowser(chromeBrowser(sourceA), 'persist:native-conc')
+    const second = importCookiesFromBrowser(chromeBrowser(sourceB), 'persist:native-conc')
+    for (let i = 0; i < 100 && !events.includes('set:first'); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+    expect(events).toContain('set:first')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
+    expect(events).not.toContain('set:second')
+    expect(clearDataMock).not.toHaveBeenCalled()
+
+    releaseFirstWrite()
+    const [resultA, resultB] = await Promise.all([first, second])
+
+    expect(resultA.ok).toBe(true)
+    expect(resultB.ok).toBe(true)
+    expect(writeCookieIdentityMock).toHaveBeenCalledTimes(2)
+    expect(cookiesSetMock).not.toHaveBeenCalled()
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
+    expect(events.indexOf('set:first')).toBeLessThan(events.indexOf('set:second'))
+  })
+})

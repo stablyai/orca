@@ -1,27 +1,29 @@
 import type { JSX, ReactNode } from 'react'
 import { Files, GitBranch, ListChecks, PanelRight } from 'lucide-react'
-import { AI_VAULT_AGENT_LABELS, AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
+import {
+  AI_VAULT_AGENT_LABELS,
+  AI_VAULT_AGENTS
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   getLocalExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../shared/execution-host'
 import { AgentSessionHistoryIcon } from '@/components/right-sidebar/agent-session-history-icon'
-import { AiVaultPanelHeader } from '@/components/right-sidebar/AiVaultPanelHeader'
-import { highlightedSearchSnippet } from '@/components/right-sidebar/AiVaultSearchEvidence'
-import { DEFAULT_AI_VAULT_SESSION_LIMIT } from '@/components/right-sidebar/ai-vault-session-limit'
+import { AiVaultPanelHeader } from '@/components/right-sidebar/ai-vault/panel/AiVaultPanelHeader'
+import { highlightedSearchSnippet } from '@/components/right-sidebar/ai-vault/search/AiVaultSearchEvidence'
+import { DEFAULT_AI_VAULT_SESSION_LIMIT } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-limit'
 import {
   DEFAULT_AI_VAULT_GROUP,
   DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS
-} from '@/components/right-sidebar/ai-vault-view-defaults'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+} from '@/components/right-sidebar/ai-vault/scope/ai-vault-view-defaults'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SessionSearchDemoRow } from './session-search-feature-tip-demo'
 
 const ROW_STAGGER_MS = 90
 
 function noop(): void {}
 
-// The real panel header, inert, with everything but the query held still.
 const DEMO_HEADER_PROPS = {
   hasScanResult: true,
   activeWorktreePath: '/demo',
@@ -63,7 +65,6 @@ function DemoActivityTab({
   )
 }
 
-// Mirrors the right sidebar's tab row so the tip shows where the panel lives.
 function DemoActivityStrip(): JSX.Element {
   return (
     <div className="flex h-10 items-center gap-1 border-b border-sidebar-border px-2">
@@ -87,7 +88,6 @@ function DemoActivityStrip(): JSX.Element {
   )
 }
 
-/** The right sidebar's Agent Session History panel, inert, for a feature tip visual. */
 export function DemoSessionPanel({
   query = '',
   searching = false,
@@ -134,9 +134,9 @@ export function DemoSessionRow({
   isHit: boolean
   focused: boolean
   index: number
-  /** Overlays anchored to the row, such as its actions menu. */
   children?: ReactNode
 }): JSX.Element {
+  const t = useTranslate()
   return (
     <div
       data-focused={focused}
@@ -154,11 +154,9 @@ export function DemoSessionRow({
         <AgentIcon agent={row.agent} size={14} />
         <span className="truncate">{AI_VAULT_AGENT_LABELS[row.agent]}</span>
         <span className="shrink-0 tabular-nums">
-          {translate(
-            'auto.components.right.sidebar.AiVaultSessionRow.messageCount',
-            '{{value0}} msgs',
-            { value0: row.messages }
-          )}
+          {t('auto.components.right.sidebar.AiVaultSessionRow.messageCount', '{{value0}} msgs', {
+            value0: row.messages
+          })}
         </span>
         <span className="shrink-0 text-muted-foreground/55">·</span>
         <span className="shrink-0">{row.age}</span>

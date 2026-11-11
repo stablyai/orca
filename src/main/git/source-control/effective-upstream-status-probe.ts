@@ -1,9 +1,9 @@
-import type { GitUpstreamStatus } from '../../../shared/git-status-types'
+import type { GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
 import {
   getEffectiveGitUpstreamStatus,
-  getGitUpstreamStatusForUpstreamName,
-  splitRemoteBranchName
-} from '../../../shared/git-effective-upstream'
+  getGitUpstreamStatusForUpstreamName
+} from '../../../shared/git/remotes/git-effective-upstream'
+import { splitRemoteBranchName } from '../../../shared/git/remotes/git-remote-branch-name'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
@@ -44,7 +44,6 @@ export async function readOrProbeEffectiveUpstreamStatus(
     }
   }
 
-  // Why: overlapping refreshes at startup — coalesce the upstream probe so a stable missing ref fails once.
   const writeGeneration = getEffectiveUpstreamStatusWriteGeneration(cacheKey)
   const probe = probeOrRevalidateEffectiveUpstreamStatus(
     cacheKey,
@@ -94,11 +93,11 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
       )
       return { status, probedSameNameOriginRef: false }
     } catch (error) {
-      // Why: an aborted probe says nothing about the ref; don't evict the warm name cache.
+      // Aborts prove nothing about ref state; retain the warm name cache.
       if (options.signal?.aborted) {
         throw error
       }
-      // Ref deleted or repo state changed — fall through to a full re-resolve.
+      // Re-resolve after an inconclusive cached-ref probe.
       resolvedUpstreamNameCache.delete(cacheKey)
     }
   }

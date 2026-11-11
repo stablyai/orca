@@ -1,23 +1,16 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
-import {
-  ConnectHostButton,
-  HostRowIcon,
-  NeedsSetupHostIcon,
-  RunTargetRow,
-  SetLocationButton
-} from './RunTargetComboboxRow'
 import {
   buildRunTargetRows,
   getEphemeralVmLabel,
@@ -25,8 +18,10 @@ import {
   RUN_TARGET_ADD_HOST_KEY,
   type EphemeralVmRecipeOption
 } from './run-target-options'
-import { AddHostSubmenuRow, RecipesSubmenuRow } from './RunTargetSubmenus'
+import { AddHostSubmenuRow } from './RunTargetSubmenus'
+import RunTargetRowList from './RunTargetRowList'
 import RunTargetField from './RunTargetField'
+import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
 
 type RunTargetComboboxProps = {
   hostOptions: readonly ProjectHostSetupOption[]
@@ -44,15 +39,7 @@ type RunTargetComboboxProps = {
 
 const ROOT_ATTRIBUTE = 'data-run-target-combobox-root'
 
-/**
- * Run-target picker, built to match the project picker: the field *is* the
- * search, exactly one row is armed and Enter takes it, hovering arms, and the
- * "Add host" row is pinned to the popover edge so it survives every state.
- *
- * Two things the project picker doesn't have: disconnected hosts carry an
- * inline Connect action that must not select the row, and two rows open nested
- * lists (VM recipes, Add host) rather than committing.
- */
+/** Match project-picker navigation; Connect must not select its host, and recipe/Add host rows open nested lists. */
 export default function RunTargetCombobox({
   hostOptions,
   hostValue,
@@ -66,6 +53,7 @@ export default function RunTargetCombobox({
   onConnectHost,
   onSetLocation
 }: RunTargetComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [submenu, setSubmenu] = useState<'recipes' | 'add-host' | null>(null)
   // Track in-flight connects per host so one stalling connect never blocks the others.
   const [connectingHostIds, setConnectingHostIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -80,7 +68,7 @@ export default function RunTargetCombobox({
   const { query, setQuery, open, setOpen, armedKey, arm, moveArm, inputRef, listId, setListNode } =
     combobox
 
-  const { rows, matchedRecipes } = useMemo(
+  const { rows, matchedRecipes, hiddenHostCount } = useMemo(
     () => buildRunTargetRows({ hostOptions, recipes, query, hasAddHost }),
     [hasAddHost, hostOptions, query, recipes]
   )
@@ -94,11 +82,10 @@ export default function RunTargetCombobox({
     readyHostOptions.find(isSelected) ??
     // Why: a selection on a merged machine's other id still belongs to that machine's one row.
     readyHostOptions.find((option) => option.aliasSetups?.some(isSelected)) ??
-    readyHostOptions[0] ??
+    // An unlisted target (e.g. a per-workspace VM) shows "Choose target", never another host's name (#38669).
     null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null
-  // Only a committed selection paints the field; typing replaces it.
   const committed = query.length === 0 && (selectedRecipe !== null || selectedHost !== null)
 
   // Closing also drops any open submenu, which the shared hook doesn't know about.
@@ -133,8 +120,6 @@ export default function RunTargetCombobox({
       try {
         await onConnectHost(option)
       } finally {
-        // Always clear when the connect settles (success, failure, or timeout)
-        // so the row's spinner stops.
         setConnectingHostIds((current) => {
           if (!current.has(option.hostId)) {
             return current
@@ -148,8 +133,7 @@ export default function RunTargetCombobox({
     [connectingHostIds, onConnectHost]
   )
 
-  // Why: reached from the row body, its inline button, and Enter — keep one path
-  // so all three close the picker before handing off to the nested dialog.
+  // Row clicks, inline actions and Enter must all close the picker before opening the setup dialog.
   const setLocation = useCallback(
     (option: NeedsSetupProjectHostOption): void => {
       if (!option.canSetLocation || !onSetLocation) {
@@ -161,7 +145,6 @@ export default function RunTargetCombobox({
     [close, onSetLocation]
   )
 
-  /** Commits a row, or opens its submenu when the row is a submenu row. */
   const activate = useCallback(
     (key: string | null): void => {
       const row = rows.find((candidate) => candidate.key === key)
@@ -173,7 +156,6 @@ export default function RunTargetCombobox({
         return
       }
       if (row.kind === 'needs-setup') {
-        // Not ready: setting the location is the only way forward from the row itself.
         setLocation(row.option)
         return
       }
@@ -199,7 +181,6 @@ export default function RunTargetCombobox({
       if (event.key === 'Escape' && (open || query.length > 0)) {
         event.preventDefault()
         event.stopPropagation()
-        // A submenu closes first, so Escape backs out one layer at a time.
         if (submenu !== null) {
           setSubmenu(null)
           return
@@ -222,9 +203,11 @@ export default function RunTargetCombobox({
   )
 
   const fieldLabel = selectedRecipe
-    ? `${getEphemeralVmLabel()} / ${selectedRecipe.name}`
+    ? `${getEphemeralVmLabel(t)} / ${selectedRecipe.name}`
     : (selectedHost?.label ?? '')
-  const fieldDetail = selectedRecipe ? getRecipeDetail(selectedRecipe) : (selectedHost?.path ?? '')
+  const fieldDetail = selectedRecipe
+    ? getRecipeDetail(selectedRecipe, t)
+    : (selectedHost?.path ?? '')
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -257,8 +240,7 @@ export default function RunTargetCombobox({
         )}
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
-        // The field lives in the anchor, not the content, so Radix would see a
-        // focus/pointer event "outside" and dismiss the instant you tab in.
+        // The search anchor is outside Radix content; preserve interactions inside this control.
         onFocusOutside={(event) => {
           if (isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE)) {
             event.preventDefault()
@@ -273,10 +255,7 @@ export default function RunTargetCombobox({
         <div
           id={listId}
           role="listbox"
-          aria-label={translate(
-            'auto.components.new.workspace.RunTargetCombobox.listLabel',
-            'Run targets'
-          )}
+          aria-label={t('auto.components.new.workspace.RunTargetCombobox.listLabel', 'Run targets')}
           className="flex min-h-0 flex-col"
         >
           <div
@@ -286,98 +265,35 @@ export default function RunTargetCombobox({
           >
             {rows.filter((row) => row.kind !== 'add-host').length === 0 ? (
               <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.NewWorkspaceComposerCard.noRunTargets',
                   'No run targets are ready for this project.'
                 )}
               </p>
             ) : null}
-            {rows.map((row) => {
-              if (row.kind === 'add-host') {
-                return null
-              }
-              const isArmed = armedRow?.key === row.key
-              const optionId = isArmed ? `${listId}-armed` : undefined
-              if (row.kind === 'ready') {
-                return (
-                  <RunTargetRow
-                    key={row.key}
-                    icon={<HostRowIcon hostId={row.option.hostId} />}
-                    label={row.option.label}
-                    detail={row.option.path}
-                    armed={isArmed}
-                    current={selectedRecipe === null && row.option === selectedHost}
-                    optionId={optionId}
-                    onArm={() => {
-                      arm(row.key)
-                      setSubmenu(null)
-                    }}
-                    onCommit={() => selectHost(row.option)}
-                  />
-                )
-              }
-              if (row.kind === 'needs-setup') {
-                const connecting = connectingHostIds.has(row.option.hostId)
-                const hasConnect = Boolean(row.option.connectAction && onConnectHost)
-                const hasSetLocation = Boolean(row.option.canSetLocation && onSetLocation)
-                return (
-                  <RunTargetRow
-                    key={row.key}
-                    icon={
-                      <NeedsSetupHostIcon
-                        hostId={row.option.hostId}
-                        connecting={connecting}
-                        attention={row.option.attention}
-                      />
-                    }
-                    label={row.option.label}
-                    // Why: Connect / Set project location already say the next
-                    // step, so the detail line would only repeat that.
-                    detail={hasConnect || hasSetLocation ? '' : row.option.detail}
-                    armed={isArmed}
-                    current={false}
-                    dimmed
-                    optionId={optionId}
-                    onArm={() => {
-                      arm(row.key)
-                      setSubmenu(null)
-                    }}
-                    onCommit={() => setLocation(row.option)}
-                    trailing={
-                      hasConnect ? (
-                        <ConnectHostButton
-                          connecting={connecting}
-                          onConnect={() => void connectHost(row.option)}
-                        />
-                      ) : hasSetLocation ? (
-                        <SetLocationButton
-                          hostLabel={row.option.label}
-                          onSetLocation={() => setLocation(row.option)}
-                        />
-                      ) : undefined
-                    }
-                  />
-                )
-              }
-              // Recipes submenu row.
-              return (
-                <RecipesSubmenuRow
-                  key={row.key}
-                  open={submenu === 'recipes'}
-                  onOpenChange={(next) => setSubmenu(next ? 'recipes' : null)}
-                  armed={isArmed}
-                  optionId={optionId}
-                  recipes={matchedRecipes}
-                  selectedRecipeId={selectedRecipe?.id ?? null}
-                  onArm={() => {
-                    arm(row.key)
-                    setSubmenu('recipes')
-                  }}
-                  onSelectRecipe={selectRecipe}
-                />
-              )
-            })}
+            <RunTargetRowList
+              rows={rows}
+              armedKey={armedRow?.key ?? null}
+              listId={listId}
+              selectedHost={selectedRecipe === null ? selectedHost : null}
+              selectedRecipeId={selectedRecipe?.id ?? null}
+              matchedRecipes={matchedRecipes}
+              recipesOpen={submenu === 'recipes'}
+              connectingHostIds={connectingHostIds}
+              canConnect={Boolean(onConnectHost)}
+              canSetLocation={Boolean(onSetLocation)}
+              onArm={(key, nextSubmenu) => {
+                arm(key)
+                setSubmenu(nextSubmenu)
+              }}
+              onRecipesOpenChange={(next) => setSubmenu(next ? 'recipes' : null)}
+              onSelectHost={selectHost}
+              onSelectRecipe={selectRecipe}
+              onConnectHost={(option) => void connectHost(option)}
+              onSetLocation={setLocation}
+            />
           </div>
+          <HostListOverflowNote hiddenCount={hiddenHostCount} />
           {hasAddHost ? (
             <AddHostSubmenuRow
               open={submenu === 'add-host'}

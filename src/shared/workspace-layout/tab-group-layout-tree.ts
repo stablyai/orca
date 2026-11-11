@@ -96,12 +96,19 @@ export function removeGroupLayoutLeaf(
   return { ...root, first, second }
 }
 
+/** Builds a record from `previous` with one entry set, or deleted for null; the renderer passes its seam helper. */
+export type ReplaceRecordEntries = <V>(
+  previous: Readonly<Record<string, V>>,
+  replacements: Iterable<readonly [key: string, value: V | null]>
+) => Record<string, V>
+
 export function collapseGroupLayout(
   layoutByWorktree: Record<string, TabGroupLayoutNode>,
   activeGroupIdByWorktree: Record<string, string>,
   worktreeId: string,
   groupId: string,
-  fallbackGroupId?: string | null
+  fallbackGroupId: string | null | undefined,
+  replaceEntries: ReplaceRecordEntries
 ): {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
   activeGroupIdByWorktree: Record<string, string>
@@ -110,20 +117,31 @@ export function collapseGroupLayout(
   if (!currentLayout) {
     return { layoutByWorktree, activeGroupIdByWorktree }
   }
-  const siblingId = findSiblingGroupId(currentLayout, groupId)
-  const collapsed = removeGroupLayoutLeaf(currentLayout, groupId)
-  const nextLayoutByWorktree = { ...layoutByWorktree }
-  if (collapsed) {
-    nextLayoutByWorktree[worktreeId] = collapsed
-  } else {
-    delete nextLayoutByWorktree[worktreeId]
-  }
+  const collapsed = collapseWorktreeGroupLayout(
+    currentLayout,
+    activeGroupIdByWorktree[worktreeId],
+    groupId,
+    fallbackGroupId
+  )
   return {
-    layoutByWorktree: nextLayoutByWorktree,
-    activeGroupIdByWorktree: {
-      ...activeGroupIdByWorktree,
-      [worktreeId]: siblingId ?? fallbackGroupId ?? activeGroupIdByWorktree[worktreeId]
-    }
+    layoutByWorktree: replaceEntries(layoutByWorktree, [[worktreeId, collapsed.layout]]),
+    activeGroupIdByWorktree: replaceEntries(activeGroupIdByWorktree, [
+      [worktreeId, collapsed.activeGroupId]
+    ])
+  }
+}
+
+/** collapseGroupLayout's values for its one worktree: a null layout deletes the entry. */
+export function collapseWorktreeGroupLayout<A extends string | undefined>(
+  currentLayout: TabGroupLayoutNode,
+  currentActiveGroupId: A,
+  groupId: string,
+  fallbackGroupId?: string | null
+): { layout: TabGroupLayoutNode | null; activeGroupId: string | A } {
+  return {
+    layout: removeGroupLayoutLeaf(currentLayout, groupId),
+    activeGroupId:
+      findSiblingGroupId(currentLayout, groupId) ?? fallbackGroupId ?? currentActiveGroupId
   }
 }
 
@@ -142,4 +160,47 @@ export function moveGroupLeafBeside(
     besideGroupId,
     buildSplitNode(besideGroupId, groupId, direction, position)
   )
+}
+
+function holdsGroup(node: TabGroupLayoutNode, groupId: string): boolean {
+  return node.type === 'leaf'
+    ? node.groupId === groupId
+    : holdsGroup(node.first, groupId) || holdsGroup(node.second, groupId)
+}
+
+/** Move beside the smallest branch containing both groups (or the single matching group); null if none contains both. */
+export function moveGroupLeafBesideBranch(
+  root: TabGroupLayoutNode,
+  groupId: string,
+  fromGroupId: string,
+  toGroupId: string,
+  side: 'left' | 'right' | 'up' | 'down'
+): TabGroupLayoutNode | null {
+  const leaf: TabGroupLayoutNode = { type: 'leaf', groupId }
+  const direction = side === 'left' || side === 'right' ? 'horizontal' : 'vertical'
+  const leafFirst = side === 'left' || side === 'up'
+  const besideBranch = (node: TabGroupLayoutNode): TabGroupLayoutNode | null => {
+    if (!holdsGroup(node, fromGroupId) || !holdsGroup(node, toGroupId)) {
+      return null
+    }
+    if (node.type === 'split') {
+      const first = besideBranch(node.first)
+      if (first) {
+        return { ...node, first }
+      }
+      const second = besideBranch(node.second)
+      if (second) {
+        return { ...node, second }
+      }
+    }
+    return {
+      type: 'split',
+      direction,
+      first: leafFirst ? leaf : node,
+      second: leafFirst ? node : leaf,
+      ratio: 0.5
+    }
+  }
+  const rest = removeGroupLayoutLeaf(root, groupId)
+  return rest && besideBranch(rest)
 }

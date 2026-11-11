@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { cn } from '@/lib/utils'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRoadmapBar from './ProjectRoadmapBar'
 import { ProjectTitleCell } from './ProjectCellIdentity'
@@ -46,15 +46,14 @@ export default function ProjectRoadmap({
   onOpenDialog,
   fallback
 }: Props): React.JSX.Element {
+  const intlLocale = useIntlLocale()
+  const t = useTranslate()
   const view = table.selectedView
   const prefersReducedMotion = usePrefersReducedMotion()
-  const locale = getIntlLocale()
-  // Why: the grid lives on UTC calendar days (parseRoadmapDate), so "today"
-  // must be the viewer's LOCAL calendar date mapped to UTC midnight — the raw
-  // instant would shift the marker into the wrong day off UTC.
+  const locale = intlLocale
+  // Map the viewer’s local calendar date to UTC midnight to match the grid’s UTC-day coordinates.
   const [todayMs, setTodayMs] = useState(localTodayAsUtcMidnightMs)
-  // Why: a pane left open across midnight would otherwise keep yesterday's
-  // marker; re-arm after each fire so multi-day sessions stay honest.
+  // Refresh at each local midnight so long-lived panes keep today’s marker current.
   useEffect(() => {
     const now = new Date()
     const nextLocalMidnight = new Date(
@@ -62,8 +61,7 @@ export default function ProjectRoadmap({
       now.getMonth(),
       now.getDate() + 1
     ).getTime()
-    // Why: the +1s pad absorbs timer drift so the callback lands after the
-    // date change, not just before it.
+    // Pad past midnight so timer drift cannot retain yesterday’s date.
     const timer = setTimeout(
       () => setTodayMs(localTodayAsUtcMidnightMs()),
       nextLocalMidnight - now.getTime() + 1000
@@ -99,8 +97,6 @@ export default function ProjectRoadmap({
   const todayPx = roadmapOffsetPx(todayMs, ticks, tickWidth)
   const hasTimeline = source !== null && table.rows.length > 0
 
-  // Why: the interesting part of a roadmap is around now — open there instead
-  // of at the padded left edge, and re-centre when the zoom changes scale.
   const scrollToToday = useCallback(() => {
     const scroller = scrollRef.current
     if (!scroller) {
@@ -135,7 +131,7 @@ export default function ProjectRoadmap({
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex-none border-b border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.github.project.ProjectRoadmap.be52f7b6db',
             'This roadmap view has no date or iteration field to place items on, so Orca is listing them instead.'
           )}
@@ -198,6 +194,7 @@ export default function ProjectRoadmap({
                   {view.groupByFields[0] ? (
                     <ProjectGroupHeader
                       group={group}
+                      groupFieldName={view.groupByFields[0].name}
                       expanded={expanded}
                       bandWidth={bandWidth}
                       onToggle={() =>
@@ -249,25 +246,22 @@ function RoadmapControls({
   onZoom: (zoom: RoadmapZoom) => void
   onToday: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const zoomLabels: Record<RoadmapZoom, string> = {
-    month: translate('auto.components.github.project.ProjectRoadmap.6405e036e0', 'Month'),
-    quarter: translate('auto.components.github.project.ProjectRoadmap.f2b1cabef7', 'Quarter'),
-    year: translate('auto.components.github.project.ProjectRoadmap.b6afc6fe45', 'Year')
+    month: t('auto.components.github.project.ProjectRoadmap.6405e036e0', 'Month'),
+    quarter: t('auto.components.github.project.ProjectRoadmap.f2b1cabef7', 'Quarter'),
+    year: t('auto.components.github.project.ProjectRoadmap.b6afc6fe45', 'Year')
   }
   return (
     <div className="flex min-w-0 flex-none flex-wrap items-center gap-2 border-b border-border/50 px-3 py-1.5 text-xs text-muted-foreground">
       <span className="truncate">
-        {translate(
-          'auto.components.github.project.ProjectRoadmap.343888b143',
-          'Placed by {{value0}}',
-          {
-            value0: placedBy
-          }
-        )}
+        {t('auto.components.github.project.ProjectRoadmap.343888b143', 'Placed by {{value0}}', {
+          value0: placedBy
+        })}
       </span>
       {undatedCount > 0 ? (
         <span className="rounded-full border border-border/50 px-1.5 text-[10px]">
-          {translate(
+          {t(
             'auto.components.github.project.ProjectRoadmap.6a088a5da1',
             '{{value0}} without dates',
             { value0: undatedCount }
@@ -277,11 +271,11 @@ function RoadmapControls({
       <div className="ml-auto flex items-center gap-1">
         <Button type="button" size="xs" variant="outline" onClick={onToday}>
           <CalendarClock className="size-3" />
-          {translate('auto.components.github.project.ProjectRoadmap.86eebd6020', 'Today')}
+          {t('auto.components.github.project.ProjectRoadmap.86eebd6020', 'Today')}
         </Button>
         <div
           role="group"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.github.project.ProjectRoadmap.0bb1c1bc07',
             'Timeline zoom'
           )}
@@ -320,13 +314,14 @@ function RoadmapHeaderRow({
   locale: string
   todayPx: number
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="sticky top-0 z-20 flex border-b border-border/60 bg-background/95 backdrop-blur">
       <div
         className="sticky left-0 z-30 shrink-0 border-r border-border/50 bg-background px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
         style={{ width: LABEL_WIDTH_PX }}
       >
-        {translate('auto.components.github.project.ProjectRoadmap.e304235879', 'Item')}
+        {t('auto.components.github.project.ProjectRoadmap.e304235879', 'Item')}
       </div>
       <div className="relative flex">
         {ticks.map((tick, index) => {
@@ -371,6 +366,7 @@ function RoadmapLane({
   locale: string
   onOpenDialog?: (row: GitHubProjectRow) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const statusValue = colorFieldId ? row.fieldValuesByFieldId[colorFieldId] : undefined
   const chipColor = statusValue?.kind === 'single-select' ? statusValue.color : null
   const left = span ? roadmapOffsetPx(span.startMs, ticks, tickWidth) : 0
@@ -391,7 +387,7 @@ function RoadmapLane({
         <ProjectTitleCell row={row} onOpenDialog={() => onOpenDialog?.(row)} />
         {span ? null : (
           <span className="shrink-0 text-[10px] text-muted-foreground">
-            {translate('auto.components.github.project.ProjectRoadmap.e077c79083', 'No dates')}
+            {t('auto.components.github.project.ProjectRoadmap.e077c79083', 'No dates')}
           </span>
         )}
       </div>

@@ -10,13 +10,14 @@ import type {
   SshTarget,
   SshTargetUpdateInput,
   PortForwardEntry,
+  UnrestoredPortForward,
   EnrichedDetectedPort
 } from '../../shared/ssh-types'
 import {
   admitSshConnectionStateForAuthorityReconciliation,
   admitSshDetectedPorts
 } from '../../shared/ssh-retained-payload-admission'
-import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../shared/file-access/filesystem-path-flavor'
 import type { PreloadApi } from '../api-types'
 
 export const sshApi = {
@@ -91,6 +92,13 @@ export const sshApi = {
     return () => ipcRenderer.removeListener('ssh:state-changed', listener)
   },
 
+  onTargetRemoved: (callback: (data: { targetId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { targetId: string }): void =>
+      callback(data)
+    ipcRenderer.on('ssh:target-removed', listener)
+    return () => ipcRenderer.removeListener('ssh:target-removed', listener)
+  },
+
   addPortForward: (args: {
     targetId: string
     localPort: number
@@ -114,15 +122,29 @@ export const sshApi = {
   listPortForwards: (args?: { targetId?: string }): Promise<PortForwardEntry[]> =>
     ipcRenderer.invoke('ssh:listPortForwards', args),
 
+  listUnrestoredPortForwards: (args: { targetId: string }): Promise<UnrestoredPortForward[]> =>
+    ipcRenderer.invoke('ssh:listUnrestoredPortForwards', args),
+
+  removeSavedPortForward: (args: {
+    targetId: string
+    localPort: number
+    remoteHost: string
+    remotePort: number
+  }): Promise<void> => ipcRenderer.invoke('ssh:removeSavedPortForward', args),
+
   listDetectedPorts: async (args: { targetId: string }): Promise<EnrichedDetectedPort[]> =>
     admitSshDetectedPorts(await ipcRenderer.invoke('ssh:listDetectedPorts', args)),
 
   onPortForwardsChanged: (
-    callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
+    callback: (data: {
+      targetId: string
+      forwards: PortForwardEntry[]
+      unrestored?: UnrestoredPortForward[]
+    }) => void
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      data: { targetId: string; forwards: PortForwardEntry[] }
+      data: { targetId: string; forwards: PortForwardEntry[]; unrestored?: UnrestoredPortForward[] }
     ) => callback(data)
     ipcRenderer.on('ssh:port-forwards-changed', handler)
     return () => ipcRenderer.removeListener('ssh:port-forwards-changed', handler)

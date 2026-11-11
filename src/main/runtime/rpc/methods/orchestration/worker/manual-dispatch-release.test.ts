@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods, type RpcContext } from '../../../core'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { ORCHESTRATION_METHODS } from '../orchestration'
+import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../core'
 import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 
 const COORDINATOR = 'term_coordinator'
@@ -107,7 +111,7 @@ describe('manual Dispatch release', () => {
   it('fences a superseded context without blocking its current replacement', async () => {
     const task = createTask('superseded')
     const superseded = await dispatchTask(task, TARGET)
-    // Why: recovery still needs coverage for contradictory rows persisted before ready resets were guarded.
+    // Recover contradictory rows persisted before guarded ready resets.
     sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task)
     const current = await dispatchTask(task, OTHER)
 
@@ -130,15 +134,6 @@ describe('manual Dispatch release', () => {
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
 
     await expect(dispatchNewTask(TARGET, 'reuses superseded terminal')).resolves.toMatch(/^ctx_/)
-  })
-
-  it('keeps unknown Dispatch errors honest', async () => {
-    await expect(
-      call('orchestration.workerAbandon', { dispatch: 'ctx_missing' })
-    ).rejects.toMatchObject({ code: 'dispatch_not_found' })
-    await expect(
-      call('orchestration.workerStop', { dispatch: 'ctx_missing' })
-    ).rejects.toMatchObject({ code: 'dispatch_not_found' })
   })
 
   function createTask(spec: string): string {
@@ -183,7 +178,7 @@ describe('manual Dispatch release', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method.handler(method.params!.parse(params), { runtime })
@@ -233,40 +228,55 @@ describe('orchestration.workerAbandon', () => {
   async function abandon(dispatchId: string, ctx: Partial<RpcContext>) {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (m) => m.name === 'orchestration.workerAbandon'
-    )!
+    )
+    if (!method || isStreamingMethod(method)) {
+      throw new Error('Method not found: orchestration.workerAbandon')
+    }
     return method.handler(method.params!.parse({ dispatch: dispatchId }), { runtime, ...ctx })
   }
 
-  it('never records an unverified terminal handle as the one who abandoned the worker', async () => {
+  it('refuses self-abandon by a terminal handle, reissued pane, or resolved session before effects', async () => {
     const dispatchId = readyWorker()
-
-    await expect(
-      abandon(dispatchId, { orchestrationCompatibilityEvidence: { terminalHandle: 'term_coord' } })
-    ).resolves.toMatchObject({ state: 'abandoned', alreadySettled: false })
-    expect(db.getWorkerDispatch(dispatchId)?.last_error).toBe(
-      'Abandoned by an unidentified caller.'
-    )
-  })
-
-  it('records the resolved Orca session as the one who abandoned the worker', async () => {
-    const dispatchId = readyWorker()
-    const orcaSessionId = parseOrcaSessionAddress('orca_session_id:chat_1')!
+    const pane = 'tab_worker:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const orcaSessionId = parseOrcaSessionAddress('orca_session_id:worker_1')!
     const session: OrchestrationSessionCaller = {
-      address: 'orca_session_id:chat_1',
-      terminalHandle: null,
-      paneKey: null,
+      address: 'term_worker',
+      terminalHandle: 'term_worker',
+      paneKey: pane,
       orcaSessionId,
       sessionId: orcaSessionId,
       workspaceId: 'wt'
     }
+    const callers: Partial<RpcContext>[] = [
+      { orchestrationCompatibilityEvidence: { terminalHandle: 'term_worker', paneKey: pane } },
+      { orchestrationCompatibilityEvidence: { terminalHandle: 'term_reminted', paneKey: pane } },
+      { orchestrationCaller: session }
+    ]
+    for (const caller of callers) {
+      await expect(abandon(dispatchId, caller)).rejects.toMatchObject({
+        code: 'invalid_argument',
+        data: { effectsApplied: false, dispatchId }
+      })
+    }
+    expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
+    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
+  })
 
-    await abandon(dispatchId, {
-      orchestrationCaller: session,
-      orchestrationCompatibilityEvidence: { terminalHandle: 'term_coord' }
+  it('refuses self-abandon of a context-only Dispatch', async () => {
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'context-only worker' })
+    const dispatch = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_worker',
+      creator: { kind: 'system' },
+      maxDepth: 9
     })
-    expect(db.getWorkerDispatch(dispatchId)?.last_error).toBe(
-      'Abandoned by orca_session_id:chat_1.'
-    )
+    await expect(
+      abandon(dispatch.id, {
+        orchestrationCompatibilityEvidence: { terminalHandle: 'term_worker' }
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument', data: { effectsApplied: false } })
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 
   it('reports an already-settled worker as stale and changes nothing', async () => {

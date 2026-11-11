@@ -1,20 +1,23 @@
-// Serializer: the layout model and what is kept beside it, written as today's session partition so
-// older builds read the same documents. Every redundant field is derived from the one model.
+// Serialize the model and beside records into session documents older builds understand; derive redundant fields from one source.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
-import type { ClosedTerminalTabTombstonesByTabId } from '../closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../tab-types'
-import type { TerminalTab } from '../terminal-tab-types'
-import type { PersistedOpenFile, WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalTab } from './terminal-tab-types'
+import type {
+  PersistedOpenFile,
+  WorkspaceSessionState
+} from '../workspace-session/workspace-session-state-types'
 import { pickStoredFields } from './stored-record-fields'
-import { pruneGroupLayout } from '../workspace-session-terminal-tab-close'
+import { pruneGroupLayout } from '../workspace-session/workspace-session-terminal-tab-close'
 import {
   BLANK_BROWSER_TAB_STATE,
   CARRIED_SESSION_FIELDS,
   FACT_SESSION_FIELDS,
   VIEW_SESSION_FIELDS
 } from './workspace-layout-beside'
+import { editorFileKey, editorTabNamesFile } from './workspace-layout-editor-tab-file'
 import type { LoadedWorkspaceLayout } from './workspace-layout-load-types'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import { paneKeyOf, tabsInOrder, type WorkspaceLayout } from './workspace-layout-model'
@@ -42,12 +45,11 @@ function saveWorkspace(
     workspaceKey: key,
     worktreeId,
     hostId: loaded.layout.hostId,
-    editorFiles: workspace.editorFiles,
+    workspace,
     leaves: workspace.leaves ?? {},
     facts,
     view
   }
-  // Rows and tab-bar entries follow the one tab order, as the rules and older readers expect.
   const ordered = tabsInOrder(workspace)
   const tabs = [...ordered, ...workspace.tabs.filter((tab) => !ordered.includes(tab))]
   const rows = tabs
@@ -90,7 +92,7 @@ function saveWorkspace(
   if (groups.length > 0) {
     session.unifiedTabs[key] = entries
     session.tabGroups[key] = groups
-    // Today's writer persists only groups holding tabs, and a group tree naming only those.
+    // Persist only nonempty groups and tree nodes naming them, matching existing writers.
     const persistedIds = new Set(groups.map((group) => group.id))
     session.tabGroupLayouts[key] = pruneGroupLayout(workspace.groupLayout, persistedIds) ?? {
       type: 'leaf',
@@ -98,17 +100,15 @@ function saveWorkspace(
     }
   }
   if (workspace.editorFiles) {
-    // One preview fact per editor tab; today's writer stores the file's copy only when true.
-    const previewFiles = new Set(
-      workspace.tabs.flatMap((tab) =>
-        tab.kind === 'editor' && tab.isPreview ? [tab.entityId] : []
-      )
-    )
+    // Tabs own preview state; persist the file’s copy only when at least one tab is preview.
+    const previewTabs = workspace.tabs.filter((tab) => tab.kind === 'editor' && tab.isPreview)
     session.openFilesByWorktree[key] = workspace.editorFiles.map((file): PersistedOpenFile => ({
       ...file,
       worktreeId,
-      ...(previewFiles.has(file.filePath) ? { isPreview: true } : {}),
-      ...view.editorDrafts[key]?.[file.filePath]
+      ...(previewTabs.some((tab) => editorTabNamesFile(workspace, tab.entityId, file))
+        ? { isPreview: true }
+        : {}),
+      ...view.editorDrafts[key]?.[editorFileKey(file)]
     }))
   }
   if (workspace.browserTabs) {
@@ -140,8 +140,9 @@ function saveWorkspaceRecords({
         if (leaf?.incarnationId !== undefined) {
           incarnations[paneKey] = leaf.incarnationId
         }
-        if (leaf?.sleeping) {
-          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...leaf.sleeping }
+        const record = leaf?.sleeping ?? leaf?.resume
+        if (record) {
+          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...record }
         }
       }
     }
@@ -187,6 +188,9 @@ export function saveWorkspaceLayout(loaded: LoadedWorkspaceLayout): WorkspaceSes
       : {}),
     ...(records.clientHostedBrowserPagesByWorkspace
       ? { clientHostedBrowserPagesByWorktree: records.clientHostedBrowserPagesByWorkspace }
+      : {}),
+    ...(records.closedTerminalPanesByPaneKey
+      ? { closedTerminalPanesByPaneKey: records.closedTerminalPanesByPaneKey }
       : {}),
     ...(legacy.topologyRevisionByRepoId
       ? { terminalTopologyRevisionByRepoId: legacy.topologyRevisionByRepoId }

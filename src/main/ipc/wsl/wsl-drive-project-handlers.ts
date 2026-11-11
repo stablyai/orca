@@ -1,0 +1,70 @@
+/**
+ * IPC for converting a WSL-runtime project on a Windows drive to Windows Git (D1c). Refused while
+ * the internal WSL hosts gate is closed or off Windows, before anything is read.
+ */
+import { ipcMain } from 'electron'
+import type { Store } from '../../persistence/loading-store/store'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
+import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
+import { readWorktreeLinks } from './wsl-drive-worktree-links'
+import { resolveLocalProjectRuntimeForProject } from '../../workspaces/execution-host/local-project-runtime-resolution'
+import { wslHostsOptedIn } from '../../wsl/host-lifecycle/wsl-host-gate'
+import {
+  convertWslDriveProjectToWindowsGit,
+  previewWslDriveProjectWindowsGit,
+  type WslDriveProjectDeps
+} from '../../wsl/filesystem/wsl-drive-project-windows-git'
+
+export const WSL_DRIVE_PROJECT_HANDLER_CHANNELS = [
+  'wslDriveProject:preview',
+  'wslDriveProject:convert'
+] as const
+
+export function registerWslDriveProjectHandlers(store: Store, runtime: OrcaRuntimeService): void {
+  for (const channel of WSL_DRIVE_PROJECT_HANDLER_CHANNELS) {
+    ipcMain.removeHandler(channel)
+  }
+  registerWslDriveUncConversionHandlers(store, runtime)
+  ipcMain.handle('wslDriveProject:preview', async (_event, projectId: unknown) =>
+    previewWslDriveProjectWindowsGit(gatedDeps(store), requireId(projectId))
+  )
+  ipcMain.handle('wslDriveProject:convert', async (_event, args: unknown) => {
+    const request = typeof args === 'object' && args !== null ? args : {}
+    const alignLineEndings = 'alignLineEndings' in request && request.alignLineEndings === true
+    return convertWslDriveProjectToWindowsGit(
+      gatedDeps(store),
+      requireId('projectId' in request ? request.projectId : undefined),
+      { alignLineEndings }
+    )
+  })
+}
+
+function requireId(value: unknown): string {
+  if (typeof value !== 'string' || !value) {
+    throw new Error('wsl_drive_project_invalid_args')
+  }
+  return value
+}
+
+function gatedDeps(store: Store): WslDriveProjectDeps {
+  // Opt-in, so the setting off or a block learned this run stops a conversion before it starts.
+  if (process.platform !== 'win32' || !wslHostsOptedIn(store.getSettings())) {
+    throw new Error('wsl_drive_project_unavailable')
+  }
+  return {
+    getProjects: () => store.getProjects(),
+    getRepos: () => store.getRepos(),
+    resolveRuntime: (project) => {
+      const runtime = resolveLocalProjectRuntimeForProject(store, project)
+      if (!runtime) {
+        throw new Error('wsl_drive_project_runtime_unresolved')
+      }
+      return runtime
+    },
+    // Host Git on purpose: this checks whether Git for Windows can take the project over.
+    runWindowsGit: async (args, cwd) =>
+      (await gitExecFileAsync(args, { cwd, hostGit: true })).stdout,
+    readWorktreeLinks
+  }
+}

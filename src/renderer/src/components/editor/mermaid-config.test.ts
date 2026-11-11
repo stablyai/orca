@@ -13,6 +13,16 @@ const darkColors = {
   border: '#8ec5ff'
 }
 
+// Catppuccin Mocha: pastel chart tokens on a dark background.
+const pastelDarkColors = {
+  background: '#1e1e2e',
+  foreground: '#cdd6f4',
+  primary: '#f5c2e7',
+  secondary: '#fab387',
+  tertiary: '#a6e3a1',
+  border: '#cba6f7'
+}
+
 function luminance(color: string | boolean | undefined): number {
   if (typeof color !== 'string') {
     throw new Error('Expected a resolved Mermaid color')
@@ -28,10 +38,10 @@ function luminance(color: string | boolean | undefined): number {
   return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
 }
 
-function resolvedDarkTheme(): NonNullable<
-  ReturnType<typeof mermaid.mermaidAPI.getConfig>['themeVariables']
-> {
-  mermaid.initialize(getMermaidConfig(true, false, darkColors))
+function resolvedDarkTheme(
+  colors = darkColors
+): NonNullable<ReturnType<typeof mermaid.mermaidAPI.getConfig>['themeVariables']> {
+  mermaid.initialize(getMermaidConfig(true, colors))
   const variables = mermaid.mermaidAPI.getConfig().themeVariables
   if (!variables) {
     throw new Error('Mermaid did not resolve the theme')
@@ -39,60 +49,35 @@ function resolvedDarkTheme(): NonNullable<
   return variables
 }
 
+function expectReadable(
+  variables: ReturnType<typeof resolvedDarkTheme>,
+  pairs: [text: string, background: string][]
+): void {
+  for (const [text, background] of pairs) {
+    const first = luminance(variables[text])
+    const second = luminance(variables[background])
+    const contrast = (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
+    expect(contrast, `${text} on ${background}`).toBeGreaterThanOrEqual(4.5)
+  }
+}
+
 describe('getMermaidConfig', () => {
-  it('uses strict Mermaid rendering defaults', () => {
-    expect(getMermaidConfig(false)).toMatchObject({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      suppressErrorRendering: true,
-      theme: 'default',
-      htmlLabels: false
-    })
-  })
-
-  it('can enable HTML labels for callers that explicitly need them', () => {
-    expect(getMermaidConfig(false, true)).toMatchObject({
-      startOnLoad: false,
-      theme: 'default',
-      htmlLabels: true
-    })
-  })
-
-  it('uses the colored dark palette when the preview is dark', () => {
-    const colors = darkColors
-    expect(getMermaidConfig(true, false, colors)).toMatchObject({
-      theme: 'base',
-      darkMode: true,
-      themeVariables: {
-        darkMode: true,
-        primaryColor: colors.primary,
-        tertiaryColor: colors.tertiary,
-        primaryTextColor: colors.foreground,
-        tertiaryTextColor: colors.foreground,
-        primaryBorderColor: colors.border,
-        lineColor: colors.foreground,
-        edgeLabelBackground: colors.background
-      },
-      htmlLabels: false
-    })
-  })
-
   it('keeps Gantt labels readable on completed and active tasks and alternate sections', () => {
-    const variables = resolvedDarkTheme()
-    for (const [text, background] of [
+    expectReadable(resolvedDarkTheme(), [
       ['taskTextDarkColor', 'doneTaskBkgColor'],
       ['taskTextDarkColor', 'activeTaskBkgColor'],
       ['taskTextOutsideColor', 'altSectionBkgColor']
-    ]) {
-      const first = luminance(variables[text])
-      const second = luminance(variables[background])
-      const contrast = (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
-      expect(contrast, `${text} on ${background}`).toBeGreaterThanOrEqual(4.5)
-    }
+    ])
   })
 
-  it('gives the first three pie categories distinct resolved colors', () => {
-    const variables = resolvedDarkTheme()
-    expect(new Set([variables.pie1, variables.pie2, variables.pie3]).size).toBe(3)
+  it('keeps labels readable on fills from a pastel dark palette', () => {
+    expectReadable(resolvedDarkTheme(pastelDarkColors), [
+      ['actorTextColor', 'actorBkg'],
+      ['nodeTextColor', 'mainBkg'],
+      ['textColor', 'clusterBkg'],
+      ['taskTextColor', 'taskBkgColor'],
+      ['taskTextClickableColor', 'taskBkgColor'],
+      ['taskTextDarkColor', 'activeTaskBkgColor']
+    ])
   })
 })

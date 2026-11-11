@@ -1,18 +1,5 @@
-/**
- * E2E test for newly-added worktrees sorting correctly in "Recent" mode.
- *
- * Why this exists:
- *   Before the fix in `src/main/ipc/worktrees.ts`, a worktree that existed
- *   on disk but had no persisted WorktreeMeta (the case for folder-mode
- *   repos and pre-existing worktrees discovered when adding a new git repo)
- *   fell back to `lastActivityAt: 0`. "Recent" sort orders by
- *   `lastActivityAt` descending, so those worktrees landed dead last —
- *   even though the user had just added them.
- *
- *   The `worktrees:list` / `worktrees:listAll` handlers now stamp
- *   `lastActivityAt = Date.now()` on first discovery. This test locks that
- *   behavior in end-to-end.
- */
+// New folder/discovered worktrees without WorktreeMeta formerly fell back to lastActivityAt:0 and sorted last in Recent.
+// Require worktrees:listDetected to stamp first discovery without restamping later refreshes.
 
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -27,10 +14,7 @@ async function addFolderRepo(page: Page, folderPath: string): Promise<string> {
     if (!store) {
       throw new Error('window.__store is unavailable')
     }
-    // Why: go through the public addNonGitFolder path (not window.api.repos.add
-    // directly) so the test exercises the same flow the "Add Folder" dialog
-    // uses. That path fetches worktrees internally, which is what triggers the
-    // discovery stamp we're asserting about.
+    // Use public addNonGitFolder so internal worktree fetch triggers discovery exactly as Add Folder does.
     const repo = await store.getState().addNonGitFolder(p)
     if (!repo) {
       throw new Error('addNonGitFolder returned null')
@@ -54,9 +38,7 @@ async function readFolderWorktreeLastActivity(page: Page, repoId: string): Promi
 }
 
 test.describe('Worktree Recent Sort', () => {
-  // Why: keep fixture tracking scoped to this describe block. Module-level
-  // shared arrays race if the file ever flips to parallel mode or another
-  // describe is added.
+  // Scope fixture tracking to this describe so future parallel tests/describes cannot share mutable cleanup arrays.
   const createdFolderFixtures: string[] = []
 
   function createFolderFixture(): string {
@@ -73,9 +55,7 @@ test.describe('Worktree Recent Sort', () => {
   })
 
   test.afterEach(() => {
-    // Why: mkdtempSync fixtures leak unless we clean them up explicitly —
-    // matches the mkdtempSync/rmSync pairing used in helpers/orca-app.ts
-    // and helpers/orca-restart.ts.
+    // Clean mkdtemp fixtures explicitly, matching app/restart fixtures.
     while (createdFolderFixtures.length) {
       const dir = createdFolderFixtures.pop()
       if (dir) {
@@ -92,17 +72,12 @@ test.describe('Worktree Recent Sort', () => {
     const repoId = await addFolderRepo(orcaPage, folderPath)
     const lastActivityAt = await readFolderWorktreeLastActivity(orcaPage, repoId)
 
-    // Why: the exact failure mode before the fix was `lastActivityAt === 0`
-    // (the fallback in mergeWorktree when meta is undefined). Asserting
-    // `> 0` captures that regression precisely without coupling to the
-    // wall-clock of the main process, which would introduce cross-process
-    // clock-skew flakiness in CI.
+    // Require >0 to catch the original zero fallback without cross-process clock-skew comparisons.
     expect(lastActivityAt).toBeGreaterThan(0)
   })
 
   test('leaves lastActivityAt stable across repeated list refreshes', async ({ orcaPage }) => {
-    // Why: the stamp fires only on *first* discovery. Re-fetching must not
-    // overwrite it, or every sidebar refresh would reshuffle Recent order.
+    // Refetch must retain the first-discovery stamp or sidebar refresh reshuffles Recent.
     const folderPath = createFolderFixture()
     const repoId = await addFolderRepo(orcaPage, folderPath)
 

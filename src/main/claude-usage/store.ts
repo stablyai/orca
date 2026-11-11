@@ -1,4 +1,4 @@
-import { claudeTokenSessions } from '../usage/agent-token-usage'
+import { claudeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { app } from 'electron'
 import { join } from 'node:path'
 import type {
@@ -11,29 +11,25 @@ import type {
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
-import type { AutomationRunUsage } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
+import type { Store } from '../persistence/loading-store/store'
 import type { ClaudeUsagePersistedState } from './types'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
-} from '../usage/usage-scan-worker-spawn'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+} from '../usage/scan-worker/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-aggregation'
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
 import { resolveAutomationRunUsage } from './claude-usage-automation-attribution'
 import { parseClaudeUsageReport, serializeClaudeUsageReport } from './persisted-usage-report'
 
-// Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
-// caches either lack ownership or used narrower keys and can under/over-count
-// after fork reclaim (#8006). v6 adds the 1-hour cache-write split, which older
-// caches never recorded, so their cost estimates stay stuck at the 5m rate (#15993).
+// Pre-v6 totals lack stable fork ownership or the 1-hour cache-write split and must be rescanned.
 // v7 stores protected column checkpoints on the worker and a separately protected report.
 const SCHEMA_VERSION = 7
 
-// Why: capture the path after configureDevUserDataPath() but before app.setName()
-// mutates Electron's derived userData location, matching the persistence/store pattern.
+// Capture after configureDevUserDataPath(), before app.setName() changes the derived userData path.
 let _claudeUsageFile: string | null = null
 
 function getDefaultState(): ClaudeUsagePersistedState {

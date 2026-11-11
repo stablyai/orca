@@ -1,4 +1,4 @@
-import type { TerminalRunFacts } from '../runtime/terminal-run-facts'
+import type { TerminalRunFacts } from '../runtime/terminal/lifecycle/terminal-run-facts'
 
 type PromptClaim = {
   digest: string
@@ -10,7 +10,6 @@ type PromptClaim = {
   expiry: ReturnType<typeof setTimeout>
 }
 
-/** Authorizes one startup operation against current execution-owner facts. */
 export class OpenCodeStartupPromptClaims {
   private readonly pending = new Map<string, PromptClaim>()
 

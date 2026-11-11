@@ -1,10 +1,10 @@
 import { useCallback, useEffect } from 'react'
-import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
+import { isOrcaCliAvailableOnPath } from '@/lib/skills/installation/agent-skill-cli-prerequisite'
 import {
   ORCHESTRATION_SETUP_STATE_EVENT,
-  hasOrchestrationSetupMarker,
+  isOrchestrationSetupEnabled,
   isOrchestrationSetupDismissed
-} from '@/lib/orchestration-setup-state'
+} from '@/components/orchestration/setup/orchestration-setup-state'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 
 type FloatingTerminalOrchestrationVisibilityInput = Pick<
@@ -22,14 +22,16 @@ export function useFloatingTerminalOrchestrationVisibility({
       setShowOrchestrationSetup(false)
       return
     }
-    if (!hasOrchestrationSetupMarker()) {
+    if (!isOrchestrationSetupEnabled()) {
       setShowOrchestrationSetup(true)
       return
     }
     try {
       const status = await window.api.cli.getInstallStatus()
       if (mountedRef.current) {
-        setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
+        const cliRegistrationUnavailable =
+          status?.state === 'unsupported' && status.unsupportedReason === 'launch_mode_unavailable'
+        setShowOrchestrationSetup(!cliRegistrationUnavailable && !isOrcaCliAvailableOnPath(status))
       }
     } catch {
       if (mountedRef.current) {

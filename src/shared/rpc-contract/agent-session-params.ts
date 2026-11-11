@@ -1,18 +1,19 @@
-import { z } from 'zod'
-import { isValidTerminalTabId } from '../terminal-tab-id'
+import * as z from 'zod'
+import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
 import {
   RESUMABLE_TUI_AGENTS,
-  getAgentResumeArgv,
   hasUnsafeProviderSessionIdChars
-} from '../agent-session-resume'
-import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
-import type {
-  RuntimeCreateAgentSessionRequest,
-  RuntimeEnsureAgentSessionRequest
-} from '../agent-session-host-authority'
-import { isTuiAgent } from '../tui-agent-config'
-import { RESTORE_SPAWN_INTENTS } from '../host-spawn-admission'
-import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
+} from '../agent-session/lifecycle/agent-session-resume'
+import { getAgentResumeArgv } from '../agent-launch/startup/agent-resume-argv'
+import { AGENT_EFFORT_LEVEL } from '../agent-launch/choices/agent-effort-level'
+import {
+  parseAgentSessionOperationTimestamp,
+  type RuntimeCreateAgentSessionRequest,
+  type RuntimeEnsureAgentSessionRequest
+} from '../agent-session/agent-session-host-authority'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { RESTORE_SPAWN_INTENTS } from '../terminal/pty/admission/spawn-admission-contract'
+import { AgentLaunchAccountEnv } from '../agent-launch/startup/agent-launch-account-env'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 
@@ -110,7 +111,8 @@ export const ProviderSession = z
           Buffer.byteLength(value, 'utf8') <= MAX_TRANSCRIPT_PATH_BYTES,
         'Invalid transcript path'
       )
-      .optional()
+      .optional(),
+    effort: z.string().regex(AGENT_EFFORT_LEVEL, 'Invalid effort level').optional()
   })
   .strict()
 
@@ -129,6 +131,9 @@ export const AutomaticEnsure = z
 export const ExplicitEnsure = z
   .object({
     kind: z.literal('explicit'),
+    resumeOrigin: z.literal('saved').optional(),
+    /** The pane a saved restore resumes; `placement` names the pane it opens in. */
+    restoreSourcePaneKey: z.string().min(1).max(300).optional(),
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: ProviderSession,
@@ -183,8 +188,11 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
       .optional(),
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
+    sessionOptions: z.record(z.string(), z.string()).optional(),
+    extraAgentArgs: z.string().optional(),
     launchPreferences: LaunchPreferences.optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
+    trustWorktreeId: WorktreeSelector.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
     viewMode: z.enum(['terminal', 'chat']).optional(),

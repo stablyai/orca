@@ -1,19 +1,17 @@
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-caller-codes'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   captureWorkerOutputArchive,
   type WorkerOutputArchiveCapture
-} from '../../../../orchestration/worker-output-archive'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
-import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
+} from '../../../../orchestration/workers/archives/worker-output-archive'
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { WorkerReleaseReceipt } from './worker-release-completion'
+import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 import { archiveSummary } from './worker-terminal-resource-presentation'
+import { captureWorkerResumeSession } from './worker-resume-session-capture'
 
-/**
- * Freezes a releasing worker's output, or ends the release `release_unknown` when a structured
- * worker's running session cannot be verified: that is no evidence still on its way, so leaving
- * the request `requested` would have every reconcile retry it forever. A fresh request retries it.
- */
+/** Freeze release output; unverifiable structured sessions finish release_unknown instead of retrying forever as requested. A fresh request may retry. */
 export async function captureWorkerReleaseArchive(
   args: Parameters<typeof captureWorkerOutputArchive>[0] & {
     db: OrchestrationDb
@@ -21,6 +19,7 @@ export async function captureWorkerReleaseArchive(
   }
 ): Promise<{ captured: WorkerOutputArchiveCapture } | { receipt: WorkerReleaseReceipt }> {
   const { db, resource, ...capture } = args
+  captureWorkerResumeSession(capture.runtime, db, resource, capture.attachedAtMs)
   try {
     return { captured: await captureWorkerOutputArchive(capture) }
   } catch (error) {

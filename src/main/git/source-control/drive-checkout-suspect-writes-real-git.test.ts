@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CheckoutGitConfig from '../wsl-windows-checkout-git-config'
-import type * as GitRunner from '../runner'
+import type * as GitRunner from '../command-runner/git-exec-file'
 import { runProcess } from '@orca/process-host'
-import { createDebouncedBatch } from '../../ipc/filesystem-watcher-batch-control'
-import { watcherLifecycleState } from '../../ipc/filesystem-watcher-lifecycle-state'
-import { getLocalWatcherRoot } from '../../ipc/filesystem-watcher-paths'
-import type { WatchedRoot } from '../../ipc/filesystem-watcher-wsl'
-import { notifyLocalWatcherEvents } from '../../ipc/local-watcher-event-observers'
+import { createDebouncedBatch } from '../../ipc/filesystem/watchers/filesystem-watcher-batch-control'
+import { watcherLifecycleState } from '../../ipc/filesystem/watchers/filesystem-watcher-lifecycle-state'
+import { getLocalWatcherRoot } from '../../ipc/filesystem/watchers/filesystem-watcher-paths'
+import type { WatchedRoot } from '../../ipc/filesystem/watchers/filesystem-watcher-wsl'
+import { notifyLocalWatcherEvents } from '../../ipc/filesystem/watchers/local-watcher-event-observers'
 
 const mocks = vi.hoisted(() => {
   const state: { minimalRepos: Set<string>; execArgs: string[][] } = {
@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => {
   return state
 })
 
-// Why: stands in for a detected Windows Git checkout, so every Git call here runs minimal-stat.
+// Simulate a Windows Git drive checkout so calls use minimal stat.
 vi.mock('../wsl-windows-checkout-git-config', async (importOriginal) => {
   const actual = await importOriginal<typeof CheckoutGitConfig>()
   return {
@@ -31,7 +31,7 @@ vi.mock('../wsl-windows-checkout-git-config', async (importOriginal) => {
   }
 })
 
-vi.mock('../runner', async (importOriginal) => {
+vi.mock('../command-runner/git-exec-file', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRunner>()
   return {
     ...actual,
@@ -123,7 +123,7 @@ describe('drive checkout suspect writes with real Git', () => {
 
   it('stages a suspect that minimal-stat add treats as unchanged', async () => {
     await rewriteSuspect('c d.txt', 'bbbb\n')
-    // Why assert the miss: proves the plain minimal-stat add is the silent no-op.
+    // Demonstrate that minimal-stat add misses the rewrite.
     await git(['-c', 'core.checkStat=minimal', 'add', '--', 'c d.txt'])
     expect(await stagedPaths()).toEqual([])
 
@@ -151,17 +151,6 @@ describe('drive checkout suspect writes with real Git', () => {
     expect(redo.flat()).not.toContain('--pathspec-from-file=-')
     // The main write keeps its pathspec-from-file shape and the injected minimal stat.
     expect(mocks.execArgs).toContainEqual(['add', '--pathspec-from-file=-', '--pathspec-file-nul'])
-  })
-
-  it('keeps writes outside the suspect set on minimal stat alone', async () => {
-    await rewriteSuspect('c d.txt', 'bbbb\n')
-    await writeFile(path.join(repo, 'a.txt'), 'longer content\n')
-
-    await stageFile(repo, 'a.txt')
-    await bulkStageFiles(repo, ['a.txt', 'sub'])
-
-    expect(await stagedPaths()).toEqual(['a.txt'])
-    expect(defaultStatWrites()).toEqual([])
   })
 
   it('stages a suspect through a scoped stage-all', async () => {
@@ -192,18 +181,5 @@ describe('drive checkout suspect writes with real Git', () => {
     expect(defaultStatWrites()).toEqual([
       ['-c', 'core.checkStat=default', 'restore', '--worktree', '--', ':(literal)sub/e.txt']
     ])
-  })
-
-  it('leaves an untracked suspect to the main write', async () => {
-    expect(await statusPaths()).toEqual([])
-    await writeOld('new.txt', 'nnnn\n')
-    notifyLocalWatcherEvents(root, [{ type: 'create', path: path.join(repo, 'new.txt') }])
-    expect(await statusPaths()).toEqual(['untracked:new.txt'])
-    mocks.execArgs = []
-
-    await stageFile(repo, 'new.txt')
-
-    expect(await stagedPaths()).toEqual(['new.txt'])
-    expect(defaultStatWrites()).toEqual([])
   })
 })

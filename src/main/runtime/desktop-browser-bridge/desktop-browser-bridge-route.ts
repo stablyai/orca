@@ -1,8 +1,4 @@
-/**
- * Decides, on orcad, whether a browser RPC from this host's own `orca` CLI goes to an attached
- * desktop. Only the local CLI is forwarded: a paired client calling orcad is never bounced back
- * to a desktop.
- */
+/** Only orcad-local CLI browser calls forward to desktops; paired clients must never bounce back. */
 import { BrowserError } from '../../browser/browser-error'
 import {
   DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
@@ -10,13 +6,15 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   isDesktopBrowserBridgeMethod
 } from '../../../shared/desktop-browser-bridge-protocol'
+import { BROWSER_EXPECT_URL_UNSUPPORTED_CODE } from '../../../shared/browser/client-hosting/browser-expected-url'
+import { browserWaitRequestTimeoutMs } from '../../../shared/browser-wait-timeout'
 import type { RpcCallerIdentity } from '../rpc/rpc-caller-identity'
+import { assertClientOpenableUrl } from '../browser/client-pages/browser-client-page-opening'
 import type { DesktopBrowserBridgeRegistry } from './desktop-browser-bridge-registry'
 
 export type DesktopBrowserBridgeRoute = { handled: false } | { handled: true; result: unknown }
 
 const DEFAULT_TIMEOUT_MS = 60_000
-const WAIT_MARGIN_MS = 30_000
 const MAX_TIMEOUT_MS = 10 * 60_000
 
 export async function routeDesktopBrowserBridgeRpc(options: {
@@ -37,7 +35,9 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   ) {
     return { handled: false }
   }
-  const forwarded = isDesktopBrowserBridgeMethod(method)
+  // Map open-url to older desktops' tabCreate surface, preserving scope/URL/focus rules.
+  const forwardedMethod = method === 'browser.openUrl' ? 'browser.tabCreate' : method
+  const forwarded = isDesktopBrowserBridgeMethod(forwardedMethod)
   if (!options.registry.hasAttachment()) {
     if (options.localBrowserAvailable || !forwarded) {
       return { handled: false }
@@ -57,25 +57,44 @@ export async function routeDesktopBrowserBridgeRpc(options: {
     )
   }
   const params: Record<string, unknown> = isRecord(options.params) ? { ...options.params } : {}
+  if (method === 'browser.openUrl') {
+    assertClientOpenableUrl(String(params.url))
+  }
   let workspaceId: string | undefined
-  // Why resolve here: only orcad knows this host's selectors (path:, branch:, active).
+  // Only orcad can resolve its host's path/branch/active selectors.
   if (typeof params.worktree === 'string' && params.worktree.length > 0) {
     workspaceId = (await options.resolveWorkspace(params.worktree)).id
     params.worktree = `id:${workspaceId}`
   } else {
     delete params.worktree
   }
+  // After every await: forward picks the newest attachment, which may have changed by now.
+  if (params.expectUrl !== undefined && !options.registry.newestAttachmentEnforcesExpectUrl()) {
+    throw new BrowserError(
+      BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
+      'The Orca desktop sharing its browser cannot check --expect-url. Update Orca on that desktop or drop the flag.'
+    )
+  }
+  if (
+    forwardedMethod === 'browser.tabAnnotations' &&
+    !options.registry.newestAttachmentReadsTabAnnotations()
+  ) {
+    throw new BrowserError(
+      DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
+      'The Orca desktop sharing its browser cannot read tab notes. Update Orca on that desktop.'
+    )
+  }
   const result = await options.registry.forward(
-    { method, params, ...(workspaceId ? { workspaceId } : {}) },
-    { timeoutMs: forwardTimeoutMs(method, params), signal: options.signal }
+    { method: forwardedMethod, params, ...(workspaceId ? { workspaceId } : {}) },
+    { timeoutMs: forwardTimeoutMs(forwardedMethod, params), signal: options.signal }
   )
   return { handled: true, result }
 }
 
 function forwardTimeoutMs(method: string, params: Record<string, unknown>): number {
-  const requested = typeof params.timeout === 'number' ? params.timeout : 0
-  const base = method === 'browser.wait' ? requested + WAIT_MARGIN_MS : DEFAULT_TIMEOUT_MS
-  return Math.min(Math.max(base, DEFAULT_TIMEOUT_MS), MAX_TIMEOUT_MS)
+  return method === 'browser.wait'
+    ? Math.min(browserWaitRequestTimeoutMs(params.timeout), MAX_TIMEOUT_MS)
+    : DEFAULT_TIMEOUT_MS
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,29 +1,27 @@
 import type {
-  AgentSessionOptionsResult,
-  AgentSessionSlashCommand
-} from '../../shared/agent-session-wire'
-import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionLifecycleEvent,
   AgentSessionDispatchOutcome
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
+import { ReaderPauseHolds } from '../jsonl-rpc/reader-pause-holds'
 import {
   JsonlRpcAgentConnection,
   type JsonlRpcAgentConnectionOptions
 } from '../jsonl-rpc/agent-connection'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import { piExitFailure } from './rpc-exit-classification'
 import { PiRpcTurns } from './rpc-turns'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
-import { piRpcStateSchema } from './rpc-protocol'
-import { applyPiRpcSessionOption, readPiRpcCommands, readPiRpcSessionOptions } from './rpc-options'
-import {
-  unpickedSessionConfiguredChoice,
-  withLiveCatalogListing,
-  type AgentModelCatalogLiveListing
-} from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
+import { PiRpcOptionObservations, type PiRpcOptionWrite } from './rpc-options'
+import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { PiRpcSessionStartup } from './rpc-session-startup'
+import { PiHistoryCapture, type PiHistoryCaptureDeps } from './rpc-history-capture'
+import { closeFailedPiSession } from './rpc-failure-cleanup'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,
@@ -36,10 +34,11 @@ export type PiRpcConnection = Pick<
   | 'closed'
   | 'rootVerdict'
   | 'processless'
+  | 'spawnAbsence'
   | 'lastCloseResult'
   | 'onExit'
 >
-export type PiRpcSessionDeps = {
+export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
   openConnection?: (
     launch: ProviderProcessLaunch,
     handlers: JsonlRpcAgentConnectionOptions
@@ -51,35 +50,48 @@ export type PiRpcSessionDeps = {
     fence: number
     outcome: AgentSessionDispatchOutcome
   }) => void
-  onIdle: (input: { sessionId: string }) => void
   logger: StructuredAgentSessionLogger
 }
 
-/** One child owns its transport, dialect, dialogs and timeline, including shutdown retries. */
 export class PiRpcSession {
   readonly connection: PiRpcConnection
   readonly lane: JsonlRpcTimelineLane
   readonly turns: PiRpcTurns
   readonly dialogs: PiRpcDialogCallbacks
   readonly selected = new Map<string, string>()
-  private startCatalogListing?: AgentModelCatalogLiveListing
-  readonly skipped: string[] = []
-  commands?: AgentSessionSlashCommand[]
-  options?: AgentSessionOptionsResult
+  /** Hold sends from handover through settlement. */
+  readonly heldSends = new Set<string>()
+  readonly optionProof = {
+    current: new Map<string, string>(),
+    writes: new Map<string, PiRpcOptionWrite>()
+  }
+  private optionObservations = new PiRpcOptionObservations(
+    this.optionProof,
+    () => !this.requestedClose && !this.failure && !this.connection.closed
+  )
+  readonly startup: PiRpcSessionStartup
+  readonly history = PiHistoryCapture.forSession(this, () => this.deps)
+  openedLink: AgentSessionProviderHandleLink | null = null
   requestedClose = false
   private publishedExit = false
-  private failedCause?: Error
+  /** What ended this child, once something did. */
+  failure?: Error
+  private readonly startupFailure = Promise.withResolvers<never>()
   private exitDelivery: Promise<void> = Promise.resolve()
   private releaseAfterExit?: () => void
+  private readonly reading = new ReaderPauseHolds<'lane' | 'journal'>(() => this.connection)
+  private unbindReadingControl?: () => void
 
   constructor(
     readonly input: StructuredAgentSessionAcquireInput,
     readonly generation: string,
     launch: ProviderProcessLaunch,
     private readonly deps: PiRpcSessionDeps,
+    private readonly resolvedLaunch: PiRpcResolvedLaunch,
     /** A new Pi session starts on its config's model; a resumed or forked one keeps its own. */
     readonly resolvesConfig = false
   ) {
+    void this.startupFailure.promise.catch(() => {})
     const sink = input.events && providerTimelineSink(input.events)
     if (!sink) {
       throw new Error('Pi structured chat requires the shared timeline sink')
@@ -90,8 +102,7 @@ export class PiRpcSession {
       agent: 'pi',
       generation,
       namespace: input.identity.sessionId,
-      pauseReading: () => this.connection?.pauseReading(),
-      resumeReading: () => this.connection?.resumeReading(),
+      ...this.reading.control('lane'),
       onFailed: (reason) => this.fail(new Error(reason)),
       onInputAccepted: (clientMessageId) =>
         this.settle(clientMessageId, {
@@ -104,11 +115,13 @@ export class PiRpcSession {
       generation,
       send: (frame) => this.connection.send(frame),
       request: (command, params, options) => this.connection.request(command, params, options),
+      prepareStateObservation: () =>
+        this.optionObservations.prepareState((current) =>
+          this.startup.reportOptions(generation, current)
+        ),
       settled: (id, outcome) => this.settle(id, outcome),
-      idle: () => {
-        this.dialogs.cancelAll()
-        deps.onIdle({ sessionId: input.identity.sessionId })
-      },
+      idle: () => this.dialogs.cancelAll(),
+      turnEnded: () => this.history.turnEnded(),
       failed: (error) => this.fail(error),
       diagnostic: (error) =>
         deps.logger.warn('Pi context usage could not be read', {
@@ -120,16 +133,17 @@ export class PiRpcSession {
     this.dialogs = new PiRpcDialogCallbacks(
       this.lane,
       (frame) => this.connection.send(frame),
-      (error) => this.fail(error)
+      (error) => this.fail(error),
+      resolvedLaunch.backgroundWork?.directory ?? null
     )
     this.connection = (
       deps.openConnection ?? ((spec, handlers) => new JsonlRpcAgentConnection(spec, handlers))
     )(launch, {
-      ...(input.onOutput ? { onOutput: input.onOutput } : {}),
       onRecord: (frame) =>
         frame.type === 'extension_ui_request'
           ? this.dialogs.receive(frame)
           : this.turns.receive(frame),
+      onOversizedEvent: (type, prefix) => this.turns.skipped(type, prefix),
       onClose: (error) => this.fail(error),
       onDiagnostic: (message) =>
         deps.logger.warn(message, { scope: 'pi-rpc', sessionId: input.identity.sessionId }),
@@ -145,91 +159,77 @@ export class PiRpcSession {
           .finally(() => this.releaseAfterExit?.())
       }
     })
+    this.startup = new PiRpcSessionStartup(
+      input,
+      this.connection,
+      deps,
+      resolvesConfig,
+      (state) => {
+        this.lane.apply(this.turns.context.setModel(state.model ?? undefined, Date.now()))
+        this.optionObservations.seed(state)
+      },
+      () => this.failure,
+      this.startupFailure.promise,
+      () => this.optionObservations.prepare()
+    )
   }
 
-  async start(): Promise<string> {
-    const state = piRpcStateSchema.parse(await this.connection.request('get_state'))
-    this.lane.apply(this.turns.context.setModel(state.model ?? undefined, Date.now()))
-    // Keys a restore sent, whether or not Pi took them.
-    const picked = new Set<string>()
-    for (const [key, value] of Object.entries(this.input.options ?? {})) {
-      if (!['model', 'effort'].includes(key)) {
-        this.skipped.push(key)
-        continue
-      }
-      picked.add(key)
-      try {
-        await applyPiRpcSessionOption(this.connection, this.selected, key, value)
-      } catch (error) {
-        this.skipped.push(key)
-        this.deps.logger.warn('Pi rejected a saved option', {
-          scope: 'pi-option-restore',
-          sessionId: this.input.identity.sessionId,
-          key,
-          error
-        })
-      }
-    }
-    this.options = await readPiRpcSessionOptions(this.connection)
-    this.startCatalogListing = withLiveCatalogListing(
-      this.options,
-      unpickedSessionConfiguredChoice({
-        resolvesConfig: this.resolvesConfig,
-        picked,
-        ...this.options
-      })
-    ).catalogListing
+  async submit(...args: Parameters<PiRpcTurns['submit']>): ReturnType<PiRpcTurns['submit']> {
+    const [clientMessageId] = args
+    this.heldSends.add(clientMessageId)
+    let outcome: AgentSessionDispatchOutcome | undefined
     try {
-      this.commands = (await readPiRpcCommands(this.connection)).commands
-    } catch (error) {
-      this.deps.logger.warn('Pi commands could not be read', {
-        scope: 'pi-commands',
-        sessionId: this.input.identity.sessionId,
-        error
-      })
+      return (outcome = await this.turns.submit(...args))
+    } finally {
+      if (outcome?.state !== 'admitted') {
+        this.heldSends.delete(clientMessageId)
+      }
     }
-    return state.sessionFile
   }
 
-  /** What this child listed at its start, with what its config resolved; the host saves it once. */
-  get startListing(): AgentModelCatalogLiveListing | undefined {
-    return this.startCatalogListing
+  async open(signal: AbortSignal): Promise<StructuredAgentSessionProviderOpenResult> {
+    this.startup.assertLive(signal)
+    const result = await this.startup.run(this.resolvedLaunch, signal)
+    this.startup.assertLive(signal)
+    // Startup replies stay readable; journal pressure paces only later output.
+    if (!this.publishedExit) {
+      this.unbindReadingControl = this.input.events?.bindReadingControl?.(
+        this.reading.control('journal')
+      )
+    }
+    this.openedLink = result.link ?? null
+    this.history.start(this.startup.historyAnchor)
+    this.startup.reportAfterOpen(this.generation, result.reportedOptions)
+    return result
   }
 
-  /** What the child reports now; only the start says what its config resolved. */
+  /** A read projects this child's held observations and successful controls. */
   async readOptions() {
-    return withLiveCatalogListing(await readPiRpcSessionOptions(this.connection))
+    return this.optionObservations.read()
   }
 
   async close(requested = true): ReturnType<PiRpcConnection['close']> {
     this.requestedClose ||= requested
     this.dialogs.cancelAll()
-    return this.connection.close()
+    const result = await this.connection.close()
+    if (result.killDelivered && result.root !== 'exited') {
+      await this.exit(new Error('Pi writer killed'))
+    }
+    return result
   }
 
   fail(error: Error): void {
-    this.failedCause ??= error
+    this.failure ??= error
+    this.startupFailure.reject(this.failure)
     this.deps.logger.error('Pi RPC session failed', {
       scope: 'pi-rpc',
       sessionId: this.input.identity.sessionId,
       error
     })
-    void this.close(false)
-      .then((result) => {
-        if (result.root !== 'exited') {
-          this.deps.logger.warn('Pi process exit is unverifiable', {
-            scope: 'pi-stop',
-            sessionId: this.input.identity.sessionId
-          })
-        }
-      })
-      .catch((cause: unknown) =>
-        this.deps.logger.error('Pi process cleanup failed', {
-          scope: 'pi-stop',
-          sessionId: this.input.identity.sessionId,
-          error: cause
-        })
-      )
+    if (!this.openedLink) {
+      return
+    }
+    closeFailedPiSession(this, this.deps.logger)
   }
 
   drainObservedExit(): Promise<void> {
@@ -256,43 +256,51 @@ export class PiRpcSession {
       return
     }
     this.publishedExit = true
-    this.dialogs.cancelAll()
+    const observedAt = Date.now()
+    this.input.events?.observeExit?.(this.heldSends, observedAt)
+    const cause = (this.failure ??= error)
+    this.dialogs.close()
     this.turns.end()
-    this.lane.finalize()
-    this.lane.apply([
-      { type: 'session.ended', verdict: { state: 'interrupted', completedAt: Date.now() } }
-    ])
-    this.lane.flush()
+    // The lane is sealed once finalized, so the end event travels with the final transfer.
+    this.lane.finalize({
+      type: 'session.ended',
+      verdict: { state: 'interrupted', completedAt: observedAt }
+    })
     let timer: ReturnType<typeof setTimeout> | undefined
-    try {
-      await Promise.race([
-        this.lane.drained(),
-        new Promise<void>((resolve) => {
-          timer = setTimeout(() => {
-            this.deps.logger.warn('Pi final timeline did not drain before exit publication', {
-              scope: 'pi-exit-drain',
-              sessionId: this.input.identity.sessionId
-            })
-            resolve()
-          }, 2_000)
-          timer.unref()
-        })
-      ])
-    } finally {
+    await Promise.race([
+      this.lane.drained(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(() => {
+          this.deps.logger.warn('Pi final timeline did not drain before exit publication', {
+            scope: 'pi-exit-drain',
+            sessionId: this.input.identity.sessionId
+          })
+          resolve()
+        }, 2_000)
+        timer.unref()
+      })
+    ]).finally(() => {
       clearTimeout(timer)
-    }
+      // Final transfer must not treat an already received backlog as startup work.
+      this.unbindReadingControl?.()
+    })
     this.deps.onLifecycle({
       type: 'ended',
+      ...(this.connection.lastCloseResult?.killDelivered && this.connection.rootVerdict !== 'exited'
+        ? { deathEvidenceKind: 'kill-delivered' as const }
+        : {}),
       sessionId: this.input.identity.sessionId,
       fence: this.input.fence,
       acquisitionGeneration: this.generation,
-      observedAt: Date.now(),
+      observedAt,
       cause: this.requestedClose ? 'requested-close' : 'unexpected-exit',
-      reason: (this.failedCause ?? error).message
+      reason: cause.message,
+      failure: piExitFailure(error, cause)
     })
   }
 
   private settle(clientMessageId: string, outcome: AgentSessionDispatchOutcome): void {
+    this.heldSends.delete(clientMessageId)
     this.deps.onSettled({
       sessionId: this.input.identity.sessionId,
       clientMessageId,

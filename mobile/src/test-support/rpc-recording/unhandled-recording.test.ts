@@ -1,13 +1,34 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { runRecording } from './run-recording'
 import { recordUnhandledRejections } from './unhandled-recording'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import type { RecordingScenario } from './recording-scenario'
 
-// No golden records an unhandled rejection any more, so these are the only things pinning the
-// capture: the helper, and its wiring into a recording, where a dropped hookup would pass every
-// golden.
+// No corpus golden has detached rejections; pin capture and recording integration directly.
 describe('recordUnhandledRejections', () => {
+  it('rolls back partial listener setup and preserves its thrown identity before a fresh registration', () => {
+    const before = process.rawListeners('unhandledRejection')
+    const originalError = new Error('actual listener setup')
+    const remove = vi.spyOn(process, 'removeAllListeners').mockImplementationOnce(() => {
+      throw originalError
+    })
+    try {
+      let caught: { error: unknown } | undefined
+      try {
+        recordUnhandledRejections(() => {})
+      } catch (error) {
+        caught = { error }
+      }
+      expect(caught?.error).toBe(originalError)
+      expect(process.rawListeners('unhandledRejection')).toEqual(before)
+      const stop = recordUnhandledRejections(() => {})
+      stop()
+      expect(process.rawListeners('unhandledRejection')).toEqual(before)
+    } finally {
+      remove.mockRestore()
+    }
+  })
+
   it('records a detached rejection as an effect and restores the prior listeners', async () => {
     const before = process.rawListeners('unhandledRejection')
     const effects: { name: string; value: unknown }[] = []
@@ -53,7 +74,7 @@ describe('recordUnhandledRejections', () => {
       vitestRecordingScheduler()
     )
     const effects = (id: string) =>
-      recording.checkpoints.find((checkpoint) => checkpoint.id === id)?.observation.effects
+      recording.checkpoints.find((checkpoint) => checkpoint.id === id)!.observation.effects
     expect(effects('after-fire')).toMatchObject([
       { name: 'unhandled-rejection', value: { message: 'detached in an action' } }
     ])

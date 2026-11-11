@@ -1,16 +1,20 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import type { EditorFileDropDestination } from './editor-file-drop-destination'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import {
   createOsFileDropSequence,
   useOsFileDropOwner,
   type OsFileDropSequence
 } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import {
-  captureEditorFileDropOpen,
-  editorGroupStillExists,
-  type EditorFileDropDestination
-} from './editor-dropped-file-open'
+  hasWorkspaceFileDragType,
+  readWorkspaceFileDragPaths,
+  readWorkspaceFileDragSource,
+  getWorkspaceFileDragRejectionMessage
+} from '@/lib/files/drop/workspace-file-drag'
+import { fileOwnerUnresolvedMessage } from '@/lib/files/access/file-owner-runtime-target'
+import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
+import { captureEditorFileDropOpen, editorGroupStillExists } from './editor-dropped-file-open'
 
 type GroupSequenceEntry = { sequence: OsFileDropSequence; owners: number }
 
@@ -55,14 +59,14 @@ function useEditorGroupFileDropSequence(key: string): OsFileDropSequence {
   )
 }
 
-/** Opens OS files dropped on this group's tab strip or editor area in that group's worktree. */
 export function useEditorGroupFileDropOwner({
   worktreeId,
   groupId
 }: EditorFileDropDestination): (root: HTMLElement | null) => void {
   const rootRef = useRef<HTMLElement | null>(null)
+  const detachWorkspaceOwner = useRef<(() => void) | null>(null)
   const sequence = useEditorGroupFileDropSequence(`${worktreeId}\0${groupId ?? ''}`)
-  return useOsFileDropOwner(rootRef, {
+  const attachOsOwner = useOsFileDropOwner(rootRef, {
     consumer: 'main-reader',
     sequence,
     captureDestination: () => captureEditorFileDropOpen({ worktreeId, groupId }),
@@ -76,4 +80,51 @@ export function useEditorGroupFileDropOwner({
       await destination?.(prepared.paths)
     }
   })
+  return useCallback(
+    (root: HTMLElement | null) => {
+      detachWorkspaceOwner.current?.()
+      detachWorkspaceOwner.current = null
+      attachOsOwner(root)
+      if (!root) {
+        return
+      }
+      const claimWorkspaceDrag = (event: DragEvent): boolean => {
+        if (!event.dataTransfer || !hasWorkspaceFileDragType(event.dataTransfer)) {
+          return false
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        event.dataTransfer.dropEffect = 'copy'
+        return true
+      }
+      const onDrop = (event: DragEvent): void => {
+        if (!claimWorkspaceDrag(event) || !event.dataTransfer) {
+          return
+        }
+        const result = readWorkspaceFileDragPaths(event.dataTransfer, {
+          collapseDescendantsForMove: false
+        })
+        if (result.status === 'rejected') {
+          toast.error(getWorkspaceFileDragRejectionMessage(result.reason))
+          return
+        }
+        const source = readWorkspaceFileDragSource(event.dataTransfer)
+        if (!source) {
+          toast.error(fileOwnerUnresolvedMessage())
+          return
+        }
+        const open = captureEditorFileDropOpen({ worktreeId, groupId }, source)
+        sequence.deliveryTail = sequence.deliveryTail
+          .then(() => open(result.paths))
+          .catch((error: unknown) => console.error('Workspace file drop failed', error))
+      }
+      root.addEventListener('dragover', claimWorkspaceDrag, true)
+      root.addEventListener('drop', onDrop, true)
+      detachWorkspaceOwner.current = () => {
+        root.removeEventListener('dragover', claimWorkspaceDrag, true)
+        root.removeEventListener('drop', onDrop, true)
+      }
+    },
+    [attachOsOwner, worktreeId, groupId, sequence]
+  )
 }

@@ -4,7 +4,7 @@ import { getOwnedTempStagingRoot } from '../../src/main/window/owned-temp-stagin
 import {
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY
-} from '../../src/shared/protocol-version'
+} from '../../src/shared/file-access/files-runtime-capabilities'
 import { test, expect } from './helpers/orca-app'
 import { openFileExplorer } from './helpers/file-explorer'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'

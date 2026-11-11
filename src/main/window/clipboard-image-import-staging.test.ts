@@ -19,8 +19,8 @@ import { ClipboardImageImportStaging } from './clipboard-image-import-staging'
 import { getOwnedTempStagingRoot } from './owned-temp-staging-root'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../shared/clipboard-image'
 import type { ClipboardImageImport } from '../../shared/clipboard-image-import'
-import { importOneSource } from '../ipc/filesystem-import-local'
-import { stageOneSourceForRuntimeUpload } from '../ipc/filesystem-runtime-upload-staging'
+import { importOneSource } from '../ipc/filesystem/filesystem-import-local'
+import { stageOneSourceForRuntimeUpload } from '../ipc/filesystem/filesystem-runtime-upload-staging'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()

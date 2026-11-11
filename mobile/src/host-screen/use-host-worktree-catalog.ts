@@ -1,50 +1,82 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
+import { WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/worktree-runtime-capabilities'
+import { readWorktreeFirstPage } from '../worktree/worktree-catalog-first-page'
+import type { Worktree } from '../worktree/workspace-list-types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AppState } from 'react-native'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { useFocusEffect } from 'expo-router'
-import { setCachedWorktrees } from '../cache/worktree-cache'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
-import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
-import { useWorktreeResync } from '../transport/use-worktree-resync'
+import { useQueryClient } from '@tanstack/react-query'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { RpcIncompatibleReplyError } from '../transport/rpc/rpc-incompatible-reply-error'
 import { startHostWorktreeRefresh } from '../worktree/host-worktree-refresh'
+import type { HostSidebarFeedTriggers } from './host-sidebar-feed-connection'
 import { areWorktreeListsEqual } from '../worktree/worktree-list-snapshot'
 import {
   clearConfirmedActiveWorktreeIdentity,
   retainLiveSleptWorktreeIdentities
 } from '../worktree/worktree-host-row-identity'
 import { savePinnedIds } from '../storage/preferences'
-import type { FetchHostRepoMetadata } from './use-host-repo-metadata'
 import type { HostScreenState } from './use-host-screen-state'
-import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
+import { relaysToServers } from '../worktree/execution-host-scoped-rpc-client'
+import { NO_SERVER_WORKSPACES } from '../worktree/server-workspaces'
+import { useRelayHosts } from '../worktree/relay-hosts-feed'
+import { WorktreeCatalogReadError } from '../worktree/worktree-catalog-snapshot-client'
+import { useHostQuery } from '../query/host-query'
+import { hostReadClient } from '../query/host-read-client'
+import { hostScopeKey } from '../query/host-query-key'
+import { isHostNotConnectedError } from '../query/host-query-errors'
+import { refetchHostQueryAfterInFlight } from '../query/host-event-router'
 import {
-  applyServerWorkspaces,
-  fetchServerWorkspaces,
-  NO_SERVER_WORKSPACES
-} from '../worktree/server-workspaces'
+  isHostListQuery,
+  HOST_LIST_BACKSTOP_POLL_MS,
+  HOST_LIST_POLL_MS,
+  HOST_LIST_TARGET,
+  hostServerWorkspacesInput,
+  hostServerWorkspacesQuery,
+  hostWorktreeCatalogKey,
+  hostWorktreeCatalogQuery,
+  NO_HOST_LIST_INPUT
+} from './host-list-queries'
+
+// Shown verbatim so broken remote hosts stay diagnosable instead of looking empty (STA-3123).
+function catalogErrorCode(error: unknown): string | null {
+  if (isHostNotConnectedError(error)) {
+    return null
+  }
+  if (error instanceof WorktreeCatalogReadError) {
+    return error.code
+  }
+  return error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
+}
 
 export function useHostWorktreeCatalog(args: {
   client: RpcClient | null
   connState: ConnectionState
   embedded: boolean
-  fetchRepoMetadata: FetchHostRepoMetadata
   hostCapabilities: readonly string[]
+  // Whether the host answered its status: capabilities are unknown, not absent, until it has.
+  hostStatusReadable: boolean
   hostId: string | undefined
+  sidebarFeed: HostSidebarFeedTriggers | null
   state: HostScreenState
-  syncViewSettingsFromDesktop: () => Promise<void>
+  syncViewSettingsFromDesktop: (options?: { resend?: boolean }) => Promise<void>
 }) {
   const {
     client,
     connState,
     embedded,
-    fetchRepoMetadata,
     hostCapabilities,
+    hostStatusReadable,
     hostId,
+    sidebarFeed,
     state,
     syncViewSettingsFromDesktop
   } = args
   const {
+    catalogError,
     clientRef,
-    fetchWorktreesInFlightRef,
-    newWorktreeModalVisibleRef,
     setActionError,
     setCatalogError,
     setLastKnownWorktrees,
@@ -54,175 +86,238 @@ export function useHostWorktreeCatalog(args: {
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
-    worktreeCatalogRef
+    showNewWorktree,
+    worktrees,
+    worktreesLoaded
   } = state
-  // Keyed by client: a fetch still running on a replaced client must not skip the new one's.
-  const serverFetchInFlightRef = useRef<RpcClient | null>(null)
-
-  // Why beside worktree.ps, not inside it: a slow server must not hold back the desktop's own rows.
-  const fetchServerRows = useCallback(
-    async (requestClient: RpcClient) => {
-      if (!relaysToServers(requestClient, hostCapabilities)) {
-        // An older desktop or shell: today's view, and no rows that could not open.
-        setServerWorkspaces(NO_SERVER_WORKSPACES)
-        return
-      }
-      if (serverFetchInFlightRef.current === requestClient) {
-        return
-      }
-      serverFetchInFlightRef.current = requestClient
-      try {
-        const fetched = await fetchServerWorkspaces(requestClient)
-        if (fetched && clientRef.current === requestClient) {
-          setServerWorkspaces((previous) => applyServerWorkspaces(previous, fetched))
-        }
-      } catch {
-        // Keeps the rows shown; the next poll retries.
-      } finally {
-        if (serverFetchInFlightRef.current === requestClient) {
-          serverFetchInFlightRef.current = null
-        }
-      }
-    },
-    [hostCapabilities]
+  const queryClient = useQueryClient()
+  // Embedded sidebars never receive route focus; a routed list reads only while it is on top.
+  const [focused, setFocused] = useState(true)
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true)
+      // Focus must probe half-open sockets without suspending healthy relay sessions; state-dependent focus callbacks would defeat reconnect backoff.
+      clientRef.current?.notifyForeground('focus')
+      return () => setFocused(false)
+    }, [])
   )
+  const subscribed = embedded || focused
+
+  const host = { hostId: hostId ?? '', client }
+  // The host's sidebar feed replaces the poll: its notices say when a row changed.
+  const pollMs = sidebarFeed ? false : HOST_LIST_POLL_MS
+  const catalog = useHostQuery(
+    hostWorktreeCatalogQuery,
+    host,
+    HOST_LIST_TARGET,
+    NO_HOST_LIST_INPUT,
+    {
+      enabled: !!hostId,
+      subscribed,
+      refetchInterval:
+        pollMs && hostCapabilities.includes(WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)
+          ? HOST_LIST_BACKSTOP_POLL_MS
+          : pollMs
+    }
+  )
+  // An older desktop or shell lists no server rows, rather than rows that could not open.
+  const relays = client !== null && relaysToServers(client, hostCapabilities)
+  // Until the host's status is read, stored server rows paint and nothing reads them.
+  const relaysRuledOut = hostStatusReadable && !relays
+  // Held while server rows poll, so a desktop that announces host changes isn't asked for its hosts on every poll.
+  const announcesHosts = hostCapabilities.includes(
+    MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY
+  )
+  useRelayHosts(subscribed && relays && announcesHosts ? client : null, hostCapabilities)
+  const servers = useHostQuery(
+    hostServerWorkspacesQuery,
+    host,
+    HOST_LIST_TARGET,
+    hostServerWorkspacesInput(hostStatusReadable ? hostCapabilities : null),
+    // Execution hosts' notices are not relayed, so server rows keep the full poll.
+    { enabled: !!hostId && relays, subscribed, refetchInterval: pollMs }
+  )
+
+  // Set by a read the new-workspace sheet asked for; other reads wait for the sheet to close.
+  const applyDuringModalRef = useRef(false)
+  // The first page drawn while the full catalog was out, until a confirmed catalog replaces it.
+  const firstPageRef = useRef<Worktree[] | null>(null)
+  // Even unchanged replies reassert host truth over optimistic local edits.
+  useEffect(() => {
+    const confirmedSnapshot = catalog.data
+    if (!confirmedSnapshot || !hostId) {
+      return
+    }
+    if (showNewWorktree && !applyDuringModalRef.current) {
+      return
+    }
+    applyDuringModalRef.current = false
+    // A copy: screens may sort the list in place, and the cache's rows are the next delta's base.
+    const confirmed = [...confirmedSnapshot.worktrees]
+    // Confirmed rows may keep the first page's array; a later failed read must not clear them.
+    firstPageRef.current = null
+    setCatalogError(null)
+    // A confirmed catalog proves a transient action failure is no longer current.
+    setActionError('')
+    // Reuse identical snapshot arrays to avoid rebuilding SectionList/sorts on the tap path.
+    setWorktrees((current) => (areWorktreeListsEqual(current, confirmed) ? current : confirmed))
+    setLastKnownWorktrees((current) =>
+      areWorktreeListsEqual(current, confirmed) ? current : confirmed
+    )
+    setWorktreesLoaded(true)
+    // Drop the optimistic active override once the host reports it active, so later desktop changes win.
+    setOptimisticActiveWorktreeIdentity((pending) =>
+      clearConfirmedActiveWorktreeIdentity(pending, confirmed)
+    )
+    // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
+    setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
+    // Sync server pins only without the feed; feed-built lists keep no local pin cache.
+    if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+      const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
+      setPinnedIds((prev) => {
+        if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
+          return prev
+        }
+        void savePinnedIds(hostId, serverPinned)
+        return serverPinned
+      })
+    }
+  }, [catalog.data, catalog.dataUpdatedAt, hostId, showNewWorktree])
+
+  // A first page only helps a never-loaded empty screen whose full read is not already failing.
+  const firstPageUseful = !worktreesLoaded && worktrees.length === 0 && catalogError === null
+  const readingFirstPage = catalog.data === undefined && catalog.isFetching && firstPageUseful
+  // With nothing to show yet, draw the host's first rows while the full catalog arrives.
+  useEffect(() => {
+    if (!readingFirstPage || !client) {
+      return
+    }
+    let current = true
+    // Fails fast while connecting; the connected edge's catalog read asks again.
+    void readWorktreeFirstPage(hostReadClient(client))
+      .then((rows) => {
+        if (rows && current) {
+          firstPageRef.current = rows
+          setWorktrees((shown) => (shown.length === 0 ? rows : shown))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      current = false
+    }
+  }, [readingFirstPage, client])
+
+  useEffect(() => {
+    // errorUpdatedAt outlives the error: a later success clears only `error`.
+    if (catalog.status !== 'error') {
+      return
+    }
+    const code = catalogErrorCode(catalog.error)
+    if (code === null) {
+      return
+    }
+    setCatalogError(code)
+    // A failed full read must not leave the first page looking like the whole host.
+    setWorktrees((shown) => (shown === firstPageRef.current ? [] : shown))
+  }, [catalog.status, catalog.errorUpdatedAt])
+
+  useEffect(() => {
+    if (servers.data && !relaysRuledOut) {
+      setServerWorkspaces(servers.data)
+    } else if (!relays) {
+      // Also drops a previous host's rows when the sidebar switches to one with none stored.
+      setServerWorkspaces(NO_SERVER_WORKSPACES)
+    }
+  }, [relays, relaysRuledOut, servers.data])
 
   const fetchWorktrees = useCallback(
     async (options: { allowDuringModal?: boolean } = {}) => {
-      if (!client || connState !== 'connected' || !hostId) {
+      if (!hostId) {
         return
       }
-      if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
+      const query = queryClient
+        .getQueryCache()
+        .find({ queryKey: hostWorktreeCatalogKey(hostId), exact: true })
+      if (!query) {
         return
       }
-      // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
-      if (fetchWorktreesInFlightRef.current) {
-        return
-      }
-      fetchWorktreesInFlightRef.current = true
-      const requestClient = client
-      const requestHostId = hostId
-      void fetchServerRows(requestClient)
-
-      try {
-        const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
-        if (clientRef.current !== requestClient || hostId !== requestHostId) {
-          return
-        }
-        if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
-          return
-        }
-        // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
-        // surface it so a broken remote host is diagnosable instead of looking empty.
-        if (fetched.kind === 'request_failed') {
-          setCatalogError(fetched.code)
-          return
-        }
-        if (fetched.pending.admission.kind === 'invalid') {
-          setCatalogError('invalid_response')
-        }
-        // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
-        // host truth over optimistic local edits regardless of payload size.
-        const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
-        if (confirmed) {
-          setCatalogError(null)
-          // A confirmed list is the host answering, which is the evidence a transient action
-          // failure was about a moment that has passed.
-          setActionError('')
-          // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
-          setWorktrees((current) =>
-            areWorktreeListsEqual(current, confirmed) ? current : confirmed
-          )
-          setLastKnownWorktrees((current) =>
-            areWorktreeListsEqual(current, confirmed) ? current : confirmed
-          )
-          setWorktreesLoaded(true)
-          // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
-          if (hostId) {
-            setCachedWorktrees(hostId, confirmed, { proven: true })
-          }
-          // Drop the optimistic active override once the host reports it active, so later desktop changes win.
-          setOptimisticActiveWorktreeIdentity((pending) =>
-            clearConfirmedActiveWorktreeIdentity(pending, confirmed)
-          )
-
-          // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
-          setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
-
-          // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
-          const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
-          setPinnedIds((prev) => {
-            if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
-              return prev
-            }
-            if (hostId) {
-              void savePinnedIds(hostId, serverPinned)
-            }
-            return serverPinned
-          })
-        }
-      } catch (error) {
-        // Will retry on reconnect
-        if (clientRef.current === requestClient && hostId === requestHostId) {
-          // Why the branch: this code is printed to the user verbatim, and a reply the reader
-          // refused is a host-payload defect, not a connectivity one (STA-3123).
-          setCatalogError(
-            error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
-          )
-        }
-      } finally {
-        fetchWorktreesInFlightRef.current = false
-      }
+      applyDuringModalRef.current ||= options.allowDuringModal === true
+      // After any read in flight: it may predate the change this read is for.
+      refetchHostQueryAfterInFlight(queryClient, query)
     },
-    [client, connState, hostId, fetchServerRows]
-  )
-
-  useFocusEffect(
-    useCallback(() => {
-      // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
-      // 'focus' keeps a healthy relay green — probe, never suspend (S2 grey blink).
-      clientRef.current?.notifyForeground('focus')
-    }, [])
+    [hostId, queryClient]
   )
 
   const startWorktreeRefresh = useCallback(() => {
     if (!client || connState !== 'connected') {
       return
     }
-    void syncViewSettingsFromDesktop()
     return startHostWorktreeRefresh({
       client,
-      fetchWorktrees,
-      fetchRepoMetadata,
-      syncViewSettings: syncViewSettingsFromDesktop
+      refreshWorktrees: () => void fetchWorktrees(),
+      syncViewSettings: syncViewSettingsFromDesktop,
+      sidebarFeed,
+      appState: AppState
     })
-  }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+  }, [client, connState, fetchWorktrees, syncViewSettingsFromDesktop, sidebarFeed])
 
   useFocusEffect(
     useCallback(() => {
-      // The embedded sidebar isn't a routed screen (focus never fires); it refreshes via the mount effect below.
       if (!embedded) {
         return startWorktreeRefresh()
       }
     }, [embedded, startWorktreeRefresh])
   )
 
-  // Why: the embedded sidebar is never the focused route, so wire its refresh lifecycle from a mount effect.
+  // Embedded sidebars never receive route focus; start their refresh lifecycle on mount.
   useEffect(() => {
     if (embedded) {
       return startWorktreeRefresh()
     }
   }, [embedded, startWorktreeRefresh])
 
-  // Why (#8498): steady-state polls miss the transition INTO 'connected' after background/sleep, when the cache is stalest.
-  const { refreshing, onRefresh } = useWorktreeResync({
-    client,
-    connState,
-    fetchWorktrees,
-    fetchRepoMetadata
-  })
+  // A read stuck on a replaced client must not hold the list back: TanStack joins a read in flight.
+  const readClientRef = useRef(client)
+  useEffect(() => {
+    const replaced = readClientRef.current !== null && readClientRef.current !== client
+    readClientRef.current = client
+    if (!replaced || !hostId) {
+      return
+    }
+    const hostList = { queryKey: hostScopeKey(hostId), predicate: isHostListQuery }
+    void queryClient
+      .cancelQueries(hostList)
+      .then(() => queryClient.refetchQueries({ ...hostList, type: 'active' }))
+  }, [client, hostId, queryClient])
 
-  return { fetchWorktrees, onRefresh, refreshing }
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    if (!hostId || connState !== 'connected') {
+      return
+    }
+    setRefreshing(true)
+    try {
+      await queryClient.refetchQueries({
+        queryKey: hostScopeKey(hostId),
+        type: 'active',
+        predicate: isHostListQuery
+      })
+    } finally {
+      setRefreshing(false)
+    }
+  }, [connState, hostId, queryClient])
+
+  return {
+    fetchWorktrees,
+    onRefresh,
+    refreshing,
+    // The other host-list reads follow the catalog's visibility.
+    subscribed,
+    // The first read after the list painted from memory; polls and pull-to-refresh show nothing here.
+    revalidating: catalog.isRefetching && !catalog.isFetchedAfterMount,
+    // When the shown rows were read, possibly at an earlier launch.
+    readAt: catalog.data ? catalog.dataUpdatedAt : null
+  }
 }
 
 export type HostWorktreeCatalog = ReturnType<typeof useHostWorktreeCatalog>

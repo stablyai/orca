@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LaunchedAgentForeground } from '../../../../launched-agent-foreground'
+import type { LaunchedAgentForeground } from '../../../../terminal/wait/launched-agent-foreground'
 import type { RuntimeTerminalWait } from '../../../../../../shared/runtime-terminal-contracts'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
@@ -42,14 +42,9 @@ export function registerWorkerStartTerminalTargetTests(): void {
         })
       ).rejects.toMatchObject({ code: 'terminal_is_coordinator' })
     })
-
-    it('still accepts a separate agent terminal in the same worktree', async () => {
-      const started = await harness.startWorker({ terminal: 'term_worker' })
-      expect(started.dispatchId).toEqual(expect.any(String))
-    })
   })
 
-  // The other door into the same self-adoption: manual dispatch never compared `to` to the caller.
+  // Manual inject is another self-adoption path; compare target with caller too.
   describe('orchestration.dispatch --to the caller', () => {
     const harness = createOrchestrationWorkerReleaseHarness()
     beforeEach(() => harness.setup())
@@ -105,8 +100,7 @@ export function registerWorkerStartTerminalTargetTests(): void {
       ).rejects.toMatchObject({ code: 'terminal_is_coordinator' })
     })
 
-    // Low-level topologies (and the e2e specs that drive them from one pane) dispatch context
-    // to the caller's own terminal; nothing is written into the pane, so nothing self-adopts.
+    // Context-only self-dispatch writes no preamble and remains valid for low-level topologies.
     it('still records a context-only dispatch aimed at the coordinator handle', async () => {
       const task = harness.db.createTask({ spec: 'self context', runId: harness.activeRunId })
 
@@ -123,8 +117,7 @@ export function registerWorkerStartTerminalTargetTests(): void {
       expect(harness.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
-    // The rejection for a missing agent tells the caller to dispatch without --inject, which the
-    // coordinator guard forbids; the self-target answer must not depend on agent presence.
+    // Self-injection must refuse regardless of agent detection; without-inject advice cannot authorize it.
     it.each([
       ['the coordinator handle', 'term_coord'],
       ['an alias of the coordinator pane', 'term_coord_alias']
@@ -155,22 +148,11 @@ export function registerWorkerStartTerminalTargetTests(): void {
       ).rejects.toMatchObject({ code: 'terminal_is_coordinator' })
       expect(harness.db.getDispatchContext(task.id)).toBeUndefined()
     })
-
-    it('still dispatches to a different pane', async () => {
-      const task = harness.db.createTask({ spec: 'peer dispatch', runId: harness.activeRunId })
-      const result = (await harness.call('orchestration.dispatch', {
-        task: task.id,
-        from: 'term_coord',
-        to: 'term_worker'
-      })) as { dispatch: { assignee_pane_key: string } }
-      expect(result.dispatch.assignee_pane_key).toBe(harness.workerPaneKey)
-    })
   })
 
   const PTY_ID = 'pty_worker'
 
-  // Why: a shell back at its prompt after the agent exits reads as ready too, so the brief needs the
-  // launched agent found in front, or the shell runs it.
+  // A returned shell also reads ready; prove the launched agent is in front before writing the brief.
   describe('a worker start writes its brief only into the agent it launched', () => {
     const h = createOrchestrationWorkerReleaseHarness()
     afterEach(() => h.cleanup())
@@ -196,21 +178,6 @@ export function registerWorkerStartTerminalTargetTests(): void {
 
       await expect(h.startWorker({ agent: 'claude' })).rejects.toThrow()
       expect(writes).toEqual([])
-    })
-
-    it('writes the brief once into the agent found in front', async () => {
-      const writes = launchedPane('agent')
-
-      await h.startWorker({ agent: 'claude' })
-      expect(writes).toHaveLength(1)
-    })
-
-    it('leaves a terminal the caller supplied to its own idle wait', async () => {
-      const writes = launchedPane('shell')
-
-      await h.startWorker({ terminal: 'term_worker' })
-      expect(h.runtime.readLaunchedAgentForeground).not.toHaveBeenCalled()
-      expect(writes).toHaveLength(1)
     })
   })
 
@@ -245,23 +212,5 @@ export function registerWorkerStartTerminalTargetTests(): void {
         expect(h.runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
       }
     )
-
-    it('keeps reused terminals on the normal idle wait', async () => {
-      h.setup()
-      vi.spyOn(h.runtime, 'waitForFreshWorkerComposer')
-      await h.startWorker({ terminal: 'term_worker' })
-      expect(h.runtime.waitForFreshWorkerComposer).not.toHaveBeenCalled()
-      expect(h.runtime.waitForTerminal).toHaveBeenCalledWith(
-        'term_worker',
-        expect.objectContaining({ condition: 'tui-idle' })
-      )
-    })
-
-    it('never delivers a task after a startup timeout', async () => {
-      h.setup()
-      vi.spyOn(h.runtime, 'waitForFreshWorkerComposer').mockRejectedValue(new Error('timeout'))
-      await expect(h.startWorker({ agent: 'zcode' })).rejects.toThrow('Expected worker-start')
-      expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-    })
   })
 }

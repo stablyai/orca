@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, requiredString } from './rpc-param-primitives'
-import { ORCHESTRATION_WORKER_READ_SOURCES } from '../orchestration-worker-output'
+import { ORCHESTRATION_WORKER_READ_SOURCES } from '../orchestration/workers/orchestration-worker-output'
 
 export const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
 

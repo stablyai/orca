@@ -1,6 +1,9 @@
 import { antigravitySessionOrigin } from '../../shared/antigravity-session-origin'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { codexSessionAliasKey, codexSessionAliasBeats } from './codex-session-root-dedup'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  codexSessionAliasKey,
+  codexSessionAliasBeats
+} from './scanners/codex/codex-session-root-dedup'
 import { sessionSortTime } from './session-scanner-accumulator'
 
 function sessionAliasKey(session: AiVaultSession): string | null {
@@ -77,9 +80,7 @@ type SessionWinner = { session: AiVaultSession; indices: number | number[] }
 /** Scan-local accumulation; parsed rows must not be mutated after admission. */
 export class ScannedSessionCollection {
   private readonly sessions = new Map<number, AiVaultSession>()
-  // Keyed by the row's own sessionId string, so an unlimited scan retains no
-  // alias key per live row; a per-alias-key map appears only for the rare id
-  // that spans several hosts, namespaces, or rollout names.
+  // Reuse sessionId keys; allocate alias maps only for IDs spanning hosts, namespaces, or rollouts.
   private readonly winnersBySessionId = new Map<
     string,
     SessionWinner | Map<string, SessionWinner>
@@ -103,7 +104,6 @@ export class ScannedSessionCollection {
     this.sessions.set(index, session)
   }
 
-  /** Whether the row is retained; a losing alias is dropped. */
   private admit(session: AiVaultSession, key: string, index: number): boolean {
     const bucket = this.winnersBySessionId.get(session.sessionId)
     if (bucket instanceof Map) {
@@ -131,7 +131,6 @@ export class ScannedSessionCollection {
     return winner !== null
   }
 
-  /** The alias key's winner after this row, or null when the row loses. */
   private contest(
     best: SessionWinner | undefined,
     session: AiVaultSession,

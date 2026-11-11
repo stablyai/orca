@@ -2,26 +2,35 @@ import { OrcaRuntimeWithStateFields } from '../construction/runtime-construction
 import {
   persistClientHostedBrowserPages,
   rehydrateClientHostedBrowserPages
-} from '../client-hosted-browser-page-persistence'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+} from '../browser/client-pages/client-hosted-browser-page-persistence'
+import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { LOCAL_EXECUTION_HOST_ID, getRepoExecutionHostId } from '../../../shared/execution-host'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+
+import {
+  type ExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId
+} from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
-import { killAllProcessesForWorktree } from '../worktree-teardown'
+import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
-import type { RuntimeClientSettingsUpdate } from '../runtime-client-settings-shape'
-import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch-settings'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
-import type { TerminalQuickCommandMutation } from '../../../shared/terminal-quick-commands'
-import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat-session-options'
+import { isDeepStrictEqual } from 'node:util'
+import type {
+  AgentListPublication,
+  AgentPaneActivityChange
+} from '../../../shared/agent-status/presentation/agent-list-status'
+import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
+import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
+import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TerminalQuickCommandMutation } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
+import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
-import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
-import type { Automation } from '../../../shared/automations-types'
+import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import type { Automation } from '../../../shared/automations/automation-definition'
 
 export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
@@ -60,16 +69,8 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     return this.messageWaiters.map
   }
 
-  /**
-   * Republishes persisted client-hosted pages as held rows, before any host can attach.
-   *
-   * Without this a runtime restart takes the only record of a client-hosted page with it. When the
-   * client restarted too -- a fleet update restarts both -- its guests died with it, so its
-   * inventory has nothing to adopt from and no participant can name the page any more.
-   *
-   * Called from each host's startup rather than the constructor so the ordering against attach is
-   * explicit, and so constructing a runtime stays free of persistence reads.
-   */
+  /** Rehydrate before attach; fleet restarts can kill client guests too, leaving only persisted page records.
+   * Startup owns ordering and I/O so runtime construction stays free of persistence reads. */
   rehydrateClientHostedBrowserPages(): void {
     if (!this.store?.getWorkspaceSession) {
       return
@@ -79,9 +80,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
       const liveRepoIds = new Set((this.store.getRepos?.() ?? []).map((repo) => repo.id))
       rehydrateClientHostedBrowserPages(registry, {
         listWorkspaceSessions: () => this.listWorkspaceSessionPartitions(),
-        // Why the same discriminant hydration uses: session keys are `${repoId}::${path}` and are
-        // not pruned when a repo leaves this client's view, so a row whose repo is gone would
-        // surface a tab with no live workspace behind it. Unparseable keys are left alone.
+        // Match hydration's repo discriminant: stale sessions for removed repos must not resurrect tabs.
         isKnownWorktree: (worktreeId) => {
           const ownerRepoId = splitWorktreeIdForFilesystem(worktreeId)?.repoId
           return !ownerRepoId || liveRepoIds.has(ownerRepoId)
@@ -95,13 +94,7 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     }
   }
 
-  /**
-   * Rewrites one worktree's persisted client-hosted rows.
-   *
-   * Guarded because it hangs off the runtime's tab-change announcement, which also fires on
-   * terminal and editor churn: a workspace that has never had a client page must not pay a session
-   * read for every one of those.
-   */
+  /** Skip session reads for workspaces without client pages on this hot terminal/editor-change seam. */
   protected persistClientHostedBrowserPagesForWorktree(worktreeId: string): void {
     const registry = getRuntimeBrowserPageRegistry(this)
     const hasPages = registry.listPages(worktreeId).length > 0
@@ -143,25 +136,22 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
   ): Promise<void> {
     const { connectionId, allowUnverifiedStop } = options
-    // Why: this process holds no SSH PTY provider, so an SSH workspace's terminals cannot be stopped here.
+    // This process has no SSH PTY provider and cannot stop that host's terminals.
     const provider = connectionId ? null : this.getLocalProvider()
     if (!provider) {
       throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
     }
     const teardownResult = await killAllProcessesForWorktree(worktreeId, {
       runtime: this,
-      // Why: `repoId::path` ids repeat across hosts, so an unfenced sweep stops a same-id
-      // workspace's terminals on another connection (mirrors the IPC removal path).
+      // Host-fence path-derived ids so same-id workspaces on other connections survive.
       resolvedWorktreeId: worktreeId,
       localProvider: provider,
       onPtyStopped: this.onPtyStopped ?? undefined,
       requirePhysicalStop: true,
-      // Why (#11960): set only by an explicit Force Delete, never by the ordinary
-      // confirmation — otherwise the gate would be off on the primary delete path.
+      // #11960: only explicit Force Delete bypasses unverified-stop refusal.
       ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {})
     })
-    // Structured sessions are counted here too, mirroring the IPC path: closing a user's chat is
-    // now an ordinary outcome of this verb, and a removal that closed one but no PTY logged nothing.
+    // Include structured chats in removal totals even when no PTY was stopped.
     const structuredStopped = teardownResult.structuredStopped ?? 0
     const total =
       teardownResult.runtimeStopped +
@@ -193,7 +183,6 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     return this.store.getUI()
   }
 
-  // Why null rather than runtime_unavailable: a missing session only means no activity to add.
   getWorkspaceSessionForHost(hostId: ExecutionHostId): WorkspaceSessionState | null {
     return this.store?.getWorkspaceSession?.(hostId) ?? null
   }
@@ -204,6 +193,29 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     }
     this.store.updateUI(updates)
     return this.store.getUI()
+  }
+
+  /** The live desktop window's Agents-list verdicts; null with no window, so worktree.ps claims none. */
+  private agentListPublication: AgentListPublication | null = null
+
+  readAgentListPublication(): AgentListPublication | null {
+    return this.agentListPublication
+  }
+
+  setAgentListPublication(next: AgentListPublication | null): void {
+    const changed = !isDeepStrictEqual(this.agentListPublication?.verdicts, next?.verdicts)
+    this.agentListPublication = next
+    if (changed) {
+      this.emitClientEvent({ type: 'agentListChanged' })
+    }
+  }
+
+  /** Applies through the window's own Activity actions and keeps the verdicts it answers with, so the next worktree.ps already shows them. */
+  async applyAgentPaneActivity(change: AgentPaneActivityChange): Promise<void> {
+    if (!this.notifier?.applyAgentPaneActivity) {
+      throw new Error('agent_activity_needs_desktop_window')
+    }
+    this.setAgentListPublication(await this.notifier.applyAgentPaneActivity(change))
   }
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedUIState {

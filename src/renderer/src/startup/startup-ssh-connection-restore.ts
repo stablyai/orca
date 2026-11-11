@@ -4,16 +4,7 @@ import { reconnectSshTargetForRendererStartup } from './ssh-startup-reconnect'
 
 const SSH_RECONNECT_TIMEOUT_MS = 15_000
 
-/**
- * Re-establishes the SSH targets that were live at shutdown before terminal reconnect, so
- * SSH-backed tabs route through pty.attach. Passphrase-protected and timed-out targets are
- * handed back as deferred so their PTYs reattach on tab focus instead of stacking dialogs.
- *
- * Only `blockingConnectionIds` are awaited. Every other target connects in the background and
- * is registered as deferred up front, so an unreachable host cannot hold local terminal
- * restoration for the reconnect timeout. Background connects keep running in main; the pane's
- * deferred flow joins the same in-flight `ssh.connect` on tab focus.
- */
+/** Reconnect prior live SSH targets before terminal attach. Await only blockingConnectionIds; defer background/passphrase/timed-out hosts for focus reattach without stacked dialogs. Main’s connects continue and focused panes join the same in-flight request. */
 export async function restoreSshConnectionsForStartup(args: {
   connectionIds: string[]
   /** Targets whose panes mount as soon as the startup gate opens. Omitted = await all. */
@@ -33,10 +24,13 @@ export async function restoreSshConnectionsForStartup(args: {
     window.api.ssh.listTargets()
   )
   const targetMap = new Map(allTargets.map((t) => [t.id, t]))
-  const targets = connectionIds.map((targetId) => ({
-    targetId,
-    needsPassphrase: targetMap.get(targetId)?.lastRequiredPassphrase ?? false
-  }))
+  // Opted-out hosts stay disconnected like hosts that were off at quit; their panes offer Connect.
+  const targets = connectionIds
+    .filter((targetId) => targetMap.get(targetId)?.reconnectOnLaunch !== false)
+    .map((targetId) => ({
+      targetId,
+      needsPassphrase: targetMap.get(targetId)?.lastRequiredPassphrase ?? false
+    }))
 
   const passphraseTargetIds = targets.filter((t) => t.needsPassphrase).map((t) => t.targetId)
   const blocking = blockingConnectionIds ? new Set(blockingConnectionIds) : null
@@ -52,11 +46,9 @@ export async function restoreSshConnectionsForStartup(args: {
     setDeferredSshReconnectTargets(deferredTargetIds)
   }
 
-  // Why tracked: the timed-out branch below rewrites the whole deferred list, and a
-  // background target that already connected must not be pushed back into it.
+  // Track connected targets so timeout’s whole-list rewrite cannot redefer successful background hosts.
   const connectedBackgroundTargetIds = new Set<string>()
-  // Why fired before the awaited group: a background target that lands before terminal
-  // reconnect reads as an ordinary connected target, exactly as it does today.
+  // Start background connects before awaited group so early successes restore as ordinary connected targets.
   for (const { targetId } of backgroundTargets) {
     void reconnectSshTargetForRendererStartup({
       targetId,
@@ -64,8 +56,7 @@ export async function restoreSshConnectionsForStartup(args: {
       publishState: (id, state) => {
         publishSshConnectionState(id, state)
         if (state.status === 'connected') {
-          // Why: a still-deferred connected target sends fresh panes down the deferred
-          // spawn path instead of the normal one. Clear it as soon as it is reachable.
+          // Clear deferral as soon as reachable or fresh panes take deferred spawn instead of normal restoration.
           connectedBackgroundTargetIds.add(id)
           removeDeferredSshReconnectTarget(id)
         }
@@ -76,7 +67,7 @@ export async function restoreSshConnectionsForStartup(args: {
     })
   }
 
-  // Why: treat timed-out eager targets as deferred so their PTYs reattach on tab focus (ssh.connect keeps running in main and likely finishes by then).
+  // Timed-out connects continue in main; defer their PTY attach until focus.
   const timedOutTargets: string[] = []
   await timeRendererStartupStep(
     'ssh-reconnect',
@@ -110,7 +101,7 @@ export async function restoreSshConnectionsForStartup(args: {
     ])
   }
 
-  // Why: older/wrapped providers may return no state from connect; poll main once as a compatibility fallback before terminal restoration.
+  // Older/wrapped connect providers omit state; poll main once before restore for compatibility.
   for (const { targetId } of eagerTargets) {
     if (timedOutTargets.includes(targetId)) {
       continue

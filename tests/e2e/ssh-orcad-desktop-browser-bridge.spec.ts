@@ -1,11 +1,5 @@
-/**
- * #29145: an agent on a managed SSH host drives this desktop's Orca browser through the host's own
- * `orca` CLI, only while "Allow this host's orca CLI to control Orca" is on.
- *
- * Off, the CLI is refused with an error that names the setting. On, `orca tab create` opens a
- * desktop tab in the host's workspace (its traffic leaves through the host, which alone resolves
- * the fixture origin) and `orca goto` navigates it. Off again, the host is refused at once.
- */
+// #29145: the managed SSH host’s real CLI may create/navigate/open desktop browser tabs only while its control setting is enabled.
+// Require remote-only origin egress through the host and immediate named refusal when the setting turns off.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { z } from 'zod'
 import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'
@@ -109,7 +103,7 @@ function browserTabUrls(page: Page, worktreeId: string): Promise<string[]> {
   }, worktreeId)
 }
 
-test('a managed SSH host drives the desktop browser only while its CLI control setting is on', async (// oxlint-disable-next-line no-empty-pattern -- Owns app launch.
+test('a managed SSH host drives the desktop browser by default until its CLI control setting is turned off', async (// oxlint-disable-next-line no-empty-pattern -- Owns app launch.
 {}, testInfo) => {
   test.setTimeout(8 * 60_000)
   const target = startDockerSshHostTarget(testInfo)
@@ -146,13 +140,7 @@ test('a managed SSH host drives the desktop browser only while its CLI control s
     await activateManagedWorkspace(page, seeded.worktreeId, environmentId)
     const tabId = await openTerminalTab(page, seeded.worktreeId)
 
-    // Default off: refused with the setting's name, never "browser unavailable".
-    const refused = await hostCli(page, target, tabId, 'orca tab list')
-    expect(refused.ok).toBe(false)
-    expect(refused.error?.code).toBe('desktop_browser_bridge_unavailable')
-    expect(refused.error?.message).toContain(DESKTOP_BROWSER_BRIDGE_SETTING_LABEL)
-
-    await setRemoteCliControl(page, seeded.targetId, true)
+    // No saved value: on by default.
     const createdUrl = `${SSH_REMOTE_ONLY_ORIGIN}/echo/bridge-created`
     const created = await hostCliUntilOk(page, target, tabId, `orca tab create --url ${createdUrl}`)
     const browserPageId = String(created.result?.browserPageId ?? '')
@@ -191,6 +179,23 @@ test('a managed SSH host drives the desktop browser only while its CLI control s
     const listed = await hostCli(page, target, tabId, 'orca tab list')
     expect(listed.ok).toBe(true)
     expect(JSON.stringify(listed.result)).toContain(browserPageId)
+    // `orca open-url` reaches the desktop the same way, as a tab in the host's workspace.
+    const openedUrl = `${SSH_REMOTE_ONLY_ORIGIN}/echo/bridge-open-url`
+    const opened = await hostCliUntilOk(page, target, tabId, `orca open-url --url ${openedUrl}`)
+    const openedPageId = String(opened.result?.browserPageId ?? '')
+    expect(openedPageId).not.toBe('')
+    await expect
+      .poll(() => browserTabUrls(page, seeded.worktreeId), { timeout: 30_000 })
+      .toContain(openedUrl)
+    await expect
+      .poll(() => readSshRemoteOnlyRequests(target).map((request) => request.path), {
+        timeout: 60_000,
+        message: 'the desktop tab open-url opened never loaded through the host'
+      })
+      .toContain('/echo/bridge-open-url')
+    expect((await hostCli(page, target, tabId, `orca tab close --page ${openedPageId}`)).ok).toBe(
+      true
+    )
     await page.screenshot({ path: testInfo.outputPath('desktop-browser-bridge-on.png') })
     // A desktop file is never reachable, even through a tab the host may drive.
     const fileRead = await hostCli(
@@ -206,7 +211,7 @@ test('a managed SSH host drives the desktop browser only while its CLI control s
       .poll(() => browserTabUrls(page, seeded.worktreeId), { timeout: 30_000 })
       .not.toContain(navigatedUrl)
 
-    // Off again: the bridge detaches at once and the host is refused.
+    // Explicitly off: the bridge detaches at once and the host is refused with the setting's name.
     await setRemoteCliControl(page, seeded.targetId, false)
     await expect
       .poll(async () => (await hostCli(page, target, tabId, 'orca tab list')).error?.code ?? 'ok', {
@@ -214,6 +219,12 @@ test('a managed SSH host drives the desktop browser only while its CLI control s
         intervals: [1_000]
       })
       .toBe('desktop_browser_bridge_unavailable')
+    const refused = await hostCli(page, target, tabId, 'orca tab list')
+    expect(refused.error?.message).toContain(DESKTOP_BROWSER_BRIDGE_SETTING_LABEL)
+    // open-url names the same setting, not a desktop that is "offline".
+    const openRefused = await hostCli(page, target, tabId, `orca open-url --url ${openedUrl}`)
+    expect(openRefused.error?.code).toBe('desktop_browser_bridge_unavailable')
+    expect(openRefused.error?.message).toContain(DESKTOP_BROWSER_BRIDGE_SETTING_LABEL)
   } finally {
     try {
       if (app) {

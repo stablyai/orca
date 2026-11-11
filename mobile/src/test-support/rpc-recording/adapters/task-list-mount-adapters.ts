@@ -7,13 +7,8 @@ import type { RuntimeHydrationModel } from '../../../tasks/use-mobile-tasks-runt
 
 const REPO_ID = 'repo-1'
 
-/** The one hosted repository every task family queries, shaped the way `isHostedTaskRepo` needs. */
 const HOSTED_REPO = { id: REPO_ID, displayName: 'Repo', path: '/repo', provider: 'github' }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -61,11 +56,7 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * The task list screen's loads and the composer's writes: provider item pages and counts, the
- * Linear account context, the list query itself, connecting Linear, and creating a task. Every one
- * of these keeps a generation guard between the request and the state commit.
- */
+// Drive generation guards through real task-list loads and composer writes.
 export function taskListMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -84,6 +75,7 @@ export function taskListMountAdapters(
         defaultLinearTeamSelectionRef: { current: null },
         jiraStatusRequestIdRef: { current: 0 },
         githubKind: 'issues',
+        keepSettings: () => {},
         taskUiReady: true,
         tasksSupported: true,
         linearConnected: false,
@@ -99,12 +91,11 @@ export function taskListMountAdapters(
             new Set(['team-1']),
             mountFixture([{ id: 'team-1' }, { id: 'team-2' }])
           ),
-        // `context.client` rather than `model.client`: the model holds that same client under an
-        // `unknown` fixture record, and reading it there would need a cast the context does not.
+        // The typed context client avoids casting the fixture’s unknown model member.
         'github-page': () =>
           actions().fetchGitHubItemsPage(context.client, mountFixture([HOSTED_REPO])),
         'github-count': () =>
-          actions().countGitHubItems(context.client, mountFixture([HOSTED_REPO]))
+          actions().countGitHubItemPages(context.client, mountFixture([HOSTED_REPO]))
       }),
       state: (model) => ({
         connected: model.linearConnected,
@@ -127,7 +118,7 @@ export function taskListMountAdapters(
           appliedQuery: '',
           clientRef: { current: context.client },
           connState: 'connected',
-          countGitHubItems: async () => 0,
+          countGitHubItemPages: async () => 0,
           fetchGitHubItemsPage: async () => ({
             items: [],
             failedCount: 0,
@@ -135,9 +126,11 @@ export function taskListMountAdapters(
             sourceErrors: [],
             sourceFallbacks: []
           }),
+          githubKind: 'issues',
           githubMode: 'items',
           gitlabFilter: 'opened',
           gitlabView: 'project',
+          hostId: 'host-1',
           jiraConnection: { connected: false, sites: [], selection: null, credentialError: null },
           jiraFilter: 'assigned',
           linearConnected: true,
@@ -149,10 +142,12 @@ export function taskListMountAdapters(
           resetGitHubItemsState: () => {},
           selectedLinearTeamIds: new Set<string>(),
           selectedLinearWorkspaceId: 'linear-workspace',
+          selectedRepoIds: new Set<string>(),
           effectiveRepoIds: new Set<string>(),
           serverRepoList: [],
           taskStateHydrated: true,
           tasksSupported: true,
+          taskUiReady: true,
           items: [],
           error: '',
           loading: false,
@@ -161,8 +156,7 @@ export function taskListMountAdapters(
         },
         actions: ({ actions, model, update }) => ({
           load: () => actions().loadTasks(),
-          // Re-renders and sends nothing: loadTasks is a useCallback over appliedQuery, so the
-          // search arm is only reachable through a rebuilt closure.
+          // Rebuild loadTasks after changing appliedQuery; the old callback cannot reach the search arm.
           'set-query': (args) => {
             model.appliedQuery = String(args.query ?? '')
             return update()
@@ -184,16 +178,21 @@ export function taskListMountAdapters(
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
+        clientRef: { current: context.client },
         connState: 'connected',
         fetchGitHubItemsPage: async () => ({ items: [], failedCount: 0 }),
         githubCurrentPage: 0,
         githubPages: [[]],
         githubPaginationLoading: false,
-        githubTotalCount: null,
+        githubCountedTotalPages: null,
+        hostId: 'host-1',
         linearApiKeyDraft: 'lin_api_key',
         linearConnectState: 'idle',
+        loadGenerationRef: { current: 0 },
         loadLinearContext: async () => {},
         loadTasks: async () => {},
+        loading: false,
+        revalidating: false,
         selectedHostedRepos: [HOSTED_REPO],
         taskUiReady: true,
         tasksSupported: true,

@@ -1,0 +1,173 @@
+import type { VoiceSettings } from '../../../shared/speech-types'
+import { stopAfterSilenceSeconds } from '../../../shared/dictation-silence-stop'
+import type {
+  RuntimeSpeechModelSummary,
+  RuntimeSpeechSetupState
+} from '../../../shared/runtime-worktree-contracts'
+import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
+import {
+  getCatalogModel,
+  isLocalSpeechModel,
+  SPEECH_MODEL_CATALOG
+} from '../../speech/model-catalog'
+import { isOfferedSpeechModel } from '../../../shared/speech-model-retirement'
+import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
+import { hasLocalSpeechRecognizer } from '../../speech/stt-worker-paths'
+import {
+  deleteLocalSpeechModel,
+  getSpeechModelDeletionErrorCode
+} from '../../speech/speech-model-deletion'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
+import {
+  clearOpenAiSpeechApiKey,
+  getOpenAiSpeechApiKeyProtection,
+  hasOpenAiSpeechApiKey
+} from '../../speech/openai-api-key-store'
+import { saveVerifiedOpenAiSpeechApiKey } from '../../speech/openai-api-key-verification'
+import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
+
+export type OpenAiSpeechKeyStatus = {
+  configured: boolean
+  protection: SecretAtRestProtection | null
+}
+
+export class RuntimeMobileSpeechCatalog {
+  constructor(private readonly getStore: () => RuntimeStore | null) {}
+
+  /** `worktreeId` picks the repo terms a phone recognizing on its own spells with. */
+  async list(worktreeId?: string): Promise<RuntimeSpeechSetupState> {
+    const store = this.requireStore()
+    const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
+    const states = await getSpeechModelManager(store).getModelStates()
+    const stateById = new Map(states.map((state) => [state.id, state]))
+    // Omit unsupported status variants; older phones could treat them as pickable models.
+    const runnable = SPEECH_MODEL_CATALOG.filter(
+      (manifest) =>
+        isOfferedSpeechModel(manifest) &&
+        (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer()) &&
+        // Phones offer an unready cloud row as "add an OpenAI key", which can't set this one up.
+        (manifest.provider !== 'openai-compatible' ||
+          stateById.get(manifest.id)?.status === 'ready')
+    )
+    const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {
+      const state = stateById.get(manifest.id)
+      return {
+        id: manifest.id,
+        label: manifest.label,
+        // Older phones know only these two; both cloud providers transcribe on this host.
+        provider: isLocalSpeechModel(manifest) ? 'local' : 'openai',
+        sizeBytes: manifest.sizeBytes ?? null,
+        recommended: manifest.recommended === true,
+        status: state?.status ?? 'not-downloaded',
+        progress: state?.progress ?? null
+      }
+    })
+    return {
+      enabled: voice.enabled === true,
+      selectedModelId: voice.sttModel ?? '',
+      dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
+      dictationHoldToRecord: voice.dictationHoldToRecord !== false,
+      removeFillerWords: voice.removeFillerWords !== false,
+      stopAfterSilenceSeconds: stopAfterSilenceSeconds(voice),
+      // The phone has no Whisper prompt to bias, and its text pass would only join the name; keeping the
+      // hint out also spares a phone page from before hints, which would treat the name as a full term.
+      dictationTerms: hostDictationTerms(store, worktreeId).filter((entry) => !entry.hint),
+      models
+    }
+  }
+
+  async download(modelId: string): Promise<{ started: true }> {
+    const store = this.requireStore()
+    const manifest = getCatalogModel(modelId)
+    if (!manifest || !isLocalSpeechModel(manifest) || !hasLocalSpeechRecognizer()) {
+      throw new Error('voice_model_not_downloadable')
+    }
+    void getSpeechModelManager(store)
+      .downloadModel(modelId)
+      .catch((err) =>
+        console.error('[runtime] mobile speech model download failed', { modelId, err })
+      )
+    return { started: true }
+  }
+
+  async delete(modelId: string): Promise<RuntimeSpeechSetupState> {
+    const store = this.requireWritableStore()
+    try {
+      await deleteLocalSpeechModel({
+        store: {
+          getSettings: () => store.getSettings(),
+          updateSettings: (updates, options) => store.updateSettings?.(updates, options)
+        },
+        modelManager: getSpeechModelManager(store),
+        sttService: getSpeechSttService(store),
+        modelId
+      })
+    } catch (error) {
+      throw new Error(getSpeechModelDeletionErrorCode(error) ?? 'voice_model_delete_failed')
+    }
+    return this.list()
+  }
+
+  async configure(params: {
+    enabled?: boolean
+    modelId?: string
+    dictationMode?: 'toggle' | 'hold'
+    dictationHoldToRecord?: boolean
+  }): Promise<RuntimeSpeechSetupState> {
+    const store = this.requireWritableStore()
+    const current = store.getSettings().voice ?? getDefaultVoiceSettings()
+    if (params.modelId !== undefined && params.modelId !== '') {
+      const manifest = getCatalogModel(params.modelId)
+      if (!manifest || !isOfferedSpeechModel(manifest)) {
+        throw new Error('voice_model_unknown')
+      }
+    }
+    const nextVoice: VoiceSettings = {
+      ...current,
+      ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
+      ...(params.modelId !== undefined ? { sttModel: params.modelId } : {}),
+      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
+      ...(params.dictationHoldToRecord !== undefined
+        ? { dictationHoldToRecord: params.dictationHoldToRecord }
+        : // A phone without Auto that picks Hold leaves no hold-to-record behind for a later Toggle.
+          params.dictationMode === 'hold'
+          ? dictationShortcutModeSettings('hold')
+          : {})
+    }
+    store.updateSettings?.({ voice: nextVoice }, { notifyListeners: true })
+    return this.list()
+  }
+
+  /** Set cloud dictation keys over RPC for headless hosts without Settings; seal with the transcribing host's secret store. */
+  openAiKeyStatus(): OpenAiSpeechKeyStatus {
+    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
+  }
+
+  async setOpenAiKey(apiKey: string): Promise<OpenAiSpeechKeyStatus> {
+    await saveVerifiedOpenAiSpeechApiKey(apiKey)
+    return this.openAiKeyStatus()
+  }
+
+  clearOpenAiKey(): OpenAiSpeechKeyStatus {
+    clearOpenAiSpeechApiKey()
+    return this.openAiKeyStatus()
+  }
+
+  private requireStore(): RuntimeStore {
+    const store = this.getStore()
+    if (!store) {
+      throw new Error('voice_dictation_unavailable')
+    }
+    return store
+  }
+
+  private requireWritableStore(): RuntimeStore {
+    const store = this.requireStore()
+    if (!store.getSettings || !store.updateSettings) {
+      throw new Error('voice_dictation_unavailable')
+    }
+    return store
+  }
+}

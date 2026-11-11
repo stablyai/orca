@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { dirname } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import type { ClaudeProfileSurfaceOutcome } from './claude-profile-report'
 
 export function linkClaudeProfileDirectory(
@@ -52,15 +52,12 @@ export function linkClaudeProfileDirectory(
     rmdirSync(target)
   }
   mkdirSync(dirname(target), { recursive: true })
-  // Why: link the path itself so a user who re-points their own link is followed.
+  // Link the source path so later user symlink changes are followed.
   symlinkSync(source, target, platform === 'win32' ? 'junction' : 'dir')
   return 'linked'
 }
 
-/**
- * Copies a file the default home owns over the profile's copy. Copied, not linked: a
- * rename-replace save (Claude's own, or an editor's) would cut a link.
- */
+/** Copy files because rename-replace saves break links. */
 export function copyClaudeProfileFile(
   source: string,
   target: string,

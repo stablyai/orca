@@ -1,17 +1,5 @@
-import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
+import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-
-/**
- * The two push senders are module-private, and the exported entry points that reach them read the
- * keychain host catalog and the device token first. Exposing the senders records the wire the
- * migration moves without teaching the substitute table to fake a device store.
- */
-export const pushRegistrationMountExposures: readonly OperationExposure[] = [
-  [
-    'notifications/push-registration.ts',
-    '\nexports.sendRegister = sendRegister;\nexports.sendUnregister = sendUnregister;'
-  ]
-]
 
 const REGISTER_TIMEOUT_MS = 5_000
 
@@ -23,7 +11,7 @@ export function pushRegistrationMountAdapters(
       const push = modules.load<{
         sendRegister: (client: unknown, token: unknown, filter: unknown) => Promise<boolean>
         sendUnregister: (client: unknown, timeoutMs: number) => Promise<boolean>
-      }>('mobile/src/notifications/push-registration.ts')
+      }>('mobile/src/notifications/mobile-push-registration-operations.ts')
       const results: Record<string, unknown> = {}
       return {
         action(name, args) {
@@ -38,7 +26,6 @@ export function pushRegistrationMountAdapters(
                   {
                     platform: 'ios',
                     token: 'apns-token-1',
-                    // An iOS token always carries its APNs environment (`push-token.ts`).
                     apnsEnvironment: args.sandbox === true ? 'sandbox' : 'production'
                   },
                   { onlyWhenDesktopAway: true, sound: args.sound !== false }

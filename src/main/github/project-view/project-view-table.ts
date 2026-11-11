@@ -14,8 +14,6 @@ import {
 import type { RawProjectV2Field } from './project-view-field-normalization'
 import { fetchAllItems, fetchItemsCountOnly } from './project-view-items'
 
-// ─── Public: getProjectViewTable ──────────────────────────────────────
-
 export async function getProjectViewTable(
   args: GetProjectViewTableArgs
 ): Promise<GetProjectViewTableResult> {
@@ -30,11 +28,14 @@ export async function getProjectViewTable(
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
     return {
       ok: false,
-      error: { type: 'validation_error', message: 'Invalid ownerType.' }
+      error: {
+        type: 'validation_error',
+        message: 'Invalid ownerType.',
+        reason: 'invalid_owner_type'
+      }
     }
   }
 
-  // Paginate views until a match is found.
   let cursor: string | null = null
   let project: { id: string; title: string; url: string } | null = null
   let selectedRaw: RawProjectView | null = null
@@ -62,7 +63,6 @@ export async function getProjectViewTable(
       if (m === 'none') {
         continue
       }
-      // Precedence: id > number > name > default.
       const rank: Record<typeof m, number> = { id: 4, number: 3, name: 2, default: 1 }
       const currentRank = matchStrength ? rank[matchStrength] : 0
       if (!selectedRaw || rank[m] > currentRank) {
@@ -70,7 +70,7 @@ export async function getProjectViewTable(
         matchStrength = m
       }
     }
-    // Why: stop on ANY match (incl. 'default' = first table view); walking further pages costs a GraphQL call per page with no re-ranking upside.
+    // Stop on the first match; further pagination spends quota without reranking it.
     if (selectedRaw) {
       break
     }
@@ -83,24 +83,31 @@ export async function getProjectViewTable(
     }
   }
   if (!project) {
-    return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+    }
   }
   const noSelector =
     args.viewId === undefined && args.viewNumber === undefined && args.viewName === undefined
   if (!selectedRaw && noSelector) {
-    // Why: `matchesSelector` only defaults to a table view, so a project whose
-    // views are all roadmaps resolved to nothing even though we can now render
-    // one. Table stays the preferred default; this is the empty-handed case.
+    // Prefer tables, but allow roadmap/board defaults when no table view matched.
     selectedRaw =
       viewsSeen.find((v) => v.layout === 'ROADMAP_LAYOUT') ??
       viewsSeen.find((v) => v.layout === 'BOARD_LAYOUT') ??
       null
   }
   if (!selectedRaw) {
-    return { ok: false, error: { type: 'not_found', message: 'Could not find the selected view.' } }
+    return {
+      ok: false,
+      error: {
+        type: 'not_found',
+        message: 'Could not find the selected view.',
+        reason: 'view_not_found'
+      }
+    }
   }
 
-  // Paginate view fields if necessary.
   let extraFields: RawProjectV2Field[] = []
   const fieldsPi = selectedRaw.fields?.pageInfo
   if (fieldsPi?.hasNextPage === true && typeof fieldsPi.endCursor === 'string' && selectedRaw.id) {
@@ -117,13 +124,11 @@ export async function getProjectViewTable(
   }
   const selectedView = finalized.view
 
-  // Why: empty-string override means "no filter"; undefined means "use the view's stored filter". The override is ephemeral, never persisted.
+  // Empty override clears the filter; undefined retains the stored view filter. Neither persists.
   const effectiveQuery =
     typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
 
-  // Why: boards and roadmaps read the same item stream as a table — only the
-  // renderer differs. Unknown future layouts must reject cleanly, not render
-  // as a table.
+  // Layouts share item data, but future unsupported layouts need explicit rejection.
   if (!isRenderableProjectViewLayout(selectedView.layout)) {
     const count = await fetchItemsCountOnly({
       owner: args.owner,
@@ -136,15 +141,13 @@ export async function getProjectViewTable(
       ok: false,
       error: {
         type: 'unsupported_layout',
-        // Why: the branch is type-unreachable (closed union) but runtime-real —
-        // raw.layout is cast unchecked, so an unknown value lands here.
+        // Unchecked runtime layout values can reach this branch despite the closed type union.
         message: `Orca renders table, board, and roadmap views. This is a ${String(selectedView.layout).replace('_LAYOUT', '').toLowerCase()} view.`
       },
       ...(typeof count === 'number' ? { totalCount: count } : {})
     }
   }
 
-  // Fetch items.
   const items = await fetchAllItems({
     owner: args.owner,
     ownerType: args.ownerType,

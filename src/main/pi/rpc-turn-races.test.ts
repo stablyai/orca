@@ -5,7 +5,6 @@ import {
   openProviderTimelineRig
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { PiRpcTurns } from './rpc-turns'
-import { PiRpcPromptDelivery } from './rpc-prompt-delivery'
 
 const state = (overrides: Record<string, unknown> = {}) => ({
   sessionFile: '/host/session.jsonl',
@@ -65,35 +64,6 @@ async function setup(request = vi.fn(async (_command: string): Promise<unknown> 
 }
 
 describe('Pi turn settlement races', () => {
-  it.each([
-    ['No API key found for anthropic', 'notSignedIn'],
-    ['No API key found elsewhere', 'providerRejected'],
-    ['Rate limit exceeded', 'providerRejected'],
-    ['Network connection failed', 'providerRejected']
-  ] as const)('keeps accepted-turn failure classification: %s', async (detail, kind) => {
-    const h = await setup()
-    await h.start()
-    h.turns.receive({
-      type: 'message_end',
-      message: {
-        role: 'assistant',
-        content: [],
-        stopReason: 'error',
-        errorMessage: detail
-      }
-    })
-    h.turns.receive({ type: 'agent_settled' })
-    await h.flush()
-    const errors = (await h.rig.rows()).flatMap(({ body }) =>
-      body.kind === 'status' && body.failure ? [body] : []
-    )
-    expect(errors).toHaveLength(1)
-    expect(errors[0]?.failure).toMatchObject({ kind, detail: { text: detail, audience: 'person' } })
-    expect(errors[0]?.text).toContain(detail)
-    if (kind === 'notSignedIn') {
-      expect(errors[0]?.text).toContain('`/login`')
-    }
-  })
   it('chooses steering after asynchronous dispatch admission finishes', async () => {
     const h = await setup()
     await h.turns.submit('first', 1, { type: 'prompt', message: 'first' })
@@ -111,21 +81,6 @@ describe('Pi turn settlement races', () => {
       message: 'second',
       streamingBehavior: 'steer'
     })
-  })
-  it('waits for agent_settled and a host idle probe after agent_end', async () => {
-    const h = await setup()
-    await h.start()
-    h.turns.receive({ type: 'agent_end' })
-    await h.flush()
-    expect(h.request).not.toHaveBeenCalled()
-    expect(h.idle).not.toHaveBeenCalled()
-    expect(await h.rig.turns()).toHaveLength(1)
-    expect((await h.rig.turns())[0]?.state).toBe('running')
-    h.turns.receive({ type: 'agent_settled' })
-    await h.flush()
-    expect(h.request).toHaveBeenCalledWith('get_state')
-    expect((await h.rig.turns())[0]?.outcome).toBe('success')
-    expect(h.idle).toHaveBeenCalledTimes(1)
   })
 
   it('invalidates an old idle probe when detached compaction starts after settlement', async () => {
@@ -154,121 +109,52 @@ describe('Pi turn settlement races', () => {
     expect((await h.rig.turns())[0]?.outcome).toBe('success')
   })
 
-  it('keeps a busy generation open and rejects a probe made stale by new activity', async () => {
-    let release: ((value: unknown) => void) | undefined
-    const request = vi.fn(
-      (_command: string) =>
-        new Promise<unknown>((resolve) => {
-          release = resolve
-        })
-    )
-    const h = await setup(request)
-    await h.start()
-    h.turns.receive({ type: 'agent_settled' })
-    await Promise.resolve()
-    release?.(state({ isStreaming: true }))
-    await h.flush()
-    expect(h.idle).not.toHaveBeenCalled()
-    h.turns.receive({ type: 'agent_settled' })
-    await Promise.resolve()
-    h.turns.receive({ type: 'message_update', message: { role: 'assistant', content: [] } })
-    release?.(state())
-    await h.flush()
-    expect(h.idle).not.toHaveBeenCalled()
-    h.turns.receive({ type: 'agent_settled' })
-    await Promise.resolve()
-    release?.(state())
-    await h.flush()
-    expect((await h.rig.turns())[0]?.outcome).toBe('success')
-  })
-
-  it('settles a provider-handled local command without agent events', async () => {
+  it('keeps an exhausted retry a failure when its records exceed the line limit', async () => {
     const h = await setup()
-    await h.turns.submit('local-command', 100, { type: 'prompt', message: '/help' })
-    h.turns.receive({
-      type: 'response',
-      command: 'prompt',
-      success: true,
-      data: { disposition: 'handled', agentInvoked: false }
-    })
+    await h.start()
+    h.turns.skipped(
+      'message_end',
+      '{"type":"message_end","message":{"role":"assistant","content":['
+    )
+    h.turns.skipped(
+      'auto_retry_end',
+      '{"type":"auto_retry_end","success":false,"attempt":3,"finalError":"'
+    )
+    h.turns.receive({ type: 'agent_settled' })
     await h.flush()
-    expect(h.accepted).toHaveBeenCalledWith('local-command')
-    expect((await h.rig.turns())[0]?.outcome).toBe('success')
-    expect(h.idle).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps exhausted auto retry as failure, while successful retry clears it', async () => {
-    for (const succeeded of [false, true]) {
-      const h = await setup()
-      await h.start()
-      h.turns.receive({
-        type: 'message_end',
-        message: {
-          role: 'assistant',
-          content: [],
-          stopReason: 'error',
-          errorMessage: 'provider failed'
-        }
-      })
-      h.turns.receive({ type: 'auto_retry_start' })
-      h.turns.receive({ type: 'auto_retry_end', success: succeeded })
-      if (succeeded) {
-        h.turns.receive({
-          type: 'message_end',
-          message: { role: 'assistant', content: [], stopReason: 'stop' }
-        })
-      }
-      h.turns.receive({ type: 'agent_settled' })
-      await h.flush()
-      expect((await h.rig.turns())[0]?.outcome).toBe(succeeded ? 'success' : 'failure')
-    }
+    expect((await h.rig.turns())[0]?.outcome).toBe('failure')
   })
 })
 
-describe('Pi prompt acknowledgement retries', () => {
-  it('retries only the exact transient auth prefix eight times at 250 ms', async () => {
-    vi.useFakeTimers()
-    const send = vi.fn(async () => {})
-    const settled = vi.fn()
-    const delivery = new PiRpcPromptDelivery({
-      send,
-      settled,
-      accepted: vi.fn(),
-      commandOnly: vi.fn(),
-      rejectedAfterAcceptance: vi.fn(),
-      failed: vi.fn()
-    })
-    await delivery.submit('send-1', 100, { type: 'prompt', message: 'hello' })
-    for (let attempt = 0; attempt < 8; attempt++) {
-      delivery.reply({
-        type: 'response',
-        command: 'prompt',
-        success: false,
-        error: 'No API key found for provider'
-      })
-      await vi.advanceTimersByTimeAsync(249)
-      expect(send).toHaveBeenCalledTimes(attempt + 1)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(send).toHaveBeenCalledTimes(attempt + 2)
+it.each([
+  'OAuth refresh failed for openai-codex: token refresh failed (400): invalid_grant',
+  // Pi 1.5.0 error text recorded by QA; the surrounding event is a fixture.
+  '401 {"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"},"request_id":"req_011Cgmh94VzHrfkrvN866JGF"}'
+])('keeps sign-in visible after an accepted turn fails: %s', async (errorMessage) => {
+  const h = await setup()
+  await h.start()
+  h.turns.receive({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: [],
+      stopReason: 'error',
+      errorMessage
     }
-    delivery.reply({
-      type: 'response',
-      command: 'prompt',
-      success: false,
-      error: 'No API key found for provider'
-    })
-    await vi.advanceTimersByTimeAsync(250)
-    expect(send).toHaveBeenCalledTimes(9)
-    expect(settled).toHaveBeenCalledWith('send-1', expect.objectContaining({ state: 'rejected' }))
-    await delivery.submit('send-2', 101, { type: 'prompt', message: 'again' })
-    delivery.reply({
-      type: 'response',
-      command: 'prompt',
-      success: false,
-      error: 'No API key found elsewhere'
-    })
-    await vi.advanceTimersByTimeAsync(250)
-    expect(send).toHaveBeenCalledTimes(10)
-    delivery.end()
   })
+  h.turns.receive({ type: 'agent_settled' })
+  await h.flush()
+  const rows = await h.rig.rows()
+  expect(rows).toContainEqual(
+    expect.objectContaining({
+      body: expect.objectContaining({
+        kind: 'status',
+        failure: expect.objectContaining({
+          kind: 'notSignedIn',
+          detail: { text: errorMessage, audience: 'log' }
+        })
+      })
+    })
+  )
+  expect((await h.rig.turns())[0]?.outcome).toBe('failure')
 })

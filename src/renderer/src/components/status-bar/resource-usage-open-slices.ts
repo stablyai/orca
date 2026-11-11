@@ -1,5 +1,7 @@
-import type { AppState } from '../../store'
-import { getAllWorktreesFromState } from '../../store/selectors'
+import { selectWorktreesByRepo } from '../../store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '../../store/types'
+import { getIndexedAllWorktrees } from '../../store/slices/worktrees/listing/worktree-catalog-index'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
@@ -10,7 +12,7 @@ const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_REPOS: AppState['repos'] = []
 const EMPTY_FOLDER_WORKSPACES: AppState['folderWorkspaces'] = []
 const EMPTY_PROJECT_GROUPS: AppState['projectGroups'] = []
-const EMPTY_WORKTREES: ReturnType<typeof getAllWorktreesFromState> = []
+const EMPTY_WORKTREES: ReturnType<typeof getIndexedAllWorktrees> = []
 
 export function getResourceUsageTabsByWorktree(
   state: Pick<AppState, 'tabsByWorktree'>,
@@ -64,15 +66,15 @@ export function getResourceUsageRepos(
 export function getResourceUsageAllWorktrees(
   state: Pick<AppState, 'worktreesByRepo'>,
   open: boolean
-): ReturnType<typeof getAllWorktreesFromState> {
-  return open ? getAllWorktreesFromState(state) : EMPTY_WORKTREES
+): ReturnType<typeof getIndexedAllWorktrees> {
+  return open ? getIndexedAllWorktrees(selectWorktreesByRepo(state)) : EMPTY_WORKTREES
 }
 
 export function getResourceUsageFolderWorkspaces(
   state: Pick<AppState, 'folderWorkspaces'>,
   open: boolean
 ): AppState['folderWorkspaces'] {
-  return open ? state.folderWorkspaces : EMPTY_FOLDER_WORKSPACES
+  return open ? selectFolderWorkspaces(state) : EMPTY_FOLDER_WORKSPACES
 }
 
 export function getResourceUsageProjectGroups(

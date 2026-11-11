@@ -38,14 +38,21 @@ describe('ArtifactPreview', () => {
     const webview = await waitFor(() => {
       const element = document.querySelector('webview')
       expect(element).not.toBeNull()
-      return element as Element
+      if (!element) {
+        throw new Error('preview webview not attached')
+      }
+      return element
     })
 
-    dispatchLoadFailure(webview, { errorCode: -105, isMainFrame: false })
-    dispatchLoadFailure(webview, { errorCode: -3, isMainFrame: true })
-    webview.dispatchEvent(new Event('did-stop-loading'))
-
+    act(() => dispatchLoadFailure(webview, { errorCode: -105, isMainFrame: false }))
     expect(screen.queryByText('Preview unavailable')).not.toBeInTheDocument()
+    act(() => dispatchLoadFailure(webview, { errorCode: -3, isMainFrame: true }))
+    expect(screen.queryByText('Preview unavailable')).not.toBeInTheDocument()
+    act(() => webview.dispatchEvent(new Event('did-stop-loading')))
+    expect(screen.queryByText('Preview unavailable')).not.toBeInTheDocument()
+
+    act(() => dispatchLoadFailure(webview, { errorCode: -105, isMainFrame: true }))
+    expect(screen.getByText('Preview unavailable')).toBeInTheDocument()
   })
 
   it('stops waiting when navigation stalls', async () => {

@@ -2,8 +2,7 @@ export function getStatusPluginDeliverySource(): string[] {
   return [
     '',
     'function enqueueLifecycle(task) {',
-    '  // Why: OpenCode intentionally fire-and-forgets hook promises, so async',
-    '  // lookups and posts need their own FIFO to preserve event order.',
+    '  // OpenCode does not await hook promises; serialize lookups/posts to preserve event order.',
     '  const run = lifecycleQueue.then(async () => {',
     '    try {',
     '      await task();',
@@ -159,7 +158,7 @@ export function getStatusPluginDeliverySource(): string[] {
 
 export function getTuiStatusDeliverySource(): string[] {
   return String.raw`
-// Why queued: levels derived before disposal still post, in order, before the identity retires.
+// Drain previously derived levels before retiring their factory identity.
 function releaseTuiStatusDelivery(factoryID, forgetUndelivered) {
   return enqueueLifecycle(async () => {
     disposingFactoryIDs.add(factoryID);

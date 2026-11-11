@@ -1,9 +1,9 @@
 import { existsSync, statSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { toWindowsWslPath } from '../wsl'
-import { scanGitMarkerSync, resolveRealPathSync } from './repo-git-marker-scan'
+import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
+import { scanGitMarkerSync } from './repo-git-marker-scan'
+import { resolveRealPathSync } from '../../shared/real-path-sync'
 import {
   gitRepoOutput,
   runGitRepoCommands,
@@ -27,7 +27,6 @@ export type GitRepoRegistrationInfo = {
 
 let warnedMarkerFallbackThisSession = false
 
-/** Check if a path is a valid git repository (regular or bare). */
 function* isGitRepoCommands(path: string): GitRepoCommands<boolean> {
   try {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
@@ -89,7 +88,6 @@ function* probeGitRepo(path: string, includeLocation = false): GitRepoCommands<G
   }
 }
 
-/** Reuse one repository discovery across registration's validity, root and worktree checks. */
 function* inspectGitRepoForRegistrationCommands(
   path: string
 ): GitRepoCommands<GitRepoRegistrationInfo> {
@@ -168,9 +166,7 @@ function* getGitRepoRootCommands(path: string): GitRepoCommands<string> {
         return normalizeGitRepoRootForInputPath(path, toplevel)
       }
     }
-  } catch {
-    // Fall through to preserving the original path.
-  }
+  } catch {}
   return rootPathFromMarker(path)
 }
 
@@ -234,7 +230,8 @@ export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: st
     // Why: persist the UNC root so later Git calls keep routing through the WSL runner.
     return toWindowsWslPath(rootPath, inputWsl.distro)
   }
-  return normalizeRuntimePathSeparators(rootPath)
+  // Why: on POSIX a backslash is a filename character, and git already reports `/` separators.
+  return process.platform === 'win32' ? normalizeRuntimePathSeparators(rootPath) : rootPath
 }
 
 export function isGitRepo(path: string): boolean {

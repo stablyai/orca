@@ -1,6 +1,6 @@
-import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira-types'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { RpcResponse } from '../transport/types'
+import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { jiraConnectionStatusSchema } from './jira-reply-schema'
 import { jiraConnectionStatusProbe, jiraConnectionStatusRead } from './mobile-jira-operations'
 
@@ -88,7 +88,7 @@ function resolveJiraSiteSelection(
 
 // Explicit refreshes surface failures instead of presenting a setup prompt.
 export async function readJiraConnection(
-  client: RpcOperationSender
+  client: UnvalidatedRpcRequestPort
 ): Promise<MobileJiraConnection> {
   return extractJiraConnection(
     jiraConnectionStatusRead.interpret(await jiraConnectionStatusRead.request(client))

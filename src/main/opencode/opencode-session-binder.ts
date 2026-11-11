@@ -19,27 +19,16 @@ import { listRegisteredPtys } from '../memory/pty-registry'
 import { isOpenCodeClientProcess, type ProcessIdentityRow } from './opencode-client-sweep'
 import type { HookListenerState } from '../../shared/agent-hook-listener/listener-state'
 
-/**
- * Main-process binder feeding the session→pane registry (#21359), for OpenCode 1
- * `serve` + `attach` only (see isOpenCodeSharedServerPost).
- *
- * Each round: read new sessions from the shared server's SQLite store,
- * snapshot panes, sweep for live clients, correlate, bind. Everything the
- * round needs is injected so the decision core stays unit-testable; the
- * store read runs on the foreign SQLite reader worker
- * (foreign-sqlite-readers/readers/opencode-binder-sessions.ts).
- */
+// Bind shared OpenCode 1 serve/attach sessions to panes; database reads run in a foreign-SQLite worker.
 
-/** One pane snapshot feeding a binder round. */
 export type BinderPaneSnapshot = {
   paneKey: string
-  /** Worktree root backing the pane (null when unknown); sessions beneath it are candidates. */
+  /** Sessions beneath this root are candidates; null means unknown. */
   directory: string | null
   worktreeId: string | null
   shellPid: number | null
 }
 
-/** Everything one binder round needs, injected for tests. */
 export type BinderRoundDeps = {
   nowMs: number
   sessions: readonly BinderSessionRow[]
@@ -49,25 +38,17 @@ export type BinderRoundDeps = {
   parentBySessionId: ReadonlyMap<string, string | null>
 }
 
-/** Ownership decisions from one binder round. */
 export type BinderRoundResult = {
   ownerships: SessionOwnership[]
 }
 
-/** Cursor before anything was ever read. */
 export const OPENCODE_SESSION_CURSOR_START: OpenCodeSessionCursor = { ms: 0, id: '' }
 
-/** Order cursors the way the store lists rows: oldest first, id as tiebreak. */
 function compareSessionRows(left: OpenCodeSessionCursor, right: OpenCodeSessionCursor): number {
   return left.ms - right.ms || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
 }
 
-/**
- * Advance the store cursor past handled rows only. `fresh` arrives in store
- * order; handling is prefix-closed (the unbound-cap break only ever skips the
- * tail), so the first unhandled row freezes the cursor and every row at or
- * past it is re-listed next round instead of silently dropped.
- */
+/** Freeze at the first unhandled row so capped tails are listed again next round. */
 export function advanceBinderCursor(args: {
   fresh: readonly BinderSessionRow[]
   isHandled: (sessionId: string) => boolean
@@ -86,7 +67,6 @@ export function advanceBinderCursor(args: {
   return cursor
 }
 
-/** pid→ppid index for one sweep; first row wins on duplicate pids. */
 function childrenIndex(processes: readonly ProcessIdentityRow[]): Map<number, number> {
   const ppidByPid = new Map<number, number>()
   for (const row of processes) {
@@ -97,7 +77,7 @@ function childrenIndex(processes: readonly ProcessIdentityRow[]): Map<number, nu
   return ppidByPid
 }
 
-/** Nearest pane shell at or above this pid; external terminals stay unattributed. */
+/** Leave external terminals unattributed. */
 function owningPane(
   ppidByPid: Map<number, number>,
   shellPidByPid: Map<number, string>,
@@ -116,7 +96,6 @@ function owningPane(
   return null
 }
 
-/** Attribute opencode client rows to panes via shell-subtree walks. */
 function toCorrelatedClients(
   processes: readonly ProcessIdentityRow[],
   panes: readonly BinderPaneSnapshot[],
@@ -138,20 +117,15 @@ function toCorrelatedClients(
     if (!paneKey) {
       continue
     }
-    // Why lastSeenAlive = now: the sweep just observed it. Bracketing uses
-    // startedAt for the lower bound and this observation for the upper.
+    // Bracket session creation between process start and this live observation.
     clients.push({ paneKey, startedAtMs: row.startedAtMs, lastSeenAliveMs: nowMs, argv: row.argv })
   }
   return clients
 }
 
-/** Pure round core: correlate unbound sessions against panes and clients. */
 export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult {
-  // Why dedupe by key, newest wins: remints and reattachments can leave a
-  // stale registry row beside the live one; counting rows instead of panes
-  // would turn every same-pane tie into a false ambiguous and nothing would
-  // ever bind, while the oldest row would point the candidate set at a dead
-  // worktree.
+  // Remints can leave stale rows: deduplicate by pane with newest ownership to avoid
+  // false ambiguity or attribution to an old worktree.
   const paneByKey = new Map<string, CorrelatedPane>()
   for (const pane of deps.panes) {
     paneByKey.set(pane.paneKey, { paneKey: pane.paneKey, directory: pane.directory })
@@ -164,11 +138,8 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
     createdAtMs: row.createdAtMs,
     parentId: row.parentId
   }))
-  // Why resolve inheritance here: the SQLite round only carries new rows, so
-  // an old root is invisible to the correlator; the binder's parent map walks
-  // the chain and the registry supplies the known root owner. Resolved heirs
-  // are emitted as binds (the registry lacks them) and fed back as known so
-  // the correlator skips what is already decided.
+  // New-row-only reads omit older roots; resolve known ancestor ownership before correlation
+  // and emit inherited binds so the registry also learns them.
   const knownOwners = new Map(deps.knownOwners)
   const inherited: SessionOwnership[] = []
   for (const session of sessions) {
@@ -200,17 +171,11 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
   return { ownerships }
 }
 
-/** Default database path for the local shared server. */
 export function defaultOpenCodeDbPath(): string {
   return `${resolveOpenCodeDataDirectory()}/opencode.db`
 }
 
-/**
- * Live local panes from the PTY registry: pane key, worktree root and shell
- * pid. Panes without a key or pid (hydrated gaps, remote panes) cannot own a
- * client subtree, so they are skipped — their sessions stay unbound rather
- * than guessed.
- */
+/** Skip panes without keys or shell PIDs; guessing would misattribute remote/hydration gaps. */
 export function listBinderPaneSnapshots(): BinderPaneSnapshot[] {
   const snapshots: BinderPaneSnapshot[] = []
   for (const pty of listRegisteredPtys()) {
@@ -228,7 +193,6 @@ export function listBinderPaneSnapshots(): BinderPaneSnapshot[] {
   return snapshots
 }
 
-/** Apply one round's decisions to the listener registry. */
 export function applyBinderOwnerships(
   state: HookListenerState,
   panes: readonly BinderPaneSnapshot[],
@@ -237,8 +201,7 @@ export function applyBinderOwnerships(
 ): number {
   const worktreeByPane = new Map<string, string | null>()
   for (const pane of panes) {
-    // Why overwrite: matching the round's newest-wins pane dedupe, so a
-    // remint's live row wins over a stale row with a different worktree.
+    // Match the round’s newest-wins deduplication for reminted panes.
     worktreeByPane.set(pane.paneKey, pane.worktreeId)
   }
   let applied = 0

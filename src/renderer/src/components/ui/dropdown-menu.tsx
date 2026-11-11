@@ -1,12 +1,47 @@
 import * as React from 'react'
+import { cva } from 'class-variance-authority'
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 import * as DropdownMenuPrimitive from 'radix-ui/dropdown-menu'
+import { useControllableState } from 'radix-ui/internal'
 
-import { cn } from '@/lib/utils'
-import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
+import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
+import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
+import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
+import { useMenuPointerHighlight } from './menu-pointer-highlight'
+import { MENU_SURFACE_CLASS } from './menu-surface'
+import { PortalContainerContext, usePortalContainer } from './portal-container-context'
 
-function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+const DropdownMenuCloseContext = React.createContext<() => void>(() => {})
+
+function useDropdownMenuClose() {
+  return React.useContext(DropdownMenuCloseContext)
+}
+
+function DropdownMenu({
+  open: controlledOpen,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  const [open, setOpen] = useControllableState({
+    prop: controlledOpen,
+    defaultProp: defaultOpen ?? false,
+    onChange: onOpenChange,
+    caller: 'DropdownMenu'
+  })
+  const close = React.useCallback(() => setOpen(false), [setOpen])
+  return (
+    <DropdownMenuCloseContext value={close}>
+      <DropdownMenuPrimitive.Root
+        data-slot="dropdown-menu"
+        {...props}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </DropdownMenuCloseContext>
+  )
 }
 
 function DropdownMenuPortal({
@@ -24,26 +59,41 @@ function DropdownMenuTrigger({
 function DropdownMenuContent({
   className,
   sideOffset = 4,
+  portalContainer,
   style,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
+  portalContainer?: HTMLElement | null
+  // Radix consumes this at its opening focus scope but omits it from the public Menu props.
+  onOpenAutoFocus?: (event: Event) => void
+}) {
+  const container = usePortalContainer(portalContainer)
+  const pointerHighlight = useMenuPointerHighlight(props)
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   return (
-    <DropdownMenuPrimitive.Portal>
-      <DropdownMenuPrimitive.Content
-        data-slot="dropdown-menu-content"
-        sideOffset={sideOffset}
-        className={cn(
-          'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-[4px] text-black dark:text-white shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
-          className
-        )}
-        // Why: Electron's -webkit-app-region: drag on the titlebar captures
-        // clicks at the OS level regardless of z-index. Without no-drag,
-        // dropdown menus that visually overlap the titlebar are unclickable.
-        style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        {...props}
-        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-      />
-    </DropdownMenuPrimitive.Portal>
+    <PortalContainerContext value={container}>
+      <DropdownMenuPrimitive.Portal container={container ?? undefined}>
+        <OverlayFocusScope value={scope}>
+          <DropdownMenuPrimitive.Content
+            data-slot="dropdown-menu-content"
+            sideOffset={sideOffset}
+            className={cn(
+              'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
+              MENU_SURFACE_CLASS,
+              'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+              className
+            )}
+            // Disable native dragging: titlebar drag regions intercept menu clicks regardless of z-index.
+            style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            {...props}
+            onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
+            {...pointerHighlight}
+            ref={focusScopeRef}
+            onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+          />
+        </OverlayFocusScope>
+      </DropdownMenuPrimitive.Portal>
+    </PortalContainerContext>
   )
 }
 
@@ -51,10 +101,13 @@ function DropdownMenuItem({
   className,
   inset,
   variant = 'default',
+  onPointerMove,
+  onPointerLeave,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
-  variant?: 'default' | 'destructive'
+  /** `launch`: rows in the shared agent menu. */
+  variant?: 'default' | 'destructive' | 'launch'
 }) {
   return (
     <DropdownMenuPrimitive.Item
@@ -62,9 +115,11 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md px-2 py-[4px] text-[12px] leading-[17px] font-[450] outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:*:[svg]:text-destructive!",
+        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-[5px] text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[search-default]:bg-black/8 dark:data-[search-default]:bg-white/14 data-[context-menu-open]:bg-black/8 dark:data-[context-menu-open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 aria-disabled:opacity-40 data-[inset]:pl-8 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=destructive]:text-[color-mix(in_srgb,var(--destructive)_78%,black)] dark:data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[15px] [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:stroke-[1.5] data-[variant=destructive]:*:[svg]:text-current! data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:py-1 data-[variant=launch]:text-[12px] data-[variant=launch]:leading-4 data-[variant=launch]:font-medium",
         className
       )}
+      onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}
+      onPointerLeave={keepFocusWhileMenuCloses(onPointerLeave)}
       {...props}
     />
   )
@@ -80,13 +135,13 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md py-[4px] pr-2 pl-7 text-[12px] leading-[17px] font-[450] outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        "relative flex cursor-default items-center gap-2 rounded-md py-[5px] pr-2.5 pl-8 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         className
       )}
       checked={checked}
       {...props}
     >
-      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
+      <span className="pointer-events-none absolute left-2.5 flex size-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
           <CheckIcon className="size-3.5" />
         </DropdownMenuPrimitive.ItemIndicator>
@@ -111,12 +166,12 @@ function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md py-[4px] pr-2 pl-7 text-[12px] leading-[17px] font-[450] outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        "relative flex cursor-default items-center gap-2 rounded-md py-[5px] pr-2.5 pl-8 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         className
       )}
       {...props}
     >
-      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
+      <span className="pointer-events-none absolute left-2.5 flex size-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
           <CircleIcon className="size-2 fill-current" />
         </DropdownMenuPrimitive.ItemIndicator>
@@ -138,7 +193,7 @@ function DropdownMenuLabel({
       data-slot="dropdown-menu-label"
       data-inset={inset}
       className={cn(
-        'px-2 py-[4px] text-[11px] font-semibold text-muted-foreground data-[inset]:pl-7',
+        'px-2.5 pt-[5px] pb-[3px] text-2xs font-semibold text-muted-foreground data-[inset]:pl-8',
         className
       )}
       {...props}
@@ -153,7 +208,7 @@ function DropdownMenuSeparator({
   return (
     <DropdownMenuPrimitive.Separator
       data-slot="dropdown-menu-separator"
-      className={cn('my-[3px] h-px bg-border/60', className)}
+      className={cn('-mx-[6px] my-[6px] h-px bg-black/7 dark:bg-white/10', className)}
       {...props}
     />
   )
@@ -164,7 +219,7 @@ function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'spa
     <span
       data-slot="dropdown-menu-shortcut"
       className={cn(
-        'ml-auto shrink-0 whitespace-nowrap text-[11px] tracking-normal text-muted-foreground/85',
+        'ml-auto shrink-0 whitespace-nowrap pl-4 tracking-normal text-muted-foreground',
         className
       )}
       {...props}
@@ -176,58 +231,109 @@ function DropdownMenuSub({ ...props }: React.ComponentProps<typeof DropdownMenuP
   return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />
 }
 
+const dropdownMenuSubTriggerVariants = cva(
+  "flex cursor-default items-center gap-2 rounded-md px-2.5 py-[5px] text-[13px] leading-4 font-normal outline-hidden select-none data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[15px] [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:stroke-[1.5]",
+  {
+    variants: {
+      variant: {
+        default:
+          'focus:bg-black/8 dark:focus:bg-white/14 data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14 data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
+        'launch-row':
+          'gap-0 rounded-[7px] p-0 text-xs leading-5 font-medium focus:bg-accent focus:text-accent-foreground focus-within:bg-accent focus-within:text-accent-foreground data-[search-default]:bg-accent data-[search-default]:text-accent-foreground has-[[data-context-menu-open]]:bg-accent has-[[data-context-menu-open]]:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40'
+      }
+    },
+    defaultVariants: { variant: 'default' }
+  }
+)
+
 function DropdownMenuSubTrigger({
   className,
   inset,
   children,
   hideChevron,
+  variant = 'default',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
   inset?: boolean
   // Why: collision-flipped submenus open leftward, where a right-pointing chevron misleads.
   hideChevron?: boolean
+  variant?: 'default' | 'launch-row'
 }) {
   return (
     <DropdownMenuPrimitive.SubTrigger
       data-slot="dropdown-menu-sub-trigger"
+      data-variant={variant}
       data-inset={inset}
-      className={cn(
-        "flex cursor-default items-center gap-2 rounded-md px-2 py-[4px] text-[12px] leading-[17px] font-[450] outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[inset]:pl-7 data-[state=open]:bg-black/8 dark:data-[state=open]:bg-white/14 data-[state=open]:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground",
-        className
-      )}
+      className={cn(dropdownMenuSubTriggerVariants({ variant }), className)}
       {...props}
     >
-      {children}
-      {hideChevron ? null : <ChevronRightIcon className="ml-auto size-4" />}
+      {hideChevron ? (
+        children
+      ) : (
+        <>
+          {children}
+          <ChevronRightIcon className="ml-auto size-3.5 text-current opacity-70" />
+        </>
+      )}
     </DropdownMenuPrimitive.SubTrigger>
   )
 }
 
+const dropdownMenuSubContentVariants = cva('', {
+  variants: { variant: { default: '', picker: 'p-0' } },
+  defaultVariants: { variant: 'default' }
+})
+
 function DropdownMenuSubContent({
   className,
+  portalContainer,
   style,
+  alignOffset = -5,
+  scrollable = false,
+  variant = 'default',
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent> & {
+  portalContainer?: HTMLElement | null
+  scrollable?: boolean
+  variant?: 'default' | 'picker'
+}) {
+  const container = usePortalContainer(portalContainer)
+  const pointerHighlight = useMenuPointerHighlight(props)
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   return (
-    <DropdownMenuPrimitive.Portal>
-      <DropdownMenuPrimitive.SubContent
-        data-slot="dropdown-menu-sub-content"
-        className={cn(
-          'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-[4px] text-black dark:text-white shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
-          className
-        )}
-        // Why: same no-drag fix as DropdownMenuContent — titlebar drag region
-        // would otherwise capture clicks when submenu overlaps it.
-        style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        {...props}
-        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-      />
-    </DropdownMenuPrimitive.Portal>
+    <PortalContainerContext value={container}>
+      <DropdownMenuPrimitive.Portal container={container ?? undefined}>
+        <OverlayFocusScope value={scope}>
+          <DropdownMenuPrimitive.SubContent
+            data-slot="dropdown-menu-sub-content"
+            data-variant={variant}
+            // Level the first submenu row with its trigger (border + padding).
+            alignOffset={alignOffset}
+            className={cn(
+              'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
+              MENU_SURFACE_CLASS,
+              'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
+              dropdownMenuSubContentVariants({ variant }),
+              scrollable &&
+                'max-h-(--radix-dropdown-menu-content-available-height) overflow-x-hidden overflow-y-auto scrollbar-sleek',
+              className
+            )}
+            // Disable native dragging where submenu content overlaps the titlebar.
+            style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            {...props}
+            {...pointerHighlight}
+            ref={focusScopeRef}
+            onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+          />
+        </OverlayFocusScope>
+      </DropdownMenuPrimitive.Portal>
+    </PortalContainerContext>
   )
 }
 
 export {
   DropdownMenu,
+  useDropdownMenuClose,
   DropdownMenuPortal,
   DropdownMenuTrigger,
   DropdownMenuContent,

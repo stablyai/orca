@@ -1,17 +1,14 @@
-/**
- * A phone paired with a desktop sees a server workspace's tab strip as the desktop arranged it:
- * the desktop writes every host-backed move through to the server, and the phone's relayed
- * `session.tabs.*` reads the server. With the desktop window closed, nothing changes for the phone.
- * Each arrangement is also checked against the server's own layout: its `session.tabs.list` and
- * its published `layout.subscribe` groups (layout rework P3).
- */
+// Phone relay reads must match desktop host-backed tab moves in server session lists and published groups (P3), including after the macOS desktop window closes.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import type { PairedMobileSocket } from './helpers/paired-mobile-client'
 import { readPublishedLayout, readSessionTabs } from './helpers/layout-compat-baseline'
-import { toHostSessionTabId, toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import {
+  toHostSessionTabId,
+  toWebTerminalSurfaceTabId
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { z } from 'zod'
 
 type Frame = PairedMobileSocket['frames'][number]
@@ -78,11 +75,20 @@ function desktopTab(page: Page, hostTabId: string) {
 
 /** Drops one desktop tab onto the leading edge of another, as a user drags in the tab strip. */
 async function dragTab(page: Page, hostTabId: string, ontoHostTabId: string): Promise<void> {
+  // The active tab docks at a scrolled strip's edge until a drag starts, so drop where it really sits.
+  const onto = desktopTab(page, ontoHostTabId)
+  await onto.hover()
+  await page.mouse.wheel(0, -10_000)
+  await expect
+    .poll(() =>
+      onto.evaluate((tab) => tab.closest('[data-tab-strip-slot]')?.parentElement?.scrollLeft)
+    )
+    .toBe(0)
   const from = (await desktopTab(page, hostTabId).boundingBox())!
-  const onto = (await desktopTab(page, ontoHostTabId).boundingBox())!
+  const target = (await onto.boundingBox())!
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
   await page.mouse.down()
-  await page.mouse.move(onto.x + onto.width * 0.25, onto.y + onto.height / 2, { steps: 8 })
+  await page.mouse.move(target.x + target.width * 0.25, target.y + target.height / 2, { steps: 8 })
   await page.mouse.up()
 }
 
@@ -152,14 +158,15 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
     )
     await expect.poll(() => desktop.page.locator(SORTABLE_TAB).count(), { timeout: 30_000 }).toBe(3)
 
-    // A server-placed browser page sits in the same strip.
-    await call(
-      socket,
-      'browser.tabCreate',
-      { worktree, url: 'about:blank', activate: false },
-      z.looseObject({}),
-      serverHostId
-    )
+    // A server-placed browser page sits in the same strip. Created by the server itself: one the phone
+    // creates through the desktop is hosted by the desktop (relayed-browser-tab-create.ts).
+    const { browserPageId } = (
+      await host.client.call<{ browserPageId: string }>('browser.tabCreate', {
+        worktree,
+        url: 'about:blank',
+        activate: false
+      })
+    ).result
     const phoneStrip = async (): Promise<Strip> =>
       ((await phoneTabs()).tabGroups ?? []).map((group) => group.tabOrder)
     await expect
@@ -178,13 +185,11 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
         (group) => group.tabIds
       ) ?? []
 
-    // Reorder on the desktop by dragging the third terminal onto the first.
     await dragTab(desktop.page, third, first)
     await expect
       .poll(async () => (await desktopStrip(desktop.page, desktopWorktree.id))[0]?.slice(0, 3))
       .toEqual([third, first, second])
 
-    // Group on the desktop: move the second terminal into a split of its own.
     await desktopTab(desktop.page, second).click({ button: 'right' })
     await desktop.page.getByRole('menuitem', { name: 'Move Tab to Split' }).hover()
     await desktop.page.getByRole('menuitem', { name: 'Right', exact: true }).click()
@@ -195,7 +200,6 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
     await expect.poll(phoneStrip, { timeout: 30_000 }).toEqual(splitOff)
     expect(await serverStrip()).toEqual(splitOff)
 
-    // Drag the first terminal into the group the desktop just split off.
     await dragTab(desktop.page, first, second)
     await expect
       .poll(async () =>
@@ -212,9 +216,9 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
       (await phoneTabs()).tabs.filter((tab) => tab.type === 'browser').map((tab) => tab.id)
     ).toHaveLength(1)
     expect(await publishedStrip()).toEqual(arranged)
-    // Only the server holds this workspace's tabs; the desktop's own answer has none of them.
+    // Only the server holds this workspace's tabs; the desktop serves its phone just the server page it mirrors (#36447).
     const untargeted = await call(socket, 'session.tabs.list', { worktree }, SessionTabsSchema)
-    expect(untargeted.tabs).toEqual([])
+    expect(untargeted.tabs.map((tab) => tab.id)).toEqual([browserPageId])
 
     // Selection is each device's own, as for a local workspace.
     await call(
@@ -234,8 +238,7 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
     }
     expect(await phoneActive()).toBe(first)
 
-    // With the desktop window closed, the phone still reads the server's strip. Only macOS keeps
-    // the app running without a window (window-all-closed-quit-policy.ts).
+    // Only macOS keeps the app alive after its window closes (window-all-closed-quit-policy.ts).
     if (process.platform !== 'darwin') {
       return
     }

@@ -1,21 +1,12 @@
-/**
- * GitHub API rate-limit probe.
- *
- * Why: heavy fan-out (listWorkItems × repos, org-walks) can drain the core/search buckets; surfacing remaining budget lets users self-regulate rather than throttle.
- * The probe itself is exempt from rate-limit accounting per GitHub docs.
- *
- * Part A: breaker stays host/runtime-scoped (not account-scoped). Bound-account
- * calls can trip a host breaker that ambient reset probes later clear — known
- * cross-account bleed, accepted for Part A.
- */
+// Breakers are host/runtime-scoped; bound accounts share a scope with ambient reset probes.
 import type {
   GetRateLimitResult,
   GitHubRateLimitBucket,
   GitHubRateLimitSnapshot
 } from '../../shared/github/rate-limit-types'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { acquire, release } from './gh-utils'
 import { ghExecFileAsync } from '../git/runner'
 import {
   clearGhRateLimitBlock,
@@ -27,11 +18,32 @@ import {
   type GhRateLimitBucket
 } from '../git/gh-rate-limit-breaker'
 
-// Why: GET /rate_limit is exempt from limits, so caching only avoids a gh subprocess per render; 30s stays live while absorbing 1/s polling.
+// GET /rate_limit is quota-exempt; caching avoids a subprocess per refresh.
 const RATE_LIMIT_CACHE_TTL_MS = 30_000
 let cached: GitHubRateLimitSnapshot | null = null
-// Why: cache failures too — a host that 404s every probe (GHES with rate limiting off) would otherwise spawn a gh subprocess per refresh.
+// Negative-cache failures, including Enterprise hosts with rate limiting disabled.
 let probeFailure: { at: number; error: string } | null = null
+
+// gh slot holders await probes, so probes use their own limiter; probe holders acquire nothing else.
+const probeLimiter = new PrioritySemaphore(2)
+const NATIVE_PROBE_PRIORITY = 0
+const SCOPE_PROBE_PRIORITY = 1
+
+async function runRateLimitProbe(
+  priority: number,
+  options: { host: string; wslDistro?: string }
+): Promise<string> {
+  const releaseProbe = await probeLimiter.acquire(priority)
+  try {
+    const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
+      encoding: 'utf-8',
+      ...options
+    })
+    return stdout
+  } finally {
+    releaseProbe()
+  }
+}
 
 type GhRateLimitPayload = {
   resources?: {
@@ -50,7 +62,7 @@ function parseBucket(
       }
     | undefined
 ): GitHubRateLimitBucket {
-  // Why: absent bucket → 0/0/now so the UI reads "unknown" rather than a misleading "plenty left".
+  // Missing buckets represent unknown budget, not available capacity.
   return {
     limit: typeof raw?.limit === 'number' ? raw.limit : 0,
     remaining: typeof raw?.remaining === 'number' ? raw.remaining : 0,
@@ -62,6 +74,8 @@ function parseBucket(
 export function _resetRateLimitCache(): void {
   cached = null
   probeFailure = null
+  probeInFlight = null
+  forcedFollowUp = null
   scopeProbeFailureAtMs.clear()
   scopeRefinementInFlight.clear()
 }
@@ -73,10 +87,7 @@ const MIN_REMAINING_SEARCH = 2
 
 export type RateLimitBucketKind = 'core' | 'graphql' | 'search'
 
-/**
- * Return a "soft" stop reason if we should refuse a new gh request for the bucket; `{ blocked: false }` when there's budget or no snapshot yet (fail open).
- * Why: advisory (returns a reason, doesn't throw) so callers format the error envelope in their own shape.
- */
+/** Advisory failure envelope; absent snapshots fail open so callers can choose their own UI copy. */
 export function rateLimitGuard(bucket: RateLimitBucketKind):
   | { blocked: false }
   | {
@@ -85,7 +96,7 @@ export function rateLimitGuard(bucket: RateLimitBucketKind):
       limit: number
       resetAt: number
     } {
-  // Why: the breaker learns exhaustion from real 403s, which can precede a probe (e.g. quota burned by another tool on the account).
+  // Real 403s can exhaust quota before any snapshot exists.
   const breakerBlockedUntilMs = getGhRateLimitBlockedUntilMs(bucket)
   if (breakerBlockedUntilMs !== null) {
     return {
@@ -105,21 +116,18 @@ export function rateLimitGuard(bucket: RateLimitBucketKind):
       : bucket === 'graphql'
         ? MIN_REMAINING_GRAPHQL
         : MIN_REMAINING_SEARCH
-  // Why: a snapshot from before reset describes an ended window — fail open rather than block on stale data.
+  // An expired budget window cannot justify blocking new work.
   if (b.resetAt * 1000 <= Date.now()) {
     return { blocked: false }
   }
-  // Why: limit:0 means "unknown" (parseBucket fallback) — don't block on missing data or a single bad response bricks the app.
+  // limit 0 means unknown; malformed snapshots must not block the app.
   if (b.limit > 0 && b.remaining < floor) {
     return { blocked: true, remaining: b.remaining, limit: b.limit, resetAt: b.resetAt }
   }
   return { blocked: false }
 }
 
-/**
- * Decrement the cached `remaining` for a bucket after a successful spawn.
- * Why: between probes the snapshot would over-report budget, so this keeps the breaker honest during a burst instead of waiting for the TTL.
- */
+/** Debit successful spawns between probes so bursts cannot overrun the cached budget. */
 export function noteRateLimitSpend(bucket: RateLimitBucketKind, cost = 1): void {
   if (!cached) {
     return
@@ -130,7 +138,7 @@ export function noteRateLimitSpend(bucket: RateLimitBucketKind, cost = 1): void 
   }
 }
 
-// Why: this snapshot covers native github.com only; GHES and WSL use quotas protected by the runner's scoped breaker.
+// This snapshot covers native github.com only; Enterprise and WSL use scoped breakers.
 export function spendsSharedGitHubComQuota(
   repository: { host?: string } | null | undefined,
   executionOptions?: { wslDistro?: string; cwd?: string }
@@ -138,9 +146,7 @@ export function spendsSharedGitHubComQuota(
   if (!isDefaultGitHubHost(repository?.host) || executionOptions?.wslDistro) {
     return false
   }
-  // Why: a \\wsl.localhost\... (or \\wsl$\...) cwd makes the runner spawn gh
-  // inside WSL, so it spends that distro's quota. The UNC shape is
-  // platform-unambiguous, so no win32 gate is needed.
+  // UNC cwd selects distro execution on every host; exclude its distinct quota.
   return !(executionOptions?.cwd && isWslUncPath(executionOptions.cwd))
 }
 
@@ -165,7 +171,7 @@ export function noteRepositoryRateLimitSpend(
   }
 }
 
-// Why: the breaker only knows "blocked", not the reset time; one exempt probe refines it to the real reset or clears a stale block (single-flight so a 403 burst probes once).
+// Share one exempt probe to refine reset time or clear an obsolete block after a 403 burst.
 let resetRefinementInFlight: Promise<void> | null = null
 
 function refineBreakerFromSnapshot(): void {
@@ -193,10 +199,7 @@ function refineBreakerFromSnapshot(): void {
 }
 
 const DEFAULT_BREAKER_SCOPE = ghRateLimitScopeKey('native', 'github.com')
-// Why: non-default scopes (GHES hosts, WSL runtimes) have their own quota and
-// their own probe lifecycle — single-flight and failure negative-cache are
-// keyed per scope so a GHES 403 storm can't starve a WSL refinement (or vice
-// versa).
+// Isolate probe lifetimes and failure cooldowns by host/runtime so one scope cannot starve another.
 const scopeRefinementInFlight = new Map<string, Promise<void>>()
 const scopeProbeFailureAtMs = new Map<string, number>()
 const SCOPE_PROBE_FAILURE_MAX_ENTRIES = 512
@@ -219,7 +222,6 @@ function rememberScopeProbeFailure(scope: string, failedAt: number): void {
 }
 
 function refineBreakerForScope(scope: string): void {
-  // Default scope keeps the existing shared-snapshot refinement path.
   if (scope === DEFAULT_BREAKER_SCOPE) {
     refineBreakerFromSnapshot()
     return
@@ -228,43 +230,31 @@ function refineBreakerForScope(scope: string): void {
   if (!parts || scopeRefinementInFlight.has(scope)) {
     return
   }
-  // Why: GHES with rate limiting disabled 404s every probe. Fail open (the
-  // fallback block stands) and don't re-probe in a tight loop while the
-  // breaker keeps tripping.
+  // Failed refinement retains the fallback block; negative-cache disabled-limit Enterprise probes.
   const failedAt = scopeProbeFailureAtMs.get(scope)
   if (failedAt !== undefined && Date.now() - failedAt < RATE_LIMIT_CACHE_TTL_MS) {
     return
   }
   const probe = (async () => {
     try {
-      await acquire()
-      try {
-        // Run the probe on the tripping scope's runtime/host so it describes
-        // that account's buckets, not the native github.com ones.
-        const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
-          encoding: 'utf-8',
-          host: parts.host,
-          ...(parts.runtime === 'wsl' ? { wslDistro: parts.wslDistro } : {})
-        })
-        const parsed = JSON.parse(stdout) as GhRateLimitPayload
-        scopeProbeFailureAtMs.delete(scope)
-        // Why: mirrors the default-scope refinement, but records into the
-        // per-scope breaker only — the shared snapshot must keep describing
-        // native github.com exclusively.
-        for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
-          const b = parseBucket(parsed.resources?.[bucket])
-          if (b.limit > 0 && b.remaining <= 0) {
-            recordGhPrimaryRateLimit(bucket, b.resetAt * 1000, scope)
-          } else if (b.limit > 0) {
-            clearGhRateLimitBlock(bucket, scope)
-          }
+      // Query the tripping runtime/host, independently of the shared native snapshot.
+      const stdout = await runRateLimitProbe(SCOPE_PROBE_PRIORITY, {
+        host: parts.host,
+        ...(parts.runtime === 'wsl' ? { wslDistro: parts.wslDistro } : {})
+      })
+      const parsed = JSON.parse(stdout) as GhRateLimitPayload
+      scopeProbeFailureAtMs.delete(scope)
+      // Refine only this scope's buckets; never overwrite the native github.com snapshot.
+      for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
+        const b = parseBucket(parsed.resources?.[bucket])
+        if (b.limit > 0 && b.remaining <= 0) {
+          recordGhPrimaryRateLimit(bucket, b.resetAt * 1000, scope)
+        } else if (b.limit > 0) {
+          clearGhRateLimitBlock(bucket, scope)
         }
-      } finally {
-        release()
       }
     } catch {
-      // Why: GHES hosts can be supplied through pasted project URLs. Bound the
-      // negative cache so repeated failing hosts cannot accumulate forever.
+      // Pasted hosts are user-controlled; bound retained failures across them.
       rememberScopeProbeFailure(scope, Date.now())
     } finally {
       scopeRefinementInFlight.delete(scope)
@@ -275,8 +265,22 @@ function refineBreakerForScope(scope: string): void {
 
 registerGhRateLimitResetProbe((_bucket, scope) => refineBreakerForScope(scope))
 
-// Why: single-flight so a concurrent fan-out resolves to one probe — the TTL cache can't dedupe calls that start before the first lands.
+// Share cold probes; TTL caching cannot dedupe calls before the first result.
 let probeInFlight: Promise<GetRateLimitResult> | null = null
+// Forced callers must see quota read after their call, so they share one probe that starts when the running one settles.
+let forcedFollowUp: PromiseWithResolvers<GetRateLimitResult> | null = null
+
+function startProbe(): Promise<GetRateLimitResult> {
+  const probe = fetchRateLimitSnapshot().finally(() => {
+    // Hand off synchronously so no caller can join a follow-up after its probe has started.
+    const next = forcedFollowUp
+    forcedFollowUp = null
+    probeInFlight = null
+    next?.resolve(startProbe())
+  })
+  probeInFlight = probe
+  return probe
+}
 
 export async function getRateLimit(options?: { force?: boolean }): Promise<GetRateLimitResult> {
   if (!options?.force && cached && Date.now() - cached.fetchedAt < RATE_LIMIT_CACHE_TTL_MS) {
@@ -285,29 +289,20 @@ export async function getRateLimit(options?: { force?: boolean }): Promise<GetRa
   if (!options?.force && probeFailure && Date.now() - probeFailure.at < RATE_LIMIT_CACHE_TTL_MS) {
     return { ok: false, error: probeFailure.error }
   }
-  if (!options?.force && probeInFlight) {
+  if (!probeInFlight) {
+    return startProbe()
+  }
+  if (!options?.force) {
     return probeInFlight
   }
-  const probe = fetchRateLimitSnapshot()
-  probeInFlight = probe
-  try {
-    return await probe
-  } finally {
-    if (probeInFlight === probe) {
-      probeInFlight = null
-    }
-  }
+  forcedFollowUp ??= Promise.withResolvers<GetRateLimitResult>()
+  return forcedFollowUp.promise
 }
 
 async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
-  await acquire()
   try {
-    // Why: this singleton snapshot guards native github.com traffic. Pin the
-    // host so a process-level GH_HOST cannot make it describe a GHES account.
-    const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
-      encoding: 'utf-8',
-      host: 'github.com'
-    })
+    // Pin the shared native snapshot against ambient GH_HOST redirection.
+    const stdout = await runRateLimitProbe(NATIVE_PROBE_PRIORITY, { host: 'github.com' })
     const parsed = JSON.parse(stdout) as GhRateLimitPayload
     const snapshot: GitHubRateLimitSnapshot = {
       core: parseBucket(parsed.resources?.core),
@@ -322,7 +317,5 @@ async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
     const message = err instanceof Error ? err.message : String(err)
     probeFailure = { at: Date.now(), error: message }
     return { ok: false, error: message }
-  } finally {
-    release()
   }
 }

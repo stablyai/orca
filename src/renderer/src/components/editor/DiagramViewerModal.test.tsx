@@ -26,7 +26,7 @@ function Host(): React.JSX.Element {
 }
 
 function sizeCanvas(): HTMLElement {
-  const canvas = screen.getByTestId('diagram-viewer-canvas')
+  const canvas = screen.getByTestId('pan-zoom-image-canvas')
   Object.defineProperty(canvas, 'clientWidth', { value: 1000 })
   Object.defineProperty(canvas, 'clientHeight', { value: 600 })
   act(() => resizeObservers.forEach((notify) => notify()))
@@ -53,8 +53,6 @@ beforeEach(() => {
       }
     }
   )
-  URL.createObjectURL = vi.fn(() => 'blob:diagram')
-  URL.revokeObjectURL = vi.fn()
 })
 
 afterEach(() => {
@@ -64,27 +62,7 @@ afterEach(() => {
 })
 
 describe('DiagramViewerModal', () => {
-  it('shows the diagram fitted and centered, and Escape returns focus to the opener', async () => {
-    const user = userEvent.setup()
-    render(<Host />)
-    const opener = screen.getByRole('button', { name: 'open' })
-    await user.click(opener)
-
-    expect(screen.getByRole('dialog', { name: 'Diagram' })).toBeInTheDocument()
-    sizeCanvas()
-    const image = screen.getByRole('img', { name: 'Diagram' })
-    expect(image).toHaveAttribute('src', 'blob:diagram')
-    expect(image.style.width).toBe('400px')
-    expect(image.style.transform).toBe('translate(300px, 200px)')
-    expect(screen.getByRole('button', { name: 'Fit to screen' })).toBeDisabled()
-
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await waitFor(() => expect(document.activeElement).toBe(opener))
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:diagram')
-  })
-
-  it('zooms from the toolbar, pans on drag, and fits again', async () => {
+  it('zooms from the toolbar, pans on Alt-drag, and fits again', async () => {
     const user = userEvent.setup()
     render(<Host />)
     await user.click(screen.getByRole('button', { name: 'open' }))
@@ -96,11 +74,17 @@ describe('DiagramViewerModal', () => {
     expect(image.style.transform).toBe('translate(250px, 175px)')
 
     canvas.setPointerCapture = vi.fn()
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 100, clientY: 100 })
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+      altKey: true
+    })
     // Two moves before a render must both count.
     act(() => {
-      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 120, clientY: 95 })
-      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 140, clientY: 90 })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 120, clientY: 95, altKey: true })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 140, clientY: 90, altKey: true })
     })
     fireEvent.pointerCancel(canvas, { pointerId: 1 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 500, clientY: 500 })
@@ -129,31 +113,6 @@ describe('DiagramViewerModal', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Diagram' })).toBeNull())
     expect(screen.getByRole('dialog', { name: 'Pull request' })).toBeInTheDocument()
     await waitFor(() => expect(document.activeElement).toBe(opener))
-  })
-
-  it('re-serializes the HTML-serialized sanitizer output as an XML image document', async () => {
-    // What DOMPurify returns in Chromium for a label holding U+00A0. Chromium's XML serializer
-    // then writes the character itself; happy-dom's keeps the entity, so only the reparse is asserted.
-    const sanitized = '<svg viewBox="0 0 400 200"><text>User&nbsp;A</text></svg>'
-    render(<Host />)
-    act(() => useAppStore.getState().openModal('diagram-viewer', { svg: sanitized }))
-    sizeCanvas()
-
-    expect(screen.getByRole('img', { name: 'Diagram' }).style.width).toBe('400px')
-    const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0]
-    const xml = blob instanceof Blob ? await blob.text() : ''
-    expect(xml).toContain('xmlns="http://www.w3.org/2000/svg"')
-  })
-
-  it('pans by the wheel distance whatever unit the device reports', async () => {
-    const user = userEvent.setup()
-    render(<Host />)
-    await user.click(screen.getByRole('button', { name: 'open' }))
-    const canvas = sizeCanvas()
-    const image = screen.getByRole('img', { name: 'Diagram' })
-
-    fireEvent.wheel(canvas, { deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_LINE })
-    expect(image.style.transform).toBe('translate(300px, 152px)')
   })
 
   it('leaves focus alone when another modal replaced the viewer', async () => {

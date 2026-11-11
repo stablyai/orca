@@ -2,7 +2,6 @@ import { useCallback, useState, type ReactNode } from 'react'
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
-  ChevronLeft,
   ChevronDown,
   ChevronUp,
   Activity,
@@ -12,8 +11,12 @@ import {
   AlertTriangle
 } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
+import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
 export type CheckResult = {
@@ -23,6 +26,7 @@ export type CheckResult = {
 }
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
+  useMobileColorScheme()
   switch (status) {
     case 'pass':
       return <CheckCircle2 size={14} color={colors.statusGreen} />
@@ -37,6 +41,7 @@ export function TroubleshootView({
   rootRef,
   diagnosticStatus,
   checks,
+  hostEndpoints,
   runDiagnostics,
   onBack,
   onConnectionLog,
@@ -45,12 +50,15 @@ export function TroubleshootView({
   rootRef?: (node: View | null) => void
   diagnosticStatus: DiagnosticStatus
   checks: CheckResult[]
+  hostEndpoints: readonly string[]
   runDiagnostics: () => void
   onBack: () => void
   onConnectionLog: () => void
-  /** Slot the route fills in a development build and in an OTA build; null in a native build. */
+  /** Developer and shell rows the route fills in. */
   developerRow?: ReactNode
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const toggleSection = useCallback(
@@ -58,22 +66,18 @@ export function TroubleshootView({
     []
   )
   return (
-    <View ref={rootRef} style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={styles.backButton}
-          onPress={onBack}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Troubleshooting</Text>
-      </View>
+    <View ref={rootRef} style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
+      <SettingsNavBar
+        title={t('diagnostics.troubleshootView.title', 'Troubleshooting')}
+        onBack={onBack}
+      />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          settingsScreenStyles.scrollContent,
+          { paddingBottom: insets.bottom + spacing.xl }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Pressable
@@ -93,10 +97,10 @@ export function TroubleshootView({
           )}
           <Text style={styles.diagnosticButtonLabel}>
             {diagnosticStatus === 'running'
-              ? 'Running…'
+              ? t('diagnostics.troubleshootView.running', 'Running…')
               : diagnosticStatus === 'done'
-                ? 'Run again'
-                : 'Run diagnostics'}
+                ? t('diagnostics.troubleshootView.runAgain', 'Run again')
+                : t('diagnostics.troubleshootView.runDiagnostics', 'Run diagnostics')}
           </Text>
         </Pressable>
 
@@ -108,48 +112,52 @@ export function TroubleshootView({
           onPress={onConnectionLog}
         >
           <ScrollText size={16} color={colors.textPrimary} />
-          <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
+          <Text style={styles.diagnosticButtonLabel}>
+            {t('diagnostics.troubleshootView.viewNetworkDiagnostics', 'View network diagnostics')}
+          </Text>
         </Pressable>
 
         {developerRow}
 
         {checks.length > 0 && (
-          <View style={styles.section}>
-            {checks.map((check, i) => (
-              <View key={i}>
-                {i > 0 && <View style={styles.separator} />}
-                <View style={styles.checkRow}>
-                  <StatusIcon status={check.status} />
-                  <Text style={styles.checkLabel}>{check.label}</Text>
+          <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+            {checks.map((check) => (
+              <ListRow
+                key={check.label}
+                title={check.label}
+                leading={<StatusIcon status={check.status} />}
+                detail={
                   <Text
                     style={[styles.checkDetail, check.status === 'fail' && styles.checkDetailFail]}
                   >
                     {check.detail}
                   </Text>
-                </View>
-              </View>
+                }
+              />
             ))}
-          </View>
+          </ListGroup>
         )}
 
-        <Text style={styles.sectionHeading}>Common issues</Text>
+        <SectionHeader
+          title={t('diagnostics.troubleshootView.commonIssues', 'Common issues')}
+          first
+        />
 
-        <View style={styles.section}>
-          {troubleshootCommonIssues.map((section, i) => (
+        <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+          {troubleshootCommonIssues(t, hostEndpoints).map((section) => (
             <View key={section.id}>
-              {i > 0 && <View style={styles.separator} />}
-              <Pressable
-                style={({ pressed }) => [styles.accordionHeader, pressed && styles.rowPressed]}
+              <ListRow
+                title={section.title}
+                leading={<section.icon size={16} color={colors.textSecondary} />}
+                accessory={
+                  expandedId === section.id ? (
+                    <ChevronUp size={16} color={colors.textMuted} />
+                  ) : (
+                    <ChevronDown size={16} color={colors.textMuted} />
+                  )
+                }
                 onPress={() => toggleSection(section.id)}
-              >
-                {section.icon}
-                <Text style={styles.accordionTitle}>{section.title}</Text>
-                {expandedId === section.id ? (
-                  <ChevronUp size={16} color={colors.textMuted} />
-                ) : (
-                  <ChevronDown size={16} color={colors.textMuted} />
-                )}
-              </Pressable>
+              />
               {expandedId === section.id && (
                 <View style={styles.accordionBody}>
                   {section.steps.map((step, j) => (
@@ -162,9 +170,7 @@ export function TroubleshootView({
               )}
             </View>
           ))}
-        </View>
-
-        <View style={{ height: spacing.xl }} />
+        </ListGroup>
       </ScrollView>
     </View>
   )

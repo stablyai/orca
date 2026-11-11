@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function EditorFileTabCloseButton({
   fileIsDirty,
@@ -10,6 +10,7 @@ export function EditorFileTabCloseButton({
   showsSelectionChrome: boolean
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       className={`flex items-center justify-center w-4 h-4 rounded-sm ${
@@ -20,13 +21,9 @@ export function EditorFileTabCloseButton({
             : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
       }`}
       type="button"
-      // Why: simulator unified tabs reuse this tab chrome, so E2E needs
-      // the same stable close affordance on the real button users click.
+      // Share the real close affordance with simulator tabs so E2E exercises their actual button.
       data-tab-close-button="true"
-      aria-label={translate(
-        'auto.components.tab.bar.EditorFileTabCloseButton.4655cf570e',
-        'Close tab'
-      )}
+      aria-label={t('auto.components.tab.bar.EditorFileTabCloseButton.4655cf570e', 'Close tab')}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation()

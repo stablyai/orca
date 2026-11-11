@@ -1,28 +1,30 @@
-// Why: shared by the desktop status-bar tooltip and the mobile accounts screen
-// so rate-limit reset/expiry countdown copy stays identical across surfaces.
-// Pure (no platform imports) — safe to bundle in both the renderer and mobile.
+// Share renderer/mobile countdown copy without platform imports.
 
-/**
- * Compact human duration for a rate-limit window, flooring to whole units:
- * "47m", "3h 54m", "6d 7h". Returns "now" for a non-positive delta so callers
- * can special-case the "already reset" copy.
- */
-export function formatResetDuration(ms: number): string {
+/** Floor durations to whole units (47m, 3h 54m, 6d 7h); nonpositive values return now for reset-specific copy. */
+export function formatResetDuration(
+  ms: number,
+  formatUnit: (value: number, unit: 'minute' | 'hour' | 'day') => string = (value, unit) =>
+    `${value}${unit === 'minute' ? 'm' : unit === 'hour' ? 'h' : 'd'}`
+): string {
   if (ms <= 0) {
     return 'now'
   }
   const totalMins = Math.floor(ms / 60_000)
   if (totalMins < 60) {
-    return `${totalMins}m`
+    return formatUnit(totalMins, 'minute')
   }
   const hours = Math.floor(totalMins / 60)
   const mins = totalMins % 60
   if (hours >= 24) {
     const days = Math.floor(hours / 24)
     const remHours = hours % 24
-    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`
+    return remHours > 0
+      ? `${formatUnit(days, 'day')} ${formatUnit(remHours, 'hour')}`
+      : formatUnit(days, 'day')
   }
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+  return mins > 0
+    ? `${formatUnit(hours, 'hour')} ${formatUnit(mins, 'minute')}`
+    : formatUnit(hours, 'hour')
 }
 
 /** "Resets in 3h 54m" / "Resets now" for a window's time-until-reset (ms). */
@@ -35,13 +37,7 @@ const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
 
-/**
- * Delay (ms) until the soonest reset countdown label would change, or null when
- * no future reset needs a tick. Because labels are floored to minutes (or hours
- * past a day), a countdown clock only needs to wake just after the next unit
- * boundary — not every second — so callers schedule one short-lived timeout
- * instead of polling. Returns the minimum delay across all reset times.
- */
+/** Schedule just past the next floored minute/hour label boundary, not every second; choose the earliest delay across future resets. */
 export function getResetCountdownNextTickDelay(
   now: number,
   resetTimes: readonly number[]

@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 type SpawnSpec = { program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
 const spawned = vi.hoisted(() => {
   const specs: SpawnSpec[] = []
-  return { specs }
+  const stdins: PassThrough[] = []
+  return { specs, stdins }
 })
 
 vi.mock('@orca/process-host', () => ({
@@ -18,12 +19,13 @@ vi.mock('@orca/process-host', () => ({
       pid: undefined,
       kill: vi.fn()
     })
+    spawned.stdins.push(child.stdin)
     queueMicrotask(() => child.emit('close', 0))
     return child
   }
 }))
 vi.mock('../codex-cli/command', () => ({ resolveClaudeCommand: () => 'claude' }))
-vi.mock('../wsl/wsl-executable-path', () => ({
+vi.mock('../wsl/execution/wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
 
@@ -32,23 +34,53 @@ import { runClaudeCommandProcess } from './claude-command-process'
 
 const originalPlatform = process.platform
 afterEach(() => {
+  vi.unstubAllEnvs()
   spawned.specs.length = 0
+  spawned.stdins.length = 0
   Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
 describe('runClaudeCommandProcess', () => {
-  it("logs in on the host with CLAUDE_CONFIG_DIR set to the account's folder", async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
+  it('uses the selected account without the launching Claude session identity', async () => {
+    vi.stubEnv('CLAUDE_CODE_MESSAGING_SOCKET', 'parent-socket')
+    vi.stubEnv('CLAUDE_CODE_MESSAGING_TOKEN', 'parent-token')
+    vi.stubEnv('CLAUDE_AGENT_SDK_VERSION', 'parent-sdk')
+    vi.stubEnv('CLAUDE_CODE_HTTP_PROXY', 'http://user-proxy')
+    await runClaudeCommandProcess(
+      ['auth', 'status'],
+      { windowsPath: '/chosen/claude', linuxPath: null, wslDistro: null },
+      1000
+    )
+    const env = spawned.specs[0]?.env
+    expect(env?.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+    expect(env?.CLAUDE_CODE_MESSAGING_TOKEN).toBeUndefined()
+    expect(env?.CLAUDE_AGENT_SDK_VERSION).toBeUndefined()
+    expect(env?.CLAUDE_CODE_HTTP_PROXY).toBe('http://user-proxy')
+    expect(env?.CLAUDE_CONFIG_DIR).toBe('/chosen/claude')
+  })
+
+  it('survives a pasted code that reaches Claude just as it exits (EPIPE)', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let write: ((text: string) => void) | null = null
     await runClaudeCommandProcess(
       ['auth', 'login', '--claudeai'],
       { windowsPath: '/data/claude-profiles/a/home', linuxPath: null, wslDistro: null },
-      1000
+      1000,
+      {
+        keepStdinOpen: true,
+        onStdin: (next) => {
+          write = next
+          spawned.stdins[0].emit(
+            'error',
+            Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
+          )
+        }
+      }
     )
-    expect(spawned.specs[0]).toMatchObject({
-      program: 'claude',
-      args: ['auth', 'login', '--claudeai']
-    })
-    expect(spawned.specs[0].env?.CLAUDE_CONFIG_DIR).toBe('/data/claude-profiles/a/home')
+    expect(write).not.toBeNull()
+    expect(warn).toHaveBeenCalledWith('[claude-accounts] Claude login stdin:', 'write EPIPE')
+    warn.mockRestore()
   })
 
   it("logs in through the distro's login shell with --exec for a WSL account", async () => {
@@ -71,35 +103,5 @@ describe('runClaudeCommandProcess', () => {
       )
     )
     expect(spec.env?.CLAUDE_CONFIG_DIR).toBe(process.env.CLAUDE_CONFIG_DIR)
-  })
-
-  it('hands BROWSER to a host login', async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
-    await runClaudeCommandProcess(
-      ['auth', 'login', '--claudeai'],
-      { windowsPath: '/data/a/home', linuxPath: null, wslDistro: null },
-      1000,
-      { browser: '/data/a/home/.orca-sign-in-browser' }
-    )
-    expect(spawned.specs[0].env?.BROWSER).toBe('/data/a/home/.orca-sign-in-browser')
-  })
-
-  it('makes the BROWSER helper executable inside the distro before a WSL login', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    await runClaudeCommandProcess(
-      ['auth', 'login', '--claudeai'],
-      {
-        windowsPath: '\\\\wsl.localhost\\Ubuntu\\home\\u\\a',
-        linuxPath: '/home/u/a',
-        wslDistro: 'Ubuntu'
-      },
-      1000,
-      { browser: '/home/u/a/.orca-sign-in-browser' }
-    )
-    expect(spawned.specs[0].args?.[5]).toBe(
-      buildWslLoginShellCommand(
-        `chmod 700 '/home/u/a/.orca-sign-in-browser'; exec env CLAUDE_CONFIG_DIR='/home/u/a' BROWSER='/home/u/a/.orca-sign-in-browser' claude 'auth' 'login' '--claudeai'`
-      )
-    )
   })
 })

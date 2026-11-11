@@ -1,16 +1,15 @@
 import { useEffect } from 'react'
-import type { FeatureWallWorkflow } from '../../../../shared/feature-wall-workflows'
-import { useAppStore } from '@/store'
-import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { useAppStore } from '@/store/index'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { deriveIntegrationConnectionStatus } from './use-integration-connection-status'
+import type { FeatureWallWorkflow } from '../../../../shared/feature-wall-workflows'
+import { localPreflightContextKey } from '../../runtime/hosts/preflight/local-preflight-context-key'
 
 export type FeatureWallTaskSourcePresentation = {
   workflow: FeatureWallWorkflow
   hasConnectedTaskSource: boolean
-  // True until the first provider status checks resolve. Callers should treat
-  // unknown state as "don't show the disconnected setup affordance yet" so we
-  // don't flash inline integration rows for a connected user.
+  // Hide disconnected setup until provider checks settle to prevent flashes for connected users.
   isCheckingTaskSources: boolean
 }
 
@@ -45,8 +44,7 @@ export function useFeatureWallTaskSourcePresentation(
     if (!isOpen) {
       return
     }
-    // Why: the Tasks tour copy depends on whether a task source is already
-    // usable, so connected users should not see setup-oriented guidance.
+    // Refresh connection facts before choosing setup-oriented tour copy.
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }

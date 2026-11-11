@@ -2,12 +2,16 @@ import React from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { toMegabytes } from './workspace-cleanup-facet-panel-model'
-import type { WorkspaceCleanupAppliedFilter } from '../../../../shared/workspace-cleanup-applied-filters'
-import { listAppliedWorkspaceCleanupFilters } from '../../../../shared/workspace-cleanup-applied-filters'
-import type { WorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup-filter-model'
 
-/** Why in the bar, not the panel: a filter narrowing the list must be visible without opening anything. */
+import {
+  type WorkspaceCleanupAppliedFilter,
+  listAppliedWorkspaceCleanupFilters
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-applied-filters'
+import type { WorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
+
+// Show narrowing filters outside the panel; derive labels per render so language changes cannot reuse stale translations.
 // Why not memoized: the labels are translated at build time, so caching them on
 // `filters` alone reuses the previous language's strings after a language change.
 // Derivation is constant-size (one pass over the filter fields, not per row).
@@ -24,6 +28,7 @@ export function WorkspaceCleanupAppliedFilterChips({
   applied: readonly WorkspaceCleanupAppliedFilter[]
   onClear: (filter: WorkspaceCleanupAppliedFilter) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (applied.length === 0) {
     return null
   }
@@ -31,10 +36,7 @@ export function WorkspaceCleanupAppliedFilterChips({
     <div
       className="flex w-full flex-wrap items-center gap-1"
       role="list"
-      aria-label={translate(
-        'components.workspace.cleanup.browse.appliedFilters',
-        'Applied filters'
-      )}
+      aria-label={t('components.workspace.cleanup.browse.appliedFilters', 'Applied filters')}
     >
       {applied.map((filter) => (
         <span
@@ -47,7 +49,7 @@ export function WorkspaceCleanupAppliedFilterChips({
             variant="ghost"
             size="icon-xs"
             className="rounded-full"
-            aria-label={translate(
+            aria-label={t(
               'components.workspace.cleanup.browse.removeFilter',
               'Remove filter {{value0}}',
               { value0: filter.label }

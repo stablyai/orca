@@ -6,15 +6,18 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalShow
 } from '../../../src/shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../src/shared/workspace-layout/terminal-surface-id'
 import { expect } from './orca-app'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 import { readFreshTerminalInventory } from './terminal-inventory-observation'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
 
 const RECOVERY_DEADLINE_MS = 8_000
+// The host's shell-ready deadline (SHELL_READY_TIMEOUT_MS): a profile exec drops the ready marker, so the command waits for it.
+const SHELL_READY_DEADLINE_MS = 15_000
 
 export type StartupExecTerminal = {
+  createdAtMs: number
   hostPtyId: string
   panePtyId: string
   parentTabId: string
@@ -150,6 +153,7 @@ export async function createStartupExecTerminal(
     `printf '%s|%s\\n' "$$" "$(tty)" > ${quotePosixShell(ledgerPath)}`,
     markerCommand(startupMarker)
   ].join('; ')
+  const createdAtMs = Date.now()
   const created = await callStartupExecRuntime<{
     tab: { parentTabId: string; terminal: string | null }
   }>(page, 'session.tabs.createTerminal', {
@@ -191,6 +195,7 @@ export async function createStartupExecTerminal(
     shown.terminal.ptyId
   )
   return {
+    createdAtMs,
     hostPtyId: shown.terminal.ptyId,
     panePtyId,
     parentTabId: created.tab.parentTabId,
@@ -214,8 +219,14 @@ export async function expectStartupExecRecovery(
   created: StartupExecTerminal,
   runId: string
 ): Promise<void> {
+  const shellReadyDeadlineRemainingMs = Math.max(
+    0,
+    created.createdAtMs + SHELL_READY_DEADLINE_MS - Date.now()
+  )
   await expect
-    .poll(() => readTerminal(page, created.terminal), { timeout: RECOVERY_DEADLINE_MS })
+    .poll(() => readTerminal(page, created.terminal), {
+      timeout: shellReadyDeadlineRemainingMs + RECOVERY_DEADLINE_MS
+    })
     .toMatchObject({
       tail: expect.arrayContaining([expect.stringContaining(created.startupMarker)])
     })

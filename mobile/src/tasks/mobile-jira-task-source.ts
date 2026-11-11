@@ -1,5 +1,9 @@
-import type { JiraIssue, JiraIssueFilter, JiraSiteSelection } from '../../../src/shared/jira-types'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type {
+  JiraIssue,
+  JiraIssueFilter,
+  JiraSiteSelection
+} from '../../../src/shared/jira/jira-types'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { toJiraDetailComments } from './jira-mobile-issue-read'
 import {
   jiraIssueCommentsRead,
@@ -14,7 +18,7 @@ const DETAIL_TIMEOUT_MS = 30_000
 
 // Raw JQL replaces the selected preset, matching desktop.
 export async function fetchJiraTaskIssues(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   args: { jql: string; filter: JiraIssueFilter; siteId: JiraSiteSelection | null }
 ): Promise<JiraIssue[]> {
   const jql = args.jql.trim()
@@ -37,7 +41,7 @@ export async function fetchJiraTaskIssues(
 }
 
 export async function fetchJiraIssueDetail(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   args: { key: string; siteId?: string }
 ): Promise<{ issue: JiraIssue; comments: ReturnType<typeof toJiraDetailComments> }> {
   const params = { key: args.key, siteId: args.siteId }

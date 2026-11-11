@@ -36,7 +36,8 @@ export function isValidResolvedWorktreeLineageEdge(
   )
 }
 
-function getCyclicChildKeys<Key>(parentByChild: ReadonlyMap<Key, Key>): Set<Key> {
+/** The children on a cycle of a child-to-parent map, whatever the keys are. */
+export function getCyclicLineageChildKeys<Key>(parentByChild: ReadonlyMap<Key, Key>): Set<Key> {
   const processed = new Set<Key>()
   const cyclic = new Set<Key>()
 
@@ -70,7 +71,7 @@ function getCyclicChildKeys<Key>(parentByChild: ReadonlyMap<Key, Key>): Set<Key>
 export function getCyclicWorktreeLineageChildIds(
   lineageByChildId: ReadonlyMap<string, WorktreeLineage>
 ): Set<string> {
-  return getCyclicChildKeys(
+  return getCyclicLineageChildKeys(
     new Map([...lineageByChildId].map(([childId, lineage]) => [childId, lineage.parentWorktreeId]))
   )
 }
@@ -133,7 +134,7 @@ export function projectResolvedWorktreeLineage<T extends Worktree>(
     parentIndexByChildIndex.set(childIndex, parentIndices[0])
   })
 
-  for (const index of getCyclicChildKeys(parentIndexByChildIndex)) {
+  for (const index of getCyclicLineageChildKeys(parentIndexByChildIndex)) {
     validLineageByChildIndex.delete(index)
     parentIndexByChildIndex.delete(index)
   }

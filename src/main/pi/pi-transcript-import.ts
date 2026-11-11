@@ -7,14 +7,15 @@ import { directoryTranscriptImport } from '../native-chat/structured-agent-cli-c
 import { readPiSessionHeader } from './rpc-launch-resolution'
 
 export const PI_TRANSCRIPT_IMPORT = directoryTranscriptImport({
+  conversationStore: () => piSessionHistorySessionsDir(),
   // Session History's host source is authoritative, including when the chat chose another home.
   accountHomeCandidates: () => [
     process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent')
   ],
-  // The file Session History lists under this id.
-  findTranscript: async ({ providerSessionId }) => {
-    const files = await walkSessionFiles(piSessionHistorySessionsDir(), 'pi', [], {
+  findTranscript: async ({ providerSessionId, store, strictErrors }) => {
+    const files = await walkSessionFiles(store, 'pi', [], {
       extensions: new Set(['.jsonl']),
+      strictErrors,
       filePredicate: (path) => sessionIdFromFileName(path) === providerSessionId
     })
     if (files.length !== 1) {
@@ -30,6 +31,5 @@ export const PI_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     }
     return file
   },
-  // A Pi chat's handle names its session file, not the id.
   handleNamesTranscript: true
 })

@@ -1,14 +1,13 @@
 import { spawnProcess } from '@orca/process-host'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
-import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
-import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
+import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 
 const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
 
-/** Ends a `claude` login and everything it spawned, then runs `afterKill`. */
 export function terminateClaudeProcess(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
   afterKill: () => void
 ): void {
@@ -49,7 +48,7 @@ export function terminateClaudeProcess(
     taskkill.once('close', (code) => finish(code === 0))
   }
   if (process.platform === 'win32') {
-    // The wrapper's own PID never owns the login tree, so prefer the relayed PID.
+    // The login tree belongs to the relayed PID, not the wrapper.
     const resolveTerminationPid = interactiveLogin?.waitForTerminationPid
       ? interactiveLogin.waitForTerminationPid()
       : Promise.resolve(interactiveLogin?.getTerminationPid?.() ?? child.pid ?? null)
@@ -74,7 +73,7 @@ export function terminateClaudeProcess(
       process.kill(-child.pid)
       signaledGroup = true
     } catch {
-      // The direct child remains the only safe fallback when group lookup fails.
+      // Fall back to the direct child when group signaling fails.
     }
     if (signaledGroup) {
       recordSelfInitiatedTreeKill({

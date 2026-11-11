@@ -1,30 +1,40 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { runEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { StateCreator } from 'zustand'
-import { toast } from 'sonner'
 import type { AppState } from '../types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { getWorktreeIdFromVisitKey, getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
-import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
-import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { hasRuntimeRpcErrorCode } from '../../runtime/runtime-rpc-result'
-import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
-import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import {
+  getWorktreeIdFromVisitKey,
+  getWorktreeVisitKey
+} from '@/lib/workspace/activation/worktree-visit-recency'
+import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
+import { repoMatchesHostIdentity, worktreeBelongsToHost } from './repo-host-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import { ipcOrRuntimeTargetForHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { destroyRecipeVmBeforeProjectRemoval } from './recipe-vm-project-removal'
 import { stopRuntimeProjectTerminalsBeforeRemoval } from './runtime-project-terminal-stop'
 import type { RepoSlice } from './repo-state'
-import { ERROR_TOAST_DURATION } from './repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import {
-  captureWorkspaceChatDraftKeys,
-  deleteWorkspaceChatDrafts
-} from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
-
-export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: string): boolean {
-  return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
-}
+  closeRemovedHostTwinState,
+  collectRemovedHostTwins
+} from './repo-removal-host-twin-teardown'
+import { twinSelectionPatch } from './repo-removal-host-twin-attribution'
+import * as chatDrafts from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
+import {
+  flushPurgedWorkspaceEdits,
+  noticeRemovedUnsavedFiles
+} from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
+import { worktreePurgeClosedFileIds } from '../slices/worktrees/teardown/worktree-purge-closed-files'
+import {
+  isRuntimeHostUnreachableError,
+  recordPendingRuntimeRepoRemoval
+} from './pending-runtime-repo-removals'
+import { toastProjectRemovalFailure } from './repo-removal-failure-toast'
+import { replayPendingRuntimeRepoRemovalsIfReady } from './pending-runtime-repo-removal-replay'
+import { isRuntimeEnvironmentRegistered } from './runtime-environment-registration'
 
 type HostScopedWorktreeRef = { id: string; hostId?: string }
 
@@ -74,22 +84,13 @@ export function countOpenRepoTerminalTabs(
   return count
 }
 
-/** A listing that fails reads as registered, so the host is still asked as before. */
-async function isRuntimeEnvironmentRegistered(environmentId: string): Promise<boolean> {
-  try {
-    const environments = await window.api.runtimeEnvironments.list()
-    return environments.some((environment) => environment.id === environmentId)
-  } catch {
-    return true
-  }
-}
-
 export function createRepoRemovalActions(
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'removeProject'> {
-  return {
+  const actions: Pick<RepoSlice, 'removeProject'> = {
     removeProject: async (projectId, options) => {
+      let hostUnreachable = false
       try {
         // Why: exact host match only; the unique-candidate/focused fallbacks could pick another host's row (#13071).
         const ownerRepo = get().repos.find((repo) =>
@@ -112,23 +113,37 @@ export function createRepoRemovalActions(
         if (!target) {
           throw new Error('The project host is unresolved. Refresh and retry.')
         }
+        const knownWorktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
         // Why before the host call: its announcement can start a listing refresh that drops these tabs.
-        const chatDraftKeys = captureWorkspaceChatDraftKeys(
+        const preCallTwins = collectRemovedHostTwins(get(), knownWorktreeIds, ownerHostId)
+        const removedTwinEntityIds = new Set(
+          preCallTwins.byHost.flatMap(({ removed }) => [
+            ...removed.terminalTabIds,
+            ...removed.conversationIds
+          ])
+        )
+        const chatDraftKeys = chatDrafts.captureWorkspaceChatDraftKeys(
           get(),
-          getKnownRepoWorktreeIds(get(), projectId, ownerHostId).map((workspaceId) => ({
+          knownWorktreeIds.map((workspaceId) => ({
             workspaceId,
-            executionHostId: ownerHostId
+            executionHostId: ownerHostId,
+            ...(preCallTwins.twinHostIds.has(workspaceId)
+              ? { onlyEntityIds: removedTwinEntityIds }
+              : {})
           }))
         )
         // Why: a stopped or forgotten server leaves rows nothing can reach; only this desktop's copy goes.
+        // A local-only removal treats the unreachable server like a gone one; repo.rm replays on reconnect.
+        const removeLocallyOnly = target.kind === 'environment' && options.localOnly === true
         const hostGone =
           target.kind === 'environment' &&
           !vmServerDestroyed &&
-          !(await isRuntimeEnvironmentRegistered(target.environmentId))
+          (removeLocallyOnly || !(await isRuntimeEnvironmentRegistered(target.environmentId)))
         if (target.kind === 'environment' && !vmServerDestroyed && !hostGone) {
           await stopRuntimeProjectTerminalsBeforeRemoval(
             target.environmentId,
             projectId,
+            // Why re-read: the registration await can let a listing refresh add worktrees.
             getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
           )
         }
@@ -143,13 +158,18 @@ export function createRepoRemovalActions(
         } catch (err) {
           // Why: the owner already dropped this project, so purge the local ghost row instead of aborting (#11994).
           if (!hasRuntimeRpcErrorCode(err, 'repo_not_found')) {
+            hostUnreachable = target.kind === 'environment' && isRuntimeHostUnreachableError(err)
             throw err
           }
         }
+        chatDrafts.deleteProjectChatDrafts(projectId, ownerHostId)
+        if (removeLocallyOnly && !vmServerDestroyed) {
+          // Before the purge: a catalog refresh it triggers must already be fenced.
+          recordPendingRuntimeRepoRemoval(target.environmentId, projectId)
+          replayPendingRuntimeRepoRemovalsIfReady(target.environmentId)
+        }
         if (target.kind === 'environment') {
-          // Why: the host confirmed the removal (or is gone), and this desktop's own persisted rows
-          // for that host are swept only by an explicit removal, never by the startup sweep (#17776).
-          // A paired web client keeps no such rows, and its bridge throws synchronously.
+          // Explicit removal sweeps this desktop’s persisted host rows; startup never does (#17776). Paired web stores none and its bridge throws synchronously.
           try {
             await window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
           } catch (error) {
@@ -161,26 +181,20 @@ export function createRepoRemovalActions(
         const repoPath = get().repos.find((repo) =>
           repoMatchesHostIdentity(repo, projectId, ownerHostId)
         )?.path
-        get().evictGitHubRepoCaches(projectId, repoPath)
-        const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
+        get().evictGitHubRepoCaches(projectId, repoPath, ownerHostId)
+        const { clearRepoSlugCacheEntry } =
+          await import('../../lib/workspace/catalog/repo-slug-index')
         clearRepoSlugCacheEntry(projectId)
 
-        // Kill PTYs for all worktrees belonging to this repo
-        const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
-        // A raw id can be published by two hosts. Keep the purge host-scoped for
-        // those twins so the sibling's qualified visit recency survives.
-        const knownRepoWorktrees = [
-          ...(get().worktreesByRepo[projectId] ?? []),
-          ...(get().detectedWorktreesByRepo[projectId]?.worktrees ?? [])
+        const worktreeIds = [
+          ...new Set([
+            ...knownWorktreeIds,
+            ...getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+          ])
         ]
-        const exactSiblingIds = new Set(
-          knownRepoWorktrees
-            .filter((worktree) => !worktreeBelongsToHost(worktree, ownerHostId))
-            .map((worktree) => worktree.id)
-        )
-        const purgeTargets = worktreeIds.map((id) =>
-          exactSiblingIds.has(id) ? { id, hostId: ownerHostId } : id
-        )
+        // Why rechecked: a concurrent removal of the other copy leaves no survivor to share with.
+        const twins = collectRemovedHostTwins(get(), worktreeIds, ownerHostId)
+        const exclusiveWorktreeIds = worktreeIds.filter((id) => !twins.twinHostIds.has(id))
         const localAgentContextProjectIds =
           ownerHostId === LOCAL_EXECUTION_HOST_ID
             ? [
@@ -190,7 +204,8 @@ export function createRepoRemovalActions(
                   .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
               ]
             : []
-        for (const wId of worktreeIds) {
+        // Backstop for the host's sweep, which a spent budget or reloading graph can cut short.
+        for (const wId of exclusiveWorktreeIds) {
           const tabs = get().tabsByWorktree[wId] ?? []
           for (const tab of tabs) {
             for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
@@ -201,9 +216,18 @@ export function createRepoRemovalActions(
           }
         }
 
-        // Why: use the canonical per-worktree purge to evict all worktree-scoped maps (hand-deletion leaked most); runs before the set() below so it still sees tabsByWorktree.
-        get().purgeWorktreeTerminalState(purgeTargets)
-        deleteWorkspaceChatDrafts(chatDraftKeys)
+        // Canonical purge clears all worktree maps before set while tabs remain readable; manual deletion leaked state.
+        const purgeTargets = worktreeIds.map((id) => ({ id, hostId: ownerHostId }))
+        flushPurgedWorkspaceEdits(get(), purgeTargets)
+        // Why before the twin close: it closes tabs one by one; the purge below shares this batch.
+        const keepEditorBuffer = noticeRemovedUnsavedFiles(
+          get(),
+          worktreePurgeClosedFileIds(get(), purgeTargets),
+          options.confirmedDiscards
+        )
+        closeRemovedHostTwinState(get, set, twins, preCallTwins, keepEditorBuffer)
+        get().purgeWorktreeTerminalState(exclusiveWorktreeIds)
+        chatDrafts.deleteWorkspaceChatDrafts(chatDraftKeys)
         get().clearLocalDetectedAgentContextsForProjects(localAgentContextProjectIds)
 
         set((s) => {
@@ -236,7 +260,7 @@ export function createRepoRemovalActions(
           const nextRepos = s.repos.filter(
             (r) => !repoMatchesHostIdentity(r, projectId, ownerHostId)
           )
-          // Why: when no sibling host owns this id, drop every worktree timestamp (unhydrated SSH ones would otherwise never prune); else stay host-scoped.
+          // Without sibling ownership, remove all timestamps including unhydrated SSH entries; otherwise keep cleanup host-scoped.
           const repoIdFullyRemoved = !nextRepos.some((r) => r.id === projectId)
           let nextLastVisitedAtByWorktreeId = s.lastVisitedAtByWorktreeId
           for (const id of Object.keys(s.lastVisitedAtByWorktreeId)) {
@@ -264,6 +288,7 @@ export function createRepoRemovalActions(
               hostId: ownerHostId
             }),
             activeRepoId: s.activeRepoId === projectId ? null : s.activeRepoId,
+            ...twinSelectionPatch(s, twins.twinHostIds, ownerHostId),
             filterRepoIds: s.filterRepoIds.filter((id) => id !== projectId),
             worktreesByRepo: nextWorktrees,
             detectedWorktreesByRepo: nextDetectedWorktrees,
@@ -286,15 +311,20 @@ export function createRepoRemovalActions(
         console.error('Failed to remove repo:', err)
         // Why: bulk and background callers aggregate their own failures, so only opted-in single-project entry points toast (#11994).
         if (options.errorFeedback === 'toast') {
-          toast.error(
-            translate('auto.store.slices.repos.removeProjectFailed', 'Failed to remove project'),
-            {
-              description: readIpcErrorMessage(err) ?? String(err),
-              duration: ERROR_TOAST_DURATION
-            }
-          )
+          toastProjectRemovalFailure(err, {
+            hostUnreachable,
+            removeLocally: () =>
+              void get().removeProject(projectId, { ...options, localOnly: true })
+          })
         }
       }
     }
+  }
+  return {
+    removeProject: (projectId, options) =>
+      runEnclosingWorktreeRemoval(
+        options.automaticCleanup ? null : { hostId: options.hostId, repoId: projectId },
+        () => actions.removeProject(projectId, options)
+      )
   }
 }

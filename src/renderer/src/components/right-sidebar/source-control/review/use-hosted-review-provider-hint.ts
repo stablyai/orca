@@ -2,22 +2,18 @@ import { useEffect, useMemo } from 'react'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewInfo
-} from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   buildLoadingHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget
 } from './hosted-review-creation-eligibility-snapshot'
-import { resolveProvisionalHostedReviewProvider } from './primary-create-pr-intent-action'
+import { resolveProvisionalHostedReviewProvider } from './provisional-hosted-review-provider'
 import { parseRemoteRepo } from './remote-repo'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import type { SourceControlLinkedReviews } from './use-linked-reviews'
 
-/**
- * Decides which provider the Create Review affordance should speak for before eligibility resolves,
- * remembering the last concrete answer per repo/worktree/branch so a refetch never flashes the
- * GitHub default at a GitLab (etc.) repo.
- */
+/** Remember the provider per repo/worktree/branch so refetches cannot flash GitHub copy on other hosts. */
 export function useSourceControlHostedReviewProviderHint({
   activeRepo,
   activeRepoId,
@@ -70,7 +66,6 @@ export function useSourceControlHostedReviewProviderHint({
     hostedReviewCreationRequestMatchesCurrent &&
     hostedReviewCreationRequestState.status === 'loading' &&
     hostedReview === null
-  // Why: infer provider from the remote host when unknown, so a GitLab (etc.) repo shows its own review copy instead of the GitHub default.
   const remoteInferredHostedReviewProvider = useMemo(
     () => parseRemoteRepo(activeRepo?.gitRemoteIdentity?.remoteUrl ?? '')?.provider ?? null,
     [activeRepo?.gitRemoteIdentity?.remoteUrl]
@@ -142,7 +137,7 @@ export function useSourceControlHostedReviewProviderHint({
     provisionalHostedReviewProvider
   ])
   const hostedReviewCreationForHeader = useMemo(() => {
-    // Why: during a fresh preflight, disable stale Create PR eligibility while state reconciles, but preserve provider copy from the last snapshot.
+    // Disable stale eligibility during preflight while preserving the last provider’s copy.
     if (isHostedReviewCreationLoading) {
       const provider = resolveHostedReviewCreationProviderForTarget(
         hostedReviewCreationProviderHintRef.current,

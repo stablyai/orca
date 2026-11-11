@@ -4,23 +4,27 @@ import type {
   ForceDeleteWorktreeBranchResult
 } from '../../../../shared/worktree/create-types'
 import { parseWorktreeId } from '../../worktree-logic'
-import { resolveWorktreeRemovalRepoOwner } from '../../../worktree-removal-repo-owner'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+
 import type { Repo } from '../../../../shared/repo-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
-import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
-import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
-import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
+import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
+import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   notifyWorktreesChanged,
   cleanupUnusedWorktreePushTargetRemote
 } from '../../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
-import { forceDeleteLocalBranch } from '../../../git/worktree'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { forceDeleteLocalBranch } from '../../../git/worktrees/removal/worktree-branch-removal'
 import { gitExecFileAsync } from '../../../git/runner'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import { getWorktreeRemovalInFlightKey } from './worktree-removal-coordinator'
@@ -39,7 +43,8 @@ import {
   assertWslMoveProjectWritable,
   assertWslMoveRepoWritable,
   isWslMoveSourceHost
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { teardownStops } from '../../../runtime/workspaces/removal/owned-session-teardown-policy'
 
 export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, worktreeRemovalsInFlight } = context
@@ -63,7 +68,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
       } else if (isWslMoveSourceHost(args.hostId)) {
         assertWslMoveProjectWritable(store, { repoId })
       }
-      // Repo-first (unlike owner resolution below) so this key matches worktrees:remove's; meta only covers ownerless forgets.
+      // Match removal's repo-first coalescing key; metadata identifies only ownerless forgets.
       const inFlightKey = getWorktreeRemovalInFlightKey(
         args.worktreeId,
         repo
@@ -101,7 +106,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
         )
         const ownerHost = parseExecutionHostId(ownerHostId)
         const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
-        // External host inventories must never sweep a same-id local workspace.
+        // Off-host teardown must never include same-ID local inventory.
         await killAllProcessesForWorktree(args.worktreeId, {
           runtime,
           resolvedWorktreeId: args.worktreeId,
@@ -111,23 +116,22 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
             : {}),
           localProvider: getLocalPtyProvider(),
           onPtyStopped: clearProviderPtyState,
-          // Forgetting an orphan still purges its workspace metadata, so retire structured chat
-          // tabs even when no provider child is attached to the workspace.
-          closeStructuredSessions: true,
+          // Metadata removal must retire structured chats even when no provider child is attached.
+          closeStructuredSessions: teardownStops('worktree-removal', 'structured-chat'),
           ...(externalHost ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
         }).catch((err) => {
           console.warn(`[worktree-teardown] forget-local failed for ${args.worktreeId}:`, err)
         })
 
         runtime.clearOptimisticReconcileToken(args.worktreeId)
-        // The resolved owner, not args.hostId: an orphan forget with no hostId still has to purge its SSH/runtime partition.
+        // Resolve omitted hosts too, or orphan cleanup purges the local partition and leaves remote state.
         removeWorktreeMetadataAndTransientState(
-          store,
+          { store, runtime },
           args.worktreeId,
           ownerHost?.id,
           args.snapshotPruneBatchId
         )
-        // Why: cached roots outlive the forgotten workspace, so an ownerless path stays filesystem-authorized until a rebuild.
+        // Cached authorization outlives metadata; invalidate it before the forgotten path can remain accessible.
         invalidateAuthorizedRootsCache()
         if (ownerHost?.id) {
           preservedBranchCleanupByScope.delete(

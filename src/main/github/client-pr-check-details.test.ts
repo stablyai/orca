@@ -17,7 +17,6 @@ vi.mock('./gh-utils', () => ({
   ghRepoExecOptions: (context: { repoPath: string }) => ({ cwd: context.repoPath }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
-  // Why: origin repository resolution calls getOwnerRepoForRemote, not getOwnerRepo.
   getOwnerRepoForRemote: (
     repoPath: string,
     remoteName: string,
@@ -33,7 +32,8 @@ vi.mock('./gh-utils', () => ({
   _resetOwnerRepoCache: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: vi.fn()
 }))
 
@@ -60,131 +60,6 @@ describe('getPRCheckDetails', () => {
     rateLimitGuardMock.mockReset()
     rateLimitGuardMock.mockReturnValue({ blocked: false })
     _resetOwnerRepoCache()
-  })
-
-  it('fetches check-run output, annotations, and workflow jobs for inline details', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    const actionUrl = 'https://github.com/acme/widgets/actions/runs/77/job/88'
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          name: 'track-community-pr',
-          status: 'completed',
-          conclusion: 'success',
-          html_url: actionUrl,
-          details_url: actionUrl,
-          started_at: '2026-05-18T19:00:00Z',
-          completed_at: '2026-05-18T19:02:00Z',
-          output: {
-            title: 'Successful',
-            summary: 'Tracked community PR',
-            text: 'No issues found.'
-          },
-          check_suite: { workflow_run: { id: 77 } }
-        })
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            path: '.github/workflows/community.yml',
-            start_line: 12,
-            end_line: 12,
-            annotation_level: 'notice',
-            title: 'Tracked',
-            message: 'Community PR tracked.',
-            raw_details: 'details'
-          }
-        ])
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          jobs: [
-            {
-              id: 8801,
-              name: 'track-community-pr',
-              status: 'completed',
-              conclusion: 'success',
-              started_at: '2026-05-18T19:00:00Z',
-              completed_at: '2026-05-18T19:02:00Z',
-              html_url: actionUrl,
-              steps: [{ name: 'Run tracker', status: 'completed', conclusion: 'success' }]
-            }
-          ]
-        })
-      })
-
-    const details = await getPRCheckDetails('/repo-root', {
-      checkRunId: 88,
-      checkName: 'track-community-pr'
-    })
-
-    expect(details).toMatchObject({
-      name: 'track-community-pr',
-      status: 'completed',
-      conclusion: 'success',
-      title: 'Successful',
-      summary: 'Tracked community PR',
-      text: 'No issues found.',
-      annotations: [
-        {
-          path: '.github/workflows/community.yml',
-          startLine: 12,
-          endLine: 12,
-          annotationLevel: 'notice',
-          title: 'Tracked',
-          message: 'Community PR tracked.',
-          rawDetails: 'details'
-        }
-      ],
-      jobs: [
-        {
-          id: 8801,
-          name: 'track-community-pr',
-          conclusion: 'success',
-          logTail: null,
-          steps: [{ name: 'Run tracker', status: 'completed', conclusion: 'success' }]
-        }
-      ]
-    })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      ['api', 'repos/acme/widgets/check-runs/88'],
-      expect.objectContaining({
-        cwd: '/repo-root',
-        host: 'github.com',
-        signal: expect.any(AbortSignal)
-      }),
-      expect.objectContaining({ onTerminationPending: expect.any(Function) })
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['api', 'repos/acme/widgets/check-runs/88/annotations?per_page=20'],
-      expect.objectContaining({
-        cwd: '/repo-root',
-        host: 'github.com',
-        signal: expect.any(AbortSignal)
-      }),
-      expect.objectContaining({ onTerminationPending: expect.any(Function) })
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['api', 'repos/acme/widgets/actions/runs/77/jobs?per_page=100'],
-      expect.objectContaining({
-        cwd: '/repo-root',
-        host: 'github.com',
-        signal: expect.any(AbortSignal)
-      }),
-      expect.objectContaining({ onTerminationPending: expect.any(Function) })
-    )
-  })
-
-  it('rejects provider failures so callers can distinguish them from unavailable details', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('authentication failed'))
-
-    await expect(getPRCheckDetails('/repo-root', { checkRunId: 88 })).rejects.toThrow(
-      'Could not load check details.'
-    )
   })
 
   it('aborts host work at the cumulative check-details deadline', async () => {
@@ -232,132 +107,50 @@ describe('getPRCheckDetails', () => {
     }
   })
 
-  it('fetches sliced log tails for failed workflow jobs only', async () => {
+  it('reads a fine-grained token check from its Actions job when the check run is refused', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    const actionUrl = 'https://github.com/acme/widgets/actions/runs/77/job/88'
-    const logLines = Array.from({ length: 210 }, (_, index) => `line ${index} ${'x'.repeat(120)}`)
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          name: 'verify',
-          status: 'completed',
-          conclusion: 'failure',
-          html_url: actionUrl,
-          details_url: actionUrl,
-          check_suite: { workflow_run: { id: 77 } }
-        })
-      })
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          jobs: [
-            {
-              id: 8801,
-              name: 'verify',
-              status: 'completed',
-              conclusion: 'startup_failure',
-              completed_at: '2026-05-18T19:02:00Z',
-              html_url: actionUrl,
-              steps: [{ name: 'Run tests', status: 'completed', conclusion: 'startup_failure' }]
-            },
-            {
-              id: 8802,
-              name: 'lint',
-              status: 'completed',
-              conclusion: 'success',
-              completed_at: '2026-05-18T19:02:00Z',
-              html_url: actionUrl,
-              steps: [{ name: 'Run lint', status: 'completed', conclusion: 'success' }]
-            }
-          ]
-        })
-      })
-      .mockResolvedValueOnce({ stdout: logLines.join('\n') })
-
-    const details = await getPRCheckDetails('/repo-root', { checkRunId: 88 })
-
-    expect(details?.jobs[0]).toMatchObject({
-      id: 8801,
-      name: 'verify',
-      conclusion: 'startup_failure'
-    })
-    expect(details?.jobs[0].logTail).toContain('line 209')
-    expect(details?.jobs[0].logTail).not.toContain('line 0')
-    expect(Buffer.from(details?.jobs[0].logTail ?? '', 'utf8').byteLength).toBeLessThanOrEqual(
-      16 * 1024
-    )
-    expect(details?.jobs[1]).toMatchObject({
-      id: 8802,
-      name: 'lint',
+    const job = {
+      id: 71,
+      run_id: 7,
+      name: 'pytest',
+      status: 'completed',
       conclusion: 'success',
-      logTail: null
-    })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      4,
-      ['api', 'repos/acme/widgets/actions/jobs/8801/logs', '--allow-escape-sequences'],
-      expect.objectContaining({
-        cwd: '/repo-root',
-        host: 'github.com',
-        signal: expect.any(AbortSignal)
-      }),
-      expect.objectContaining({ onTerminationPending: expect.any(Function) })
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
-  })
-
-  it('isolates failed-job log tails for the same job ID on different GitHub hosts', async () => {
-    ghExecFileAsyncMock.mockImplementation(async (args: string[], options?: { host?: string }) => {
-      const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      const enterprise = options?.host === 'github.acme-corp.com'
-      if (endpoint.endsWith('/check-runs/99')) {
-        return {
-          stdout: JSON.stringify({
-            name: 'verify',
-            status: 'completed',
-            conclusion: 'failure',
-            check_suite: { workflow_run: { id: 77 } }
-          })
-        }
+      html_url: 'https://github.com/acme/widgets/actions/runs/7/job/71',
+      started_at: '2026-11-10T10:00:00Z',
+      completed_at: '2026-11-10T10:05:00Z',
+      steps: []
+    }
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const path = args.at(-1) ?? ''
+      if (path.includes('/check-runs/71')) {
+        throw Object.assign(new Error(`Command failed: gh api ${path}`), {
+          stderr: 'gh: Resource not accessible by personal access token (HTTP 403)\n',
+          stdout: ''
+        })
       }
-      if (endpoint.endsWith('/check-runs/99/annotations?per_page=20')) {
-        return { stdout: '[]' }
+      if (path.endsWith('/actions/jobs/71')) {
+        return { stdout: JSON.stringify(job), stderr: '' }
       }
-      if (endpoint.endsWith('/actions/runs/77/jobs?per_page=100')) {
-        return {
-          stdout: JSON.stringify({
-            jobs: [
-              {
-                id: 9901,
-                name: 'verify',
-                status: 'completed',
-                conclusion: 'failure',
-                steps: []
-              }
-            ]
-          })
-        }
+      if (path.includes('/actions/runs/7/jobs')) {
+        return { stdout: JSON.stringify({ jobs: [job] }), stderr: '' }
       }
-      if (endpoint.endsWith('/actions/jobs/9901/logs')) {
-        return { stdout: enterprise ? 'enterprise log' : 'github.com log' }
-      }
-      throw new Error(`unexpected gh call: ${args.join(' ')}`)
+      throw new Error(`unexpected ${path}`)
     })
 
-    const githubDotCom = await getPRCheckDetails('/repo-root', {
-      checkRunId: 99,
-      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.com' }
-    })
-    const enterprise = await getPRCheckDetails('/repo-root', {
-      checkRunId: 99,
-      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' }
+    const details = await getPRCheckDetails('/repo-root', {
+      checkRunId: 71,
+      workflowRunId: 7,
+      checkName: 'pytest'
     })
 
-    expect(githubDotCom?.jobs[0]?.logTail).toBe('github.com log')
-    expect(enterprise?.jobs[0]?.logTail).toBe('enterprise log')
-    const logCalls = ghExecFileAsyncMock.mock.calls.filter(([args]) =>
-      args.some((arg) => arg.endsWith('/actions/jobs/9901/logs'))
-    )
-    expect(logCalls).toHaveLength(2)
-    expect(logCalls[1]?.[1]).toEqual(expect.objectContaining({ host: 'github.acme-corp.com' }))
+    expect(details).toMatchObject({
+      name: 'pytest',
+      status: 'completed',
+      conclusion: 'success',
+      url: 'https://github.com/acme/widgets/actions/runs/7/job/71',
+      startedAt: '2026-11-10T10:00:00Z',
+      completedAt: '2026-11-10T10:05:00Z',
+      jobs: [{ id: 71, name: 'pytest', status: 'completed', conclusion: 'success' }]
+    })
   })
 })

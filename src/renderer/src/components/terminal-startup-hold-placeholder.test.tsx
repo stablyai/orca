@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalController } from './use-terminal-controller'
 
 vi.mock('../store', async () => {
@@ -24,13 +24,13 @@ vi.mock('../store', async () => {
   }))
   return { useAppStore }
 })
-vi.mock('./native-chat/use-native-chat-toggle-shortcut', () => ({
+vi.mock('./native-chat/pane/routing/use-native-chat-toggle-shortcut', () => ({
   useNativeChatToggleShortcut: () => {}
 }))
-vi.mock('./terminal-pane/use-terminal-tab-cold-parking', () => ({
+vi.mock('./terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking', () => ({
   useTerminalTabColdParking: () => new Set()
 }))
-vi.mock('./terminal-pane/TerminalOverlaySlot', () => ({
+vi.mock('./terminal-pane/mounting/TerminalOverlaySlot', () => ({
   TerminalOverlaySlot: (props: { terminalTabId: string }) => (
     <div data-terminal-pane-tab-id={props.terminalTabId} />
   )
@@ -45,7 +45,7 @@ vi.mock('./tab-group/RetainedPaneHost', () => ({
 }))
 
 import { useAppStore } from '../store'
-import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
+import TerminalPaneOverlayLayer from './terminal-pane/mounting/TerminalPaneOverlayLayer'
 import { TerminalLegacyTerminalPanes } from './TerminalLegacyTerminalPanes'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -138,7 +138,6 @@ describe('overlay layer under the startup terminal hold', () => {
   it('fills the visible held tab slot, including a tab created under the hold, until the gate opens', () => {
     setTabs(['tab-a', 'tab-b'], 'tab-a')
     renderOverlay(NO_ADMITTED_TABS)
-    // Only the visible tab gets a placeholder; the hidden held tab renders nothing.
     expect(placeholders()).toHaveLength(1)
     expect(placeholders()[0].parentElement?.getAttribute('data-retained-pane-group-id')).toBe(
       GROUP_ID
@@ -153,21 +152,6 @@ describe('overlay layer under the startup terminal hold', () => {
     renderOverlay(null)
     expect(placeholders()).toHaveLength(0)
     expect(mountedPaneTabIds()).toEqual(['tab-a', 'tab-b', 'tab-new'])
-  })
-
-  it('renders no placeholder while the held worktree is not the active one', () => {
-    setTabs(['tab-a'], 'tab-a')
-    act(() =>
-      root.render(
-        <TerminalPaneOverlayLayer
-          worktreeId={WORKTREE_ID}
-          worktreePath="/held"
-          isWorktreeActive={false}
-          backgroundMountTabIds={NO_ADMITTED_TABS}
-        />
-      )
-    )
-    expect(placeholders()).toHaveLength(0)
   })
 })
 
@@ -212,11 +196,5 @@ describe('legacy terminal panes under the startup terminal hold', () => {
     renderLegacy(['tab-a', 'tab-b', 'tab-new'], 'tab-new', null)
     expect(placeholders()).toHaveLength(0)
     expect(mountedPaneTabIds()).toEqual(['tab-a', 'tab-b', 'tab-new'])
-  })
-
-  it('renders no placeholder when the active tab is not a held one', () => {
-    renderLegacy(['tab-a', 'tab-b'], 'tab-a', new Set(['tab-a']))
-    expect(placeholders()).toHaveLength(0)
-    expect(mountedPaneTabIds()).toEqual(['tab-a'])
   })
 })

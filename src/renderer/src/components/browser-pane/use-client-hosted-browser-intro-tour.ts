@@ -2,12 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { requestContextualTourWhenReady } from '@/components/contextual-tours/request-contextual-tour-when-ready'
 
-/**
- * One-time intro tooltip on the first client-hosted remote browser page a user
- * sees, pointing at the pane's controls with a path to the settings opt-out.
- * Forced request (the transition applies to existing users, who are not
- * auto-tour eligible), so the seen gate lives here instead of the tour gate.
- */
+/** Force the transition tour for existing users; keep the one-time seen gate here because forced requests bypass automatic eligibility. */
 export function useClientHostedBrowserIntroTour(enabled: boolean): void {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const seen = useAppStore((s) => s.contextualToursSeenIds).includes('client-hosted-browser')

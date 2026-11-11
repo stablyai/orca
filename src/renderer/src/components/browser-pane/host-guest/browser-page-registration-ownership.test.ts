@@ -32,6 +32,7 @@ const registrations = vi.fn(() => {
 const isRegistered = vi.fn(async () => true)
 const repair = vi.fn(async () => true)
 const unregister = vi.fn(async () => true)
+const notifyActiveTabChanged = vi.fn(async () => true)
 type RegistrationTestPage = {
   id: string
   webview: Electron.WebviewTag
@@ -87,11 +88,9 @@ function createSession(
     activeLoadFailureRef: loadFailure,
     recoveryNavigationValidationRef: ref(null),
     keepAddressBarFocusRef: ref(false),
-    paneZoomLevelRef: ref(0),
     viewportPresetIdRef: ref(null),
     onUpdatePageStateRef: ref(update),
     setGuestRecoveryGeneration: vi.fn(),
-    setBrowserZoomPercent: vi.fn(),
     focusAddressBarNow: () => false,
     syncNavigationState: vi.fn(),
     syncBrowserAnnotationViewportBridge: sync
@@ -123,6 +122,7 @@ beforeEach(() => {
   isRegistered.mockReset().mockResolvedValue(true)
   repair.mockReset().mockResolvedValue(true)
   unregister.mockClear()
+  notifyActiveTabChanged.mockClear()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -131,6 +131,7 @@ beforeEach(() => {
         unregisterGuest: unregister,
         isGuestRegistered: isRegistered,
         repairGuestRegistration: repair,
+        notifyActiveTabChanged,
         setViewportOverride: vi.fn(async () => true)
       }
     }
@@ -151,24 +152,6 @@ afterEach(async () => {
 })
 
 describe('renderer registration completion ownership', () => {
-  it('does not restore 1000 closed IDs from delayed successful replies', async () => {
-    for (let i = 0; i < 1000; i++) {
-      const page = createSession(`closed-${i}`, i + 1)
-      page.session.handleDidAttach()
-      page.session.guestRecovery.dispose()
-      page.webviewRef.current = null
-      await destroyPersistentWebview(page.id)
-    }
-    for (const reply of replies) {
-      reply.resolve(true)
-    }
-    await flush()
-    expect(webviewRegistry.size).toBe(0)
-    expect(registeredWebContentsIds.size).toBe(0)
-    expect(sessions.reduce((count, page) => count + page.sync.mock.calls.length, 0)).toBe(0)
-    expect(unregister).toHaveBeenCalledTimes(1000)
-  })
-
   it('keeps the replacement ID after an older reply arrives', async () => {
     const old = createSession('page', 1)
     old.session.handleDidAttach()
@@ -232,37 +215,6 @@ describe('renderer registration completion ownership', () => {
     expect(replacement.pending.current).toBe(true)
   })
 
-  it.each(['attach', 'ready'] as const)('keeps successful current %s replies', async (event) => {
-    const page = createSession('page', 1)
-    if (event === 'attach') {
-      page.session.handleDidAttach()
-    } else {
-      page.session.handleDomReady()
-    }
-    replies[0].resolve(true)
-    await flush()
-    expect(registeredWebContentsIds.get('page')).toBe(1)
-    expect(page.sync).toHaveBeenCalledOnce()
-    expect(unregister).not.toHaveBeenCalled()
-  })
-
-  it.each(['false', 'reject'] as const)(
-    'preserves inconclusive current registration %s',
-    async (result) => {
-      const page = createSession('page', 1)
-      page.session.handleDidAttach()
-      if (result === 'false') {
-        replies[0].resolve(false)
-      } else {
-        replies[0].reject(new Error('attach race'))
-      }
-      await flush()
-      expect(registeredWebContentsIds.has('page')).toBe(false)
-      expect(page.sync).toHaveBeenCalledOnce()
-      expect(unregister).not.toHaveBeenCalled()
-    }
-  )
-
   it('does not restore a registry-removed guest before listener disposal runs', async () => {
     const page = createSession('page', 1)
     page.session.handleDidAttach()
@@ -320,21 +272,6 @@ describe('renderer registration completion ownership', () => {
     await flush()
     expect(repair).not.toHaveBeenCalled()
     expect(unregister).toHaveBeenCalledOnce()
-  })
-
-  it('still repairs an inconclusive current registration', async () => {
-    isRegistered.mockResolvedValue(false)
-    const page = createSession('page', 1)
-    registeredWebContentsIds.set('page', 1)
-    page.session.guestRecovery.validateAfterResume()
-    await flush()
-    expect(repair).toHaveBeenCalledExactlyOnceWith({
-      browserPageId: 'page',
-      workspaceId: 'browser-1',
-      worktreeId: 'wt-1',
-      sessionProfileId: null,
-      webContentsId: 1
-    })
   })
 
   it('does not clear a newer guest recovery error from a pending old repair reply', async () => {

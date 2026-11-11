@@ -4,23 +4,19 @@ import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Hello
-} from '../../../src/shared/mobile-e2ee-v2-contract'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
-} from '../../../src/shared/mobile-e2ee-v2-framing'
-import { deriveMobileE2EEV2KeySchedule } from '../../../src/shared/mobile-e2ee-v2-node-key-schedule'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import { deriveMobileE2EEV2KeySchedule } from '../../../src/shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * Updated phones open direct (LAN) sockets with E2EE v2 instead of the legacy hello. The
- * previously released host must accept that handshake on its direct transport, where it does
- * not require v2, and route sealed requests to its RPC handler.
- */
+// Updated phones must authenticate direct E2EE v2 and route sealed RPCs against the released host without requiring v2.
 const SUITE_TIMEOUT_MS = 180_000
 
 type ChannelLike = {

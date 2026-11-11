@@ -1,7 +1,4 @@
-// Why: BrowserWindow instances are recreated on macOS dock re-activation, so
-// long-lived main-process services (e.g. the SSH port scanner) subscribe to
-// this process-global signal instead of a specific window instance; index.ts
-// re-wires each new window's show/restore events into notifyMainWindowBecameVisible.
+// macOS recreates windows after Dock activation; process-global subscribers survive and each new window relays show/restore here.
 type MainWindowBecameVisibleListener = () => void
 
 type MainWindowVisibilityState = {
@@ -30,8 +27,7 @@ export function isMainWindowVisible(window: MainWindowVisibilityState | null): b
     return false
   }
 
-  // Why: production BrowserWindow exposes both APIs, but older main-process
-  // tests use minimal window doubles that should stay visible by default.
+  // Minimal older window doubles lack visibility APIs; default them to visible.
   const isVisible = window.isVisible?.() ?? true
   const isMinimized = window.isMinimized?.() ?? false
   return isVisible && !isMinimized

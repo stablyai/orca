@@ -1,18 +1,16 @@
-# Ephemeral CI only. Runs each Windows host cell (src/main/ssh/ssh-windows-host-cells.ts) against the
-# private sshd prove-preview-openssh.ps1 provisioned: one account, one DefaultShell and one vitest
-# process per cell, so every cell starts from an empty runtime store.
+# Ephemeral CI only: one private-sshd account, DefaultShell and vitest process per host cell for an empty runtime store.
 param(
  [Parameter(Mandatory=$true)][string]$SourceRoot,
  [Parameter(Mandatory=$true)][hashtable]$Context,
  [Parameter(Mandatory=$true)][ValidateSet('win32-arm64','win32-x64')][string]$Target,
  [Parameter(Mandatory=$true)][string]$ReceiptRoot,
- [ValidateSet('orcad-cmd','orcad-powershell','orcad-convert','orcad-cli-managed','orcad-cli-convert')][string[]]$Cells=@('orcad-cmd','orcad-powershell')
+ [ValidateSet('orcad-cmd','orcad-powershell','orcad-cli-managed')][string[]]$Cells=@('orcad-cmd','orcad-powershell')
 )
 $ErrorActionPreference='Stop'
 if($env:GITHUB_ACTIONS -ne 'true' -or $env:ORCA_ISOLATED_SSH_CI -ne '1'){throw 'Disposable CI only'}
-$shells=@{'orcad-cmd'='cmd';'orcad-powershell'='powershell';'orcad-convert'='cmd';'orcad-cli-managed'='cmd';'orcad-cli-convert'='cmd'}
+$shells=@{'orcad-cmd'='cmd';'orcad-powershell'='powershell';'orcad-cli-managed'='cmd'}
 # App-level cells drive the e2e build (and the bundled CLI) against the host; each greps one tagged test.
-$appCells=@{'orcad-convert'=@('tests/e2e/ssh-orcad-auto-convert.spec.ts','');'orcad-cli-managed'=@('tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts','@orcad-cli-managed');'orcad-cli-convert'=@('tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts','@orcad-cli-convert')}
+$appCells=@{'orcad-cli-managed'=@('tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts','@orcad-cli-managed')}
 $electronBuilt=$false
 if($Context.accounts.Count -lt $Cells.Count){throw 'Each cell needs its own private account'}
 $seenApp=$false
@@ -48,18 +46,14 @@ function Set-PrivateDefaultShell([string]$Shell) {
   }
 }
 
-# Diagnostic only: Orca must launch orcad without WMI, which refuses a standard user's SSH
-# (network) logon unless an administrator grants Remote Enable on root\cimv2. The cells run with no
-# such grant, so a launch that still needs WMI fails its cell. Prints ORCA_WMI=<ReturnValue>
-# or ORCA_WMI=denied.
+# Diagnostic ORCA_WMI=<ReturnValue>|denied: standard SSH logons lack root\cimv2 Remote Enable; Orca must launch without WMI.
 function Test-PrivateWmiLaunch([string]$Account) {
   $out=Invoke-PrivateSsh $Account 'powershell.exe -NoProfile -NonInteractive -Command "try{$r=Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=''cmd.exe /d /c exit 0''} -ErrorAction Stop;''ORCA_WMI=''+$r.ReturnValue}catch{''ORCA_WMI=denied''}"'
   $match=[regex]::Match($out,'ORCA_WMI=(\S+)')
   if($match.Success){return $match.Groups[1].Value}else{return 'no-output'}
 }
 
-# App-level cells (tests/e2e/ssh-orcad-auto-convert.spec.ts, ssh-orcad-windows-cli-matrix.spec.ts). Last
-# in the run: they switch native modules to Electron's ABI, which the vitest cells cannot load.
+# Run app-level cells last: the e2e build switches natives to Electron’s ABI, which vitest cannot load.
 function Invoke-AppCell($Account,[string]$Descriptor,[string]$Log,[string]$Spec,[string]$Grep) {
   $ready=Invoke-PrivateSsh $Account.name 'git init -q orca-convert-repo && git -C orca-convert-repo -c user.name=orca -c user.email=orca@example.invalid commit -q --allow-empty -m init && echo ORCA_REPO_READY'
   if($ready -notmatch 'ORCA_REPO_READY'){throw 'Could not create the convert cell repository as the account'}
@@ -70,7 +64,7 @@ function Invoke-AppCell($Account,[string]$Descriptor,[string]$Log,[string]$Spec,
   Rename-Item -LiteralPath 'out\orcad-template' -NewName 'orcad-template.convert-hidden'
   try {
     if(-not $script:electronBuilt){
-      & node config/scripts/ensure-native-runtime.mjs --runtime=electron 2>&1 | Tee-Object -FilePath $Log | Out-Host
+      & node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron 2>&1 | Tee-Object -FilePath $Log | Out-Host
       if($global:LASTEXITCODE -ne 0){Write-Host 'Switching native modules to Electron failed';return $global:LASTEXITCODE}
       & pnpm exec electron-vite build --mode e2e 2>&1 | Tee-Object -FilePath $Log -Append | Out-Host
       if($global:LASTEXITCODE -ne 0){Write-Host 'The e2e app build failed';return $global:LASTEXITCODE}
@@ -117,7 +111,7 @@ try {
       $code=Invoke-AppCell $account $descriptor (Join-Path $ReceiptRoot "$cell.log") $appCells[$cell][0] $appCells[$cell][1]
     } else {
       if(-not $cell.StartsWith('orcad-')){throw "Unknown Windows host cell $cell"}
-      $lane='src/main/ssh/orcad-windows-host-lane.test.ts'
+      $lane='src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
       & node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts $lane --reporter=verbose 2>&1 | Tee-Object -FilePath (Join-Path $ReceiptRoot "$cell.log")
       # Why global: under the workflow's GetNewClosure callback, bare $LASTEXITCODE reads a stale captured copy.
       $code=$global:LASTEXITCODE

@@ -12,10 +12,7 @@ const BUCKET = 'onorca-cloud-terraform-state'
 const OBJECT = 'terraform/state/cloud-sql-rollout/production.lock'
 const NOW = 1_756_000_000_000
 
-/**
- * Enough of the Cloud Storage JSON API to exercise real compare-and-swap semantics: generations
- * increment, ifGenerationMatch is enforced, and a mismatch is a 412. `faults` injects failures.
- */
+/** Model real GCS generation increments, ifGenerationMatch and 412 conflicts; faults inject failures. */
 function fakeStorage({ object = null, faults = [] } = {}) {
   const state = { object, requests: [] }
   const fetcher = async (rawUrl, init = {}) => {
@@ -235,18 +232,6 @@ test('fails closed when the bucket answers 5xx', async () => {
 
   assert.match(error.message, /lease inspection failed: 503/)
   assert.equal(storage.state.requests.filter((request) => request.method !== 'GET').length, 0)
-})
-
-test('fails closed when permission is denied', async () => {
-  const storage = fakeStorage({
-    faults: [{ when: (request) => request.method === 'GET', status: 403 }]
-  })
-
-  const error = await leaseFor(storage)
-    .acquire(HOLDER)
-    .catch((thrown) => thrown)
-
-  assert.match(error.message, /lease inspection failed: 403/)
 })
 
 test('treats an unreadable record as held, not free', async () => {

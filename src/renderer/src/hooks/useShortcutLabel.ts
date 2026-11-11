@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import {
   formatKeybinding,
   formatKeybindingList,
@@ -6,8 +7,8 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
-import { useAppStore } from '../store'
-import { getShortcutPlatform } from '../lib/shortcut-platform'
+import { getShortcutPlatform } from '../lib/keyboard/shortcut-platform'
+import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 
 export { getShortcutPlatform }
 
@@ -16,9 +17,7 @@ export type ShortcutKeyComboDetails = {
   doubleTap: boolean
 }
 
-// Why: these run in render bodies of components that re-render constantly, and every call is two full keybinding parses.
-// The store hands out a new overrides object on every keybinding edit, so keying the cache on that object gives exact
-// invalidation: an edit can never be served from a stale entry, and the old entry is dropped with the old object.
+// Cache by overrides identity to avoid repeated keybinding parses during render; edits replace the object and invalidate exactly.
 const cachesByOverrides = new WeakMap<KeybindingOverrides, Map<string, unknown>>()
 const defaultOverridesCache = new Map<string, unknown>()
 
@@ -56,8 +55,13 @@ export function formatShortcutLabel(
   overrides?: KeybindingOverrides
 ): string {
   const platform = getShortcutPlatform()
-  return memoizeShortcut('label', actionId, platform, overrides, () =>
-    formatKeybindingList(getEffectiveKeybindingsForAction(actionId, platform, overrides), platform)
+  return localizeUnassignedDisplay(
+    memoizeShortcut('label', actionId, platform, overrides, () =>
+      formatKeybindingList(
+        getEffectiveKeybindingsForAction(actionId, platform, overrides),
+        platform
+      )
+    )
   )
 }
 
@@ -66,20 +70,20 @@ export function formatPrimaryShortcutLabel(
   overrides?: KeybindingOverrides
 ): string {
   const platform = getShortcutPlatform()
-  return memoizeShortcut('primary', actionId, platform, overrides, () => {
-    const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
-    return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
-  })
+  return localizeUnassignedDisplay(
+    memoizeShortcut('primary', actionId, platform, overrides, () => {
+      const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
+      return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
+    })
+  )
 }
 
 export function useShortcutLabel(actionId: KeybindingActionId): string {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatShortcutLabel(actionId, keybindings)
 }
 
-// Why: returns null for unbound actions instead of the display sentinel
-// 'Unassigned', so callers decide whether to render a hint without coupling
-// UI logic to formatter copy (which may change or become localized).
+// Return null for unbound actions so callers never depend on localized display copy.
 export function formatOptionalShortcutLabel(
   actionId: KeybindingActionId,
   overrides?: KeybindingOverrides
@@ -94,9 +98,6 @@ export function formatOptionalShortcutLabel(
   })
 }
 
-// Why: primary-only companion to formatOptionalShortcutLabel, for menus that list
-// one alias — null instead of the 'Unassigned' sentinel keeps callers from
-// comparing against formatter copy.
 export function formatOptionalPrimaryShortcutLabel(
   actionId: KeybindingActionId,
   overrides?: KeybindingOverrides
@@ -109,7 +110,7 @@ export function formatOptionalPrimaryShortcutLabel(
 }
 
 export function useOptionalShortcutLabel(actionId: KeybindingActionId): string | null {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatOptionalShortcutLabel(actionId, keybindings)
 }
 
@@ -118,7 +119,7 @@ export function formatShortcutKeyComboDetails(
   overrides?: KeybindingOverrides
 ): ShortcutKeyComboDetails[] {
   const platform = getShortcutPlatform()
-  // The returned array is shared across callers now, so treat it as read-only (every current caller does).
+  // Shared across callers; treat this array as read-only.
   return memoizeShortcut('combo', actionId, platform, overrides, () =>
     getEffectiveKeybindingsForAction(actionId, platform, overrides).map((binding) => ({
       keys: formatKeybinding(binding, platform),
@@ -130,7 +131,7 @@ export function formatShortcutKeyComboDetails(
 export function useShortcutKeyComboDetails(
   actionId: KeybindingActionId
 ): ShortcutKeyComboDetails[] {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatShortcutKeyComboDetails(actionId, keybindings)
 }
 

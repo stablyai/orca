@@ -3,15 +3,19 @@
  * bridge still serves relay terminals in a project its managed server already holds.
  */
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SshHostServerStatusLine } from './ssh-host-server-status-copy'
 
 /** `detail` is main's English naming the project those terminals hold, so it stays behind "Details". */
-export function bridgedTerminalsLine(detail: string | undefined): SshHostServerStatusLine {
+export function bridgedTerminalsLine(
+  detail: string | undefined,
+  t: Translate = translate
+): SshHostServerStatusLine {
   return {
     tone: 'warning',
-    text: translate(
+    text: t(
       'auto.components.settings.sshHostServer.olderTerminalsBridged',
-      'Not moved to a managed server yet: terminals started by an older version of Orca are still running in this host’s projects. They keep working here. Close them or end them on the host, then reconnect.'
+      'Orca isn’t set up on this host yet: terminals started by an older version of Orca are still running in this host’s projects. They keep working here. Close them or end them on the host, then reconnect.'
     ),
     ...(detail ? { detail } : {})
   }

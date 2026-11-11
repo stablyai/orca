@@ -1,6 +1,7 @@
 import { AlertCircle, Check, Loader2, X } from 'lucide-react'
 import { Button } from '../../ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function UpdateCheckFeedback({
   icon,
@@ -13,6 +14,7 @@ export function UpdateCheckFeedback({
   onClose?: () => void
   action?: { label: string; url: string }
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex items-center gap-3 p-3">
       <div className="shrink-0 text-muted-foreground">
@@ -26,7 +28,7 @@ export function UpdateCheckFeedback({
           <button
             type="button"
             className="text-xs text-muted-foreground underline hover:text-foreground mt-0.5"
-            onClick={() => void window.api.shell.openUrl(action.url)}
+            onClick={(event) => openAppHttpLink(action.url, { event })}
           >
             {action.label}
           </button>
@@ -38,7 +40,7 @@ export function UpdateCheckFeedback({
           size="icon"
           className="size-7 shrink-0"
           onClick={onClose}
-          aria-label={translate('auto.components.UpdateCard.a726967bd3', 'Dismiss')}
+          aria-label={t('auto.components.UpdateCard.a726967bd3', 'Dismiss')}
         >
           <X className="size-3.5" />
         </Button>

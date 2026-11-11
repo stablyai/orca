@@ -55,8 +55,6 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
             `Add a Git repository before creating a ${provider === 'github' ? 'GitHub' : 'GitLab'} issue.`
           )
         }
-        // Two providers, two methods: each arm sends its own operation rather than one call
-        // picking a method string.
         const created =
           provider === 'github'
             ? githubIssueCreate.interpret(
@@ -143,8 +141,9 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
         )
       }
       setShowCreateTask(false)
-      setCreateTitle('')
-      setCreateBody('')
+      // Text typed while the create ran, here or in a reopened sheet, is not what it sent.
+      setCreateTitle((current) => (current === createTitle ? '' : current))
+      setCreateBody((current) => (current === createBody ? '' : current))
       await loadTasks({ silent: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create task')
@@ -182,8 +181,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           { timeoutMs: 15_000 }
         )
         taskRepoPreferenceWrite.interpret(reply)
-        // Why: the host owns issueSourcePreference, so re-read the list instead of
-        // patching the cached copy and hoping the two stay in step.
+        // The host owns issue-source preference; reread authoritative repos instead of patching cached state.
         await repoListReload().catch(() => {})
         await loadTasks({ silent: true })
       } catch (err) {

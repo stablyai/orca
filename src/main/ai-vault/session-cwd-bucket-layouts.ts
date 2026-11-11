@@ -1,21 +1,25 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import { encodeClaudeProjectPaths, isClaudeProjectDirInScope } from './claude-project-dir-encoding'
+import { basename, join } from 'node:path'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  claudeProjectBucketScopePrefixes,
+  isClaudeProjectBucketInScope
+} from './scanners/claude/claude-project-dir-encoding'
 
-/** An agent that keeps one directory per cwd, named by a lossy encoding of that cwd. */
 export type CwdBucketLayout = {
   agent: Extract<AiVaultAgent, 'claude' | 'pi' | 'codebuddy'>
   encodeScopePrefixes: (scopePath: string) => string[]
   isDirInScope: (dirName: string, prefixes: ReadonlySet<string>) => boolean
+  /** Folders whose children are cwd buckets; defaults to the root itself. */
+  bucketDirs?: (rootDir: string) => string[]
 }
 
 export const CLAUDE_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
   agent: 'claude',
-  encodeScopePrefixes: encodeClaudeProjectPaths,
-  isDirInScope: isClaudeProjectDirInScope
+  encodeScopePrefixes: claudeProjectBucketScopePrefixes,
+  isDirInScope: isClaudeProjectBucketInScope
 }
 
-// Pi names each bucket `--<cwd without leading slash, with / \ : as ->--`;
-// the prefix drops the closing `--` so nested cwds (`--a-b-c--`) still match `--a-b`.
+// Omit Pi's closing -- so the prefix also matches nested working directories.
 function encodePiSessionDirPrefix(pathValue: string): string {
   const trimmed = pathValue.length > 1 ? pathValue.replace(/[/\\]+$/, '') : pathValue
   return `--${trimmed.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}`
@@ -23,6 +27,9 @@ function encodePiSessionDirPrefix(pathValue: string): string {
 
 export const PI_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
   agent: 'pi',
+  // PI_CODING_AGENT_DIR=<dir> makes Pi's root the agent folder, whose buckets sit under sessions/.
+  bucketDirs: (rootDir) =>
+    basename(rootDir) === 'sessions' ? [rootDir] : [rootDir, join(rootDir, 'sessions')],
   encodeScopePrefixes: (pathValue) => {
     const raw = encodePiSessionDirPrefix(pathValue)
     const composed = encodePiSessionDirPrefix(pathValue.normalize('NFC'))
@@ -30,7 +37,7 @@ export const PI_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
   },
   isDirInScope: (dirName, prefixes) => {
     for (const prefix of prefixes) {
-      // A root scope encodes to the bare `--`, which contains every bucket.
+      // Root scope encodes to -- and includes every Pi bucket.
       if (prefix === '--' && dirName.startsWith('--') && dirName.endsWith('--')) {
         return true
       }
@@ -63,14 +70,6 @@ export const CODEBUDDY_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
   encodeScopePrefixes: (path) => [
     ...new Set([path, path.normalize('NFC')].map(codebuddyScopePrefix))
   ],
-  // This is only a prefilter: each transcript's cwd decides membership, including lossy collisions.
+  // Lossy bucket names only prefilter; the transcript cwd decides membership.
   isDirInScope: (name, prefixes) => [...prefixes].some((prefix) => name.startsWith(prefix))
 }
-
-// Agents whose on-disk layout names a directory per cwd, so a scope's older
-// sessions can be found without reading every transcript's header.
-export const CWD_BUCKET_LAYOUTS = [
-  CLAUDE_CWD_BUCKET_LAYOUT,
-  PI_CWD_BUCKET_LAYOUT,
-  CODEBUDDY_CWD_BUCKET_LAYOUT
-]

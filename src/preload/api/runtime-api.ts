@@ -1,22 +1,32 @@
+import type {
+  CrewSubscriptionAttemptArgs,
+  CrewSubscriptionAttemptCallbacks,
+  CrewSubscriptionSetupResult
+} from '../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type { ManagedOrcadPreloadApi } from './managed-orcad-api'
 import type { WslHostsPreloadApi } from './wsl-hosts-api'
-import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
-  RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
-  RuntimeStatus,
-  RuntimeSyncWindowGraphResult,
-  RuntimeTerminalDriverState
+  RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
+import type {
+  RuntimeStatus,
+  RuntimeTerminalDriverState
+} from '../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
-import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
+import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
+import type {
+  PublicKnownRuntimeEnvironment,
+  RuntimeEnvironmentRemoval
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-runtime/pairing/remote-pairing-verification'
 import type {
   BrowserClientHostPlacementPreparationRequest,
   BrowserPageCreationPlacement
-} from '../../shared/browser-client-host-placement'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime-shared-control-types'
+} from '../../shared/browser/client-hosting/browser-client-host-placement'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { WslOrcadAccountNotAppliedEvent } from '../../shared/wsl-orcad-account-notice'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -47,7 +57,7 @@ export type RuntimeApi = {
     getBrowserDrivers: () => Promise<
       {
         browserPageId: string
-        driver: RuntimeBrowserDriverState
+        driver: RuntimeTerminalDriverState
       }[]
     >
     getBrowserRemoteViewerPages?: () => Promise<string[]>
@@ -69,20 +79,23 @@ export type RuntimeApi = {
       callback: (event: { tabId: string; text: string; createdAt: number }) => void
     ) => () => void
     onBrowserDriverChanged: (
-      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
+      callback: (event: { browserPageId: string; driver: RuntimeTerminalDriverState }) => void
     ) => () => void
-    // Why optional: matches onNativeChatLaunchDraftResolved — a renderer running against an older
-    // preload keeps working without the retention signal instead of throwing on every mount.
+    // Older preloads lack this signal.
     onBrowserRemoteViewersChanged?: (
       callback: (event: { browserPageId: string; hasRemoteViewers: boolean }) => void
     ) => () => void
     onClientHostedBrowserRowsChanged: (
       callback: (event: ClientHostedBrowserRowsEvent) => void
     ) => () => void
+    onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
   }
   runtimeEnvironments: {
+    desktopCreatedChatIds?: () => Promise<string[]>
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
+    // Absent in the web client, whose catalog lives in the browser rather than a CLI-editable file.
+    onCatalogChanged?: (callback: () => void) => () => void
     list: () => Promise<PublicKnownRuntimeEnvironment[]>
     addFromPairingCode: (args: {
       name: string
@@ -93,8 +106,13 @@ export type RuntimeApi = {
       pairingCode: string
       allowLoopback?: boolean
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
+    /** Replaces a revoked pairing in place; refuses a link for a different server. */
+    repairFromPairingCode: (args: {
+      selector: string
+      pairingCode: string
+    }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
-    remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
+    remove: (args: { selector: string }) => Promise<RuntimeEnvironmentRemoval>
     disconnect: (args: {
       selector: string
     }) => Promise<{ disconnected: PublicKnownRuntimeEnvironment }>
@@ -107,7 +125,6 @@ export type RuntimeApi = {
       timeoutMs?: number
       observeOnly?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
-    retryControlConnection?: (args: { selector: string }) => Promise<void>
     onSharedControlDiagnostics?: (
       callback: (event: {
         environmentId: string
@@ -122,7 +139,7 @@ export type RuntimeApi = {
     prepareBrowserClientHostPlacement: (
       args: BrowserClientHostPlacementPreparationRequest
     ) => Promise<BrowserPageCreationPlacement>
-    // Why: system resume / browser online advance pending shared-control reconnect timers only.
+    // Resume/online events advance only pending shared-control reconnect timers.
     retryConnectionsNow?: () => Promise<void>
     call: (args: {
       selector: string
@@ -132,6 +149,10 @@ export type RuntimeApi = {
       expectedEnvironmentPairingRevision?: number
       expectedEnvironmentRuntimeId?: string
     }) => Promise<RuntimeRpcResponse<unknown>>
+    subscribeCrewAttempt?: (
+      args: CrewSubscriptionAttemptArgs,
+      callbacks: CrewSubscriptionAttemptCallbacks
+    ) => Promise<CrewSubscriptionSetupResult>
     cancelSubscription: (args: { subscriptionId: string }) => Promise<void>
     subscribe: (
       args: {
@@ -150,9 +171,9 @@ export type RuntimeApi = {
         onClose?: () => void
       }
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
-    // Why optional: only the desktop preload deploys servers over SSH.
+    // Only desktop clients deploy servers over SSH.
     managedOrcad?: ManagedOrcadPreloadApi
-    // Why optional: only a Windows desktop (or the e2e fake) has WSL distros to host.
+    // Only Windows desktops (or e2e fakes) host WSL distros.
     wslHosts?: WslHostsPreloadApi
   }
   wsl: {

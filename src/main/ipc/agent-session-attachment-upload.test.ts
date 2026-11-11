@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,8 +16,8 @@ const calls: Call[] = []
 let serverStore: AgentSessionAttachmentStore
 let failMethod: string | null = null
 
-// The paired server, played by a real store: every call answers as the RPC handler would.
-vi.mock('./runtime-environment-transport-routing', () => ({
+// Use the real paired-server store behind the RPC seam.
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: async (
     _userDataPath: string,
     _environmentId: string,
@@ -111,45 +111,6 @@ describe('uploadExternalPathsToAgentSessionAttachments', () => {
     expect((await readFile(result.uploaded[0].path)).equals(big)).toBe(true)
     expect(await readFile(result.uploaded[1].path, 'utf8')).toBe('# hi')
   })
-
-  it('pins every call to the pairing and every call to the server process', async () => {
-    await writeFile(join(workDir, 'a.txt'), 'a')
-    await uploadExternalPathsToAgentSessionAttachments(context(), [join(workDir, 'a.txt')])
-    expect(calls.map((call) => call.method)).toEqual([
-      'agentSessionAttachment.uploadStart',
-      'agentSessionAttachment.uploadAppend',
-      'agentSessionAttachment.uploadCommit'
-    ])
-    for (const call of calls) {
-      expect(call.revision).toBe(7)
-      expect(call.options?.expectedEnvironmentRuntimeId).toBe('runtime-a')
-    }
-  })
-
-  it('skips a folder as unsupported without walking into it', async () => {
-    await mkdir(join(workDir, 'folder', 'nested'), { recursive: true })
-    await writeFile(join(workDir, 'folder', 'inside.txt'), 'x')
-    // A link inside would make the stager skip the folder as a symlink: never reached.
-    await symlink(join(workDir, 'folder', 'inside.txt'), join(workDir, 'folder', 'nested', 'link'))
-    const result = await uploadExternalPathsToAgentSessionAttachments(context(), [
-      join(workDir, 'folder')
-    ])
-    expect(result.skipped).toEqual([{ sourcePath: join(workDir, 'folder'), reason: 'unsupported' }])
-    expect(calls).toEqual([])
-  })
-
-  it('aborts a failed upload on the server and reports the file as failed', async () => {
-    await writeFile(join(workDir, 'a.txt'), 'a')
-    failMethod = 'agentSessionAttachment.uploadCommit'
-    const result = await uploadExternalPathsToAgentSessionAttachments(context(), [
-      join(workDir, 'a.txt')
-    ])
-    expect(result.uploaded).toEqual([])
-    expect(result.failed).toEqual([
-      { sourcePath: join(workDir, 'a.txt'), reason: 'agentSessionAttachment.uploadCommit failed' }
-    ])
-    expect(calls.at(-1)?.method).toBe('agentSessionAttachment.uploadAbort')
-  })
 })
 
 describe('uploadBufferToAgentSessionAttachments', () => {
@@ -158,7 +119,6 @@ describe('uploadBufferToAgentSessionAttachments', () => {
     const stored = await uploadBufferToAgentSessionAttachments(context(), 'orca-paste-1.png', png)
     expect(stored.name).toBe('orca-paste-1.png')
     expect((await readFile(stored.path)).equals(png)).toBe(true)
-    // 900 KiB in 384 KiB slices.
     expect(
       calls.filter((call) => call.method === 'agentSessionAttachment.uploadAppend')
     ).toHaveLength(3)

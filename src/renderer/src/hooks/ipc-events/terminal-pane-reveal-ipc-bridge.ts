@@ -1,24 +1,22 @@
-import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { revealTerminalPane } from '@/lib/workspace/activation/reveal-terminal-pane'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { TerminalPaneRevealTarget } from '../../../../shared/terminal-pane-reveal'
+import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-pane-reveal'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 
-/**
- * External callers name a tab as its owning host does. This window mirrors a paired server's
- * terminal tab under a prefixed id, with the same leaf ids, so map the tab before revealing it.
- */
+/** Map host terminal IDs to prefixed client mirrors before reveal; leaf IDs remain stable. */
 function toWindowTabId(target: TerminalPaneRevealTarget): string {
   const host = parseExecutionHostId(target.executionHostId)
   const environmentId = host
     ? host.kind === 'runtime'
       ? host.environmentId
       : null
-    : getExplicitRuntimeEnvironmentIdForWorktree(useAppStore.getState(), target.worktreeId)
+    : // Why: reveal only focuses a tab; a twin keeps the id the caller named.
+      runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), target.worktreeId)
   return environmentId && !isWebTerminalSurfaceTabId(target.tabId)
     ? toWebTerminalSurfaceTabId(target.tabId)
     : target.tabId

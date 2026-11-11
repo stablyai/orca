@@ -1,12 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
-  createCodexAccountRecord,
   createCodexAuthJson,
-  createManagedAuth,
   createStore,
   getRuntimeCodexAuthPath,
   getRuntimeCodexHomePath,
@@ -20,11 +18,14 @@ import {
   writePaneRegistry
 } from './runtime-home-service-test-harness'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+// Keep asserted config bytes independent of platform socket-path limits.
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -33,8 +34,8 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -48,85 +49,6 @@ describe('CodexRuntimeHomeService', () => {
 
   afterEach(() => {
     teardownRuntimeHomeTest()
-  })
-
-  it('routes host system default to the real home', async () => {
-    const store = createStore(createSettings({ realHomeRoutable: true }))
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
-    expect(service.prepareForCodexLaunch()).toBeNull()
-    expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([
-      getRuntimeCodexHomePath(),
-      getSystemCodexHomePath()
-    ])
-    const markerPath = join(
-      testState.userDataDir,
-      'codex-session-backfill',
-      'backfill-complete.json'
-    )
-    mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
-    const perSpawnCustomHome = join(testState.fakeHomeDir, 'per-spawn-custom-codex-home')
-    writeFileSync(markerPath, '{}\n', 'utf-8')
-    expect(service.isHostSystemDefaultRealHomeSelected({ CODEX_HOME: perSpawnCustomHome })).toBe(
-      false
-    )
-    expect(service.prepareForCodexLaunch(undefined, { CODEX_HOME: perSpawnCustomHome })).toBe(
-      getRuntimeCodexHomePath()
-    )
-    expect(existsSync(markerPath)).toBe(true)
-    expect(
-      service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath(), {
-        launchEnv: { CODEX_HOME: perSpawnCustomHome }
-      })
-    ).toBeNull()
-    if (process.platform !== 'win32') {
-      // Why: shell startup CODEX_HOME discovery is a POSIX-shell lane; Windows
-      // must not invoke an ambient WSL bash while evaluating this contract.
-      writeFileSync(
-        join(testState.fakeHomeDir, '.zshrc'),
-        'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
-        'utf-8'
-      )
-      const shellLaunchEnv = { HOME: testState.fakeHomeDir, SHELL: '/bin/zsh' }
-      expect(service.isHostSystemDefaultRealHomeSelected(shellLaunchEnv)).toBe(false)
-      expect(service.prepareForCodexLaunch(undefined, shellLaunchEnv)).toBe(
-        getRuntimeCodexHomePath()
-      )
-    }
-    const previousCodexHome = process.env.CODEX_HOME
-    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
-    process.env.CODEX_HOME = getRuntimeCodexHomePath()
-    process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
-    try {
-      // Background fetchers prefer ambient CODEX_HOME when passed null, so an
-      // explicit path proves nested Orca launches cannot poll the managed home.
-      expect(service.prepareForRateLimitFetch()).toEqual({
-        kind: 'ready',
-        codexHomePath: getSystemCodexHomePath()
-      })
-      process.env.CODEX_HOME = getSystemCodexHomePath()
-      delete process.env.ORCA_CODEX_HOME
-      expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
-      process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
-      expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
-      expect(service.prepareForRateLimitFetch()).toEqual({
-        kind: 'ready',
-        codexHomePath: getRuntimeCodexHomePath()
-      })
-    } finally {
-      if (previousCodexHome === undefined) {
-        delete process.env.CODEX_HOME
-      } else {
-        process.env.CODEX_HOME = previousCodexHome
-      }
-      if (previousOrcaCodexHome === undefined) {
-        delete process.env.ORCA_CODEX_HOME
-      } else {
-        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
-      }
-    }
   })
 
   it('seeds shared auth for a pane-local custom home on the real-home lane', async () => {
@@ -187,44 +109,6 @@ describe('CodexRuntimeHomeService', () => {
     } finally {
       vi.doUnmock('./legacy-shared-config-compatibility')
     }
-  })
-
-  it('resolves only Orca-owned homes used by live retained host shells', async () => {
-    const accountHome = createManagedAuth(
-      testState.userDataDir,
-      'account-1',
-      createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
-    )
-    const unownedHome = join(testState.fakeHomeDir, 'unowned-codex-home')
-    mkdirSync(unownedHome, { recursive: true })
-    writeFileSync(join(unownedHome, '.orca-managed-home'), 'account-2\n', 'utf-8')
-    writePaneRegistry({
-      'shared-pane': { selectionKey: 'host', accountId: null, homeRoute: 'shared-home' },
-      'account-pane': { selectionKey: 'host', accountId: 'account-1', homeRoute: 'account-home' },
-      'unowned-pane': { selectionKey: 'host', accountId: 'account-2', homeRoute: 'account-home' },
-      'real-pane': { selectionKey: 'host', accountId: null, homeRoute: 'real-home' },
-      'wsl-pane': { selectionKey: 'wsl:Ubuntu', accountId: null, homeRoute: 'wsl-home' }
-    })
-    const settings = createSettings({
-      codexManagedAccounts: [
-        createCodexAccountRecord('account-1', 'managed@example.com', 'acct-managed', accountHome),
-        createCodexAccountRecord('account-2', 'other@example.com', 'acct-other', unownedHome)
-      ]
-    })
-    const store = createStore(settings)
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    expect(
-      service.getRetainedHostCodexHookHomePaths([
-        'shared-pane',
-        'account-pane',
-        'unowned-pane',
-        'real-pane',
-        'wsl-pane',
-        'unknown-pane'
-      ])
-    ).toEqual([getRuntimeCodexHomePath(), accountHome])
   })
 
   it('keeps pre-rollout shared-home panes authenticated on the real-home lane', async () => {

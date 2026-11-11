@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
+import type { ChildProcess } from 'node:child_process'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 
 const ROOT_PID = 424242
@@ -11,7 +11,7 @@ const ROOT_STARTED_AT = 'Mon Jan 1 00:00:00 2026'
 const ROOT_FORK_MS = Date.parse(ROOT_STARTED_AT)
 
 function mockChild(): EventEmitter &
-  Pick<SpawnedProcess, 'pid' | 'kill' | 'stdin'> & { kill: ReturnType<typeof vi.fn> } {
+  Pick<ChildProcess, 'pid' | 'kill' | 'stdin'> & { kill: ReturnType<typeof vi.fn> } {
   return Object.assign(new EventEmitter(), {
     pid: ROOT_PID,
     stdin: new PassThrough(),
@@ -33,10 +33,10 @@ function posixSnapshot(input: {
 
 describe('Claude root kill fallback', () => {
   it('kills the root when the first capture landed in the fork second', async () => {
-    // The production POSIX verifier declines a root born in its capture second,
-    // and that verdict must not cost the tree the kill on Node's own handle.
+    // An ambiguous capture second must not block termination through Node's root handle.
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       exited: () => false,
       captureDescendants: vi.fn(async () => posixSnapshot({ capturedAtMs: ROOT_FORK_MS + 300 }))
@@ -65,6 +65,7 @@ describe('Claude root kill fallback', () => {
         })
       )
     const tree = createClaudeChildTreeReaper(child, {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       exited: () => false,
       captureDescendants,
@@ -73,7 +74,6 @@ describe('Claude root kill fallback', () => {
 
     await tree.capture()
     await tree.refresh?.()
-    // The descendant evidence is rightly discarded; the root's never was in doubt.
     await expect(tree.reap()).resolves.toBe('unverifiable')
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
@@ -81,6 +81,7 @@ describe('Claude root kill fallback', () => {
   it('keeps an observed live descendant through the root kill', async () => {
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       exited: () => false,
       captureDescendants: vi.fn(async () =>
@@ -100,6 +101,7 @@ describe('Claude root kill fallback', () => {
   it('kills the root when no POSIX snapshot could be read', async () => {
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       exited: () => false,
       captureDescendants: vi.fn(async () => null),
@@ -113,6 +115,7 @@ describe('Claude root kill fallback', () => {
   it('never signals a root the reaper already saw exit', async () => {
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       exited: () => true,
       captureDescendants: vi.fn(async () => null)

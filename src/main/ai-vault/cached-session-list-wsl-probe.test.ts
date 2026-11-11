@@ -11,16 +11,20 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   runProcess: runProcessMock
 }))
-vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('./scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService
 }))
-vi.mock('./opencode-wsl-runtime-preparation', () => ({
+vi.mock('./scanners/opencode/reader-transport/opencode-wsl-runtime-preparation', () => ({
   prepareOpenCodeWslReaders: vi.fn(async () => [])
 }))
 
-import { _resetWslCachesForTests, _setWslCachesForTests, listWslDistrosAsync } from '../wsl'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import {
+  _resetWslCachesForTests,
+  _setWslCachesForTests,
+  listWslDistrosAsync
+} from '../wsl/discovery/distro-catalog'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl/filesystem/wsl-running-path-filter'
 import {
   configureAiVaultSessionSources,
   getAiVaultWslHomeDirs,
@@ -43,8 +47,7 @@ function wslSpawns(): string[][] {
     .map(([spec]) => spec.args.map(String))
 }
 
-// Why the real wsl module: the point is the wsl.exe spawn count across the WHOLE
-// listing Promise.all, which a per-function mock cannot observe.
+// Keep real WSL code to measure shared probe calls across the entire listing.
 describe('AI Vault listing wsl.exe probes', () => {
   beforeEach(() => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
@@ -72,7 +75,6 @@ describe('AI Vault listing wsl.exe probes', () => {
       }),
       expect.anything(),
       expect.objectContaining({
-        sent: expect.any(Function),
         work: expect.any(Function),
         finish: expect.any(Function),
         fail: expect.any(Function)
@@ -99,7 +101,6 @@ describe('AI Vault listing wsl.exe probes', () => {
       expect.objectContaining({ wslHomeDirs: [WSL_HOME] }),
       expect.anything(),
       expect.objectContaining({
-        sent: expect.any(Function),
         work: expect.any(Function),
         finish: expect.any(Function),
         fail: expect.any(Function)
@@ -112,8 +113,7 @@ describe('AI Vault listing wsl.exe probes', () => {
     ])
   })
 
-  // Why: a rejected `--list --quiet` yields [] without caching. Treating that as "no distro
-  // installed" would narrow the allowed roots delete/subagent validation trusts.
+  // A failed distro probe cannot narrow the roots trusted by deletion or subagent validation.
   it('still discovers WSL homes after the installed-distro probe was rejected', async () => {
     runProcessMock.mockImplementation(
       ({ args }: { args: string[] }) =>

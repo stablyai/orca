@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { ArtifactCloudOperation, ArtifactListItem } from '../../../../shared/artifacts'
+import type {
+  ArtifactCloudOperation,
+  ArtifactListItem
+} from '../../../../shared/artifacts/artifacts'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { persistConfirmationSkipPreference } from '@/components/confirmation-skip-preference'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ArtifactCollection } from './ArtifactCollection'
 import { ArtifactDetailDrawer } from './ArtifactDetailDrawer'
 import { ArtifactsPageSkeleton } from './ArtifactsPageSkeleton'
@@ -18,17 +21,16 @@ import { artifactAccountIdentity, useArtifactPagination } from './useArtifactPag
 const LOCAL_RUNTIME = { kind: 'local' } as const
 
 export default function ArtifactsPage(): React.JSX.Element {
+  const t = useTranslate()
   const closePage = useAppStore((state) => state.closeArtifactsPage)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const refreshAuth = useAppStore((state) => state.refreshCurrentOrcaProfileAuth)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const confirm = useConfirmationDialog()
-  // Why: publishing is off by default, so "ask your agent to share" is a dead end until the
-  // capability is granted. Only claim that once settings have actually loaded.
+  // Claim publishing is blocked only after settings load; sharing requires explicit capability opt-in.
   const publishingBlocked = settings ? settings.artifactSharingEnabled !== true : false
   const [deleting, setDeleting] = useState<{ identity: string; slug: string } | null>(null)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
@@ -56,11 +58,10 @@ export default function ArtifactsPage(): React.JSX.Element {
       ? null
       : (artifacts.find(({ artifact }) => artifact.slug === selectedSlug) ?? null)
 
-  useEffect(() => {
-    if (selectedSlug && !artifacts.some(({ artifact }) => artifact.slug === selectedSlug)) {
-      setSelectedSlug(null)
-    }
-  }, [selectedSlug, artifacts])
+  if (selectedSlug !== null && selectedArtifact === null) {
+    // Drop a vanished selection during render so a later reload cannot reopen it.
+    setSelectedSlug(null)
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -100,13 +101,13 @@ export default function ArtifactsPage(): React.JSX.Element {
     const name = item.artifact.title || item.artifact.originalFileName || item.artifact.slug
     if (!settings?.skipDeleteArtifactConfirm) {
       const accepted = await confirm({
-        title: translate('auto.components.artifacts.ArtifactsPage.deleteTitle', 'Delete artifact?'),
-        description: translate(
+        title: t('auto.components.artifacts.ArtifactsPage.deleteTitle', 'Delete artifact?'),
+        description: t(
           'auto.components.artifacts.ArtifactsPage.deleteDescription',
           '“{{name}}” will no longer be available at its public link.',
           { name }
         ),
-        confirmLabel: translate('auto.components.artifacts.ArtifactsPage.delete', 'Delete'),
+        confirmLabel: t('auto.components.artifacts.ArtifactsPage.delete', 'Delete'),
         confirmVariant: 'destructive',
         dontAskAgain: {
           onConfirmed: () =>
@@ -151,7 +152,7 @@ export default function ArtifactsPage(): React.JSX.Element {
       console.error('Failed to delete artifact:', deleteError)
       if (requestedAccountIsCurrent()) {
         setError(
-          translate(
+          t(
             'auto.components.artifacts.ArtifactsPage.deleteFailed',
             'Could not delete the artifact.'
           )
@@ -178,7 +179,7 @@ export default function ArtifactsPage(): React.JSX.Element {
         }
       >
         <h1 className="truncate text-base font-semibold leading-8">
-          {translate('auto.components.artifacts.ArtifactsPage.title', 'Artifacts')}
+          {t('auto.components.artifacts.ArtifactsPage.title', 'Artifacts')}
         </h1>
       </header>
 
@@ -193,7 +194,6 @@ export default function ArtifactsPage(): React.JSX.Element {
         <ArtifactsPageAuthState
           needsReconnect={needsReconnect}
           configured={authStatus?.configured === true}
-          onConnect={() => void connect()}
           onOpenAccountSettings={openAccountSettings}
         />
       ) : loading && artifacts.length === 0 ? (

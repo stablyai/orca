@@ -1,8 +1,4 @@
-/**
- * orcad's side of the desktop browser bridge: the desktops attached to it and the forwarded
- * requests waiting on their answers. The newest attachment serves; an older one takes over only
- * when the newer one detaches.
- */
+/** orcad forwards through its newest desktop attachment; older ones resume only after it detaches. */
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../browser/browser-error'
 import {
@@ -12,8 +8,7 @@ import {
   type DesktopBrowserBridgeResultParams
 } from '../../../shared/desktop-browser-bridge-protocol'
 
-// Why below 32: the desktop answers over one subscription that holds at most 32 unacknowledged
-// requests (remote-runtime-subscription-request-channel), so more would strand finished results.
+// Stay below the subscription's 32-unacknowledged-request bound or completed results could strand.
 export const MAX_PENDING_PER_ATTACHMENT = 16
 const DESKTOP_DEADLINE_MARGIN_MS = 10_000
 const MIN_DESKTOP_DEADLINE_MS = 1_000
@@ -22,6 +17,9 @@ type Attachment = {
   attachmentId: string
   connectionId: string
   pairedDeviceId: string
+  acceptsCancel?: boolean
+  enforcesExpectUrl?: boolean
+  readsTabAnnotations?: boolean
   emit: (event: DesktopBrowserBridgeEvent) => void
 }
 
@@ -55,6 +53,15 @@ export class DesktopBrowserBridgeRegistry {
     return this.attachments.length > 0
   }
 
+  /** Commands go to the newest attachment only, so an older one behind it can't help. */
+  newestAttachmentEnforcesExpectUrl(): boolean {
+    return this.attachments.at(-1)?.enforcesExpectUrl === true
+  }
+
+  newestAttachmentReadsTabAnnotations(): boolean {
+    return this.attachments.at(-1)?.readsTabAnnotations === true
+  }
+
   forward(
     request: DesktopBrowserBridgeForward,
     options: { timeoutMs: number; signal?: AbortSignal }
@@ -75,12 +82,26 @@ export class DesktopBrowserBridgeRegistry {
         this.pending.delete(requestId)
         options.signal?.removeEventListener('abort', onAbort)
       }
+      let emitted = false
+      // Revoke queued desktop work when the CLI gives up.
+      const cancelOnDesktop = (): void => {
+        if (!emitted || !attachment.acceptsCancel || !this.attachments.includes(attachment)) {
+          return
+        }
+        try {
+          attachment.emit({ type: 'cancel', requestId })
+        } catch {
+          // The socket is gone, so the desktop's own detach revokes the command.
+        }
+      }
       const onAbort = (): void => {
         settle()
+        cancelOnDesktop()
         reject(new BrowserError('browser_aborted', 'The browser command was cancelled.'))
       }
       const timer = setTimeout(() => {
         settle()
+        cancelOnDesktop()
         reject(
           new BrowserError('browser_timeout', 'The desktop did not answer the browser command.')
         )
@@ -108,20 +129,20 @@ export class DesktopBrowserBridgeRegistry {
           requestId,
           method: request.method,
           params: request.params,
-          // Why shorter: the desktop must stop starting this before orcad gives up, transit included.
+          // Leave transit margin for desktop refusal before orcad's deadline.
           timeoutMs: Math.max(
             MIN_DESKTOP_DEADLINE_MS,
             options.timeoutMs - DESKTOP_DEADLINE_MARGIN_MS
           ),
           ...(request.workspaceId ? { workspaceId: request.workspaceId } : {})
         })
+        emitted = true
       } catch {
         this.pending.get(requestId)?.reject(unavailableError())
       }
     })
   }
 
-  /** Accepts an answer only from the socket and device the request was sent to. */
   settle(
     caller: { connectionId: string; pairedDeviceId: string },
     result: DesktopBrowserBridgeResultParams
@@ -140,7 +161,7 @@ export class DesktopBrowserBridgeRegistry {
     if (result.ok) {
       pending.resolve(result.result)
     } else {
-      pending.reject(new BrowserError(result.error.code, result.error.message))
+      pending.reject(new BrowserError(result.error.code, result.error.message, result.error.data))
     }
     return true
   }
@@ -184,7 +205,6 @@ function unavailableError(): BrowserError {
 const registries = new WeakMap<object, DesktopBrowserBridgeRegistry>()
 let hostEnabled = false
 
-/** Only orcad serves the bridge; a desktop runtime never accepts an attach or forwards a call. */
 export function setDesktopBrowserBridgeHostEnabled(enabled: boolean): void {
   hostEnabled = enabled
 }

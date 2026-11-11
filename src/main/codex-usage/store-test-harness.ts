@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
+import { scanCodexUsageFilesViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import { CodexUsageStore, initCodexUsagePath } from './store'
 import type { CodexUsagePersistedState } from './types'
 
@@ -14,7 +14,6 @@ export function createEmptyScanResult() {
   }
 }
 
-/** One completed session in `worktreeId`, shaped for automation-run attribution. */
 export function createWorktreeUsageSession(worktreeId: string) {
   const tokens = {
     eventCount: 1,
@@ -90,7 +89,7 @@ export function createStoreWithState(state: Partial<CodexUsagePersistedState>): 
   return store
 }
 
-/** Registers the shared temp-userdata + fake-timer lifecycle; caller owns the hoisted electron mock. */
+/** The caller owns the hoisted Electron mock. */
 export function setupCodexUsageStoreEnv(getPathMock: Mock): { tempUserData: string } {
   const env = { tempUserData: '' }
 

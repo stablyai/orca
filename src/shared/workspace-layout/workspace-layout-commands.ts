@@ -1,6 +1,6 @@
-// applyLayoutCommand: every layout change a client can ask for, applied to the model in one step.
-// Pure and synchronous, so the runtime applies commands in arrival order on one thread.
+// Apply pure layout commands synchronously so runtime arrival order remains authoritative.
 
+import { clientLayoutCommand } from './workspace-layout-client-command'
 import {
   closeBrowserPage,
   openBrowserPage,
@@ -8,7 +8,12 @@ import {
   setBrowserTabProfile
 } from './workspace-layout-browser-commands'
 import { applied, refuse, type Applied } from './workspace-layout-command-steps'
-import type { LayoutCommand, LayoutContext } from './workspace-layout-command-types'
+import type {
+  CommandOf,
+  LayoutCommand,
+  LayoutContext,
+  RenameTabsCommand
+} from './workspace-layout-command-types'
 import {
   openAgentSessionTab,
   openBrowserTab,
@@ -20,7 +25,10 @@ import {
   setGroupRatios,
   splitGroup
 } from './workspace-layout-group-commands'
+import { renameEditorFiles } from './workspace-layout-editor-rekey'
+import { openSimulatorTab } from './workspace-layout-simulator-tab'
 import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
+import { runDroppedLeafStep } from './workspace-layout-dropped-leaves'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import {
   closePane,
@@ -28,6 +36,8 @@ import {
   movePane,
   movePaneToNewTab,
   renamePane,
+  setPaneGrid,
+  releasePaneTerminal,
   setPaneRatios,
   splitPane
 } from './workspace-layout-pane-commands'
@@ -41,21 +51,47 @@ import {
   setTabProps
 } from './workspace-layout-tab-commands'
 import { moveTabToWorkspace } from './workspace-layout-workspace-move'
+import { applyDefaultTabs } from './workspace-layout-default-tabs'
 
 const CREATES_WORKSPACE = new Set<LayoutCommand['type']>([
   'createTerminalTab',
   'openEditorTab',
   'openBrowserTab',
-  'openAgentSessionTab'
+  'openAgentSessionTab',
+  'openSimulatorTab'
 ])
+
+export function renameTabCommandsOf(command: RenameTabsCommand): CommandOf<'renameTab'>[] {
+  return command.renames.map(({ workspace, tabId, title, replaceExisting }) => ({
+    type: 'renameTab',
+    workspace,
+    tabId,
+    kind: command.kind,
+    title,
+    ...(replaceExisting ? { replaceExisting } : {})
+  }))
+}
 
 export function applyLayoutCommand(
   model: WorkspaceLayoutModel,
   command: LayoutCommand,
   context: LayoutContext
 ): Applied {
-  const result = applyCommand(model, command, context)
-  return result.ok ? { ...result, model: updateLegacyPersistence(model, result.model) } : result
+  const result = applyCommand(
+    model,
+    clientLayoutCommand(model, command, context.visibility),
+    context
+  )
+  if (!result.ok) {
+    return result
+  }
+  const next = updateLegacyPersistence(model, result.model)
+  return {
+    ...result,
+    model: context.droppedLeafReason
+      ? runDroppedLeafStep(model, next, context.droppedLeafReason, context.now())
+      : next
+  }
 }
 
 function applyCommand(
@@ -63,6 +99,12 @@ function applyCommand(
   command: LayoutCommand,
   context: LayoutContext
 ): Applied {
+  if (command.type === 'setDefaultTabsApplied') {
+    return setDefaultTabsApplied(model, command.workspace)
+  }
+  if (command.type === 'applyDefaultTabs') {
+    return applyDefaultTabs(model, command, context, setDefaultTabsApplied)
+  }
   if (!model.workspaces[command.workspace] && !CREATES_WORKSPACE.has(command.type)) {
     // Closing what is already gone is not an error (#10747).
     if (command.type === 'closeTabs') {
@@ -82,7 +124,7 @@ function applyCommand(
     case 'closeTabs':
       return closeTabs(model, command, context)
     case 'moveTab':
-      return moveTab(model, command)
+      return moveTab(model, command, context)
     case 'splitGroup':
       return splitGroup(model, command, context)
     case 'setGroupRatios':
@@ -99,16 +141,24 @@ function applyCommand(
       return renameTab(model, command)
     case 'renamePane':
       return renamePane(model, command)
+    case 'setPaneGrid':
+      return setPaneGrid(model, command)
+    case 'releasePaneTerminal':
+      return releasePaneTerminal(model, command)
     case 'setTabProps':
       return setTabProps(model, command)
     case 'setChatPane':
       return setChatPane(model, command)
     case 'openEditorTab':
       return openInNewGroup(model, command, (next) => openEditorTab(next, command, context))
+    case 'openSimulatorTab':
+      return openInNewGroup(model, command, (next) => openSimulatorTab(next, command, context))
     case 'promotePreviewTab':
       return promotePreviewTab(model, command)
     case 'moveTabToWorkspace':
       return moveTabToWorkspace(model, command, context)
+    case 'renameEditorFiles':
+      return renameEditorFiles(model, command)
     case 'openBrowserTab':
       return openInNewGroup(model, command, (next) => openBrowserTab(next, command, context))
     case 'openBrowserPage':
@@ -120,7 +170,7 @@ function applyCommand(
     case 'setBrowserTabProfile':
       return setBrowserTabProfile(model, command)
     case 'openAgentSessionTab':
-      return openAgentSessionTab(model, command, context)
+      return openInNewGroup(model, command, (next) => openAgentSessionTab(next, command, context))
     case 'startPane':
       return startPane(model, command, context)
     case 'restartPane':
@@ -130,4 +180,16 @@ function applyCommand(
     case 'wake':
       return wake(model, command)
   }
+}
+
+// A record, not a layout: a workspace with no tabs yet (zero templates) is marked, not created.
+function setDefaultTabsApplied(model: WorkspaceLayoutModel, workspace: string): Applied {
+  const marks = model.records.defaultTabsAppliedByWorkspace
+  if (marks?.[workspace]) {
+    return applied(model)
+  }
+  return applied({
+    ...model,
+    records: { ...model.records, defaultTabsAppliedByWorkspace: { ...marks, [workspace]: true } }
+  })
 }

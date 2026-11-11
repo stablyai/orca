@@ -1,15 +1,10 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import {
-  findGroupAndWorktree,
-  findGroupForTab,
-  findTabAndWorktree,
-  pickNextActiveTab,
-  pushRecentTabId,
-  sanitizeRecentTabIds
-} from '../tab-group-state'
+import { findGroupAndWorktree, findGroupForTab, findTabAndWorktree } from './tab-group-state'
+import { pickNextActiveTab, pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 export function createTabsMoveActions(
   set: TabsSliceSet,
@@ -37,17 +32,16 @@ export function createTabsMoveActions(
 
         const dedupedSourceGroupOrder = dedupeTabOrder(sourceGroup.tabOrder)
         const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
-        // Why: defensive dedupe so target order can't grow a duplicate id (stale state); see dropUnifiedTab for the same guard.
+        // Stale target orders may already contain tabId; dedupe to prevent duplicate React keys (also guarded in dropUnifiedTab).
         const targetOrder = dedupeTabOrder(targetGroup.tabOrder.filter((id) => id !== tabId))
         const targetIndex = Math.max(
           0,
           Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
         )
         targetOrder.splice(targetIndex, 0, tabId)
-        const nextActiveGroupIdByWorktree = {
-          ...state.activeGroupIdByWorktree,
-          [worktreeId]: opts?.activate ? targetGroupId : state.activeGroupIdByWorktree[worktreeId]
-        }
+        let nextActiveGroupId = opts?.activate
+          ? targetGroupId
+          : state.activeGroupIdByWorktree[worktreeId]
         const sourceRecentTabIds = sanitizeRecentTabIds(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
@@ -59,7 +53,12 @@ export function createTabsMoveActions(
               activeTabId:
                 group.activeTabId === tabId
                   ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
-                    pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
+                    pickNextActiveTab(
+                      dedupedSourceGroupOrder,
+                      sourceGroup.recentTabIds,
+                      tabId,
+                      state.unifiedTabsByWorktree[worktreeId]
+                    )
                   : group.activeTabId,
               tabOrder: sourceOrder,
               recentTabIds: sourceRecentTabIds
@@ -79,30 +78,38 @@ export function createTabsMoveActions(
           return group
         })
         let nextLayoutByWorktree = state.layoutByWorktree
-        let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
         let filteredGroups = nextGroups
+        const currentLayout = state.layoutByWorktree[worktreeId]
         if (sourceOrder.length === 0) {
           filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
-          const collapsedState = collapseGroupLayout(
-            nextLayoutByWorktree,
-            nextActiveGroupIdByWorktreeResolved,
+          if (currentLayout) {
+            const collapsed = collapseWorktreeGroupLayout(
+              currentLayout,
+              nextActiveGroupId,
+              sourceGroup.id,
+              targetGroupId
+            )
+            nextLayoutByWorktree = replaceRecordEntries(state.layoutByWorktree, [
+              [worktreeId, collapsed.layout]
+            ])
+            nextActiveGroupId = collapsed.activeGroupId
+          }
+        }
+        const nextActiveGroupIdByWorktreeResolved = replaceRecordEntries(
+          state.activeGroupIdByWorktree,
+          [[worktreeId, nextActiveGroupId]]
+        )
+        const nextGroupsByWorktree = replaceRecordEntries(state.groupsByWorktree, [
+          [worktreeId, filteredGroups]
+        ])
+        const nextUnifiedTabsByWorktree = replaceTabBuckets(state.unifiedTabsByWorktree, [
+          [
             worktreeId,
-            sourceGroup.id,
-            targetGroupId
-          )
-          nextLayoutByWorktree = collapsedState.layoutByWorktree
-          nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
-        }
-        const nextGroupsByWorktree = {
-          ...state.groupsByWorktree,
-          [worktreeId]: filteredGroups
-        }
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
-        }
+            (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+              candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+            )
+          ]
+        ])
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
           groupsByWorktree: nextGroupsByWorktree,

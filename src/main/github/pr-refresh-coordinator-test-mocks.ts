@@ -1,10 +1,18 @@
+import type { PRRefreshRendererPort } from './pr-refresh-renderer-port'
 import { vi, type Mock } from 'vitest'
 import { isWslUncPath } from '../../shared/wsl-paths'
+
+type PRRefreshWebContentsMock = {
+  id: number
+  isDestroyed: () => boolean
+  send?: Mock
+}
 
 export type PRRefreshCoordinatorMocks = {
   sendMock: Mock
   sendToTrustedUIRendererMock: Mock
-  getAllWebContentsMock: Mock
+  getAllWebContentsMock: Mock<() => PRRefreshWebContentsMock[]>
+  webContentsFromIdMock: Mock<(id: number) => PRRefreshWebContentsMock | undefined>
   getPRForBranchOutcomeMock: Mock
   getOriginGitHubApiRepositoryMock: Mock
   getRateLimitMock: Mock
@@ -13,14 +21,13 @@ export type PRRefreshCoordinatorMocks = {
   spendsSharedGitHubComQuotaMock: Mock
 }
 
-// Why: every coordinator suite registers its own `vi.mock` factories (hoisting
-// is per-file), so the mock set and the factory bodies live here and each test
-// file only wires them together.
+// Vitest hoists per file; suites register these shared factories locally.
 export function createPRRefreshCoordinatorMocks(): PRRefreshCoordinatorMocks {
   return {
     sendMock: vi.fn(),
     sendToTrustedUIRendererMock: vi.fn(),
     getAllWebContentsMock: vi.fn(),
+    webContentsFromIdMock: vi.fn(),
     getPRForBranchOutcomeMock: vi.fn(),
     getOriginGitHubApiRepositoryMock: vi.fn(),
     getRateLimitMock: vi.fn(),
@@ -30,14 +37,18 @@ export function createPRRefreshCoordinatorMocks(): PRRefreshCoordinatorMocks {
   }
 }
 
-export type ElectronModuleMock = { webContents: { getAllWebContents: Mock } }
+export type RendererPortModuleMock = { prRefreshRenderers: () => PRRefreshRendererPort }
 
-export function electronModuleMock(mocks: PRRefreshCoordinatorMocks): ElectronModuleMock {
-  return {
-    webContents: {
-      getAllWebContents: mocks.getAllWebContentsMock
-    }
+/** Renderers are the mocked web contents; refresh events reach `sendToTrustedUIRendererMock`. */
+export function rendererPortModuleMock(mocks: PRRefreshCoordinatorMocks): RendererPortModuleMock {
+  const port: PRRefreshRendererPort = {
+    isRendererOpen: (id) => {
+      const contents = mocks.webContentsFromIdMock(id)
+      return contents !== undefined && !contents.isDestroyed()
+    },
+    sendToTrustedUI: (channel, payload) => mocks.sendToTrustedUIRendererMock(channel, payload)
   }
+  return { prRefreshRenderers: () => port }
 }
 
 export type ClientModuleMock = { getPRForBranchOutcome: Mock }
@@ -74,21 +85,13 @@ export function rateLimitModuleMock(mocks: PRRefreshCoordinatorMocks): RateLimit
   }
 }
 
-export type IpcUiModuleMock = { sendToTrustedUIRenderer: Mock }
-
-export function ipcUiModuleMock(mocks: PRRefreshCoordinatorMocks): IpcUiModuleMock {
-  return {
-    sendToTrustedUIRenderer: mocks.sendToTrustedUIRendererMock
-  }
-}
-
-// The coordinator keeps module-level queue state; reset modules and timers so
-// one suite's pending work cannot leak into the next test.
+// Module queues and timers must not leak pending work between tests.
 export function resetPRRefreshCoordinatorMocks(mocks: PRRefreshCoordinatorMocks): void {
   const {
     sendMock,
     sendToTrustedUIRendererMock,
     getAllWebContentsMock,
+    webContentsFromIdMock,
     getPRForBranchOutcomeMock,
     getOriginGitHubApiRepositoryMock,
     getRateLimitMock,
@@ -105,6 +108,10 @@ export function resetPRRefreshCoordinatorMocks(mocks: PRRefreshCoordinatorMocks)
     sendMock(channel, payload)
   })
   getAllWebContentsMock.mockReset()
+  webContentsFromIdMock.mockReset()
+  webContentsFromIdMock.mockImplementation((id) =>
+    getAllWebContentsMock().find((contents) => contents.id === id)
+  )
   getPRForBranchOutcomeMock.mockReset()
   getOriginGitHubApiRepositoryMock.mockReset()
   getOriginGitHubApiRepositoryMock.mockResolvedValue({

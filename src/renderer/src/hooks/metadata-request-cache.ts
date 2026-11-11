@@ -1,9 +1,6 @@
-const METADATA_TTL = 300_000 // 5 min
+const METADATA_TTL = 300_000
 const MAX_METADATA_CACHE_ENTRIES = 500
-// Why: an unreachable provider/runtime fails every consumer render; without a
-// negative cache each settlement re-issues the fetch, which storms a dead
-// remote. Failures are remembered briefly so retries are paced, not disabled —
-// short enough that a recovered provider is picked up within seconds.
+// Briefly cache failures to pace unreachable-provider retries without delaying recovery indefinitely.
 const METADATA_FAILURE_TTL = 10_000
 const MAX_METADATA_FAILURE_ENTRIES = 200
 
@@ -56,8 +53,7 @@ function pruneMetadataCache<T>(
   for (const [key] of sorted.slice(maxEntries)) {
     store.cache.delete(key)
   }
-  // Why: capacity eviction drops the oldest entries, so the gate computed above
-  // points at an expiry that no longer exists and would force a needless sweep.
+  // Capacity eviction can remove the gated expiry; recompute it to avoid needless sweeps.
   const oldestSurvivor = sorted[maxEntries - 1]?.[1]
   store.nextCacheExpiryAt = oldestSurvivor ? oldestSurvivor.fetchedAt + METADATA_TTL : Infinity
 }
@@ -129,8 +125,7 @@ export function loadMetadata<T>(
     return Promise.reject(recentFailure.error)
   }
 
-  // Why: clearMetadataRequestStore invalidates auth/repo boundaries; late
-  // responses from the previous generation must not repopulate the cache.
+  // Clearing auth/repo boundaries advances generation so old responses cannot repopulate cache.
   const generation = store.generation
   const promise = fetcher()
     .then((data) => {
@@ -138,9 +133,7 @@ export function loadMetadata<T>(
         const fetchedAt = now()
         store.cache.set(key, { data, fetchedAt })
         store.failures.delete(key)
-        // Why: these module-level stores are reused across dialogs and
-        // repo/runtime keys; TTL controls freshness but also needs pruning so
-        // long sessions do not retain stale metadata indefinitely.
+        // Prune TTL-expired module caches so long sessions do not retain stale repo/runtime metadata.
         pruneMetadataCache(store, fetchedAt)
       }
       return data

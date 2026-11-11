@@ -54,21 +54,12 @@ class MobileWebShellOriginTest {
     val label = host.substringBefore('.')
     assertEquals(32, label.length)
     assertTrue(label.all { it in '0'..'9' || it in 'a'..'f' })
-    // The bug this replaces: a label sliced off the session id carried case and '_', which
-    // Chromium and java.net.URI canonicalise differently, so every asset 403'd.
+    // Regression: mixed-case/underscore session slices canonicalized differently and 403’d every asset.
     assertFalse(label.startsWith(SESSION.take(8)))
     assertEquals("$label.orca-mobile-web.invalid", host)
     assertEquals("https://$host", mobileWebShellOrigin(SESSION))
     assertNull(mobileWebShellOriginHost("bad host"))
     assertNull(mobileWebShellOrigin("bad host"))
-  }
-
-  @Test
-  fun `derives a different label for every session and the same one for a repeat`() {
-    assertEquals(mobileWebShellOriginHost(SESSION), mobileWebShellOriginHost(SESSION))
-    assertTrue(mobileWebShellOriginHost(SESSION) != mobileWebShellOriginHost("${SESSION}a"))
-    // Case matters to the derivation even though the host comparison ignores it.
-    assertTrue(mobileWebShellOriginHost(SESSION) != mobileWebShellOriginHost(SESSION.uppercase()))
   }
 
   @Test

@@ -2,12 +2,16 @@ import type { AppState } from '../types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '../worktree-repo-index'
+import { getFolderWorkspaceConnectionId } from '@/lib/workspace/ownership/folder-workspace-connection'
+import { getIndexedRepoMap } from '../repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '../slices/worktrees/listing/worktree-catalog-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../workspaces/catalog/workspace-record-fields'
 
 export function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
@@ -57,12 +61,12 @@ export function worktreeUsesWslPath(
 ): boolean {
   const parsed = parseWorkspaceKey(worktreeId)
   if (parsed?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
+    const folderWorkspace = selectFolderWorkspaces(state).find(
       (workspace) => workspace.id === parsed.folderWorkspaceId
     )
     return folderWorkspace ? isWslUncPath(folderWorkspace.folderPath) : false
   }
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
+  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)
   return worktree ? isWslUncPath(worktree.path) : false
 }
 
@@ -79,7 +83,7 @@ export function worktreeUsesRemoteConnection(
   if (directRepo) {
     return Boolean(directRepo.connectionId)
   }
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
+  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)
   const repo = worktree ? repoMap.get(worktree.repoId) : null
   return Boolean(repo?.connectionId)
 }
@@ -97,14 +101,7 @@ export function getRemoteConnectionIdForWorktree(
   if (directRepo) {
     return directRepo.connectionId?.trim() || null
   }
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
+  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)
   const repo = worktree ? repoMap.get(worktree.repoId) : null
   return repo?.connectionId?.trim() || null
-}
-
-export function resolveTerminalStopRuntimeEnvironmentId(
-  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo'>,
-  worktreeId: string
-): string | null {
-  return getRuntimeEnvironmentIdForWorktree(state, worktreeId)
 }

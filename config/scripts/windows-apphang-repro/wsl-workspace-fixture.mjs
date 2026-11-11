@@ -95,9 +95,7 @@ export function createCompletedOnboardingProfile(userDataDir) {
   const profile = {
     settings: {
       telemetry: {
-        // Why: synthetic harness/benchmark activity must not send telemetry.
-        // Explicit false with existedBeforeTelemetryRelease=false also keeps
-        // the first-launch consent surface from blocking automation.
+        // Disable telemetry/first-launch consent for synthetic benchmark activity with explicit false and new-install marker.
         optedIn: false,
         installId: '00000000-0000-4000-8000-000000000000',
         existedBeforeTelemetryRelease: false

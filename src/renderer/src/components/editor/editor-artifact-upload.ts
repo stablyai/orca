@@ -1,13 +1,16 @@
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
-import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
+import {
+  fileArtifactSourceKey,
+  type FileArtifactOwner
+} from '@/lib/files/artifacts/file-artifact-source-key'
 import { basename } from '@/lib/path'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
-import { flushPendingEditorChange } from './editor-pending-flush'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { flushPendingEditorBuffer } from './save/flush/editor-pending-flush'
 
 export type ShareableFileContentType = ArtifactWriteRequest['contentType']
 
-/** The host the tab opened its file through; tabs opened before routes were recorded keep their environment. */
+/** Use captured file ownership; legacy tabs without routes retain their recorded runtime environment. */
 function editorArtifactOwner(file: OpenFile): FileArtifactOwner {
   const route = file.operationProvenance?.generation.route
   return {
@@ -21,7 +24,6 @@ export function editorArtifactSourceKey(file: OpenFile): string {
   return fileArtifactSourceKey(editorArtifactOwner(file), file.filePath)
 }
 
-/** What an editor file shares as, or null when it isn't a shareable document. */
 export function editorArtifactContentType(
   filePath: string,
   isMarkdown: boolean
@@ -55,7 +57,7 @@ export function createCurrentEditorArtifactRequest(
   fallbackContent: string,
   contentType: ShareableFileContentType
 ): ArtifactWriteRequest {
-  flushPendingEditorChange(contentFileId)
+  flushPendingEditorBuffer(useAppStore.getState(), contentFileId)
   const content = useAppStore.getState().editorDrafts[contentFileId] ?? fallbackContent
   return createEditorArtifactRequest(file, content, contentType)
 }

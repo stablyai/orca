@@ -1,6 +1,5 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import { type BrowserWindow, ipcMain } from 'electron'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   ProjectHostSetupCreateArgs,
@@ -12,12 +11,16 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
 } from '../../../shared/project-types'
-import { getProjectIdForProviderIdentity } from '../../../shared/project-host-setup-projection'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
+import {
+  linkImportedFolderToProject,
+  type RepositoryMetadataOwner
+} from '../../workspaces/catalog/imported-folder-project-link'
+import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-remote-identity'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { updateProjectHostSetupWithProvenKind } from '../../folder-repo-git-conversion'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { updateProjectHostSetupWithProvenKind } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -28,11 +31,12 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { addLocalRepoFromPath } from './local-repo-registration'
-import { sshTargetNotConnectedMessage } from '../../providers/ssh-host-not-served-error'
+import { sshHostWithoutServerMessage } from '../../../shared/project-host-setup-target'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import {
   assertWslMoveHostSetupIdWritable,
   assertWslMoveHostSetupWritable
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetupResult {
   const setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
@@ -43,51 +47,11 @@ function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetup
   return { project, setup, repo }
 }
 
-function alignRepoWithRequestedProject(
+export function registerProjectHostSetupHandlers(
+  mainWindow: BrowserWindow,
   store: Store,
-  repo: Repo,
-  projectId: string,
-  setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder',
-  requestedProviderIdentity?: ProjectHostSetupExistingFolderArgs['projectProviderIdentity']
-): ProjectHostSetupResult {
-  assertWslMoveHostSetupWritable(store, {
-    projectId,
-    hostId: getRepoExecutionHostId(repo),
-    repoId: repo.id
-  })
-  let setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
-  if (setup.projectId !== projectId) {
-    const project = store.getProjects().find((entry) => entry.id === projectId)
-    // Why: the selected project can exist only on the source host, so its structured identity travels with the request.
-    const identity = project?.providerIdentity ?? requestedProviderIdentity
-    if (!identity || getProjectIdForProviderIdentity(identity) !== projectId) {
-      throw new Error('Imported folder does not match the selected project identity.')
-    }
-    // Why: stamp the selected project's provider identity when the folder lacks upstream, so projection can merge it.
-    const updated = store.updateRepo(repo.id, {
-      upstream: {
-        owner: identity.owner,
-        repo: identity.repo,
-        ...(identity.host ? { host: identity.host } : {})
-      }
-    })
-    if (!updated) {
-      throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
-    }
-    repo = updated
-    setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
-  }
-  const updated = store.updateRepo(repo.id, { projectHostSetupMethod: setupMethod })
-  if (!updated) {
-    throw new Error(
-      `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
-    )
-  }
-  repo = updated
-  return buildProjectHostSetupResult(store, repo)
-}
-
-export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, store: Store): void {
+  metadata: RepositoryMetadataOwner
+): void {
   ipcMain.handle(
     'projectHostSetups:create',
     (_event, rawArgs: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult => {
@@ -114,11 +78,11 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         rawArgs,
         'project_host_setup_update_invalid_args'
       )
-      assertWslMoveHostSetupIdWritable(store, args.setupId)
+      assertWslMoveHostSetupIdWritable(store, args)
       const result = await updateProjectHostSetupWithProvenKind(
         store,
         (setupArgs) => {
-          assertWslMoveHostSetupIdWritable(store, setupArgs.setupId)
+          assertWslMoveHostSetupIdWritable(store, setupArgs)
           return store.updateProjectHostSetup(setupArgs)
         },
         args
@@ -143,7 +107,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         rawArgs,
         'project_host_setup_delete_invalid_args'
       )
-      assertWslMoveHostSetupIdWritable(store, args.setupId)
+      assertWslMoveHostSetupIdWritable(store, args)
       const result = store.deleteProjectHostSetup(args)
       if (!result) {
         throw new Error(`Project host setup not found: ${args.setupId}`)
@@ -172,7 +136,12 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         parsedHost.kind === 'local'
           ? await addLocalRepoFromPath(store, args.path, args.kind)
           : parsedHost.kind === 'ssh'
-            ? { error: sshTargetNotConnectedMessage(parsedHost.targetId) }
+            ? {
+                error: sshHostWithoutServerMessage(
+                  getSshTargetRegistryStore()?.getTarget(parsedHost.targetId)?.label ??
+                    parsedHost.targetId
+                )
+              }
             : {
                 error:
                   'Runtime hosts must be set up through the runtime projectHostSetup.setupExistingFolder RPC.'
@@ -180,21 +149,28 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
       if ('error' in result) {
         throw new Error(result.error)
       }
+      // Stored remotes may predate changes made in the checkout.
+      const folderRemote =
+        result.alreadyExisted || result.repo.gitRemoteIdentity === undefined
+          ? await readCurrentGitRemoteIdentity(result.repo)
+          : result.repo
       let aligned: ProjectHostSetupResult
       try {
-        aligned = alignRepoWithRequestedProject(
-          store,
+        const repo = await linkImportedFolderToProject(
+          () => store,
           result.repo,
-          args.projectId,
-          args.setupMethod,
-          args.projectProviderIdentity
+          folderRemote,
+          { ...args, hostId: getRepoExecutionHostId(result.repo) },
+          metadata
         )
+        aligned = buildProjectHostSetupResult(store, repo)
       } catch (err) {
-        // Why: an import that cannot be linked must not leave a new repo registration or authorization root behind.
+        // Failed linking must not leave a newly registered repo or authorization root.
         if (!result.alreadyExisted) {
-          store.removeProjectForHost(result.repo.id, getRepoExecutionHostId(result.repo))
+          store.removeProjectForHost(result.repo)
           invalidateAuthorizedRootsCache()
         }
+        notifyReposChanged(mainWindow)
         throw err
       }
       invalidateAuthorizedRootsCache()

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { WorktreeSelector } from './files-target-params'
+import { FileChunkRange } from './files-params'
 
 export const TerminalArtifactFile = WorktreeSelector.extend({
   grantId: z
@@ -17,3 +18,5 @@ export const TerminalArtifactFileWrite = TerminalArtifactFile.extend({
     .unknown()
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
 })
+
+export const TerminalArtifactFileChunk = TerminalArtifactFile.extend(FileChunkRange)

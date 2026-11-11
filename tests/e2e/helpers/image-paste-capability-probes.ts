@@ -1,9 +1,7 @@
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import path from 'node:path'
-import {
-  FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY,
-  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+import { FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY } from '../../../src/shared/file-access/files-runtime-capabilities'
+import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../src/shared/worktree-runtime-capabilities'
 
 export async function omitHostImagePasteCapability(app: ElectronApplication) {
   return app.evaluateHandle(

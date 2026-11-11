@@ -4,9 +4,9 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "values": {
-    "05215ca2ea35": {
+    "03fd6edde488": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 5,
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -17,13 +17,14 @@
           "value": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -47,22 +48,46 @@
         }
       }
     },
-    "33d053404f10": {
-      "activeWorktreePath": {
-        "$rpc": "null"
-      },
-      "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
-      },
+    "2182656920b3": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"],\"scopeOnly\":true}}"
+    },
+    "44a27dbf05e2": {
+      "name": "status.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "758b3fde1948": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 6,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
+    },
+    "9aa0df31dc4d": {
+      "activeWorktreePath": "/repo/feature",
       "refreshing": false,
       "scope": "workspace",
       "screenState": {
-        "kind": "loading"
+        "issues": [],
+        "kind": "ready",
+        "sessions": [
+          {
+            "agent": "claude",
+            "cwd": "/repo/feature",
+            "id": "s1"
+          }
+        ]
       }
     },
-    "4a76a58cbdac": {
+    "daf52dc85a58": {
       "name": "status.get#1",
-      "ordinal": 1,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -71,47 +96,13 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
-          }
-        }
-      }
-    },
-    "4e35efd1ee45": {
-      "name": "status.get#2",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -128,34 +119,20 @@
         }
       }
     },
-    "72d9a278aca3": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
-    },
-    "cd739a80b7a8": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
+    "dcc5f025cb63": {
+      "activeWorktreePath": {
+        "$rpc": "null"
       },
       "refreshing": false,
       "scope": "workspace",
       "screenState": {
-        "issues": [],
-        "kind": "ready",
-        "sessions": [
-          {
-            "agent": "claude",
-            "cwd": "/repo/feature",
-            "id": "s1"
-          }
-        ]
+        "kind": "loading"
       }
     },
-    "d08f74d65ee6": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -164,11 +141,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f1834177e593": {
-      "name": "status.get#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -177,26 +149,39 @@
       {
         "id": "held",
         "observation": {
-          "sender": ["4a76a58cbdac"],
-          "payloads": ["d08f74d65ee6"],
+          "sender": [],
+          "payloads": ["e28c488ce6b2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "33d053404f10",
+          "state": "dcc5f025cb63",
           "effects": []
         }
       },
       {
         "id": "ready",
         "observation": {
-          "sender": ["4a76a58cbdac", "4e35efd1ee45", "05215ca2ea35"],
-          "payloads": ["d08f74d65ee6", "f1834177e593", "72d9a278aca3"],
+          "sender": ["daf52dc85a58", "03fd6edde488"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "2182656920b3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"
           },
-          "state": "cd739a80b7a8",
+          "state": "9aa0df31dc4d",
           "effects": []
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["daf52dc85a58", "03fd6edde488"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "2182656920b3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "worktrees-loaded": "eb79a9b3682a"
+          },
+          "state": "9aa0df31dc4d",
+          "effects": ["758b3fde1948"]
         }
       }
     ]

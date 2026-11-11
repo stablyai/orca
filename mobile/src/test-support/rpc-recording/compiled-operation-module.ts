@@ -1,5 +1,5 @@
 import { compileFunction } from 'node:vm'
-import ts from 'typescript'
+import ts from 'typescript-api'
 
 type CompiledModule = {
   source: string

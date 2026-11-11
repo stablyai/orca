@@ -1,13 +1,14 @@
-// What a stored session holds besides the layout: the desktop view's own selection, content facts
-// views report, and fields this module passes through untouched. The Loader splits a session into
-// these and the layout; the Serializer joins them back into today's on-disk shape.
+// Loader separates layout from view selections, reported content facts and untouched carried fields; Serializer recombines them into compatible disk records.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
-import type { ClosedTerminalTabTombstonesByTabId } from '../closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
 import type { TabGroup } from '../tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
-import type { PersistedOpenFile, WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
+import type {
+  PersistedOpenFile,
+  WorkspaceSessionState
+} from '../workspace-session/workspace-session-state-types'
 
 type SessionFieldOwner = 'layout' | 'view' | 'fact' | 'carried' | 'legacy'
 
@@ -30,6 +31,7 @@ export const SESSION_FIELD_OWNERS = {
   activeBrowserTabIdByWorktree: 'view',
   clientHostedBrowserPagesByWorktree: 'layout',
   clientHostedBrowserCloseIntentsByEnvironment: 'carried',
+  pairedTerminalTabCloseIntentsByEnvironment: 'carried',
   activeTabTypeByWorktree: 'view',
   browserUrlHistory: 'carried',
   workspaceDocHistory: 'carried',
@@ -47,7 +49,8 @@ export const SESSION_FIELD_OWNERS = {
   terminalTopologyRevisionByRepoId: 'layout',
   // Applied and cleared by the Loader; never written again.
   terminalSurfaceTombstonesByPaneKey: 'legacy',
-  closedTerminalTabTombstonesByTabId: 'layout'
+  closedTerminalTabTombstonesByTabId: 'layout',
+  closedTerminalPanesByPaneKey: 'layout'
 } as const satisfies Record<keyof WorkspaceSessionState, SessionFieldOwner>
 
 type FieldsOwnedBy<Owner extends SessionFieldOwner> = {
@@ -79,7 +82,7 @@ export type DesktopLayoutView = Pick<WorkspaceSessionState, ViewSessionField> & 
   lastFocusedAt: Record<string, Record<string, number>>
   /** Terminal tab id → focused and expanded pane. */
   panes: Record<string, Pick<TerminalLayoutSnapshot, 'activeLeafId' | 'expandedLeafId'>>
-  /** Workspace key → file path → unsaved draft. */
+  /** Workspace key → file key (`editorFileKey`) → unsaved draft. */
   editorDrafts: Record<string, Record<string, EditorDraft>>
 }
 
@@ -115,7 +118,7 @@ export const BLANK_BROWSER_TAB_STATE: BrowserTabLiveState = {
   loadError: null
 }
 
-/** The row's last terminal is not a fact here: the Serializer derives it from the pane bindings. */
+/** Serializer derives last PTY from pane bindings; generation remains the window-owned remount key. */
 export type TerminalRowFacts = Pick<TerminalTab, 'title' | 'generation'>
 
 export type PaneScrollback = { buffer?: string; scrollbackRef?: string }

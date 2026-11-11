@@ -4,15 +4,18 @@ import {
   buildWindowsHostInteractiveLoginSpawn,
   type WindowsHostInteractiveLoginSpawn
 } from '../../shared/windows-interactive-login-spawn'
-import {
-  buildWslExecArgs,
-  buildWslLoginShellCommand,
-  quotePosixShell
-} from '../../shared/wsl-login-shell-command'
+import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { resolveClaudeCommand } from '../codex-cli/command'
-import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import {
+  isSpawnEnoent,
+  isWindowsOnlyAgentCommand,
+  windowsOnlyCliMessage
+} from '../codex-cli/windows-only-agent-cli'
+import { resolveWslExecutablePath } from '../wsl/execution/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
+import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
 const CLAUDE_AUTH_DENIED_PATTERN =
@@ -29,6 +32,9 @@ export type ClaudeCommandOptions = {
   keepStdinOpen?: boolean
   /** BROWSER for Claude, as Claude's own host sees the path. */
   browser?: string
+  onStdout?: (text: string) => void
+  /** Requires `keepStdinOpen`. */
+  onStdin?: (send: (text: string) => void) => void
 }
 
 export function runClaudeCommandProcess(
@@ -44,12 +50,20 @@ export function runClaudeCommandProcess(
       configDir.wslDistro === null &&
       args[0] === 'auth' &&
       args[1] === 'login'
-    // Why lazy: the WSL branch runs `claude` inside the distro, so resolving a
-    // host binary there would be wasted filesystem probing for a path never used.
+    // WSL launches never need the host binary, so resolve it lazily.
     let cachedHostClaudeCommand: string | null = null
-    const hostClaudeCommand = (): string => (cachedHostClaudeCommand ??= resolveClaudeCommand())
-    // The native login needs its own visible console, so it runs behind a
-    // start /wait wrapper that relays the real login PID back for termination.
+    const hostClaudeCommand = (): string => {
+      if (cachedHostClaudeCommand) {
+        return cachedHostClaudeCommand
+      }
+      const resolved = resolveClaudeCommand()
+      // A Windows-only result is never kept, so a later WSL install is found by the next resolve.
+      if (!isWindowsOnlyAgentCommand(resolved)) {
+        cachedHostClaudeCommand = resolved
+      }
+      return resolved
+    }
+    // The visible-console wrapper relays the login PID so termination reaches it.
     const interactiveLogin = isWindowsHostInteractiveLogin
       ? buildWindowsHostInteractiveLoginSpawn(hostClaudeCommand(), args)
       : null
@@ -64,9 +78,7 @@ export function runClaudeCommandProcess(
       program: spawnConfig.command,
       args: spawnConfig.args,
       env: spawnConfig.env,
-      // Why: Claude's browser auth can bind its callback lifetime to stdin.
-      // Keeping stdin open prevents hidden managed-login runs from tearing down
-      // the local callback server before the browser returns.
+      // Keep stdin open so Claude's auth callback survives until the browser returns.
       stdio: interactiveLogin
         ? interactiveLogin.stdio
         : [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
@@ -101,6 +113,7 @@ export function runClaudeCommandProcess(
         timeout = null
       }
       stdout?.off('data', appendOutput)
+      stdout?.off('data', forwardStdout)
       stderr?.off('data', appendOutput)
       child.off('error', onError)
       child.off(completionEvent, onDone)
@@ -129,6 +142,7 @@ export function runClaudeCommandProcess(
       terminationPending = true
       terminateClaudeProcess(child, interactiveLogin, afterKill)
     }
+    const forwardStdout = (chunk: Buffer): void => options?.onStdout?.(chunk.toString())
     const appendOutput = (chunk: Buffer): void => {
       output = `${output}${chunk.toString()}`
       if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
@@ -145,7 +159,10 @@ export function runClaudeCommandProcess(
     }
     const onError = (error: Error): void => {
       if (!terminationPending) {
-        settle(() => rejectPromise(error))
+        const windowsOnly = isSpawnEnoent(error)
+          ? windowsOnlyCliMessage(spawnConfig.command, 'Claude')
+          : null
+        settle(() => rejectPromise(windowsOnly ? new Error(windowsOnly) : error))
       }
     }
     const onDone = (code: number | null): void => {
@@ -175,8 +192,23 @@ export function runClaudeCommandProcess(
     }, timeoutMs)
     stdout?.on('data', appendOutput)
     stderr?.on('data', appendOutput)
+    if (options?.onStdout) {
+      stdout?.on('data', forwardStdout)
+    }
     child.on('error', onError)
     child.on(completionEvent, onDone)
+    const stdin = options?.keepStdinOpen && !interactiveLogin ? child.stdin : null
+    if (stdin && options?.onStdin) {
+      // Unhandled EPIPE during exit would crash the host.
+      stdin.on('error', (error) =>
+        console.warn('[claude-accounts] Claude login stdin:', error.message)
+      )
+      options.onStdin((text) => {
+        if (!settled && !stdin.destroyed) {
+          stdin.write(text)
+        }
+      })
+    }
     if (options?.signal?.aborted) {
       onAbort()
     } else {
@@ -192,7 +224,7 @@ type ClaudeSpawnConfig = {
   windowsVerbatimArguments: boolean
 }
 
-// Why only this variable: account terminals set just CLAUDE_CONFIG_DIR, so Claude keys the login the same way.
+// Match account terminals by using CLAUDE_CONFIG_DIR for login identity.
 function claudeConfigDirEnv(configDir: string, browser: string | undefined): NodeJS.ProcessEnv {
   return browser
     ? { CLAUDE_CONFIG_DIR: configDir, BROWSER: browser }
@@ -205,7 +237,7 @@ function wslClaudeCommand(linuxPath: string, args: string[], browser: string | u
   if (!browser) {
     return `exec env ${configDir} ${claude}`
   }
-  // Why chmod here: a file Orca writes over \\wsl$ arrives without an exec bit; a failure must not stop the login.
+  // WSL share writes lack execute permission; attempt chmod without blocking login on failure.
   const helper = quotePosixShell(browser)
   return `chmod 700 ${helper}; exec env ${configDir} BROWSER=${helper} ${claude}`
 }
@@ -217,33 +249,35 @@ function resolveClaudeInvocation(
   hostClaudeCommand: () => string,
   browser: string | undefined
 ): ClaudeSpawnConfig {
+  const inheritedEnv = { ...process.env }
+  stripInheritedClaudeSessionEnv(inheritedEnv)
   const spawnConfig = interactiveLogin
     ? {
         command: interactiveLogin.command,
         args: interactiveLogin.args,
         env: withCliRuntimeOnPath(hostClaudeCommand(), {
-          ...process.env,
+          ...inheritedEnv,
           ...claudeConfigDirEnv(configDir.windowsPath, browser)
         }),
         windowsVerbatimArguments: false
       }
     : configDir.linuxPath && configDir.wslDistro
       ? {
-          // Same login as the CLI's WSL sign-in: the distro's login shell finds an nvm/mise claude.
+          // The distro's login shell finds Claude installed through nvm or mise.
           command: resolveWslExecutablePath(),
           args: buildWslExecArgs(configDir.wslDistro, [
             '/bin/sh',
             '-c',
             buildWslLoginShellCommand(wslClaudeCommand(configDir.linuxPath, args, browser))
           ]),
-          env: process.env,
+          env: inheritedEnv,
           windowsVerbatimArguments: false
         }
       : process.platform === 'win32'
         ? {
             ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
-              ...process.env,
+              ...inheritedEnv,
               ...claudeConfigDirEnv(configDir.windowsPath, browser)
             })
           }
@@ -251,7 +285,7 @@ function resolveClaudeInvocation(
             command: hostClaudeCommand(),
             args,
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
-              ...process.env,
+              ...inheritedEnv,
               ...claudeConfigDirEnv(configDir.windowsPath, browser)
             }),
             windowsVerbatimArguments: false

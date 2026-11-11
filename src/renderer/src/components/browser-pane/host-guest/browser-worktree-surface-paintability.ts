@@ -1,7 +1,4 @@
-// The worktree-surface twin of browser-page-paintability.ts. This surface is a STRICT ANCESTOR of
-// every guest in the worktree, so parking it `hidden` stops their screencasts no matter what the
-// pane-level term says. Required fields, not an inline OR-list: a new retention term then breaks
-// the call site at typecheck instead of silently reaching only the panes.
+// This ancestor can stop every guest’s screencast; required retention fields make missing call-site updates fail typechecking.
 
 export type HiddenBrowserWorktreeSurfaceState = {
   shouldMeasureHiddenWorktree: boolean

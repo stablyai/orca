@@ -1,5 +1,5 @@
 import type { Image, ImageLoadEvent, View } from 'react-native'
-import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request'
 import type { FrameLayer } from './mobile-browser-frame-state'
 import { createBrowserFrameDataUri } from './browser-frame-data-uri'
@@ -30,14 +30,8 @@ export type BrowserFrameLayerBinding = {
   onError: () => void
 }
 
-/**
- * Owns the pane's double buffer: each frame decodes on the hidden layer and is shown by flipping
- * opacity once it has, at most one frame per interval.
- *
- * The stream writes a layer only when it is not loading and only with a different source, so every
- * write gets exactly one native answer: an unchanged source reloads nothing on Android or iOS.
- * `replace` writes over a loading layer; the new source is the one that answers.
- */
+// Decode each frame on hidden layer, then flip opacity at most once per interval.
+// Write only changed sources to idle layers: unchanged sources emit no native answer. replace may overwrite loading layer; newest source answers.
 export function createBrowserFramePacer(deps: BrowserFramePacerDeps) {
   const views: [View | null, View | null] = [null, null]
   const images: [Image | null, Image | null] = [null, null]

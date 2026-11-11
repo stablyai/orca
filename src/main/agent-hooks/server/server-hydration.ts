@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-
 import {
   admitLegacyAgentStatus,
   clearLegacyAgentStatuses
@@ -9,8 +7,10 @@ import {
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
-import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
-import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
+import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { LAST_STATUS_FILE_VERSION, STATUS_FLUSH_BUSY_TIMEOUT_MS } from './server-constants'
+import type { SavedStatus } from './last-status-store'
 import type { EnrichedAgentHookEventPayload, LastStatusFile } from './server-types'
 import {
   authorityCommitmentsMatch,
@@ -23,35 +23,52 @@ import { AgentHookServerTabCleanup } from './server-tab-cleanup'
 import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
 
 export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup {
-  /** Hydrate the durable cache, validating every row before it reaches the live listener state. */
   protected hydrateLastStatusFromDisk(): void {
     if (!this.lastStatusFilePath) {
       return
     }
-    // Why: keep hydrate idempotent so a future re-start path can't merge prior-session state.
+    // Repeated hydration must not merge state from an earlier runtime.
+    this.providerRowsByTab = null
     clearLegacyAgentStatuses(this.state)
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
-    let raw: string
+    const store = this.getStatusStore()
+    let saved: SavedStatus | undefined
     try {
-      raw = readFileSync(this.lastStatusFilePath, 'utf8')
+      saved = store?.read(STATUS_FLUSH_BUSY_TIMEOUT_MS)
     } catch (err) {
-      // Why: missing file is normal (first launch); other errors degrade to empty hydration + one warn.
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.warn('[agent-hooks] failed to read last-status file:', err)
+      // Status is a restart cache; an unreadable store degrades to empty hydration + one warn.
+      // The store then stays read-only for this session, so rows it never read survive.
+      console.warn('[agent-hooks] failed to read saved agent status:', err)
+      return
+    }
+    if (!store || !saved) {
+      return
+    }
+    if (saved.source === 'legacy') {
+      if (this.admitSavedStatus(saved.document)) {
+        // Only an admitted file is recorded as imported, once rows holding it commit.
+        store.confirmLegacyImport()
+      } else {
+        // A rejected file must not stand in for the rows: drop it and restore those instead.
+        store.rejectLegacy()
+        const rows = store.readRows()
+        if (rows) {
+          this.admitSavedStatus(rows.document)
+        }
       }
-      return
+    } else {
+      this.admitSavedStatus(saved.document)
     }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      console.warn('[agent-hooks] last-status file is not valid JSON; ignoring')
-      return
-    }
+    // Repairs and a migrated legacy file are saved now; an unchanged store writes nothing.
+    this.runStatusPersist()
+  }
+
+  /** False when the document is rejected whole; nothing from it is admitted then. */
+  private admitSavedStatus(parsed: unknown): boolean {
     if (typeof parsed !== 'object' || parsed === null) {
       console.warn('[agent-hooks] last-status file is not an object; ignoring')
-      return
+      return false
     }
     const file = parsed as Partial<LastStatusFile>
     if (file.version !== LAST_STATUS_FILE_VERSION) {
@@ -60,18 +77,17 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           file.version
         )} != ${LAST_STATUS_FILE_VERSION}); ignoring`
       )
-      return
+      return false
     }
     const entries = file.entries
     if (typeof entries !== 'object' || entries === null) {
       console.warn('[agent-hooks] last-status file entries missing or wrong shape; ignoring')
-      return
+      return false
     }
     let hydrated = 0
     let dropped = 0
     let prunedLegacyClaudeSubagents = 0
     let scrubbedLegacyLaunchTokens = 0
-    // Why: drop entries older than HYDRATE_MAX_AGE_MS to bound disk growth (one Date.now() for a consistent cutoff).
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
     for (const [paneKey, rawEntry] of Object.entries(entries)) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -103,7 +119,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           entry.payload = hydratedPayload
         }
         if (entry.payload.state !== 'done') {
-          // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.
+          // Completion may have occurred offline; restored work needs confirmation.
           entry.restoredUnconfirmed = true
         }
         admitLegacyAgentStatus(
@@ -113,14 +129,14 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           AGENT_STATUS_PERSISTED_HYDRATION_MODE
         )
         if (entry.connectionId) {
-          // Why: a restart can see an earlier wall clock; seed ordering so new events stay after disk state.
+          // Seed ordering from disk even if the wall clock moved backward.
           const previousWatermark = this.connectionTimestampWatermarkById.get(entry.connectionId)
           this.connectionTimestampWatermarkById.set(
             entry.connectionId,
             Math.max(previousWatermark ?? -1, entry.receivedAt)
           )
         }
-        // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
+        // Seed child hierarchy now; provider reconciliation removes stale entries.
         if (entry.payload.agentType === 'codex') {
           seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
         } else if (entry.payload.agentType === 'claude') {
@@ -163,22 +179,15 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
         `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
       )
     }
-    if (dropped > 0 || prunedLegacyClaudeSubagents > 0 || scrubbedLegacyLaunchTokens > 0) {
-      // Why: persist load-time pruning and bearer scrubbing once.
-      this.runStatusPersist()
-    } else if (hydrated > 0) {
-      // Why: prime dedup from raw bytes (not re-serialized) only when hydration was lossless.
-      this.primeStatusPersistBaseline(raw)
-    }
+    return true
   }
 
-  /** Hydrated rows still claiming work that nothing in this runtime has confirmed. */
   listUnconfirmedRestoredStatuses(): EnrichedAgentHookEventPayload[] {
     const rows: EnrichedAgentHookEventPayload[] = []
     for (const [paneKey, row] of this.state.lastStatusByPaneKey) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
       const enriched = row as EnrichedAgentHookEventPayload
-      // Why: a resume remnant carries no state claim.
+      // Resume identity alone makes no work claim.
       if (
         enriched.restoredUnconfirmed &&
         !enriched.providerSessionOnly &&

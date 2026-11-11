@@ -1,5 +1,8 @@
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { syncSystemConfigIntoLegacySharedCodexHome } from '../codex/codex-config-mirror'
+import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath
+} from '../codex/configuration/homes/codex-home-paths'
+import { syncSystemConfigIntoLegacySharedCodexHome } from '../codex/configuration/settings/codex-config-mirror'
 
 type LegacySharedCodexConfigPaths = {
   sharedRuntimeHome: string
@@ -19,7 +22,7 @@ export function syncLegacySharedCodexConfigForRetainedPanes(
       systemHomePath: resolvedPaths.systemCodexHome
     })
   } catch (error) {
-    // Why: compatibility for a retained pane must never block real-home Codex.
+    // Retained-pane compatibility failures must not block real-home launches.
     console.warn('[codex-runtime-home] Failed to refresh legacy shared config:', error)
   }
 }

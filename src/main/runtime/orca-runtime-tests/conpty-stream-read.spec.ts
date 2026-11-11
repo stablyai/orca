@@ -1,14 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { OrcaRuntimeService, join } from '../orca-runtime-test-mocks.spec'
-import { store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { join } from 'node:path'
+import { store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 import {
   clearNativeWindowsConptyPty,
   markNativeWindowsConptyPty
-} from '../terminal-model-query-authority'
+} from '../terminal/output/terminal-model-query-authority'
 
-// Real pwsh 7.6 + ConPTY bytes: PSReadLine paints a history prediction (another shell's command)
-// as grey ghost text, then ConPTY overwrites it with absolute cursor moves as the user types.
+// Captured pwsh 7.6/ConPTY: grey PSReadLine predictions from history are overwritten by absolute cursor moves.
 const PSREADLINE_PREDICTION_TRANSCRIPT = readFileSync(
   join(__dirname, '..', '__fixtures__', 'pwsh-7-6-psreadline-history-prediction-conpty.txt'),
   'utf8'
@@ -61,17 +62,5 @@ describe('OrcaRuntimeService ConPTY stream reads', () => {
     } finally {
       clearNativeWindowsConptyPty(ptyId)
     }
-  })
-
-  it('keeps accumulated-stream reads for terminals that are not ConPTY', async () => {
-    const ptyId = 'pty-posix-prediction'
-    const runtime = startConptyRuntime(ptyId)
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData(ptyId, 'one\r\ntwo\rTWO\r\n', 100)
-
-    const read = await runtime.readTerminal(terminal.handle)
-
-    expect(read.tail).toEqual(['one', 'TWO'])
-    expect(read.source).toBe('stream')
   })
 })

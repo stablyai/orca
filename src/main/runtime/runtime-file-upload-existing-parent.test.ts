@@ -2,32 +2,60 @@ import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createRuntimeFileCommands } from './orca-runtime-files-test-harness'
-import { ClipboardImageImportStaging } from '../window/clipboard-image-import-staging'
-import { stageOneSourceForRuntimeUpload } from '../ipc/filesystem-runtime-upload-staging'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { stageOneSourceForRuntimeUpload } from '../ipc/filesystem/filesystem-runtime-upload-staging'
 import {
   RUNTIME_UPLOAD_SLICE_BYTES,
   streamExternalFileToRuntime
 } from '../ipc/runtime-upload-file-stream'
+import { ClipboardImageImportStaging } from '../window/clipboard-image-import-staging'
+import { RuntimeFileMutations } from './files/file-mutations'
+import type { ResolvedRuntimeFileTarget } from './files/file-target'
+import {
+  partialRuntimeStore,
+  storeFolderWorkspace
+} from './orca-runtime-tests/runtime-store-partial-fixture'
 
 const transport = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: unknown[]) => transport.call(...args)
 }))
 
 let root: string
 let destination: string
-let commands: ReturnType<typeof createRuntimeFileCommands>['commands']
+let mutations: RuntimeFileMutations
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-upload-existing-parent-'))
-  destination = join(root, 'workspace', 'imagens com espaços')
+  const workspace = join(root, 'workspace')
+  destination = join(workspace, 'imagens com espaços')
   await mkdir(destination, { recursive: true })
-  const runtime = createRuntimeFileCommands({ path: join(root, 'workspace') })
-  commands = runtime.commands
-  Object.assign(runtime.store, {
-    getRepos: () => [],
+  const store = partialRuntimeStore({
     getProjectGroups: () => [],
-    getFolderWorkspaces: () => [{ folderPath: join(root, 'workspace'), projectGroupId: 'group' }]
+    getFolderWorkspaces: () => [
+      storeFolderWorkspace({
+        id: 'notes',
+        projectGroupId: 'group',
+        folderPath: workspace
+      })
+    ]
+  })
+  const target: ResolvedRuntimeFileTarget = {
+    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    worktree: {
+      id: 'folder:notes',
+      path: workspace,
+      repoId: 'group'
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: upload commands read only the workspace path and host.
+    } as ResolvedRuntimeFileTarget['worktree']
+  }
+  mutations = new RuntimeFileMutations({
+    requireStore: () => store,
+    resolveRuntimeFileTarget: async (selector) => {
+      if (selector !== 'folder:notes') {
+        throw new Error(`unexpected selector ${selector}`)
+      }
+      return target
+    }
   })
   transport.call.mockReset()
 })
@@ -36,7 +64,7 @@ afterEach(() => rm(root, { recursive: true, force: true }))
 const temporary = 'imagens com espaços/.pasted-image.png.orca-upload-test'
 const final = 'imagens com espaços/pasted-image.png'
 function writeChunk(append = false, requireExistingParent = true) {
-  return commands.writeFileExplorerFileBase64Chunk(
+  return mutations.writeFileExplorerFileBase64Chunk(
     'folder:notes',
     temporary,
     Buffer.from('pixels').toString('base64'),
@@ -48,7 +76,7 @@ function writeChunk(append = false, requireExistingParent = true) {
   )
 }
 function commit(requireExistingParent = true) {
-  return commands.commitFileExplorerUpload(
+  return mutations.commitFileExplorerUpload(
     'folder:notes',
     temporary,
     final,
@@ -98,7 +126,7 @@ it('preserves directory creation for callers without the strict policy', async (
 
 it('keeps workspace containment and owner checks on strict uploads', async () => {
   await expect(
-    commands.writeFileExplorerFileBase64Chunk(
+    mutations.writeFileExplorerFileBase64Chunk(
       'folder:notes',
       '../outside.png',
       '',
@@ -110,7 +138,7 @@ it('keeps workspace containment and owner checks on strict uploads', async () =>
     )
   ).rejects.toThrow()
   await expect(
-    commands.writeFileExplorerFileBase64Chunk(
+    mutations.writeFileExplorerFileBase64Chunk(
       'folder:notes',
       temporary,
       '',
@@ -146,7 +174,7 @@ it.each(['success', 'removed-during-staging', 'removed-during-upload'] as const)
       let chunks = 0
       transport.call.mockImplementation(async (_userData, _environment, _method, params) => {
         expect(params.requireExistingParent).toBe(true)
-        await commands.writeFileExplorerFileBase64Chunk(
+        await mutations.writeFileExplorerFileBase64Chunk(
           params.worktree,
           params.relativePath,
           params.contentBase64,
