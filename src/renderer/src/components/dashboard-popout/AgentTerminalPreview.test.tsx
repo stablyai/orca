@@ -7,26 +7,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPreviewApi } from '../../../../preload/api/dashboard-api'
 import type { TerminalPreviewConnectResult } from '../../../../shared/terminal/replay/terminal-preview'
 
-const terminalHarness = vi.hoisted(() => ({
-  instances: [] as {
-    write: ReturnType<typeof vi.fn>
-    writeCallbacks: (() => void)[]
-    onDataListener: ((data: string) => void) | null
-    dispose: ReturnType<typeof vi.fn>
-    resize: ReturnType<typeof vi.fn>
-    reset: ReturnType<typeof vi.fn>
-    paste: ReturnType<typeof vi.fn>
-    input: ReturnType<typeof vi.fn>
-    scrollToTop: ReturnType<typeof vi.fn>
-    scrollToBottom: ReturnType<typeof vi.fn>
-    selectAll: ReturnType<typeof vi.fn>
-    modes: { bracketedPasteMode: boolean }
-    selectionText: string
-    customKeyHandler: ((event: KeyboardEvent) => boolean) | null
-  }[],
-  userInputListener: null as (() => void) | null,
-  userInputDispose: vi.fn()
-}))
+type TerminalHarnessInstance = {
+  write: ReturnType<typeof vi.fn>
+  writeCallbacks: (() => void)[]
+  onDataListener: ((data: string) => void) | null
+  dispose: ReturnType<typeof vi.fn>
+  resize: ReturnType<typeof vi.fn>
+  reset: ReturnType<typeof vi.fn>
+  paste: ReturnType<typeof vi.fn>
+  input: ReturnType<typeof vi.fn>
+  focus: ReturnType<typeof vi.fn>
+  scrollToTop: ReturnType<typeof vi.fn>
+  scrollToBottom: ReturnType<typeof vi.fn>
+  selectAll: ReturnType<typeof vi.fn>
+  modes: { bracketedPasteMode: boolean }
+  selectionText: string
+  customKeyHandler: ((event: KeyboardEvent) => boolean) | null
+}
+
+const terminalHarness = vi.hoisted(
+  (): {
+    instances: TerminalHarnessInstance[]
+    userInputListener: (() => void) | null
+    userInputDispose: ReturnType<typeof vi.fn>
+  } => ({ instances: [], userInputListener: null, userInputDispose: vi.fn() })
+)
 
 const platformState = vi.hoisted(() => ({ value: 'linux' }))
 const storeState = vi.hoisted(() => ({
@@ -383,5 +388,23 @@ describe('AgentTerminalPreview', () => {
     expect(terminal.dispose).toHaveBeenCalledTimes(1)
     expect(terminalHarness.userInputDispose).toHaveBeenCalledTimes(1)
     expect(unsubscribe).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('sends no typed key or paste to the pty and takes no focus when not interactive', async () => {
+    render(<AgentTerminalPreview ptyId="pty-1" interactive={false} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.onDataListener).not.toBeNull())
+
+    // Each user-signaled onData is what xterm emits for a typed key and a bracketed paste.
+    act(() => {
+      terminalHarness.userInputListener?.()
+      terminal.onDataListener?.('k')
+      terminalHarness.userInputListener?.()
+      terminal.onDataListener?.('\x1b[200~pasted text\x1b[201~')
+    })
+
+    expect(input).not.toHaveBeenCalled()
+    expect(terminal.focus).not.toHaveBeenCalled()
   })
 })
