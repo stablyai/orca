@@ -239,21 +239,17 @@ export class ModelManager extends SpeechModelDownloadTransport {
     this.cancelDownload(modelId)
     // A swap already under way ignores cancel; deleting mid-swap could race its restore.
     await download?.settled
-    const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir)) {
-      await rm(modelDir, { recursive: true, force: true })
-    }
-    await rm(`${modelDir}.partial`, { recursive: true, force: true })
-    await rm(previousSpeechModelDir(modelDir), { recursive: true, force: true })
-    await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
     // Remove the migration source too or next launch resurrects the model.
+    const modelDirs = [this.getModelDir(modelId)]
     if (this.migrationSourceDir) {
-      const sourceModelDir = this.getSafeModelDir(modelId, this.migrationSourceDir)
-      if (existsSync(sourceModelDir)) {
-        await rm(sourceModelDir, { recursive: true, force: true })
-      }
-      await rm(previousSpeechModelDir(sourceModelDir), { recursive: true, force: true })
+      modelDirs.push(this.getSafeModelDir(modelId, this.migrationSourceDir))
     }
+    for (const modelDir of modelDirs) {
+      for (const path of [modelDir, `${modelDir}.partial`, previousSpeechModelDir(modelDir)]) {
+        await rm(path, { recursive: true, force: true })
+      }
+    }
+    await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
     this.modelStates.delete(modelId)
   }
 
