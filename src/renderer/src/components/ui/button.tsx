@@ -36,6 +36,9 @@ const buttonVariants = cva(
         quiet:
           'text-muted-foreground hover:bg-accent hover:text-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline focus-visible:underline',
+        // A secondary escape hatch under a row's detail (e.g. "Paste a token instead"): muted, link-styled.
+        'link-muted':
+          'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',

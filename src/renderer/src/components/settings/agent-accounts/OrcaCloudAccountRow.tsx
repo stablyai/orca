@@ -65,7 +65,13 @@ export function AccountRow({
         >
           {/* The paste path stays reachable without waiting for the browser (RA-5). */}
           {agent === 'claude' ? (
-            <Button type="button" variant="link" size="inline" onClick={actions.usePaste}>
+            <Button
+              type="button"
+              variant="link-muted"
+              size="statusAction"
+              className="-ml-1"
+              onClick={actions.usePaste}
+            >
               {t('orcaCloudAccounts.pasteTokenInstead', 'Paste a token instead')}
             </Button>
           ) : null}
