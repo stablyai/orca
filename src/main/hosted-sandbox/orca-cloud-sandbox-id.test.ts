@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const runtimes = vi.hoisted(() => ({ list: [] as unknown[] }))
+const runtimes = vi.hoisted((): { list: unknown[] } => ({ list: [] }))
 vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => runtimes.list
 }))
