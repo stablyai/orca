@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { oweRemoteDispatchStop, remoteStopKey } from '../../db/remote-owned/remote-dispatch-records'
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from '../../db/remote-owned/remote-run-links'
+import { settleRemoteAttemptHere } from '../../db/remote-owned/remote-placements'
 import { OrchestrationError } from '../../orchestration-error'
 import type { RemoteForwardKey } from './remote-forward-caller'
 import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
@@ -37,11 +38,31 @@ export async function stopRemoteWorker(
     if (!serverNeverAnswered(error) || !getOpenRemoteRunLink(db, link.conversation_id)) {
       throw inServerTerms(error, { server, forward: stopKey, link: link })
     }
-    return {
-      dispatchId,
-      state: 'stop_requested',
-      server,
-      next: `${server} did not answer, so the stop is owed: this Orca sends it again until ${server} confirms the worker stopped.`
-    }
+    return settleUnansweredStop(runtime, link, dispatchId)
+  }
+}
+
+/**
+ * The server did not answer a stop or abandon: the Task half runs here at once, as a local stop's
+ * does, and the stop stays owed until the server proves it. Its worker may still run there.
+ */
+export function settleUnansweredStop(
+  runtime: OrcaRuntimeService,
+  link: RemoteRunLinkRow,
+  dispatchId: string,
+  intentKey?: string
+) {
+  const db = runtime.getOrchestrationDb()
+  const server = remoteServerName(runtime, link.environment_id)
+  if (intentKey) {
+    oweRemoteDispatchStop(db, dispatchId, intentKey)
+    runtime.ensureOrchestrationFederationRelay(link.run_id)
+  }
+  settleRemoteAttemptHere(db, dispatchId)
+  return {
+    dispatchId,
+    state: 'stop_requested',
+    server,
+    next: `${server} did not answer, so its worker may still run there. Its Task is settled here, so it can be retried, and the stop is owed: this Orca sends it again until ${server} confirms the worker stopped.`
   }
 }

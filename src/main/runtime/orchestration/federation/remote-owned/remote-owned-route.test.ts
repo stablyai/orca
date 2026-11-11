@@ -560,4 +560,73 @@ describe('commands about a worker a paired server owns', () => {
     expect(stop.ok ? stop.result : undefined).toMatchObject({ state: 'stop_requested' })
     expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ stop_owed: 1 })
   })
+
+  /** devB's queue item saying where its Dispatch and Task now stand. */
+  function importState(
+    runId: string,
+    taskId: string,
+    sequence: number,
+    state: { status: string; workerState: string; taskStatus: string; result?: string }
+  ) {
+    const link = record(db.db.prepare('SELECT conversation_id FROM remote_run_links').get())
+    importRemoteOwnedItem(db, remoteServerPin(server), {
+      conversationId: String(link.conversation_id),
+      sequence,
+      messageId: `state_${sequence}`,
+      kind: 'worker_state',
+      payload: JSON.stringify({
+        v: 1,
+        id: `state_${sequence}`,
+        homeRunId: runId,
+        peerRunId: 'run_on_b',
+        dispatch: {
+          id: 'ctx_b1',
+          taskId,
+          status: state.status,
+          workerState: state.workerState,
+          lastFailure: null,
+          agent: 'claude'
+        },
+        task: { status: state.taskStatus, result: state.result ?? null },
+        correctedUnobservedPrompt: false,
+        removed: null
+      })
+    })
+  }
+
+  for (const method of ['orchestration.workerStop', 'orchestration.workerAbandon']) {
+    it(`settles the Task here at once when the server does not answer ${method}, and the first result stands`, async () => {
+      const { taskId, runId } = await startOnB()
+      importState(runId, taskId, 1, {
+        status: 'dispatched',
+        workerState: 'ready',
+        taskStatus: 'dispatched'
+      })
+
+      const stopped = await call(method, { dispatch: 'ctx_b1' })
+      expect(stopped.ok ? stopped.result : undefined).toMatchObject({ state: 'stop_requested' })
+      expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ stop_owed: 1 })
+      // As a local stop leaves it: blocked, so it can be retried.
+      expect(db.getTask(taskId)?.status).toBe('blocked')
+
+      // devB finished before it got the stop; its late result changes only its record here.
+      importState(runId, taskId, 2, {
+        status: 'completed',
+        workerState: 'succeeded',
+        taskStatus: 'completed',
+        result: 'done'
+      })
+      expect(db.getTask(taskId)?.status).toBe('blocked')
+
+      answers['orchestration.workerStart'] = [started('ctx_b2')]
+      const retry = await call('orchestration.workerStart', {
+        from: 'term_coord',
+        on: 'devB',
+        task: taskId,
+        retryOf: 'ctx_b1',
+        worktree: 'new-top-level'
+      })
+      expect(retry.ok).toBe(true)
+    })
+  }
 })

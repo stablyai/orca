@@ -196,7 +196,7 @@ function importWorkerState(
     dispatchId: dispatch.id,
     agent: dispatch.agent
   })
-  recordRemoteDispatchState(
+  const record = recordRemoteDispatchState(
     db,
     dispatch.id,
     state.removed
@@ -218,7 +218,11 @@ function importWorkerState(
     // No stop there can prove anything about a Dispatch its reset deleted, so nothing is owed for it.
     abandonRemoteDispatchStop(db, dispatch.id)
   }
-  // The Task here follows the server's Task through the ordinary owner's Task half.
+  // The Task here follows the server's Task through the ordinary owner's Task half, unless this
+  // Orca already settled it for this attempt: the first result stands.
+  if (record.task_settled_here) {
+    return undefined
+  }
   if (state.removed || task.status === 'failed') {
     db.settleRemoteAttemptResult({
       taskId: dispatch.taskId,

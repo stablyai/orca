@@ -20,6 +20,7 @@ export type RemoteDispatchRow = {
   stop_retries: number
   stop_retry_at: number | null
   stop_last_error: string | null
+  task_settled_here: number
   created_at: string
   updated_at: string
 }

@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS remote_dispatches (
   stop_retries       INTEGER NOT NULL DEFAULT 0,
   stop_retry_at      INTEGER,
   stop_last_error    TEXT,
+  -- This Orca already ran the Task half for the attempt (a stop or abandon the server did not
+  -- answer). The first result stands: later states from the server change only this record.
+  task_settled_here  INTEGER NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),
   -- When this Orca recorded the server's start answer or, after that, its latest state for the
   -- Dispatch. Reports and this Orca's own stop bookkeeping leave it.

@@ -24,11 +24,11 @@ import {
 } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller'
-import { inServerTerms } from './remote-owned-answers'
+import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
-import { stopRemoteWorker } from './remote-owned-stop'
+import { settleUnansweredStop, stopRemoteWorker } from './remote-owned-stop'
 
 type Routed = { handled: false } | { handled: true; result: unknown }
 
@@ -88,6 +88,24 @@ export async function routeRemoteOwnedCall(
     return {
       handled: true,
       result: await stopRemoteWorker(runtime, subject.link, subject.dispatchId, forward)
+    }
+  }
+  if (request.method === 'orchestration.workerAbandon' && subject.dispatchId) {
+    try {
+      return {
+        handled: true,
+        result: await forwardToLink(runtime, subject, request.method, access, values, forward)
+      }
+    } catch (error) {
+      if (!serverNeverAnswered(error) || !getOpenRemoteRunLink(db, subject.link.conversation_id)) {
+        throw error
+      }
+      // As an unanswered stop: settled here at once, with a stop owed for the worker there.
+      const intent = `abandon:${forward?.key ?? randomUUID()}`
+      return {
+        handled: true,
+        result: settleUnansweredStop(runtime, subject.link, subject.dispatchId, intent)
+      }
     }
   }
   return {

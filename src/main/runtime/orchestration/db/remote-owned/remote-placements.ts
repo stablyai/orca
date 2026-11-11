@@ -8,7 +8,11 @@ import {
   rollbackLifecycleWriteTransaction,
   transitionLifecycleWithDb
 } from '../lifecycle-transition'
-import { getActiveDispatchForTask } from '../dispatch-context/task-dispatch-reconciliation'
+import {
+  getActiveDispatchForTask,
+  reconcileTaskAfterDispatchInterruption
+} from '../dispatch-context/task-dispatch-reconciliation'
+import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import {
   ensureRemoteDispatchRecord,
@@ -295,8 +299,32 @@ export function remoteHoldOnTask(
   if (!attempt) {
     return undefined
   }
+  if (attempt.task_settled_here) {
+    return undefined
+  }
   // The server owns the Task until its result has come home: a finished worker whose Task here is
   // still dispatched holds it just as a running one does.
   const held = !isRemoteDispatchTerminal(attempt) || db.getTask(taskId)?.status === 'dispatched'
   return held ? { dispatchId: attempt.dispatch_id, active: true, liveWorker: true } : undefined
+}
+
+/**
+ * A stop or abandon the server did not answer: the Task half runs here at once, as a local stop's
+ * does (blocked, so it can be retried), while the stop stays owed. The first result stands, so a
+ * later state from the server changes only this attempt's record.
+ */
+export function settleRemoteAttemptHere(db: OrchestrationDb, dispatchId: string): void {
+  runLifecycleWriteTransaction(db.db, 'settle_remote_attempt_here', () => {
+    const record = getRemoteDispatch(db, dispatchId)
+    if (!record || record.task_settled_here) {
+      return
+    }
+    const current = currentRemoteAttempt(db, record.task_id)?.dispatch_id === dispatchId
+    db.db
+      .prepare('UPDATE remote_dispatches SET task_settled_here = 1 WHERE dispatch_id = ?')
+      .run(dispatchId)
+    if (current) {
+      reconcileTaskAfterDispatchInterruption(db, record.task_id, dispatchId)
+    }
+  })
 }
