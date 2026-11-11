@@ -4528,7 +4528,6 @@
       "src/renderer/src/components/editor/ai-vault-session-log-content.test.tsx": 1899,
       "src/renderer/src/components/editor/check-details/actions/check-annotation-path.test.ts": 53,
       "src/renderer/src/components/editor/model-lifetime/retention/closed-editor-model-lifetime.test.ts": 7921,
-      "src/renderer/src/components/editor/model-lifetime/retention/closed-editor-model-shell.test.tsx": 4492,
       "src/renderer/src/components/editor/model-lifetime/retention/closed-editor-tab-disposal.test.ts": 121,
       "src/renderer/src/components/editor/model-lifetime/retention/closed-editor-view-state-retention.test.ts": 9012,
       "src/renderer/src/components/editor/closed-unsaved-files-toast.test.ts": 448,
