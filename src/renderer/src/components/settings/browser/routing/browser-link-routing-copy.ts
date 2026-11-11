@@ -127,7 +127,7 @@ function getLinkRoutingSplitTitle(t: Translate = translate): string {
 function getLinkRoutingSplitDescription(t: Translate = translate): string {
   return t(
     'auto.components.settings.BrowserLinkRoutingSplitSetting.description',
-    'With no browser visible, a link opens in a new pane beside the one you clicked. When off, it opens as a new tab in that pane.'
+    'When the pane you clicked is the only one, a link opens in a new pane beside it. When off, it opens as a new tab in that pane. A visible browser or another pane still takes the link.'
   )
 }
 
