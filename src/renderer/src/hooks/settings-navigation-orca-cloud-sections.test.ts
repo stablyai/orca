@@ -79,12 +79,12 @@ describe('one Orca Cloud group (JA-16)', () => {
     nav('automations', 'workflows')
   ]
 
-  it('leads the Orca Cloud group with Agent accounts and the Orca account', () => {
+  it('leads the Orca Cloud group with the Orca account; Agent accounts stays in AI capabilities', () => {
     const out = gatherOrcaCloudSettingsGroup(all, options({}))
     expect(out.map((section) => `${section.group}:${section.id}`)).toEqual([
       'capabilities:agents',
+      'capabilities:accounts',
       'setup:general',
-      'orca-cloud:accounts',
       'orca-cloud:orca-account',
       'orca-cloud:cloud-billing',
       'orca-cloud:cloud-team',
