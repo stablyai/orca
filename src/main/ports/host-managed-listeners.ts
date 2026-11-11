@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import type { RawListeningPort } from './local-workspace-port-scan-state'
 
 /** Colon-separated install roots whose binaries are the host's own services (e.g. a sandbox image's tools). */
@@ -33,12 +33,12 @@ export function hostManagedListenerConfig(
  * declared platform port whose owner is invisible. A pid-less listener on any other port (a root-run postgres or
  * Docker-published port) is still the user's.
  */
-export function isHostManagedListener(
+export async function isHostManagedListener(
   port: Pick<RawListeningPort, 'pid' | 'commandLine' | 'port'>,
   config: HostManagedListenerConfig,
   serverPid: number = process.pid,
-  readParent: (pid: number) => ParentProcess | undefined = readLinuxParentProcess
-): boolean {
+  readParent: (pid: number) => Promise<ParentProcess | undefined> = readLinuxParentProcess
+): Promise<boolean> {
   if (port.pid === undefined) {
     return config.unownedPorts.has(port.port)
   }
@@ -55,7 +55,7 @@ export function isHostManagedListener(
   // (it spawns the user's terminals) and at a shell (a user session, e.g. over the managed sshd).
   let pid = port.pid
   for (let depth = 0; depth < MAX_ANCESTRY_DEPTH; depth++) {
-    const parent = readParent(pid)
+    const parent = await readParent(pid)
     if (!parent || parent.pid === serverPid || isShell(parent.commandLine)) {
       return false
     }
@@ -85,18 +85,21 @@ function startedFromRoot(commandLine: string | undefined, roots: readonly string
     .some((token) => roots.some((root) => token === root || token.startsWith(`${root}/`)))
 }
 
-function readLinuxParentProcess(pid: number): ParentProcess | undefined {
+async function readLinuxParentProcess(pid: number): Promise<ParentProcess | undefined> {
   if (process.platform !== 'linux') {
     return undefined
   }
   try {
     // /proc/<pid>/stat: "pid (comm) state ppid ..."; comm may contain spaces or parens.
-    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    const stat = await readFile(`/proc/${pid}/stat`, 'utf8')
     const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
     if (!Number.isInteger(ppid) || ppid <= 1) {
       return undefined
     }
-    const commandLine = readFileSync(`/proc/${ppid}/cmdline`, 'utf8').split('\0').join(' ').trim()
+    const commandLine = (await readFile(`/proc/${ppid}/cmdline`, 'utf8'))
+      .split('\0')
+      .join(' ')
+      .trim()
     return { pid: ppid, commandLine }
   } catch {
     return undefined
