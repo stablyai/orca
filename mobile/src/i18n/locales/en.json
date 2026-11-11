@@ -2944,6 +2944,10 @@
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "context updates after next reply",
+      "compacted": "compacted {{times}}×"
+    },
     "contextUsage": {
       "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
       "title": "Context",

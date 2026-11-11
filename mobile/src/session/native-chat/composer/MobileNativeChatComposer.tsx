@@ -38,6 +38,7 @@ import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-c
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatComposerSendSlot } from './MobileNativeChatComposerSendSlot'
 import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
+import { MobileNativeChatClaudeSessionStatus } from './MobileNativeChatClaudeSessionStatusRow'
 import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
 import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import { MobileNativeChatComposerMic } from './MobileNativeChatComposerMic'
@@ -290,6 +291,7 @@ export function MobileNativeChatComposer({
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         {goal.strip}
         <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
+          <MobileNativeChatClaudeSessionStatus />
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}

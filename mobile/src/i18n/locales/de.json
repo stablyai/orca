@@ -191,6 +191,10 @@
       "sendQueueHint": "Läuft nach dem aktuellen Durchgang",
       "sendSteerHint": "Fließt in das ein, was der Agent gerade tut"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "Kontext wird nach der nächsten Antwort aktualisiert",
+      "compacted": "{{times}}× komprimiert"
+    },
     "contextUsage": {
       "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
       "title": "Kontext",

@@ -191,6 +191,10 @@
       "sendQueueHint": "在目前回合結束後執行",
       "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
+    "claudeSessionStatus": {
+      "awaitingNextReply": "下次回覆後更新上下文",
+      "compacted": "已壓縮 {{times}} 次"
+    },
     "contextUsage": {
       "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
       "title": "上下文",
