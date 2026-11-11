@@ -106,6 +106,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
+      'native.media.picklarge',
       'native.pdf.view',
       'native.image.act',
       'native.speech.act',
