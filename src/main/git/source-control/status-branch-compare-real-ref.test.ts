@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, readdir, realpath, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -232,5 +232,89 @@ describe('getBranchCompare real refs', () => {
       commitsBehind: 0,
       status: 'ready'
     })
+  })
+
+  it('lists the feature commits vs origin/master when local master is stale', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-compare-stale-master-'))
+    tempRoots.push(root)
+    const repo = path.join(root, 'repo')
+    execFileSync('git', ['init', '-q', repo])
+    git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/master'])
+    git(repo, ['config', 'user.email', 'test@example.com'])
+    git(repo, ['config', 'user.name', 'Test User'])
+    git(repo, ['config', 'commit.gpgSign', 'false'])
+
+    async function commitFile(relativePath: string, message: string): Promise<void> {
+      const target = path.join(repo, relativePath)
+      await mkdir(path.dirname(target), { recursive: true })
+      await writeFile(target, `${message}\n`)
+      git(repo, ['add', relativePath])
+      git(repo, ['commit', '-q', '-m', message])
+    }
+
+    await commitFile('base.txt', 'base')
+    for (let index = 1; index <= 5; index += 1) {
+      await commitFile(`stale-${index}.txt`, `stale ${index}`)
+    }
+    git(repo, ['update-ref', 'refs/remotes/origin/master', 'HEAD'])
+    git(repo, ['reset', '--hard', '--quiet', 'HEAD~5'])
+    git(repo, ['checkout', '-q', '-b', 'feature', 'refs/remotes/origin/master'])
+    await commitFile('feature-1.txt', 'feature 1')
+    await commitFile('feature-2.txt', 'feature 2')
+
+    const originMaster = await getBranchCompare(repo, 'origin/master')
+    const localMaster = await getBranchCompare(repo, 'master')
+    const qualifiedLocal = await getBranchCompare(repo, 'refs/heads/master')
+
+    for (const result of [originMaster, localMaster, qualifiedLocal]) {
+      expect(result.summary.status).toBe('ready')
+      expect(result.summary.commitsAhead).toBe(2)
+      expect(result.entries.map((entry) => entry.path).sort()).toEqual([
+        'feature-1.txt',
+        'feature-2.txt'
+      ])
+    }
+
+    git(repo, ['update-ref', '-d', 'refs/remotes/origin/master'])
+    const missingOrigin = await getBranchCompare(repo, 'master')
+    expect(missingOrigin.summary.status).toBe('ready')
+    expect(missingOrigin.summary.commitsAhead).toBe(7)
+    expect(missingOrigin.entries).toHaveLength(7)
+  })
+
+  it('compares a slash-local release/24 base against origin/release/24', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-compare-slash-local-'))
+    tempRoots.push(root)
+    const repo = path.join(root, 'repo')
+    execFileSync('git', ['init', '-q', repo])
+    git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/master'])
+    git(repo, ['config', 'user.email', 'test@example.com'])
+    git(repo, ['config', 'user.name', 'Test User'])
+    git(repo, ['config', 'commit.gpgSign', 'false'])
+
+    async function commitFile(relativePath: string, message: string): Promise<void> {
+      const target = path.join(repo, relativePath)
+      await mkdir(path.dirname(target), { recursive: true })
+      await writeFile(target, `${message}\n`)
+      git(repo, ['add', relativePath])
+      git(repo, ['commit', '-q', '-m', message])
+    }
+
+    await commitFile('base.txt', 'base')
+    git(repo, ['branch', 'release/24'])
+    git(repo, ['update-ref', 'refs/remotes/origin/release/24', 'HEAD'])
+    git(repo, ['checkout', '-q', 'release/24'])
+    await commitFile('stale.txt', 'stale local')
+    git(repo, ['checkout', '-q', '-b', 'feature', 'refs/remotes/origin/release/24'])
+    await commitFile('feature-1.txt', 'feature 1')
+
+    const compared = await getBranchCompare(repo, 'release/24')
+    const originOid = git(repo, ['rev-parse', 'refs/remotes/origin/release/24']).trim()
+    expect(compared.summary).toMatchObject({
+      baseOid: originOid,
+      commitsAhead: 1,
+      status: 'ready'
+    })
+    expect(compared.entries.map((entry) => entry.path)).toEqual(['feature-1.txt'])
   })
 })
