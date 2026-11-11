@@ -267,8 +267,7 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
     ok: true,
     result: {
       split: {
-        tabId: targetTabId,
-        paneRuntimeId: sourcePane.numericPaneId
+        tabId: targetTabId
       }
     }
   })
@@ -287,6 +286,7 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   if (!createdPane?.ptyId) {
     throw new Error('Revealed split has no second PTY identity')
   }
+  expect(createdPane.leafId).toBe(splitRun.response.result.split.leafId)
 
   let listedAfterReveal: RuntimeTerminalSummary[] = []
   await expect
