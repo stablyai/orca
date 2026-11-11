@@ -561,6 +561,36 @@ describe('commands about a worker a paired server owns', () => {
     expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ stop_owed: 1 })
   })
 
+  it("updates this Orca's own Task here by the local rule, and never sends the update to its server", async () => {
+    const { taskId, runId } = await startOnB()
+    importState(runId, taskId, 1, {
+      status: 'dispatched',
+      workerState: 'ready',
+      taskStatus: 'dispatched'
+    })
+
+    const held = await call('orchestration.taskUpdate', {
+      id: taskId,
+      status: 'completed',
+      result: 'by hand',
+      callerTerminalHandle: 'term_coord'
+    })
+    expect(held.ok ? undefined : held.error.message).toContain(
+      `Task ${taskId} cannot move to completed while supervised Dispatch ctx_b1 is active`
+    )
+
+    await call('orchestration.workerStop', { dispatch: 'ctx_b1' })
+    const updated = await call('orchestration.taskUpdate', {
+      id: taskId,
+      status: 'failed',
+      result: 'given up',
+      callerTerminalHandle: 'term_coord'
+    })
+    expect(updated.ok).toBe(true)
+    expect(db.getTask(taskId)?.status).toBe('failed')
+    expect(sent.map((s) => s.method)).not.toContain('orchestration.taskUpdate')
+  })
+
   /** devB's queue item saying where its Dispatch and Task now stand. */
   function importState(
     runId: string,

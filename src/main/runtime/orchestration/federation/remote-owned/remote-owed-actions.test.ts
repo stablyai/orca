@@ -418,38 +418,6 @@ describe('what the coordinating Orca owes a paired server', () => {
     })
   })
 
-  describe('#8 forwarded taskUpdate', () => {
-    it('sends a Task update to the server running its attempt instead of applying it here', async () => {
-      startedOnB()
-      const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-      answers['orchestration.taskUpdate'] = [
-        { result: { task: { id: 'task_t', status: 'completed' } } }
-      ]
-      const response = await dispatcher.dispatch({
-        id: 'update',
-        authToken: 'local',
-        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-        orchestrationRequestId: 'update_1',
-        method: 'orchestration.taskUpdate',
-        params: {
-          id: 'task_t',
-          status: 'completed',
-          result: 'by hand',
-          callerTerminalHandle: 'term_coord',
-          run: run.id
-        }
-      })
-      expect(response).toMatchObject({
-        ok: true,
-        result: { on: 'devB', task: { status: 'completed' } }
-      })
-      const forwarded = sent.find((s) => s.method === 'orchestration.taskUpdate')
-      expect(forwarded?.params).toEqual({ id: 'task_t', status: 'completed', result: 'by hand' })
-      expect(forwarded?.envelope?.orchestrationRequestId).toMatch(/^fwd:/)
-      expect(db.getTask('task_t')?.status).toBe('dispatched')
-    })
-  })
-
   describe('S8 pull loop', () => {
     it('acknowledges what it imported before an unreadable item, and never that item', async () => {
       startedOnB()
