@@ -60,7 +60,7 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
   func accept(_ command: Command) {
     if command.type == "ping", let id = command.id, id > 0 {
       // A common-mode UI probe remains serviceable while a native menu tracks.
-      CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes) { emit(["type": "pong", "id": id]) }
+      RunLoop.main.perform(inModes: [.common]) { emit(["type": "pong", "id": id]) }
       CFRunLoopWakeUp(CFRunLoopGetMain())
     } else if command.type == "state", command.id != nil, command.snapshot != nil {
       RunLoop.main.perform(inModes: [.default]) {
@@ -139,7 +139,7 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
       tracking = true
       let source = Timer(timeInterval: 21, repeats: false) { _ in }
       RunLoop.main.add(source, forMode: .eventTracking)
-      CFRunLoopRunInMode(RunLoop.Mode.eventTracking.rawValue as CFString, 20, false)
+      CFRunLoopRunInMode(CFRunLoopMode(rawValue: RunLoop.Mode.eventTracking.rawValue as CFString), 20, false)
       source.invalidate()
       tracking = false
       applyPending()
@@ -159,7 +159,7 @@ signal(SIGPIPE, SIG_IGN)
 guard fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) | O_NONBLOCK) != -1 else { _exit(1) }
 let application = NSApplication.shared
 application.setActivationPolicy(.accessory)
-let menuBar = MenuBar()
+private let menuBar = MenuBar()
 application.delegate = menuBar
 DispatchQueue.global(qos: .userInitiated).async {
   var pending = Data()
