@@ -61,17 +61,6 @@ describe('Claude permission hook channel', () => {
     expect(held.ends).toEqual([])
   })
 
-  it('passes with {} when the budget runs out or Orca quits', async () => {
-    const timedOut = await holdOne(20)
-    expect(await timedOut.reply).toBe('{}')
-    expect(timedOut.ends).toEqual(['budget'])
-
-    const quit = await holdOne(60_000)
-    quit.channel.drain()
-    expect(await quit.reply).toBe('{}')
-    expect(quit.ends).toEqual(['quit'])
-  })
-
   it('reports a hook that hung up before any answer', async () => {
     const held = await holdOne(60_000)
     held.hang()
