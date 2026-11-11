@@ -44,6 +44,8 @@ type TrustDialogStatusDeps = {
 /** Projects a Claude/Codex startup dialog (folder trust, MCP servers, updates…) into the pane's status row; hooks only start after it. */
 export class TrustDialogStatusObserver {
   private readonly panes = new Map<string, PaneScan>()
+  /** The received-output sequence each pane's last card choice was written at. */
+  private readonly choiceAt = new Map<string, number>()
 
   constructor(private readonly deps: TrustDialogStatusDeps) {}
 
@@ -96,20 +98,33 @@ export class TrustDialogStatusObserver {
     void this.deps.refreshForegroundAgent(ptyId).then(resolved, resolved)
   }
 
-  /** Whether the dialog on screen still reads as `prompt`; a card's keys are aimed from that screen's highlight. */
-  showsPrompt(ptyId: string, prompt: string): boolean {
+  /**
+   * Claims a card choice while the dialog on screen still reads as `prompt` (its keys are aimed from that
+   * screen's highlight). One choice per screen: a second client's keys would land on whatever the first opens.
+   */
+  claimChoice(ptyId: string, prompt: string, outputSequence: number): boolean {
+    if (this.choiceAt.get(ptyId) === outputSequence) {
+      return false
+    }
     // A card restored after an Orca restart has no owner here until new output arrives.
     const agent = this.panes.get(ptyId)?.owned?.agent ?? this.deps.getPaneAgent(ptyId)
     const emulator = this.deps.getEmulator(ptyId)
-    if (!agent || !emulator || emulator.isSynchronizedOutput) {
+    if (
+      !agent ||
+      !emulator ||
+      emulator.isSynchronizedOutput ||
+      startupDialogPrompt(emulator, agent)?.prompt !== prompt
+    ) {
       return false
     }
-    return startupDialogPrompt(emulator, agent)?.prompt === prompt
+    this.choiceAt.set(ptyId, outputSequence)
+    return true
   }
 
   forget(ptyId: string): void {
     clearTimeout(this.panes.get(ptyId)?.readTimer)
     this.panes.delete(ptyId)
+    this.choiceAt.delete(ptyId)
   }
 
   private publishWaiting(

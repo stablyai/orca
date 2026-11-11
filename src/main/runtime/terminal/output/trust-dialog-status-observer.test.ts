@@ -161,9 +161,11 @@ describe('TrustDialogStatusObserver', () => {
       '\x1b[9;1H\x1b[2K    Use this and all future MCP servers in this project' +
         '\x1b[10;1H\x1b[2K  ❯ Continue without using this MCP server'
     )
-    expect(runtime.isStartupDialogCardCurrent(TRANSCRIPT_PANE_PTY_ID, prompts.at(-1)!)).toBe(false)
+    expect(runtime.claimStartupDialogChoice(TRANSCRIPT_PANE_PTY_ID, prompts.at(-1)!)).toBe(false)
     await vi.advanceTimersByTimeAsync(1_000)
     await expect(choose(prompts.at(-1), `${UP}${UP}\r`)).resolves.toBe(true)
+    // A second client's click before Claude repaints would land on whatever the first choice opens.
+    await expect(choose(prompts.at(-1), '\r')).resolves.toBe(false)
     // Answered from the terminal: the next dialog must not take a stale card's keys.
     const answered = prompts.at(-1)
     await write('\x1b[2J\x1b[H')

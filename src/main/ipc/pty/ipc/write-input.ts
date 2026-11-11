@@ -83,7 +83,7 @@ export function createPtyWriteInput(deps: {
     }
     if (
       args.requireStartupDialog !== undefined &&
-      !runtime?.isStartupDialogCardCurrent(id, args.requireStartupDialog)
+      !runtime?.claimStartupDialogChoice(id, args.requireStartupDialog)
     ) {
       return false
     }

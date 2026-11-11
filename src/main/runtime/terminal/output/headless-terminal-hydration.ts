@@ -48,12 +48,13 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       )
   })
 
-  /** Whether this PTY's startup dialog still reads as the card a choice was clicked on; a moved highlight or a new dialog fails. */
-  isStartupDialogCardCurrent(ptyId: string, prompt: string): boolean {
+  /** Claims a startup-dialog card choice while the screen still reads as that card; a moved highlight, a new dialog or an earlier claim on this screen fails. */
+  claimStartupDialogChoice(ptyId: string, prompt: string): boolean {
+    const received = this.getPtyOutputSequence(ptyId)
     // A model behind received output could vouch for a screen Claude has already changed.
     return (
-      this.headlessTerminals.get(ptyId)?.outputSequence === this.getPtyOutputSequence(ptyId) &&
-      this.trustDialogStatus.showsPrompt(ptyId, prompt)
+      this.headlessTerminals.get(ptyId)?.outputSequence === received &&
+      this.trustDialogStatus.claimChoice(ptyId, prompt, received)
     )
   }
 

@@ -179,7 +179,7 @@ export const TERMINAL_SEND_METHODS = [
         const assertStartupDialogCurrent =
           requireStartupDialog !== undefined
             ? (ptyId?: string): void => {
-                if (!ptyId || !runtime.isStartupDialogCardCurrent(ptyId, requireStartupDialog)) {
+                if (!ptyId || !runtime.claimStartupDialogChoice(ptyId, requireStartupDialog)) {
                   throw new Error('terminal_guard_not_writable')
                 }
               }
