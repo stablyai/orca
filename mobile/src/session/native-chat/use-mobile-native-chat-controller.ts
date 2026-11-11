@@ -230,6 +230,7 @@ export function useMobileNativeChatController(args: {
       isTabChatView,
       isWorking: activeTurn.isWorking,
       reportedStatus: activeSessionTab?.agentStatus,
+      sessionReport: nativeChatLane.claudeSessionStatus,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         optionSurface: structuredNativeChat.optionSurface,
@@ -295,7 +296,6 @@ export function useMobileNativeChatController(args: {
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
     nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
-    nativeChatClaudeSessionStatus: nativeChatLane.claudeSessionStatus,
     nativeChatInterruptedContinue: activeChatStructured
       ? structuredNativeChat.interruptedContinue
       : null,

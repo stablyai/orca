@@ -48,7 +48,7 @@ import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useThemedStyles } from '../../../theme/themed-styles'
-import { MobileNativeChatClaudeSessionStatus } from './MobileNativeChatClaudeSessionStatusRow'
+import { MobileClaudeStatusRow } from './MobileClaudeStatusRow'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -285,7 +285,7 @@ export function MobileNativeChatComposer({
             onLayout={collapse.onContentLayout}
           >
             {collapsed ? null : <MobileNativeChatContextLimitLine {...modes.context} />}
-            {collapsed ? null : <MobileNativeChatClaudeSessionStatus />}
+            {collapsed ? null : <MobileClaudeStatusRow status={sessionOptions?.controller.claudeSessionStatus} />}
             <MobileNativeChatComposerAttachments
               images={attachments}
               files={files}
