@@ -1,5 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { GitRepositoryStatusRequest } from '../../../../../../shared/git/status/git-repository-status'
+import type {
+  GitRepositoryStatus,
+  GitRepositoryStatusRequest
+} from '../../../../../../shared/git/status/git-repository-status'
 import {
   FileExplorerRepositoryObserver,
   type ExplorerRepositorySource
@@ -246,4 +249,62 @@ it('heals each input from its own validation and backs off failed attempts witho
   expect(retry.at - failedAt).toBeGreaterThanOrEqual(60_000)
   expect(retry.at - failedAt).toBeLessThanOrEqual(63_000)
   observer.dispose()
+})
+
+it('discards invalidated in-flight discovery proof while healthy siblings and later batches progress', async () => {
+  vi.useFakeTimers()
+  const probes: string[][] = []
+  let release!: (results: GitRepositoryStatus[]) => void
+  let sources: readonly ExplorerRepositorySource[] = []
+  const observer = new FileExplorerRepositoryObserver(
+    async (request) => {
+      if (request.repositoryIntent === 'probe') {
+        const paths = request.repositoryPaths!
+        probes.push(paths)
+        if (probes.length === 1) {
+          return await new Promise<GitRepositoryStatus[]>((resolve) => {
+            release = resolve
+          })
+        }
+        return paths.map((path) => ({ path, kind: 'repository' }))
+      }
+      return [
+        {
+          path: request.repositoryPaths![0],
+          kind: 'repository',
+          status: { entries: [], conflictOperation: 'unknown' }
+        }
+      ]
+    },
+    (next) => {
+      sources = next
+    }
+  )
+  const candidates = Array.from({ length: 101 }, (_, index) => ({ path: `d${index}` }))
+  observer.setFrontier(
+    candidates,
+    candidates.map((candidate) => candidate.path)
+  )
+  observer.setVisible(true)
+  try {
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(probes).toHaveLength(1)
+    expect(probes[0]).toHaveLength(100)
+    observer.invalidateChanges([{ path: 'd1/.git', kind: 'update', directory: false }])
+    release(probes[0].map((path) => ({ path, kind: 'repository' })))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(probes).toHaveLength(2)
+    expect(probes[1]).toEqual(['d100'])
+    expect(sources).toHaveLength(100)
+    expect(sources.some((source) => source.path === 'd0')).toBe(true)
+    expect(sources.some((source) => source.path === 'd100')).toBe(true)
+    expect(sources.some((source) => source.path === 'd1')).toBe(false)
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(probes).toHaveLength(3)
+    expect(probes[2]).toEqual(['d1'])
+    expect(sources).toHaveLength(101)
+    expect(sources.some((source) => source.path === 'd1')).toBe(true)
+  } finally {
+    observer.dispose()
+  }
 })

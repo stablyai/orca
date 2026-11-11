@@ -62,12 +62,17 @@ export async function discoverExplorerRepositories(
     if (unresolved.length === 0) {
       continue
     }
+    const admitted = new Map<
+      ExplorerRepositoryCandidate,
+      ReturnType<typeof createExplorerRepositoryValidation>
+    >()
     for (const candidate of unresolved) {
       owner.evidence.set(candidate.path, candidate.listing)
       const validation =
         owner.validations.get(candidate.path) ?? createExplorerRepositoryValidation()
       validation.settle(false)
       owner.validations.set(candidate.path, validation)
+      admitted.set(candidate, validation)
     }
     let results: Awaited<ReturnType<ExplorerRepositoryRead>>
     try {
@@ -80,8 +85,13 @@ export async function discoverExplorerRepositories(
       )
     } catch {
       if (signal.aborted) {
-        for (const candidate of unresolved) {
-          owner.evidence.delete(candidate.path)
+        for (const [candidate, validation] of admitted) {
+          if (
+            owner.candidates().get(candidate.path) === candidate &&
+            owner.validations.get(candidate.path) === validation
+          ) {
+            owner.evidence.delete(candidate.path)
+          }
         }
         return
       }
@@ -95,17 +105,18 @@ export async function discoverExplorerRepositories(
       return
     }
     const byPath = new Map(results.map((record) => [record.path, record]))
-    for (const candidate of unresolved) {
+    for (const [candidate, validation] of admitted) {
       const result = byPath.get(candidate.path)
       if (
         owner.candidates().get(candidate.path) !== candidate ||
+        owner.validations.get(candidate.path) !== validation ||
         !result ||
         result.kind === 'unknown'
       ) {
         continue
       }
       owner.evidence.set(candidate.path, candidate.listing)
-      owner.validations.get(candidate.path)!.settle(true)
+      validation.settle(true)
       if (result.kind === 'repository') {
         created.push(candidate.path)
       }
