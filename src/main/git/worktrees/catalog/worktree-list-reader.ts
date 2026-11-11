@@ -203,6 +203,8 @@ export async function readWorktreeList(
 ): Promise<GitWorktreeInfo[]> {
   const execOptions = {
     cwd: repoPath,
+    // Why: worktree list is main's most frequent Git spawn; on Windows CreateProcessW can block the calling loop for seconds (#11161, #27362).
+    ...(process.platform === 'win32' ? { spawnOnWorkerThread: true } : {}),
     ...options,
     timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   }
