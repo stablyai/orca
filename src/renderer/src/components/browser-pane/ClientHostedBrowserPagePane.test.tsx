@@ -56,10 +56,15 @@ vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
 import { useAppStore } from '@/store'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { requestBrowserFocus } from './host-guest/browser-focus'
-import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
+import {
+  installClientHostedPaneApi,
+  reportClientHostedGuestMetadata
+} from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
-function render(ui: React.ReactElement) {
+function render(ui: React.ReactElement<{ browserTab: BrowserPage }>) {
+  const current = ui.props.browserTab
+  useAppStore.setState({ browserPagesByWorkspace: { [current.workspaceId]: [current] } })
   return renderWithProviders(ui, { wrapper: TooltipProvider })
 }
 
@@ -156,7 +161,9 @@ describe('ClientHostedBrowserPagePane', () => {
     expect(onUpdatePageState).toHaveBeenCalledWith('page-a', { loading: false, loadError })
     // Why: did-stop-loading follows did-fail-load and must not wipe the failure.
     onUpdatePageState.mockClear()
-    act(() => webview.dispatchEvent(new Event('did-stop-loading')))
+    act(() =>
+      reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'stop', loadError, loading: false })
+    )
     expect(onUpdatePageState).toHaveBeenCalledWith('page-a', expect.objectContaining({ loadError }))
 
     view.rerender(
@@ -176,6 +183,87 @@ describe('ClientHostedBrowserPagePane', () => {
     act(() => screen.getByText('Retry').click())
     expect(webview.reload).not.toHaveBeenCalled()
     expect(webview.src).toBe(normalizeBrowserNavigationUrl(loadError.validatedUrl))
+  })
+
+  it('keeps Find open across subframe settlement and closes it only on a full commit', () => {
+    const { webview } = createWebview()
+    mocks.attach.mockReturnValue(retainedAttachment(webview))
+    let openFind = () => {}
+    installClientHostedPaneApi({
+      ui: {
+        onFindInBrowserPage: (_target, listener) => {
+          openFind = listener
+          return () => {}
+        }
+      }
+    })
+    reportClientHostedGuestMetadata({
+      webContentsId: 7,
+      url: 'https://example.internal/',
+      title: 'Example'
+    })
+    render(
+      <ClientHostedBrowserPagePane
+        browserTab={{ ...page(), url: 'https://example.internal/' }}
+        workspaceId="workspace-a"
+        chromeShortcutScope="focused"
+        runtimeEnvironmentId="environment-a"
+        worktreeId="worktree-a"
+        placement={PLACEMENT}
+        isActive
+        onUpdatePageState={vi.fn()}
+        onSetUrl={vi.fn()}
+      />
+    )
+    act(() => openFind())
+    expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
+    act(() => reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'stop' }))
+    expect(screen.getByPlaceholderText('Find in page...')).not.toBeNull()
+    act(() => webview.dispatchEvent(new Event('did-navigate')))
+    expect(screen.queryByPlaceholderText('Find in page...')).toBeNull()
+  })
+
+  it('restores the committed address after an attempted navigation is stopped', async () => {
+    const { webview } = createWebview()
+    reportClientHostedGuestMetadata({
+      webContentsId: 7,
+      url: 'https://example.internal/a',
+      title: 'Example'
+    })
+    mocks.attach.mockReturnValue(retainedAttachment(webview))
+    const onSetUrl = vi.fn()
+    const onUpdatePageState = vi.fn()
+    render(
+      <ClientHostedBrowserPagePane
+        browserTab={{ ...page(), url: 'https://example.internal/a' }}
+        workspaceId="workspace-a"
+        chromeShortcutScope="focused"
+        runtimeEnvironmentId="environment-a"
+        worktreeId="worktree-a"
+        placement={PLACEMENT}
+        isActive
+        onUpdatePageState={onUpdatePageState}
+        onSetUrl={onSetUrl}
+      />
+    )
+    act(() => mocks.addressBar.current?.onNavigate('https://example.internal/b'))
+    act(() => reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'start', loading: true }))
+    expect(screen.getByLabelText<HTMLInputElement>('Address').value).toBe(
+      'https://example.internal/b'
+    )
+    act(() => screen.getByLabelText<HTMLInputElement>('Address').blur())
+    onSetUrl.mockClear()
+    await act(async () =>
+      reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'stop', loading: false })
+    )
+    expect(screen.getByLabelText<HTMLInputElement>('Address').value).toBe(
+      'https://example.internal/a'
+    )
+    expect(onSetUrl).not.toHaveBeenCalled()
+    expect(onUpdatePageState).toHaveBeenCalledWith(
+      'page-a',
+      expect.objectContaining({ loading: false, loadError: null })
+    )
   })
 
   it('offers Reopen without a stale load-failure surface until the restored page attaches', () => {
@@ -425,15 +513,18 @@ function createWebview(): {
     reload: vi.fn(),
     loadURL: vi.fn(async () => {})
   })
+  reportClientHostedGuestMetadata({ webContentsId: 7, url, title })
   return {
     webview,
     focus,
     blur,
     setUrl: (nextUrl) => {
       url = nextUrl
+      reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'navigation', url })
     },
     setTitle: (nextTitle) => {
       title = nextTitle
+      reportClientHostedGuestMetadata({ webContentsId: 7, kind: 'title', title })
     }
   }
 }
