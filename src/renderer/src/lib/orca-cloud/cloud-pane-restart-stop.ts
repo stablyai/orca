@@ -106,11 +106,88 @@ function hostTerminalOf(ptyId: string | null): { environmentId: string; handle: 
     : null
 }
 
+// A just-relaunched host can be slow to take input; never leave the pane a bare shell for that.
+const FRESH_SEND_TIMEOUT_MS = 20_000
+const FRESH_SEND_ATTEMPTS = 3
+const FRESH_SEND_RETRY_MS = 1_000
+/** The fresh start landed: the command echoed, or the agent's own screen is up after the miss. */
+const AGENT_UP = /Claude Code|OpenAI Codex|^\s*[❯›>]\s*$/
+
+/** Whether the fresh command (or the agent it starts) shows after the last "no conversation" line. */
+function freshStartLanded(lines: readonly string[], freshCommand: string): boolean {
+  let miss = -1
+  lines.forEach((line, index) => {
+    if (NO_CONVERSATION.test(line)) {
+      miss = index
+    }
+  })
+  const echo = freshCommand.trim().slice(-24)
+  return lines
+    .slice(miss + 1)
+    .some((line) => AGENT_UP.test(line) || (echo.length > 0 && line.includes(echo)))
+}
+
+async function readTail(
+  target: { kind: 'environment'; environmentId: string },
+  handle: string
+): Promise<string[] | null> {
+  const read = await callRuntimeRpc<{ terminal?: { tail?: string[] } }>(
+    target,
+    'terminal.read',
+    { terminal: handle, limit: 80 },
+    { timeoutMs: 5_000 }
+  ).catch(() => null)
+  const tail = read?.terminal?.tail
+  return Array.isArray(tail) ? tail.map((line) => line.replace(ANSI, '')) : null
+}
+
+/**
+ * Type the fresh command once. A send that times out may still have landed, so before each retry
+ * the tail is read again and nothing is typed a second time if the command or the agent shows.
+ * Throws when every try failed: the caller reports it rather than leave a quiet bare shell.
+ */
+async function sendFreshOnce(
+  target: { kind: 'environment'; environmentId: string },
+  handle: string,
+  freshCommand: string,
+  sleep: (ms: number) => Promise<void>
+): Promise<void> {
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= FRESH_SEND_ATTEMPTS; attempt += 1) {
+    if (attempt > 1) {
+      await sleep(FRESH_SEND_RETRY_MS)
+      const tail = await readTail(target, handle)
+      if (tail && freshStartLanded(tail, freshCommand)) {
+        return
+      }
+    }
+    try {
+      // The Enter rides in the text, not `enter: true`: the host holds an Enter send for the launched
+      // Claude's composer (8 s), which never comes once it exited to the shell, then refuses it.
+      const sent = await callRuntimeRpc<{ send?: { accepted?: boolean; refusedReason?: string } }>(
+        target,
+        'terminal.send',
+        { terminal: handle, text: `${freshCommand}\r` },
+        { timeoutMs: FRESH_SEND_TIMEOUT_MS }
+      )
+      if (sent?.send?.accepted === false) {
+        throw new Error(`terminal_send_refused:${sent.send.refusedReason ?? 'unknown'}`)
+      }
+      return
+    } catch (err) {
+      lastError = err
+      console.warn(`[orca-cloud] RA-11e fresh start send failed (try ${attempt}):`, err)
+    }
+  }
+  throw new Error('ra11e_fresh_send_failed', { cause: lastError })
+}
+
 /**
  * RA-11e backstop: a recorded session can have no conversation on disk (Claude started, never ran a
  * turn). Its `--resume` prints "No conversation found…" and exits, leaving a bare shell. Watch the
  * relaunched pane's terminal (its new handle) for up to 25 s; if that happened, start the agent fresh
- * in the same shell, once. Returns whether it relaunched fresh.
+ * in the same shell, once. Returns whether it relaunched fresh; throws when the fresh start could not
+ * be typed (the pane is left a bare shell, so the caller must say so).
  */
 export async function freshIfResumeFoundNothing(args: {
   /** The pane's PTY id now (the relaunched terminal), or null while it is still binding. */
@@ -156,12 +233,7 @@ export async function freshIfResumeFoundNothing(args: {
       '[orca-cloud] RA-11e resume found no conversation; starting fresh in',
       current.handle
     )
-    await callRuntimeRpc(
-      target,
-      'terminal.send',
-      { terminal: current.handle, text: args.freshCommand, enter: true },
-      { timeoutMs: 5_000 }
-    )
+    await sendFreshOnce(target, current.handle, args.freshCommand, sleep)
     return true
   }
   console.info('[orca-cloud] RA-11e watch ended without a "no conversation" line', lastSeen)

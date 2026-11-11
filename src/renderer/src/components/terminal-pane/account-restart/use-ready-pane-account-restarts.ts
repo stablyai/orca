@@ -8,6 +8,7 @@ import {
 import {
   beginCloudAgentRestart,
   failCloudAgentRestart,
+  failCloudAgentRestartFresh,
   noteCloudAgentRestartFresh,
   isForcedCloudAgentRestart,
   noteCloudAgentRestartLaunched
@@ -234,7 +235,19 @@ export function runReadyPaneAccountRestarts<
                   noteCloudAgentRestartFresh(makePaneKey(args.tabId, pane.leafId))
                 }
               })
-              .catch((err: unknown) => console.warn('[orca-cloud] fresh fallback failed:', err))
+              .catch((err: unknown) => {
+                console.warn('[orca-cloud] fresh fallback failed:', err)
+                if (tracked) {
+                  // The pane is a bare shell now: say so with Try again, never leave it quiet.
+                  failCloudAgentRestartFresh(makePaneKey(args.tabId, pane.leafId), {
+                    agent,
+                    ptyId:
+                      useAppStore.getState().terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId?.[
+                        pane.leafId
+                      ] ?? ptyId
+                  })
+                }
+              })
           }
         },
         (err: unknown) => {
