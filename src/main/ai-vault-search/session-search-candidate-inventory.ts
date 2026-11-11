@@ -56,7 +56,11 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
   async unowned(rows: { path: string; agent?: string | null }[]): Promise<string[]> {
     const unowned: string[] = []
     for (const page of sessionSearchRecordPages(rows)) {
-      unowned.push(...((await this.request!({ kind: 'unowned-page', rows: page })).unowned ?? []))
+      const result = await this.request!({ kind: 'unowned-page', rows: page })
+      if (!result.unowned) {
+        throw new Error('Session membership projection did not return its results')
+      }
+      unowned.push(...result.unowned)
     }
     return unowned
   }
