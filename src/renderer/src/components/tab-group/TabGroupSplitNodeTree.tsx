@@ -4,7 +4,10 @@ import { useAppStore } from '../../store'
 import TabGroupPanel, { type TabGroupPanelTabStrip } from './TabGroupPanel'
 import type { HoveredTabInsertion } from './useTabDragSplit'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { setGroupRatioThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import {
+  equalizeGroupRunThroughLayoutOwner,
+  setGroupRatioThroughLayoutOwner
+} from './tab-group-layout-owner-commands'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
@@ -13,12 +16,15 @@ export function ResizeHandle({
   direction,
   onResizeStart,
   onResizeEnd,
-  onRatioChange
+  onRatioChange,
+  onEqualize
 }: {
   direction: 'horizontal' | 'vertical'
   onResizeStart: () => void
   onResizeEnd?: () => void
   onRatioChange: (ratio: number) => void
+  /** Double-click resets the whole row or column to equal sizes. */
+  onEqualize?: () => void
 }): React.JSX.Element {
   const isHorizontal = direction === 'horizontal'
   const [dragging, setDragging] = useState(false)
@@ -136,6 +142,7 @@ export function ResizeHandle({
         isHorizontal ? 'is-vertical' : 'is-horizontal'
       }${dragging ? ' is-dragging' : ''}`}
       onPointerDown={onPointerDown}
+      onDoubleClick={onEqualize}
     />
   )
 }
@@ -178,6 +185,7 @@ function SplitNode({
   hoveredTabInsertion: HoveredTabInsertion | null
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
+  const equalizeTabGroupSplitRun = useAppStore((state) => state.equalizeTabGroupSplitRun)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   if (node.type === 'leaf') {
@@ -244,6 +252,11 @@ function SplitNode({
           ORCA_LAYOUT_OWNER_IS_MAIN
             ? setGroupRatioThroughLayoutOwner(worktreeId, nodePath, nextRatio)
             : setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)
+        }
+        onEqualize={() =>
+          ORCA_LAYOUT_OWNER_IS_MAIN
+            ? equalizeGroupRunThroughLayoutOwner(worktreeId, nodePath)
+            : equalizeTabGroupSplitRun(worktreeId, nodePath)
         }
       />
       <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>

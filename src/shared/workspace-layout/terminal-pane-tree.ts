@@ -115,10 +115,12 @@ export function samePanesIgnoringRatios(
   )
 }
 
-function equalizeWeight(
-  node: TerminalPaneLayoutNode,
-  direction: 'vertical' | 'horizontal'
-): number {
+type SplitTreeShape =
+  | { type: 'leaf' }
+  | { type: 'split'; direction: string; first: SplitTreeShape; second: SplitTreeShape }
+
+/** Panes (or groups) laid out along `direction` under `node`; a cross-axis split counts as one. */
+export function equalizeWeight(node: SplitTreeShape, direction: string): number {
   return node.type === 'split' && node.direction === direction
     ? equalizeWeight(node.first, direction) + equalizeWeight(node.second, direction)
     : 1

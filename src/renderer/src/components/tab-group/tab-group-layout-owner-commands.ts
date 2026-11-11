@@ -12,7 +12,10 @@ import {
 } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
-import { splitRatioIntentAt } from '../../../../shared/workspace-layout/split-ratio-intents'
+import {
+  changedSplitRatios,
+  splitRatioIntentAt
+} from '../../../../shared/workspace-layout/split-ratio-intents'
 import { serverTabCount } from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
 import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
 
@@ -174,6 +177,24 @@ export function setGroupRatioThroughLayoutOwner(
     sendLayoutCommandToOwner(
       worktreeId,
       { type: 'setGroupRatios', ratios: [intent] },
+      { apply: keep, asToday: keep, drawn: true }
+    )
+  }
+}
+
+/** Draw the equalized run locally, then ask main to persist every changed ratio in one command. */
+export function equalizeGroupRunThroughLayoutOwner(worktreeId: string, nodePath: string): void {
+  const state = useAppStore.getState()
+  const before = state.layoutByWorktree[worktreeId]
+  state.equalizeTabGroupSplitRun(worktreeId, nodePath)
+  const after = useAppStore.getState().layoutByWorktree[worktreeId]
+  // One command keeps the run atomic: main refuses all of it if any split moved on.
+  const ratios = before && after && after !== before ? changedSplitRatios(before, after) : []
+  if (ratios.length > 0) {
+    const keep = (): void => {}
+    sendLayoutCommandToOwner(
+      worktreeId,
+      { type: 'setGroupRatios', ratios },
       { apply: keep, asToday: keep, drawn: true }
     )
   }

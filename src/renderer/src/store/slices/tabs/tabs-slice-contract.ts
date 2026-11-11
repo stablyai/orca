@@ -172,6 +172,8 @@ export type TabsSlice = {
     }
   ) => boolean
   setTabGroupSplitRatio: (worktreeId: string, nodePath: string, ratio: number) => void
+  /** Equalizes every group along the axis of the split at `nodePath`. */
+  equalizeTabGroupSplitRun: (worktreeId: string, nodePath: string) => void
   /** Selects the hovered tab while a drag is in flight; restored from the drag-start snapshot. */
   previewDragActiveTab: (args: {
     worktreeId: string
