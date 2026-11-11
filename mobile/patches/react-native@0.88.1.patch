@@ -1,111 +1,11 @@
-diff --git a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
-index d02e003a439e410ddab597b2c036256c80db0395..cf745cf37a37d34f9e93eb8df10b43cb54ab91a3 100644
---- a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
-+++ b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
-@@ -382,6 +382,7 @@
-   _backedTextInputView.inputAccessoryView = nil;
-   _hasInputAccessoryView = false;
-   [_backedTextInputView resignFirstResponder];
-+  [_backedTextInputView resetDictationRecognition];
- }
-
- #pragma mark - RCTBackedTextInputDelegate
-@@ -703,6 +704,7 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
- {
-   return {
-       .text = RCTStringFromNSString(_backedTextInputView.attributedText.string),
-+      .isComposing = _backedTextInputView.markedTextRange != nil,
-       .selectionRange = [self _selectionRange],
-       .eventCount = static_cast<int>(_mostRecentEventCount),
-       .contentOffset = RCTPointFromCGPoint(_backedTextInputView.contentOffset),
-@@ -865,4 +867,6 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
-+  // Preserve the native recognition placeholder while iOS finalizes dictation.
-   BOOL shouldFallbackToBareTextComparison =
-       [_backedTextInputView.textInputMode.primaryLanguage isEqualToString:@"dictation"] ||
-+      _backedTextInputView.dictationRecognizing ||
-       [_backedTextInputView.textInputMode.primaryLanguage isEqualToString:@"ko-KR"] ||
-       _backedTextInputView.markedTextRange || _backedTextInputView.isSecureTextEntry || fontHasBeenUpdatedBySystem;
-diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
-index a9bc219f8bf729111e907423ca61b991fd712b46..60e9c6f54edb295295d6e48d1d554499106b7e57 100644
---- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
-+++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
-@@ -24,6 +24,10 @@ static jsi::Value textInputMetricsPayload(
-
-   payload.setProperty(runtime, "eventCount", textInputMetrics.eventCount);
-
-+  if (textInputMetrics.isComposing.has_value()) {
-+    payload.setProperty(runtime, "isComposing", *textInputMetrics.isComposing);
-+  }
-+
-   if (includeSelectionState) {
-     auto selection = jsi::Object(runtime);
-     selection.setProperty(
-diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
-index a3f2e01c130c1a53aee0b39e72927d21f2a6973d..c9d34f8b42644800b5c85e5be45b6ebfbe94a54d 100644
---- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
-+++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
-@@ -7,6 +7,8 @@
-
- #pragma once
-
-+#include <optional>
-+
- #include <react/renderer/attributedstring/AttributedString.h>
- #include <react/renderer/components/view/ViewEventEmitter.h>
-
-@@ -18,6 +20,7 @@ class TextInputEventEmitter : public ViewEventEmitter {
-
-   struct Metrics {
-     std::string text;
-+    std::optional<bool> isComposing;
-     AttributedString::Range selectionRange;
-     // ScrollView-like metrics
-     Size contentSize;
-diff --git a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
-index 79ee7ffe43..956f189a1c 100644
---- a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
-+++ b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
-@@ -136,6 +136,7 @@ using namespace facebook::react;
- - (void)prepareForRecycle
- {
-   [super prepareForRecycle];
-   _textView.state = nullptr;
-+  _textView.layoutMetrics = EmptyLayoutMetrics;
-   _accessibilityProvider = nil;
- }
-diff --git a/Libraries/Text/TextInput/RCTBackedTextInputViewProtocol.h b/Libraries/Text/TextInput/RCTBackedTextInputViewProtocol.h
---- a/Libraries/Text/TextInput/RCTBackedTextInputViewProtocol.h
-+++ b/Libraries/Text/TextInput/RCTBackedTextInputViewProtocol.h
-@@ -48,6 +48,7 @@
- - (void)setSelectedTextRange:(nullable UITextRange *)selectedTextRange NS_UNAVAILABLE;
- - (void)setSelectedTextRange:(nullable UITextRange *)selectedTextRange notifyDelegate:(BOOL)notifyDelegate;
- - (void)scrollRangeToVisible:(NSRange)selectedTextRange;
-+- (void)resetDictationRecognition;
-
- // This protocol disallows direct access to `text` property because
- // unwise usage of it can break the `attributeText` behavior.
-diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
---- a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
-+++ b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
-@@ -197,6 +197,11 @@
- }
-
- #pragma mark - Dictation
-+
-+- (void)resetDictationRecognition
-+{
-+  _dictationRecognizing = NO;
-+}
-
- - (void)dictationRecordingDidEnd
- {
 diff --git a/Libraries/Text/TextInput/Multiline/RCTUITextView.mm b/Libraries/Text/TextInput/Multiline/RCTUITextView.mm
+index a803387b98bfb68e0c9bbb783e25bc649566e6a3..53adfdd413797871d29e13770f50e9be6377c3e1 100644
 --- a/Libraries/Text/TextInput/Multiline/RCTUITextView.mm
 +++ b/Libraries/Text/TextInput/Multiline/RCTUITextView.mm
-@@ -319,6 +319,11 @@
-
+@@ -326,6 +326,11 @@ static UIColor *defaultPlaceholderColor(void)
+ 
  #pragma mark - Dictation
-
+ 
 +- (void)resetDictationRecognition
 +{
 +  _dictationRecognizing = NO;
@@ -114,11 +14,118 @@ diff --git a/Libraries/Text/TextInput/Multiline/RCTUITextView.mm b/Libraries/Tex
  - (void)dictationRecordingDidEnd
  {
    _dictationRecognizing = YES;
+diff --git a/Libraries/Text/TextInput/RCTBackedTextInputViewProtocol.h b/Libraries/Text/TextInput/RCTBackedTextInputViewProtocol.h
+index 2f32b96d2a17b1fd512c2d985dd536ffd4c011c8..4089c3a940a7c389c17500667b6c026bc741034d 100644
+--- a/Libraries/Text/TextInput/RCTBackedTextInputViewProtocol.h
++++ b/Libraries/Text/TextInput/RCTBackedTextInputViewProtocol.h
+@@ -47,6 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
+ - (void)setSelectedTextRange:(nullable UITextRange *)selectedTextRange NS_UNAVAILABLE;
+ - (void)setSelectedTextRange:(nullable UITextRange *)selectedTextRange notifyDelegate:(BOOL)notifyDelegate;
+ - (void)scrollRangeToVisible:(NSRange)selectedTextRange;
++- (void)resetDictationRecognition;
+ 
+ // This protocol disallows direct access to `text` property because
+ // unwise usage of it can break the `attributeText` behavior.
+diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
+index 064b48bb372074df29f961ff8d79e7caba8520c5..b0b73ecba1f42a7789ede064aa83f4ae9f62c1fb 100644
+--- a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
++++ b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
+@@ -197,6 +197,11 @@
+ 
+ #pragma mark - Dictation
+ 
++- (void)resetDictationRecognition
++{
++  _dictationRecognizing = NO;
++}
++
+ - (void)dictationRecordingDidEnd
+ {
+   _dictationRecognizing = YES;
+diff --git a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
+index 228ec0d2a28feeee886e1105f4b1e6cd18649b42..c50f79b48e0d4ae0fcdcfb49d0b9db949f55f5d7 100644
+--- a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
++++ b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
+@@ -167,6 +167,7 @@ using namespace facebook::react;
+ {
+   [super prepareForRecycle];
+   _textView.state = nullptr;
++  _textView.layoutMetrics = EmptyLayoutMetrics;
+   _accessibilityProvider = nil;
+ }
+ 
+diff --git a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
+index 8f55121cd23d27577bab45716d91d6cdad878e41..05529db1a074652d2ca45abd70e421484b38e87b 100644
+--- a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
++++ b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
+@@ -397,6 +397,7 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+   _backedTextInputView.inputAccessoryView = nil;
+   _hasInputAccessoryView = false;
+   [_backedTextInputView resignFirstResponder];
++  [_backedTextInputView resetDictationRecognition];
+ }
+ 
+ #pragma mark - RCTBackedTextInputDelegate
+@@ -733,6 +734,7 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+ {
+   return {
+       .text = RCTStringFromNSString(_backedTextInputView.attributedText.string),
++      .isComposing = _backedTextInputView.markedTextRange != nil,
+       .selectionRange = [self _selectionRange],
+       .contentSize = RCTSizeFromCGSize(_backedTextInputView.contentSize),
+       .contentOffset = RCTPointFromCGPoint(_backedTextInputView.contentOffset),
+@@ -892,8 +894,10 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+                      }
+                    }];
+ 
++  // Preserve the native recognition placeholder while iOS finalizes dictation.
+   BOOL shouldFallbackToBareTextComparison =
+       [_backedTextInputView.textInputMode.primaryLanguage isEqualToString:@"dictation"] ||
++      _backedTextInputView.dictationRecognizing ||
+       [_backedTextInputView.textInputMode.primaryLanguage isEqualToString:@"ko-KR"] ||
+       _backedTextInputView.markedTextRange || _backedTextInputView.isSecureTextEntry || fontHasBeenUpdatedBySystem;
+ 
+diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
+index 7da2622926dcb85968d0d8f17a2ec57098117bdd..42d814740d9cfd46bfd40f1cc5b9e851d3765fbd 100644
+--- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
++++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
+@@ -24,6 +24,10 @@ static jsi::Value textInputMetricsPayload(
+ 
+   payload.setProperty(runtime, "eventCount", textInputMetrics.eventCount);
+ 
++  if (textInputMetrics.isComposing.has_value()) {
++    payload.setProperty(runtime, "isComposing", *textInputMetrics.isComposing);
++  }
++
+   if (includeSelectionState) {
+     auto selection = jsi::Object(runtime);
+     selection.setProperty(
+diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
+index 8c1a443f9e5f769ea0a1e50e818ab7aae63c72b2..cf6aa26c9a1b6469f110fb0d39e2456bb464bb4f 100644
+--- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
++++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
+@@ -9,6 +9,8 @@
+ 
+ #include <react/cxxstableapi/FrameworksGuard.h>
+ 
++#include <optional>
++
+ #include <react/renderer/attributedstring/AttributedString.h>
+ #include <react/renderer/components/view/ViewEventEmitter.h>
+ 
+@@ -20,6 +22,7 @@ class TextInputEventEmitter : public ViewEventEmitter {
+ 
+   struct Metrics {
+     std::string text;
++    std::optional<bool> isComposing;
+     AttributedString::Range selectionRange;
+     // ScrollView-like metrics
+     Size contentSize;
 diff --git a/Libraries/WebSocket/WebSocket.js b/Libraries/WebSocket/WebSocket.js
-index 36aafbb..92aa2d9 100644
+index 2eccf43..b5dfad2 100644
 --- a/Libraries/WebSocket/WebSocket.js
 +++ b/Libraries/WebSocket/WebSocket.js
-@@ -88,6 +88,8 @@ class WebSocket extends EventTarget {
+@@ -90,6 +90,8 @@ class WebSocket extends EventTarget {
    _eventEmitter: NativeEventEmitter<WebSocketEventDefinitions>;
    _subscriptions: Array<EventSubscription>;
    _binaryType: ?BinaryType;
@@ -127,7 +134,7 @@ index 36aafbb..92aa2d9 100644
  
    bufferedAmount: number;
    extension: ?string;
-@@ -236,10 +238,13 @@ class WebSocket extends EventTarget {
+@@ -241,11 +243,14 @@ class WebSocket extends EventTarget {
          if (ev.id !== this._socketId) {
            return;
          }
@@ -136,10 +143,12 @@ index 36aafbb..92aa2d9 100644
 +          ev.data;
          switch (ev.type) {
            case 'binary':
+-            // $FlowFixMe[incompatible-type]
 -            data = base64.toByteArray(ev.data).buffer;
 +            data = this.orcaBinaryAsBase64
 +              ? {base64: ev.data}
-+              : base64.toByteArray(ev.data).buffer;
++              : // $FlowFixMe[incompatible-type]
++                base64.toByteArray(ev.data).buffer;
              break;
            case 'blob':
              data = BlobManager.createFromOptions(ev.data);
