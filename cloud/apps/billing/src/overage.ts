@@ -2,14 +2,23 @@
 // Opting in puts exactly one metered overage item, at STRIPE_PRICE_OVERAGE, on the Stripe
 // subscription: an item still on an older overage price is moved to the current one rather than a
 // second added (two items on the same meter would bill the same seconds twice). Opting out stops
-// metering immediately but leaves the item, so usage already reported is still invoiced.
+// metering immediately. The item is removed once it has nothing left to invoice (no meter report
+// this Stripe period): at once if none was sent, otherwise at a sync after the period rolls over,
+// so usage already reported is still invoiced and no $0 overage line is left on later invoices.
 import { z } from 'zod'
 import type { BillingCaller } from './auth'
 import { OPEN_STATUSES } from './checkout'
 import type { Env } from './env'
 import { planCatalog, planForPrice } from './plans'
 import type { StripeClient, StripeSubscription } from './stripe'
-import { accountSettings, currentSubscription, setOverageSettings, upsertSubscription, type SubscriptionRow } from './store'
+import {
+  accountSettings,
+  currentSubscription,
+  meterReportsSince,
+  setOverageSettings,
+  upsertSubscription,
+  type SubscriptionRow
+} from './store'
 
 export const OverageRequestSchema = z
   .object({
@@ -51,7 +60,33 @@ export async function updateOverage(
       ? (await accountSettings(env.BILLING_DB, caller.accountId)).spend_cap_cents
       : request.spendCapCents
   await setOverageSettings(env.BILLING_DB, caller.accountId, { optIn: request.enabled, spendCapCents }, now)
+  if (!request.enabled) {
+    // Best effort: the opt-out already stops metering; a failed removal is retried by the next sync.
+    await retireOverageItem(env, stripe, subscription, now).catch((error: unknown) => {
+      console.error(JSON.stringify({ error: 'retire_overage_item', message: error instanceof Error ? error.message.slice(0, 200) : '' }))
+    })
+  }
   return { ok: true }
+}
+
+/**
+ * Removes an opted-out account's overage item once nothing on it is left to invoice: no meter
+ * report (sent or pending) since the Stripe period began. Returns whether it removed one.
+ */
+export async function retireOverageItem(env: Env, stripe: StripeClient, subscription: SubscriptionRow, now: number): Promise<boolean> {
+  if (!subscription.overage_item_id) {
+    return false
+  }
+  const settings = await accountSettings(env.BILLING_DB, subscription.account_id)
+  if (settings.overage_opt_in === 1) {
+    return false
+  }
+  if ((await meterReportsSince(env.BILLING_DB, subscription.account_id, subscription.current_period_start)) > 0) {
+    return false
+  }
+  await stripe.deleteSubscriptionItem(subscription.overage_item_id)
+  await upsertSubscription(env.BILLING_DB, { ...subscription, overage_enabled: 0, overage_item_id: null, updated_at: now })
+  return true
 }
 
 /** A metered item that is not a seat price and not the current overage price: an older overage price. */
@@ -84,6 +119,17 @@ async function ensureOverageItem(env: Env, stripe: StripeClient, subscription: S
     }
     return replace.id
   }
-  // Idempotent per subscription+price, so a retried opt-in cannot add a second item.
-  return (await stripe.addSubscriptionItem({ subscription: subscription.stripe_subscription_id, price: env.STRIPE_PRICE_OVERAGE })).id
+  // Idempotent per subscription+price, so a retried opt-in cannot add a second item. Opting out
+  // can remove the item, so a later opt-in may get the removed item's id replayed (Stripe keeps
+  // idempotent answers for 24 hours): then add again under a key that names the removed item.
+  let after: string | undefined
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const added = await stripe.addSubscriptionItem({ subscription: subscription.stripe_subscription_id, price: env.STRIPE_PRICE_OVERAGE, after })
+    const fresh = await stripe.retrieveSubscription(subscription.stripe_subscription_id)
+    if (fresh.items.data.some((item) => item.id === added.id)) {
+      return added.id
+    }
+    after = added.id
+  }
+  throw new Error('overage_item_replayed')
 }
