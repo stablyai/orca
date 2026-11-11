@@ -49,7 +49,7 @@ export function mergeWorktreeMetaForWrite(
   const normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existing, metaUpdates)
   const updated = {
     ...(existing ?? createDefaultWorktreeMeta()),
-    ...normalizeGitHubPRSuppressionUpdate(normalizedUpdates),
+    ...normalizeGitHubPRSuppressionUpdate(normalizedUpdates, existing?.linkedPR),
     ...identity
   }
   updated.linkedWorkItem = normalizeWorkspaceLinkedItem(updated.linkedWorkItem)
