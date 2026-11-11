@@ -126,3 +126,62 @@ it('reads the structured host list for a local UNC workspace instead of gating o
     })
   )
 })
+
+it('reloads paired launch defaults when reopening while the old catalog request drains', async () => {
+  useAppStore.setState({ settings: getDefaultSettings('/synthetic') })
+  const catalog = Promise.withResolvers<never>()
+  const admitted = Promise.withResolvers<void>()
+  const defaults = Promise.withResolvers<{
+    settings: { agentDefaultArgs: { codex: string } }
+    structuredKnown: boolean
+  }>()
+  transport.call.mockImplementation(() => {
+    admitted.resolve()
+    return catalog.promise
+  })
+  transport.defaults.mockReturnValueOnce(defaults.promise).mockResolvedValue({
+    settings: {
+      agentDefaultArgs: { codex: '--add-dir fresh' },
+      nativeChatSessionOptions: {
+        codex: { model: 'fresh-default', valuesByModel: { 'fresh-default': { effort: 'high' } } }
+      }
+    },
+    structuredKnown: true
+  })
+  const model: NewTabAgentMenuModel = {
+    state: 'settled',
+    rows: [{ agent: 'codex', kind: 'cli' }],
+    detection,
+    pickerContext: {
+      workspace: { kind: 'floating', executionHostId: 'runtime:defaults-reopen' },
+      executionHostId: 'runtime:defaults-reopen',
+      runtimeId: 'defaults-server',
+      settings: null,
+      key: 'defaults-reopen'
+    }
+  }
+  const hook = renderHook(({ open }) => useAgentLaunchPickerInventory(undefined, model, open), {
+    initialProps: { open: true }
+  })
+  await act(async () => admitted.promise)
+  hook.rerender({ open: false })
+  await act(async () => {
+    defaults.resolve({
+      settings: { agentDefaultArgs: { codex: '--add-dir old' } },
+      structuredKnown: true
+    })
+  })
+  hook.rerender({ open: true })
+  try {
+    await waitFor(() =>
+      expect(hook.result.current[0]).toMatchObject({
+        defaultsPending: false,
+        arguments: '--add-dir fresh',
+        structured: { model: 'fresh-default', options: { effort: 'high' } }
+      })
+    )
+  } finally {
+    hook.unmount()
+    await act(async () => catalog.reject(new Error('closed catalog')))
+  }
+})

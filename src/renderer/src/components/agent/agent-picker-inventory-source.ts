@@ -57,6 +57,7 @@ export type AgentPickerAcquisitionReads = {
     waitForListing: boolean,
     signal: AbortSignal
   ) => Promise<AgentPickerEntry['catalog'] | undefined>
+  refreshOnInvalidation?: (entry: AgentPickerEntry) => boolean
   subscribeInvalidation?: (listener: () => void) => () => void
   support: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['structured'] | undefined>
 }

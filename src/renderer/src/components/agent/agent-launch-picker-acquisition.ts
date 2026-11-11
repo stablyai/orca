@@ -70,17 +70,18 @@ class AgentPickerAcquisition {
       this.demand = new AbortController()
       this.outstanding = { catalog: 0, refresh: 0, support: this.outstanding.support }
       this.stopInvalidation = this.reads.subscribeInvalidation?.(() => {
-        this.demand?.abort()
-        this.demand = new AbortController()
         this.outstanding = { catalog: 0, refresh: 0, support: this.outstanding.support }
-        this.jobs = this.jobs.map((job) => ({ ...job }))
-        this.queued.refresh.clear()
-        this.jobs.forEach((job, index) => {
+        this.jobs = this.jobs.map((job, index) => {
+          if (this.reads.refreshOnInvalidation?.(this.entries[job.index]) === false) {
+            return job
+          }
+          this.queued.refresh.delete(index)
           this.entries = updateAgentPickerCatalog(this.entries, job, {
             catalog: { origin: 'unknown' },
             catalogRead: 'pending'
           })
           this.queued.catalog.add(index)
+          return { ...job }
         })
         this.publish()
         this.admit('catalog')

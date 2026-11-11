@@ -244,24 +244,22 @@ export function useAgentLaunchPickerInventorySource(
       return
     }
     const controller = new AbortController()
-    let defaultsRead: ReturnType<typeof readHostAgentLaunchDefaults> | undefined
-    const readDefaults = () =>
-      (defaultsRead ??= readHostAgentLaunchDefaults(
-        {
-          environmentId: target.kind === 'environment' ? target.environmentId : '',
-          pairingRevision: context?.pairingRevision,
-          ...(context?.runtimeId ? { runtimeId: context.runtimeId } : {})
-        },
-        controller.signal
-      ).catch(() => null))
-    const stop = observeAgentPickerAcquisition(
+    return observeAgentPickerAcquisition(
       key,
       fallback,
       {
         settings:
-          target.kind === 'environment'
-            ? async () => {
-                const defaults = await readDefaults()
+          target.kind !== 'environment'
+            ? undefined
+            : async () => {
+                const defaults = await readHostAgentLaunchDefaults(
+                  {
+                    environmentId: target.environmentId,
+                    pairingRevision: context?.pairingRevision,
+                    ...(context?.runtimeId ? { runtimeId: context.runtimeId } : {})
+                  },
+                  controller.signal
+                ).catch(() => null)
                 return defaults
                   ? build(defaults.settings).map((entry) => ({
                       ...entry,
@@ -273,8 +271,7 @@ export function useAgentLaunchPickerInventorySource(
                       worktreeId
                     }))
                   : undefined
-              }
-            : undefined,
+              },
         ...agentPickerModelCatalogReads({
           target,
           worktree: selector
@@ -286,10 +283,6 @@ export function useAgentLaunchPickerInventorySource(
         publish: source.publish
       }
     )
-    return () => {
-      controller.abort()
-      stop()
-    }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only semantic inputs and visibility own observation; selected priority publishes independently after commit.
   }, [key, open, source, viewActive])
   return source
