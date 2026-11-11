@@ -1,7 +1,5 @@
 import { retireRemovedWorktreeCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
-import type { AppState } from '../../../types'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
@@ -12,7 +10,7 @@ import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { omitRecordKeys } from './record-key-omission'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/workspace/activation/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '@/lib/workspace/ownership/ambiguous-owner-warning'
-import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { forgetWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import {
   cancelStructuredLaunchesForWorktrees,
@@ -24,6 +22,8 @@ import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffe
 import { buildHostTwinPurgeState } from './host-twin-worktree-purge'
 import { collectHostTwinPurgeScopes } from './host-twin-purge-scopes'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import type { AppState } from '../../../types'
+import type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
 
 /**
  * Builds a bulk cleanup patch and clears auxiliary warning records without requiring individual

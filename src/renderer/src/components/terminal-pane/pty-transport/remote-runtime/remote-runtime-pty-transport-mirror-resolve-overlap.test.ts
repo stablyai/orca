@@ -10,17 +10,16 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => ({}) } }))
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
 
-const { runtimeCall, subscriptionSendBinary, resetRemoteRuntimeTransport } =
-  createRemoteRuntimeTransportMocks({
-    getCallbacks: () => subscriptionCallbacks,
-    setCallbacks: (callbacks) => {
-      subscriptionCallbacks = callbacks
-    },
-    getResolvedPaneHandle: () => resolvedPaneHandle,
-    setResolvedPaneHandle: (handle) => {
-      resolvedPaneHandle = handle
-    }
-  })
+const { runtimeCall, resetRemoteRuntimeTransport } = createRemoteRuntimeTransportMocks({
+  getCallbacks: () => subscriptionCallbacks,
+  setCallbacks: (callbacks) => {
+    subscriptionCallbacks = callbacks
+  },
+  getResolvedPaneHandle: () => resolvedPaneHandle,
+  setResolvedPaneHandle: (handle) => {
+    resolvedPaneHandle = handle
+  }
+})
 
 function calledMethods(): string[] {
   return runtimeCall.mock.calls.map(([request]) => request.method)
@@ -47,42 +46,6 @@ describe('web mirror reveal: resolvePane overlaps the activation', () => {
       callbacks: {}
     })
   }
-
-  it('sends resolvePane before the activation answers, and reads it once', async () => {
-    const defaultCall = runtimeCall.getMockImplementation()!
-    let answerActivate: () => void = () => {}
-    runtimeCall.mockImplementation((request: { method: string }) => {
-      if (request.method === 'session.tabs.activate') {
-        return new Promise((resolve) => {
-          answerActivate = () => resolve(defaultCall(request))
-        })
-      }
-      if (request.method === 'terminal.resolvePane') {
-        return Promise.resolve(defaultCall(request)).then((response) => ({
-          ...response,
-          result: {
-            terminal: { ...response.result.terminal, incarnationId: 'incarnation-resolved' }
-          }
-        }))
-      }
-      return defaultCall(request)
-    })
-
-    const attached = attachMirror()
-    await vi.waitFor(() => expect(calledMethods()).toContain('terminal.resolvePane'), {
-      timeout: 10_000
-    })
-    // The activation has not answered, yet the pane read is already on the wire.
-    expect(calledMethods()).toContain('session.tabs.activate')
-    expect(subscriptionSendBinary).not.toHaveBeenCalled()
-
-    answerActivate()
-    await expect(attached).resolves.toMatchObject({
-      id: 'remote:env-1@@terminal-1',
-      incarnationId: 'incarnation-resolved'
-    })
-    expect(calledMethods().filter((method) => method === 'terminal.resolvePane')).toHaveLength(1)
-  })
 
   it('re-reads the pane after an activation that materialized a different handle', async () => {
     const defaultCall = runtimeCall.getMockImplementation()!

@@ -1,6 +1,4 @@
 import { cancelActiveWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
-import type { WorktreeSlice } from '../worktree-slice-contract'
-import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { projectWorktreeTabModelReconciliation } from '../../tabs/tabs-reconciliation'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../../../components/browser-pane/host-guest/webview-registry'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
@@ -21,11 +19,13 @@ import {
 } from '../../../../../../shared/workspace-scope'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
-import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { clearWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
 } from './activation-terminal-prep'
+import type { WorktreeSlice } from '../worktree-slice-contract'
+import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 
 export function createSetActiveWorktree(
   set: WorktreeSliceSet,

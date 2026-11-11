@@ -3,7 +3,7 @@ export function independentAgentModelCatalog(agent: string): boolean {
 }
 
 export function usesModelSpecificAcpEfforts(agent: string): boolean {
-  return agent === 'opencode' || agent === 'opencode2'
+  return agent === 'opencode' || agent === 'opencode2' || agent === 'omp'
 }
 
 export function usesInstalledAgentModelCatalog(agent: string, coherentCatalog?: boolean): boolean {
