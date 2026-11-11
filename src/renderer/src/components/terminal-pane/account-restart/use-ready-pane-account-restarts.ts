@@ -219,7 +219,13 @@ export function runReadyPaneAccountRestarts<
     }
     // RA-11d: the pane's recorded launch, or (a host-launched agent the desktop never recorded) the
     // agent's default CLI args, the same source the create launch read.
-    const launchConfig = launchedStartup.launchConfig ?? defaultLaunchConfig(agent)
+    // RA-11d: the resume plan always carries a launch config, with empty args when nothing was
+    // recorded (a host-launched agent); only real recorded args win over the defaults.
+    const recorded = launchedStartup.launchConfig
+    const defaults = recorded?.agentArgs?.trim() ? undefined : defaultLaunchConfig(agent)
+    // Substitute only the args: the recorded env (and command) stay the pane's own.
+    const launchConfig =
+      defaults && recorded ? { ...recorded, agentArgs: defaults.agentArgs } : (recorded ?? defaults)
     // Stop that one host terminal first (its exit is ours, not the pane's), then reconnect.
     const store = useAppStore.getState()
     store.suppressPtyExit(ptyId)
