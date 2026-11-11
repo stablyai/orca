@@ -18700,38 +18700,6 @@
       ]
     },
     {
-      "id": "session-markdown-tab-read",
-      "operation": "session.tab-documents",
-      "family": "session.tab-documents",
-      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "markdown",
-          "id": "markdown"
-        },
-        {
-          "complete": "markdown.readTab#1",
-          "params": {
-            "tabId": "tab-md",
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "content": "# a",
-              "version": "v1",
-              "isDirty": false,
-              "editable": true
-            }
-          }
-        },
-        {
-          "checkpoint": "read"
-        }
-      ]
-    },
-    {
       "id": "session-markdown-tab-disk-fallback",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
@@ -18773,67 +18741,6 @@
         },
         {
           "checkpoint": "fell-back"
-        }
-      ]
-    },
-    {
-      "id": "session-markdown-tab-refused",
-      "operation": "session.tab-documents",
-      "family": "session.tab-documents",
-      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "markdown",
-          "id": "markdown"
-        },
-        {
-          "complete": "markdown.readTab#1",
-          "params": {
-            "tabId": "tab-md",
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "tab_not_found",
-              "message": "No such tab"
-            }
-          }
-        },
-        {
-          "checkpoint": "errored"
-        }
-      ]
-    },
-    {
-      "id": "session-file-tab-read",
-      "operation": "session.tab-documents",
-      "family": "session.tab-documents",
-      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "file",
-          "id": "file"
-        },
-        {
-          "complete": "files.read#1",
-          "params": {
-            "relativePath": "src/app.ts",
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "content": "a\n",
-              "truncated": false,
-              "byteLength": 2
-            }
-          }
-        },
-        {
-          "checkpoint": "read"
         }
       ]
     },
@@ -19856,74 +19763,6 @@
         },
         {
           "checkpoint": "refused"
-        }
-      ]
-    },
-    {
-      "id": "session-diff-notes-loaded",
-      "operation": "session.diff-notes",
-      "family": "session.diff-notes",
-      "sites": ["mobile/src/source-control/review/use-mobile-session-diff-comments.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "complete": "worktree.show#1",
-          "params": {
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "worktree": {
-                "diffComments": [
-                  {
-                    "body": "needs a test",
-                    "createdAt": 0,
-                    "filePath": "src/app.ts",
-                    "id": "note-1",
-                    "lineNumber": 4,
-                    "worktreeId": "workspace-1"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "loaded"
-        }
-      ]
-    },
-    {
-      "id": "session-diff-notes-load-refused",
-      "operation": "session.diff-notes",
-      "family": "session.diff-notes",
-      "sites": ["mobile/src/source-control/review/use-mobile-session-diff-comments.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "complete": "worktree.show#1",
-          "params": {
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "worktree_not_found",
-              "message": "No such workspace"
-            }
-          }
-        },
-        {
-          "checkpoint": "unchanged"
         }
       ]
     },
@@ -23963,83 +23802,6 @@
         },
         {
           "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "session-markdown-disk-read",
-      "operation": "session.tab-documents",
-      "family": "session.markdown-disk-fallback",
-      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "markdown",
-          "id": "markdown"
-        },
-        {
-          "complete": "markdown.readTab#1",
-          "params": {
-            "tabId": "tab-md",
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "renderer_unavailable",
-              "message": "Renderer unavailable"
-            }
-          }
-        },
-        {
-          "complete": "files.read#1",
-          "params": {
-            "relativePath": "docs/readme.md",
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "content": "# disk",
-              "truncated": false,
-              "byteLength": 6
-            }
-          }
-        },
-        {
-          "checkpoint": "fell-back"
-        }
-      ]
-    },
-    {
-      "id": "session-markdown-disk-served",
-      "operation": "session.tab-documents",
-      "family": "session.markdown-disk-fallback",
-      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "markdown",
-          "id": "markdown"
-        },
-        {
-          "complete": "markdown.readTab#1",
-          "params": {
-            "tabId": "tab-md",
-            "worktree": "id:workspace-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "content": "# served",
-              "version": "v1",
-              "isDirty": false,
-              "editable": true
-            }
-          }
-        },
-        {
-          "checkpoint": "served"
         }
       ]
     },

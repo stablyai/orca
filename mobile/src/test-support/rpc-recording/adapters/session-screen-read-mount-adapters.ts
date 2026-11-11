@@ -49,7 +49,7 @@ export function sessionScreenReadMountAdapters(
       })
       hook.mount()
       return {
-        action(name, args) {
+        action(name) {
           if (name === 'markdown') {
             return performHookAction(() =>
               readers.readMarkdownTab(
@@ -57,19 +57,7 @@ export function sessionScreenReadMountAdapters(
                   type: 'markdown',
                   id: 'tab-md',
                   relativePath: 'docs/readme.md',
-                  isDirty: args.dirty === true
-                })
-              )
-            )
-          }
-          if (name === 'file') {
-            return performHookAction(() =>
-              readers.readFileTab(
-                mountFixture<Parameters<typeof readers.readFileTab>[0]>({
-                  type: 'file',
-                  id: 'tab-file',
-                  relativePath: 'src/app.ts',
-                  ...(args.diff === true ? { diffSource: 'staged' as const } : {})
+                  isDirty: false
                 })
               )
             )
