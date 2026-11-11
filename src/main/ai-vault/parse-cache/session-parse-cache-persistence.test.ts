@@ -267,6 +267,20 @@ describe('session parse cache persistence', () => {
     expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
   })
 
+  it('leaves a pre-versioning file in place while another build still has it open', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    const transcript = await writeTranscript(root)
+    const holder = new SessionParseCacheDatabase(join(root, 'session-parse-cache.sqlite'))
+    try {
+      simulateRestart(cacheFile)
+      expect(await parse(transcript)).toMatchObject({ fullParses: 1 })
+      expect(existsSync(join(root, 'session-parse-cache.sqlite'))).toBe(true)
+    } finally {
+      holder.close()
+    }
+  })
+
   it('scanAiVaultSessions reads the database and writes after parsing', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')

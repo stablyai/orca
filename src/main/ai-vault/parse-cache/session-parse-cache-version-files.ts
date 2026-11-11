@@ -23,18 +23,17 @@ export function adoptUnversionedSessionParseCache(directory: string, path: strin
   }
   try {
     const db = new SyncDatabase(unversioned)
-    let current = false
+    let movable = false
     try {
       const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()
-      current = row?.value === String(SESSION_PARSE_CACHE_SCHEMA_VERSION)
-      if (current) {
-        // Fold the WAL in so the moved file holds every committed row on its own.
-        db.pragma('wal_checkpoint(TRUNCATE)')
-      }
+      // Leaving WAL folds every committed row into the file, and is refused while another build holds it.
+      movable =
+        row?.value === String(SESSION_PARSE_CACHE_SCHEMA_VERSION) &&
+        db.pragma('journal_mode = DELETE', { simple: true }) === 'delete'
     } finally {
       db.close()
     }
-    if (current) {
+    if (movable) {
       renameSync(unversioned, path)
       removeVersionedCacheDatabase(unversioned, 'fail-fast')
     }

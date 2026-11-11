@@ -96,7 +96,8 @@ export function startLocalAiVaultScanProgress(
     fail: () => {
       if (currentScans.get(scanKey)?.handle === handle) {
         currentScans.delete(scanKey)
-        publish(scanKey, fallback ?? { ...current, settledAt: now() })
+        // A scan that stayed quiet leaves no partial strip the user never saw.
+        publish(scanKey, fallback ?? (shown === current ? { ...current, settledAt: now() } : null))
       }
     }
   }
