@@ -9,14 +9,19 @@ import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
 /** The prefix that refreshes a cloud shell's session env before the command; quiet off-cloud. */
 export const ORCA_CLOUD_SESSION_ENV_REFRESH = 'eval "$(orca-env 2>/dev/null)"; '
 
+/** True when this pane's terminal runs on an Orca Cloud sandbox. */
+export function isOrcaCloudPane(pane: { tabId: string; leafId: string }): boolean {
+  const ptyId =
+    useAppStore.getState().terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] ?? null
+  const environmentId = ptyId ? parseRemoteRuntimePtyId(ptyId)?.environmentId : null
+  return Boolean(environmentId && isOrcaCloudEnvironmentId(environmentId))
+}
+
 export function withOrcaCloudSessionEnv<T extends { command: string }>(
   startup: T,
   pane: { tabId: string; leafId: string }
 ): T {
-  const ptyId =
-    useAppStore.getState().terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] ?? null
-  const environmentId = ptyId ? parseRemoteRuntimePtyId(ptyId)?.environmentId : null
-  if (!environmentId || !isOrcaCloudEnvironmentId(environmentId)) {
+  if (!isOrcaCloudPane(pane)) {
     return startup
   }
   return startup.command.startsWith(ORCA_CLOUD_SESSION_ENV_REFRESH)
