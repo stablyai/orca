@@ -327,22 +327,32 @@ it('discards row-free authority changes before publishing an asynchronous observ
   const reached = Promise.withResolvers<void>()
   const release = Promise.withResolvers<void>()
   const read = journal.reads.observer.bind(journal.reads)
-  vi.spyOn(journal.reads, 'observer').mockImplementationOnce(async (input) => {
+  const observer = vi.spyOn(journal.reads, 'observer').mockImplementation(async (input) => {
     const result = await read(input)
     reached.resolve()
     await release.promise
     return result
   })
-  let invalidated = false
-  const pending = projections.readSql(journal, capture, () => {
-    invalidated = true
-  })
+  const invalidated: string[] = []
+  const observed: unknown[] = []
+  const pending = Promise.all(
+    ['first', 'second'].map((reader) =>
+      projections.readSql(
+        journal,
+        capture,
+        () => invalidated.push(reader),
+        (projection) => observed.push(projection)
+      )
+    )
+  )
   await reached.promise
   revision = 1
   held.push('new-live-owner')
   release.resolve()
-  expect(await pending).toBeNull()
-  expect(invalidated).toBe(true)
+  expect(await pending).toEqual([null, null])
+  expect(invalidated).toEqual(['first', 'second'])
+  expect(observed).toEqual([])
+  observer.mockRestore()
   const current = await projections.readSql(journal, capture, () => {})
   expect(current).toMatchObject({
     workRevision: 1,
@@ -353,6 +363,20 @@ it('discards row-free authority changes before publishing an asynchronous observ
   expect(await projections.readSql(journal, capture, () => {})).toMatchObject({
     authority: { child: { heldSends: ['later-owner', 'new-live-owner'] } }
   })
+  revision = 2
+  const failed = Promise.withResolvers<Awaited<ReturnType<typeof read>>>()
+  const failure = new Error('observer read failed')
+  vi.spyOn(journal.reads, 'observer').mockImplementationOnce(() => failed.promise)
+  const failures = Promise.allSettled([
+    projections.readSql(journal, capture, () => {}),
+    projections.readSql(journal, capture, () => {})
+  ])
+  failed.reject(failure)
+  expect(await failures).toEqual([
+    { status: 'rejected', reason: failure },
+    { status: 'rejected', reason: failure }
+  ])
+  expect(await projections.readSql(journal, capture, () => {})).toMatchObject({ workRevision: 2 })
 })
 
 it('rechecks row-free owner death before answering an attempt-end action read', async () => {
@@ -429,7 +453,6 @@ it('publishes SQL status only with recaptured live owners through the existing r
     { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:prompt' },
     { fence: 0, turnScope: { kind: 'thread' } }
   )
-  await journal.appendStopEvent({ reason: 'user-stop' }, 0)
   const held = new Set<string>()
   const session: StatusFeedSession = {
     journal,
@@ -451,9 +474,12 @@ it('publishes SQL status only with recaptured live owners through the existing r
     now: () => 999,
     logger
   })
+  expect(await feed.journalProjection('session-1', journal)).toMatchObject({ stopping: false })
+  await journal.appendStopEvent({ reason: 'user-stop' }, 0)
   const reached = Promise.withResolvers<void>()
   const release = Promise.withResolvers<void>()
   const published = Promise.withResolvers<void>()
+  const alsoPublished = Promise.withResolvers<void>()
   const read = journal.reads.observer.bind(journal.reads)
   vi.spyOn(journal.reads, 'observer').mockImplementationOnce(async (input) => {
     const result = await read(input)
@@ -470,14 +496,24 @@ it('publishes SQL status only with recaptured live owners through the existing r
     })
     published.resolve()
   })
+  const alsoPending = feed.publish('session-1', journal, { replay: true }, (projection) => {
+    expect(projection).toMatchObject({
+      workRevision: 1,
+      stopping: true,
+      authority: { child: { heldSends: ['held-without-row'] } }
+    })
+    alsoPublished.resolve()
+  })
   await reached.promise
   expect(feed.readPublished('session-1')).toBeUndefined()
   session.operationalRevision = 1
   held.add('held-without-row')
-  await journal.stopMarks.beginSettle(true)
+  const settle = await journal.stopMarks.beginSettle(true)
   release.resolve()
   await pending
   await published.promise
+  await alsoPending
+  await alsoPublished.promise
   expect(observations).toEqual([{ revision: 1, held: ['held-without-row'], stopping: true }])
   expect(feed.readPublished('session-1')).toMatchObject({
     latestPrompt: 'Read my chat',
@@ -486,6 +522,14 @@ it('publishes SQL status only with recaptured live owners through the existing r
     updatedAt: 100
   })
   expect(logger.warn).not.toHaveBeenCalled()
+  const cursor = journal.cursor()
+  const stopping = await feed.journalProjection('session-1', journal)
+  journal.stopMarks.settled(settle, 'other-turn')
+  await feed.publish('session-1', journal, { replay: true })
+  expect(feed.readPublished('session-1')).toMatchObject({ status: 'working' })
+  expect(feed.readPublished('session-1')).not.toHaveProperty('stopping')
+  expect(journal.cursor()).toEqual(cursor)
+  expect(stopping?.authority?.stop?.settle).toEqual({ settling: true })
 })
 
 it('drops a revoked history invocation after worker dispatch and preserves deduplicated verdicts', async () => {

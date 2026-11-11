@@ -264,12 +264,17 @@ it('catches up a queue insertion between the old-reader initial page and its sid
       )
     ).toMatchObject({ result: { ok: true, value: { queued: { messageId: id } } } })
     expect(await j.reads.submission(id)).toBeUndefined()
+    expect(await call('agentSession.workState', { sessionId: SESSION }, OLD)).toMatchObject({
+      ok: true,
+      result: { working: true, queuedMessageIds: [id], nextQueuedMessageId: null }
+    })
     resume.resolve()
     await eventually(() =>
       expect(streamState(frames).items).toContainEqual(
         expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
       )
     )
+    await eventually(() => expect(streamState(frames).cursor).toEqual(j.cursor()))
     expect(frames).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -6,6 +6,8 @@ import type {
 } from '../../agent-session-journal/journal-observer-read'
 import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usage-limit-chain'
 import { sameJournalCursor } from '../../agent-session-journal/replay/journal-cursor'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 export type StructuredAgentSessionStatusState = JournalObserverResult['state']
 
 export type StructuredAgentSessionJournalProjection = {
@@ -30,17 +32,60 @@ export type StructuredAgentSessionJournalProjection = {
   work?: JournalObserverResult['work']
 }
 
+type ProjectionEntry = {
+  projection: StructuredAgentSessionJournalProjection
+  physicalCursor: AgentJournalCursor
+  savedStop: JournalLatestStop | null
+}
+
+type PendingObservation = { key: string; result: Promise<JournalObserverResult> }
+type CapturedWork = { authority: JournalWorkAuthority; contextId: string | null }
+
 export class StructuredAgentSessionJournalProjections {
   // Key by journal lifetime; task-progress frames must not rescan unchanged conversations.
-  private readonly byJournal = new WeakMap<
-    SqlAgentSessionJournal,
-    StructuredAgentSessionJournalProjection
-  >()
+  private readonly byJournal = new WeakMap<SqlAgentSessionJournal, ProjectionEntry>()
+  private readonly pending = new WeakMap<SqlAgentSessionJournal, PendingObservation>()
+
+  savedStop(
+    journal: SqlAgentSessionJournal,
+    contextId: string | null
+  ): { value: JournalLatestStop | null } | undefined {
+    const entry = this.currentEntry(journal)
+    return entry?.projection.contextId === contextId ? { value: entry.savedStop } : undefined
+  }
+
+  private currentEntry(journal: SqlAgentSessionJournal): ProjectionEntry | undefined {
+    const entry = this.byJournal.get(journal)
+    const authority = entry?.projection.authority
+    return entry &&
+      authority &&
+      !journal.isClosed &&
+      sameJournalCursor(entry.projection, journal.cursor()) &&
+      sameJournalCursor(entry.physicalCursor, journal.physicalCursor()) &&
+      authority.handle === journal.observationHandle() &&
+      sameJournalCursor(authority.openedThrough, journal.openingCursor())
+      ? entry
+      : undefined
+  }
+
+  currentSql(
+    journal: SqlAgentSessionJournal,
+    captured: CapturedWork | null
+  ): StructuredAgentSessionJournalProjection | null {
+    const prior = this.currentEntry(journal)?.projection
+    return captured &&
+      prior?.authority &&
+      prior.contextId === captured.contextId &&
+      JSON.stringify(prior.authority) ===
+        JSON.stringify(copyJournalWorkAuthority(captured.authority))
+      ? prior
+      : null
+  }
 
   /** Discard an invalidated asynchronous answer before touching the existing publication cache. */
   async readSql(
     journal: SqlAgentSessionJournal,
-    capture: () => { authority: JournalWorkAuthority; contextId: string | null } | null,
+    capture: () => CapturedWork | null,
     invalidated: () => void,
     observed?: (projection: StructuredAgentSessionJournalProjection) => void
   ): Promise<StructuredAgentSessionJournalProjection | null> {
@@ -51,29 +96,44 @@ export class StructuredAgentSessionJournalProjections {
       }
       return null
     }
+    const currentProjection = this.currentSql(journal, captured)
+    if (currentProjection) {
+      observed?.(currentProjection)
+      return currentProjection
+    }
     const contextId = captured.contextId
     const authority = copyJournalWorkAuthority(captured.authority)
     const signature = JSON.stringify(authority)
     const cursor = journal.cursor()
-    const prior = this.byJournal.get(journal)
-    if (
-      !journal.isClosed &&
-      prior?.authority &&
-      sameJournalCursor(prior, cursor) &&
-      prior.contextId === contextId &&
-      JSON.stringify(prior.authority) === signature
-    ) {
-      observed?.(prior)
-      return prior
-    }
+    const prior = this.byJournal.get(journal)?.projection
     const sameContext =
       prior?.epoch === cursor.epoch && prior.contextId === contextId ? prior : undefined
-    const result = await journal.reads.observer({
+    const input = {
       authority,
       start: sameContext?.submissionCount ?? 0,
       floor: sameContext ? 0 : undefined,
       firstInputSubmissionKey: sameContext?.firstInputSubmissionKey ?? null
+    }
+    const key = JSON.stringify({
+      cursor,
+      physicalCursor: journal.physicalCursor(),
+      contextId,
+      input
     })
+    let pending = this.pending.get(journal)
+    if (pending?.key !== key) {
+      const next: PendingObservation = {
+        key,
+        result: journal.reads.observer(input).finally(() => {
+          if (this.pending.get(journal) === next) {
+            this.pending.delete(journal)
+          }
+        })
+      }
+      this.pending.set(journal, next)
+      pending = next
+    }
+    const result = await pending.result
     const current = capture()
     if (
       !current ||
@@ -103,7 +163,9 @@ export class StructuredAgentSessionJournalProjections {
       authority,
       work: result.work
     }
-    this.byJournal.set(journal, projection)
+    const stop = authority.stop
+    const savedStop = stop && { sequence: stop.sequence, event: stop.event }
+    this.byJournal.set(journal, { projection, physicalCursor: result.physicalCursor, savedStop })
     observed?.(projection)
     return projection
   }

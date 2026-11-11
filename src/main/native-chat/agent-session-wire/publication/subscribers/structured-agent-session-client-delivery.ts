@@ -11,7 +11,6 @@ import { AgentSessionRefusalError } from '../../../../../shared/agent-session/fa
 import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { StructuredAgentSessionObservedWork as ObservedWork } from '../../observations/structured-agent-session-observed-work'
 import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import {
@@ -29,6 +28,7 @@ import {
   sendSettlementReading
 } from '../../delivery/structured-agent-session-send-settlement'
 import { readHostStructuredAgentSessionWork } from '../../observations/structured-agent-session-read-work'
+import { projectedStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
 import { structuredAgentSessionConversationFence } from '../../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionStatusFeed } from '../../observations/structured-agent-session-status-feed'
 import type { StructuredAgentSessionStatusSubscriber as StatusSubscriber } from '../../observations/structured-agent-session-status-feed-deps'
@@ -112,10 +112,17 @@ export class StructuredAgentSessionClientDelivery {
       readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
-      readQueuePublication: (sessionId, work) =>
-        tryReadQueuePublication(
-          sessions.get(sessionId)?.journal,
-          structuredQueueSendGate({ store: this.deps().store, sessions }, sessionId, work)
+      readQueuePublication: (sessionId) =>
+        tryReadQueuePublication(sessions.get(sessionId)?.journal, async (journal) =>
+          structuredQueueSendGate(
+            { store: this.deps().store, sessions },
+            sessionId,
+            (await this.currentWork(
+              sessionId,
+              journal,
+              this.statusFeed.journalProjection.current(sessionId, journal)
+            )) ?? undefined
+          )(journal)
         ),
       readBackgroundTasks,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
@@ -307,17 +314,14 @@ export class StructuredAgentSessionClientDelivery {
     return source ? this.statusFeed.journalProjection(sessionId, source) : null
   }
 
-  private async currentWork(
+  // Called inside queue admission too: misses must use direct readers, never admit/readInOrder.
+  private currentWork(
     sessionId: string,
-    journal: AgentSessionJournal
-  ): Promise<ObservedWork | null> {
-    const projection = await this.statusFeed.journalProjection(sessionId, journal)
-    return projection?.work
-      ? new ObservedWork(journal, projection.work, {
-          epoch: projection.epoch,
-          sequence: projection.sequence
-        })
-      : null
+    journal: AgentSessionJournal,
+    projection = this.statusFeed.journalProjection(sessionId, journal)
+  ) {
+    const host = { store: this.deps().store, sessions: this.sessions }
+    return projectedStructuredAgentSessionCurrentWork(host, sessionId, journal, projection)
   }
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {

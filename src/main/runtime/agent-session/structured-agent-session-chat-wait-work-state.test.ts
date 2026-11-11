@@ -184,6 +184,13 @@ describe('chat send --wait over the real host', () => {
       }
     })
     expect(work.historyPages).toBe(0)
+    expect(
+      await harness.call('agentSession.history', {
+        sessionId: SESSION,
+        direction: 'tail',
+        limit: 1
+      })
+    ).toMatchObject({ ok: true, result: { page: { working: true } } })
   })
 
   it.each([

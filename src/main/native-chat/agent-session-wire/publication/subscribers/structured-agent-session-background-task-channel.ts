@@ -1,6 +1,5 @@
 import { readForkMarker } from '../history/agent-session-fork-marker'
 import { structuredAgentSessionOwnerStatus } from '../../host/structured-agent-session-owner-status'
-import { heldStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
 import type { AgentSessionCurrentRequestsRead } from '../../../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from '../../observations/agent-session-current-requests'
 import type {
@@ -113,18 +112,9 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   /** What a waiter decides from, from the sources history pages state, without building a page. */
   async workState(sessionId: string): Promise<AgentSessionWorkState> {
     await this.conversation(sessionId)
-    let work = await this.currentWork(sessionId)
+    const work = await this.currentWork(sessionId)
     if (!work) {
-      const session = this.sessions.get(sessionId)
-      if (!session) {
-        throw new AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
-      }
-      work = await heldStructuredAgentSessionCurrentWork(
-        this.deps.store,
-        sessionId,
-        session.journal,
-        session
-      )
+      throw new AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
     }
     const queue = await this.subscribers.readQueuePublication(sessionId)
     const fence = this.deps.store.getConversation(sessionId)?.currentFence

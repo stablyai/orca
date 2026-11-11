@@ -5,6 +5,7 @@ import { structuredAgentSessionHandoverAuthority } from '../delivery/structured-
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
+import type { StructuredAgentSessionJournalProjection } from './structured-agent-session-status-journal-projection'
 // Bind host sessions/store evidence to the projection while keeping shared projection code free of host types.
 
 export type StructuredAgentSessionCurrentWorkHost = {
@@ -19,6 +20,25 @@ export type StructuredAgentSessionCurrentWorkHost = {
         >
       | undefined
   }
+}
+
+export async function projectedStructuredAgentSessionCurrentWork(
+  host: StructuredAgentSessionCurrentWorkHost,
+  sessionId: string,
+  journal: AgentSessionJournal,
+  pending: Promise<StructuredAgentSessionJournalProjection | null>
+): Promise<StructuredAgentSessionObservedWork | null> {
+  const projection = await pending
+  if (projection?.work) {
+    return new StructuredAgentSessionObservedWork(journal, projection.work, {
+      epoch: projection.epoch,
+      sequence: projection.sequence
+    })
+  }
+  const session = host.sessions.get(sessionId)
+  return session?.journal === journal
+    ? heldStructuredAgentSessionCurrentWork(host.store, sessionId, journal, session)
+    : null
 }
 
 export async function hostStructuredAgentSessionCurrentWork(

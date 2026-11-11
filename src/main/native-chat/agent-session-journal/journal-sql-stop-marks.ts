@@ -40,7 +40,10 @@ export class SqlJournalStopMarks {
   }
 
   async latest(): Promise<JournalLatestStop | null> {
-    const stop = await this.reads.latestStop()
+    return this.withCurrentSettlement(await this.reads.latestStop())
+  }
+
+  withCurrentSettlement(stop: JournalLatestStop | null): JournalLatestStop | null {
     if (!stop) {
       return null
     }
