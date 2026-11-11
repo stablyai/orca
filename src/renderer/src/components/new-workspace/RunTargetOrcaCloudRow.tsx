@@ -14,6 +14,7 @@ import {
   type OrcaCloudRunTargetAccess
 } from './orca-cloud-run-target-access'
 import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { orcaCloudNeedsFixFirst, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
 
 /**
  * Looks like a button but is plain option content: focus stays in the combobox input, Enter on the
@@ -274,7 +275,11 @@ function OrcaCloudMeta({
  * In the composer, hours and plan details wait until after create (Neil): the row only keeps what
  * explains why it can't be picked, "Ask an owner or admin".
  */
-function showsMetaAfterStart(access: OrcaCloudRunTargetAccess): boolean {
+function showsMetaAfterStart(access: OrcaCloudRunTargetAccess, preflight: boolean): boolean {
+  // JA-21 (flagged): a billing wall is fixed here, before Start, not on the setup page after it.
+  if (preflight && orcaCloudNeedsFixFirst(access)) {
+    return true
+  }
   switch (access.state) {
     case 'no-plan':
     case 'out-of-hours':
@@ -315,6 +320,7 @@ export function RunTargetOrcaCloudRow({
   setupAfterStart?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const preflight = useRunOnPreflightEnabled() && setupAfterStart
   return (
     <RunTargetRow
       icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -331,10 +337,11 @@ export function RunTargetOrcaCloudRow({
       armed={armed}
       current={current}
       disabled={
-        (access.state === 'no-plan' ||
+        ((access.state === 'no-plan' ||
           access.state === 'out-of-hours' ||
           access.state === 'payment-issue') &&
-        !access.canManageBilling
+          !access.canManageBilling) ||
+        (preflight && orcaCloudNeedsFixFirst(access))
       }
       optionId={optionId}
       busy={pending}
@@ -342,7 +349,7 @@ export function RunTargetOrcaCloudRow({
       onCommit={onSelect}
       description={orcaCloudRowHint(access, t)}
       trailing={
-        setupAfterStart && !showsMetaAfterStart(access) ? undefined : (
+        setupAfterStart && !showsMetaAfterStart(access, preflight) ? undefined : (
           <OrcaCloudMeta access={access} onAction={onBlockedAction} />
         )
       }
