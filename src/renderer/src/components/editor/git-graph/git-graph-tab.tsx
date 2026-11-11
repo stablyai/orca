@@ -3,7 +3,7 @@ import {
   GitGraphCommitActionControls,
   GitGraphCommitConfirmStrip
 } from './git-graph-commit-action-controls'
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw } from 'lucide-react'
@@ -20,18 +20,21 @@ import {
 } from '../../../../../shared/git/history/git-history-graph'
 import { useGitGraphHistory, gitGraphFilterSupported } from './use-git-graph-history'
 import { GitGraphFilter } from './git-graph-filter'
+import { loadMoreInView } from './git-graph-viewport-paging'
 import { GitGraphDetails } from './git-graph-details'
 import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
 import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const sameGroup = () => undefined
+// About 200px of rows, so scrolling fetches before the end shows.
+const PAGE_AHEAD_ROWS = 8
 
 export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const history = useGitGraphHistory(worktreeId)
-  const { result, scope, selectedId, revealId, controller } = history
+  const { result, scope, selectedId, revealId, controller, loading } = history
   const commitActionSupport = useGitCommitActionsSupport(
     scope?.target ?? null,
     scope?.route.executionHostId ?? undefined
@@ -88,6 +91,16 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     overscan: 12,
     getItemKey: (index) => rows[index]!.historyItem.id
   })
+  const virtualItems = virtualizer.getVirtualItems()
+  // Null while the pane has no height; read after getVirtualItems() recomputes it.
+  const lastVisibleIndex = virtualizer.range?.endIndex ?? -1
+  const endInView = lastVisibleIndex >= 0 && lastVisibleIndex >= rows.length - 1 - PAGE_AHEAD_ROWS
+  useEffect(() => {
+    // Viewport demand, not scroll events: page whenever the end of loaded rows is in view.
+    if (endInView) {
+      loadMoreInView(controller, result)
+    }
+  }, [endInView, result, loading, controller])
   const selected = result?.items.find((item) => item.id === selectedId)
   useLayoutEffect(() => {
     if (scroll.current) {
@@ -189,20 +202,13 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
               if (element) {
                 controller.scrollOffset = element.scrollTop
               }
-              if (
-                element &&
-                element.scrollHeight - element.scrollTop - element.clientHeight < 200 &&
-                !history.loading
-              ) {
-                void history.loadMore()
-              }
             }}
           >
             <div
               className="relative min-w-max"
               style={{ height: virtualizer.getTotalSize(), minWidth: draftGraphWidth + 604 }}
             >
-              {virtualizer.getVirtualItems().map((virtualRow) => {
+              {virtualItems.map((virtualRow) => {
                 const viewModel = rows[virtualRow.index]!
                 const item = viewModel.historyItem
                 return (

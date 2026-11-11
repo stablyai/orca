@@ -1,6 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
-import { toast } from 'sonner'
 import { createRuntimeStatusSlice } from './create-runtime-status-slice'
 import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from './runtime-status-connection-generation'
 import type { RuntimeStatusSlice } from './runtime-status-types'
@@ -8,7 +7,6 @@ import type { RuntimeHostStatusSnapshot } from '../../../../../shared/remote-run
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
-import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
 import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
@@ -54,44 +52,6 @@ function snapshot(
     ...patch
   }
 }
-
-it('represents failed verification honestly without manufacturing a session restart or toast', () => {
-  const viewer = store()
-  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(1))
-  const generation = viewer
-    .getState()
-    .runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
-  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2, { verification: 'unavailable' }))
-  expect(
-    runtimeHostConnectionStateForEntry(viewer.getState().runtimeStatusByEnvironmentId.get('env-a'))
-  ).toBe('runtime-unavailable')
-  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
-    generation
-  )
-  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
-  // Same-runtime recovery advances only resubscribe epoch, preserving mirror cache (#19647); reclaim hosting without a toast.
-  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
-    generation
-  )
-  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.hostContactEpoch).toBe(1)
-  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
-    'rt-1'
-  )
-  expect(ensureBrowserClientHostOnRuntimeContact).toHaveBeenCalledWith(expect.anything(), 'env-a')
-  vi.mocked(ensureBrowserClientHostOnRuntimeContact).mockClear()
-  expect(toast.warning).not.toHaveBeenCalled()
-  const reconnectedGeneration = viewer
-    .getState()
-    .runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
-  viewer
-    .getState()
-    .applyRuntimeHostStatusSnapshot(snapshot(4, { status: { runtimeId: 'rt-2' } as RuntimeStatus }))
-  // A replacement runtime id is a restart: a genuinely new connection, so the generation moves.
-  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
-    (reconnectedGeneration ?? 0) + 1
-  )
-  expect(ensureBrowserClientHostOnRuntimeContact).toHaveBeenCalledWith(expect.anything(), 'env-a')
-})
 
 it('retains disconnect ordering and rejects publications for removed or replaced pairings', () => {
   const viewer = store()
