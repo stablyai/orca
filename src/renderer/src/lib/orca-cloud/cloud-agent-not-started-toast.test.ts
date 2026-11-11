@@ -83,7 +83,13 @@ describe('cloud agent not-started toast', () => {
   it('"Set up Claude once" starts the sign-in right from the toast, which stays up', () => {
     const start = vi.fn(async () => undefined)
     Object.assign(window, {
-      api: { ...(window as { api?: object }).api, orcaCloudAgents: { start } }
+      api: {
+        orcaCloudAgents: {
+          start,
+          setups: vi.fn(async () => ({ claude: { phase: 'idle' }, codex: { phase: 'idle' } })),
+          onSetupChanged: vi.fn(() => () => undefined)
+        }
+      }
     })
     showCloudAgentNotStartedToast('claude', 'w')
     const options: {
