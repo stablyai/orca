@@ -1,4 +1,5 @@
 import { createRemoteRefProbeCache } from '../git/remotes/remote-ref-probe-cache'
+import { isAzureDevOpsOrganizationName } from '../../shared/git/remotes/azure-devops-organization-name'
 
 export type AzureDevOpsRepoRef = {
   host: string
@@ -152,9 +153,13 @@ function parseCloudSshPath(host: string, rawPath: string): AzureDevOpsRepoRef | 
     return makeCloudRef('dev.azure.com', organization, project, repository)
   }
   // Older orgs' SSH host; match what their https://<org>.visualstudio.com remotes resolve to.
-  const origin = `https://${organization.toLowerCase()}.visualstudio.com`
+  if (!isAzureDevOpsOrganizationName(organization)) {
+    return null
+  }
+  const webHost = `${organization.toLowerCase()}.visualstudio.com`
+  const origin = `https://${webHost}`
   return {
-    host: `${organization.toLowerCase()}.visualstudio.com`,
+    host: webHost,
     organization,
     project,
     repository,

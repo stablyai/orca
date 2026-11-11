@@ -22,6 +22,13 @@ describe('parseAzureDevOpsRepoRef', () => {
     )
   })
 
+  it('rejects a vs-ssh organization that would redirect the API host', () => {
+    expect(parseAzureDevOpsRepoRef('git@vs-ssh.visualstudio.com:v3/evil.example%23/P/R')).toBeNull()
+    expect(
+      parseAzureDevOpsRepoRef('ssh://git@vs-ssh.visualstudio.com/v3/evil.example%2F/P/R')
+    ).toBeNull()
+  })
+
   it('keeps reading dev.azure.com SSH remotes as before', () => {
     expect(parseAzureDevOpsRepoRef('git@ssh.dev.azure.com:v3/acme/Proj/Repo')).toMatchObject({
       host: 'dev.azure.com',
