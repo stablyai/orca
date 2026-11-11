@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { readProfileStateSplitDocumentForRow } from './profile-state-document-parts-reader'
 import type Database from '../../sqlite/sync-database'
 import {
   ProfileStateRecoveryCommandError,
@@ -6,7 +7,7 @@ import {
   type ProfileStateRecoveryRepairSection
 } from '../../../shared/profile-state-recovery-command'
 import type { ProfileStateMaintenance } from './profile-state-access'
-import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
+import { profileHasPendingProjectMove } from '../../orca-profiles/project-transfer/profile-project-move-record'
 import { readProfileStateAutomationRunsDocument } from './profile-state-automation-runs'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import {
@@ -237,7 +238,9 @@ function scanProfileStateSections(db: Database.Database): SectionScan | undefine
     const domain = isRecord(row) && typeof row.domain === 'string' ? row.domain : undefined
     let document: ReturnType<typeof validateProfileStateDocumentRow>
     try {
-      document = validateProfileStateDocumentRow(row, { retainParsedValue: true })
+      document =
+        readProfileStateSplitDocumentForRow(db, row, true) ??
+        validateProfileStateDocumentRow(row, { retainParsedValue: true })
     } catch (error) {
       if (!(error instanceof ProfileStateDocumentCorruptionError) || domain === undefined) {
         throw error

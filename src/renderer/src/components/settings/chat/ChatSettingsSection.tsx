@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AppearanceChatSection } from '../appearance/chat/AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatTransientErrorRecoverySetting } from './ChatTransientErrorRecoverySetting'
@@ -6,15 +6,17 @@ import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
-import { matchesSettingsSearch } from '../search/settings-search'
+import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control-ai-types'
-import type { SettingsSearchEntry } from '../search/settings-search'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+
 import { useAppStore } from '../../../store/index'
 import { Card, CardContent } from '../../ui/card'
 import { getChatAppearanceSearchEntries } from '../appearance/chat/chat-appearance-search'
+import { ChatTurnActivitySetting } from './ChatTurnActivitySetting'
+import { getChatTurnActivityTitle } from './chat-turn-activity-search'
 import { getChatBehaviorTitle } from './chat-behavior-search'
-import { AgentDefaultSurfaceSection } from '../AgentDefaultSurfaceSection'
+import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
 import { ChatAgentLaunchSettings } from './ChatAgentLaunchSettings'
 import { getChatLaunchEntriesByKey } from './chat-launch-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -44,19 +46,20 @@ export function ChatSettingsSection({
   showDesktopOnlySettings: boolean
   isMounted: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const query = useAppStore((state) => state.settingsSearchQuery)
-  const title = translate('settings.appearance.chat.title', 'Chat UI')
-  const appearanceTitle = translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
-  const launchEntries = getChatLaunchEntriesByKey()
+  const title = t('settings.appearance.chat.title', 'Chat UI')
+  const appearanceTitle = t('auto.components.settings.Settings.2b4474780a', 'Appearance')
+  const launchEntries = getChatLaunchEntriesByKey(t)
   const showAllBehavior = matchesSettingsSearch(query, [
     { title },
-    { title: getChatBehaviorTitle() }
+    { title: getChatBehaviorTitle(t) }
   ])
   return (
     <SettingsSection
       id="chat"
       title={title}
-      description={translate('settings.chat.description', 'Choose how chats look and behave.')}
+      description={t('settings.chat.description', 'Choose how chats look and behave.')}
       searchEntries={searchEntries}
       forceVisible={hasUnsavedChatPromptChanges}
       bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
@@ -83,7 +86,7 @@ export function ChatSettingsSection({
               </SearchableSetting>
             </>
           ) : null}
-          {matchesSettingsSearch(query, [{ title }, ...getChatAppearanceSearchEntries()]) ? (
+          {matchesSettingsSearch(query, [{ title }, ...getChatAppearanceSearchEntries(t)]) ? (
             <section id="chat-appearance" className="space-y-3">
               <SettingsSubsectionHeader title={appearanceTitle} />
               <Card>
@@ -102,6 +105,14 @@ export function ChatSettingsSection({
               </Card>
             </section>
           ) : null}
+          <ChatTurnActivitySetting
+            settings={settings}
+            updateSettings={updateSettings}
+            forceVisible={matchesSettingsSearch(query, [
+              { title },
+              { title: getChatTurnActivityTitle(t) }
+            ])}
+          />
           {showDesktopOnlySettings ? (
             <NativeChatInlineVisualsSetting
               settings={settings}

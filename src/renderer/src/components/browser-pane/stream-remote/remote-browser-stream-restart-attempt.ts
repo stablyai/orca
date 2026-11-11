@@ -14,7 +14,7 @@ import {
   type RemoteBrowserStreamSubscription,
   type RemoteBrowserStreamToken
 } from './remote-browser-stream-tokens'
-import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
+import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 
 export type RemoteBrowserStreamRestartAttemptDeps = {
   tokens: RemoteBrowserOperationTokens

@@ -4,11 +4,13 @@ import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-
 
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../shared/workspace-unread-raise-capability'
-import { createTestStore, makeWorktree, TEST_REPO } from '../store-test-helpers'
-import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
+import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { markWorkspaceUnreadFlag } from './workspace-unread-flag'
 
-import '@/runtime/runtime-rpc-client'
+import '@/runtime/rpc/calls/runtime-rpc-call'
 
 // With the switch on, the window raises the flag exactly where the owning host does not.
 
@@ -22,10 +24,12 @@ vi.mock('../worktrees/metadata/worktree-meta-persist', async (importOriginal) =>
   const actual = await importOriginal<typeof WorktreeMetaPersistModule>()
   return { ...actual, persistWorktreeMeta: vi.fn(async () => undefined) }
 })
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-cache', () => ({
   // Null before the environment's first status probe, as the real cache.
   readCachedRuntimeEnvironmentCapability: (environmentId: string, capability: string) =>
-    cachedStatus.get(environmentId)?.includes(capability) ?? null,
+    cachedStatus.get(environmentId)?.includes(capability) ?? null
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   // Settles with the environment's status probe; rejects when it cannot be read.
   runtimeEnvironmentSupportsCapability: vi.fn(async (environmentId: string, capability: string) => {
     const capabilities = await hostCapabilities.get(environmentId)

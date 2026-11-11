@@ -1,15 +1,18 @@
-import { isTaskProvider, type TaskProvider } from '../../../src/shared/task-providers'
-import { resolveVisibleTaskProvider } from './mobile-tasks-dependencies'
+import {
+  isTaskProvider,
+  resolveVisibleTaskProvider,
+  type TaskProvider
+} from '../../../src/shared/work-items/task-providers'
 import { normalizeJiraFilter } from './mobile-jira-issue-filters'
 import {
   type RuntimeTaskSettings,
   type TaskResumeState,
-  getTaskPresetQuery,
   githubKindFromQuery,
   normalizeGitHubPreset,
-  normalizeLinearFilter,
-  scopeGitHubTaskSearch
+  normalizeLinearFilter
 } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
 
 export type HydratedTaskViewState = {
   provider: TaskProvider

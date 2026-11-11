@@ -8,6 +8,7 @@ import {
   loadedSyntaxHighlighter,
   loadSyntaxLanguage
 } from '@/lib/syntax-highlighting/syntax-highlighter'
+import { recomputeOn } from '@/lib/recompute-on'
 import { BoundedMap } from '../../../shared/bounded-map'
 
 // Each token is a DOM node, so only the start of a very long block is colored.
@@ -60,8 +61,8 @@ function finishedKey(language: string, source: string): string {
 export function useHighlightedSyntax(code: string, language: string): SyntaxProgress | null {
   const source =
     code.length > MAX_HIGHLIGHTED_CODE_LENGTH ? code.slice(0, MAX_HIGHLIGHTED_CODE_LENGTH) : code
-  const highlighter = loadedSyntaxHighlighter(language)
-  const [, rerender] = useReducer((count: number) => count + 1, 0)
+  const [loadedCount, rerender] = useReducer((count: number) => count + 1, 0)
+  const highlighter = recomputeOn([loadedCount], () => loadedSyntaxHighlighter(language))
 
   // Why: `source` is a dependency so a block still streaming asks again after a failed load.
   useEffect(() => {

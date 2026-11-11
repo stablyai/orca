@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
+import { tokenizeCustomCommandTemplate } from './source-control/ai/generation/commit-message-prompt'
 
 export const editorFormatterSchema = z.object({
   command: z.string().max(4096),

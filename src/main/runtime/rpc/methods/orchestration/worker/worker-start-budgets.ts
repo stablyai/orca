@@ -4,7 +4,7 @@ import {
   resolveFederationAttachDeadlineMs,
   resolveWorkerStartReadinessTimeoutMs,
   resolveWorkerStartClientTimeoutMs
-} from '../../../../../../shared/orchestration-timing-budgets'
+} from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 
 export function resolveFederatedWorkerStartBudgets(
   timeoutMs: number | undefined,

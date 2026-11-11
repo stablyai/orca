@@ -3,9 +3,9 @@ import {
   TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   type TerminalLimitStatus,
   type TerminalLimitUpdate
-} from '../../../../../../shared/terminal-limit-policy'
-import { callHostRoute } from '@/runtime/host-route-call'
-import type { HostRoute } from '@/runtime/runtime-client-target'
+} from '../../../../../../shared/terminal/runtime-policy/terminal-limit-policy'
+import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
+import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 
 export async function readTerminalLimit(
   route: HostRoute,

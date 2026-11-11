@@ -1,8 +1,8 @@
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
-import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
+import { showPreservedBranchToast } from '@/components/sidebar/workspace-actions/deletion/preserved-branch-toast'
 
 export async function completePreservedBranchCleanup({
   get,

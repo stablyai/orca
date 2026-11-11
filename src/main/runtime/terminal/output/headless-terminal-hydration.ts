@@ -1,24 +1,24 @@
 import type {
   RuntimeHeadlessTerminal,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+} from '../records/runtime-terminal-state-records'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { splitFreebuffScreenUpdates } from '../../../../shared/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './terminal-buffer-operations'
-import { observeFreebuffTerminalStatus } from '../../freebuff-terminal-status'
+import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import {
   observeCodexCapacityTerminalStatus,
   observeCodexReconnectFailure
-} from '../../codex-notice-terminal-status'
-import { TrustDialogStatusObserver } from '../../trust-dialog-status-observer'
-import type { LaunchedAgentForeground } from '../../launched-agent-foreground'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from './codex-notice-terminal-status'
+import { TrustDialogStatusObserver } from './trust-dialog-status-observer'
+import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   detectAgentStatusFromTitle,
   normalizeTerminalTitle
-} from '../../../../shared/agent-detection'
-import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-authority'
-import { advancePartialEscapeTail } from '../../../../shared/terminal-partial-escape-tail'
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
+import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal

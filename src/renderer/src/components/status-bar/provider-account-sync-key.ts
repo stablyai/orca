@@ -1,4 +1,4 @@
-import { sameProviderAccountData } from '@/runtime/observed-provider-accounts'
+import { sameProviderAccountData } from '@/runtime/provider-accounts/observations/observed-provider-accounts'
 import type { ClaudeAccountSettings } from './status-bar-claude-accounts'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 

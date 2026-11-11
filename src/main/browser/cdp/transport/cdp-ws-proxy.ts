@@ -1,0 +1,321 @@
+import { WebSocketServer, type WebSocket } from 'ws'
+import { createServer, type Server } from 'node:http'
+import { randomBytes } from 'node:crypto'
+import type { WebContents } from 'electron'
+import { CdpClientResponseWriter } from './cdp-client-response-writer'
+import { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
+import { CdpTargetDiscovery } from './cdp-target-discovery'
+import { CdpDebuggerChannel } from '../debugger/cdp-debugger-channel'
+import { CdpPageNavigationCommands } from '../commands/cdp-page-navigation-commands'
+import { CdpDomFocusReplay } from '../input/cdp-dom-focus-replay'
+import { CdpElementCapture } from '../commands/cdp-element-capture'
+import { CdpPageCaptureCommands } from '../commands/cdp-page-capture-commands'
+import type { CapturePaintHold } from '../debugger/guest-paint-hold'
+import type { AgentInputFocusGuard } from '../input/agent-input-focus-guard'
+import { CdpPageInputCommands, type ShowAgentPointer } from '../input/cdp-page-input-commands'
+import { admitCdpProxyRequest, verifyCdpProxyUpgrade } from './cdp-loopback-request-guard'
+import { parseCdpClientCommand } from './cdp-client-command'
+import {
+  assertRemoteCliPageAccess,
+  runUnderRemoteCliPageAdmission
+} from '../../routing/input-ownership/remote-cli-page-admission'
+
+export class CdpWsProxy {
+  private httpServer: Server | null = null
+  private wss: WebSocketServer | null = null
+  private client: WebSocket | null = null
+  private detachClientListeners: (() => void) | null = null
+  private port = 0
+  private readonly token = randomBytes(32).toString('hex')
+  private stopped = false
+  private readonly responder = new CdpClientResponseWriter(() => this.client)
+  private readonly sessions = new CdpSyntheticSessionRegistry()
+  private readonly discovery: CdpTargetDiscovery
+  private readonly debuggerChannel: CdpDebuggerChannel
+  private readonly navigation: CdpPageNavigationCommands
+  private readonly domFocusReplay: CdpDomFocusReplay
+  private readonly pageCapture: CdpPageCaptureCommands
+  private readonly input: CdpPageInputCommands
+  private pointAtNextResolvedNode = false
+  readonly elementCapture = new CdpElementCapture()
+
+  constructor(
+    private readonly webContents: WebContents,
+    holdPaint: CapturePaintHold,
+    guardFocus: AgentInputFocusGuard = async () => () => {},
+    showAgentPointer: ShowAgentPointer = async () => {}
+  ) {
+    this.discovery = new CdpTargetDiscovery(webContents, this.responder, this.sessions, () =>
+      this.getEndpoint()
+    )
+    this.debuggerChannel = new CdpDebuggerChannel(
+      webContents,
+      this.responder,
+      this.sessions,
+      () => this.client,
+      () => this.stop()
+    )
+    this.navigation = new CdpPageNavigationCommands(
+      webContents,
+      this.responder,
+      this.sessions,
+      this.debuggerChannel
+    )
+    this.domFocusReplay = new CdpDomFocusReplay(webContents, this.responder, this.debuggerChannel)
+    this.pageCapture = new CdpPageCaptureCommands(webContents, this.responder, holdPaint)
+    this.input = new CdpPageInputCommands(
+      webContents,
+      this.responder,
+      this.debuggerChannel,
+      this.domFocusReplay,
+      guardFocus,
+      showAgentPointer,
+      holdPaint
+    )
+  }
+
+  /** Shows the agent cursor on the next node the helper resolves: its fill/check/select target. */
+  pointAtNextNode(enabled: boolean): void {
+    this.pointAtNextResolvedNode = enabled
+  }
+
+  async start(): Promise<string> {
+    if (this.stopped) {
+      throw new Error('CDP proxy has been stopped')
+    }
+    await this.debuggerChannel.attachDebugger()
+    if (this.stopped || this.webContents.isDestroyed()) {
+      await this.stop()
+      throw new Error('CDP proxy has been stopped')
+    }
+    return new Promise<string>((resolve, reject) => {
+      this.httpServer = createServer((req, res) => {
+        const admission = admitCdpProxyRequest(req, this.port, this.token)
+        if ('status' in admission) {
+          res.writeHead(admission.status)
+          res.end()
+          return
+        }
+        this.discovery.handleHttpRequest(admission.path, res)
+      })
+      this.wss = new WebSocketServer({
+        server: this.httpServer,
+        verifyClient: ({ req }, done) => verifyCdpProxyUpgrade(req, this.port, this.token, done)
+      })
+      const failStart = (error: Error): void => {
+        this.httpServer?.removeListener('error', onListenError)
+        this.wss?.close()
+        this.wss = null
+        this.httpServer?.close()
+        this.httpServer = null
+        // Failed startup has no caller-owned cleanup, so release the attached debugger here.
+        this.debuggerChannel.detachDebugger()
+        reject(error)
+      }
+      const onListenError = (error: Error): void => {
+        failStart(error)
+      }
+      this.wss.on('connection', (ws) => {
+        this.closeClient()
+        this.client = ws
+        // Keep errors contained even after a replaced client's message listeners are detached.
+        ws.on('error', () => ws.terminate())
+        const onMessage = (data: WebSocket.RawData): void => {
+          runUnderRemoteCliPageAdmission(this.webContents.id, () =>
+            this.handleClientMessage(ws, data.toString())
+          )
+        }
+        const onClose = (): void => {
+          detach()
+          if (this.client === ws) {
+            this.clearClientState()
+            this.client = null
+          }
+        }
+        const detach = (): void => {
+          ws.off('message', onMessage)
+          ws.off('close', onClose)
+          if (this.detachClientListeners === detach) {
+            this.detachClientListeners = null
+          }
+        }
+        this.detachClientListeners = detach
+        ws.on('message', onMessage)
+        ws.on('close', onClose)
+      })
+      this.httpServer.listen(0, '127.0.0.1', () => {
+        this.httpServer?.removeListener('error', onListenError)
+        const addr = this.httpServer!.address()
+        if (typeof addr === 'object' && addr) {
+          this.port = addr.port
+          resolve(this.getEndpoint())
+        } else {
+          failStart(new Error('Failed to bind proxy server'))
+        }
+      })
+      this.httpServer.once('error', onListenError)
+    })
+  }
+
+  async stop(): Promise<void> {
+    this.stopped = true
+    try {
+      this.debuggerChannel.detachDebugger()
+    } finally {
+      this.closeClient()
+      if (this.wss) {
+        this.wss.close()
+        this.wss = null
+      }
+      if (this.httpServer) {
+        this.httpServer.close()
+        this.httpServer = null
+      }
+    }
+  }
+
+  getPort(): number {
+    return this.port
+  }
+
+  getEndpoint(): string {
+    return `ws://127.0.0.1:${this.port}/${this.token}`
+  }
+
+  private closeClient(): void {
+    const client = this.client
+    this.detachClientListeners?.()
+    this.detachClientListeners = null
+    this.client = null
+    this.clearClientState()
+    if (client) {
+      this.responder.forgetClient(client)
+    }
+    client?.close()
+  }
+
+  private clearClientState(): void {
+    // Never carry session, focus, or capture state across client replacement.
+    this.domFocusReplay.clear()
+    this.pageCapture.clear()
+    this.sessions.clear()
+  }
+
+  private handleClientMessage(client: WebSocket, raw: string): void {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return
+    }
+    const envelope = parseCdpClientCommand(parsed)
+    if (!envelope.command) {
+      if (envelope.invalidId !== null) {
+        this.responder.sendError(envelope.invalidId, 'Invalid CDP request', client)
+      }
+      return
+    }
+    const msg = envelope.command
+    const clientId = msg.id
+    this.responder.recordRequestSessionId(client, clientId, msg)
+    // Refuse every step of a revoked helper, including reads.
+    try {
+      assertRemoteCliPageAccess(this.webContents.id)
+    } catch (error) {
+      this.responder.sendError(
+        clientId,
+        error instanceof Error ? error.message : String(error),
+        client
+      )
+      return
+    }
+
+    if (this.discovery.handleCommand(client, clientId, msg)) {
+      return
+    }
+    const effectiveSessionId = this.sessions.resolveDebuggerSessionId(msg.sessionId)
+    this.domFocusReplay.invalidateForMethod(msg.method, effectiveSessionId)
+    // Acknowledge activation without taking the user's keyboard focus (#20595).
+    if (msg.method === 'Page.bringToFront' || msg.method === 'Target.activateTarget') {
+      this.responder.sendResult(clientId, {}, client)
+      return
+    }
+    if (
+      msg.method === 'DOM.resolveNode' &&
+      this.pointAtNextResolvedNode &&
+      effectiveSessionId === undefined
+    ) {
+      this.pointAtNextResolvedNode = false
+      const { method, params = {}, sessionId } = msg
+      void this.input
+        .pointAtNode(params.backendNodeId)
+        .then(() =>
+          this.debuggerChannel.forwardCommand(client, clientId, method, params, sessionId)
+        )
+      return
+    }
+    this.elementCapture.observe(msg.method, msg.params, effectiveSessionId)
+    if (msg.method === 'DOM.focus') {
+      this.domFocusReplay.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
+      return
+    }
+    // Electron guest screenshots need a specialized path because raw CDP capture can hang.
+    if (msg.method === 'Page.captureScreenshot') {
+      void this.pageCapture.handleScreenshot(client, clientId, msg.params)
+      return
+    }
+    // Native printToPDF replaces unsupported guest CDP printing.
+    if (msg.method === 'Page.printToPDF') {
+      void this.pageCapture.handlePrintToPdf(client, clientId, msg.params ?? {})
+      return
+    }
+    if (msg.method === 'IO.read') {
+      const params = msg.params ?? {}
+      if (this.pageCapture.ownsHandle(params)) {
+        this.pageCapture.handleStreamRead(client, clientId, params)
+        return
+      }
+      this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
+      return
+    }
+    if (msg.method === 'IO.close') {
+      const params = msg.params ?? {}
+      if (this.pageCapture.ownsHandle(params)) {
+        this.pageCapture.handleStreamClose(client, clientId, params)
+        return
+      }
+      this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
+      return
+    }
+    // Root-session input needs guest routing; frame sessions already target their frame.
+    if (
+      msg.method.startsWith('Input.') &&
+      this.input.handle(client, clientId, msg.method, msg.params ?? {}, effectiveSessionId)
+    ) {
+      return
+    }
+    // Process swaps lose lifecycle subscriptions that agent-browser needs for network idle.
+    if (msg.method === 'Page.navigate' && !this.webContents.isDestroyed()) {
+      void this.navigation.navigateWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
+      return
+    }
+    // Reload natively because CDP reload can destroy guest targets during process swaps.
+    if (msg.method === 'Page.reload' && !this.webContents.isDestroyed()) {
+      void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
+      return
+    }
+    // The guest debugger outlives this client, so nothing would resume workers or frames left waiting.
+    if (msg.method === 'Target.setAutoAttach') {
+      const params = { ...msg.params, waitForDebuggerOnStart: false }
+      this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
+      return
+    }
+    this.debuggerChannel.forwardCommand(
+      client,
+      clientId,
+      msg.method,
+      msg.params ?? {},
+      msg.sessionId
+    )
+  }
+}

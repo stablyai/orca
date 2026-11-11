@@ -8,10 +8,10 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { TaskProvider } from '../../../../../shared/task-providers'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../shared/telemetry-events'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
 

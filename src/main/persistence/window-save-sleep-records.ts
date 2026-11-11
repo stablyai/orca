@@ -5,7 +5,7 @@ import { isWorkspaceSleepRecord } from '../../shared/workspace-sleep'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
 
 type Records = Record<string, SleepingAgentSessionRecord>
 

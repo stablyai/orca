@@ -42,7 +42,10 @@ export function createTerminalTab(
   command: CommandOf<'createTerminalTab'>,
   context: LayoutContext
 ): Applied {
-  if (command.initial && !admitsInitialSurface(model, command.workspace, command.initial)) {
+  if (
+    command.initial &&
+    !admitsInitialSurface(model, command.workspace, command.initial, context.visibility)
+  ) {
     return applied(model)
   }
   const held = command.adopt && appliedHeldAdoption(model, command.workspace, command.adopt)
@@ -263,6 +266,7 @@ export function placeContentTab(
     ? workspace.tabs.find(
         (entry) =>
           entry.isPreview &&
+          (!context.visibility || context.visibility(entry)) &&
           group?.tabOrder.includes(entry.id) &&
           canReplacePreviewContentType(tab.kind, entry.kind)
       )
@@ -279,7 +283,8 @@ export function placeContentTab(
         afterTabId: placement.afterTabId,
         index: placement.index
       },
-      context
+      context,
+      preview && !placement.dirtyTabIds?.includes(preview.id) ? preview.id : undefined
     )
   )
   if (!preview) {

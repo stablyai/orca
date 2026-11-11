@@ -1,3 +1,4 @@
+import type { AgentChildWorkKind } from '../../shared/agent-status/child-work/agent-status-child-work'
 // Task IDs alone cannot distinguish agents from shells or workflows; task_type identifies the kind.
 
 import {
@@ -5,7 +6,7 @@ import {
   claudeTaskId,
   isBoundedClaudeTaskId
 } from './claude-background-task-tracker'
-import { isAgentChildWorkKind } from '../../shared/agent-status-child-work-liveness'
+import { isAgentChildWorkKind } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 
 const TASK_SUBTYPES: ReadonlySet<string> = new Set([
@@ -62,4 +63,11 @@ export function readClaudeSubagentTaskFrame(
     announcesSubagent: subagent,
     excluded: announcement && !subagent
   }
+}
+
+/** Releases predating `task_type` still name an agent in `subagent_type`. */
+export function claudeStartedTaskKind(message: Record<string, unknown>): AgentChildWorkKind {
+  return isClaudeSubagentTask(message)
+    ? 'agent'
+    : classifyClaudeBackgroundTaskKind(message.task_type)
 }

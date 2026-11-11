@@ -1,17 +1,14 @@
 import type { AppState } from '../types'
-import {
-  getTabIdFromPaneKey,
-  type GeneratedTabTitleUpdate
-} from '../slices/terminal-tab-title-batch'
-import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
+import { getTabIdFromPaneKey, type GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
+import { getTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet } from './terminal-state'
 import {
   sendRenamableTabChangeToLayoutOwner,
   type TabChange
 } from './tab-change-through-layout-owner'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
-import { captureStructuredChatRename } from '@/runtime/structured-chat-rename-action'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { captureStructuredChatRename } from '@/runtime/native-chat/naming/structured-chat-rename-action'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 
 type RoutedActions = Pick<
   TerminalSlice,
@@ -76,7 +73,7 @@ export function routeTerminalTabChangesThroughLayoutOwner(
         return
       }
       const action = captureStructuredChatRename(get, chat)
-      void import('@/runtime/structured-chat-rename')
+      void import('@/runtime/native-chat/naming/structured-chat-rename')
         .then(({ renameStructuredChatTab }) =>
           renameStructuredChatTab(get, chat, title, opts, renameOnTab, action)
         )

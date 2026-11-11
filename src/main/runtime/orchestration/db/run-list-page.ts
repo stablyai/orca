@@ -1,4 +1,4 @@
-import type { RunRow, TaskRow } from '../types'
+import type { RunRow, TaskRow } from './orchestration-records'
 
 export type RunListPage = {
   runs: RunRow[]

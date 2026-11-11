@@ -1,3 +1,4 @@
+import { githubBodyImageUrls, githubBodyMediaHeaders } from '../body-image-urls'
 import {
   acquire,
   assertPositiveInt,
@@ -46,15 +47,16 @@ export async function updateIssueBySlug(
     return stateResult
   }
   const { title, body } = args.updates
+  let bodyImageUrls: Record<string, string> | undefined
   if (title !== undefined || body !== undefined) {
     const patchArgs = ['-X', 'PATCH', base]
     if (title !== undefined) {
       patchArgs.push('--raw-field', `title=${title}`)
     }
     if (body !== undefined) {
-      patchArgs.push('--raw-field', `body=${body}`)
+      patchArgs.push(...githubBodyMediaHeaders(body), '--raw-field', `body=${body}`)
     }
-    const result = await runRest<unknown>(
+    const result = await runRest<{ body?: string; body_html?: string }>(
       patchArgs,
       undefined,
       'core',
@@ -63,12 +65,20 @@ export async function updateIssueBySlug(
     if (!result.ok) {
       return { ok: false, error: result.error }
     }
+    try {
+      if (body !== undefined && result.data?.body === body) {
+        bodyImageUrls = githubBodyImageUrls(body, result.data.body_html)
+      }
+    } catch {
+      // Optional display data cannot turn an accepted edit into a failed write.
+    }
   }
   const labelResult = await updateIssueLabels(args, base)
   if (!labelResult.ok) {
     return labelResult
   }
-  return updateIssueAssignees(args, base)
+  const assigneeResult = await updateIssueAssignees(args, base)
+  return assigneeResult.ok ? { ok: true, bodyImageUrls } : assigneeResult
 }
 
 function validateDuplicateUpdate(args: UpdateIssueBySlugArgs): GitHubProjectMutationResult | null {

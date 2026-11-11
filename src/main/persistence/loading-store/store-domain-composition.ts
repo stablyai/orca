@@ -1,4 +1,5 @@
 import type { StoreRuntimeState } from './store-runtime-state'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { Store } from './store'
 import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
 import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
@@ -14,6 +15,8 @@ import { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
 import { SessionHostPartitionOperations } from './session-host-partitions'
 import { SessionSnapshotOperations } from './session-snapshot-operations'
 import { MetadataLineageOperations } from './metadata-lineage-operations'
+import { CrossStoreLineagePersistence } from './cross-store-lineage-persistence'
+import { FolderParentLineagePersistence } from './folder-parent-lineage-persistence'
 import { ProjectCollectionOperations } from './project-collection-operations'
 import { AutomationPersistence } from './automation-persistence'
 import { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
@@ -39,6 +42,8 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   SparsePresetPersistence &
   AutomationPersistence &
   MetadataLineageOperations &
+  CrossStoreLineagePersistence &
+  FolderParentLineagePersistence &
   ProfilePreferences &
   SessionHostPartitionOperations &
   SessionSnapshotOperations &
@@ -66,6 +71,8 @@ export type StoreDomains = {
   sessions: SessionHostPartitionOperations
   sessionSnapshots: SessionSnapshotOperations
   metadata: MetadataLineageOperations
+  crossStoreLineage: CrossStoreLineagePersistence
+  folderParentLineage: FolderParentLineagePersistence
   projects: ProjectCollectionOperations
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
@@ -93,6 +100,8 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   SparsePresetPersistence,
   AutomationPersistence,
   MetadataLineageOperations,
+  CrossStoreLineagePersistence,
+  FolderParentLineagePersistence,
   ProfilePreferences,
   SessionHostPartitionOperations,
   SessionSnapshotOperations,
@@ -165,6 +174,8 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     sessions,
     sessionSnapshots,
     metadata,
+    crossStoreLineage: new CrossStoreLineagePersistence(runtime, scheduling),
+    folderParentLineage: new FolderParentLineagePersistence(runtime, scheduling),
     projects,
     automations,
     mobileTabSelections,
@@ -175,8 +186,10 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     layoutCommands: new LayoutCommandPersistence(
       runtime,
       sessions,
-      // Retry persistence for terminal closes retained after failed writes.
-      ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined
+      // Retry persistence for terminal closes retained after failed writes; a close edits sessions only.
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? () => scheduleSave(scheduling, WORKSPACE_SESSION_DOMAINS)
+        : undefined
     ),
     sshProfiles,
     retiredWorktreeNames,

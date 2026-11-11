@@ -2,7 +2,7 @@
 
 import { z } from 'zod'
 import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
-import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../shared/json-stream/json-text-structure-limit'
 
 export const OPENCODE_MODEL_LISTING_ARGS = ['models', '--verbose'] as const
 

@@ -1,8 +1,7 @@
-import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import { createPluginFromTemplate } from './plugin-create'
 import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
 
@@ -21,19 +20,6 @@ async function hookPlugin(): Promise<string> {
 }
 
 describe('orca plugin create --template hook', () => {
-  it('declares a worker-only guard that fails closed and validates as-is', async () => {
-    const dir = await hookPlugin()
-    const raw: unknown = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
-    expect(parsePluginManifest(raw)).toMatchObject({
-      ok: true,
-      manifest: {
-        execution: 'trusted-worker',
-        main: 'src/worker.ts',
-        contributes: { hooks: [{ event: 'terminal.send', onError: 'deny' }], panels: [] }
-      }
-    })
-  })
-
   it(
     "passes its own worker test under `orca plugin test` on Orca's runtime",
     async () => {

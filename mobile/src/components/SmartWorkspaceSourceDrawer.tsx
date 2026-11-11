@@ -8,7 +8,7 @@ import {
   TextInput,
   View
 } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
@@ -77,15 +77,14 @@ export function SmartWorkspaceSourceDrawer({
   const [mode, setMode] = useState<SmartNameMode>(() => resolveDefaultSmartMode(availability))
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const inputRef = useRef<TextInput>(null)
-  // Read latest availability without reactive dependency so recreated object reseeds only on open.
-  const availabilityRef = useRef(availability)
-  availabilityRef.current = availability
-
-  useEffect(() => {
+  // Reseed only on open so a recreated availability object cannot reset the picked mode.
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
     if (visible) {
-      setMode(resolveDefaultSmartMode(availabilityRef.current))
+      setMode(resolveDefaultSmartMode(availability))
     }
-  }, [visible])
+  }
 
   // Focus after opening interactions settle; docked field shares composer.name with form.
   useEffect(() => {

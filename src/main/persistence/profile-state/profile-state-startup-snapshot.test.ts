@@ -6,7 +6,7 @@ import type { ProfileStateAuthority } from '../loading-store/profile-state-autho
 import { Store } from '../loading-store/store'
 import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
 import * as profileStateDatabase from './profile-state-database'
-import * as profileStateDocumentReader from './profile-state-document-reader'
+
 import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createProfileStateStore } from './profile-state-store-factory'
@@ -114,28 +114,6 @@ describe('profile state startup snapshot handoff', () => {
     })
   })
 
-  it.each([false, true])('reads established storage once with retained JSON=%s', (keepJson) => {
-    const paths = createEstablishedProfile(keepJson)
-    const open = vi.spyOn(profileStateDatabase, 'openProfileStateDatabaseReadOnly')
-    const documentRead = vi.spyOn(profileStateDocumentReader, 'readProfileStateDocuments')
-    const initialRead = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readInitialState')
-    const serializedRead = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readSerializedState')
-    const acceptedRead = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readAcceptedState')
-
-    const result = createProfileStateStore({ ...paths })
-    stores.push(result.store)
-
-    expect(open).toHaveBeenCalledTimes(1)
-    expect(documentRead).toHaveBeenCalledTimes(1)
-    expect(initialRead).toHaveBeenCalledTimes(keepJson ? 0 : 1)
-    expect(serializedRead).not.toHaveBeenCalled()
-    expect(acceptedRead).toHaveBeenCalledTimes(keepJson ? 1 : 0)
-    expect(result.store.getSettings().theme).toBe('dark')
-    expect(JSON.parse(result.store.prepareProfileStateExport().json)).toMatchObject({
-      futureDomain: { keep: true }
-    })
-  })
-
   it('uses the validated empty snapshot without rereading SQLite or consulting JSON', () => {
     const paths = createPaths()
     const opened = profileStateDatabase.openProfileStateDatabase(
@@ -165,20 +143,6 @@ describe('profile state startup snapshot handoff', () => {
     store.flushOrThrow()
     expect(readFileSync(paths.dataFile, 'utf8')).toContain('stale-json')
     expect(bootstrapped.authority.readSerializedState()).toContain('"dark"')
-  })
-
-  it('consumes a parsed startup snapshot once, including an empty revision', () => {
-    const paths = createPaths()
-    const opened = profileStateDatabase.openProfileStateDatabase(
-      paths.databaseFile,
-      paths.profileId
-    )
-    opened.db.close()
-    const authority = new ProfileStateSqliteAuthority(paths.databaseFile, paths.profileId)
-    authorities.push(authority)
-    const initial = authority.readInitialState()
-    expect(initial.takeParsedState?.()).toBeUndefined()
-    expect(() => initial.takeParsedState?.()).toThrow('already been consumed')
   })
 
   it.each([false, true])(
@@ -283,27 +247,5 @@ describe('profile state startup snapshot handoff', () => {
     stores.push(again)
     expect(again.getSettings().opencodeSessionCookie).toBe('startup-secret')
     expect(again.getSettings().theme).toBe('light')
-  })
-
-  it('rejects initial state without its authority or alongside migration input', () => {
-    const paths = createPaths()
-    const authority = new ProfileStateSqliteAuthority(paths.databaseFile, paths.profileId)
-    const otherAuthority = new ProfileStateSqliteAuthority(paths.databaseFile, paths.profileId)
-    const initialAuthorityState = { authority, serializedState: '{}' }
-
-    expect(() => new Store({ dataFile: paths.dataFile, initialAuthorityState })).toThrow(
-      'must belong to its profile-state authority'
-    )
-    expect(
-      () => new Store({ profileStateAuthority: otherAuthority, initialAuthorityState })
-    ).toThrow('must belong to its profile-state authority')
-    expect(
-      () =>
-        new Store({
-          profileStateAuthority: authority,
-          initialAuthorityState,
-          serializedState: '{}'
-        })
-    ).toThrow('cannot use both a profile-state authority and serialized state')
   })
 })

@@ -3,8 +3,8 @@ import { lstat, mkdtemp, rm, writeFile, type FileHandle } from 'node:fs/promises
 import { basename, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session/agent-session-attachments'
-import type { NativeFileDropCopyFailureReason } from '../../shared/native-file-drop'
-import { readNodeFileHandleWithinLimit } from '../../shared/node-bounded-file-reader'
+import type { NativeFileDropCopyFailureReason } from '../../shared/file-import/native-file-drop'
+import { readNodeFileHandleWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import type {
   DragTempCopyBatch,
   DragTempCopyEnvironment,

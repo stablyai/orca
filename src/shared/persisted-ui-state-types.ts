@@ -1,13 +1,15 @@
+import type { GitHistoryRefs } from './git/history/git-history-types'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
-import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
+import type { BrowserDevToolsDockLayout } from './browser/devtools/browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
-import type { WorkspaceCleanupUIState } from './workspace-cleanup'
-import type { FeatureTipId } from './feature-tips'
+import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
+import type { FeatureTipSeenId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
 import type { FeatureInteractionState } from './feature-interactions'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
+import type { StatusBarUsageFormat } from './status-bar-usage-format'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
 import type { CustomPet } from './pet-types'
 import type {
@@ -27,10 +29,11 @@ import type {
   WorktreeCardProperty
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
-import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { PersistedAutomationHostFilter } from './automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
 
 export type PersistedUIState = {
+  gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>
   /** Paired-server project removals still owed to their server; optional so older builds ignore it. */
   pendingRuntimeRepoRemovals?: PendingRuntimeRepoRemoval[]
   jiraSavedFilterState?: JiraSavedFilterState
@@ -138,12 +141,16 @@ export type PersistedUIState = {
   _cursorStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on ZCode status item. */
   _zcodeStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Muse status item. */
+  _museStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   /** Why: this is client-side presentation, not a provider/account or execution-host setting. */
   usagePercentageDisplay?: UsagePercentageDisplay
   /** Client-side footer presentation; verbose preserves the pre-roster all-window default. */
   statusBarUsageMode?: StatusBarUsageMode
+  /** User template for footer usage text; empty template keeps the built-in rendering. */
+  statusBarUsageFormat?: StatusBarUsageFormat
   dismissedUpdateVersion: string | null
   /** Version when the sign-out notice was seen or dismissed; any value suppresses future appearances. */
   dismissedUnexpectedSignoutVersion?: string | null
@@ -156,6 +163,8 @@ export type PersistedUIState = {
   notificationPermissionRequested?: boolean
   /** Once the "your sessions won't be interrupted" reassurance card is seen, never show it again. */
   updateReassuranceSeen?: boolean
+  /** macOS major whose update-requirement notice was seen; a later requirement shows it again. */
+  seenMacosUpdateRequirement?: string | null
   /** Renderer ui:set acknowledgments by pane/turn timestamp; persist so seen rows stay read after restart. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
   /** Renderer ui:set cutoffs hide events at/before the timestamp; persist so cleared rows stay hidden after restart. */
@@ -192,6 +201,8 @@ export type PersistedUIState = {
   codexTerminalServerIsolationNoticeSeen?: boolean
   /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
   codexSharedSettingsNoticeSeen?: boolean
+  /** Retired launch card for the speech model update; kept because a paired client from that build still sends it. */
+  speechModelUpdateNoticeSeen?: boolean
   /** One-shot pane banner explaining Claude Code's own diff panel; set when the user closes it. */
   claudeDiffPanelNoticeSeen?: boolean
   /** Retired one-shot Claude sign-in toast; kept because a paired client from that build still sends it. */
@@ -254,7 +265,7 @@ export type PersistedUIState = {
   taskResumeState?: TaskResumeState
   workspaceCleanup?: WorkspaceCleanupUIState
   /** Feature tips already surfaced; startup opens the tips modal only when a current tip id is missing here. */
-  featureTipsSeenIds?: FeatureTipId[]
+  featureTipsSeenIds?: FeatureTipSeenId[]
   /** Feature ids the user has actually used; education surfaces skip teaching already-discovered features. */
   featureInteractions?: FeatureInteractionState
   /** Contextual tours already surfaced; unknown ids ignored on hydration for downgrade/upgrade forward-compat. */

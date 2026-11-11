@@ -1,19 +1,19 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../../shared/pairing'
-import type { PairingOffer } from '../../../shared/mobile-relay-pairing-offer'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import {
   orcadIdentityRefusal,
   verifyOrcadPairingIdentity,
   type OrcadTunnelIdentity
 } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
-import { getPreferredPairingOffer } from '../../../shared/runtime-environments'
+import { tunneledOrcadPairingCode } from '../../managed-server/lifecycle/orcad-tunneled-pairing'
+import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   buildWithPairingRepair,
   type ManagedOrcadPairingRecovery
 } from '../../managed-server/lifecycle/orcad-managed-tunnel-pairing-recovery'
-import type { WslOrcadLaunch } from './wsl-orcad-deploy'
+import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 
 /** The managed repair gate a refused enrolled token goes through, for one WSL host. */
 export type WslOrcadPairingRecovery = Omit<ManagedOrcadPairingRecovery, 'ensure'> & {

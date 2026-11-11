@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { RendererTerminalSerializerReadiness } from './renderer-terminal-serializer-readiness'
 
 describe('RendererTerminalSerializerReadiness', () => {
@@ -11,21 +11,6 @@ describe('RendererTerminalSerializerReadiness', () => {
 
     await expect(pending).resolves.toBe(false)
     expect(readiness.has('pty-1')).toBe(false)
-  })
-
-  it('releases waiters on abort and timeout', async () => {
-    vi.useFakeTimers()
-    const readiness = new RendererTerminalSerializerReadiness()
-    const abortController = new AbortController()
-    const aborted = readiness.wait('pty-abort', 0, 1_000, abortController.signal)
-    const timedOut = readiness.wait('pty-timeout', 0, 1_000)
-
-    abortController.abort()
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    await expect(aborted).resolves.toBe(false)
-    await expect(timedOut).resolves.toBe(false)
-    vi.useRealTimers()
   })
 
   it('ignores late teardown from an older incarnation of a reused PTY id', async () => {

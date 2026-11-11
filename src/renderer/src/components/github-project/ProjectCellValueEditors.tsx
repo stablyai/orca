@@ -1,4 +1,4 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'

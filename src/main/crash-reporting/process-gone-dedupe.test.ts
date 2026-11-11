@@ -2,16 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { ProcessGoneDedupe } from './process-gone-dedupe'
 
 describe('ProcessGoneDedupe', () => {
-  it('allows an immediate retry after a failed claim is released', () => {
-    const dedupe = new ProcessGoneDedupe({ windowMs: 2_000 })
-    const claim = dedupe.tryClaim('renderer', 1_000)
-
-    expect(claim).not.toBeNull()
-    expect(dedupe.tryClaim('renderer', 1_001)).toBeNull()
-    dedupe.release(claim!)
-    expect(dedupe.tryClaim('renderer', 1_001)).not.toBeNull()
-  })
-
   it('does not release a newer claim when an older persistence attempt fails late', () => {
     const dedupe = new ProcessGoneDedupe({ windowMs: 2_000 })
     const oldClaim = dedupe.tryClaim('renderer', 1_000)

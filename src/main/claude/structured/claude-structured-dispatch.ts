@@ -9,7 +9,7 @@ import {
   waitForReplay
 } from './claude-structured-dispatch-waiters'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionDispatchOutcome } from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AgentSessionDispatchOutcome } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-session-state'
 import type { ClaudeLateDispatchSettlement } from '../claude-replay-turn-resolution'
 import {
@@ -19,7 +19,7 @@ import {
   claudeDispatchMessageContent,
   claudeDispatchRejection
 } from './claude-structured-dispatch-content'
-import { dispatchWriteOutcomeUnknownReason } from '../../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { dispatchWriteOutcomeUnknownReason } from '../../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import { DISPATCH_REJECTED_QUEUE_FULL } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   agentSessionFailureFact,
@@ -31,17 +31,17 @@ import {
   claudeUnwrittenUserMessageError,
   claudeUserMessageWasProvablyUnwritten
 } from '../claude-agent-sdk-user-message-queue'
-import { AgentSessionPreDispatchError } from '../../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import { AgentSessionPreDispatchError } from '../../native-chat/agent-session-wire/operations/structured-agent-session-operation-settlement'
 import {
   ClaudeEffortValidationError,
   isAgentSessionOptionRejectedError
-} from '../../native-chat/agent-session-wire/structured-agent-session-option-error'
+} from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { ClaudeControlRequestError } from '../claude-agent-sdk-control-requests'
 import {
   admitStructuredAgentSessionInput,
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput
-} from '../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+} from '../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 

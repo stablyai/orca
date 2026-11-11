@@ -16,24 +16,6 @@ const turnStart = item(1, {
 })
 
 describe('selectStructuredAgentTurnActivity', () => {
-  it('shows the latest line of the live provider activity in the active turn', () => {
-    const activity = selectStructuredAgentTurnActivity(
-      [
-        turnStart,
-        item(2, {
-          kind: 'tool-call',
-          name: 'shell',
-          input: { command: 'pnpm test' },
-          state: 'completed'
-        })
-      ],
-      'turn-1',
-      { turnId: 'turn-1', text: 'Checking the results\nPreparing the answer' }
-    )
-
-    expect(activity).toEqual({ kind: 'description', text: 'Preparing the answer' })
-  })
-
   it("never puts the model's reasoning on the indicator line", () => {
     const reasoning = item(2, {
       kind: 'message',

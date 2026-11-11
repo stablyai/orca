@@ -1,16 +1,16 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
-import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/remote-runtime-terminal-multiplexer'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-output/terminal-delivery-credit'
+import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
 import type {
   RemoteRuntimeMultiplexedTerminal,
   RemoteRuntimeMultiplexedTerminalCallbacks
-} from '@/runtime/remote-runtime-terminal-multiplexer-types'
+} from '@/runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload,
   TerminalPreviewReplayChunk
-} from '../../../../shared/terminal-preview'
+} from '../../../../shared/terminal/replay/terminal-preview'
 
 type TerminalPreviewApi = typeof window.api.terminalPreview
 

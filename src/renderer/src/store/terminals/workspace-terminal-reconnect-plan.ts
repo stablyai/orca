@@ -1,7 +1,8 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { buildByIdIndex } from '../../../../shared/first-row-by-id-index'
+import { buildWorktreeByIdIndex } from './workspace-terminal-worktree-index'
 
 export type WorkspaceTerminalReconnectPlan = {
   pendingReconnectPtyIdByTabId: Record<string, string>

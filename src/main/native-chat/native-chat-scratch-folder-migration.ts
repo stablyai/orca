@@ -5,7 +5,7 @@ import { constants } from 'node:fs'
 import { copyFile, lstat, mkdir, mkdtemp, readdir, rename, rmdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import {
   isNativeChatScratchFolderName,
   nativeChatScratchRootFor

@@ -3,271 +3,15 @@ import { compilePickerTerminalLaunch } from './agent-launch-picker-menu-test-fix
 import {
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
-import {
-  AgentLaunchSetupPanel,
-  entry,
-  host,
-  root,
-  onUse
-} from './agent-launch-setup-panel-test-fixture'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { entry, root } from './agent-launch-setup-panel-test-fixture'
 import { act } from 'react'
 import { fireEvent, getByRole, waitFor } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { i18n } from '@/i18n/i18n'
-import de from '../../i18n/locales/de.json'
-import { readLaunchSetupOptions } from '../native-chat/native-chat-launch-draft-source'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
-import { focusMountedNativeChatEditor } from '../native-chat/native-chat-mounted-editor-view'
-import { changePrompt, promptEditor } from '../native-chat/native-chat-prompt-editor.test-support'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft
-} from '../native-chat/native-chat-composer-draft-store'
-import {
-  createMemoryNativeChatComposerDraftStorage,
-  setNativeChatComposerDraftStorageForTests
-} from '../native-chat/native-chat-composer-draft-storage'
-
-beforeEach(() => clearNativeChatComposerDraftsForTests())
-
-const launchEntry = { ...entry, worktreeId: 'wt-1' }
-
-function prompt(): HTMLElement {
-  return host.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
-}
-
-function launchButton(label: string): HTMLButtonElement {
-  return [...host.querySelectorAll('button')].find(
-    (button) => button.getAttribute('aria-label') === label
-  )!
-}
-
-it('launches with the typed first prompt from Enter or either Launch button, and without one as before', async () => {
-  const storage = createMemoryNativeChatComposerDraftStorage()
-  setNativeChatComposerDraftStorageForTests(storage)
-  act(() =>
-    root.render(
-      <TooltipProvider>
-        <AgentLaunchSetupPanel entry={launchEntry} onUse={onUse} />
-      </TooltipProvider>
-    )
-  )
-  expect(prompt().getAttribute('aria-label')).toBe(
-    'Add a prompt (optional): / for skills, @ for files'
-  )
-
-  // Enter launches the panel's default way.
-  changePrompt(prompt(), 'fix the flaky test')
-  await act(async () => {
-    fireEvent.keyDown(prompt(), { key: 'Enter', keyCode: 13, isComposing: false })
-  })
-  await waitFor(() =>
-    expect(onUse).toHaveBeenLastCalledWith(
-      expect.objectContaining({ surface: 'terminal', prompt: 'fix the flaky test' })
-    )
-  )
-  await waitFor(() =>
-    expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(launchEntry)).text).toBe('')
-  )
-
-  // The other Launch button sends the prompt its own way.
-  changePrompt(prompt(), 'review the diff')
-  await act(async () => launchButton('Launch chat').click())
-  await waitFor(() =>
-    expect(onUse).toHaveBeenLastCalledWith(
-      expect.objectContaining({ surface: 'chat', prompt: 'review the diff' })
-    )
-  )
-
-  // Nothing typed: the launch is exactly today's.
-  await waitFor(() =>
-    expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(launchEntry)).text).toBe('')
-  )
-  await act(async () => launchButton('Launch terminal').click())
-  expect(onUse).toHaveBeenLastCalledWith(expect.not.objectContaining({ prompt: expect.anything() }))
-  expect(onUse).toHaveBeenCalledTimes(3)
-
-  // Setup shares the rich store but retains input only for this renderer session.
-  vi.useFakeTimers()
-  try {
-    changePrompt(prompt(), 'kept until launch')
-    await act(async () => vi.advanceTimersByTimeAsync(400))
-  } finally {
-    vi.useRealTimers()
-  }
-  expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(launchEntry)).text).toBe(
-    'kept until launch'
-  )
-  expect([...storage.drafts.keys()]).toEqual([])
-  expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(launchEntry)).owner).toEqual({
-    workspaceId: 'wt-1',
-    executionHostId: 'local'
-  })
-  setNativeChatComposerDraftStorageForTests(null)
-})
-
-it('shows the prompt placeholder from the German catalog', async () => {
-  i18n.addResourceBundle('de', 'translation', de, true, true)
-  await act(async () => {
-    await i18n.changeLanguage('de')
-  })
-  try {
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupPanel entry={launchEntry} onUse={onUse} />
-        </TooltipProvider>
-      )
-    )
-    expect(prompt().getAttribute('aria-label')).toBe(de.agentPicker.promptPlaceholder)
-    // The longer translation may wrap: the empty editor's placeholder float keeps its height,
-    // with a zero-width margin box so the empty line and caret stay where they are.
-    expect(prompt().className).toContain('[&_p.is-editor-empty:first-child]:before:!h-auto')
-    expect(prompt().className).toContain('[&_p.is-editor-empty:first-child]:before:mr-[-100%]')
-    expect(de.agentPicker.promptPlaceholder).toBe(
-      'Prompt hinzufügen (optional): / für Skills, @ für Dateien'
-    )
-  } finally {
-    await act(async () => {
-      await i18n.changeLanguage('en')
-    })
-  }
-})
-
-it.each(['composer', 'arguments', 'model', 'chat', 'terminal'])(
-  'submits the same optional input through %s, holding pending-only content',
-  async (trigger) => {
-    const selected = {
-      ...launchEntry,
-      terminal: { ...launchEntry.terminal, model: 'selected-model' },
-      catalog: {
-        origin: 'probe' as const,
-        fetchedAt: 1,
-        models: [{ id: 'selected-model', label: 'Selected model', efforts: [], isDefault: true }]
-      }
-    }
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupPanel entry={selected} onUse={onUse} />
-        </TooltipProvider>
-      )
-    )
-    const scope = agentLaunchPromptScopeKey(selected)
-    const { addNativeChatPendingAttachment, settleNativeChatPendingAttachmentReferences } =
-      await import('../native-chat/native-chat-pending-attachment-cache')
-    const submit = async () => {
-      await act(async () => {
-        if (trigger === 'chat' || trigger === 'terminal') {
-          launchButton(trigger === 'chat' ? 'Launch chat' : 'Launch terminal').click()
-        } else {
-          const target =
-            trigger === 'composer'
-              ? prompt()
-              : trigger === 'arguments'
-                ? host.querySelector('textarea')!
-                : host.querySelector('input[aria-label="Search models"]')!
-          fireEvent.keyDown(target, { key: 'Enter', keyCode: 13 })
-        }
-      })
-    }
-    act(() =>
-      addNativeChatPendingAttachment(scope, { id: 'pending-file', path: '', pending: true })
-    )
-    await submit()
-    expect(onUse).not.toHaveBeenCalled()
-    act(() => {
-      settleNativeChatPendingAttachmentReferences(scope, [
-        { id: 'pending-file', path: '/repo/notes.txt' }
-      ])
-    })
-    await submit()
-    expect(onUse).toHaveBeenCalledOnce()
-    expect(onUse).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        prompt: '@/repo/notes.txt',
-        surface: trigger === 'chat' ? 'chat' : 'terminal'
-      })
-    )
-    await waitFor(() => expect(readNativeChatComposerDraft(scope).text).toBe(''))
-    changePrompt(prompt(), '   ')
-    await submit()
-    expect(onUse).toHaveBeenCalledTimes(2)
-    expect(onUse).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ prompt: expect.anything() })
-    )
-    await waitFor(() => expect(readNativeChatComposerDraft(scope).text).toBe(''))
-  }
-)
-
-it('keeps launch drafts with their stable workspace host through remounts and inventory refresh', async () => {
-  const a: AgentPickerEntry = {
-    ...launchEntry,
-    rows: [{ agent: 'claude' as const, kind: 'cli' as const, executionHostId: 'local' }]
-  }
-  const b: AgentPickerEntry = {
-    ...a,
-    rows: [{ agent: 'claude', kind: 'cli', executionHostId: 'runtime:server-b' }]
-  }
-  const show = (selected: AgentPickerEntry) =>
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupPanel
-            key={agentLaunchPromptScopeKey(selected)}
-            entry={selected}
-            onUse={onUse}
-          />
-        </TooltipProvider>
-      )
-    )
-  show(a)
-  changePrompt(prompt(), 'inspect @src/private-a.ts')
-  show(b)
-  expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(b)).text).toBe('')
-  changePrompt(prompt(), 'inspect @src/private-b.ts')
-  show({ ...a, ownerKey: 'refreshed-defaults-and-catalog' })
-  expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(a)).text).toBe(
-    'inspect @src/private-a.ts'
-  )
-  expect(prompt().textContent).toContain('private-a.ts')
-  await act(async () => launchButton('Launch chat').click())
-  expect(onUse).toHaveBeenLastCalledWith(
-    expect.objectContaining({ prompt: 'inspect @src/private-a.ts' })
-  )
-  expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(b)).text).toBe(
-    'inspect @src/private-b.ts'
-  )
-})
-
-it.each(['/model', '/effort', '/resume'])(
-  'does not advertise the session-only %s action before launch',
-  async (command) => {
-    const selected = { ...launchEntry, agent: 'codex' as const }
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupPanel entry={selected} onUse={onUse} />
-        </TooltipProvider>
-      )
-    )
-    changePrompt(prompt(), command)
-    act(() => promptEditor(prompt()).commands.setTextSelection(command.length + 1))
-    await act(async () => {})
-    expect(document.querySelector('[role="option"]:not([cmdk-item])')).toBeNull()
-    expect(onUse).not.toHaveBeenCalled()
-    changePrompt(prompt(), '/goal')
-    act(() => promptEditor(prompt()).commands.setTextSelection(6))
-    await waitFor(() =>
-      expect(document.querySelector('[role="option"]:not([cmdk-item])')?.textContent).toContain(
-        '/goal'
-      )
-    )
-  }
-)
-
+import { changePrompt } from '../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { readNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
 import { EntryActionRow } from '../tab-bar/TabBarCreateEntryRow'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import {
@@ -275,6 +19,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+
 it.each(['claude', 'codex'] as const)(
   'both actual setup callers retain rich %s input/options across freshness, refusal and explicit retry',
   async (agent) => {
@@ -296,7 +41,9 @@ it.each(['claude', 'codex'] as const)(
             id: 'selected',
             label: 'Selected',
             efforts: [{ value: 'high', label: 'High' }],
-            isDefault: true
+            isDefault: true,
+            supportsFastMode: true,
+            serviceTiers: [{ value: 'fast', label: 'Fast' }]
           }
         ]
       }
@@ -323,9 +70,8 @@ it.each(['claude', 'codex'] as const)(
       )!
     fireEvent.click(panel().querySelector('[cmdk-item]')!)
     fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
-    fireEvent.change(panel().querySelector('textarea')!, {
-      target: { value: '--add-dir "authored exact path"' }
-    })
+    // A speed edit copies the current Arguments into the draft; later settings must still win.
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Fast' }))
     changePrompt(
       panel().querySelector<HTMLElement>('[contenteditable]')!,
       'keep @/repo/exact-file.ts'
@@ -341,55 +87,57 @@ it.each(['claude', 'codex'] as const)(
     act(() =>
       root.render(
         <TooltipProvider>
-          <EntryActionRow
-            id="actual-search-row"
-            option={{
-              kind: 'agent',
-              option: { agent, aliases: [], label: agent, pickerEntry: refreshed }
-            }}
-            selected={false}
-            onClick={() => launch(undefined)}
-            onUseAgent={(draft) => launch(own.rows[0], draft, refreshed)}
-          />
+          <DropdownMenu defaultOpen modal={false}>
+            <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <EntryActionRow
+                id="actual-search-row"
+                option={{
+                  kind: 'agent',
+                  option: { agent, aliases: [], label: agent, pickerEntry: refreshed }
+                }}
+                selected={false}
+                onClick={() => launch(undefined)}
+                onUseAgent={(draft) => launch(own.rows[0], draft, refreshed)}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TooltipProvider>
       )
     )
     fireEvent.click(configure())
-    expect(panel().querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(
-      '--add-dir "authored exact path"'
-    )
+    expect(panel().querySelector('textarea[aria-label="Arguments"]')).toBeNull()
     expect(panel().querySelector('[contenteditable]')?.textContent).toContain('exact-file.ts')
     launch.mockReturnValueOnce(false)
-    fireEvent.keyDown(panel().querySelector('textarea')!, { key: 'Enter' })
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
     await waitFor(() => expect(launch).toHaveBeenCalledOnce())
     const inputs = agentPickerLaunchInputs(launch.mock.lastCall![1], refreshed)
-    expect(inputs).toMatchObject({
-      agentArgs: '--add-dir "authored exact path"',
-      sessionOptions: { model: 'selected', effort: 'high' }
-    })
+    expect(inputs).toMatchObject({ sessionOptions: { model: 'selected', effort: 'high' } })
     expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], refreshed)).toMatchObject({
       ok: true,
       tokens:
         agent === 'claude'
           ? [
               'claude',
-              '--add-dir',
-              'authored exact path',
+              '--dangerously-skip-permissions',
               '--model',
               'selected',
               '--effort',
-              'high'
+              'high',
+              '--settings',
+              '{"fastMode":true}'
             ]
           : [
               'codex',
               '-c',
               'disable_paste_burst=true',
-              '--add-dir',
-              'authored exact path',
+              '--dangerously-bypass-approvals-and-sandbox',
               '-m',
               'selected',
               '-c',
-              'model_reasoning_effort=high'
+              'model_reasoning_effort=high',
+              '-c',
+              'service_tier=fast'
             ]
     })
     await waitFor(() =>
@@ -399,113 +147,9 @@ it.each(['claude', 'codex'] as const)(
     )
     fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
     await waitFor(() => expect(launch).toHaveBeenCalledTimes(2))
-    expect(launch.mock.lastCall![1]).toMatchObject({
-      prompt: 'keep @/repo/exact-file.ts',
-      argumentsOwner: refreshed.ownerKey
-    })
+    expect(launch.mock.lastCall![1]).toMatchObject({ prompt: 'keep @/repo/exact-file.ts' })
     await waitFor(() =>
       expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(refreshed)).text).toBe('')
     )
-  }
-)
-
-it.each(['claude', 'codex'] as const)(
-  'launches exact pending-only %s Args after a pending-defaults refresh',
-  async (agent) => {
-    const own: AgentPickerEntry = {
-      ...entry,
-      agent,
-      label: agent,
-      terminal: {},
-      structured: {},
-      arguments: '',
-      ownerKey: 'pending-before',
-      worktreeId: 'repo::/pending-only',
-      rows: [{ agent, kind: 'cli', executionHostId: 'local' }]
-    }
-    const launch = vi.fn().mockReturnValue(true)
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupPanel entry={own} onUse={launch} />
-        </TooltipProvider>
-      )
-    )
-    const text = '--add-dir "pending exact path"'
-    fireEvent.change(host.querySelector('textarea')!, { target: { value: text } })
-    const held = readLaunchSetupOptions(agentLaunchPromptScopeKey(own))!
-    expect(held.arguments).toBeUndefined()
-    expect(held.pendingArguments).toBe(text)
-    const refreshed = {
-      ...own,
-      ownerKey: 'pending-current',
-      defaultsPending: true,
-      arguments: '--add-dir changed-default'
-    }
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupPanel entry={refreshed} onUse={launch} />
-        </TooltipProvider>
-      )
-    )
-    expect(host.querySelector('textarea')).toHaveProperty('disabled', false)
-    expect(host.querySelector('textarea')).toHaveProperty('value', text)
-    fireEvent.keyDown(host.querySelector('textarea')!, { key: 'Enter' })
-    await waitFor(() => expect(launch).toHaveBeenCalledOnce())
-    expect(launch.mock.lastCall![0].argumentsOwner).toBe(refreshed.ownerKey)
-    expect(launch.mock.lastCall![0].pendingArguments).toBeUndefined()
-    expect(agentPickerLaunchInputs(launch.mock.lastCall![0], refreshed).agentArgs).toBe(text)
-  }
-)
-
-it.each(['inline', 'menu'])(
-  'focuses the setup prompt imperatively with the model list open in %s configuration',
-  async (surface) => {
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          {surface === 'menu' ? (
-            <DropdownMenu defaultOpen modal={false}>
-              <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <AgentLaunchPickerMenu entries={[launchEntry]} runLaunch={() => false} />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <AgentLaunchSetupPanel entry={launchEntry} onUse={onUse} />
-          )}
-        </TooltipProvider>
-      )
-    )
-    if (surface === 'menu') {
-      fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Claude' }))
-    }
-    const editor = document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
-    await waitFor(() => expect(promptEditor(editor)).toBeDefined())
-    const models = document.querySelector<HTMLInputElement>('input[aria-label="Search models"]')!
-    act(() => models.focus())
-    expect(document.activeElement).toBe(models)
-    expect(document.querySelector('[cmdk-list]')).not.toBeNull()
-    if (surface === 'menu') {
-      expect(document.querySelector('[role="menu"][data-state="open"]')).not.toBeNull()
-    }
-
-    act(() => focusMountedNativeChatEditor(promptEditor(editor)))
-    expect(document.activeElement).toBe(editor)
-
-    // A sibling popup still owns focus above the setup prompt.
-    const popup = document.createElement('div')
-    popup.setAttribute('role', 'dialog')
-    const input = document.createElement('input')
-    popup.append(input)
-    document.body.append(popup)
-    try {
-      input.focus()
-      act(() => focusMountedNativeChatEditor(promptEditor(editor)))
-      expect(document.activeElement).toBe(input)
-    } finally {
-      popup.remove()
-    }
   }
 )

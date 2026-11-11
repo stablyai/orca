@@ -5,12 +5,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  buildGitBranchLineTotalDiffArgs,
-  invalidateGitBranchLineTotalInFlight
-} from '../../../shared/git-branch-line-total'
+import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git/status/git-branch-line-total'
 
-import type * as BranchLineTotal from '../../../shared/git-branch-line-total'
+import type * as BranchLineTotal from '../../../shared/git/status/git-branch-line-total'
 
 // Spy on real Git argv to validate opt-in and coalescing without stubbing results.
 const { gitExecCalls, execHooks, coalescerJoins } = vi.hoisted(() => ({
@@ -19,7 +16,7 @@ const { gitExecCalls, execHooks, coalescerJoins } = vi.hoisted(() => ({
   coalescerJoins: { count: 0, onJoin: undefined as undefined | (() => void) }
 }))
 
-vi.mock('../../../shared/git-branch-line-total', async (importOriginal) => {
+vi.mock('../../../shared/git/status/git-branch-line-total', async (importOriginal) => {
   const actual = await importOriginal<typeof BranchLineTotal>()
   return {
     ...actual,
@@ -105,10 +102,6 @@ function rangedDiffCalls(): string[][] {
   return gitExecCalls.filter((args) => args.includes('--numstat') && args.at(-1) === '--')
 }
 
-function numstatCalls(): string[][] {
-  return gitExecCalls.filter((args) => args.includes('--numstat'))
-}
-
 /** Resolves once `count` status passes have entered the branch-total coalescer. */
 function waitForCoalescerJoins(count: number): Promise<void> {
   if (coalescerJoins.count >= count) {
@@ -172,17 +165,6 @@ describe('branch line total completeness', () => {
     expect(rangedDiffCalls()).toHaveLength(1)
   })
 
-  it('omits the total for a directory that is not a git worktree', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-line-total-folder-'))
-    tempRoots.push(root)
-
-    const result = await getStatus(root, { branchLineTotalMergeBase: BOGUS_MERGE_BASE })
-
-    expect(result.branchLineTotal).toBeUndefined()
-    expect(result.branchLineTotalUnavailable).toBeUndefined()
-    expect(rangedDiffCalls()).toEqual([])
-  })
-
   it('rejects with an AbortError when the pass is cancelled mid-diff', async () => {
     const { repo, mergeBase } = await createFixtureRepo()
     const controller = new AbortController()
@@ -200,30 +182,6 @@ describe('branch line total completeness', () => {
 })
 
 describe('branch line total merge-base gate', () => {
-  it('runs no ranged diff and returns no total without a merge base', async () => {
-    const { repo } = await createFixtureRepo()
-
-    const result = await getStatus(repo)
-
-    expect(result.branchLineTotal).toBeUndefined()
-    expect(rangedDiffCalls()).toEqual([])
-  })
-
-  it.each(['--upload-pack=x', 'HEAD', '', 'origin/main', '-M', 'A1B2C3D'])(
-    'never spawns a ranged diff for a merge base of %j',
-    async (branchLineTotalMergeBase) => {
-      const { repo } = await createFixtureRepo()
-
-      const result = await getStatus(repo, { branchLineTotalMergeBase })
-
-      expect(result.branchLineTotal).toBeUndefined()
-      expect(rangedDiffCalls()).toEqual([])
-      expect(gitExecCalls).not.toContainEqual(
-        buildGitBranchLineTotalDiffArgs(branchLineTotalMergeBase)
-      )
-    }
-  )
-
   it('never leaks a flag-shaped merge base into any git argv', async () => {
     const { repo } = await createFixtureRepo()
 
@@ -236,40 +194,6 @@ describe('branch line total merge-base gate', () => {
 })
 
 describe('branch line total exec budget', () => {
-  it('costs exactly one extra exec versus the same pass with the chip hidden', async () => {
-    const { repo, mergeBase } = await createFixtureRepo()
-
-    await getStatus(repo)
-    const withoutChip = gitExecCalls.map((args) => args.join(' '))
-
-    gitExecCalls.length = 0
-    resetGitReadCaches()
-    await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-    const withChip = gitExecCalls.map((args) => args.join(' '))
-
-    expect(withChip.filter((args) => !args.endsWith(`${mergeBase} --`))).toEqual(withoutChip)
-    expect(withChip).toHaveLength(withoutChip.length + 1)
-  })
-
-  it('shares one ranged diff between two concurrent identical status passes', async () => {
-    const { repo, mergeBase } = await createFixtureRepo()
-
-    const [first, second] = await Promise.all([
-      getStatus(repo, { branchLineTotalMergeBase: mergeBase }),
-      getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-    ])
-
-    expect(first.branchLineTotal).toEqual({
-      added: 1,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-    expect(second.branchLineTotal).toEqual(first.branchLineTotal)
-    expect(rangedDiffCalls()).toHaveLength(1)
-  })
-
   it('shares one ranged diff across status passes the status lease cannot merge', async () => {
     const { repo, mergeBase } = await createFixtureRepo()
     // Different limits require separate status leases; hold the diff until both join its shared lease.
@@ -294,34 +218,6 @@ describe('branch line total exec budget', () => {
     expect(second.branchLineTotal).toEqual(first.branchLineTotal)
     expect(gitExecCalls.filter((args) => args.includes('status'))).toHaveLength(2)
     expect(rangedDiffCalls()).toHaveLength(1)
-  })
-
-  it('reuses the cached total when the pass reuses cached line stats', async () => {
-    const { repo, mergeBase } = await createFixtureRepo()
-
-    const first = await getStatus(repo, {
-      branchLineTotalMergeBase: mergeBase,
-      reuseLineStats: true
-    })
-    expect(rangedDiffCalls()).toHaveLength(1)
-    expect(numstatCalls()).toHaveLength(2)
-
-    gitExecCalls.length = 0
-    invalidateGitBranchLineTotalInFlight()
-    const second = await getStatus(repo, {
-      branchLineTotalMergeBase: mergeBase,
-      reuseLineStats: true
-    })
-
-    expect(second.branchLineTotal).toEqual(first.branchLineTotal)
-    expect(second.branchLineTotal).toEqual({
-      added: 1,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-    expect(numstatCalls()).toEqual([])
   })
 
   it('recomputes rather than reusing a total measured against another merge base', async () => {

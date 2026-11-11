@@ -99,7 +99,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
         },
         { name: automationName, prompt: automationPrompt }
       )
-      expect(automationLifecycle.runStatus).toBe('dispatching')
+      expect(automationLifecycle.runStatus).toBe('pending')
 
       const profileIndex: unknown = JSON.parse(
         readFileSync(path.join(session.userDataDir, 'orca-profile-index.json'), 'utf8')

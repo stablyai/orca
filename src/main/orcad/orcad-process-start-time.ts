@@ -1,11 +1,11 @@
 // Linux ticks/boot ID avoid drifting wall time; Windows uses kernel creation time. Unknown never proves exit.
 import { readFileSync, statSync } from 'node:fs'
-import { parseLinuxStartTicks } from '../agent-hooks/managed-hook-owner-identity'
+import { parseLinuxStartTicks } from '../agent-hooks/installation/locking/managed-hook-owner-identity'
 import {
   getProcessStartedAtMs,
   START_TIME_TOLERANCE_MS,
   startTimesWithinTolerance
-} from '../daemon/daemon-process-start-time'
+} from '../daemon/endpoint/identity/daemon-process-start-time'
 import { readWindowsProcessCreationTime } from '../windows/windows-process-table'
 
 export type OrcadProcessIncarnation = { linuxStartTicks: string; bootId: string }

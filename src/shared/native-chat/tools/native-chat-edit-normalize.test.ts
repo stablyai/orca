@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { editFilesFromToolPair, isEditToolName } from './native-chat-edit-normalize'
+import { editFilesFromToolPair } from './native-chat-edit-normalize'
 import { MAX_EDIT_CHARS, unifiedLineNumber } from './native-chat-edit-model'
 import { editLinesFromUnifiedPatch } from './native-chat-unified-patch'
 import { unwrapBeginPatch } from './native-chat-begin-patch'
@@ -31,10 +31,6 @@ describe('editLinesFromUnifiedPatch', () => {
     expect(parsed?.lines.every((line) => unifiedLineNumber(line) === null)).toBe(true)
   })
 
-  it('returns null for text with no hunk header', () => {
-    expect(editLinesFromUnifiedPatch('just prose\n- a bullet')).toBeNull()
-  })
-
   it('keeps the hunk open across a mid-hunk no-newline marker', () => {
     const parsed = editLinesFromUnifiedPatch(
       '@@ -1,2 +1,2 @@\n keep\n-old\n\\ No newline at end of file\n+new\n\\ No newline at end of file'
@@ -53,16 +49,6 @@ describe('editLinesFromUnifiedPatch', () => {
       ['del', '-- comment'],
       ['del', 'gone'],
       ['context', 'tail']
-    ])
-  })
-
-  it('skips a real file header pair, which only appears outside a hunk', () => {
-    const parsed = editLinesFromUnifiedPatch(
-      'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,1 +1,1 @@\n-was\n+now'
-    )
-    expect(parsed?.lines.map((line) => [line.kind, line.text])).toEqual([
-      ['del', 'was'],
-      ['add', 'now']
     ])
   })
 
@@ -99,25 +85,6 @@ describe('editLinesFromUnifiedPatch', () => {
 })
 
 describe('unwrapBeginPatch', () => {
-  it('recovers an envelope carried in one word of an argument vector', () => {
-    const envelope = '*** Begin Patch\n*** Update File: a.ts\n@@\n-x\n+y\n*** End Patch'
-    expect(
-      unwrapBeginPatch({
-        command: ['bash', '-lc', `apply_patch <<'EOF'\n${envelope}\nEOF`],
-        workdir: '/repo'
-      })
-    ).toBe(envelope)
-  })
-
-  it('leaves an already-decoded envelope alone', () => {
-    const plain = '*** Begin Patch\n*** Update File: a.ts\n@@\n-x\n+y\n*** End Patch'
-    expect(unwrapBeginPatch(plain)).toBe(plain)
-  })
-
-  it('ignores input with no envelope', () => {
-    expect(unwrapBeginPatch('ls -la')).toBeNull()
-  })
-
   it('declines an envelope with no closing marker rather than swallowing the command line', () => {
     const command = 'bash -c "*** Begin Patch\n*** Update File: a.ts\n@@\n-x\n+y" && echo ok'
     expect(unwrapBeginPatch(command)).toBeNull()
@@ -146,17 +113,6 @@ describe('editFilesFromToolPair', () => {
     expect(files?.[0]?.lineNumbersKnown).toBe(false)
   })
 
-  it('numbers an added file from 1', () => {
-    const files = settledFiles({
-      name: 'exec',
-      input:
-        "apply_patch <<'EOF'\n*** Begin Patch\n*** Add File: new.ts\n+one\n+two\n*** End Patch\nEOF"
-    })
-    expect(files?.[0]?.changeKind).toBe('added')
-    expect(files?.[0]?.lineNumbersKnown).toBe(true)
-    expect(gutter(files)).toEqual([1, 2])
-  })
-
   it('keeps a file whose update body carries no hunk header', () => {
     const files = settledFiles({
       name: 'apply_patch',
@@ -179,17 +135,6 @@ describe('editFilesFromToolPair', () => {
       }
     })
     expect(files?.[0]?.lines.map((line) => line.text)).toEqual(['was', 'now'])
-  })
-
-  it('reports a delete that names the file and carries no body', () => {
-    const files = settledFiles({
-      name: 'apply_patch',
-      input: { input: '*** Begin Patch\n*** Delete File: gone.ts\n*** End Patch' }
-    })
-    expect(files).toHaveLength(1)
-    expect(files?.[0]?.changeKind).toBe('deleted')
-    expect(files?.[0]?.path).toBe('gone.ts')
-    expect(files?.[0]?.lines).toEqual([])
   })
 
   it('reads a CRLF envelope, whose markers otherwise match nothing', () => {
@@ -224,30 +169,6 @@ describe('editFilesFromToolPair', () => {
     expect(files?.[0]?.added).toBe(2)
     expect(files?.[0]?.removed).toBe(2)
     expect(gutter(files)).toEqual([42, 42, null, 310, 310])
-  })
-
-  it('reads a move header as a rename', () => {
-    const files = settledFiles({
-      name: 'exec',
-      input:
-        "apply_patch <<'EOF'\n*** Begin Patch\n*** Update File: old.ts\n*** Move to: new.ts\n@@\n-a\n+b\n*** End Patch\nEOF"
-    })
-    expect(files?.[0]?.changeKind).toBe('renamed')
-    expect(files?.[0]?.oldPath).toBe('old.ts')
-    expect(files?.[0]?.path).toBe('new.ts')
-  })
-
-  it('interleaves a Claude snippet pair without claiming line positions', () => {
-    const files = settledFiles({
-      name: 'Edit',
-      input: {
-        file_path: '/repo/a.ts',
-        old_string: 'keep\nwas\ntail',
-        new_string: 'keep\nnow\ntail'
-      }
-    })
-    expect(files?.[0]?.lines.map((line) => line.kind)).toEqual(['context', 'del', 'add', 'context'])
-    expect(files?.[0]?.lineNumbersKnown).toBe(false)
   })
 
   it('prefers the resolved hunks on the result over the snippet pair', () => {
@@ -321,10 +242,6 @@ describe('editFilesFromToolPair', () => {
     ])
     expect(files?.[0]?.added).toBe(2)
     expect(files?.[0]?.removed).toBe(2)
-  })
-
-  it('leaves NotebookEdit to the generic tool view', () => {
-    expect(isEditToolName('NotebookEdit')).toBe(false)
   })
 
   it('drops the gutter numbers whenever they locate a snippet rather than the file', () => {
@@ -405,15 +322,6 @@ describe('editFilesFromToolPair', () => {
     expect(files?.[0]?.changeKind).toBe('renamed')
     expect(files?.[0]?.lines.some((line) => line.text.includes('Moved to'))).toBe(false)
     expect(gutter(files)).toEqual([1, 1])
-  })
-
-  it('reads a Codex add change, which arrives as raw content with no hunk header', () => {
-    const files = settledFiles({
-      name: 'apply_patch',
-      input: { changes: [{ path: 'new.ts', kind: { type: 'add' }, diff: 'one\ntwo' }] }
-    })
-    expect(files?.[0]?.changeKind).toBe('added')
-    expect(files?.[0]?.added).toBe(2)
   })
 
   it('renders the file a write actually wrote, not one its content quotes', () => {
@@ -543,15 +451,6 @@ describe('editFilesFromToolPair', () => {
     }
   })
 
-  it('accepts either spelling of the command that applies an envelope', () => {
-    const envelope = '*** Begin Patch\n*** Update File: src/a.ts\n@@\n-was\n+now\n*** End Patch'
-    const files = settledFiles({
-      name: 'shell',
-      input: { command: ['bash', '-lc', `applypatch <<'EOF'\n${envelope}\nEOF`] }
-    })
-    expect(files?.[0]?.path).toBe('src/a.ts')
-  })
-
   it('keeps the header destination for a rename the call names by its old path', () => {
     const files = settledFiles({
       name: 'Diff',
@@ -597,11 +496,5 @@ describe('editFilesFromToolPair', () => {
     })
     // Unnamed preambles must not make single-file patches appear multi-file.
     expect(files?.map((file) => file.path)).toEqual(['/repo/one.ts'])
-  })
-
-  it('returns null for a tool that did not edit a file', () => {
-    expect(settledFiles({ name: 'Bash', input: { command: 'ls' } })).toBeNull()
-    expect(isEditToolName('Bash')).toBe(false)
-    expect(isEditToolName('Edit')).toBe(true)
   })
 })

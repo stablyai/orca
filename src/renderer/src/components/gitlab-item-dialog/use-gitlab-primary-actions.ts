@@ -1,14 +1,14 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
+import { getCommentBodySubmitState } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export function useGitLabPrimaryActions(
   item: GitLabWorkItem | null,

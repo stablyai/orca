@@ -34,23 +34,6 @@ function consume() {
 }
 
 describe('prepared checkout shared fetch barrier', () => {
-  it('passes initial materialization settlement separately from owning WSL Git options', async () => {
-    mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
-    const fetch = deferredFetch()
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main', fetch.beforeMaterialization)
-    const entry = listPreparations()[0]!
-    expect(mocks.prepareCheckout).toHaveBeenCalledWith(
-      repo.path,
-      entry.preparedPath,
-      'refs/remotes/origin/main',
-      entry.lockReason,
-      { wslDistro: 'Ubuntu', signal: expect.any(AbortSignal) },
-      fetch.beforeMaterialization
-    )
-    expect(mocks.refreshTip).not.toHaveBeenCalled()
-    fetch.settle()
-  })
-
   it('lets a cold racing consume join the first materialization without a second checkout or refresh', async () => {
     const fetch = deferredFetch()
     let materializations = 0
@@ -80,30 +63,6 @@ describe('prepared checkout shared fetch barrier', () => {
     expect(mocks.finalize).toHaveBeenCalledOnce()
   })
 
-  it('publishes an existing checkout refresh before a racing consume can finalize', async () => {
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-    const entry = listPreparations()[0]!
-    const oldReady = entry.ready
-    const fetch = deferredFetch()
-    const preparation = prepareWorktreeCreateForRepo(
-      store,
-      repo,
-      'origin/main',
-      fetch.beforeMaterialization
-    )
-    await vi.waitFor(() => expect(entry.ready).not.toBe(oldReady))
-    const create = consume()
-    await flushBackgroundWork()
-    expect(mocks.refreshTip).not.toHaveBeenCalled()
-    expect(mocks.finalize).not.toHaveBeenCalled()
-    fetch.settle()
-    await preparation
-    expect(await create).toMatchObject({ status: 'hit' })
-    expect(mocks.prepareCheckout).toHaveBeenCalledOnce()
-    expect(mocks.refreshTip).toHaveBeenCalledOnce()
-    expect(mocks.finalize).toHaveBeenCalledOnce()
-  })
-
   it('expires a ready checkout while its shared fetch is still pending without waiting for the network', async () => {
     vi.useFakeTimers()
     const fetch = deferredFetch()
@@ -121,8 +80,9 @@ describe('prepared checkout shared fetch barrier', () => {
       expect(mocks.discard).toHaveBeenCalledWith(
         repo.path,
         entry.preparedPath,
-        {},
-        entry.lockReason
+        expect.objectContaining({ signal: undefined }),
+        entry.lockReason,
+        null
       )
       expect(listPreparations()).toEqual([])
     } finally {

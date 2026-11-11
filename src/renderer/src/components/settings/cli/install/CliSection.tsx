@@ -1,0 +1,341 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { FolderOpen, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
+import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
+import {
+  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
+  useInstalledAgentSkill
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { Button } from '../../../ui/button'
+import { Label } from '../../../ui/label'
+import { Switch } from '../../../ui/switch'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
+import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
+import { CliRegistrationDialog } from './CliRegistrationDialog'
+import {
+  getSelectedAgentRuntime,
+  getSkillDiscoveryTargetForRuntime
+} from '../../../../lib/skills/runtime/skill-runtime-command'
+import { WslCliRegistration } from './WslCliRegistration'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { useCliRegistrationActions } from './use-cli-registration-actions'
+import { useLocalCliSkillFreshnessName } from '../../../../hooks/skills/freshness/use-local-cli-skill-freshness-name'
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
+
+type CliSectionProps = {
+  currentPlatform: string
+  settings: GlobalSettings
+  wslSupportedPlatform?: boolean
+  wslAvailable?: boolean
+  wslCapabilitiesLoading?: boolean
+}
+
+function getRevealLabel(platform: string, t: Translate = translate): string {
+  if (platform === 'darwin') {
+    return t('auto.components.settings.CliSection.6f894ef9c2', 'Show in Finder')
+  }
+  if (platform === 'win32') {
+    return t('auto.components.settings.CliSection.cbe55e4d48', 'Show in Explorer')
+  }
+  return t('auto.components.settings.CliSection.71e5d9feae', 'Show in file manager')
+}
+
+function getInstallDescription(platform: string): string {
+  if (platform === 'darwin') {
+    return 'Register `orca` in /usr/local/bin.'
+  }
+  if (platform === 'linux') {
+    return 'Register `orca-ide` in ~/.local/bin.'
+  }
+  if (platform === 'win32') {
+    return 'Register `orca` in your user PATH.'
+  }
+  return 'CLI registration is not yet available on this platform.'
+}
+
+function getFallbackCommandName(platform: string): string {
+  return platform === 'linux' ? 'orca-ide' : 'orca'
+}
+
+export function CliSection({
+  currentPlatform,
+  settings,
+  wslSupportedPlatform = false,
+  wslAvailable = false,
+  wslCapabilitiesLoading = false
+}: CliSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const [status, setStatus] = useState<CliInstallStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const mountedRef = useMountedRef()
+  const agentRuntime = useMemo(
+    () =>
+      getSelectedAgentRuntime(settings, wslSupportedPlatform, wslAvailable, wslCapabilitiesLoading),
+    [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
+  )
+  const cliSkillFreshnessName = useLocalCliSkillFreshnessName(agentRuntime)
+  const skillRuntime = useMemo(
+    () => ({
+      discoveryTarget: getSkillDiscoveryTargetForRuntime(agentRuntime),
+      discoveryRuntimeTarget: { kind: 'local' } as const,
+      bundledSkillTarget: agentRuntime.runtime === 'wsl' ? null : ({ kind: 'local' } as const)
+    }),
+    [agentRuntime]
+  )
+  const {
+    installed: cliSkillDetected,
+    loading: cliSkillLoading,
+    error: cliSkillError,
+    refresh: refreshCliSkill
+  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    discoveryTarget: skillRuntime.discoveryTarget,
+    runtimeTarget: skillRuntime.discoveryRuntimeTarget,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const handleStatusChange = useCallback(
+    (nextStatus: CliInstallStatus): void => {
+      if (mountedRef.current) {
+        setStatus(nextStatus)
+      }
+    },
+    [mountedRef]
+  )
+
+  const closeDialog = useCallback((): void => setDialogOpen(false), [])
+  const commandName = status?.commandName ?? getFallbackCommandName(currentPlatform)
+  const { busyAction, installFailure, clearInstallFailure, install, remove } =
+    useCliRegistrationActions({
+      commandName,
+      mountedRef,
+      onStatusChange: handleStatusChange,
+      onSettled: closeDialog
+    })
+
+  const refreshStatus = useCallback(async (): Promise<void> => {
+    setLoading(true)
+    clearInstallFailure()
+    try {
+      handleStatusChange(await window.api.cli.getInstallStatus())
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error
+            ? formatCliUserFacingDetail(error.message) || error.message
+            : translate(
+                'auto.components.settings.CliSection.7baec27029',
+                'Failed to load CLI status.'
+              )
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false)
+      }
+    }
+  }, [clearInstallFailure, handleStatusChange, mountedRef])
+
+  useEffect(() => {
+    void refreshStatus()
+  }, [refreshStatus])
+
+  const pathStatusUnknown = currentPlatform === 'win32' && status?.pathConfigured === null
+  const isEnabled = status?.state === 'installed' && !pathStatusUnknown
+  const isSupported = status?.supported ?? false
+  const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
+  const revealLabel = getRevealLabel(currentPlatform, t)
+  const canRevealCommandPath =
+    status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
+
+  const shellCommandLabel = t(
+    'settings.general.cli.otherTerminals',
+    '{{command}} in other terminals',
+    { command: commandName }
+  )
+  const showDiagnostics = Boolean(
+    installFailure ||
+    pathStatusUnknown ||
+    status?.state === 'stale' ||
+    status?.state === 'conflict' ||
+    status?.state === 'unsupported' ||
+    (status?.state === 'installed' && status.pathConfigured === false)
+  )
+
+  return (
+    <div data-settings-section="cli">
+      <SettingsGroup title={t('settings.general.cli.title', 'Command line')}>
+        <div data-settings-row="" className="space-y-3 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label>{shellCommandLabel}</Label>
+              <p
+                className={`text-xs ${pathStatusUnknown ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+              >
+                {loading
+                  ? t(
+                      'auto.components.settings.CliSection.d363e5929b',
+                      'Checking CLI registration…'
+                    )
+                  : showDiagnostics
+                    ? formatCliUserFacingDetail(status?.detail) ||
+                      getInstallDescription(currentPlatform)
+                    : t(
+                        'settings.general.cli.description',
+                        'Orca’s own terminals already have it.'
+                      )}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => void refreshStatus()}
+                      disabled={loading || busyAction !== null}
+                      aria-label={t(
+                        'auto.components.settings.CliSection.52e640f3a0',
+                        'Refresh CLI status'
+                      )}
+                    >
+                      <RefreshCw className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {t('auto.components.settings.CliSection.5dae812f50', 'Refresh')}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {!isBrowserManaged ? (
+                <Switch
+                  aria-label={shellCommandLabel}
+                  checked={isEnabled}
+                  disabled={loading || !isSupported || pathStatusUnknown || busyAction !== null}
+                  onCheckedChange={() => setDialogOpen(true)}
+                  className="disabled:opacity-60"
+                />
+              ) : null}
+            </div>
+          </div>
+
+          {showDiagnostics && status?.commandPath ? (
+            <p className="text-xs text-muted-foreground">
+              {t('auto.components.settings.CliSection.15eaad0d31', 'Command path:')}{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
+            </p>
+          ) : null}
+
+          {status?.state === 'stale' && status.currentTarget ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {t('auto.components.settings.CliSection.b0c310ab46', 'Existing launcher target:')}{' '}
+              <code>{status.currentTarget}</code>
+            </p>
+          ) : null}
+
+          {status?.state === 'installed' &&
+          status.pathConfigured === false &&
+          status.pathDirectory ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {status.pathDirectory}{' '}
+              {t(
+                'auto.components.settings.CliSection.7f2747f7dd',
+                'is not currently visible on PATH for this shell.'
+              )}
+            </p>
+          ) : null}
+
+          {!loading && !isSupported && !isBrowserManaged && status?.detail ? (
+            <p className="text-xs text-muted-foreground">
+              {formatCliUserFacingDetail(status.detail)}
+            </p>
+          ) : null}
+
+          {installFailure ? (
+            <div
+              role="alert"
+              className="space-y-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            >
+              <p className="font-medium">
+                {t(
+                  'auto.components.settings.CliSection.a2b13efa94',
+                  'Failed to register `{{value0}}` in PATH.',
+                  { value0: commandName }
+                )}
+              </p>
+              <p className="leading-snug">{installFailure.reason}</p>
+              {installFailure.conflictCommandPath ? (
+                <p className="leading-snug">
+                  {t(
+                    'auto.components.settings.CliSection.installFailureConflictRemedy',
+                    'Remove {{value0}} and register again if it is no longer needed.',
+                    { value0: installFailure.conflictCommandPath }
+                  )}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {showDiagnostics && status?.commandPath ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (status.commandPath) {
+                    void window.api.shell.openPath(status.commandPath, LOCAL_EXECUTION_HOST_ID)
+                  }
+                }}
+                disabled={loading || !canRevealCommandPath}
+                className="gap-2"
+              >
+                <FolderOpen className="size-3.5" />
+                {revealLabel}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        {!isBrowserManaged ? (
+          <AgentSkillSetupPanel
+            variant="row"
+            title={t('settings.general.cli.skillTitle', 'Orca skill for agents')}
+            description={t(
+              'auto.components.settings.CliSection.e8012c03a1',
+              'Enables agents to use Orca workspace, terminal, and progress commands.'
+            )}
+            skillNames={[ORCA_CLI_SKILL_NAME]}
+            target={skillRuntime.bundledSkillTarget}
+            // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+            terminalRuntime={agentRuntime}
+            installed={cliSkillDetected}
+            loading={cliSkillLoading}
+            error={cliSkillError}
+            onRecheck={refreshCliSkill}
+            freshnessSkillName={cliSkillFreshnessName}
+          />
+        ) : null}
+
+        <WslCliRegistration currentPlatform={currentPlatform} />
+      </SettingsGroup>
+
+      <CliRegistrationDialog
+        busyAction={busyAction}
+        commandName={commandName}
+        commandPath={status?.commandPath}
+        isEnabled={isEnabled}
+        isSupported={isSupported}
+        onInstall={install}
+        onOpenChange={setDialogOpen}
+        onRemove={remove}
+        open={dialogOpen}
+      />
+    </div>
+  )
+}

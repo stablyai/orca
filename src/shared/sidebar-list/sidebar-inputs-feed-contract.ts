@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { openEnum } from '../zod-salvage'
 
 /** The reply's shape; an added optional field keeps it. */

@@ -2,13 +2,13 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import {
   SettingsRow,
   SettingsSegmentedControl,
-  SettingsSubsectionHeader,
   SettingsSwitchRow
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { TerminalContrastSetting } from './TerminalContrastSetting'
-import { translate } from '@/i18n/i18n'
-import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal-inline-images-settings'
+import { useTranslate } from '@/i18n/use-translate'
+import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type TerminalRenderingSectionProps = {
   settings: GlobalSettings
@@ -19,127 +19,113 @@ export function TerminalRenderingSection({
   settings,
   updateSettings
 }: TerminalRenderingSectionProps): React.JSX.Element {
+  const t = useTranslate()
   return (
-    <section key="rendering" className="space-y-3">
-      <SettingsSubsectionHeader
-        title={translate('auto.components.settings.TerminalPane.2fba319f21', 'Rendering')}
-        description={translate(
-          'auto.components.settings.TerminalPane.72bc9334a0',
-          'Terminal renderer behavior for live panes and new panes.'
+    <SettingsGroup
+      key="rendering"
+      title={t('auto.components.settings.TerminalPane.2fba319f21', 'Rendering')}
+      description={t(
+        'auto.components.settings.TerminalPane.72bc9334a0',
+        'Terminal renderer behavior for live panes and new panes.'
+      )}
+    >
+      <SearchableSetting
+        title={t('auto.components.settings.TerminalPane.37389522c6', 'GPU acceleration')}
+        description={t(
+          'auto.components.settings.TerminalPane.f07dfb4466',
+          'Controls whether the terminal uses xterm.js WebGL rendering. Auto tries WebGL when the renderer is supported, with a conservative Linux fallback for software or unknown GPU renderers.'
         )}
-      />
-
-      <div className="divide-y divide-border/40">
-        <SearchableSetting
-          title={translate('auto.components.settings.TerminalPane.c1fc9e9444', 'GPU Acceleration')}
-          description={translate(
-            'auto.components.settings.TerminalPane.f07dfb4466',
-            'Controls whether the terminal uses xterm.js WebGL rendering. Auto tries WebGL when the renderer is supported, with a conservative Linux fallback for software or unknown GPU renderers.'
-          )}
-          keywords={[
-            'terminal',
-            'gpu',
-            'acceleration',
-            'webgl',
-            'renderer',
-            'rendering',
-            'graphics',
-            'linux'
-          ]}
-        >
-          <SettingsRow
-            label={translate(
-              'auto.components.settings.TerminalPane.c1fc9e9444',
-              'GPU Acceleration'
-            )}
-            description={
-              settings.terminalGpuAcceleration === 'off'
-                ? translate(
-                    'auto.components.settings.TerminalPane.fe4acf36c6',
-                    'WebGL disabled; DOM renderer for max compatibility.'
+        keywords={[
+          'terminal',
+          'gpu',
+          'acceleration',
+          'webgl',
+          'renderer',
+          'rendering',
+          'graphics',
+          'linux'
+        ]}
+      >
+        <SettingsRow
+          label={t('auto.components.settings.TerminalPane.37389522c6', 'GPU acceleration')}
+          description={
+            settings.terminalGpuAcceleration === 'off'
+              ? t(
+                  'auto.components.settings.TerminalPane.fe4acf36c6',
+                  'WebGL disabled; DOM renderer for max compatibility.'
+                )
+              : settings.terminalGpuAcceleration === 'on'
+                ? t(
+                    'auto.components.settings.TerminalPane.7eaccc1424',
+                    'WebGL is always attempted for terminal panes.'
                   )
-                : settings.terminalGpuAcceleration === 'on'
-                  ? translate(
-                      'auto.components.settings.TerminalPane.7eaccc1424',
-                      'WebGL is always attempted for terminal panes.'
-                    )
-                  : translate(
-                      'auto.components.settings.TerminalPane.e0996d141a',
-                      'Auto tries WebGL, with DOM fallback for unsupported or risky renderers.'
-                    )
-            }
-            control={
-              <SettingsSegmentedControl
-                ariaLabel={translate(
-                  'auto.components.settings.TerminalPane.c1fc9e9444',
-                  'GPU Acceleration'
-                )}
-                value={settings.terminalGpuAcceleration ?? 'auto'}
-                onChange={(option) => updateSettings({ terminalGpuAcceleration: option })}
-                options={[
-                  {
-                    value: 'auto',
-                    label: translate('auto.components.settings.TerminalPane.43c2ff7b0e', 'Auto')
-                  },
-                  {
-                    value: 'on',
-                    label: translate('auto.components.settings.TerminalPane.9c0b1c1792', 'On')
-                  },
-                  {
-                    value: 'off',
-                    label: translate('auto.components.settings.TerminalPane.3fe1c5bfe0', 'Off')
-                  }
-                ]}
-              />
-            }
-          />
-        </SearchableSetting>
+                : t(
+                    'auto.components.settings.TerminalPane.e0996d141a',
+                    'Auto tries WebGL, with DOM fallback for unsupported or risky renderers.'
+                  )
+          }
+          control={
+            <SettingsSegmentedControl
+              ariaLabel={t('auto.components.settings.TerminalPane.37389522c6', 'GPU acceleration')}
+              value={settings.terminalGpuAcceleration ?? 'auto'}
+              onChange={(option) => updateSettings({ terminalGpuAcceleration: option })}
+              options={[
+                {
+                  value: 'auto',
+                  label: t('auto.components.settings.TerminalPane.43c2ff7b0e', 'Auto')
+                },
+                {
+                  value: 'on',
+                  label: t('auto.components.settings.TerminalPane.9c0b1c1792', 'On')
+                },
+                {
+                  value: 'off',
+                  label: t('auto.components.settings.TerminalPane.3fe1c5bfe0', 'Off')
+                }
+              ]}
+            />
+          }
+        />
+      </SearchableSetting>
 
-        <TerminalContrastSetting settings={settings} updateSettings={updateSettings} />
+      <TerminalContrastSetting settings={settings} updateSettings={updateSettings} />
 
-        <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalRenderingSection.6d4c55bacc',
-            'Inline Images'
-          )}
-          description={translate(
+      <SearchableSetting
+        title={t('auto.components.settings.TerminalRenderingSection.08db7947d8', 'Inline images')}
+        description={t(
+          'auto.components.settings.TerminalRenderingSection.fffab5890b',
+          'Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.'
+        )}
+        keywords={[
+          'terminal',
+          'image',
+          'images',
+          'inline',
+          'sixel',
+          'iterm',
+          'iip',
+          'kitty',
+          'graphics',
+          'picture'
+        ]}
+        className="py-2"
+      >
+        <SettingsSwitchRow
+          label={t('auto.components.settings.TerminalRenderingSection.08db7947d8', 'Inline images')}
+          description={t(
             'auto.components.settings.TerminalRenderingSection.fffab5890b',
             'Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.'
           )}
-          keywords={[
-            'terminal',
-            'image',
-            'images',
-            'inline',
-            'sixel',
-            'iterm',
-            'iip',
-            'kitty',
-            'graphics',
-            'picture'
-          ]}
-          className="py-2"
-        >
-          <SettingsSwitchRow
-            label={translate(
-              'auto.components.settings.TerminalRenderingSection.6d4c55bacc',
-              'Inline Images'
-            )}
-            description={translate(
-              'auto.components.settings.TerminalRenderingSection.fffab5890b',
-              'Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.'
-            )}
-            checked={resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)}
-            onChange={() =>
-              updateSettings({
-                terminalInlineImages: !resolveTerminalInlineImagesEnabled(
-                  settings.terminalInlineImages
-                )
-              })
-            }
-          />
-        </SearchableSetting>
-      </div>
-    </section>
+          checked={resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)}
+          onChange={() =>
+            updateSettings({
+              terminalInlineImages: !resolveTerminalInlineImagesEnabled(
+                settings.terminalInlineImages
+              )
+            })
+          }
+        />
+      </SearchableSetting>
+    </SettingsGroup>
   )
 }

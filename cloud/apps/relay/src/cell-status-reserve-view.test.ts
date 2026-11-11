@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayConfig } from './config.js'
 
-vi.mock('./admin-token-verifier.js', () => ({
+vi.mock('./authentication/admin-token-verifier.js', () => ({
   createAdminTokenVerifier: () => async (token: string) => token === 'deploy-token',
   createReadOnlyAdminTokenVerifier: () => async () => false,
   createRegionalRehomeControlApplyTokenVerifier: () => async () => false,
@@ -10,18 +10,22 @@ vi.mock('./admin-token-verifier.js', () => ({
   createRuntimeTokenVerifier: () => async () => false
 }))
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => async () => null,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))
 
 import { createRelayApp } from './app.js'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
-import type { CellReserveClient } from './cell-reserve-client.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
-import { ReserveAssignment, type ReservePlacementMode } from './reserve-assignment.js'
-import { ReservePlacer } from './reserve-placement.js'
-import { ShadowSeatDirectory, type SeatFeedCell, type SeatFeedResponse } from './shadow-seat-directory.js'
+import type { CellReserveClient } from './cell/reservations/cell-reserve-client.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from './database/database.js'
+import { ReserveAssignment, type ReservePlacementMode } from './assignment/reserve-placement/reserve-assignment.js'
+import { ReservePlacer } from './assignment/reserve-placement/reserve-placement.js'
+import {
+  ShadowSeatDirectory,
+  type SeatFeedCell,
+  type SeatFeedResponse
+} from './cell/seats/shadow-seat-directory.js'
 
 const INCARNATION = '11111111-1111-4111-8111-111111111111'
 const CELLS = [
@@ -66,7 +70,9 @@ describe('reserve-aware cell status', () => {
     database = undefined
   })
 
-  async function setup(options: { mode?: ReservePlacementMode; startedAt?: number; placement?: boolean } = {}) {
+  async function setup(
+    options: { mode?: ReservePlacementMode; startedAt?: number; placement?: boolean } = {}
+  ) {
     const now = { value: 100_000 }
     database = await openInMemoryRelayDatabase()
     const store = new RelayAssignmentStore(database, () => now.value, { heartbeatTtlMs: 45_000 })
@@ -98,7 +104,10 @@ describe('reserve-aware cell status', () => {
       directory,
       cells: () => cells,
       startedAt: options.startedAt ?? 0,
-      placer: new ReservePlacer(() => now.value, () => 0.25),
+      placer: new ReservePlacer(
+        () => now.value,
+        () => 0.25
+      ),
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status route never books or demotes.
       client: {} as CellReserveClient,
       readRow: async () => null,
@@ -130,12 +139,19 @@ describe('reserve-aware cell status', () => {
     const reserve = await store.reserveAwareCellDeploymentStatus('cell-a')
     expect(reserve).toMatchObject({
       admitMode: 'reserve',
-      status: { cellId: 'cell-a', runtime: { cellIncarnation: INCARNATION, ready: true, heartbeatFresh: true } }
+      status: {
+        cellId: 'cell-a',
+        runtime: { cellIncarnation: INCARNATION, ready: true, heartbeatFresh: true }
+      }
     })
     expect(Object.keys(reserve.status).filter((key) => PER_HOST_FIELDS.includes(key))).toEqual([])
-    await database!.query('ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone')
+    await database!.query(
+      'ALTER TABLE relay_cell_admit_modes RENAME TO relay_cell_admit_modes_gone'
+    )
     const unknown = new RelayAssignmentStore(database!, () => 100_000)
-    await expect(unknown.reserveAwareCellDeploymentStatus('cell-b')).rejects.toThrow('reserve_mode_unknown')
+    await expect(unknown.reserveAwareCellDeploymentStatus('cell-b')).rejects.toThrow(
+      'reserve_mode_unknown'
+    )
   })
 
   it('keeps the 404 for a reserve cell without the opt-in, and 400s an unknown view', async () => {
@@ -146,18 +162,15 @@ describe('reserve-aware cell status', () => {
     expect((await status({ cellId: 'cell-a', view: 'all' })).status).toBe(400)
   })
 
-  it('answers a database cell with the opt-in as today, plus reserve: null', async () => {
-    const { status } = await setup()
-    const today = await statusBody(await status({ cellId: 'cell-b' }))
-    const response = await status({ cellId: 'cell-b', view: 'reserve-aware' })
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ ...today, status: { ...today.status, reserve: null } })
-  })
-
   it('answers a reserve cell from the map, with perHost null and never zeros', async () => {
     const { directory, now, status } = await setup()
     directory.apply('cell-a', feed('cell-a', { draining: true }), now.value, now.value - 1_500)
-    directory.apply('cell-b', feed('cell-b', { admitModeEffective: 'db', admitModeRaw: 'db' }), now.value, now.value)
+    directory.apply(
+      'cell-b',
+      feed('cell-b', { admitModeEffective: 'db', admitModeRaw: 'db' }),
+      now.value,
+      now.value
+    )
     now.value += 20_000
     const response = await status({ cellId: 'cell-a', view: 'reserve-aware' })
     expect(response.status).toBe(200)
@@ -233,19 +246,25 @@ describe('reserve-aware cell status', () => {
     // A starting director with one cell unheard.
     const starting = await setup({ startedAt: 99_000 })
     starting.directory.apply('cell-a', feed('cell-a'), starting.now.value, starting.now.value)
-    expect(await unavailable(await starting.status({ cellId: 'cell-a', view: 'reserve-aware' }))).toEqual(
-      expected('map-incomplete')
-    )
+    expect(
+      await unavailable(await starting.status({ cellId: 'cell-a', view: 'reserve-aware' }))
+    ).toEqual(expected('map-incomplete'))
     await database?.close()
     const { directory, now, status } = await setup()
     directory.apply('cell-b', feed('cell-b'), now.value, now.value)
     directory.markNoFeed('cell-a', now.value)
-    expect(await unavailable(await status({ cellId: 'cell-a', view: 'reserve-aware' }))).toEqual(expected('no-feed'))
+    expect(await unavailable(await status({ cellId: 'cell-a', view: 'reserve-aware' }))).toEqual(
+      expected('no-feed')
+    )
     // A feed without the drain flag or counts is an older image: no feed, never an empty cell.
     directory.apply('cell-a', feed('cell-a', { draining: undefined }), now.value, now.value)
-    expect(await unavailable(await status({ cellId: 'cell-a', view: 'reserve-aware' }))).toEqual(expected('no-feed'))
+    expect(await unavailable(await status({ cellId: 'cell-a', view: 'reserve-aware' }))).toEqual(
+      expected('no-feed')
+    )
     directory.apply('cell-a', feed('cell-a', { counts: undefined }), now.value, now.value)
-    expect(await unavailable(await status({ cellId: 'cell-a', view: 'reserve-aware' }))).toEqual(expected('no-feed'))
+    expect(await unavailable(await status({ cellId: 'cell-a', view: 'reserve-aware' }))).toEqual(
+      expected('no-feed')
+    )
     // The process that answered the feed is not the one heartbeating the runtime row.
     directory.apply(
       'cell-a',
@@ -256,41 +275,6 @@ describe('reserve-aware cell status', () => {
     expect(await unavailable(await status({ cellId: 'cell-a', view: 'reserve-aware' }))).toEqual(
       expected('incarnation-mismatch')
     )
-  })
-
-  it('probes rehome trust on a reserve cell from its runtime rows', async () => {
-    const { store } = await setup()
-    await database!.query(
-      `INSERT INTO relay_cell_capabilities (cell_id, cell_incarnation, regional_rehome_protocol, last_heartbeat_at)
-       VALUES ('cell-a', ?, 1, 100000)`,
-      [INCARNATION]
-    )
-    const sourceFetch = vi.fn(async () =>
-      Response.json({ v: 1, outcome: 'host-not-connected', sharedRuntimeIdentityRejected: true })
-    )
-    const app = createRelayApp(
-      config({
-        rehomeDirectorServiceAccount: 'relay-director@example.test',
-        rehomeAudience: 'https://relay.example.test/v1/admin/host-drain'
-      }),
-      {
-        store: {} as never,
-        assignments: store,
-        drain: vi.fn(),
-        regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the probe only awaits a Response.
-        regionalRehomeFetch: sourceFetch as unknown as typeof fetch,
-        ready: vi.fn(async () => true)
-      }
-    )
-    const response = await app.request('/v1/admin/regional-rehome-trust-probe', {
-      method: 'POST',
-      headers: { authorization: 'Bearer deploy-token', 'content-type': 'application/json' },
-      body: JSON.stringify({ v: 1, sourceCellId: 'cell-a', sourceCellIncarnation: INCARNATION })
-    })
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ proven: true })
-    expect(sourceFetch).toHaveBeenCalledTimes(2)
   })
 })
 

@@ -2,6 +2,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { StoreRuntimeState } from './store-runtime-state'
 import { refileEditorViews } from './layout-editor-views'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 
 /** Null means any partition may have changed. */
 export type WorkspaceSessionWriteListener = (hostId: ExecutionHostId | null) => void
@@ -9,10 +10,7 @@ export type WorkspaceSessionWriteListener = (hostId: ExecutionHostId | null) => 
 /** Null means any partition may have changed. */
 export type WorkspaceSessionOperationListener = (hostIds: readonly ExecutionHostId[] | null) => void
 
-const WORKSPACE_SESSION_DOMAINS: readonly string[] = [
-  'workspaceSession',
-  'workspaceSessionsByHostId'
-]
+const SESSION_DOMAINS: readonly string[] = WORKSPACE_SESSION_DOMAINS
 
 /** Full saves may contain untracked session edits; an absent host makes all partitions candidates. */
 export function notifyWorkspaceSessionWritten(
@@ -23,7 +21,7 @@ export function notifyWorkspaceSessionWritten(
   dirtyDomains?: readonly string[],
   hostId?: ExecutionHostId
 ): void {
-  if (dirtyDomains && !dirtyDomains.some((domain) => WORKSPACE_SESSION_DOMAINS.includes(domain))) {
+  if (dirtyDomains && !dirtyDomains.some((domain) => SESSION_DOMAINS.includes(domain))) {
     return
   }
   // Refile views before listeners project the updated session.

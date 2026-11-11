@@ -1,10 +1,10 @@
 // Connector tokens for the desktop's signed-in Orca account, fetched the way relay tokens are.
 import { z } from 'zod'
-import type { OrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
-import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
+import type { OrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
+import { runWithFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { loadOrCreateHostInstallationId } from '../runtime/host-descriptor'
+import { loadOrCreateHostInstallationId } from '../runtime/hosts/platform-probe/host-descriptor'
 import { requestConnector, type ConnectorFailure } from './connector-cloud-request'
 import type { ConnectorTokenMint } from './connector-transport'
 

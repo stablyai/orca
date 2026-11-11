@@ -1,6 +1,11 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import { mayDestroyWithoutOwnerEvidence } from '../../../../shared/pty-listed-session'
-import type { DaemonSession } from './resource-usage-merge-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  mayDestroyWithoutOwnerEvidence,
+  type PtyListedSession as DaemonSession
+} from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
 export type ResourceSessionBindingInputs = {
   tabsByWorktree: Record<string, TerminalTab[]>

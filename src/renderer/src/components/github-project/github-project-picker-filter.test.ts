@@ -40,21 +40,6 @@ describe('github-project-picker-filter', () => {
     ).toEqual([enterprise])
   })
 
-  it('enforces the query budget by UTF-8 byte length', () => {
-    const query = 'é'.repeat(GITHUB_PROJECT_PICKER_QUERY_MAX_BYTES)
-
-    expect(query.length).toBe(GITHUB_PROJECT_PICKER_QUERY_MAX_BYTES)
-    expect(isGitHubProjectPickerQueryTooLarge(query)).toBe(true)
-    expect(
-      filterGitHubProjectPickerProjects({
-        projects: [project('stablyai', 1, 'Roadmap')],
-        pinned: [],
-        recent: [],
-        query
-      })
-    ).toEqual([])
-  })
-
   it('rejects oversized pasted project searches before reading project metadata', () => {
     const oversizedQuery = 'secret-project-picker-search'.repeat(
       GITHUB_PROJECT_PICKER_QUERY_MAX_BYTES

@@ -5,8 +5,8 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.notifications.search.4a210b2f72',
-      'Enable Notifications'
+      'auto.components.settings.notifications.search.25f58f061f',
+      'Enable notifications'
     ),
     description: translate(
       'auto.components.settings.notifications.search.0534c76311',
@@ -33,8 +33,8 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.notifications.search.bdc1edaeb4',
-      'Agent Task Complete'
+      'auto.components.settings.notifications.search.db32fed5aa',
+      'Agent task complete'
     ),
     description: translate(
       'auto.components.settings.notifications.search.10d83ef8dc',
@@ -59,8 +59,8 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.notifications.search.d46216d768',
-      'Agent Needs Input'
+      'auto.components.settings.notifications.search.32f70cca40',
+      'Agent needs input'
     ),
     description: translate(
       'auto.components.settings.notifications.search.c9b2b656e0',
@@ -87,7 +87,7 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.notifications.search.a5edee1d99', 'Terminal Bell'),
+    title: translate('auto.components.settings.notifications.search.209323590a', 'Terminal bell'),
     description: translate(
       'auto.components.settings.notifications.search.d3f1c48677',
       'Notify when a background terminal emits a bell character.'
@@ -127,8 +127,8 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.notifications.search.96562a72c6',
-      'Suppress While Focused'
+      'auto.components.settings.notifications.search.8eeee85a4f',
+      'Suppress while focused'
     ),
     description: translate(
       'auto.components.settings.notifications.search.7247b97a31',
@@ -155,8 +155,8 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.notifications.search.ea8cb8d9ce',
-      'Notification Sound'
+      'auto.components.settings.notifications.search.8517a2dd51',
+      'Notification sound'
     ),
     description: translate(
       'auto.components.settings.notifications.search.c718793e95',
@@ -187,8 +187,8 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.notifications.search.aace1a62c6',
-      'Notification Volume'
+      'auto.components.settings.notifications.search.fe11c91724',
+      'Notification volume'
     ),
     description: translate(
       'auto.components.settings.notifications.search.eeb6f77322',
@@ -215,8 +215,8 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.notifications.search.ef9b311346',
-      'Send Test Notification'
+      'auto.components.settings.notifications.search.55ecae5b7e',
+      'Send test notification'
     ),
     description: translate(
       'auto.components.settings.notifications.search.4e30b1925e',

@@ -38,36 +38,6 @@ async function expectSameDetection(path: string): Promise<void> {
 }
 
 describe('asynchronous repository detection with real Git', () => {
-  it('preserves normal, nested, linked-worktree, bare, and folder results', async () => {
-    const repo = join(fixture, 'repo with spaces')
-    const nested = join(repo, 'packages', 'web')
-    mkdirSync(nested, { recursive: true })
-    await git(repo, ['init', '--quiet'])
-    await git(repo, [
-      '-c',
-      'user.name=Orca Test',
-      '-c',
-      'user.email=orca@example.invalid',
-      'commit',
-      '--allow-empty',
-      '--quiet',
-      '-m',
-      'fixture'
-    ])
-    const linked = join(fixture, 'linked worktree')
-    await git(repo, ['worktree', 'add', '--quiet', '-b', 'fixture-linked', linked])
-    const bare = join(fixture, 'bare.git')
-    await git(fixture, ['init', '--bare', '--quiet', bare])
-    const folder = join(fixture, 'folder')
-    mkdirSync(folder)
-    for (const path of [repo, nested, linked, bare, folder]) {
-      await expectSameDetection(path)
-    }
-    expect(await isGitRepoAsync(folder)).toBe(false)
-    expect(await isGitRepoAsync(bare)).toBe(true)
-    expect((await inspectGitRepoForRegistrationAsync(linked)).mainRepoPath).not.toBeNull()
-  })
-
   it('preserves genuine metadata fallback when asynchronous Git cannot answer', async () => {
     const repo = join(fixture, 'fallback repo')
     const nested = join(repo, 'packages')

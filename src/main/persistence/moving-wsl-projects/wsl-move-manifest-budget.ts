@@ -4,7 +4,7 @@
  * Capping it when the move is recorded keeps new moves out of that gap entirely.
  */
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import { ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES } from '../../ssh/orcad-migration-manifest-export'
+import { ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES } from '../../managed-server/migration/catalog/orcad-migration-request-budget'
 
 // Headroom for a host whose request limit is a little lower than this build's.
 const WSL_MOVE_MANIFEST_MARGIN_BYTES = 16 * 1024

@@ -1,42 +1,39 @@
-import {
-  createLegacyPrerequisites,
-  type LegacyPrerequisites
-} from '../../structured-agent-session-launch-prerequisites'
+import { createLegacyPrerequisites } from './structured-agent-session-launch-prerequisites'
+import type { LegacyPrerequisites } from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
 import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
-import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
-import type {
-  SelectionOperation,
-  SelectionOutcome
-} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
-import {
-  structuredAgentSessionOptionPicks,
-  type StructuredAgentSessionOptionState
-} from '../../../../../shared/agent-session/options/structured-agent-session-options'
-import type {
-  AgentSessionMutationResult,
-  AgentSessionOptionResult
-} from '../../../../../shared/agent-session/agent-session-wire'
+import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
+import { structuredAgentSessionOptionPicks } from '../../../../../shared/agent-session/options/structured-agent-session-options'
+import type { StructuredAgentSessionOptionState } from '../../../../../shared/agent-session/options/structured-agent-session-options'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
 } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
   getStructuredLaunchStateBySessionId,
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
+
 import {
   agentSessionRefusalFailure,
-  agentSessionThrownFailure,
-  type AgentSessionWriteFailure
+  agentSessionThrownFailure
 } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import type {
+  SelectionOperation,
+  SelectionOutcome
+} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+import type {
+  AgentSessionMutationResult,
+  AgentSessionOptionResult
+} from '../../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -51,14 +48,15 @@ export type StructuredLaunchSelection = {
 export function initialStructuredLaunchSelection(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredLaunchSelection {
+  if (intent.params.forkFrom) {
+    return {}
+  }
   return {
     seed: intent.seedOptions,
     ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),
     ...(intent.target.kind !== 'local' && !intent.seedOptions ? { seedPending: true } : {})
   }
 }
-
-export type StructuredLaunchOptionOutcome = SelectionOutcome
 
 const launchControllers = new WeakMap<
   StructuredLaunchState,
@@ -92,7 +90,7 @@ export function holdStructuredAgentSessionLaunchOption(
   encoded: string,
   /** The picker's list, under which a model pick keeps only the held values the model offers. */
   picker?: StructuredAgentSessionOptionState
-): Promise<StructuredLaunchOptionOutcome> | null {
+): Promise<SelectionOutcome> | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state || state.cancelled || state.callers.outcome === 'published') {
     return null
@@ -100,10 +98,23 @@ export function holdStructuredAgentSessionLaunchOption(
   if (state.selection.seedPending) {
     return null
   }
-  const model = picker
-    ? (structuredAgentSessionOptionPicks(picker, { [id]: encoded })[0]?.modelId ?? null)
-    : (state.selection.seed?.model ?? null)
-  const operation = selectionController(state).issue(id, encoded, model)
+  // A resumed conversation already has turns: its value picks keep the remembered new-chat model.
+  const pick = picker
+    ? structuredAgentSessionOptionPicks(
+        picker,
+        { [id]: encoded },
+        state.intent.params.resumeFrom !== undefined
+      )[0]
+    : undefined
+  const model = picker ? (pick?.modelId ?? null) : (state.selection.seed?.model ?? null)
+  const operation = selectionController(state).issue(
+    id,
+    encoded,
+    model,
+    undefined,
+    undefined,
+    pick?.adoptModelAsLaunchDefault === false ? false : undefined
+  )
   const receipt = receipts.get(state)
   if (receipt) {
     void applyStructuredLaunchHeldOptions(state, receipt, false)
@@ -118,7 +129,7 @@ export async function setStructuredSessionSelectionOption(
   key: string,
   value: string,
   options: { expectedEnvironmentPairingRevision?: number } = {}
-): Promise<StructuredLaunchOptionOutcome> {
+): Promise<SelectionOutcome> {
   const fields = { key, value }
   try {
     const result = await callStructuredAgentSession<
@@ -201,10 +212,10 @@ export function holdStructuredLaunchCreatePicks(state: StructuredLaunchState): v
 
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
-  options: Readonly<Record<string, string>>
+  outcome: SelectionOutcome
 ): void {
   for (const operation of createHeld.get(state) ?? []) {
-    selectionController(state).settle(operation, { kind: 'accepted', options })
+    selectionController(state).settle(operation, outcome)
   }
   createHeld.delete(state)
 }

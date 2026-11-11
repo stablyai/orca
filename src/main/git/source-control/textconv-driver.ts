@@ -1,7 +1,7 @@
 import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
-} from '../../../shared/file-preview-kind'
+} from '../../../shared/file-preview/file-preview-kind'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'

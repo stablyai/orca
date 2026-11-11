@@ -1,9 +1,9 @@
 import { withClaudeAgentViewPlugin } from '../../../shared/claude-agent-view-launch'
-import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../shared/codex-terminal-server-isolation'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../opencode/opencode-pty-launch'
@@ -24,6 +24,10 @@ import {
 import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from './host-env/path'
 import { resolveConfiguredTerminalShellArgs } from './configured-terminal-shell-args'
 import { ptySizes } from './delivery/visibility-state'
+import {
+  canonicalClaudeSessionStampEnvKey,
+  stripInheritedClaudeSessionEnv
+} from '../../../shared/agent-launch/startup/claude-parent-session-env'
 import { shouldSeedPreAttachPtySize } from './delivery/attached-pty-size'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
@@ -42,10 +46,16 @@ export function assemblePtySpawnEnvDeletions(input: {
   settings: GlobalSettings | undefined
 }): { env: Record<string, string> | undefined; envToDelete: string[] } {
   // Apply isolation at the common environment boundary used by every provider.
-  const env = withCodexTerminalServerIsolationEnv(input.env, input.settings)
+  const isolated = withCodexTerminalServerIsolationEnv(input.env, input.settings)
+  const env = isolated ? { ...isolated } : undefined
+  if (env) {
+    stripInheritedClaudeSessionEnv(env, { launchEnv: isolated })
+  }
   let envToDelete =
     mergePtyEnvDeletions(
-      input.callerEnvToDelete ?? [],
+      input.callerEnvToDelete?.map((key) =>
+        canonicalClaudeSessionStampEnvKey(key, process.platform)
+      ) ?? [],
       // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
       PI_PROCESS_OWNER_ENV_KEYS,
       input.agentTeamsEnvToDelete,
@@ -78,6 +88,7 @@ export type PtySpawnLaunchOptionsInput = {
     commandDelivery?: PtySpawnOptions['commandDelivery']
     startupCommandDelivery?: PtySpawnOptions['startupCommandDelivery']
     worktreeId?: string
+    trustWorktreeId?: string
     tabId?: unknown
     connectionId?: string | null
     shellOverride?: string
@@ -197,6 +208,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const trustWrite = applyAgentWorkspaceTrustToSpawn({
     launchAgent: args.launchAgent,
     worktreeId: args.worktreeId,
+    trustWorktreeId: args.trustWorktreeId,
     cwd: input.cwd,
     store: input.store,
     isFreshLaunch: !input.preAdoptedStablePane && launchCommand !== undefined,

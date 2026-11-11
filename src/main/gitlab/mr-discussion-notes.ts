@@ -1,9 +1,11 @@
+import { fetchAllGitLabPages } from './gitlab-paginated-list'
 import type { MRComment } from '../../shared/gitlab-types'
+import { viewerAuthorship } from '../source-control/comment-viewer-authorship'
+import { readGlabViewer } from './gitlab-auth-and-rate-limit'
 import { encodedProject } from './project-path-encoding'
 import {
   glabHostnameArgs,
   glabRepoExecOptions,
-  glabExecFileAsync,
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
@@ -27,7 +29,10 @@ export type GitLabRawDiscussion = {
   notes?: GitLabRawNote[]
 }
 
-export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRComment[] {
+function flattenDiscussions(
+  discussions: GitLabRawDiscussion[],
+  viewerUsername: string | null
+): MRComment[] {
   const out: MRComment[] = []
   for (const discussion of discussions) {
     const notes = discussion.notes ?? []
@@ -43,6 +48,7 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
         createdAt: note.created_at ?? '',
         url: '',
         isBot: note.author?.state === 'bot',
+        ...viewerAuthorship(note.author?.username, viewerUsername),
         ...(discussion.id ? { threadId: discussion.id } : {}),
         ...(note.resolvable === true ? { isResolved: note.resolved === true } : {}),
         ...(note.position?.new_path ? { path: note.position.new_path } : {}),
@@ -53,23 +59,33 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
   return out.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
 }
 
-export async function fetchDiscussions(
+export async function fetchDiscussionComments(
   repoPath: string,
   projectRef: ProjectRef,
   type: 'issue' | 'mr',
   iid: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<GitLabRawDiscussion[]> {
+  localGitOptions: LocalGitExecOptions = {},
+  markViewer = true
+): Promise<MRComment[]> {
   const resource = type === 'mr' ? 'merge_requests' : 'issues'
-  const { stdout } = await glabExecFileAsync(
-    [
-      'api',
-      ...glabHostnameArgs(projectRef, connectionId),
-      // Bound detail loads to a recent page rather than retaining every historic discussion.
-      `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
-    ],
-    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-  )
-  return JSON.parse(stdout) as GitLabRawDiscussion[]
+  const hostArgs = glabHostnameArgs(projectRef, connectionId)
+  const options = glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  const [discussions, viewerUsername] = await Promise.all([
+    fetchAllGitLabPages<GitLabRawDiscussion>(
+      repoPath,
+      projectRef,
+      `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions`,
+      connectionId,
+      localGitOptions
+    ),
+    // Notes carry no authorship flag, so ask the reading account who it is.
+    markViewer
+      ? readGlabViewer(hostArgs, options).then(
+          ({ username }) => (typeof username === 'string' ? username : null),
+          () => null
+        )
+      : null
+  ])
+  return flattenDiscussions(discussions, viewerUsername)
 }

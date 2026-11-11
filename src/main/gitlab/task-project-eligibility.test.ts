@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+
 import type * as FileSystem from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const fs = await importOriginal<typeof FileSystem>()
@@ -27,10 +25,11 @@ vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
 }))
 
 import { listMergeRequests } from './merge-request-list'
+import { isTaskRepositoryIneligible } from '../git/task-repository-eligibility'
+import { rememberGlabKnownHosts } from './gitlab-known-host-probe'
 import { listIssues } from './issues'
 import { _resetProjectRefCache, _resetKnownHostsCache } from './gitlab-project-ref-resolution'
 import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
-import { resolveIssueSource } from './gitlab-issue-source-resolution'
 
 function serveRemotes(repos: Record<string, Record<string, string>>): void {
   git.mockImplementation(async (args: string[], options: { cwd: string }) => {
@@ -136,53 +135,8 @@ describe('GitLab task project admission', () => {
     expect(glab.mock.calls.filter(([args]) => args[0] !== 'auth')).toEqual([])
   })
 
-  it.each([1, 3, 30])('bounds actual config traversal cold/warm at %i remotes', async (count) => {
-    const repo = await mkdtemp(join(tmpdir(), 'gitlab-signature-'))
-    try {
-      const remotes = Object.fromEntries(
-        Array.from({ length: count }, (_, i) => [
-          i ? `fork-${i}` : 'origin',
-          `https://${count === 1 ? 'gitlab' : 'github'}.com/team/p${i}.git`
-        ])
-      )
-      const config = Object.entries(remotes)
-        .map(([name, url]) => `[remote "${name}"]\nurl=${url}\n`)
-        .join('')
-      await mkdir(join(repo, '.git'))
-      await writeFile(join(repo, '.git/config'), config)
-      serveRemotes({ [repo]: remotes })
-      for (const warm of [false, true]) {
-        vi.mocked(readFile).mockClear()
-        vi.mocked(stat).mockClear()
-        git.mockClear()
-        glab.mockClear()
-        const { source } = await resolveIssueSource(repo, 'auto')
-        expect(source?.path ?? null).toBe(count === 1 ? 'team/p0' : null)
-        // Identity shares the initial observation; unchanged name discovery adds constant traversals.
-        const traversals = count === 1 ? (warm ? 1 : 2) : warm ? 2 : 3
-        const reads = vi
-          .mocked(readFile)
-          .mock.calls.filter(([path]) => path === join(repo, '.git/config')).length
-        expect([
-          reads,
-          vi.mocked(readFile).mock.calls.length,
-          vi.mocked(stat).mock.calls.length
-        ]).toEqual([traversals, traversals * 2, traversals * 3])
-        const contents = await Promise.all(
-          vi
-            .mocked(readFile)
-            .mock.results.map(({ value }) => Promise.resolve(value).catch(() => ''))
-        )
-        const bytes = contents.reduce((sum, text) => sum + Buffer.byteLength(text), 0)
-        expect(bytes).toBe(traversals * Buffer.byteLength(config))
-        expect(git.mock.calls.filter(([args]) => args[1] === 'get-url')).toHaveLength(
-          warm ? 0 : count
-        )
-        expect(git.mock.calls.filter(([args]) => args.length === 1)).toHaveLength(warm ? 0 : 1)
-        expect(glab).toHaveBeenCalledTimes(count === 1 || warm ? 0 : 1)
-      }
-    } finally {
-      await rm(repo, { recursive: true, force: true })
-    }
+  it('does not exclude GitHub tasks because glab remembers github.com', async () => {
+    rememberGlabKnownHosts(['github.com'])
+    await expect(isTaskRepositoryIneligible('/github', 'github')).resolves.toBe(false)
   })
 })

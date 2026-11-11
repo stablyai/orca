@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from './execution-host'
 import type { ProjectHostSetupMethod } from './project-types'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
@@ -71,6 +71,7 @@ export const ProjectGroupSchema = z.object({
   parentGroupId: z.string().nullable(),
   createdFrom: z.enum(PROJECT_GROUP_CREATED_FROM_ARMS).catch('manual'),
   tabOrder: z.number(),
+  rootProjectOrder: salvagedOptional('rootProjectOrder', z.number().finite()),
   isCollapsed: z.boolean(),
   color: z.string().nullable(),
   createdAt: z.number(),

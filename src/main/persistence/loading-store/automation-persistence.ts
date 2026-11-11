@@ -3,24 +3,26 @@ import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationUpdateInput
+} from '../../../shared/automations/automation-definition'
+import type {
   AutomationDispatchResult,
   AutomationRun,
-  AutomationRunTrigger,
-  AutomationUpdateInput
-} from '../../../shared/automations-types'
+  AutomationRunTrigger
+} from '../../../shared/automations/history/automation-run'
 import type {
   AutomationCapturedHostIssue,
   AutomationChangeSelector,
   AutomationListParams,
   AutomationListResult
-} from '../../../shared/automation-list-scope'
+} from '../../../shared/automations/ownership/automation-list-scope'
 import type {
   AutomationDestination,
   AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition,
   AutomationUpdatePreconditions
-} from '../../../shared/automation-owner-precondition'
-import type { WorkspaceRunContext } from '../../../shared/task-source-context'
+} from '../../../shared/automations/ownership/automation-owner-precondition'
+import type { WorkspaceRunContext } from '../../../shared/work-items/task-source-context'
 import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
 import { normalizeAutomationRunWorkspaceDisplayName } from '../scheduling-automations/automation-context-migration'
 import {
@@ -56,6 +58,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 import type { ProfilePreferences } from './profile-preferences'
+import { AutomationEnablementTransitions } from './automation-enablement-transitions'
 
 type AutomationPersistenceRuntime = Pick<
   StoreRuntimeState,
@@ -67,6 +70,7 @@ type AutomationPersistenceRuntime = Pick<
 >
 
 const automationPersistenceContext = Symbol('AutomationPersistence')
+const automationEnablement = Symbol('AutomationEnablement')
 type AutomationPersistenceContext = {
   runtime: AutomationPersistenceRuntime
   flushBarriers: WriteFlushBarrierOperations
@@ -75,6 +79,7 @@ type AutomationPersistenceContext = {
 
 export class AutomationPersistence {
   readonly [automationPersistenceContext]: AutomationPersistenceContext
+  readonly [automationEnablement] = new AutomationEnablementTransitions()
 
   constructor(
     runtime: AutomationPersistenceRuntime,
@@ -157,7 +162,15 @@ export class AutomationPersistence {
     updates: AutomationUpdateInput,
     options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
   ): Automation {
-    return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
+    const stored = this[automationPersistenceContext].runtime.state.automations ?? []
+    return this[automationEnablement].track(stored, id, () =>
+      updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
+    )
+  }
+
+  /** Changes when an update pauses or re-enables the automation, never on run bookkeeping. */
+  automationEnablementRevision(id: string): number {
+    return this[automationEnablement].revision(id)
   }
 
   stampLegacyAutomationRunContext(automationId: string, runContext: WorkspaceRunContext): boolean {

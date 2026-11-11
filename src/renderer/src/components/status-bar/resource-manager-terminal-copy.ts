@@ -1,18 +1,19 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
-export function formatTerminalSessionCount(count: number | null): string {
+export function formatTerminalSessionCount(count: number | null, t: Translate = translate): string {
   if (count === null) {
-    return translate('resourceManager.countUnavailable', 'terminal count unavailable')
+    return t('resourceManager.countUnavailable', 'terminal count unavailable')
   }
-  return translate(
+  return t(
     'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount',
     '{{count}} terminal sessions',
     { count, defaultValue_one: '{{count}} terminal session' }
   )
 }
 
-function spaceScanReadyLabel(): string {
-  return translate(
+function spaceScanReadyLabel(t: Translate = translate): string {
+  return t(
     'auto.components.status.bar.resource.manager.terminal.copy.spaceScanReady',
     'Space scan ready'
   )
@@ -25,15 +26,18 @@ export type ResourceManagerTooltipLine = {
   emphasized: boolean
 }
 
-export function getResourceManagerTooltipLines(args: {
-  memoryLabel: string
-  sessionCount: number | null
-  spaceScanReady: boolean
-}): ResourceManagerTooltipLine[] {
+export function getResourceManagerTooltipLines(
+  args: {
+    memoryLabel: string
+    sessionCount: number | null
+    spaceScanReady: boolean
+  },
+  t: Translate = translate
+): ResourceManagerTooltipLine[] {
   const rawMemoryLabel = args.memoryLabel.trim()
   const memoryLabel =
     rawMemoryLabel === '' || rawMemoryLabel === '-' || rawMemoryLabel === '—'
-      ? translate(
+      ? t(
           'auto.components.status.bar.resource.manager.terminal.copy.memoryUnavailable',
           'memory unavailable'
         )
@@ -42,30 +46,30 @@ export function getResourceManagerTooltipLines(args: {
   const lines: ResourceManagerTooltipLine[] = [
     {
       id: 'summary',
-      text: translate(
+      text: t(
         'auto.components.status.bar.resource.manager.terminal.copy.tooltipSummary',
         'Resource Manager - {{memory}} - {{sessions}}',
-        { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount) }
+        { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount, t) }
       ),
       emphasized: false
     }
   ]
 
   if (args.spaceScanReady) {
-    lines.push({ id: 'space-scan', text: spaceScanReadyLabel(), emphasized: true })
+    lines.push({ id: 'space-scan', text: spaceScanReadyLabel(t), emphasized: true })
   }
 
   lines.push({
     id: 'sessions-hint',
     text:
       args.sessionCount === null
-        ? translate('resourceManager.openToObserve', 'Open Resources to observe terminal sessions.')
+        ? t('resourceManager.openToObserve', 'Open Resources to observe terminal sessions.')
         : args.sessionCount !== null && args.sessionCount > 0
-          ? translate(
+          ? t(
               'auto.components.status.bar.resource.manager.terminal.copy.sessionsGroupedByWorkspace',
               'Terminal sessions are grouped by workspace.'
             )
-          : translate(
+          : t(
               'auto.components.status.bar.resource.manager.terminal.copy.noTerminalSessions',
               'No terminal sessions yet.'
             ),
@@ -75,21 +79,24 @@ export function getResourceManagerTooltipLines(args: {
   return lines
 }
 
-export function getResourceManagerAriaLabel(args: {
-  sessionCount: number | null
-  spaceScanReady: boolean
-}): string {
-  const sessions = formatTerminalSessionCount(args.sessionCount)
+export function getResourceManagerAriaLabel(
+  args: {
+    sessionCount: number | null
+    spaceScanReady: boolean
+  },
+  t: Translate = translate
+): string {
+  const sessions = formatTerminalSessionCount(args.sessionCount, t)
 
   if (args.spaceScanReady) {
-    return translate(
+    return t(
       'auto.components.status.bar.resource.manager.terminal.copy.ariaLabelWithSpaceScan',
       'Resource Manager, {{sessions}}, {{spaceScan}}',
-      { sessions, spaceScan: spaceScanReadyLabel() }
+      { sessions, spaceScan: spaceScanReadyLabel(t) }
     )
   }
 
-  return translate(
+  return t(
     'auto.components.status.bar.resource.manager.terminal.copy.ariaLabel',
     'Resource Manager, {{sessions}}',
     { sessions }

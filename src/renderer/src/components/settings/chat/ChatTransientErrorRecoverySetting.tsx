@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Card, CardContent } from '../../ui/card'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
@@ -14,6 +14,7 @@ export function ChatTransientErrorRecoverySetting({
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisible?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const enabled = settings.nativeChatAutoContinueOnTransientError === true
   const entry = getChatTransientErrorRecoverySearchEntry()
   return (
@@ -29,7 +30,7 @@ export function ChatTransientErrorRecoverySetting({
             label={entry.title}
             description={entry.description}
             checked={enabled}
-            ariaLabel={translate(
+            ariaLabel={t(
               'components.settings.nativeChat.transientErrorRecoveryToggleLabel',
               'Toggle automatic continuation after temporary errors'
             )}

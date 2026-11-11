@@ -1,8 +1,8 @@
-import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalSend } from '../../../../shared/runtime-terminal-send-contract'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
-import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
+import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './terminal-input-dispatch'
-import type { RuntimeAgentPromptWriteOptions } from '../../runtime-terminal-contracts'
+import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import {
   agentPromptHookApplies,
   runAgentPromptPluginHook,

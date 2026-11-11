@@ -1,5 +1,8 @@
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
+import type {
+  AgentHookRelayEnvelope,
+  AgentHookSource
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { ClaudeSettledRequest } from '../shared/agent-hook-listener/claude-settled-permission-requests'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 

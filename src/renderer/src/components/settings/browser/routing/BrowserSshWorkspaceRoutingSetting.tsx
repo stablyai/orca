@@ -1,7 +1,7 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
-import { BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
@@ -22,8 +22,9 @@ export function BrowserSshWorkspaceRoutingSetting({
   settings,
   updateSettings
 }: BrowserSshWorkspaceRoutingSettingProps): React.JSX.Element {
-  const title = getBrowserSshWorkspaceRoutingTitle()
-  const description = getBrowserSshWorkspaceRoutingDescription()
+  const t = useTranslate()
+  const title = getBrowserSshWorkspaceRoutingTitle(t)
+  const description = getBrowserSshWorkspaceRoutingDescription(t)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const disabledTargetIds = settings.browserSshWorkspaceRoutingDisabledTargetIds ?? []
 
@@ -60,19 +61,16 @@ export function BrowserSshWorkspaceRoutingSetting({
             options={[
               {
                 value: 'host',
-                label: translate('settings.browser.sshWorkspaceRouting.optionHost', 'SSH host'),
-                tooltip: translate(
+                label: t('settings.browser.sshWorkspaceRouting.optionHost', 'SSH host'),
+                tooltip: t(
                   'settings.browser.sshWorkspaceRouting.optionHostTooltip',
                   "Traffic and DNS go through the workspace's SSH host."
                 )
               },
               {
                 value: 'device',
-                label: translate(
-                  'settings.browser.sshWorkspaceRouting.optionDevice',
-                  'This device'
-                ),
-                tooltip: translate(
+                label: t('settings.browser.sshWorkspaceRouting.optionDevice', 'This device'),
+                tooltip: t(
                   'settings.browser.sshWorkspaceRouting.optionDeviceTooltip',
                   "Pages browse from this machine's network."
                 )
@@ -84,7 +82,7 @@ export function BrowserSshWorkspaceRoutingSetting({
       {disabledTargetIds.length > 0 ? (
         <div className="mt-2 flex flex-col gap-1.5">
           <div className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'settings.browser.sshWorkspaceRouting.disabledHosts',
               'Hosts browsing from this device instead:'
             )}
@@ -105,7 +103,7 @@ export function BrowserSshWorkspaceRoutingSetting({
                   })
                 }
               >
-                {translate('settings.browser.sshWorkspaceRouting.useHost', 'Use SSH host')}
+                {t('settings.browser.sshWorkspaceRouting.useHost', 'Use SSH host')}
               </Button>
             </div>
           ))}
