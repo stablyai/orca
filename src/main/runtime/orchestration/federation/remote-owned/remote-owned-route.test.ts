@@ -304,6 +304,27 @@ describe('commands about a worker a paired server owns', () => {
     expect(sent.map((s) => s.method)).not.toContain('orchestration.dispatchShow')
   })
 
+  it('keeps a lost start reserved for the queue, and never asks the server about it', async () => {
+    const now = Date.parse('2026-11-10T12:00:00Z')
+    vi.useFakeTimers({ toFake: ['Date'], now })
+    await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'lost', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+    const taskId = String(
+      sent.find((s) => s.method === 'orchestration.workerStart')?.params.adoptTaskId
+    )
+    // Well past any interval a lookup would wait, with the pull loop still going round.
+    vi.setSystemTime(now + 120_000)
+    await vi.waitFor(() =>
+      expect(runtime.getPeerServerAnswerStatus('env_b')?.answeredAt).toBeGreaterThan(now + 60_000)
+    )
+
+    expect(sent.map((s) => s.method)).not.toContain('orchestration.dispatchShow')
+    expect(getRemotePlacement(db, taskId)).toMatchObject({ state: 'reserved' })
+  })
+
   it('records nothing for a start the server answers after the Run was reset, and says so', async () => {
     whileSending = async () => {
       db.resetTasks()
