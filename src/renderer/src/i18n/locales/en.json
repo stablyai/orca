@@ -20176,7 +20176,6 @@
           "browsePlugins": "Browse plugins",
           "browseThemePlugins": "Browse theme plugins",
           "colorMode": "Color mode",
-          "colorModeCaption": "Light, dark, or follow your OS.",
           "darkLook": "Dark look",
           "darkLooks": "Dark looks",
           "lightLook": "Light look",
@@ -20192,10 +20191,9 @@
           "slotLabel": "Look to edit",
           "sourceBuiltIn": "Built in",
           "sourceCommunity": "Terminal palette",
-          "themes": "Theme",
-          "themesCaption": "Optional. Go further with app themes and terminal palettes."
+          "themes": "Theme"
         },
-        "subtitle": "Choose light or dark, then optionally a theme. Change either any time in Settings."
+        "changeAnyTime": "Change any time in Settings."
       },
       "integrations": {
         "capabilities": {
@@ -20945,6 +20943,7 @@
         "deny": "Deny",
         "cancel": "Cancel",
         "reason": "Reason",
+        "reasonSentAsMessage": "Reason, sent as a message",
         "needsAccess": "Needs access to",
         "needsNewerOrca": "This request needs a newer version of Orca.",
         "folderTrust": {
@@ -20960,7 +20959,23 @@
           "file": "Plan file",
           "reviewTitle": "Review proposed plan",
           "refineHint": "Refine plan closes the review so you can send what to change."
-        }
+        },
+        "worker": "Worker · {{name}}",
+        "openWorker": "Open worker",
+        "answerFailed": "{{name}}: {{detail}}",
+        "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
+        "strip_one": "{{count}} approval",
+        "strip_other": "{{count}} approvals",
+        "show": "Show",
+        "allowedByYou": "Allowed by you",
+        "deniedByYou": "Denied by you",
+        "deniedByCoordinator": "Denied by coordinator",
+        "allowedInTerminal": "Allowed in the worker's terminal",
+        "deniedInTerminal": "Denied in the worker's terminal",
+        "answeredInChat": "Answered in the worker's chat",
+        "noLongerOpen": "No longer open",
+        "autoDenied": "Auto-denied by Claude after 2:00",
+        "answerInTerminal": "Answer it in the worker's terminal"
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",
       "subagents": {

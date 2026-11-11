@@ -20197,7 +20197,6 @@
           "browsePlugins": "浏览插件",
           "browseThemePlugins": "浏览主题插件",
           "colorMode": "颜色模式",
-          "colorModeCaption": "浅色、深色或跟随系统。",
           "darkLook": "深色外观",
           "darkLooks": "深色外观",
           "lightLook": "浅色外观",
@@ -20213,10 +20212,8 @@
           "slotLabel": "要编辑的外观",
           "sourceBuiltIn": "内置",
           "sourceCommunity": "终端调色板",
-          "themes": "主题",
-          "themesCaption": "可选。使用应用主题和终端调色板进一步自定义。"
-        },
-        "subtitle": "选择浅色或深色，也可以再选一个主题。两者都可以随时在设置中更改。"
+          "themes": "主题"
+        }
       },
       "integrations": {
         "capabilities": {
