@@ -32,7 +32,8 @@ export function useAiVaultOpenTabSessions(
     }
     return [...paths].sort()
   }, [missing, worktrees])
-  const scopeKey = JSON.stringify(scopePaths)
+  // Keyed by value so typing within one match set does not refetch.
+  const scopeKey = scopePaths.join('\u0000')
   const [fetched, setFetched] = useState<{
     executionHostScope: ExecutionHostScope
     scopeKey: string
@@ -40,9 +41,10 @@ export function useAiVaultOpenTabSessions(
   } | null>(null)
 
   useEffect(() => {
-    if (scopePaths.length === 0) {
+    if (scopeKey === '') {
       return
     }
+    const scopePaths = scopeKey.split('\u0000')
     const requestToken = createBrowserUuid()
     let cancelled = false
     void window.api.aiVault
@@ -57,8 +59,6 @@ export function useAiVaultOpenTabSessions(
       cancelled = true
       void window.api.aiVault.cancelListSessions({ requestToken }).catch(() => {})
     }
-    // scopeKey stands in for scopePaths so typing within one match set does not refetch.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey, executionHostScope])
 
   return useMemo(() => {
