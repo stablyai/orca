@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
+import { isOrcaCloudEnvironmentId } from '@/lib/orca-cloud/orca-cloud-environment-id'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import {
   readAgentSignInGate,
@@ -17,6 +17,7 @@ import {
 import { abandonAgentSignIn } from '@/lib/agent-sign-in/agent-sign-in-gate'
 import {
   cloudAgentStripReason,
+  cloudTabHoldKey,
   readCloudAgentHold,
   releaseCloudAgentHold,
   useCloudAgentHold
@@ -33,12 +34,7 @@ import { cloudAgentStripModel } from './cloud-agent-strip-model'
 
 const ABANDON_CHECK_MS = 1_000
 
-export function isOrcaCloudEnvironmentId(environmentId: string): boolean {
-  const environment = useAppStore
-    .getState()
-    .runtimeEnvironments?.find((entry) => entry.id === environmentId)
-  return environment ? isOrcaCloudRuntimeEnvironment(environment) : false
-}
+export { isOrcaCloudEnvironmentId }
 
 /** Pane keys whose #40228 gate is on an Orca Cloud host; those panes show the strip instead. */
 export function useCloudGatePaneKeys(controller: TerminalPaneController): ReadonlySet<string> {
@@ -62,15 +58,22 @@ function openSettings(pane: 'agent-accounts' | 'cloud-secrets', sectionId?: stri
 
 function CloudStripPortal({
   pane,
-  tabId
+  tabId,
+  first
 }: {
   pane: ManagedPane
   tabId: string
+  /** A host-published launch holds its whole tab (RA-1); its first pane shows the strip. */
+  first: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const key = makePaneKey(tabId, pane.leafId)
-  const hold = useCloudAgentHold(key)
-  const gate = useAgentSignInGate(key)
+  const paneKey = makePaneKey(tabId, pane.leafId)
+  const paneHold = useCloudAgentHold(paneKey)
+  const tabHold = useCloudAgentHold(first ? cloudTabHoldKey(tabId) : '')
+  const hold = paneHold ?? tabHold
+  // Releases and abandons go to whichever key holds; #40228's gate is always per pane.
+  const key = paneHold || !tabHold ? paneKey : cloudTabHoldKey(tabId)
+  const gate = useAgentSignInGate(paneKey)
   const cloudGate = gate && isOrcaCloudEnvironmentId(gate.environmentId) ? gate : null
   const accounts = useOrcaCloudAgentAccounts(hold !== null || cloudGate !== null)
   // Decided once at mount (container query); the strip never changes width class mid-flow.
@@ -87,13 +90,13 @@ function CloudStripPortal({
           if (readCloudAgentHold(key)) {
             releaseCloudAgentHold(key, 'cancel')
           }
-          if (readAgentSignInGate(key)) {
-            abandonAgentSignIn(key)
+          if (readAgentSignInGate(paneKey)) {
+            abandonAgentSignIn(paneKey)
           }
         }
       }, ABANDON_CHECK_MS)
     }
-  }, [active, key, pane.container])
+  }, [active, key, paneKey, pane.container])
   if (!hold && !cloudGate) {
     return null
   }
@@ -110,7 +113,7 @@ function CloudStripPortal({
     hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
     t
   })
-  const gateActions = agentSignInCardActions(key)
+  const gateActions = agentSignInCardActions(paneKey)
   const actions: CloudStripActions = {
     primary: (action) => {
       switch (action.kind) {
@@ -162,8 +165,8 @@ export function CloudAgentSignInStripPortals({
 }): React.JSX.Element {
   return (
     <>
-      {controller.managedPanes.map((pane) => (
-        <CloudStripPortal key={pane.id} pane={pane} tabId={controller.tabId} />
+      {controller.managedPanes.map((pane, index) => (
+        <CloudStripPortal key={pane.id} pane={pane} tabId={controller.tabId} first={index === 0} />
       ))}
     </>
   )

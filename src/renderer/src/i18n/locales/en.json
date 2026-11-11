@@ -28010,7 +28010,8 @@
     "queuedPrefix": "Queued:",
     "pasteInstead": "Paste a code instead",
     "cancelSignIn": "Cancel sign-in",
-    "copyAndOpen": "Copy code and open"
+    "copyAndOpen": "Copy code and open",
+    "cancelledToast": "The agent didn’t start. The shell is still open."
   },
   "cloudAgentCheck": {
     "keyAgentSignedOut": "{{agent}} isn’t signed in.",
