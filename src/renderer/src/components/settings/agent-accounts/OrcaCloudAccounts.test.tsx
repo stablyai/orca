@@ -118,6 +118,30 @@ describe('OrcaCloudAccountsView', () => {
     )
   })
 
+  it('offers Paste a token instead on the not-set-up Claude row only (RA-5)', () => {
+    const handlers = view({ claude: NOT_SET_UP, codex: NOT_SET_UP })
+    const paste = screen.getAllByRole('button', { name: 'Paste a token instead' })
+    expect(paste).toHaveLength(1)
+    fireEvent.click(paste[0])
+    expect(handlers.usePaste).toHaveBeenCalledOnce()
+  })
+
+  it('an expired row offers Renew and a ⋯ with Remove, which confirms first (RA-5)', async () => {
+    const handlers = view({
+      claude: { kind: 'expired', keyKind: null, covered: false },
+      codex: NOT_SET_UP
+    })
+    expect(screen.getByRole('button', { name: 'Renew' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Sign in again/ })).toBeNull()
+    const menu = screen.getByRole('button', { name: 'Claude account options' })
+    fireEvent.pointerDown(menu, { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove…' }))
+    const remove = await screen.findByRole('button', { name: 'Remove' })
+    expect(handlers.remove).not.toHaveBeenCalled()
+    fireEvent.click(remove)
+    await waitFor(() => expect(handlers.remove).toHaveBeenCalledWith('claude'))
+  })
+
   it('shows the kill switch as info with no action, and signed out with Sign in', () => {
     view({ claude: { kind: 'killSwitch' }, codex: NOT_SET_UP })
     expect(screen.getByText('Signs in for each cloud workspace')).toBeTruthy()

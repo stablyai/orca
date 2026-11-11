@@ -26,6 +26,8 @@ export type AgentAccountsOverviewProps = {
   summary: string
   onOpenRow: (row: OverviewRow) => void
   onAction: (row: OverviewRow, action: OverviewAction) => void
+  /** Fixtures only: the filter the list opens on. */
+  initialFilter?: 'all' | 'attention'
 }
 
 function actionLabel(action: OverviewAction, t: Translate): string {
@@ -97,15 +99,18 @@ function HostHeader({ row }: { row: OverviewRow }): React.JSX.Element {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <HostGlyph kind={GLYPH[row.kind]} size={14} />
-      <span className="truncate text-foreground">{name}</span>
-      {detail ? <span className="shrink-0 text-xs text-muted-foreground">{detail}</span> : null}
+      {/* The name keeps room for "Orca Cloud"; the muted detail gives way first (RA-5). */}
+      <span className="min-w-[6rem] truncate text-foreground">{name}</span>
+      {detail ? (
+        <span className="min-w-0 truncate text-xs text-muted-foreground">{detail}</span>
+      ) : null}
     </span>
   )
 }
 
 export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.JSX.Element {
   const t = useTranslate()
-  const [filter, setFilter] = useState<'all' | 'attention'>('all')
+  const [filter, setFilter] = useState<'all' | 'attention'>(props.initialFilter ?? 'all')
   const attention = props.rows.filter((row) => row.attention).length
   const shown = filter === 'attention' ? props.rows.filter((row) => row.attention) : props.rows
   const onlyLocal = !props.loading && props.rows.every((row) => row.kind === 'local')
@@ -153,6 +158,10 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
               <Skeleton key={line} shape="small" className="h-3 w-3/5" />
             ))}
           </div>
+        ) : shown.length === 0 ? (
+          <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
+            {t('agentAccountsOverview.nothingNeedsAttention', 'Nothing needs attention.')}
+          </p>
         ) : (
           <table className="w-full table-fixed border-collapse text-start">
             <thead>

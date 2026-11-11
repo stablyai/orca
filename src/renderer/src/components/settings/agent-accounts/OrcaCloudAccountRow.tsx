@@ -14,6 +14,7 @@ import { agentName, keyPhrase, productName, setupFailureCopy } from './orca-clou
 import type { OrcaCloudAccountsActions } from './orca-cloud-accounts-types'
 import { ActiveRow, ChoiceRow } from './OrcaCloudActiveRow'
 import { SetupRow } from './OrcaCloudSetupRow'
+import { RemoveConfirmRow, RowRemoveMenu } from './OrcaCloudRemoveRow'
 
 export function AccountRow({
   agent,
@@ -61,7 +62,20 @@ export function AccountRow({
               {useAccount}
             </Button>
           }
-        />
+        >
+          {/* The paste path stays reachable without waiting for the browser (RA-5). */}
+          {agent === 'claude' ? (
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              className="h-auto px-0 text-muted-foreground"
+              onClick={actions.usePaste}
+            >
+              {t('orcaCloudAccounts.pasteTokenInstead', 'Paste a token instead')}
+            </Button>
+          ) : null}
+        </RowShell>
       )
       break
     case 'setup':
@@ -107,7 +121,14 @@ export function AccountRow({
       )
       break
     case 'expired':
-      content = (
+      content = confirmRemove ? (
+        <RemoveConfirmRow
+          agent={agent}
+          actions={actions}
+          setConfirmRemove={setConfirmRemove}
+          setRowError={setRowError}
+        />
+      ) : (
         <RowShell
           agent={agent}
           tone="warning"
@@ -127,9 +148,17 @@ export function AccountRow({
                 )
           }
           actions={
-            <Button type="button" variant="outline" size="sm" onClick={() => actions.start(agent)}>
-              {t('orcaCloudAccounts.renew', 'Renew')}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => actions.start(agent)}
+              >
+                {t('orcaCloudAccounts.renew', 'Renew')}
+              </Button>
+              <RowRemoveMenu agent={agent} onRemove={() => setConfirmRemove(true)} />
+            </>
           }
         />
       )

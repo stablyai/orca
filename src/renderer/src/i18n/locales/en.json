@@ -27868,7 +27868,9 @@
     "copyAndOpen": "Copy code and open",
     "unavailable": "Signs in for each cloud workspace",
     "unavailableDetail": "Signing in once with your {{product}} account isn’t available in Orca Cloud yet. Each new cloud workspace asks you to sign in.",
-    "allUnavailable": "Claude and Codex sign in for each cloud workspace for now."
+    "allUnavailable": "Claude and Codex sign in for each cloud workspace for now.",
+    "pasteTokenInstead": "Paste a token instead",
+    "rowMenu": "{{agent}} account options"
   },
   "vmBuildAgents": {
     "menu": {
@@ -27962,7 +27964,8 @@
       "cloudNotSetUp": "Not set up",
       "cloudPaused": "Each workspace signs in (temporarily)",
       "apiKeyOverrides": "API key overrides sign-in"
-    }
+    },
+    "nothingNeedsAttention": "Nothing needs attention."
   },
   "agentSignInStrip": {
     "sandbox": "the sandbox",
