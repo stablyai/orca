@@ -13,8 +13,8 @@ import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-ter
 import {
   getTerminalScrollIntentKind,
   markTerminalFollowOutput
-} from '@/lib/pane-manager/terminal-scroll-intent'
-import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+} from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
+import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-rebuild'
 
 import type { FreshSpawnOptions } from '../startup/fresh-spawn-types'
 

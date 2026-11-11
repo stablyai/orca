@@ -8,7 +8,6 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { optionPreviewFont } from './mobile-native-chat-option-preview'
 
 const sheetKey = () => 'option-preview'
 
@@ -117,7 +116,7 @@ const styles = themedStyleSheet(() => ({
   text: {
     padding: spacing.md,
     color: colors.textPrimary,
-    fontFamily: optionPreviewFont,
+    fontFamily: typography.monoFamily,
     fontSize: typography.bodySize,
     lineHeight: typography.bodySize * 1.5
   },

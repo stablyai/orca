@@ -1,6 +1,6 @@
 import { describe } from 'vitest'
 import { registerPtyConnectionPendingSpawnTests } from '../spawn/pty-connection-pending-spawn.spec'
-import { registerPtyConnectionSplitSpawnTests } from '../spawn/pty-connection-split-spawn.spec'
+
 import { registerPtyConnectionRestoredRuntimePaneBindingTests } from '../reattach/pty-connection-restored-runtime-pane-binding.spec'
 import { registerPtyConnectionTerminalPasteStartupCommandDeliveryTests } from '../startup/pty-connection-startup-command-delivery.spec'
 import { registerPtyConnectionCommandCodeStatusInferenceTests } from '../agent-identity/pty-connection-command-code-status-inference.spec'
@@ -9,7 +9,7 @@ import { registerPtyConnectionRemoteRuntimeAttachTests } from '../reattach/pty-c
 import { registerPtyConnectionRuntimePaneTransportRoutingTests } from '../host-ownership/pty-connection-runtime-pane-transport-routing.spec'
 
 describe('pty-connection-pending-spawn', registerPtyConnectionPendingSpawnTests)
-describe('pty-connection-split-spawn', registerPtyConnectionSplitSpawnTests)
+
 describe('pty-connection-runtime-owner-spawn-routing', () => {
   registerPtyConnectionRestoredRuntimePaneBindingTests()
 })

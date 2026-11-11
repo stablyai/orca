@@ -133,7 +133,7 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   // Flush real-promise settle continuations while window still exists; fake timers postpone them beyond teardown (orca#14728).
   await flushAsyncTicks(20)
   const { cancelPendingSafeFitContinuations } =
-    await import('@/lib/pane-manager/pane-fit-continuation-registry')
+    await import('@/lib/pane-manager/terminal-fit/pane-fit-continuation-registry')
   for (const pane of takeTerminalTestPanes()) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture panes provide the fit and terminal members read during cancellation.
     cancelPendingSafeFitContinuations(pane as unknown as ManagedPane)
