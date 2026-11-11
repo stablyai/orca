@@ -24,7 +24,17 @@ export type OrcaCloudAuthorizationCode = {
 /** How long a held browser tab waits for the caller before it gets the "signed in" page. */
 const HOLD_BROWSER_MS = 30_000
 
-const AUTH_TIMEOUT_MS = 5 * 60 * 1000
+/** A sign-in the browser never answers ends after this, with "Sign-in didn’t finish. Try again." */
+export const ORCA_CLOUD_SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000
+
+/** Dev automation only (unpackaged): ORCA_CLOUD_SIGN_IN_TIMEOUT_MS shortens the wait for a test run. */
+export function orcaCloudSignInTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env,
+  packaged: boolean = app.isPackaged
+): number {
+  const override = packaged ? Number.NaN : Number(env.ORCA_CLOUD_SIGN_IN_TIMEOUT_MS)
+  return Number.isFinite(override) && override >= 1_000 ? override : ORCA_CLOUD_SIGN_IN_TIMEOUT_MS
+}
 
 function base64Url(buffer: Buffer): string {
   return buffer.toString('base64').replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
@@ -159,7 +169,7 @@ export function beginOrcaCloudPkceFlow(
 
     const timeout = setTimeout(() => {
       rejectFlow(new Error('orca_cloud_auth_timeout'))
-    }, AUTH_TIMEOUT_MS)
+    }, orcaCloudSignInTimeoutMs())
     const cancel = (): void => rejectFlow(new Error('orca_cloud_auth_cancelled'))
     options.signal?.addEventListener('abort', cancel, { once: true })
     server.once('close', () => {
@@ -167,6 +177,10 @@ export function beginOrcaCloudPkceFlow(
       options.signal?.removeEventListener('abort', cancel)
     })
     server.once('error', rejectFlow)
+    if (options.signal?.aborted) {
+      cancel()
+      return
+    }
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
       if (!address || typeof address === 'string') {

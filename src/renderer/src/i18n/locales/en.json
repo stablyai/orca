@@ -1778,7 +1778,7 @@
             "7d4bc516ee": "Failed to switch profile",
             "f518e89aa5": "Project already exists in that profile",
             "f03ae7f27b": "Failed to transfer project",
-            "signInTimedOut": "Sign-in timed out"
+            "signInDidNotFinish": "Sign-in didn’t finish. Try again."
           }
         },
         "runtime": {
@@ -20415,7 +20415,9 @@
         "copied": "Sign-in link copied",
         "copyFailed": "Could not copy the link.",
         "signingIn": "Signing in…",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "didNotFinish": "Sign-in didn’t finish. Try again.",
+        "reopenBrowser": "Reopen browser"
       },
       "plainSshTerminal": {
         "open": "Open plain SSH terminal",
@@ -28199,7 +28201,8 @@
     "signIn": {
       "lead": "Orca Cloud runs your agents in a cloud workspace, so they keep going with your laptop closed. Sign in or create an account in your browser. We’ll make a team for you.",
       "note": "New teams get a trial with no card needed. This page picks up each step on its own.",
-      "title": "Sign in to Orca"
+      "title": "Sign in to Orca",
+      "didNotFinish": "Sign-in didn’t finish. Try again."
     },
     "starting": "Starting…",
     "step": {
@@ -28231,7 +28234,8 @@
     "exited": "Orca Cloud setup closed. Your draft is kept.",
     "header": "Setting up Orca Cloud",
     "headerFor": "Setting up Orca Cloud for {{name}}",
-    "resumeDraft": "Open draft"
+    "resumeDraft": "Open draft",
+    "cancelSignIn": "Cancel"
   },
   "orcaCloudSignInSheet": {
     "title": "Agents in Orca Cloud",

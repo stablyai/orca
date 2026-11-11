@@ -901,8 +901,7 @@
             "76deec8f58": "Error al cambiar organización",
             "7d4bc516ee": "Error al cambiar perfil",
             "f518e89aa5": "El proyecto ya existe en ese perfil",
-            "f03ae7f27b": "Error al transferir proyecto",
-            "signInTimedOut": "Se agotó el tiempo de inicio de sesión"
+            "f03ae7f27b": "Error al transferir proyecto"
           }
         },
         "runtime": {
