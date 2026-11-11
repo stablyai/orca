@@ -2,15 +2,7 @@ import type { FederatedWorkerStartRequest } from './federated-worker-start-reque
 import { assertRemoteAntigravityEffort } from '../../terminal/catalog/antigravity-remote-terminal-effort'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
-} from '../../../../shared/orchestration/orchestration-runtime-capabilities'
+import * as Caps from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { orchestrationMigrationData } from '../../../../shared/orchestration/orchestration-rpc-contract'
 import { OrchestrationError } from '../orchestration-error'
 import {
@@ -36,6 +28,7 @@ import { releaseRetriedWorkerTerminal } from '../../rpc/methods/orchestration/wo
 import { withWorkerStartNext } from '../../rpc/methods/orchestration/receipt-next'
 import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
 import { resolveFederatedChildParent } from './federated-worker-child-parent'
+import { reportFailedWorkerStart } from '../workers/turn-stops/failed-worker-start-report'
 import { prepareWorkerStartCard } from '../workers/launch/worker-start-card'
 import {
   recordWorkerLaunchObservation,
@@ -86,14 +79,15 @@ export async function startFederatedWorker(
     undefined,
     pairingFence
   )) as RuntimeStatus
-  if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
+  const capabilities = status.capabilities
+  if (!capabilities?.includes(Caps.ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
     throw new OrchestrationError(
       'orchestration_migration_required',
       `Connected server ${server.name} does not support the current orchestration contract. No effects were applied.`,
       orchestrationMigrationData('runtime_capability_missing')
     )
   }
-  if (!status.capabilities?.includes(ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY)) {
+  if (!capabilities?.includes(Caps.ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY)) {
     throw new OrchestrationError(
       'capability_unsupported',
       `Connected server ${server.name} does not support orchestration federation.`
@@ -102,7 +96,7 @@ export async function startFederatedWorker(
   assertWorkerLaunchPreferencesRuntimeSupported({
     model: params.model,
     effort: params.effort,
-    capabilities: status.capabilities,
+    capabilities,
     serverName: server.name
   })
   const childParent =
@@ -111,7 +105,7 @@ export async function startFederatedWorker(
           runtime,
           from: params.from,
           callerSession: args.callerSession,
-          serverCapabilities: status.capabilities,
+          serverCapabilities: capabilities,
           serverName: server.name
         })
       : undefined
@@ -119,15 +113,15 @@ export async function startFederatedWorker(
     await assertRemoteAntigravityEffort(runtime, params, server, budgets.preflightTimeoutMs)
   }
 
-  const supportsControlMail = status.capabilities?.includes(
-    ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
+  const supportsControlMail = capabilities?.includes(
+    Caps.ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
   const federationProtocolVersion =
     supportsControlMail &&
-    status.capabilities?.includes(ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
-      ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+    capabilities?.includes(Caps.ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
+      ? Caps.ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
       : supportsControlMail
-        ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+        ? Caps.ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
         : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
@@ -237,8 +231,8 @@ export async function startFederatedWorker(
       recordReadyFederatedDispatch(db, started.dispatch.id, remote)
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)
-      const reportsTurnStops = status.capabilities?.includes(
-        ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
+      const reportsTurnStops = capabilities?.includes(
+        Caps.ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
       )
       readyResult = withWorkerStartNext(
         {
@@ -276,6 +270,9 @@ export async function startFederatedWorker(
         remote.failedStage ?? 'remote_attach',
         remote.lastError ?? `The worker server returned ${remote.state}.`
       )
+      reportFailedWorkerStart(db, worker, (handle, type) =>
+        runtime.notifyMessageArrived(handle, type)
+      )
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
         setup: remote.setup,
         launch,
@@ -287,6 +284,9 @@ export async function startFederatedWorker(
     const reason = error instanceof Error ? error.message : String(error)
     if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
+      reportFailedWorkerStart(db, worker, (handle, type) =>
+        runtime.notifyMessageArrived(handle, type)
+      )
       return federatedFailedReceipt(worker, { runId, taskId: taskForRemote.id }, server, {
         launch: requestedLaunch
       })

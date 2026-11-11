@@ -89,6 +89,16 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      const dispatch = db.getDispatchContextById(params.dispatch)
+      const worker = db.getWorkerDispatch(params.dispatch)
+      const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
+      // A start that never got a terminal has only its failure, on any host.
+      if (worker?.state === 'failed' && !terminalHandle) {
+        throw new OrchestrationError(
+          'worker_never_started',
+          `Worker Dispatch ${params.dispatch} never started: ${worker.last_error ?? 'its start failed'}`
+        )
+      }
       const federated = db.getFederatedDispatch(params.dispatch)
       if (federated) {
         const server = resolvePinnedFederatedServer(runtime, federated)
@@ -103,9 +113,6 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           limit: params.limit
         })
       }
-      const dispatch = db.getDispatchContextById(params.dispatch)
-      const worker = db.getWorkerDispatch(params.dispatch)
-      const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
       if (!dispatch) {
         throw new OrchestrationError(
           'dispatch_not_found',
