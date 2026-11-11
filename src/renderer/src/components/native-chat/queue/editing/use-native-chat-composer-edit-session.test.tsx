@@ -43,7 +43,7 @@ function Composer() {
     },
     setNotice: () => {},
     saveHeld: false,
-    launchPrompt: false,
+    autoSendTo: scope,
     sendMessage: () => {},
     completeItem: () => {}
   })

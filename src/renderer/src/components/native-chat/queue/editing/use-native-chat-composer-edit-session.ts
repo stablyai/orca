@@ -36,7 +36,7 @@ export function useNativeChatComposerEditSession({
   ptyCommandRouting,
   setNotice,
   saveHeld,
-  launchPrompt,
+  autoSendTo,
   sendMessage,
   completeItem
 }: {
@@ -53,8 +53,8 @@ export function useNativeChatComposerEditSession({
   setNotice: (text: string) => void
   /** The composer is disabled or its Send is held, so an edit can't be saved yet. */
   saveHeld: boolean
-  /** Enter in a launch prompt starts an agent, which a dictation must never do on its own. */
-  launchPrompt: boolean
+  /** The conversation an automatic send goes to; null where Enter starts an agent (a launch prompt). */
+  autoSendTo: string | null
   sendMessage: (intent?: NativeChatComposerSendIntent) => void
   completeItem: (item: NativeChatPickerItem) => void
 }) {
@@ -111,7 +111,7 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
-  const sendOrQueue = useSendAfterDictation(root, sendMessage, !isEditing && !launchPrompt)
+  const sendOrQueue = useSendAfterDictation(root, sendMessage, isEditing ? null : autoSendTo)
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       if (!editSession) {

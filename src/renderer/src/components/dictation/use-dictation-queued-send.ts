@@ -30,17 +30,20 @@ type ComposerSendQueue = (root: HTMLElement, send: () => void) => boolean
 let composerSendQueue: ComposerSendQueue | null = null
 
 const composerAutoSends = new WeakMap<HTMLElement, (handoff: AutoSendHandoff) => void>()
+// The owner's hook for a composer that stops taking automatic sends, or now sends somewhere else.
+let composerAutoSendRevoked: ((root: HTMLElement) => void) | null = null
 
 type PendingSend<Intent> = { intent?: Intent; handoff?: AutoSendHandoff }
 
 /**
  * A composer's Send: while it's being dictated into, it waits for the last words to land and render,
- * then sends them too. With `sendsWhenDictationEnds`, the "Send when dictation ends" setting presses it.
+ * then sends them too. With `autoSendTo`, the conversation it sends to, "Send when dictation ends"
+ * presses it; a different conversation there ends the countdown.
  */
 export function useSendAfterDictation<Intent>(
   root: RefObject<HTMLElement | null>,
   sendMessage: (intent?: Intent) => void,
-  sendsWhenDictationEnds: boolean
+  autoSendTo: string | null
 ): (intent?: Intent) => void {
   const pendingRef = useRef<PendingSend<Intent> | null>(null)
   const [landedTick, setLandedTick] = useState(0)
@@ -64,7 +67,7 @@ export function useSendAfterDictation<Intent>(
   }, [])
   useEffect(() => {
     const element = root.current
-    if (!sendsWhenDictationEnds || !element) {
+    if (autoSendTo === null || !element) {
       return
     }
     const autoSend = (handoff: AutoSendHandoff): void => sendOnceRendered({ handoff })
@@ -74,8 +77,9 @@ export function useSendAfterDictation<Intent>(
         composerAutoSends.delete(element)
       }
       dropPendingAutoSend()
+      composerAutoSendRevoked?.(element)
     }
-  }, [root, sendsWhenDictationEnds, sendOnceRendered, dropPendingAutoSend])
+  }, [root, autoSendTo, sendOnceRendered, dropPendingAutoSend])
   return (intent) => {
     if (!root.current || !composerSendQueue?.(root.current, () => sendOnceRendered({ intent }))) {
       // An explicit Send replaces a countdown send still waiting for this render.
@@ -158,10 +162,16 @@ export function useDictationQueuedSend(
       const target = keptRef.current?.target
       return target?.kind === 'composer' && target.root === root && queue('chat', send)
     }
+    composerAutoSendRevoked = (root) => {
+      if (autoSendRef.current?.root === root) {
+        takeOverAutoSend()
+      }
+    }
     return () => {
       composerSendQueue = null
+      composerAutoSendRevoked = null
     }
-  }, [keptRef, queue])
+  }, [keptRef, queue, takeOverAutoSend])
 
   useEffect(
     () => () => {

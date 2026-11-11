@@ -27,6 +27,7 @@ import { useNativeChatComposerAppMenuSelection } from './focus/use-native-chat-c
 import { useNativeChatComposerSubmit } from './submit/use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './pickers/use-native-chat-composer-command-picker'
 import type * as C from './native-chat-composer-types'
+import { nativeChatComposerTargetKey } from './native-chat-composer-target-key'
 
 type ComposerHandle = C.NativeChatComposerHandle
 
@@ -61,7 +62,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       inputOwnedByCard = false,
       notices: chatNotices,
       workspacePending: pending = false,
-      launchPrompt
+      launchPrompt,
+      conversationId
     },
     ref
   ): React.JSX.Element {
@@ -171,6 +173,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const localHandle = useRef<C.NativeChatComposerHandle>(null)
     const root = useRef<HTMLDivElement>(null)
+    const targetKey = nativeChatComposerTargetKey(paneKey, targetPtyId, structuredTransport)
     const handlePasteEvent = useNativeChatComposerHandle(localHandle, {
       resend: (text, imagePaths) => !structuredTransport && sendPty({ text, imagePaths }),
       attachmentScopeKey: draftScopeKey,
@@ -180,13 +183,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setCaret,
       setActiveSuggestion,
-      targetKey: JSON.stringify([
-        paneKey,
-        targetPtyId,
-        structuredTransport?.sessionId,
-        structuredTransport?.worktreeId,
-        structuredTransport?.runtimeEnvironmentId
-      ]),
+      targetKey,
       agent,
       disabled,
       resolveAttachmentOwner: fileDrops.resolveAttachmentOwner,
@@ -302,7 +299,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         draftScopeKey,
         agent,
         saveHeld: disabled || sendHeld,
-        launchPrompt: launchPrompt !== undefined,
+        autoSendTo: launchPrompt ? null : JSON.stringify([targetKey, conversationId ?? null]),
         ...picker,
         structuredTransport,
         sendStructured,
