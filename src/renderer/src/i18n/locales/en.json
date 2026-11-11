@@ -14601,7 +14601,6 @@
           "sectionDescription": "For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets."
         },
         "cloudRoutines": {
-          "queued": "Run queued. It shows up in the history below.",
           "pausedSr": "(paused)",
           "createdByPerson": "by <person></person>",
           "lastRun": "Last run:",
@@ -14610,7 +14609,6 @@
           "runningShowHistory": "{{routineName}} is running. Show run history",
           "runNowLabel": "Run {{routineName}} now",
           "alreadyRunning": "A run is already in progress.",
-          "runningNow": "Running…",
           "runNow": "Run now",
           "more": "More actions for {{routineName}}",
           "hideHistory": "Hide run history",
@@ -20654,7 +20652,6 @@
           "makeOwnerBody": "Owners control billing and can manage other owners. To hand the team over, make {{value0}} an owner, then ask them to change your role.",
           "makeOwnerConfirm": "Make owner",
           "makeOwnerTitle": "Make {{value0}} an owner?",
-          "manage": "Members, invites and seats",
           "members": "Members",
           "membersList": "Team members and invites",
           "nextInvoice": "Next invoice (est.)",
@@ -20722,7 +20719,8 @@
           "totalPerMonth": "{{total}} per month",
           "totalPerYear": "{{total}} per year",
           "openProfile": "Open {{value0}}’s profile",
-          "viewProfile": "View profile"
+          "viewProfile": "View profile",
+          "seatsOnPlanBilling": "Seats and invoices are in"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
