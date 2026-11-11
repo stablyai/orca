@@ -265,7 +265,7 @@
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-connect-failure-recovery.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-host-exit-record.test.ts
-3 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-subscribe-ack-input.test.ts
+1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-subscribe-ack-input.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/viewport/terminal-fit-restore.test.ts
 1 test-no-real-time-wait:src/renderer/src/hooks/runtime-project-refresh-scheduler.test.ts
 1 test-no-real-time-wait:src/renderer/src/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation.test.ts
@@ -643,7 +643,6 @@
 2 test-no-wall-clock:src/renderer/src/store/github/pull-requests/github-pr-branch-linked-pr-divergence.test.ts
 6 test-no-wall-clock:src/renderer/src/store/slices/jira/jira.test.ts
 5 test-no-wall-clock:src/renderer/src/store/slices/worktrees/metadata/worktree-meta-hosted-review.test.ts
-1 test-no-wall-clock:src/renderer/src/store/slices/worktrees/session/worktrees-terminal-reference-origins.test.ts
 1 test-no-wall-clock:src/renderer/src/store/terminals/store-sleep-exact-runtime-stop.test.ts
 1 test-no-wall-clock:src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts
 7 test-no-wall-clock:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
