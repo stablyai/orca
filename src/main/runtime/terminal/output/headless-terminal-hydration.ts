@@ -50,7 +50,11 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
 
   /** Whether this PTY's startup dialog still reads as the card a choice was clicked on; a moved highlight or a new dialog fails. */
   isStartupDialogCardCurrent(ptyId: string, prompt: string): boolean {
-    return this.trustDialogStatus.showsPrompt(ptyId, prompt)
+    // A model behind received output could vouch for a screen Claude has already changed.
+    return (
+      this.headlessTerminals.get(ptyId)?.outputSequence === this.getPtyOutputSequence(ptyId) &&
+      this.trustDialogStatus.showsPrompt(ptyId, prompt)
+    )
   }
 
   // Create emulator state synchronously and chain renderer hydration first so concurrent live bytes cannot be overwritten by a late seed (docs/mobile-prefer-renderer-scrollback.md).
