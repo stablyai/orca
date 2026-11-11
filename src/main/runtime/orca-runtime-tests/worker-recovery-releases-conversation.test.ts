@@ -72,6 +72,7 @@ describe('worker terminal recovery after a crash', () => {
         hasPty: () => false,
         listProcesses: async () => []
       })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recovery calls only this notifier method.
       runtime.setNotifier({ resolveLegacyWorkerTerminalRecovery: vi.fn() } as never)
 
       await expect(runtime.reconcileLegacyWorkerTerminals()).resolves.toMatchObject({
