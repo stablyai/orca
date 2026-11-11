@@ -18,8 +18,12 @@ function setup(id: string, hostId: ProjectHostSetup['hostId'], path: string): Pr
     hostId,
     repoId: `repo-${id}`,
     path,
-    displayName: 'orca'
-  } as ProjectHostSetup
+    displayName: 'orca',
+    setupState: 'ready',
+    setupMethod: 'imported-existing-folder',
+    createdAt: 0,
+    updatedAt: 0
+  }
 }
 
 const setups = [
