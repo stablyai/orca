@@ -1,3 +1,4 @@
+import { setGitGraphViewport } from './git-graph-tab-controllers'
 import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import {
   GitGraphCommitActionControls,
@@ -48,7 +49,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const [draftGraphWidth, setDraftGraphWidth] = useState(graphWidth)
   const commitGraphWidth = useCallback(
     (width: number) => {
-      controller.graphWidth = width
+      setGitGraphViewport(controller, 'graphWidth', width)
       setGraphWidth(width)
     },
     [controller]
@@ -65,13 +66,17 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const columns = `160px ${draftGraphWidth}px minmax(200px,1fr) 120px 100px`
   const getScrollOffset = useCallback(() => controller.scrollOffset, [controller])
   const saveScrollOffset = useCallback(
-    (offset: number) => {
-      controller.scrollOffset = offset
-    },
+    (offset: number) => setGitGraphViewport(controller, 'scrollOffset', offset),
     [controller]
   )
-  const viewport = useGitGraphViewport(rows.length, getScrollOffset, saveScrollOffset)
-  const lastVisibleIndex = viewport.lastVisible
+  const {
+    scroll: scrollRef,
+    items: virtualRows,
+    lastVisible: lastVisibleIndex,
+    height: virtualHeight,
+    onScroll,
+    reveal: revealRow
+  } = useGitGraphViewport(rows.length, getScrollOffset, saveScrollOffset)
   const endInView = lastVisibleIndex >= 0 && lastVisibleIndex >= rows.length - 1 - PAGE_AHEAD_ROWS
   useEffect(() => {
     // Viewport demand, not scroll events: page whenever the end of loaded rows is in view.
@@ -79,7 +84,6 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
       loadMoreInView(controller, result)
     }
   }, [endInView, result, loading, controller])
-  const revealRow = viewport.reveal
   useLayoutEffect(() => {
     if (revealIndex !== undefined) {
       revealRow(revealIndex)
@@ -164,15 +168,15 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
             <span>{t('gitGraph.date', 'Date')}</span>
           </div>
           <div
-            ref={viewport.scroll}
+            ref={scrollRef}
             className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
-            onScroll={viewport.onScroll}
+            onScroll={onScroll}
           >
             <div
               className="relative min-w-max"
-              style={{ height: viewport.height, minWidth: draftGraphWidth + 604 }}
+              style={{ height: virtualHeight, minWidth: draftGraphWidth + 604 }}
             >
-              {viewport.items.map((virtualRow) => {
+              {virtualRows.map((virtualRow) => {
                 const viewModel = rows[virtualRow.index]!
                 const item = viewModel.historyItem
                 return (

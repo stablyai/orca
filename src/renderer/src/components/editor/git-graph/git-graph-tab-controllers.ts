@@ -15,3 +15,11 @@ export function disposeGitGraphHistory(tabId: string): void {
   controllers.get(tabId)?.dispose()
   controllers.delete(tabId)
 }
+
+export function setGitGraphViewport(
+  controller: GitGraphHistoryController,
+  field: 'scrollOffset' | 'graphWidth',
+  value: number
+): void {
+  controller[field] = value
+}

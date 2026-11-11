@@ -35,7 +35,7 @@ it('keeps boundary strokes and restores full geometry when the graph column wide
   expect(draw(wide, 132).querySelector('svg')?.getAttribute('width')).toBe('275')
 })
 
-it('preserves converging arcs and output-lane advancement after omitted paths', () => {
+it('preserves converging arcs whose strokes enter the graph column', () => {
   const view: GitHistoryItemViewModel = {
     ...wide,
     historyItem: { ...wide.historyItem, parentIds: [] },
