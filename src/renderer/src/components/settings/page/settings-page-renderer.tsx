@@ -170,8 +170,8 @@ export function renderSettingsPage(
                     value={model.highlightedSettingsTarget?.id ?? null}
                   >
                     {renderAgentsSettingsSection(context, t)}
-                    {renderAccountsSettingsSection(context, t)}
                     {renderAgentAccountsSettingsSection(context, t)}
+                    {renderAccountsSettingsSection(context, t)}
                     {renderAgentApiKeysSettingsSection(context, t)}
                     {renderOrchestrationSettingsSection(context, t)}
                     {renderLinearSettingsSection(context, t)}

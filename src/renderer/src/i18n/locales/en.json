@@ -1401,7 +1401,7 @@
     },
     "agentAccounts": {
       "searchTitle": "Agent accounts",
-      "searchDescription": "Use your Claude and ChatGPT accounts in every cloud workspace.",
+      "hubSearchDescription": "Where Claude and Codex are signed in: Orca Cloud, this computer and your hosts.",
       "search": {
         "subscription": "subscription",
         "signIn": "sign in",
@@ -1409,7 +1409,7 @@
         "setupToken": "setup-token"
       },
       "title": "Agent accounts",
-      "description": "Use your Claude and ChatGPT accounts in every cloud workspace. Set up once on this computer."
+      "hubDescription": "Where Claude and Codex are signed in: Orca Cloud, this computer and your hosts."
     }
   },
   "menu": {
@@ -27943,9 +27943,7 @@
     "filter": "Show",
     "all": "All",
     "attention": "Needs attention · {{count}}",
-    "signedOut": "Sign in to Orca to see cloud workspaces here.",
-    "signedOutDetail": "Hosts on this computer’s list are shown below.",
-    "signIn": "Sign in",
+    "signedOutNote": "Sign in to Orca to see Orca Cloud here.",
     "host": "Host",
     "actions": "Actions",
     "openRow": "Open agent accounts for {{host}}",

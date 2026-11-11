@@ -4,7 +4,6 @@ import React, { useState } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import {
@@ -27,7 +26,6 @@ export type AgentAccountsOverviewProps = {
   summary: string
   onOpenRow: (row: OverviewRow) => void
   onAction: (row: OverviewRow, action: OverviewAction) => void
-  onSignIn: () => void
 }
 
 function actionLabel(action: OverviewAction, t: Translate): string {
@@ -125,6 +123,12 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
               'Where Claude and Codex are signed in, and which key they use. Orca never copies a sign-in between machines.'
             )}
           </p>
+          {/* One Sign in button lives in the Orca Cloud card above; this is only a muted note. */}
+          {props.signedOutOfOrca ? (
+            <p className="text-xs text-muted-foreground">
+              {t('agentAccountsOverview.signedOutNote', 'Sign in to Orca to see Orca Cloud here.')}
+            </p>
+          ) : null}
         </div>
         <SettingsSegmentedControl
           size="sm"
@@ -142,25 +146,6 @@ export function AgentAccountsOverview(props: AgentAccountsOverviewProps): React.
           ]}
         />
       </div>
-      {props.signedOutOfOrca ? (
-        <InlineError
-          tone="neutral"
-          density="compact"
-          title={t(
-            'agentAccountsOverview.signedOut',
-            'Sign in to Orca to see cloud workspaces here.'
-          )}
-          detail={t(
-            'agentAccountsOverview.signedOutDetail',
-            'Hosts on this computer’s list are shown below.'
-          )}
-          action={
-            <Button type="button" variant="outline" size="xs" onClick={props.onSignIn}>
-              {t('agentAccountsOverview.signIn', 'Sign in')}
-            </Button>
-          }
-        />
-      ) : null}
       <div className="overflow-hidden rounded-xl border border-border bg-card/50 shadow-xs">
         {props.loading ? (
           <div aria-busy="true" className="flex flex-col gap-3 p-4">
