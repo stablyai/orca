@@ -18,7 +18,7 @@ vi.mock('node-pty', () => import('./pty/pty-ipc-mock-registry').then((m) => m.no
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty/pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
-vi.mock('../opencode/hook-service', () =>
+vi.mock('../opencode/status-hooks/hook-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../mimo/hook-service', () =>

@@ -6,7 +6,7 @@ import {
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/shell/launch/terminal-git-credential-guard'
-import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode-startup-prompt-installer'
+import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/startup-prompts/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
