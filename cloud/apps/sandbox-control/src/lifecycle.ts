@@ -310,8 +310,8 @@ export function guardrails(deps: LifecycleDeps): GuardrailConfig {
 export async function requireStart(deps: LifecycleDeps, accountId: string, userId: string, machineSize: MachineSize) {
   const [, runningSandboxes, runningSandboxesForUser] = await Promise.all([
     assertStartsOpen(deps.db, guardrails(deps)),
-    countActiveSandboxes(deps.db, accountId),
-    countActiveSandboxesForUser(deps.db, accountId, userId)
+    countActiveSandboxes(deps.db, accountId, deps.now()),
+    countActiveSandboxesForUser(deps.db, accountId, userId, deps.now())
   ])
   const decision = await deps.entitlements.checkStart({
     accountId,
@@ -326,10 +326,13 @@ export async function requireStart(deps: LifecycleDeps, accountId: string, userI
   if (!decision.allow) {
     throw new LifecycleError('entitlement_denied', decision.reason ?? 'denied')
   }
-  await assertAccountCapacity(deps.db, guardrails(deps), accountId, {
-    seats: decision.seats,
-    maxConcurrentSandboxes: decision.maxConcurrentSandboxes
-  })
+  await assertAccountCapacity(
+    deps.db,
+    guardrails(deps),
+    accountId,
+    { seats: decision.seats, maxConcurrentSandboxes: decision.maxConcurrentSandboxes },
+    deps.now()
+  )
 }
 
 function orcadEndpoint(state: ProviderSandboxState): string | null {

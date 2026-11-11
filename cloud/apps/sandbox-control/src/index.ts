@@ -1555,7 +1555,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       {
         const [{ idleSleepMinutes, ...status }, hints] = await Promise.all([
           workspaceStatus(life, row, workspaceConfig(env, deps)),
-          wakeHintsAware ? wakeHints(life.db, row) : null
+          wakeHintsAware ? wakeHints(life.db, row, life.now()) : null
         ])
         return json({
           sandbox: view(row),

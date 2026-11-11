@@ -76,8 +76,8 @@ async function openSshHostSettings(page: Page): Promise<void> {
   await dismissTransientAnnouncement(page)
   const sshSection = page.locator('[data-settings-section="ssh"]')
   await expect(sshSection).toBeVisible({ timeout: 10_000 })
-  // Why: section chrome uses "SSH Hosts"; the pane body catalog string is "Targets".
-  await expect(sshSection.getByRole('heading', { name: 'SSH Hosts' })).toBeVisible()
+  // Why: section chrome uses "SSH hosts"; the pane body catalog string is "Targets".
+  await expect(sshSection.getByRole('heading', { name: 'SSH hosts' })).toBeVisible()
   await expect(sshSection.getByRole('button', { name: 'Add host' })).toBeVisible({
     timeout: 10_000
   })

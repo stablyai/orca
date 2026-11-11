@@ -24,7 +24,12 @@ export type HostedSandboxRequest = <T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   schema: z.ZodType<T>,
-  init: { body?: unknown; kind: 'boot' | 'control'; signal?: AbortSignal }
+  init: {
+    body?: unknown
+    kind: 'boot' | 'control'
+    signal?: AbortSignal
+    features?: readonly string[]
+  }
 ) => Promise<T>
 
 /** One authenticated, schema-checked control-plane call; shared by every desktop client of it. */
@@ -39,7 +44,13 @@ export function createHostedSandboxRequest(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     schema: z.ZodType<T>,
-    init: { body?: unknown; kind: 'boot' | 'control'; signal?: AbortSignal }
+    init: {
+      body?: unknown
+      kind: 'boot' | 'control'
+      signal?: AbortSignal
+      /** Per-call opt-ins on top of the features every call sends. */
+      features?: readonly string[]
+    }
   ): Promise<T> {
     const timeoutSignal = AbortSignal.timeout(timeouts[init.kind])
     const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal
@@ -52,7 +63,12 @@ export function createHostedSandboxRequest(
           authorization: `Bearer ${token}`,
           accept: 'application/json',
           // This client's schemas know the `archived` status.
-          'x-orca-sandbox-features': 'archive,idle-minutes,wake-hints',
+          'x-orca-sandbox-features': [
+            'archive',
+            'idle-minutes',
+            'wake-hints',
+            ...(init.features ?? [])
+          ].join(','),
           ...(init.body === undefined ? {} : { 'content-type': 'application/json' })
         },
         body: init.body === undefined ? undefined : JSON.stringify(init.body),

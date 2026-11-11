@@ -1,4 +1,5 @@
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
+import { orcaCloudCloneProgress } from '@/lib/orca-cloud/orca-cloud-clone-progress'
 import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
@@ -298,7 +299,13 @@ export function getVisibleCheckoutProgress(
 export function getCreationProgressLabel(
   entry: Pick<
     PendingWorktreeCreation,
-    'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress' | 'environmentCheck'
+    | 'status'
+    | 'phase'
+    | 'indeterminate'
+    | 'request'
+    | 'checkoutProgress'
+    | 'environmentCheck'
+    | 'provisioningLog'
   >,
   t: Translate = translate
 ): string {
@@ -316,7 +323,14 @@ export function getCreationProgressLabel(
     }
     // Glossary: an Orca Cloud machine is a sandbox; "VM" stays only for bring-your-own recipes.
     if (entry.request.ephemeralVmRecipe?.provider === 'orca-cloud') {
-      return entry.environmentCheck
+      // Follows the build sheet's active step: sandbox, then the background clone, then checks.
+      const clone = entry.environmentCheck
+        ? null
+        : orcaCloudCloneProgress(entry.provisioningLog ?? '', [])
+      if (clone && !clone.ended) {
+        return t('auto.lib.pendingWorktreeCreation.cloningRepository', 'Cloning the repository…')
+      }
+      return entry.environmentCheck || clone
         ? t('auto.lib.pendingWorktreeCreation.preparingCloudEnvironment', 'Preparing environment…')
         : t('auto.lib.pendingWorktreeCreation.startingSandbox', 'Starting sandbox…')
     }

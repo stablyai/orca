@@ -148,7 +148,15 @@ export const HostedSandboxLeaseRequestSchema = z
 
 /** create, resume and rollover: the environment is up and orcad is ready to pair. */
 export const HostedSandboxReadyResponseSchema = z
-  .object({ sandbox: HostedSandboxViewSchema, connection: HostedSandboxConnectionSchema })
+  .object({
+    sandbox: HostedSandboxViewSchema,
+    connection: HostedSandboxConnectionSchema,
+    /** Create with feature `clone-progress`: the repo is still cloning; poll GET .../clone. */
+    clone: z
+      .object({ state: z.literal('running') })
+      .strict()
+      .optional()
+  })
   .strict()
 export type HostedSandboxReadyResponse = z.infer<typeof HostedSandboxReadyResponseSchema>
 

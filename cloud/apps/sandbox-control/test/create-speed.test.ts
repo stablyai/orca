@@ -117,6 +117,26 @@ describe('repo-backed create', () => {
     expect(starts).toBe(1)
   })
 
+  it('the start gate counts neither a sandbox going to sleep nor an abandoned create', async () => {
+    const h = await createHarness()
+    const ids: string[] = []
+    // Billing's cap is 3 here (the guardrail backstop: 3 per seat, 1 seat).
+    for (const ws of ['ws-a', 'ws-b', 'ws-c']) {
+      ids.push(String((await h.call('POST', '/v1/sandboxes', { body: { workspaceId: ws, machineSize: 'standard' } })).body.sandbox.id))
+    }
+    // One is draining toward sleep; one is a create whose Worker was cut off 6 minutes ago.
+    h.raw.prepare(`UPDATE sandboxes SET status = 'suspending' WHERE id = ?`).run(ids[0]!)
+    h.raw.prepare(`UPDATE sandboxes SET status = 'creating', updated_at = ? WHERE id = ?`).run(h.now() - 6 * MIN, ids[1]!)
+    h.billing.requests.length = 0
+    expect((await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-d', machineSize: 'standard' } })).status).toBe(200)
+    expect(h.billing.requests[0]).toMatchObject({ runningSandboxes: 1, runningSandboxesForUser: 1 })
+    // A create still in flight (recent) does count.
+    h.raw.prepare(`UPDATE sandboxes SET updated_at = ? WHERE id = ?`).run(h.now() - MIN, ids[1]!)
+    h.billing.requests.length = 0
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-e', machineSize: 'standard' } })
+    expect(h.billing.requests[0]).toMatchObject({ runningSandboxes: 3, runningSandboxesForUser: 3 })
+  })
+
   it('a create whose Worker was cut off is failed after 5 minutes, not 15', async () => {
     const h = await createHarness()
     const { body } = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' } })
