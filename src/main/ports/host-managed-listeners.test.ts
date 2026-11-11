@@ -76,32 +76,35 @@ describe('host-managed listeners', () => {
     ).toBe(false)
   })
 
-  it('marks a direct child of a managed tool, but not of the server or a user shell', () => {
+  it('walks ancestry to a managed tool, stopping at the server and at shells', () => {
     const parents: Record<number, { pid: number; commandLine: string }> = {
       985: { pid: 941, commandLine: '/opt/orca/runtime/orcad/agent-browser-linux-x64' },
+      1018: { pid: 985, commandLine: '/usr/bin/google-chrome --headless' },
       300: { pid: 27, commandLine: 'node /opt/orca/runtime/orcad/orcad-server.js' },
-      400: { pid: 399, commandLine: '/bin/bash' }
+      400: { pid: 399, commandLine: '/bin/bash' },
+      399: { pid: 27, commandLine: 'node /opt/orca/runtime/orcad/orcad-server.js' },
+      500: { pid: 499, commandLine: '-bash' },
+      499: { pid: 498, commandLine: '/opt/orca/openssh/sbin/sshd -D -f x' }
     }
     const read = (pid: number) => parents[pid]
     const chrome = { pid: 985, port: 42063, commandLine: '/usr/bin/google-chrome --headless' }
     expect(isHostManagedListener(chrome, config(), 27, read)).toBe(true)
+    // Grandchild: a Chrome helper two levels below agent-browser.
+    expect(
+      isHostManagedListener(
+        { pid: 1018, port: 42064, commandLine: '/opt/google/chrome/chrome --type=utility' },
+        config(),
+        27,
+        read
+      )
+    ).toBe(true)
     expect(isHostManagedListener(chrome, config([]), 27, read)).toBe(false)
+    const user = (pid: number) => ({ pid, port: 8123, commandLine: 'python3 -m http.server' })
     // `exec python3 -m http.server` in a terminal: its parent is the server.
-    expect(
-      isHostManagedListener(
-        { pid: 300, port: 8123, commandLine: 'python3 -m http.server' },
-        config(),
-        27,
-        read
-      )
-    ).toBe(false)
-    expect(
-      isHostManagedListener(
-        { pid: 400, port: 8123, commandLine: 'python3 -m http.server' },
-        config(),
-        27,
-        read
-      )
-    ).toBe(false)
+    expect(isHostManagedListener(user(300), config(), 27, read)).toBe(false)
+    // Terminal shell under the server.
+    expect(isHostManagedListener(user(400), config(), 27, read)).toBe(false)
+    // An SSH session's shell under the managed sshd.
+    expect(isHostManagedListener(user(500), config(), 27, read)).toBe(false)
   })
 })

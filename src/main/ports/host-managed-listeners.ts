@@ -29,7 +29,7 @@ export function hostManagedListenerConfig(
 
 /**
  * Listeners the host runs itself: this server process, a program started from a managed root
- * (checked on argv[0] and argv[1], so `python3 /root/bin/tool` counts too) or its direct child, or a
+ * (checked on argv[0] and argv[1], so `python3 /root/bin/tool` counts too) or its descendant, or a
  * declared platform port whose owner is invisible. A pid-less listener on any other port (a root-run postgres or
  * Docker-published port) is still the user's.
  */
@@ -51,14 +51,28 @@ export function isHostManagedListener(
   if (startedFromRoot(port.commandLine, config.roots)) {
     return true
   }
-  // A managed tool's direct child (agent-browser's Chrome DevTools port). The server itself is
-  // excluded as a parent: it spawns the user's terminals.
-  const parent = readParent(port.pid)
-  return (
-    parent !== undefined &&
-    parent.pid !== serverPid &&
-    startedFromRoot(parent.commandLine, config.roots)
-  )
+  // A managed tool's descendant (agent-browser's Chrome DevTools port). The walk stops at the server
+  // (it spawns the user's terminals) and at a shell (a user session, e.g. over the managed sshd).
+  let pid = port.pid
+  for (let depth = 0; depth < MAX_ANCESTRY_DEPTH; depth++) {
+    const parent = readParent(pid)
+    if (!parent || parent.pid === serverPid || isShell(parent.commandLine)) {
+      return false
+    }
+    if (startedFromRoot(parent.commandLine, config.roots)) {
+      return true
+    }
+    pid = parent.pid
+  }
+  return false
+}
+
+const MAX_ANCESTRY_DEPTH = 8
+const SHELLS = new Set(['sh', 'bash', 'dash', 'zsh', 'fish', 'ksh', 'tcsh', 'csh', 'nu', 'pwsh'])
+
+function isShell(commandLine: string): boolean {
+  const argv0 = commandLine.trim().split(/\s+/)[0] ?? ''
+  return SHELLS.has(argv0.replace(/^-/, '').split('/').pop() ?? '')
 }
 
 export type ParentProcess = { pid: number; commandLine: string }
