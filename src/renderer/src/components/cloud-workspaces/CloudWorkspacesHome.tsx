@@ -22,6 +22,7 @@ import {
   type CloudWorkspacesFilters
 } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
+import { readShowRoutineRuns, writeShowRoutineRuns } from './cloud-workspaces-home-prefs'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
@@ -84,13 +85,18 @@ export function CloudWorkspacesHome({
   const orgId = cloud?.activeOrgId
   const selfId = cloud?.userId ?? null
   const account = useOrcaAccountKey()
-  const [filters, setFilters] = useState(INITIAL_CLOUD_WORKSPACE_FILTERS)
+  // The Routine runs switch is remembered per account; every other filter starts fresh.
+  const initialFilters = (key: string): CloudWorkspacesFilters => ({
+    ...INITIAL_CLOUD_WORKSPACE_FILTERS,
+    routines: readShowRoutineRuns(key)
+  })
+  const [filters, setFilters] = useState(() => initialFilters(account))
   homeArchive.usePendingHomeFilters(setFilters)
   // Owner and repo filters name the previous team's people and repos; a team switch starts over.
   const [filtersAccount, setFiltersAccount] = useState(account)
   if (filtersAccount !== account) {
     setFiltersAccount(account)
-    setFilters(INITIAL_CLOUD_WORKSPACE_FILTERS)
+    setFilters(initialFilters(account))
   }
   const [opening, setOpening] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -100,7 +106,11 @@ export function CloudWorkspacesHome({
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
-    { scope, archived: filters.archived ? 'only' : 'exclude' },
+    {
+      scope,
+      archived: filters.archived ? 'only' : 'exclude',
+      ...(filters.routines ? { routines: 'include' as const } : {})
+    },
     Boolean(cloud),
     account
   )
@@ -111,15 +121,22 @@ export function CloudWorkspacesHome({
     []
   )
 
-  const changeFilters = useCallback((next: Partial<CloudWorkspacesFilters>) => {
-    setFilters((previous) => {
-      // A different list (scope or archived) has different owners and repos; start unfiltered.
-      const reset =
-        (next.scope !== undefined && next.scope !== previous.scope) ||
-        (next.archived !== undefined && next.archived !== previous.archived)
-      return { ...previous, ...(reset ? { by: ANY, repo: ANY } : {}), ...next }
-    })
-  }, [])
+  const changeFilters = useCallback(
+    (next: Partial<CloudWorkspacesFilters>) => {
+      if (next.routines !== undefined) {
+        writeShowRoutineRuns(account, next.routines)
+      }
+      setFilters((previous) => {
+        // A different list (scope or archived) has different owners and repos; start unfiltered.
+        // Routine runs only add rows, so the owner/repo picks stay.
+        const reset =
+          (next.scope !== undefined && next.scope !== previous.scope) ||
+          (next.archived !== undefined && next.archived !== previous.archived)
+        return { ...previous, ...(reset ? { by: ANY, repo: ANY } : {}), ...next }
+      })
+    },
+    [account]
+  )
 
   // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
   const all = useHomeWorkspaces(state.status === 'ready' ? state.workspaces : null)
@@ -170,7 +187,11 @@ export function CloudWorkspacesHome({
       })),
     [directory, selfId, t]
   )
-  const totalMs = visible.reduce((sum, w) => sum + w.cost.computeMs, 0)
+  const routineRuns = state.status === 'ready' ? state.routineRuns : undefined
+  // Hidden routine runs leave the count but not the hours: they are still the team's usage.
+  const totalMs =
+    visible.reduce((sum, w) => sum + w.cost.computeMs, 0) +
+    (filters.routines ? 0 : (routineRuns?.hiddenComputeMs ?? 0))
 
   /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
   const open = useCallback(
@@ -298,6 +319,7 @@ export function CloudWorkspacesHome({
         }
         reading={reading}
         onRefresh={refresh}
+        routineRuns={routineRuns}
       />
 
       <div

@@ -28,7 +28,8 @@ const ListQuery = z
     by: z.string().max(128).optional(),
     repo: z.string().max(2048).optional(),
     section: z.string().max(64).optional(),
-    archived: z.enum(['exclude', 'include', 'only']).optional()
+    archived: z.enum(['exclude', 'include', 'only']).optional(),
+    routines: z.enum(['exclude', 'include']).optional()
   })
   .strict()
 const Patch = z
