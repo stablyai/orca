@@ -1,8 +1,7 @@
 import { Fragment, useState } from 'react'
 import { Button } from '../ui/button'
-import { translate } from '@/i18n/i18n'
 import { formatSessionTime, formatTokens, formatUsageProjectLabel } from './usage-formatters'
-import { useIntlLocale } from '../../i18n/use-translate'
+import { useIntlLocale, useTranslate } from '../../i18n/use-translate'
 
 type UsageRecentSession = {
   sessionId: string
@@ -50,6 +49,7 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
   getSessionTimeLabel,
   renderDetails
 }: UsageRecentSessionsTableProps<Row>): React.JSX.Element {
+  const t = useTranslate()
   const [expanded, setExpanded] = useState<string | null>(null)
   const intlLocale = useIntlLocale()
   return (
@@ -59,7 +59,7 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
         <p className="text-xs text-muted-foreground">{description}</p>
         {rows.some((row) => row.totalsScope === 'lifetime') ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'stats.usage.session.lifetime',
               'Some session rows show lifetime totals because period attribution is unavailable. Refresh the scan to rebuild their detail.'
             )}

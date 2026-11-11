@@ -10,7 +10,7 @@ import {
   CommandList
 } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function UsageHistoryFilter({
   label,
@@ -25,6 +25,7 @@ export function UsageHistoryFilter({
   options: readonly { value: string; label: string }[]
   onChange: (value: string | null) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const selectedLabel =
     value === null ? allLabel : (options.find((option) => option.value === value)?.label ?? value)
@@ -46,13 +47,13 @@ export function UsageHistoryFilter({
       <PopoverContent className="w-72 max-w-[calc(100vw-2rem)]" align="start">
         <Command>
           <CommandInput
-            placeholder={translate('stats.usage.filter.search', 'Search {{filter}}…', {
+            placeholder={t('stats.usage.filter.search', 'Search {{filter}}…', {
               filter: label
             })}
             aria-label={label}
           />
           <CommandList>
-            <CommandEmpty>{translate('stats.usage.filter.noMatches', 'No matches')}</CommandEmpty>
+            <CommandEmpty>{t('stats.usage.filter.noMatches', 'No matches')}</CommandEmpty>
             <CommandGroup heading={label}>
               {[{ value: null, label: allLabel }, ...options].map((option) => (
                 <CommandItem

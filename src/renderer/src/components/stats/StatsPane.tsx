@@ -271,7 +271,7 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
                 <div className="grid gap-3 @sm:grid-cols-3">
                   <StatCard
                     label={t('auto.components.stats.StatsPane.9dbec9e675', 'Agents spawned')}
-                    value={summary.totalAgentsSpawned.toLocaleString(getIntlLocale())}
+                    value={summary.totalAgentsSpawned.toLocaleString(intlLocale)}
                     icon={<Bot className="size-4" />}
                   />
                   <StatCard
@@ -281,7 +281,7 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
                   />
                   <StatCard
                     label={t('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
-                    value={summary.totalPRsCreated.toLocaleString(getIntlLocale())}
+                    value={summary.totalPRsCreated.toLocaleString(intlLocale)}
                     icon={<GitPullRequest className="size-4" />}
                   />
                 </div>

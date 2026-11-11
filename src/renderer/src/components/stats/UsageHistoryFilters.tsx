@@ -13,7 +13,7 @@ import {
   type UsageHistorySelection
 } from './usage-history-model'
 import { usageHistoryAccountLabel } from './usage-history-accounts'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function UsageHistoryFilters({
   allRows,
@@ -28,11 +28,12 @@ export function UsageHistoryFilters({
   providers: readonly { value: UsageHistoryProvider; label: string }[]
   accountLabels: ReadonlyMap<string, string>
 }): React.JSX.Element {
+  const t = useTranslate()
   const optionRows = useMemo(
     () => filterUsageHistory(allRows, { ...selection, model: null, project: null, day: null }),
     [allRows, selection]
   )
-  const unknown = translate('stats.usage.unknown', 'Unknown')
+  const unknown = t('stats.usage.unknown', 'Unknown')
   const accountRows = useMemo(
     () =>
       filterUsageHistory(allRows, {
@@ -51,7 +52,7 @@ export function UsageHistoryFilters({
         usageHistoryAccountKey(row),
         {
           value: usageHistoryAccountKey(row),
-          label: usageHistoryAccountLabel(row, accountLabels)
+          label: usageHistoryAccountLabel(row, accountLabels, t)
         }
       ])
     ).values()
@@ -70,24 +71,24 @@ export function UsageHistoryFilters({
     ).values()
   ].sort((a, b) => a.label.localeCompare(b.label))
   const rangeOptions: readonly { value: UsageHistoryRange; label: string }[] = [
-    { value: '7d', label: translate('stats.usage.period.7d', '7 days') },
-    { value: '30d', label: translate('stats.usage.period.30d', '30 days') },
-    { value: '90d', label: translate('stats.usage.period.90d', '90 days') },
-    { value: 'all', label: translate('stats.usage.period.all', 'All time') }
+    { value: '7d', label: t('stats.usage.period.7d', '7 days') },
+    { value: '30d', label: t('stats.usage.period.30d', '30 days') },
+    { value: '90d', label: t('stats.usage.period.90d', '90 days') },
+    { value: 'all', label: t('stats.usage.period.all', 'All time') }
   ]
   return (
     <div className="space-y-3">
       <SettingsSegmentedControl<UsageHistoryRange>
         value={selection.range}
         onChange={(range) => setSelection((current) => ({ ...current, range, day: null }))}
-        ariaLabel={translate('stats.usage.filter.period', 'History period')}
+        ariaLabel={t('stats.usage.filter.period', 'History period')}
         options={rangeOptions}
         size="sm"
       />
       <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2 @3xl:grid-cols-4">
         <UsageHistoryFilter
-          label={translate('stats.usage.filter.provider', 'Provider')}
-          allLabel={translate('stats.usage.filter.allProviders', 'All providers')}
+          label={t('stats.usage.filter.provider', 'Provider')}
+          allLabel={t('stats.usage.filter.allProviders', 'All providers')}
           value={selection.provider === 'all' ? null : selection.provider}
           options={providers}
           onChange={(provider) => {
@@ -103,8 +104,8 @@ export function UsageHistoryFilters({
           }}
         />
         <UsageHistoryFilter
-          label={translate('stats.usage.filter.account', 'Account')}
-          allLabel={translate('stats.usage.filter.allAccounts', 'All accounts')}
+          label={t('stats.usage.filter.account', 'Account')}
+          allLabel={t('stats.usage.filter.allAccounts', 'All accounts')}
           value={selection.account ?? null}
           options={accountOptions}
           onChange={(account) =>
@@ -118,27 +119,27 @@ export function UsageHistoryFilters({
           }
         />
         <UsageHistoryFilter
-          label={translate('stats.usage.filter.model', 'Model')}
-          allLabel={translate('stats.usage.filter.allModels', 'All models')}
+          label={t('stats.usage.filter.model', 'Model')}
+          allLabel={t('stats.usage.filter.allModels', 'All models')}
           value={selection.model}
           options={models}
           onChange={(model) => setSelection((current) => ({ ...current, model }))}
         />
         <UsageHistoryFilter
-          label={translate('stats.usage.filter.project', 'Project')}
-          allLabel={translate('stats.usage.filter.allProjects', 'All projects')}
+          label={t('stats.usage.filter.project', 'Project')}
+          allLabel={t('stats.usage.filter.allProjects', 'All projects')}
           value={selection.project}
           options={projects}
           onChange={(project) => setSelection((current) => ({ ...current, project }))}
         />
         <UsageHistoryFilter
-          label={translate('stats.usage.filter.scope', 'Project scope')}
-          allLabel={translate('stats.usage.filter.allLocal', 'All local projects')}
+          label={t('stats.usage.filter.scope', 'Project scope')}
+          allLabel={t('stats.usage.filter.allLocal', 'All local projects')}
           value={selection.scope === 'all' ? null : 'orca'}
           options={[
             {
               value: 'orca',
-              label: translate('stats.usage.filter.orca', 'Orca projects and folders')
+              label: t('stats.usage.filter.orca', 'Orca projects and folders')
             }
           ]}
           onChange={(scope) =>
@@ -157,7 +158,7 @@ export function UsageHistoryFilters({
           size="sm"
           onClick={() => setSelection((current) => ({ ...current, day: null }))}
         >
-          {translate('stats.usage.filter.clearDay', '{{day}} · Clear day filter', {
+          {t('stats.usage.filter.clearDay', '{{day}} · Clear day filter', {
             day: selection.day
           })}
         </Button>
