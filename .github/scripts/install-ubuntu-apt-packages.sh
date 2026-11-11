@@ -28,5 +28,10 @@ for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.li
   fi
 done
 
-timeout 60 sudo apt-get update
-timeout 180 sudo apt-get install -y "$@"
+# A timed-out install may leave a transaction that apt cannot resume itself.
+timeout 30 sudo dpkg --configure -a || true
+# Unrelated repositories may fail refresh; apt still verifies the requested packages.
+if ! timeout 60 sudo apt-get update; then
+  echo 'Index refresh incomplete; attempting the requested packages with available authenticated indexes.' >&2
+fi
+timeout 150 sudo apt-get install -y "$@"
