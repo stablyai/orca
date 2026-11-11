@@ -89,8 +89,25 @@ export const NO_SESSION: SessionFields & Pick<SandboxRow, 'orcad_endpoint'> = {
   usage_settled_at: null
 }
 
-/** Counted against the plan's concurrency limit. */
+/** Holding (or about to hold) a VM: capacity guardrails, retention and drains count these. */
 export const ACTIVE_STATUSES: readonly SandboxStatus[] = ['creating', 'running', 'resuming', 'suspending']
+
+/** A create this old never finished: its Worker was cut off, and the cron releases it (reconcile.ts). */
+export const CREATE_ABANDONED_MS = 5 * 60_000
+
+/**
+ * Counted against the plan's concurrency limits (team and per member). Not a sandbox going to sleep
+ * ('suspending' drains for up to 5 min after someone chose Sleep, and reads as asleep everywhere), and
+ * not a create abandoned more than CREATE_ABANDONED_MS ago: neither may refuse the next start.
+ */
+const START_GATE_STATUSES: readonly SandboxStatus[] = ['creating', 'running', 'resuming']
+
+function startGateFilter(now: number): { sql: string; binds: (string | number)[] } {
+  return {
+    sql: `status IN (${START_GATE_STATUSES.map(() => '?').join(', ')}) AND NOT (status = 'creating' AND updated_at < ?)`,
+    binds: [...START_GATE_STATUSES, now - CREATE_ABANDONED_MS]
+  }
+}
 
 export async function insertSandbox(
   db: D1Database,
@@ -155,20 +172,27 @@ export async function listAccountSandboxes(db: D1Database, accountId: string): P
   return results
 }
 
-export async function countActiveSandboxes(db: D1Database, accountId: string): Promise<number> {
-  const placeholders = ACTIVE_STATUSES.map(() => '?').join(', ')
+/** Sandboxes that count against the account's concurrency limit at `now` (see START_GATE_STATUSES). */
+export async function countActiveSandboxes(db: D1Database, accountId: string, now: number): Promise<number> {
+  const gate = startGateFilter(now)
   const row = await db
-    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND status IN (${placeholders})`)
-    .bind(accountId, ...ACTIVE_STATUSES)
+    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND ${gate.sql}`)
+    .bind(accountId, ...gate.binds)
     .first<{ n: number }>()
   return row?.n ?? 0
 }
 
-export async function countActiveSandboxesForUser(db: D1Database, accountId: string, userId: string): Promise<number> {
-  const placeholders = ACTIVE_STATUSES.map(() => '?').join(', ')
+/** The same, for one member's per-member limit. */
+export async function countActiveSandboxesForUser(
+  db: D1Database,
+  accountId: string,
+  userId: string,
+  now: number
+): Promise<number> {
+  const gate = startGateFilter(now)
   const row = await db
-    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND user_id = ? AND status IN (${placeholders})`)
-    .bind(accountId, userId, ...ACTIVE_STATUSES)
+    .prepare(`SELECT COUNT(*) AS n FROM sandboxes WHERE account_id = ? AND user_id = ? AND ${gate.sql}`)
+    .bind(accountId, userId, ...gate.binds)
     .first<{ n: number }>()
   return row?.n ?? 0
 }

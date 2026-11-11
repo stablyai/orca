@@ -418,10 +418,10 @@ export type WakeHints = {
   running: { owner: number; account: number }
 }
 
-export async function wakeHints(db: D1Database, row: SandboxRow): Promise<WakeHints> {
+export async function wakeHints(db: D1Database, row: SandboxRow, now: number = Date.now()): Promise<WakeHints> {
   const [owner, account] = await Promise.all([
-    countActiveSandboxesForUser(db, row.account_id, row.user_id),
-    countActiveSandboxes(db, row.account_id)
+    countActiveSandboxesForUser(db, row.account_id, row.user_id, now),
+    countActiveSandboxes(db, row.account_id, now)
   ])
   return { lastUserSleepAt: row.user_slept_at ?? null, running: { owner, account } }
 }
