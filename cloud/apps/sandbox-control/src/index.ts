@@ -379,9 +379,10 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
                 const handled = provider.onUnauthorized
                   ? keyring.then((ring) => provider.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil }))
                   : markAgentCredentialRevoked(env.SANDBOX_DB, row.user_id, agent, now)
-                const work = handled.then(() => {
+                // Every running sandbox of this person drops the dead placeholder, not only this one.
+                const work = handled.then(async () => {
                   forgetAccountCredential(row.user_id, agent)
-                  scheduleEnvRefresh(env, deps, row)
+                  await refreshOwnersSandboxes(env, deps, row.user_id)
                 })
                 if (deps.waitUntil) {
                   deps.waitUntil(work.catch(() => undefined))
