@@ -201,8 +201,8 @@ export function EmptyStepRow({
       : t('cloudEnvironment.log.booting', 'Starting a fresh sandbox…')
   } else if (step === 'snapshot') {
     copy = build.finishedAt
-      ? t('cloudEnvironment.log.snapshotDone', 'Snapshot saved.')
-      : t('cloudEnvironment.log.snapshotting', 'Saving the snapshot…')
+      ? t('cloudEnvironment.log.environmentSaved', 'Environment saved.')
+      : t('cloudEnvironment.log.savingEnvironment', 'Saving the environment…')
   } else {
     copy = t('cloudEnvironment.log.noOutput', 'No output.')
   }

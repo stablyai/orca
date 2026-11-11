@@ -163,7 +163,7 @@ export function stepLabel(step: EnvironmentBuildStep, t: Translate = translate):
     case 'record':
       return t('cloudEnvironment.step.record', 'Record environment')
     case 'snapshot':
-      return t('cloudEnvironment.step.snapshot', 'Save snapshot')
+      return t('cloudEnvironment.step.saveEnvironment', 'Save environment')
   }
 }
 
@@ -174,7 +174,7 @@ export function buildStatusLabel(status: EnvironmentBuildStatus, t: Translate = 
     case 'running':
       return t('cloudEnvironment.status.running', 'Building')
     case 'snapshotting':
-      return t('cloudEnvironment.status.snapshotting', 'Saving snapshot')
+      return t('cloudEnvironment.status.savingEnvironment', 'Saving environment')
     case 'succeeded':
       return t('cloudEnvironment.status.succeeded', 'Ready')
     case 'failed':
@@ -226,7 +226,7 @@ export function buildErrorCopy(error: string | null, t: Translate = translate): 
     case 'timeout':
       return t('cloudEnvironment.error.timeout', 'The build ran past its time limit.')
     case 'snapshot_failed':
-      return t('cloudEnvironment.error.snapshotFailed', 'Saving the snapshot failed.')
+      return t('cloudEnvironment.error.saveEnvironmentFailed', 'Saving the environment failed.')
     case 'runtime_removed':
       return t(
         'cloudEnvironment.error.runtimeRemoved',
