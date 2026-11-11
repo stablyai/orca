@@ -65,7 +65,7 @@ beforeEach(() => {
     refreshRemoteServerUpdates: async () => {}
   })
   const header = document.createElement('div')
-  header.dataset.sidebarSectionTitle = 'projects'
+  header.dataset.contextualTourTarget = 'project-grouping-upgrade'
   header.getBoundingClientRect = () => DOMRect.fromRect({ x: 100, y: 100, width: 200, height: 30 })
   document.body.appendChild(header)
 })
@@ -73,11 +73,13 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.restoreAllMocks()
-  document.querySelectorAll('[data-sidebar-section-title]').forEach((element) => element.remove())
+  document
+    .querySelectorAll('[data-contextual-tour-target="project-grouping-upgrade"]')
+    .forEach((element) => element.remove())
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-it.each(['Got it', 'Dismiss tour', 'Settings'])(
+it.each(['Dismiss tour', 'Settings'])(
   'dismisses the actual upgrade overlay permanently through %s',
   async (action) => {
     const scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo')

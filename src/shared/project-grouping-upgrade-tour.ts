@@ -7,10 +7,10 @@ export const PROJECT_GROUPING_TIP_TOUR = {
       id: 'project-grouping-upgrade',
       title: 'One project for every checkout',
       body: '',
-      targetSelector: '[data-sidebar-section-title="projects"]',
+      targetSelector: '[data-contextual-tour-target="project-grouping-upgrade"]',
       requiredForStart: true,
       preferredPlacement: 'right',
-      primaryAction: { kind: 'complete', label: 'Got it' }
+      hidePrimaryAction: true
     }
   ]
 } as const satisfies ContextualTour
