@@ -27062,6 +27062,7 @@
       "more": "More actions",
       "details": "Details",
       "hideDetails": "Hide details",
+      "sandboxHours": "Sandbox hours",
       "delete": "Delete"
     },
     "statusUnavailable": "Status unavailable",
@@ -27124,7 +27125,6 @@
     "archivedWorkspace": "Archived the workspace",
     "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files.",
     "tryAgain": "Try again",
-    "sandboxHoursUsedLabel": "Sandbox hours used",
     "sleep": "Sleep",
     "thisWorkspace": "This workspace",
     "sleepFailedNamed": "Couldn’t put {{name}} to sleep",

@@ -4,7 +4,9 @@
 import React, { useEffect, useId, useState } from 'react'
 import {
   ChevronLeft,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Loader2,
   Moon,
   Play,
@@ -262,13 +264,12 @@ export function CloudWorkspaceStatusPanel({
           <span className="min-w-0 flex-1 truncate tabular-nums">
             {cloudCardUsageLine(metrics, t)}
           </span>
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              'size-3.5 shrink-0 motion-safe:transition-transform',
-              detailsOpen && 'rotate-90'
-            )}
-          />
+          {/* Expands in place (⌄ / ⌃); › is kept for rows that open another view. */}
+          {detailsOpen ? (
+            <ChevronUp aria-hidden className="size-3.5 shrink-0" />
+          ) : (
+            <ChevronDown aria-hidden className="size-3.5 shrink-0" />
+          )}
           <span className="sr-only">{t('orcaCloudWorkspace.card.details', 'Details')}</span>
         </button>
       ) : null}

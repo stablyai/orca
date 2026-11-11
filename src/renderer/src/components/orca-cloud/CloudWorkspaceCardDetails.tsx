@@ -2,12 +2,12 @@
 // Opt-in (⋯ → Details, or the disclosure under the usage line); the default card stays one line.
 import React from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getIntlLocale } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import {
   formatBytes,
   formatDuration,
-  formatSandboxHours,
   formatShortDate,
   percentOf
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
@@ -17,6 +17,16 @@ import {
 } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 const METER_ROWS = 3
+
+/** "14.6": the label already says sandbox hours. */
+function sandboxHoursNumber(ms: number): string {
+  const hours = ms / 3_600_000
+  const digits = hours >= 100 ? 0 : 1
+  return new Intl.NumberFormat(getIntlLocale(), {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  }).format(hours)
+}
 
 function Meter({
   label,
@@ -137,8 +147,8 @@ export function CloudWorkspaceCardDetails({
           />
         ) : null}
         <Fact
-          label={t('orcaCloudWorkspace.sandboxHoursUsedLabel', 'Sandbox hours used')}
-          value={formatSandboxHours(status.usage.totalMs)}
+          label={t('orcaCloudWorkspace.card.sandboxHours', 'Sandbox hours')}
+          value={sandboxHoursNumber(status.usage.totalMs)}
         />
         {status.archive?.expiresAt ? (
           <Fact
