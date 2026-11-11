@@ -1,5 +1,6 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
+import { wakeScrollbackPreview } from '@/lib/orca-cloud/cloud-wake-scrollback'
 import { applyExpandedLayoutTo } from './expand/expanded-pane-layout'
 import { replayTerminalLayout } from './terminal-layout-replay'
 import { restoreScrollbackBuffers } from '../snapshots/saved-terminal-output-replay'
@@ -48,6 +49,14 @@ export function restoreTerminalPaneLayout(args: {
     refs.restoredViewportBlankingPanesRef,
     liveAltScreenLeafIds
   )
+  // WAKE-SCROLLBACK: waking remounts a cloud pane with a fresh, empty xterm; paint its kept pre-sleep
+  // output now (client-side, text + SGR) so it never shows blank before the woken snapshot's restore.
+  for (const pane of manager.getPanes()) {
+    const preview = wakeScrollbackPreview(pane.leafId)
+    if (preview !== null) {
+      pane.terminal.write(preview)
+    }
+  }
   const hasScrollbackRefs = Boolean(initialLayoutRef.current.scrollbackRefsByLeafId)
   if (
     restoredBuffers &&

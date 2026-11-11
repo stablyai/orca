@@ -124,6 +124,15 @@ export function armWakeScrollback(leafIds: Iterable<string>): void {
   }
 }
 
+/**
+ * What a freshly mounted pane shows until its woken snapshot's restore: the kept output alone
+ * (text + SGR only), or null when there is none.
+ */
+export function wakeScrollbackPreview(leafId: string): string | null {
+  const text = pending.get(leafId)?.text ?? null
+  return text === null ? null : `\x1b[0m${sanitizeRestoredText(text)}\x1b[0m`
+}
+
 /** The pane has pre-sleep output waiting to be put back after its wake. */
 export function hasPendingWakeScrollback(leafId: string): boolean {
   return (pending.get(leafId)?.text ?? null) !== null

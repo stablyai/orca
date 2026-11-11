@@ -7,6 +7,7 @@ import {
   finishWakeScrollbackRestore,
   forgetWakeScrollback,
   hasPendingWakeScrollback,
+  wakeScrollbackPreview,
   resetWakeScrollbackForTests
 } from './cloud-wake-scrollback'
 
@@ -241,6 +242,16 @@ describe('WAKE-SCROLLBACK', () => {
     capture(terminal, 'leaf-1')
     armWakeScrollback(['leaf-1'])
     expect(beginWakeScrollbackRestore('leaf-1', terminal)?.block).toContain('new')
+  })
+
+  it('a pane remounted on wake (fresh, empty xterm) is painted with its kept output at once', async () => {
+    const before = pane(6)
+    await write(before, '\x1b[32m$ ls\x1b[0m\r\nREADME\r\n$ ')
+    capture(before, 'leaf-1')
+    const remounted = pane(6)
+    await write(remounted, wakeScrollbackPreview('leaf-1')!)
+    expect(text(remounted)).toEqual(['$ ls', 'README', '$'])
+    expect(wakeScrollbackPreview('leaf-none')).toBeNull()
   })
 
   it('reports a pending restore only when there is output to put back', async () => {
