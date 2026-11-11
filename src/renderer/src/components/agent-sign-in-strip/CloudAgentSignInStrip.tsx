@@ -1,7 +1,8 @@
 // The 56 px strip at the top of an Orca Cloud pane (redesign §6). Fixed slots: status 16, two text
 // lines, the queued prompt chip (140, hidden below 720 px), actions (280, or 200 below 560 px).
+// Laid out from its own live width (RA-1): a pane narrowed after mount gets the narrow layout too.
 // A region, never a dialog; one polite status sentence per state.
-import React, { useState } from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import {
   CircleAlert,
   CircleCheck,
@@ -28,10 +29,54 @@ import type {
   CloudStripStatus
 } from './cloud-agent-strip-model'
 
-export type CloudStripWidth = 'wide' | 'narrow' | 'tiny'
+export type CloudStripWidth = 'wide' | 'narrow' | 'tiny' | 'compact'
 
 export function cloudStripWidth(paneWidth: number): CloudStripWidth {
-  return paneWidth < 560 ? 'tiny' : paneWidth < 720 ? 'narrow' : 'wide'
+  return paneWidth < 360
+    ? 'compact'
+    : paneWidth < 560
+      ? 'tiny'
+      : paneWidth < 720
+        ? 'narrow'
+        : 'wide'
+}
+
+/** The strip's own width class, followed live; the height never changes, so nothing shifts. */
+function useLiveStripWidth(
+  ref: React.RefObject<HTMLElement | null>,
+  initial: CloudStripWidth
+): CloudStripWidth {
+  const [width, setWidth] = useState(initial)
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element) {
+      return
+    }
+    const measure = (): void => setWidth(cloudStripWidth(element.getBoundingClientRect().width))
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ref])
+  return width
+}
+
+/**
+ * Where the strip sits in a pane: below the pane's title row, so the pane's own split and close
+ * buttons stay visible and clickable while it shows (RA-1). The pane and its fixture share it.
+ */
+export function CloudStripLayer({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <div
+      data-cloud-strip-layer
+      className="absolute inset-x-0 top-[var(--orca-pane-title-height,24px)] z-20"
+    >
+      {children}
+    </div>
+  )
 }
 
 export type CloudStripActions = {
@@ -68,21 +113,25 @@ function StatusSlot({ status }: { status: CloudStripStatus }): React.JSX.Element
 const GRID: Record<CloudStripWidth, string> = {
   wide: 'grid-cols-[16px_minmax(0,1fr)_140px_280px]',
   narrow: 'grid-cols-[16px_minmax(0,1fr)_280px]',
-  tiny: 'grid-cols-[16px_minmax(0,1fr)_200px]'
+  tiny: 'grid-cols-[16px_minmax(0,1fr)_200px]',
+  compact: 'grid-cols-[16px_minmax(0,1fr)_auto]'
 }
 
 export function CloudAgentSignInStrip({
   model,
   prompt,
-  width,
+  width: initialWidth = 'wide',
   actions
 }: {
   model: CloudStripModel
   prompt: string | null
-  /** Decided once at mount from the pane's width. */
-  width: CloudStripWidth
+  /** The first render's class; after that the strip follows its own live width. */
+  width?: CloudStripWidth
   actions: CloudStripActions
 }): React.JSX.Element {
+  const sectionRef = useRef<HTMLElement | null>(null)
+  const width = useLiveStripWidth(sectionRef, initialWidth)
+  const compact = width === 'compact'
   const t = useTranslate()
   const titleId = React.useId()
   const detailId = React.useId()
@@ -90,6 +139,8 @@ export function CloudAgentSignInStrip({
   const primary = model.primary
   return (
     <section
+      ref={sectionRef}
+      data-strip-width={width}
       role="region"
       aria-labelledby={titleId}
       aria-describedby={detailId}
@@ -109,11 +160,18 @@ export function CloudAgentSignInStrip({
       <StatusSlot status={model.status} />
       <div data-strip-text className="flex min-w-0 flex-col">
         <span id={titleId} className="truncate text-[13px] leading-5 font-medium">
-          {model.title}
+          {compact ? (model.compactTitle ?? model.title) : model.title}
         </span>
+        {/* Below 360 px the detail leaves the line but stays the region's description. */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <span id={detailId} className="truncate text-xs leading-4 text-muted-foreground">
+            <span
+              id={detailId}
+              className={cn(
+                'truncate text-xs leading-4 text-muted-foreground',
+                compact && 'sr-only'
+              )}
+            >
               {model.detail}
               {model.description ? <span className="sr-only">. {model.description}</span> : null}
             </span>
@@ -185,7 +243,9 @@ export function CloudAgentSignInStrip({
             aria-disabled={primary.busy || undefined}
             onClick={() => (primary.busy ? undefined : actions.primary(primary.action))}
           >
-            {width === 'tiny' && primary.narrowLabel ? primary.narrowLabel : primary.label}
+            {(width === 'tiny' || compact) && primary.narrowLabel
+              ? primary.narrowLabel
+              : primary.label}
           </Button>
         ) : null}
         {model.otherWays ? (
@@ -221,7 +281,8 @@ export function CloudAgentSignInStrip({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-        {model.status === 'done' ? null : (
+        {/* Renew is the whole action and the strip leaves on its own; Escape still cancels. */}
+        {model.status === 'done' || primary?.action.kind === 'renew' ? null : (
           <Button
             type="button"
             variant="ghost"

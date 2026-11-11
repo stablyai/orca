@@ -2,7 +2,7 @@
 // private launch hold waits, or #40228's per-workspace gate while the Orca-account path is paused or
 // never offered. It overlays the top 56 px of the pane while the agent hasn't started, so the
 // terminal's size never changes. SSH, WSL and paired hosts keep #40228's card.
-import React, { useEffect, useState, useSyncExternalStore } from 'react'
+import React, { useEffect, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
@@ -27,6 +27,7 @@ import type { TerminalPaneController } from '../terminal-pane/controller/use-ter
 import { agentSignInCardActions } from '../agent-sign-in/AgentSignInPanePortals'
 import {
   CloudAgentSignInStrip,
+  CloudStripLayer,
   cloudStripWidth,
   type CloudStripActions
 } from './CloudAgentSignInStrip'
@@ -76,8 +77,8 @@ function CloudStripPortal({
   const gate = useAgentSignInGate(paneKey)
   const cloudGate = gate && isOrcaCloudEnvironmentId(gate.environmentId) ? gate : null
   const accounts = useOrcaCloudAgentAccounts(hold !== null || cloudGate !== null)
-  // Decided once at mount (container query); the strip never changes width class mid-flow.
-  const [width] = useState(() => cloudStripWidth(pane.container.clientWidth))
+  // The first render's class; the strip then follows its own live width (RA-1).
+  const width = cloudStripWidth(pane.container.clientWidth)
   const active = hold !== null || cloudGate !== null
   useEffect(() => {
     if (!active) {
@@ -145,14 +146,14 @@ function CloudStripPortal({
     cancel: () => (hold ? releaseCloudAgentHold(key, 'cancel') : gateActions.cancel())
   }
   return createPortal(
-    <div className="absolute inset-x-0 top-0 z-20">
+    <CloudStripLayer>
       <CloudAgentSignInStrip
         model={model}
         prompt={hold?.prompt ?? cloudGate?.prompt ?? null}
         width={width}
         actions={actions}
       />
-    </div>,
+    </CloudStripLayer>,
     pane.container,
     `cloud-sign-in-strip-${pane.id}`
   )

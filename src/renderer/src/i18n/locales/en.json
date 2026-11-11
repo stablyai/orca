@@ -28027,7 +28027,8 @@
     "pasteInstead": "Paste a code instead",
     "cancelSignIn": "Cancel sign-in",
     "copyAndOpen": "Copy code and open",
-    "cancelledToast": "The agent didn’t start. The shell is still open."
+    "cancelledToast": "The agent didn’t start. The shell is still open.",
+    "expiredCompact": "{{agent}} sign-in expired"
   },
   "cloudAgentCheck": {
     "keyAgentSignedOut": "{{agent}} isn’t signed in.",
