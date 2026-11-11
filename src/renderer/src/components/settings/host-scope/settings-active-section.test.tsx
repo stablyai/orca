@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { setSettingsActiveSection, useSettingsActiveSection } from './settings-active-section'
