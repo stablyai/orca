@@ -13752,6 +13752,18 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "No matches."
+        },
+        "HermesSetupSection": {
+          "version": "Show version",
+          "acpCheck": "Run ACP check",
+          "setup": "Set up profile",
+          "profile": "Checks use the Hermes profile {{profile}} from HERMES_HOME.",
+          "defaultProfile": "Checks use the default Hermes profile. Set HERMES_HOME to a profile folder to check that profile.",
+          "close": "Close terminal",
+          "loading": "Loading terminal…",
+          "terminalTitle": "Hermes",
+          "terminalLabel": "Hermes setup terminal",
+          "instructions": "Press Enter to run the command."
         }
       },
       "right": {

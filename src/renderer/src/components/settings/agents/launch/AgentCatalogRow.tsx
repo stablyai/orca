@@ -104,6 +104,8 @@ export type AgentCatalogRowProps = {
   opensAs?: AgentOpensAs
   /** The downloaded chat program's install and sign-in, shown in the row's details. */
   chatRuntime?: React.ReactNode
+  /** The agent's own setup checks, shown in the row's details. */
+  setupChecks?: React.ReactNode
   launchChoiceEditor?: (permissionControlRef: React.Ref<HTMLDivElement>) => React.ReactNode
 }
 
@@ -133,7 +135,8 @@ export function AgentCatalogRow({
   permissionChoice,
   launchArgs = argsOverride,
   opensAs,
-  chatRuntime
+  chatRuntime,
+  setupChecks
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
@@ -367,6 +370,7 @@ export function AgentCatalogRow({
                   />
                 </div>
               )}
+              {setupChecks && <div className="mt-2">{setupChecks}</div>}
               <p className="mt-2 text-[11px] text-muted-foreground">
                 {translate(
                   'auto.components.settings.AgentsPane.f9f127d664',

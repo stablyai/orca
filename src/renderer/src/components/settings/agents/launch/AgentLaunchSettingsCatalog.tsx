@@ -51,6 +51,7 @@ import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from './HostAgentEnvironmentEditor'
+import { HermesSetupSection } from './HermesSetupSection'
 import { buildCodexSessionSourceHomeControl } from '../../../agent/launch-settings/codex-session-source-home-control'
 import { buildAgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
 import { AgentChatRuntimeArea } from '../../../agent/launch-settings/AgentChatChoiceControls'
@@ -285,7 +286,18 @@ export function AgentLaunchSettingsCatalog({
     sessionSourceHome:
       local && isDetected && agent.id === 'codex'
         ? buildCodexSessionSourceHomeControl(local.settings, local.updateSettings)
-        : undefined
+        : undefined,
+    setupChecks:
+      local && isDetected && agent.id === 'hermes' ? (
+        <HermesSetupSection
+          commandOverride={settings.agentCmdOverrides.hermes}
+          hermesHome={
+            resolveTuiAgentLaunchEnv('hermes', {
+              agentDefaultEnv: local.settings.agentDefaultEnv
+            }).HERMES_HOME
+          }
+        />
+      ) : undefined
   })
   const rowProps = (
     agent: (typeof catalog)[number],
