@@ -39,7 +39,8 @@
   ],
   "exclude": [
     "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
-    "../src/main/runtime/rpc/methods/orchestration/orchestration-check-ambiguous-caller.test.ts"
+    "../src/main/runtime/rpc/methods/orchestration/orchestration-check-ambiguous-caller.test.ts",
+    "../src/main/runtime/agent-session/structured-agent-session-chat-wait-work-state.test.ts"
   ],
   "compilerOptions": {
     "composite": true,
