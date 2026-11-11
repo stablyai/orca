@@ -235,6 +235,7 @@ export class RemoteBrowserStreamLifecycle {
     }
     this.streamViewportSize = viewportSize
     const token = tokens.claimStreamToken(operationToken, pageId)
+    const admitsTabInfo = this.session.captureTabInfoAdmission(token)
     // Treat a silent host as a drop so it spends the same bounded retry budget.
     this.liveness.watch(() => {
       if (this.tokens.isCurrentStreamToken(token)) {
@@ -257,7 +258,9 @@ export class RemoteBrowserStreamLifecycle {
             // Record uptime; only sustained streams earn a refill at close. Live status also clears healed notices.
             this.liveness.markReady()
             this.setStatus(REMOTE_BROWSER_STREAM_LIVE)
-            deps.applyTabInfo(event.tab)
+            if (admitsTabInfo()) {
+              deps.applyTabInfo(event.tab)
+            }
             void deps.syncViewport(event.browserPageId).catch(() => {})
           },
           onEnded: () => this.handleStreamClosed(token, true),

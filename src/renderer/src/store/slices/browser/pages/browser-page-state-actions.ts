@@ -12,6 +12,10 @@ import {
 } from './browser-page-records'
 import { normalizeBrowserHistoryUrl } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
 import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import {
+  browserCertificateFailureEqual,
+  browserPageEqual
+} from '@/runtime/web-session-tabs-sync/state-equality-tabs'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,
@@ -58,13 +62,7 @@ export function createBrowserPageStateActions(
             : -1
         const unifiedLabelNeedsRepair =
           unifiedIndex !== -1 && unifiedTabs[unifiedIndex]?.label !== nextPage.title
-        const pageStateUnchanged =
-          nextPage.title === page.title &&
-          nextPage.loading === page.loading &&
-          nextPage.faviconUrl === page.faviconUrl &&
-          nextPage.canGoBack === page.canGoBack &&
-          nextPage.canGoForward === page.canGoForward &&
-          nextPage.loadError === page.loadError
+        const pageStateUnchanged = browserPageEqual(nextPage, page)
         const currentPages = s.browserPagesByWorkspace[workspace.id] ?? []
         const mirroredWorkspace = pageStateUnchanged
           ? mirrorWorkspaceFromActivePage(workspace, currentPages)
@@ -158,7 +156,10 @@ export function createBrowserPageStateActions(
           delete nextFailures[pageId]
           return { browserCertificateFailuresByPageId: nextFailures }
         }
-        if (!findPage(s.browserPagesByWorkspace, pageId) || current === failure) {
+        if (
+          !findPage(s.browserPagesByWorkspace, pageId) ||
+          browserCertificateFailureEqual(current, failure)
+        ) {
           return s
         }
         return {
@@ -217,7 +218,9 @@ export function createBrowserPageStateActions(
           }
         }
       })
-      get().setBrowserPageCertificateFailure(pageId, null)
+      if (!options?.preserveLoadError) {
+        get().setBrowserPageCertificateFailure(pageId, null)
+      }
     }
   }
 }

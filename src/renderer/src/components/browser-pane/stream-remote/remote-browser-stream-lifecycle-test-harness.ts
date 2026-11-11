@@ -173,6 +173,7 @@ export function createHarness() {
     callRpc,
     subscribeScreencast,
     getWorktreeSelector: () => 'worktree:wt-1',
+    readCurrentObservation: () => [],
     getCurrentUrl: () => 'https://example.test/',
     readStoredHandle: () => storedHandle,
     writeStoredHandle: (handle) => {

@@ -23,6 +23,7 @@ import {
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
 import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -90,6 +91,15 @@ export function useRemoteBrowserPageLifecycle({
       subscribeScreencast: (args, callbacks) => subscribeRuntimeEnvironment(args, callbacks),
       getWorktreeSelector: () => runtimeWorktreeRef.current,
       getCurrentUrl: () => currentBrowserTabUrlRef.current,
+      readCurrentObservation: () => {
+        const state = useAppStore.getState()
+        const page = findPage(state.browserPagesByWorkspace, currentBrowserTabIdRef.current)
+        return [
+          page?.url,
+          page?.loadError,
+          state.browserCertificateFailuresByPageId[currentBrowserTabIdRef.current]
+        ]
+      },
       readStoredHandle: () =>
         useAppStore.getState().remoteBrowserPageHandlesByPageId[currentBrowserTabIdRef.current] ??
         null,

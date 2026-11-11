@@ -26,20 +26,65 @@ export type RemoteBrowserPageSessionDeps = {
   callRpc: RemoteBrowserRpcCall
   getWorktreeSelector(): string
   getCurrentUrl(): string
+  readCurrentObservation(): readonly unknown[]
   readStoredHandle(): RemoteBrowserPageHandle | null
   writeStoredHandle(handle: RemoteBrowserPageHandle): void
   removeStoredHandle(remotePageId: string): void
-  applyTabInfo(tab: Pick<BrowserTabInfo, 'url' | 'title'>): void
+  applyTabInfo(tab: BrowserTabInfo): void
   closeMissingRemotePage(remotePageId: string | null): void
 }
 
 // Keep runtime page identity and post-input refresh separate from screencast ownership.
 export class RemoteBrowserPageSession {
   private tabRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private observationGeneration = 0
 
   constructor(private readonly deps: RemoteBrowserPageSessionDeps) {}
 
+  invalidateTabInfoReads(): void {
+    this.observationGeneration += 1
+    this.cancelTabInfoRefresh()
+  }
+
+  captureTabInfoAdmission(token: RemoteBrowserOperationToken): () => boolean {
+    const generation = ++this.observationGeneration
+    const observed = this.deps.readCurrentObservation()
+    return () => {
+      const current = this.deps.readCurrentObservation()
+      return (
+        this.deps.tokens.isCurrent(token) &&
+        generation === this.observationGeneration &&
+        observed.every((value, index) => value === current[index])
+      )
+    }
+  }
+
   async fetchTabInfo(token: RemoteBrowserOperationToken): Promise<BrowserTabInfo | null> {
+    const admits = this.captureTabInfoAdmission(token)
+    try {
+      const tab = await this.readTabInfo(token)
+      return admits() ? tab : null
+    } catch (error) {
+      if (!admits()) {
+        return null
+      }
+      throw error
+    }
+  }
+
+  async resolveNavigationPage(token: RemoteBrowserOperationToken): Promise<string | null> {
+    if (!this.deps.tokens.isCurrent(token)) {
+      return null
+    }
+    const handle = this.deps.readStoredHandle()
+    if (handle?.environmentId === token.environmentId) {
+      this.deps.tokens.setRemotePage(handle.remotePageId)
+      return handle.remotePageId
+    }
+    return this.ensureRemotePage(token)
+  }
+
+  private async readTabInfo(token: RemoteBrowserOperationToken): Promise<BrowserTabInfo | null> {
     if (!this.deps.tokens.isCurrent(token) || !token.remotePageId) {
       return null
     }
@@ -70,7 +115,7 @@ export class RemoteBrowserPageSession {
     }
     tokens.setRemotePage(existingHandle.remotePageId)
     try {
-      const cachedTab = await this.fetchTabInfo({
+      const cachedTab = await this.readTabInfo({
         ...token,
         remotePageId: existingHandle.remotePageId
       })
@@ -137,7 +182,7 @@ export class RemoteBrowserPageSession {
     tokens.setRemotePage(provisional)
     try {
       // tabShow also starts a saved page the host has not opened yet.
-      if (!(await this.fetchTabInfo(probe)) || !tokens.isCurrent(probe)) {
+      if (!(await this.readTabInfo(probe)) || !tokens.isCurrent(probe)) {
         release()
         return null
       }

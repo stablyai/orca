@@ -15,6 +15,18 @@ describe('RemoteBrowserStreamLifecycle', () => {
     vi.useRealTimers()
   })
 
+  it('keeps a stream live without applying ready metadata superseded by navigation', async () => {
+    const harness = createHarness()
+    harness.lifecycle.open()
+    await settle()
+    const before = [...harness.appliedTitles]
+    harness.lifecycle.session.invalidateTabInfoReads()
+    harness.streams[0].emitReady()
+    await settle()
+    expect(harness.appliedTitles).toEqual(before)
+    expect(harness.currentStatusKind).toBe('live')
+  })
+
   // Parked unmount has no effect cleanup left; parking must already have unsubscribed.
   it('leaves nothing subscribed when the pane unmounts while its stream is parked', async () => {
     const harness = createHarness()
