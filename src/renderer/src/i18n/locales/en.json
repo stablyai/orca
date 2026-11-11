@@ -12088,7 +12088,11 @@
           "deleteAnywayClicked": "Delete Anyway clicked"
         },
         "EphemeralVmRecipeRow": {
-          "useInWorkspace": "Use in workspace"
+          "useInWorkspace": "Use in workspace",
+          "envLimited": "Scripts only receive the variables listed in passEnv, plus PATH, HOME and similar basics.",
+          "envNamesMore": "{{names}} +{{count}} more",
+          "envExposedAllowlist": "Scripts run on this computer and receive these credentials from passEnv: {{names}}.",
+          "envExposedAll": "Scripts run on this computer with your full environment, including {{names}}. Set passEnv on the recipe to pass only what it needs."
         },
         "EphemeralVmRuntimesSection": {
           "cleanupFailed": "Cleanup failed",
