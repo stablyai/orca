@@ -55,7 +55,11 @@ type SourceOwner = {
     generation?: number,
     signal?: AbortSignal
   ) => boolean
-  admit: (key: object, signal: AbortSignal, run: () => Promise<void>) => Promise<void>
+  admit: (
+    key: ExplorerRepositorySourceState,
+    signal: AbortSignal,
+    run: () => Promise<void>
+  ) => Promise<void>
   remove: () => void
   publish: () => void
 }

@@ -1,14 +1,20 @@
+import type { ExplorerRepositorySourceState } from './file-explorer-repository-source'
+
 /** Status and ignore chunks share admission; one stalled repository cannot replay another's completed work. */
 export class ExplorerRepositoryReadQueue {
   private pending = new Map<
-    object,
+    ExplorerRepositorySourceState,
     { run: () => Promise<void>; finish: () => void; signal: AbortSignal }
   >()
   private active = 0
   private visible = false
   private disposed = false
 
-  admit(key: object, signal: AbortSignal, run: () => Promise<void>): Promise<void> {
+  admit(
+    key: ExplorerRepositorySourceState,
+    signal: AbortSignal,
+    run: () => Promise<void>
+  ): Promise<void> {
     if (signal.aborted || !this.visible || this.disposed) {
       return Promise.resolve()
     }
