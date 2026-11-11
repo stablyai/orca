@@ -276,6 +276,8 @@ export function nativeChatSessionOptionDescriptors(args: {
 export function buildNativeChatSessionOptionSnapshot(args: {
   catalog: AgentSessionOptionCatalog
   models: readonly CatalogModel[]
+  /** Discovered rows before tracked stand-ins are added; see nativeChatSessionOptionDescriptors. */
+  legacyInventory?: readonly CatalogModel[]
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   modelLabel: string

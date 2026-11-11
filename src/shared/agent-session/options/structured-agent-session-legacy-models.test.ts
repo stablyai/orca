@@ -41,15 +41,18 @@ describe('structured chat legacy model folding', () => {
       }
       const state = chat(ids, 'gpt-6-sol')
       let reads = 0
-      const rows = state.catalog!.models.map(
-        (row) =>
-          new Proxy(row, {
-            get: (target, key, receiver) => {
-              reads += 1
-              return Reflect.get(target, key, receiver)
-            }
-          })
-      )
+      // Count reads of the fields legacy classification looks at.
+      const rows = state.catalog!.models.map((row) => ({
+        ...row,
+        get id() {
+          reads += 1
+          return row.id
+        },
+        get isDefault() {
+          reads += 1
+          return row.isDefault
+        }
+      }))
       const counted = { ...state, catalog: { ...state.catalog!, models: rows } }
       const readsPerRender = () => {
         reads = 0

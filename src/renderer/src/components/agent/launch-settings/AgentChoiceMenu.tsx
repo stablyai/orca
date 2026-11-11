@@ -43,7 +43,7 @@ export function AgentChoiceMenu({
   onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
+  const [legacyExpanded, toggleLegacy, resetLegacy] = useLegacyModelsExpanded(
     choices.some((choice) => choice.value === value && choice.legacy)
   )
   const [selectOpen, setSelectOpen] = useState(false)
@@ -83,7 +83,14 @@ export function AgentChoiceMenu({
     return (
       <div className="flex min-h-7 min-w-0 items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">{label}</span>
-        <DropdownMenu onOpenChange={onOpenChange}>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (open) {
+              resetLegacy()
+            }
+            onOpenChange?.(open)
+          }}
+        >
           <DropdownMenuTrigger asChild disabled={disabled}>
             <Button
               type="button"
@@ -142,6 +149,9 @@ export function AgentChoiceMenu({
           if (!open && toggledLegacy.current) {
             toggledLegacy.current = false
             return
+          }
+          if (open) {
+            resetLegacy()
           }
           setSelectOpen(open)
           onOpenChange?.(open)

@@ -42,21 +42,24 @@ describe('legacyAgentModelIds', () => {
     for (const size of [20, 200]) {
       for (const agent of ['claude', 'codex']) {
         let reads = 0
-        const rows = Array.from(
-          { length: size },
-          (_, index) =>
-            new Proxy(
-              agent === 'claude'
-                ? { id: `claude-family${index}-5-5`, resolvedModel: `claude-family${index}-5-5` }
-                : { id: `gpt-6.1-family${index}` },
-              {
-                get: (target, key, receiver) => {
-                  reads += 1
-                  return Reflect.get(target, key, receiver)
-                }
-              }
-            )
-        )
+        const rows = Array.from({ length: size }, (_, index): Row => {
+          const id = agent === 'claude' ? `claude-family${index}-5-5` : `gpt-6.1-family${index}`
+          const resolvedModel = agent === 'claude' ? id : undefined
+          return {
+            get id() {
+              reads += 1
+              return id
+            },
+            get resolvedModel() {
+              reads += 1
+              return resolvedModel
+            },
+            get isDefault() {
+              reads += 1
+              return undefined
+            }
+          }
+        })
         legacy(agent, rows)
         // Index pass, legacy test and result pass each read at most three fields of a row.
         expect(reads).toBeLessThanOrEqual(9 * size)
