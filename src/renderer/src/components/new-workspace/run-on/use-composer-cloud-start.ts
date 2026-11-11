@@ -71,7 +71,8 @@ export function useComposerCloudStart({
   return {
     cloudStart,
     // Local and Orca Cloud share one button: same label, same rules for when it's enabled.
-    primaryCreateDisabled: createDisabled,
+    // JA-21b: a billing wall on the selected Orca Cloud holds Create until it's fixed.
+    primaryCreateDisabled: createDisabled || Boolean(cloudStart.view?.wall),
     onPrimary: cloudStart.onPrimary ?? runCreate
   }
 }
