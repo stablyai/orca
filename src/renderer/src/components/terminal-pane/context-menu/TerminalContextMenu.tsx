@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import {
   Clipboard,
   Copy,
@@ -86,10 +86,12 @@ type TerminalContextMenuProps = {
   onCopyPaneId: () => void
   canCopyAgentSessionId: boolean
   onCopyAgentSessionId: () => void
+  onRestoreTerminalFocus: () => void
 }
 
 export default function TerminalContextMenu(props: TerminalContextMenuProps): React.JSX.Element {
-  const { open, onOpenChange, menuPoint, menuOpenedAtRef } = props
+  const { open, onOpenChange, menuPoint, menuOpenedAtRef, onRestoreTerminalFocus } = props
+  const outsideDismissAtRef = useRef(0)
   return (
     <DropdownMenu
       open={open}
@@ -116,6 +118,10 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
         onCloseAutoFocus={(e) => {
           // Keep xterm focused instead of Radix's hidden trigger.
           e.preventDefault()
+          // Outside clicks release terminal focus; only reclaim after Escape or item selection.
+          if (outsideDismissAtRef.current <= menuOpenedAtRef.current) {
+            onRestoreTerminalFocus()
+          }
         }}
         onFocusOutside={(e) => {
           // xterm reclaiming focus after contextmenu is not an outside dismissal.
@@ -129,7 +135,9 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
             })
           ) {
             e.preventDefault()
+            return
           }
+          outsideDismissAtRef.current = Date.now()
         }}
       >
         <TerminalContextMenuItems {...props} />
