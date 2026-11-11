@@ -5,7 +5,7 @@ import {
 } from './cloud-workspaces/CloudWorkspacesHome'
 import { useCloudWorkspaceHighlight } from './cloud-workspaces/cloud-workspace-links'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Star, X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -23,7 +23,7 @@ import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 import { useLandingOrcaStarState, type LandingStarState } from './landing-github-star-state'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import {
-  LANDING_ACTION_BUTTON_CLASS,
+  LandingActions,
   LandingBrand,
   LandingShortcutList,
   type LandingShortcutItem
@@ -265,7 +265,7 @@ export default function Landing(): React.JSX.Element {
       <div
         className={cn('flex w-full flex-col items-center', cloudListPresent ? 'pt-8' : 'my-auto')}
       >
-        <div className={cn('w-full px-6', cloudListPresent ? 'max-w-3xl' : 'max-w-lg')}>
+        <div className={cn('w-full px-6', cloudListPresent ? '@container max-w-3xl' : 'max-w-lg')}>
           <div
             className={cn(
               'flex flex-col',
@@ -290,25 +290,13 @@ export default function Landing(): React.JSX.Element {
               </p>
             )}
 
-            <div
-              className={cn(
-                'flex items-center gap-2.5 flex-wrap',
-                cloudListPresent ? 'justify-start' : 'justify-center'
-              )}
-            >
-              <button className={LANDING_ACTION_BUTTON_CLASS} onClick={() => openModal('add-repo')}>
-                <FolderPlus className="size-3.5" />
-                {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
-              </button>
-
-              <button
-                className={LANDING_ACTION_BUTTON_CLASS}
-                onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
-              >
-                <GitBranchPlus className="size-3.5" />
-                {createActionLabel}
-              </button>
-            </div>
+            <LandingActions
+              overCloudList={cloudListPresent}
+              addProjectLabel={t('auto.components.Landing.f9eaa9e12d', 'Add project')}
+              createLabel={createActionLabel}
+              onAddProject={() => openModal('add-repo')}
+              onCreate={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
+            />
 
             {hasProjects ? <LandingCloudCard cloudWorkspacesPresent={cloudListPresent} /> : null}
 
