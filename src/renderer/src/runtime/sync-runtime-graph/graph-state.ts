@@ -121,5 +121,6 @@ export type MobileSessionContent = {
   activeTabType: RuntimeMobileSessionSnapshotTab['type'] | null
   tabGroups?: NonNullable<RuntimeMobileSessionTabsSnapshot['tabGroups']>
   tabGroupLayout?: RuntimeMobileSessionTabsSnapshot['tabGroupLayout']
+  browserPageInventory?: RuntimeMobileSessionTabsSnapshot['browserPageInventory']
   tabs: RuntimeMobileSessionSnapshotTab[]
 }

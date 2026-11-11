@@ -25,13 +25,19 @@ vi.mock('../../browser/identity/mode/browser-identity-mode-store', () => ({
 vi.mock('./browser-passwords-ipc', () => ({ registerBrowserPasswordsHandlers: vi.fn() }))
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn() },
-  ipcMain: { handle: handleMock, removeHandler: removeHandlerMock },
+  ipcMain: {
+    handle: handleMock,
+    removeHandler: removeHandlerMock,
+    on: vi.fn(),
+    removeAllListeners: vi.fn()
+  },
   webContents: { fromId: vi.fn() }
 }))
 
 vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserCertificateTrustController: { proceed: vi.fn() },
   browserManager: {
+    cancelGrabOp: vi.fn(),
     getWebContentsIdByTabId: vi.fn(() => new Map())
   }
 }))

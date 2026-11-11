@@ -15,6 +15,28 @@ import {
 import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
+  isGuestMemoryProtected(browserPageId: string): boolean {
+    const guestId = this.webContentsIdByTabId.get(browserPageId)
+    if (
+      guestId === undefined ||
+      this.hasActiveGrabOp(browserPageId) ||
+      this.isAgentUsingPage(browserPageId)
+    ) {
+      return true
+    }
+    for (const download of this.downloadsById.values()) {
+      if (download.browserTabId === browserPageId && !download.terminalEvent) {
+        return true
+      }
+    }
+    for (const holds of this.capturePaintHolds.values()) {
+      if (holds.has(browserPageId)) {
+        return true
+      }
+    }
+    return this.getPopupPages().some((popup) => popup.openerBrowserPageId === browserPageId)
+  }
+
   getGuestWebContentsId(browserTabId: string): number | null {
     return this.webContentsIdByTabId.get(browserTabId) ?? null
   }

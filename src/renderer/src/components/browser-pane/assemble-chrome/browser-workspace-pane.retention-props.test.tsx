@@ -37,8 +37,8 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}
 }))
 
-vi.mock('../host-guest/webview-registry', () => ({
-  destroyPersistentWebview: () => {}
+vi.mock('../host-guest/browser-webview-disposal', () => ({
+  replacePersistentWebview: () => {}
 }))
 
 vi.mock('./ssh-routed-browser-page-gate', () => ({

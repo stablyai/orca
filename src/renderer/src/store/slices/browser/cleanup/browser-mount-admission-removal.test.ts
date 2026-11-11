@@ -25,10 +25,13 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
-vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  destroyPersistentWebview: vi.fn(() => Promise.resolve())
-}))
+vi.mock(
+  '@/components/browser-pane/host-guest/browser-webview-disposal',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    closePersistentBrowserPage: vi.fn(() => Promise.resolve())
+  })
+)
 
 // Main answers the window's layout commands; its frames draw the browser tabs.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
@@ -46,7 +49,7 @@ createStoreCascadesMockApi()
 
 const { isBrowserPageMountAdmitted } =
   await import('@/components/browser-pane/host-guest/browser-page-mount-admission')
-const { destroyWebviewsRemovedFromStore, destroyWorktreeBrowserGuests } =
+const { destroyWebviewsRemovedFromStore, destroyRemovedBrowserWebview } =
   await import('./browser-webview-cleanup')
 
 const WT = 'repo1::/path/wt1'
@@ -123,10 +126,11 @@ describe('browser page mount admission ends when the page leaves the store', () 
   it('ends when the guest is evicted, though the page stays in the store', async () => {
     const store = await storeWithWorktree()
     const pageIds = await openBackgroundTabs(store, 3)
-    const state = store.getState()
     expect(admittedCount(pageIds)).toBe(3)
 
-    destroyWorktreeBrowserGuests(state.browserTabsByWorktree, state.browserPagesByWorkspace, WT)
+    for (const pageId of pageIds) {
+      destroyRemovedBrowserWebview(pageId)
+    }
 
     expect(admittedCount(pageIds)).toBe(0)
     expect(Object.values(store.getState().browserPagesByWorkspace).flat()).toHaveLength(3)

@@ -1,3 +1,4 @@
+import { protectBrowserGuestMedia } from '../../guest-lifecycle/manager/registration/browser-guest-discard-protection'
 import { isRemoteCliDrivenGuest } from '../../desktop-browser-bridge/remote-cli-driven-workspaces'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { Session } from 'electron'
@@ -148,10 +149,18 @@ export function installBrowserSessionPermissionHandlers(
       }
       return granted
     }
-    void decide().then(callback, (error: unknown) => {
-      console.error('[permissions] Browser site permission failed:', error)
-      callback(false)
-    })
+    void decide().then(
+      (allowed) => {
+        if (allowed && permission === 'media') {
+          protectBrowserGuestMedia(webContents)
+        }
+        callback(allowed)
+      },
+      (error: unknown) => {
+        console.error('[permissions] Browser site permission failed:', error)
+        callback(false)
+      }
+    )
   })
   sess.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
     if (deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)) {
@@ -178,14 +187,17 @@ export function installBrowserSessionPermissionHandlers(
           memory: siteMemory
         })
       }
-      return (
+      const allowed =
         isBrowserSitePermissionAllowed({
           source,
           memory: siteMemory,
           permissions: sitePermissions
         }) &&
         (permission !== 'media' || hasSystemMediaAccess(details?.mediaType))
-      )
+      if (allowed && permission === 'media' && webContents) {
+        protectBrowserGuestMedia(webContents)
+      }
+      return allowed
     }
     return isAutoGranted(permission)
   })

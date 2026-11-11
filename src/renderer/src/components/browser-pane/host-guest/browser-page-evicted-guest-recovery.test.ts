@@ -7,9 +7,9 @@ const mocks = vi.hoisted(() => ({
   registeredIds: new Map<string, number>(),
   isRegistered: vi.fn(async () => true)
 }))
+vi.mock('./browser-webview-disposal', () => ({ replacePersistentWebview: mocks.replace }))
 vi.mock('./webview-registry', () => ({
-  registeredWebContentsIds: mocks.registeredIds,
-  replacePersistentWebview: mocks.replace
+  registeredWebContentsIds: mocks.registeredIds
 }))
 vi.mock('../describe-page/browser-page-load-error', () => ({ browserPageExists: () => true }))
 

@@ -9,6 +9,7 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-cont
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { browserPageInventorySchema } from '../../../shared/browser/runtime/browser-page-inventory'
 
 type Graph = RuntimeSyncWindowGraph
 
@@ -52,6 +53,14 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
   ): RuntimeSyncWindowGraphResult {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
+    for (const snapshot of graph.mobileSessionTabs ?? []) {
+      if (
+        snapshot.browserPageInventory !== undefined &&
+        !browserPageInventorySchema.safeParse(snapshot.browserPageInventory).success
+      ) {
+        throw new Error('invalid_browser_page_inventory')
+      }
+    }
     const rendererGeneration = this.admitWindowPublisher(windowId, graph)
     const previousTitleAuthority = this.captureSessionTitleAuthority()
     const publishedMobileSessionTabs = graph.mobileSessionTabs

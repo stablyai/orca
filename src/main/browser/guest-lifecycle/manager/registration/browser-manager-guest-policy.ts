@@ -1,17 +1,24 @@
 import { installBrowserGuestMetadata } from '../../navigation/browser-guest-metadata'
 import { BROWSING_GUEST_POLICY } from './browser-guest-policy-profile'
+import { webContents } from 'electron'
 import type { BrowserGuestPolicy } from './browser-guest-policy-profile'
 import type { PopupOwnerContext } from '../../popups/browser-popup-ownership'
 import { BrowserManagerGuestCleanup } from './browser-manager-guest-cleanup'
 import { allowPageUnload } from '../../navigation/browser-guest-unload-policy'
 import {
   installDocPreviewGuestPolicy,
-  readDocPreviewGuestBoundPageId
+  readDocPreviewGuestBoundPageId,
+  getWorkspaceDocPageGuest
 } from '../../../document-preview/doc-preview-guest-policy'
 import { setupGuestEscapeForwarding } from '../../input/shortcuts/browser-guest-escape-forwarding'
 import { setupGuestShortcutForwarding } from '../../input/shortcuts/browser-guest-shortcut-forwarding'
 import { forwardGuestMousePress } from '../../input/browser-guest-mouse-press'
 import { installGuestDevToolsCloseShortcut } from '../../devtools/browser-guest-devtools-close-shortcut'
+import {
+  installBrowserGuestDiscardProtection,
+  readBrowserGuestDiscardProtection
+} from './browser-guest-discard-protection'
+import { readBrowserMemoryPageDiscardProtection } from '../../browser-page-memory'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -34,6 +41,20 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
+    const disposeDiscardProtection = installBrowserGuestDiscardProtection(guest, () =>
+      this.invalidateGuestMemoryProtection(guest)
+    )
+    const invalidate = (): void => this.invalidateGuestMemoryProtection(guest)
+    const inPageNavigation = (_event: Electron.Event, _url: string, mainFrame: boolean): void => {
+      if (mainFrame) {
+        invalidate()
+      }
+    }
+    guest.on('did-stop-loading', invalidate)
+    guest.on('did-navigate', invalidate)
+    guest.on('did-navigate-in-page', inPageNavigation)
+    guest.on('devtools-closed', invalidate)
+    guest.on('devtools-opened', invalidate)
     const disposeMetadata = this.offscreenGuestIds.has(guest.id)
       ? () => {}
       : installBrowserGuestMetadata({
@@ -84,17 +105,31 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     })
 
     this.policyCleanupByGuestId.set(guest.id, () => {
-      disposeDetachTracking()
-      disposePopupPolicy()
-      disposeNavigationPolicy()
-      disposeMetadata()
-      disposeDevToolsCloseShortcut()
-      disposeEscapeForwarding()
-      if (!guest.isDestroyed()) {
-        guest.off('audio-state-changed', forwardAudioState)
+      for (const dispose of [
+        disposeDetachTracking,
+        disposePopupPolicy,
+        disposeNavigationPolicy,
+        disposeDiscardProtection,
+        disposeMetadata,
+        () => guest.off('did-stop-loading', invalidate),
+        () => guest.off('did-navigate', invalidate),
+        () => guest.off('did-navigate-in-page', inPageNavigation),
+        () => guest.off('devtools-closed', invalidate),
+        () => guest.off('devtools-opened', invalidate),
+        disposeDevToolsCloseShortcut,
+        disposeEscapeForwarding,
+        () => {
+          if (!guest.isDestroyed()) {
+            guest.off('audio-state-changed', forwardAudioState)
+          }
+        }
+      ]) {
+        this.completeGuestCleanup('policy listener', dispose)
       }
       // A docked host outliving its guest would stay painted over the pane.
-      void this.devToolsDock.close(guest.id)
+      void this.devToolsDock.close(guest.id).catch(() => {
+        console.warn('[BrowserManager] Retired guest developer tools close failed')
+      })
     })
   }
 
@@ -103,6 +138,41 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       browserPageId,
       audible
     })
+  }
+
+  protected notifyGuestDiscardProtection(browserPageId: string, guest: Electron.WebContents): void {
+    if (this.webContentsIdByTabId.get(browserPageId) !== guest.id) {
+      return
+    }
+    try {
+      this.resolveRendererForBrowserTab(browserPageId)?.send(
+        'browser:guest-discard-protection-changed',
+        {
+          browserPageId,
+          ...this.readGuestDiscardProtection(browserPageId, guest)
+        }
+      )
+    } catch {
+      // A disposed renderer must not fail a lifecycle terminal.
+    }
+  }
+
+  readGuestDiscardProtection(
+    browserPageId: string,
+    guest: Electron.WebContents
+  ): ReturnType<typeof readBrowserMemoryPageDiscardProtection> {
+    return readBrowserMemoryPageDiscardProtection(
+      browserPageId,
+      guest,
+      this.rendererWebContentsIdByTabId.get(browserPageId)
+    )
+  }
+
+  invalidateGuestMemoryProtection(guest: Electron.WebContents): void {
+    const pageId = this.tabIdByWebContentsId.get(guest.id)
+    if (pageId && !guest.isDestroyed() && webContents.fromId(guest.id) === guest) {
+      this.notifyGuestDiscardProtection(pageId, guest)
+    }
   }
 
   /** Closes the page's DevTools wherever they are: docked in the pane or in their own window. */
@@ -120,6 +190,18 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     host: Electron.WebContents
   ): void {
     const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
+    const publishProtection = (): void => {
+      const pageId = readDocPreviewGuestBoundPageId(guest)
+      if (!pageId || host.isDestroyed() || getWorkspaceDocPageGuest(pageId, host.id) !== guest) {
+        return
+      }
+      host.send('browser:guest-discard-protection-changed', {
+        browserPageId: pageId,
+        ...readBrowserGuestDiscardProtection(guest)
+      })
+    }
+    const disposeDiscardProtection = installBrowserGuestDiscardProtection(guest, publishProtection)
+    publishProtection()
     const resolveHost = (): Electron.WebContents | null => (host.isDestroyed() ? null : host)
     const disposeEscapeForwarding = setupGuestEscapeForwarding({
       guest,
@@ -158,6 +240,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     guest.on('will-prevent-unload', allowPageUnload)
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDocPolicy()
+      disposeDiscardProtection()
       disposeEscapeForwarding()
       disposeShortcutForwarding()
       try {

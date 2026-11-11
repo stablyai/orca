@@ -24,7 +24,6 @@ export function useTerminalWorkspaceFoundation() {
   > | null>(null)
   terminalTopologyProjectionRef.current ??= createTerminalWorktreeTopologyProjection()
   const mountedWorktreeIdsRef = useRef<Set<string>>(new MountedTerminalWorktrees())
-  const browserGuestWorktreeRecencyRef = useRef<string[]>([])
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const terminalWorktreeHiddenSinceRef = useRef(new Map<string, number>())
   const measuringTerminalWorktreeIdsRef = useRef(new Set<string>())
@@ -98,7 +97,6 @@ export function useTerminalWorkspaceFoundation() {
 
   return {
     mountedWorktreeIdsRef,
-    browserGuestWorktreeRecencyRef,
     measurableBackgroundWorktreeIdsRef,
     terminalWorktreeHiddenSinceRef,
     measuringTerminalWorktreeIdsRef,

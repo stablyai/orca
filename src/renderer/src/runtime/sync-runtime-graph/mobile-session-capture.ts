@@ -142,6 +142,7 @@ export function canReuseMobileSessionSnapshot(
     previous.worktreeInstanceId === next.worktreeInstanceId &&
     previous.terminalTabs === next.terminalTabs &&
     previous.browserWorkspaces === next.browserWorkspaces &&
+    previous.browserRuntimeEnvironmentId === next.browserRuntimeEnvironmentId &&
     previous.unifiedTabs === next.unifiedTabs &&
     previous.groups === next.groups &&
     previous.tabBarOrder === next.tabBarOrder &&

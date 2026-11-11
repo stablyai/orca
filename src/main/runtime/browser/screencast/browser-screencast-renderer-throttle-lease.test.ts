@@ -34,6 +34,7 @@ function createRig() {
   const guest = {
     destroyed: false,
     isDestroyed: () => guest.destroyed,
+    isLoading: () => false,
     setBackgroundThrottling: (allowed: boolean) => guestCalls.push(allowed),
     capturePage: async (rect: unknown, opts: unknown) => {
       guestCalls.push({ capture: rect, opts })

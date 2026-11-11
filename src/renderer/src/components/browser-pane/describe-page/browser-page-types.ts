@@ -142,6 +142,7 @@ export type BrowserPagePaneProps = {
   isAutomationVisible: boolean
   isMobileDriven: boolean
   isRemotelyViewed: boolean
+  isMountAdmitted?: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: BrowserPageUrlSetter

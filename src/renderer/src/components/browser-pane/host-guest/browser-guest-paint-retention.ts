@@ -64,10 +64,10 @@ export function browserPageNeedsPaintRetention(browserPageId: string): boolean {
 }
 
 /** Fires whenever any retention term flips, for callers that cache a retention decision. */
-export function onBrowserGuestPaintRetentionChange(listener: () => void): () => void {
+export function onBrowserGuestPaintRetentionChange(listener: (pageId: string) => void): () => void {
   const removeListeners = [
     onBrowserAutomationVisibilityChange(listener),
-    onBrowserDriverChange(listener),
+    onBrowserDriverChange((event) => listener(event.browserPageId)),
     onBrowserRemoteViewerChange(listener)
   ]
   return () => {

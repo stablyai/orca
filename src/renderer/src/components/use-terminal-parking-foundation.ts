@@ -46,7 +46,6 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
 
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
-  const [browserGuestRetentionRevision, setBrowserGuestRetentionRevision] = useState(0)
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )
@@ -151,8 +150,6 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     measurableBackgroundWorktreeTimersRef,
     backgroundMountRevision,
     setBackgroundMountRevision,
-    browserGuestRetentionRevision,
-    setBrowserGuestRetentionRevision,
     parkedTerminalWorktreeIds,
     setParkedTerminalWorktreeIds,
     manuallyParkedTerminalWorktreeIds,

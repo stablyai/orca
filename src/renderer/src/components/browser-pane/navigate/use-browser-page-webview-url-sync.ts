@@ -64,7 +64,7 @@ export function useBrowserPageWebviewUrlSync({
 
   useEffect(() => {
     const webview = webviewRef.current
-    if (!webview) {
+    if (!webview || webview.dataset.orcaAttachPending) {
       return
     }
     const page = useAppStore

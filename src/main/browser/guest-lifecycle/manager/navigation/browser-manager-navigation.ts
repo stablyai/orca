@@ -92,6 +92,16 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     )
   }
 
+  protected hasTabIdentityOverrideWork(guest: Electron.WebContents, url: string): boolean {
+    return (
+      this.resolveTabIdentityOverride(
+        guest,
+        this.resolveGuestTabIdentity(guest, url),
+        guest.getUserAgent()
+      ) !== null
+    )
+  }
+
   private resolveGuestTabIdentity(guest: Electron.WebContents, url: string): BrowserTabIdentity {
     return resolveBrowserTabIdentity({
       url,
@@ -106,6 +116,16 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     identity: BrowserTabIdentity,
     presentedByWebContents: string
   ): Promise<boolean> {
+    const override = this.resolveTabIdentityOverride(guest, identity, presentedByWebContents)
+    // Without CDP, leave navigation intact; session hooks still rewrite the request UA.
+    return override ? this.writeCdpUserAgentOverride(guest, override) : Promise.resolve(true)
+  }
+
+  private resolveTabIdentityOverride(
+    guest: Electron.WebContents,
+    identity: BrowserTabIdentity,
+    presentedByWebContents: string
+  ): CdpUserAgentOverride | null {
     const override: CdpUserAgentOverride =
       identity.kind === 'mobile'
         ? { userAgent: identity.userAgent, userAgentMetadata: identity.userAgentMetadata }
@@ -114,10 +134,9 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
           : // Temporary override until cross-document navigation can update the WebContents UA.
             { userAgent: identity.userAgent, userAgentMetadata: desktopUserAgentMetadata() }
     if (override.userAgent === '' && !this.standingCdpUserAgentOverride(guest.id)) {
-      return Promise.resolve(true)
+      return null
     }
-    // Without CDP, leave navigation intact; session hooks still rewrite the request UA.
-    return this.writeCdpUserAgentOverride(guest, override)
+    return override
   }
 
   /** Includes pending writes; undefined when no nonempty override stands. */

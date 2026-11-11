@@ -9,7 +9,7 @@ export function hasActiveBrowserPageDownload(browserPageId: string): boolean {
 function adjustActiveDownloadCount(
   browserPageId: string,
   delta: 1 | -1,
-  onEvictionVetoChange: () => void
+  onEvictionVetoChange: (pageId: string) => void
 ): void {
   const count = (activeDownloadCountByPageId.get(browserPageId) ?? 0) + delta
   if (count <= 0) {
@@ -17,13 +17,13 @@ function adjustActiveDownloadCount(
   } else {
     activeDownloadCountByPageId.set(browserPageId, count)
   }
-  onEvictionVetoChange()
+  onEvictionVetoChange(browserPageId)
 }
 
 function trackDownloadStarted(
   downloadId: string,
   browserPageId: string,
-  onEvictionVetoChange: () => void
+  onEvictionVetoChange: (pageId: string) => void
 ): void {
   if (browserPageIdByDownloadId.has(downloadId)) {
     return
@@ -32,7 +32,10 @@ function trackDownloadStarted(
   adjustActiveDownloadCount(browserPageId, 1, onEvictionVetoChange)
 }
 
-function trackDownloadFinished(downloadId: string, onEvictionVetoChange: () => void): void {
+function trackDownloadFinished(
+  downloadId: string,
+  onEvictionVetoChange: (pageId: string) => void
+): void {
   const browserPageId = browserPageIdByDownloadId.get(downloadId)
   if (browserPageId === undefined) {
     return
@@ -43,7 +46,7 @@ function trackDownloadFinished(downloadId: string, onEvictionVetoChange: () => v
 
 /** Install once per surface host; clear on teardown because every guest is destroyed and stale entries would block eviction. */
 export function installBrowserPageDownloadActivityTracking(
-  onEvictionVetoChange: () => void = () => {}
+  onEvictionVetoChange: (pageId: string) => void = () => {}
 ): () => void {
   const removeRequested = window.api.browser.onDownloadRequested((event) => {
     trackDownloadStarted(event.downloadId, event.browserPageId, onEvictionVetoChange)

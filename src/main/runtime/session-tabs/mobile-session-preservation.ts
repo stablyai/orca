@@ -220,6 +220,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       : existing
     return normalizeMobileSessionTabSelection({
       ...existing,
+      browserPageInventory: undefined,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(publicationBase, tabs),
       // Bump version or clients discard same-epoch prune frames.
       snapshotVersion: existing.snapshotVersion + 1,

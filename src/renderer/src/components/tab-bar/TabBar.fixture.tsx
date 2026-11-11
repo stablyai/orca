@@ -4,6 +4,10 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import TabBar from './TabBar'
 import type { TabBarProps } from './tab-bar-props'
+import {
+  buildBrowserPage,
+  buildWorkspaceFromPage
+} from '../../store/slices/browser/pages/browser-page-records'
 
 const WORKSPACE_ID = 'tab-width-fixture'
 const TITLES = [
@@ -159,6 +163,42 @@ export const singleBrowser = defineFixture({
           loadError: null,
           createdAt: 0
         }
+      ]}
+    />
+  )
+})
+
+const audioPreview = buildBrowserPage(
+  'audio-preview',
+  WORKSPACE_ID,
+  '',
+  'HTML preview',
+  undefined,
+  'preview-page',
+  { kind: 'workspace-doc', worktreeId: WORKSPACE_ID, filePath: '/docs/audio.html' }
+)
+const audioBrowser = buildBrowserPage(
+  'audio-browser',
+  WORKSPACE_ID,
+  'https://example.com',
+  'Browser page',
+  undefined,
+  'browser-page'
+)
+
+export const documentAudioProtection = defineFixture({
+  width: 760,
+  store: {
+    browserPagesByWorkspace: { 'audio-preview': [audioPreview], 'audio-browser': [audioBrowser] },
+    browserAudiblePageIds: { 'browser-page': true },
+    browserAudioMutedTabIds: {}
+  },
+  render: () => (
+    <TabWidthFixture
+      count={0}
+      browserTabs={[
+        buildWorkspaceFromPage('audio-preview', WORKSPACE_ID, audioPreview, [audioPreview.id]),
+        buildWorkspaceFromPage('audio-browser', WORKSPACE_ID, audioBrowser, [audioBrowser.id])
       ]}
     />
   )

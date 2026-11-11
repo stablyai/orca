@@ -2,16 +2,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const registryMocks = vi.hoisted(() => ({
-  destroyPersistentWebview: vi.fn(),
+  closePersistentBrowserPage: vi.fn(),
   registerPersistentWebview: vi.fn(),
   replacePersistentWebview: vi.fn(),
   webviewRegistry: new Map<string, Electron.WebviewTag>()
 }))
 
+vi.mock('../host-guest/browser-webview-disposal', () => ({
+  closePersistentBrowserPage: registryMocks.closePersistentBrowserPage,
+  replacePersistentWebview: registryMocks.replacePersistentWebview
+}))
+
 vi.mock('../host-guest/webview-registry', () => ({
-  destroyPersistentWebview: registryMocks.destroyPersistentWebview,
   registerPersistentWebview: registryMocks.registerPersistentWebview,
-  replacePersistentWebview: registryMocks.replacePersistentWebview,
   webviewRegistry: registryMocks.webviewRegistry
 }))
 
@@ -26,7 +29,7 @@ function createContainer(id: string): HTMLDivElement {
 
 describe('BrowserPane webview preferences', () => {
   beforeEach(() => {
-    registryMocks.destroyPersistentWebview.mockReset()
+    registryMocks.closePersistentBrowserPage.mockReset()
     registryMocks.registerPersistentWebview.mockReset()
     registryMocks.replacePersistentWebview.mockReset()
     registryMocks.webviewRegistry.clear()
@@ -52,7 +55,7 @@ describe('BrowserPane webview preferences', () => {
       }
       return refreshedContainer
     })
-    registryMocks.destroyPersistentWebview.mockImplementation(() => {
+    registryMocks.replacePersistentWebview.mockImplementation(() => {
       staleWebview.remove()
       staleContainer.remove()
       registryMocks.webviewRegistry.delete('browser-page-1')
@@ -66,7 +69,7 @@ describe('BrowserPane webview preferences', () => {
       resolveContainer
     })
 
-    expect(registryMocks.destroyPersistentWebview).toHaveBeenCalledWith('browser-page-1')
+    expect(registryMocks.replacePersistentWebview).toHaveBeenCalledWith('browser-page-1')
     expect(resolveContainer).toHaveBeenCalledTimes(1)
     expect(ensuredWebview).not.toBeNull()
     expect(ensuredWebview?.created).toBe(true)

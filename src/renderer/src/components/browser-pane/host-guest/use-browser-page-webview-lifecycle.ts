@@ -23,6 +23,7 @@ import {
 } from '../describe-page/browser-annotation-geometry'
 import { syncGuestAnnotationViewportBridge } from '../annotate/guest-annotation-viewport-bridge'
 import { attachBrowserPageWebview } from './attach-browser-page-webview'
+import { webviewRegistry } from './webview-registry'
 import { setBrowserPageWebviewInputLock } from './browser-page-webview'
 import type {
   BrowserPageRecoveryNavigationValidation,
@@ -40,6 +41,7 @@ export function useBrowserPageWebviewLifecycle({
   webviewPartition,
   isActive,
   isPaintable,
+  isMountAdmitted,
   slotViewport,
   viewportPresetId,
   addressBarInputRef,
@@ -78,6 +80,7 @@ export function useBrowserPageWebviewLifecycle({
   webviewPartition: string
   isActive: boolean
   isPaintable: boolean
+  isMountAdmitted: boolean
   slotViewport: HTMLDivElement | null
   viewportPresetId: BrowserViewportPresetId | null
   addressBarInputRef: RefObject<HTMLInputElement | null>
@@ -259,10 +262,12 @@ export function useBrowserPageWebviewLifecycle({
   useEffect(() => {
     const becamePaintable = isPaintable && !wasPaintableForGuestValidationRef.current
     wasPaintableForGuestValidationRef.current = isPaintable
-    if (becamePaintable) {
+    if ((isPaintable || isMountAdmitted) && !webviewRegistry.has(browserTabId)) {
+      setGuestRecoveryGeneration((generation) => generation + 1)
+    } else if (becamePaintable) {
       validateVisibleGuestRegistrationRef.current()
     }
-  }, [isPaintable])
+  }, [browserTabId, isPaintable, isMountAdmitted])
 
   useEffect(() => {
     syncBrowserAnnotationViewportBridge()

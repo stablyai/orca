@@ -7,12 +7,8 @@ import {
   issueBrowserGuestNavigation,
   subscribeBrowserGuestMetadata
 } from './browser-guest-metadata-cache'
-import {
-  destroyPersistentWebview,
-  registerPersistentWebview,
-  replacePersistentWebview,
-  unregisterPersistentWebview
-} from './webview-registry'
+import { registerPersistentWebview, unregisterPersistentWebview } from './webview-registry'
+import { closePersistentBrowserPage, replacePersistentWebview } from './browser-webview-disposal'
 import {
   getBrowserOverlaySlotViewport,
   ensureBrowserPageViewport,
@@ -117,7 +113,7 @@ describe('local guest metadata disposal', () => {
         rig.detach()
       }
       await (mode === 'destroy'
-        ? destroyPersistentWebview('page-1')
+        ? closePersistentBrowserPage('page-1')
         : replacePersistentWebview('page-1', { preserveViewport: true }))
       rig.finish()
       await Promise.resolve()

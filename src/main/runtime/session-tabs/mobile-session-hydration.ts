@@ -287,6 +287,9 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         existing !== undefined &&
         !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
       const rebuiltSnapshot: RuntimeMobileSessionTabsSnapshot = {
+        ...(mergedIntoRendererPublication
+          ? { browserPageInventory: existing.browserPageInventory }
+          : {}),
         worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: mergedIntoRendererPublication
           ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)

@@ -29,6 +29,17 @@ export function releaseBrowserPageMount(pageId: string): void {
   emit()
 }
 
+export function useBrowserPageMountAdmissions(pageIds: readonly string[]): string {
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    () => pageIds.map((pageId) => (isBrowserPageMountAdmitted(pageId) ? '1' : '0')).join(''),
+    () => '0'.repeat(pageIds.length)
+  )
+}
+
 export function useAnyBrowserPageMountAdmission(pageIds: readonly string[]): boolean {
   return useSyncExternalStore(
     (listener) => {

@@ -20,6 +20,7 @@ vi.mock('./browser-page-webview-guest-session', () => ({
   })
 }))
 vi.mock('./webview-registry', () => ({
+  webviewRegistry: new Map(),
   isBrowserPageRendererRecoveryPending: () => false,
   moveFocusToRendererBeforeWebviewDetach() {}
 }))
@@ -36,6 +37,7 @@ vi.mock('../annotate/browser-annotation-viewport-message', () => ({
 }))
 
 import { useAppStore } from '@/store'
+import { webviewRegistry } from './webview-registry'
 import { bindBrowserPageWebviewListeners } from './bind-browser-page-webview-listeners'
 import { attachBrowserPageWebview } from './attach-browser-page-webview'
 import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
@@ -50,6 +52,7 @@ beforeEach(clearBrowserGuestMetadata)
 afterEach(() => {
   disposers.splice(0).forEach((dispose) => dispose())
   clearBrowserGuestMetadata()
+  webviewRegistry.clear()
   document.body.replaceChildren()
 })
 
@@ -107,6 +110,7 @@ function mount(state: BrowserGuestMetadata, initiallyLoading = false) {
   const webview = Object.assign(document.createElement('webview'), {
     getWebContentsId: () => 42
   }) as Electron.WebviewTag
+  webviewRegistry.set('page-a', webview)
   const container = document.createElement('div')
   container.append(webview)
   document.body.append(container)

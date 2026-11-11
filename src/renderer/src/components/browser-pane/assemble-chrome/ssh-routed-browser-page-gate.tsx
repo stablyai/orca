@@ -4,7 +4,9 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { DOC_PREVIEW_PARTITION } from '../../../../../shared/document-preview/doc-preview-scheme'
-import { destroyPersistentWebview, webviewRegistry } from '../host-guest/webview-registry'
+import { webviewRegistry } from '../host-guest/webview-registry'
+import { replacePersistentWebview } from '../host-guest/browser-webview-disposal'
+import { admitBrowserPageMount } from '../host-guest/browser-page-mount-admission'
 import {
   useSshWorkspaceBrowserRoute,
   type SshWorkspaceBrowserRouteErrorKind
@@ -36,18 +38,19 @@ export function SshRoutedBrowserPageGate({
     }
     // Chrome unmount only parks guests; destroy pre-route guests so they cannot keep browsing with local egress behind the gate.
     for (const pageId of pageIds) {
+      const webview = webviewRegistry.get(pageId)
+      if (!webview) {
+        continue
+      }
       if (routedPartition) {
-        const partition = webviewRegistry.get(pageId)?.getAttribute('partition')
+        const partition = webview.getAttribute('partition')
         // Guests already on the verified route (or a local doc preview) survive remounts without reloading.
-        if (
-          partition === undefined ||
-          partition === routedPartition ||
-          partition === DOC_PREVIEW_PARTITION
-        ) {
+        if (partition === routedPartition || partition === DOC_PREVIEW_PARTITION) {
           continue
         }
       }
-      void destroyPersistentWebview(pageId)
+      admitBrowserPageMount(pageId)
+      void replacePersistentWebview(pageId)
     }
   }, [unrouted, routedPartition, pageIds])
 

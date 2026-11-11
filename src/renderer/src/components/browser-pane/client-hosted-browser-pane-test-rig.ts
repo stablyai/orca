@@ -51,6 +51,7 @@ export function installClientHostedPaneApi(overrides?: {
         onGuestMetadata: inert,
         onGuestEscape: inert,
         onPopup: inert,
+        unregisterGuest: vi.fn(async () => {}),
         onPermissionDenied: inert,
         onContextMenuRequested: inert,
         onContextMenuDismissed: inert,

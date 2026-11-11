@@ -205,6 +205,7 @@ function createMockGuest(
     ...guestNavigationMethods(),
     id,
     isDestroyed: vi.fn(() => false),
+    isLoading: () => false,
     isCurrentlyAudible: vi.fn(() => false),
     setIgnoreMenuShortcuts: vi.fn(),
     getType: vi.fn(() => 'webview'),

@@ -5,6 +5,7 @@ import type { CdpCommandSender } from './cdp-command-sender'
 import type { CdpBridgeState } from '../commands/cdp-bridge-state'
 import { createCdpDebuggerMessageListener } from './cdp-debugger-events'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import { invalidateBrowserGuestDiscardProtection } from '../../guest-lifecycle/manager/registration/browser-guest-discard-protection'
 
 export class CdpDebuggerLifecycle {
   constructor(private readonly bridgeState: CdpBridgeState) {}
@@ -42,6 +43,7 @@ export class CdpDebuggerLifecycle {
       // Reuse BrowserManager’s attachment to avoid a second-debugger error.
       if (!guest.debugger.isAttached()) {
         guest.debugger.attach('1.3')
+        invalidateBrowserGuestDiscardProtection(guest)
       }
     } catch {
       throw new BrowserError(

@@ -4,6 +4,7 @@ import {
 } from './doc-preview-link-interception'
 import type { IpcRenderer, WebFrame } from 'electron'
 import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
+import { installBrowserGuestEditProtection } from './browser-guest-edit-protection'
 
 // Raw require keeps the sandboxed preload standalone in the CJS build.
 const electron: {
@@ -11,6 +12,13 @@ const electron: {
   webFrame: WebFrame
 } = require('electron')
 const { ipcRenderer, webFrame } = electron
+if (process.isMainFrame) {
+  installBrowserGuestEditProtection({
+    send: (channel, payload) => ipcRenderer.send(channel, payload),
+    on: (channel, listener) =>
+      ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))
+  })
+}
 installNativeChatVisualGuestTheme(ipcRenderer, webFrame)
 
 // Keep the reporter in the isolated world so the document cannot call it through contextBridge.

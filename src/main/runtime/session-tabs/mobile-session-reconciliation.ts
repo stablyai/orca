@@ -5,7 +5,8 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import {
   headlessMobileSnapshotContentUnchanged,
-  mobileSnapshotIdentityUnchanged
+  mobileSnapshotIdentityUnchanged,
+  mobileSnapshotInventoryOnlyChanged
 } from './mobile-session-snapshot-equality'
 import type { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs as MergePreservedHeadlessMobileSessionTabsMethods } from './mobile-session-preservation'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
@@ -250,7 +251,8 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
           const preservedIsNoOp =
             preserved.publicationEpoch === existing.publicationEpoch &&
             preserved.tabs.length === existing.tabs.length &&
-            preserved.tabs.every((tab, index) => tab === existing.tabs[index])
+            preserved.tabs.every((tab, index) => tab === existing.tabs[index]) &&
+            headlessMobileSnapshotContentUnchanged(existing, preserved)
           if (!preservedIsNoOp) {
             this.storeMobileSessionSnapshot(worktreeId, preserved)
           }
@@ -268,7 +270,11 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       }
     }
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      if (before.get(worktreeId) !== snapshot) {
+      const previous = before.get(worktreeId)
+      if (
+        previous !== snapshot &&
+        (!previous || !mobileSnapshotInventoryOnlyChanged(previous, snapshot))
+      ) {
         changedWorktreeIds.add(worktreeId)
       }
     }

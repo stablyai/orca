@@ -1,5 +1,6 @@
 import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
+import type { BrowserGuestDiscardApi } from '../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
@@ -98,14 +99,12 @@ export type BrowserApi = {
     webContentsId: number
   }) => Promise<boolean>
   isGuestRegistered: (args: { browserPageId: string; webContentsId: number }) => Promise<boolean>
-  repairGuestRegistration: (args: {
+  repairGuestRegistration: BrowserApi['registerGuest']
+  unregisterGuest: (args: {
     browserPageId: string
-    workspaceId: string
-    worktreeId: string
-    sessionProfileId?: string | null
-    webContentsId: number
-  }) => Promise<boolean>
-  unregisterGuest: (args: { browserPageId: string }) => Promise<void>
+    webContentsId?: number
+    replacement?: boolean
+  }) => Promise<void>
   onWebAuthnAccountRequest: (
     callback: (request: BrowserWebAuthnAccountRequest) => void
   ) => () => void
@@ -300,7 +299,8 @@ export type BrowserApi = {
   }) => Promise<BrowserExtensionActionResult>
   /** Installs, updates, removals, load errors or held updates changed; refetch the list. */
   onExtensionsChanged: (callback: () => void) => () => void
-} & BrowserExtensionToolbarApi &
+} & BrowserGuestDiscardApi &
+  BrowserExtensionToolbarApi &
   BrowserExtensionWebStoreApi &
   BrowserExtensionContextMenuApi &
   BrowserSessionCookieApi &

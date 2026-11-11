@@ -21,7 +21,8 @@ describe('OrcaRuntimeService', () => {
   describe('browser page targeting', () => {
     function mockLiveBrowserGuest(): void {
       electronMocks.webContents.fromId.mockReturnValue({
-        isDestroyed: () => false
+        isDestroyed: () => false,
+        isLoading: () => false
       })
     }
 

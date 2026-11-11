@@ -1,5 +1,11 @@
 import { app, BrowserWindow, ipcMain, session, webContents } from 'electron'
 import { join } from 'node:path'
+import {
+  prepareBrowserPageAttach,
+  admitBrowserPageAttach,
+  associateBrowserPageAttach,
+  startBrowserPageAttach
+} from '../browser-page-attach'
 import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
 
 if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
@@ -25,6 +31,10 @@ app.whenReady().then(async () => {
       webviewTag: true
     }
   })
+  ipcMain.handle('browser:preparePageAttach', (event, args) =>
+    prepareBrowserPageAttach(args.browserPageId, event.sender.id, args.partition, args.url)
+  )
+  app.on('web-contents-created', (_event, guest) => associateBrowserPageAttach(guest))
   ipcMain.handle('browser:setGrabMode', () => undefined)
   ipcMain.handle('link-probe:open', (_event, event) =>
     window.webContents.send('browser:open-link-in-orca-tab', event)
@@ -52,10 +62,15 @@ app.whenReady().then(async () => {
       .fromPartition('persist:link-probe-default')
       .cookies.set({ url: origin, name: 'synthetic_profile', value: 'other' })
   })
-  window.webContents.on('will-attach-webview', (_event, preferences) => {
+  window.webContents.on('will-attach-webview', (_event, preferences, params) => {
+    admitBrowserPageAttach(params.src, window.webContents.id, preferences.partition ?? '')
+    delete params.src
     preferences.nodeIntegration = false
     preferences.contextIsolation = true
     preferences.sandbox = true
+  })
+  window.webContents.on('did-attach-webview', (_event, guest) => {
+    startBrowserPageAttach(guest)
   })
   await window.loadFile(join(root, 'index.html'))
 })

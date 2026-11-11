@@ -1,3 +1,4 @@
+import type { BrowserPageInventoryEntry } from './browser/runtime/browser-page-inventory'
 import type { AgentSenderPublication, AgentSenderRevision } from './agent-sender-associations'
 import type { MobileProjectSectionCatalog } from './mobile-project-sections-contract'
 import type { AgentStatusOrchestrationContext } from './agent-status/contracts/agent-status-types'
@@ -256,6 +257,8 @@ export type RuntimeMobileSessionTabsSnapshot = {
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
   retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
+  /** Desktop publication only; outward session-tab results contain visible rows, not this inventory. */
+  browserPageInventory?: BrowserPageInventoryEntry[]
   tabs: RuntimeMobileSessionSnapshotTab[]
 }
 

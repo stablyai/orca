@@ -50,6 +50,8 @@ function getGuestErrorMessage(err: unknown): string {
 export class BrowserGrabSessionController {
   private readonly activeGrabOps = new Map<string, ActiveGrabOp>()
 
+  constructor(private readonly onSettled?: (pageId: string, guest: Electron.WebContents) => void) {}
+
   hasActiveGrabOp(browserTabId: string): boolean {
     return this.activeGrabOps.has(browserTabId)
   }
@@ -95,6 +97,7 @@ export class BrowserGrabSessionController {
         // Keep the selection highlight until the renderer dismisses or rearms the picker.
         op.cleanup(result.kind === 'selected' || result.kind === 'context-selected')
         this.activeGrabOps.delete(browserTabId)
+        this.onSettled?.(browserTabId, guest)
         resolve(result)
       }
 

@@ -16,11 +16,8 @@ import {
   createBrowserPageGuestRecovery,
   type BrowserPageGuestRecovery
 } from './browser-page-guest-recovery'
-import {
-  registeredWebContentsIds,
-  replacePersistentWebview,
-  webviewRegistry
-} from './webview-registry'
+import { registeredWebContentsIds, webviewRegistry } from './webview-registry'
+import { replacePersistentWebview } from './browser-webview-disposal'
 import { browserPageExists } from '../describe-page/browser-page-load-error'
 import {
   setBrowserPageAgentViewportSize,

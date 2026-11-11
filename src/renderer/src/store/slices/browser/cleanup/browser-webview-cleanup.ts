@@ -2,13 +2,13 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../../../shared/browser-workspace-types'
-import { destroyPersistentWebview } from '../../../../components/browser-pane/host-guest/webview-registry'
+import { closePersistentBrowserPage } from '../../../../components/browser-pane/host-guest/browser-webview-disposal'
 import { releaseBrowserPageMount } from '../../../../components/browser-pane/host-guest/browser-page-mount-admission'
 
 // Release admission with guest destruction on close, purge, conversion or eviction.
 export function destroyRemovedBrowserWebview(browserPageId: string): void {
   releaseBrowserPageMount(browserPageId)
-  destroyPersistentWebview(browserPageId)
+  void closePersistentBrowserPage(browserPageId)
 }
 
 /** Destroys every page in `previousIds` the store no longer holds; returns the ids it holds now. */
@@ -45,22 +45,6 @@ export function collectBrowserWebviewIds(
     }
   }
   return ids
-}
-
-// Evict hidden guests without removing tabs/pages so revisit rebuilds from saved state.
-export function destroyWorktreeBrowserGuests(
-  browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
-  browserPagesByWorkspace: Record<string, BrowserPage[]>,
-  worktreeId: string
-): void {
-  for (const tab of browserTabsByWorktree[worktreeId] ?? []) {
-    const pages = browserPagesByWorkspace[tab.id] ?? []
-    // Legacy pre-page sessions key guests by workspace tab ID, like collectBrowserWebviewIds.
-    const guestIds = pages.length === 0 ? [tab.id] : pages.map((page) => page.id)
-    for (const guestId of guestIds) {
-      destroyRemovedBrowserWebview(guestId)
-    }
-  }
 }
 
 export function destroyWorkspaceWebviews(

@@ -14,6 +14,7 @@ import { BrowserError } from '../../../browser/browser-error'
 import { publishSwitchedBrowserSessionTab } from './browser-tab-create-publication'
 import type {
   BrowserCommandTargetParams,
+  BrowserAnswerAdmission,
   RuntimeBrowserCommandHost
 } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
@@ -50,23 +51,15 @@ export class RuntimeBrowserTabQueries {
       ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
       : undefined
     const clientPages = this.host.getRuntimeBrowserPageRegistry().listPages(workspaceId)
-    let bridgeWorktreeId = workspaceId
-    if (this.host.getAgentBrowserBridge()) {
-      try {
-        bridgeWorktreeId = await this.targets.resolveBrowserWorktreeId(params.worktree)
-      } catch (error) {
-        if (clientPages.length === 0) {
-          throw error
-        }
-      }
-    }
-    return { tabs: this.catalog.listLogicalBrowserTabs(bridgeWorktreeId, clientPages) }
+    return { tabs: this.catalog.listLogicalBrowserTabs(workspaceId, clientPages) }
   }
 
   async browserProceedCertificate(
-    params: { challengeId: string } & BrowserCommandTargetParams
+    params: { challengeId: string } & BrowserCommandTargetParams,
+    admit?: BrowserAnswerAdmission
   ): Promise<BrowserCertificateProceedResult> {
-    const target = await this.targets.resolveBrowserCommandTarget(params)
+    const resolved = await this.targets.resolveBrowserCommandTarget(params)
+    const target = typeof admit === 'function' ? admit(resolved) : resolved
     if (!target.browserPageId) {
       return { ok: false, reason: 'missing' }
     }

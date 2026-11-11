@@ -37,6 +37,8 @@ export type OffscreenBrowserTabOpenRequest = {
 }
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
+  abstract invalidateGuestMemoryProtection(guest: Electron.WebContents): void
+
   protected abstract attachGuestPolicies(
     guest: Electron.WebContents,
     inheritedOwnerContext?: PopupOwnerContext | null,
@@ -179,7 +181,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
   protected readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
   protected readonly downloadsById = new Map<string, ActiveDownload>()
-  protected readonly grabSessionController = new BrowserGrabSessionController()
+  protected readonly grabSessionController = new BrowserGrabSessionController((pageId, guest) => {
+    if (this.webContentsIdByTabId.get(pageId) === guest.id) {
+      this.invalidateGuestMemoryProtection(guest)
+    }
+  })
 
   setDictationShortcutForwardingPredicate(predicate: (() => boolean) | null): void {
     this.shouldForwardDictationShortcut = predicate
@@ -226,6 +232,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       if (browserTabId) {
         this.recordAppliedViewportOverride(browserTabId, guest.id, null)
       }
+      this.invalidateGuestMemoryProtection(guest)
     }
     try {
       guest.debugger.on('detach', onDetach)

@@ -12,6 +12,7 @@ import {
   resolveTabRegistrationWaiters
 } from './browser-tab-registration-wait'
 import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
+import { registerBrowserGuestDiscardHandlers } from './browser-guest-discard-ipc'
 import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
 import {
   disposeGrabModeStateForPage,
@@ -199,24 +200,38 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
     }
   )
 
-  ipcMain.handle('browser:unregisterGuest', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
+  ipcMain.handle(
+    'browser:unregisterGuest',
+    (event, args: { browserPageId: string; webContentsId?: number; replacement?: boolean }) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      // Documents withdraw by grant revocation; dropping their intent here could silently settle an unarmed grab.
+      if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
+        return false
+      }
+      const currentId = browserManager.getGuestWebContentsId(args.browserPageId)
+      if (
+        args.replacement &&
+        args.webContentsId !== undefined &&
+        currentId !== args.webContentsId
+      ) {
+        return false
+      }
+      // Destroy bridge sessions before unregistering clears the guest mapping.
+      const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
+      if (wcId !== null && agentBrowserBridgeRef) {
+        agentBrowserBridgeRef.onTabClosed(wcId)
+      }
+      cancelBrowserWebAuthnAccountRequests(args.browserPageId)
+      browserManager.unregisterGuest(
+        args.browserPageId,
+        args.replacement ? 'guest-destroyed' : 'page-closed'
+      )
+      disposeGrabModeStateForPage(args.browserPageId)
+      return true
     }
-    // Documents withdraw by grant revocation; dropping their intent here could silently settle an unarmed grab.
-    if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
-      return false
-    }
-    // Destroy bridge sessions before unregistering clears the guest mapping.
-    const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
-    if (wcId !== null && agentBrowserBridgeRef) {
-      agentBrowserBridgeRef.onTabClosed(wcId)
-    }
-    cancelBrowserWebAuthnAccountRequests(args.browserPageId)
-    browserManager.unregisterGuest(args.browserPageId)
-    disposeGrabModeStateForPage(args.browserPageId)
-    return true
-  })
+  )
 
   ipcMain.handle(
     'browser:respondWebAuthnAccount',
@@ -277,6 +292,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   })
 
   registerBrowserGuestViewHandlers()
+  registerBrowserGuestDiscardHandlers()
   registerBrowserDictationHandlers()
 
   registerBrowserGrabHandlers()

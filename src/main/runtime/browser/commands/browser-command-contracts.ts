@@ -22,6 +22,10 @@ export type ResolvedBrowserCommandTarget = {
   browserPageId?: string
 }
 
+export type BrowserAnswerAdmission = (
+  target: ResolvedBrowserCommandTarget
+) => ResolvedBrowserCommandTarget
+
 export type ResolvedBrowserPageWebContents = {
   browserPageId: string
   webContents: Electron.WebContents
