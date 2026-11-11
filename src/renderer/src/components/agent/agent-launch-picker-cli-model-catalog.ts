@@ -1,5 +1,4 @@
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import { independentAgentModelCatalog } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   findCatalogModel,
   getAgentSessionOptionCatalog
@@ -10,16 +9,14 @@ import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
 } from '../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
+import { isNativeChatSupportedAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
 
-/** Terminal-only agents the host catalog doesn't list take their models from the CLI's own listing. */
-export function agentPickerListsCliModels(
-  entry: Pick<AgentPickerEntry, 'agent' | 'surfaces'>
-): boolean {
+/** Agents with no structured chat have no host model catalog, so they list models through their CLI. */
+export function agentPickerListsCliModels(entry: Pick<AgentPickerEntry, 'agent'>): boolean {
   return (
-    !independentAgentModelCatalog(entry.agent) &&
-    !entry.surfaces.includes('chat') &&
+    !isNativeChatSupportedAgent(entry.agent) &&
     getAgentSessionOptionCatalog(entry.agent)?.listModels !== undefined
   )
 }
