@@ -23,9 +23,10 @@ describe('cloud open cover', () => {
   })
 
   it('counts the workspace as open only once one of its terminals has a PTY', () => {
+    const noPtys: string[] = []
     const state = {
       tabsByWorktree: { w1: [{ id: 't1' }, { id: 't2' }] },
-      ptyIdsByTabId: { t1: [] as string[] }
+      ptyIdsByTabId: { t1: noPtys }
     }
     expect(workspaceHasAttachedPty(state, 'w1')).toBe(false)
     expect(
