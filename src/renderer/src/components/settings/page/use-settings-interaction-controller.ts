@@ -156,17 +156,12 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     if (!target) {
       return
     }
-    // Rows highlighted through SettingsTargetHighlightContext already carry the class.
-    const ownsClass = !target.classList.contains(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
-    if (ownsClass) {
-      target.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
-    }
+    // The one owner of the highlight: the same element the jump scrolled to.
+    target.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
     applySettingsTargetHighlightBleed(target)
     return () => {
       clearSettingsTargetHighlightBleed(target)
-      if (ownsClass) {
-        target.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
-      }
+      target.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
     }
   }, [highlightedSettingsTarget])
 

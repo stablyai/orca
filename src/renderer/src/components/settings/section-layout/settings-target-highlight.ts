@@ -1,7 +1,3 @@
-import { createContext } from 'react'
-
-export const SettingsTargetHighlightContext = createContext<string | null>(null)
-export const SettingsTargetHighlightProvider = SettingsTargetHighlightContext.Provider
 export const SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME = 'settings-target-highlight'
 
 const SETTINGS_TITLE_TARGET_PREFIX = 'settings-title:'

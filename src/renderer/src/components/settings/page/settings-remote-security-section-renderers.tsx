@@ -97,11 +97,7 @@ export function renderDeveloperPermissionsSettingsSection(
       )}
       searchEntries={navigation.getSectionSearchEntries('developer-permissions')}
     >
-      {view.isSectionMounted('developer-permissions') ? (
-        <DeveloperPermissionsPane
-          highlightedSettingId={model.highlightedSettingsTarget?.id ?? null}
-        />
-      ) : null}
+      {view.isSectionMounted('developer-permissions') ? <DeveloperPermissionsPane /> : null}
     </SettingsSection>
   ) : null
 }

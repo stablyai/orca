@@ -1,9 +1,3 @@
-import { useContext } from 'react'
-import {
-  getSettingsTitleTargetId,
-  SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME,
-  SettingsTargetHighlightContext
-} from './settings-target-highlight'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type React from 'react'
 import { cn } from '@/lib/class-names'
@@ -25,10 +19,6 @@ export function SearchableSetting({
   className,
   id
 }: SearchableSettingProps): React.JSX.Element | null {
-  const highlightedTarget = useContext(SettingsTargetHighlightContext)
-  const highlighted =
-    highlightedTarget !== null &&
-    (highlightedTarget === id || highlightedTarget === getSettingsTitleTargetId(title))
   const query = useAppStateValue((state) => state.settingsSearchQuery)
   if (!forceVisible && !matchesSettingsSearch(query, { title, description, keywords })) {
     return null
@@ -38,11 +28,7 @@ export function SearchableSetting({
     <div
       data-settings-row=""
       data-settings-search-title={title}
-      className={cn(
-        'scroll-mt-6 w-full',
-        highlighted && SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME,
-        className
-      )}
+      className={cn('scroll-mt-6 w-full', className)}
       id={id}
     >
       {children}

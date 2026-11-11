@@ -11,13 +11,7 @@ import { JiraIntegrationCard } from '../../integrations/task-trackers/jira-integ
 import { LinearIntegrationCard } from '../../integrations/task-trackers/linear-integration-card'
 import { IntegrationCardPresentationProvider } from '../../integrations/presentation/integration-card-presentation'
 import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
-import { useContext } from 'react'
-import { cn } from '@/lib/class-names'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import {
-  SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME,
-  SettingsTargetHighlightContext
-} from '../section-layout/settings-target-highlight'
 import { INTEGRATION_SETTING_TARGET_IDS } from './integrations-search'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -26,19 +20,12 @@ function ProviderRow({
   id,
   children
 }: {
-  id: string
+  /** Search anchor; task-provider cards carry their own. */
+  id?: string
   children: React.ReactNode
 }): React.JSX.Element {
-  const highlighted = useContext(SettingsTargetHighlightContext) === id
   return (
-    <div
-      id={id}
-      data-settings-row=""
-      className={cn(
-        'scroll-mt-6 [&_.border-t]:border-t-0 [&>*]:-mx-4',
-        highlighted && SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
-      )}
-    >
+    <div id={id} data-settings-row="" className="scroll-mt-6 [&_.border-t]:border-t-0 [&>*]:-mx-4">
       {children}
     </div>
   )
@@ -82,10 +69,10 @@ export function IntegrationsPane(): React.JSX.Element {
             'Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.'
           )}
         >
-          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.linear}>
+          <ProviderRow>
             <LinearIntegrationCard />
           </ProviderRow>
-          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.jira}>
+          <ProviderRow>
             <JiraIntegrationCard />
           </ProviderRow>
         </SettingsGroup>

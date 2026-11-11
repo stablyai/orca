@@ -13,7 +13,6 @@ import {
   Workflow
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/class-names'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionState
@@ -30,11 +29,6 @@ import {
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME } from '../section-layout/settings-target-highlight'
-
-type DeveloperPermissionsPaneProps = {
-  highlightedSettingId?: string | null
-}
 
 type PermissionDefinition = {
   id: DeveloperPermissionId
@@ -224,9 +218,7 @@ const PERMISSIONS: PermissionDefinition[] = [
   }
 ]
 
-export function DeveloperPermissionsPane({
-  highlightedSettingId = null
-}: DeveloperPermissionsPaneProps): React.JSX.Element {
+export function DeveloperPermissionsPane(): React.JSX.Element {
   const t = useTranslate()
   const [states, setStates] = useState<DeveloperPermissionState[]>([])
   const [loading, setLoading] = useState(true)
@@ -349,10 +341,7 @@ export function DeveloperPermissionsPane({
             <div key={permission.id} data-settings-row="">
               <div
                 data-settings-section={settingId}
-                className={cn(
-                  '-mx-5 flex items-center justify-between gap-4 px-5 py-3',
-                  highlightedSettingId === settingId && SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
-                )}
+                className="-mx-5 flex items-center justify-between gap-4 px-5 py-3"
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
