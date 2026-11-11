@@ -118,7 +118,14 @@ export function removeJournalDomainItem(
     itemId,
     revision,
     removed,
-    items: turn ? refreshJournalDomainStopNotes(db, target, [itemId]) : []
+    items: turn
+      ? refreshJournalDomainStopNotes(
+          db,
+          target,
+          [itemId],
+          new Map([[itemId, removed ?? undefined]])
+        )
+      : []
   }
 }
 

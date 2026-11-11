@@ -88,7 +88,7 @@ export function readJournalDomainForwardHistory(
     },
     cursor,
     count,
-    reader,
+    image ? { ...reader, form: (item) => image.forms.get(item) ?? reader.form(item) } : reader,
     (ids) => {
       materialized ??= readSnapshot(ids, forms)
       return {

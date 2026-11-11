@@ -72,6 +72,11 @@ it('commits Stop display with the turn at its original revision and restores the
       blocks: [{ type: 'text', text: 'x'.repeat(650) }]
     })
   }
+  db.prepare('UPDATE journal_items SET wire_version=NULL,wire_json=? WHERE item_id=?').run(
+    '{"obsolete":true}',
+    noteId
+  )
+  expect(display()).toMatchObject({ item: { body: original } })
   const stopped = turn('interrupted')
   expect(stopped.items.map((value) => value.itemId)).toEqual([turnId, noteId])
   expect(item(noteId)).toMatchObject({ revision: 1, sequence: 12, observedAt: 20, body: original })
@@ -125,6 +130,11 @@ it('commits Stop display with the turn at its original revision and restores the
       { form: measureHistoryItem, budgetBytes: 1024 }
     )
     expect(page.ok).toBe(true)
+    for (const value of page.page.items) {
+      if (value.itemId === noteId) {
+        expect(value.body).toEqual({ kind: 'status', text: 'Cancellation requested.' })
+      }
+    }
     seen.push(...page.page.items.map((value) => value.itemId))
     cursor = page.page.window.nextCursor
     cursors.push(cursor.sequence)
@@ -195,6 +205,10 @@ it('keeps full semantic source when an unprojected Stop has a shortened wire hea
     body: { kind: 'status', text: 'Cancellation requested.' }
   })
   expect(item(noteId)).toMatchObject({ revision: 2, body: revised })
+  db.prepare('UPDATE journal_items SET wire_version=NULL,wire_json=? WHERE item_id=?').run(
+    '{"obsolete":true}',
+    noteId
+  )
   const removed = runJournalTransaction(db, () => removeJournalDomainItem(db, target, turnId, 100))
   expect(removed.items).toMatchObject([{ itemId: noteId, revision: 2, body: revised }])
   expect(display()).toMatchObject({ item: { revision: 2, body: revised } })

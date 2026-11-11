@@ -318,6 +318,43 @@ it('windows retained image sources before reading their bodies and admits their 
     items: [{ itemId: 'orca:send' }, { sequence: 2 }, { sequence: 4 }, { sequence: 5 }],
     window: { nextCursor: { sequence: 5 } }
   })
+  const presented = read(
+    { direction: 'after', cursor: { epoch: 'epoch', sequence: 1 }, reader: bounded },
+    {
+      budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
+      form: (item) =>
+        measureHistoryItem({
+          ...item,
+          itemId: `reader:${item.itemId}`,
+          sequence: 100 - item.sequence,
+          body: { kind: 'status', text: `Presented ${item.itemId}` }
+        })
+    }
+  )
+  expect(
+    presented.page.items.map(({ itemId, sequence, body }) => ({ itemId, sequence, body }))
+  ).toEqual([
+    {
+      itemId: 'reader:orca:send',
+      sequence: 99,
+      body: { kind: 'status', text: 'Presented orca:send' }
+    },
+    {
+      itemId: 'reader:orca:2:0',
+      sequence: 98,
+      body: { kind: 'status', text: 'Presented orca:2:0' }
+    },
+    {
+      itemId: 'reader:orca:4:0',
+      sequence: 96,
+      body: { kind: 'status', text: 'Presented orca:4:0' }
+    },
+    {
+      itemId: 'reader:orca:5:0',
+      sequence: 95,
+      body: { kind: 'status', text: 'Presented orca:5:0' }
+    }
+  ])
 })
 
 it('keeps visible rows first and retained sources in relation order across a whole boundary sequence', () => {

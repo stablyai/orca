@@ -187,7 +187,12 @@ export function writeJournalDomainCurrentItem(
   return [
     next,
     ...(readAgentJournalTurn(next.body) || readAgentJournalTurn(input.previous?.item.body)
-      ? refreshJournalDomainStopNotes(db, target, [next.itemId])
+      ? refreshJournalDomainStopNotes(
+          db,
+          target,
+          [next.itemId],
+          new Map([[next.itemId, input.previous?.item]])
+        )
       : [])
   ]
 }

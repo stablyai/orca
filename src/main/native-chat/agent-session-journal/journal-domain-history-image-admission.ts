@@ -30,9 +30,14 @@ export function admitJournalDomainImageEvents(
   rows: readonly JournalOutcomeReadRow[],
   reader: Pick<HistoryReader, 'form' | 'budgetBytes'>,
   readSnapshot: JournalDomainHistorySnapshotReader
-): { limit: number; snapshot: AgentJournalSnapshot } {
+): {
+  limit: number
+  snapshot: AgentJournalSnapshot
+  forms: ReadonlyMap<AgentJournalSnapshot['items'][number], HistoryItemForm>
+} {
   const states = readJournalDomainStopStates(db, head, [...new Set(rows.flatMap(eventIds))])
   const items = new Map<string, AgentJournalSnapshot['items'][number]>()
+  const forms = new Map<AgentJournalSnapshot['items'][number], HistoryItemForm>()
   const submissions = new Map<string, AgentJournalSnapshot['submissions'][number]>()
   const ordinals = new Map<string, number>()
   const visited = new Set<string>()
@@ -41,17 +46,30 @@ export function admitJournalDomainImageEvents(
   for (const row of rows) {
     const fresh = [...new Set(eventIds(row))].filter((id) => !visited.has(id))
     const group = readSnapshot(new Set(fresh), new Map(), states, ordinals)
-    const live = new Map(group.items.map((item) => [item.itemId, item]))
+    const live = new Map(
+      group.items.map((item) => {
+        const form = reader.form(item)
+        // Keep selection identity/order without retaining a larger pre-presentation source.
+        const retained = {
+          ...form.item,
+          itemId: item.itemId,
+          sequence: item.sequence,
+          sequenceIndex: item.sequenceIndex
+        }
+        return [item.itemId, { retained, form }] as const
+      })
+    )
     const bytes = historyContentBytes(
-      [...live.values()].map(reader.form),
+      [...live.values()].map(({ form }) => form),
       fresh.filter((id) => !live.has(id)),
       submissionBytesByItemId(group.submissions)
     )
     if (count > 0 && total + bytes > reader.budgetBytes) {
       break
     }
-    for (const [id, item] of live) {
-      items.set(id, item)
+    for (const [id, { retained, form }] of live) {
+      items.set(id, retained)
+      forms.set(retained, form)
     }
     for (const send of group.submissions) {
       submissions.set(send.clientMessageId, send)
@@ -70,6 +88,7 @@ export function admitJournalDomainImageEvents(
   const kept = new Set(rows.slice(0, limit).flatMap(eventIds))
   return {
     limit: Math.max(1, limit),
+    forms,
     snapshot: {
       sessionId: head.sessionId,
       cursor: head.cursor,
