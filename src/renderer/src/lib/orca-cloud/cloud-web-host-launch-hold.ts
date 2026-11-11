@@ -18,7 +18,8 @@ import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
 import {
   cloudAgentLaunchDecision,
   cloudTabHoldKey,
-  holdCloudAgentLaunch
+  holdCloudAgentLaunch,
+  takeCloudAgentHoldStartedByPerson
 } from './cloud-agent-launch-hold'
 
 type CreateHostTerminal = (
@@ -86,7 +87,11 @@ export async function createWithCloudAgentHold(
     )
     return placeholder
   }
-  const created = await create(args)
+  // Started by the person's click in the held pane: bring the agent's tab forward so they see their
+  // queued prompt run. A Renew's auto-start (maybe on a background tab) never steals focus.
+  const created = await create(
+    takeCloudAgentHoldStartedByPerson(cloudTabHoldKey(tabId)) ? { ...args, activate: true } : args
+  )
   // The agent opened in its own tab; the placeholder shell has done its job.
   if (args.environmentId) {
     void closeWebRuntimeSessionTab({
