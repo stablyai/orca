@@ -1,3 +1,18 @@
+import type {
+  SessionSearchWorkReceipt,
+  SessionSearchReadSettlement,
+  SessionSearchWorkCommand,
+  SessionSearchWorkResult
+} from '../session-search-work-queue'
+import type {
+  SessionSearchCandidateCommand,
+  SessionSearchCandidateResult
+} from '../session-search-catalog-candidates'
+import type { SessionSearchReadEvent } from '../session-search-foreground-write'
+import type {
+  SessionSearchCatalogCommand,
+  SessionSearchCatalogResult
+} from '../session-search-catalog'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 import type {
   TranscriptMessage,
@@ -22,14 +37,23 @@ export type SessionSearchSnapshotRow = SessionSearchFileRow & {
   agent: string | null
   contentHash: SessionContentHash
 }
+export type SessionSearchCatalogEnvelope = {
+  runtimeEpoch: number
+  sourceId: string
+  observationEpoch: number
+  pageSequence: number
+}
 export type SearchWorkerCommand =
-  | { op: 'open'; path: string; reader: boolean; cutoff: number | null }
+  | { op: 'open'; path: string; reader: boolean; cutoff: number | null; runtimeEpoch?: number }
   | {
       op: 'begin'
+      metadataOnly?: boolean
+      work?: SessionSearchWorkReceipt
       handle: number
       candidate: SessionFileCandidate
       mode: 'append' | 'replace'
       offset: number
+      unprepared?: { allowCovered: boolean; canProvePrefix: boolean }
     }
   | {
       op: 'batch'
@@ -38,12 +62,31 @@ export type SearchWorkerCommand =
       hash: SessionContentHash
       identity: TranscriptSessionIdentity | null
     }
+  | {
+      op: 'read-batch'
+      handle: number
+      events: SessionSearchReadEvent[]
+      identity: TranscriptSessionIdentity | null
+    }
   | { op: 'finish'; handle: number; outcome: TranscriptReadOutcome; hash: SessionContentHash }
   | { op: 'discard'; handle: number }
   | { op: 'state'; path: string; state: SessionSearchFileState; mtime?: number }
   | { op: 'remove'; path: string }
   | { op: 'purge'; cutoff: number | null }
+  | { op: 'coverage'; paths: string[] }
+  | { op: 'file-page'; after?: string }
   | { op: 'sync' }
+  | {
+      op: 'candidates'
+      command: SessionSearchCandidateCommand
+      catalogPage?: SessionSearchCatalogEnvelope
+    }
+  | { op: 'work'; command: SessionSearchWorkCommand; catalogPage?: SessionSearchCatalogEnvelope }
+  | {
+      op: 'catalog'
+      command: SessionSearchCatalogCommand
+      catalogPage?: SessionSearchCatalogEnvelope
+    }
   | { op: 'query'; request: AiVaultSearchRequest; scope?: SessionSearchHostScope }
 export type SearchWorkerRequest = { id: number; command: SearchWorkerCommand }
 export type SearchWorkerResponse = {
@@ -51,10 +94,19 @@ export type SearchWorkerResponse = {
   trace?: unknown
   failure?: 'write'
   error?: string
+  catalogPending?: boolean
   accepted?: boolean
-  snapshot?: SessionSearchSnapshotRow[]
+  admission?: 'covered' | 'target' | 'lag' | 'gap' | 'rejected'
+  prefixTarget?: number | null
+  reset?: boolean
+  coverage?: SessionSearchSnapshotRow[]
+  filePage?: SessionSearchSnapshotRow[]
   deltas?: { path: string; row: SessionSearchSnapshotRow | null }[]
   counts?: SessionSearchStateCounts
   generation?: number
+  candidates?: SessionSearchCandidateResult
+  work?: SessionSearchWorkResult
+  settlement?: SessionSearchReadSettlement
+  catalog?: SessionSearchCatalogResult
   result?: AiVaultSearchResponse
 }

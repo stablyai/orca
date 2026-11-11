@@ -1,4 +1,7 @@
+import { SessionSearchCatalog } from '../session-search-catalog'
+import { SessionFileInventory } from '../../ai-vault/session-file-inventory'
 import '../worker/session-search-worker.test-fixture'
+import { notifySessionSearchFileChange } from '../session-search-watcher.test-fixture'
 import { mkdir, mkdtemp, rename, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -60,6 +63,7 @@ export type SessionSearchIndexerHarness = {
   claudeProjectDir: string
   read: <T>(query: (db: SyncDatabase) => T) => T
   write: <T>(query: (db: SyncDatabase) => T) => T
+  inventory: (root: string) => SessionFileInventory
   cleanup: () => Promise<void>
 }
 
@@ -69,6 +73,8 @@ export async function openSessionSearchIndexerHarness(
   const root = await mkdtemp(join(tmpdir(), `${name}-`))
   const roots = isolatedScanRoots(root)
   const databasePath = join(root, 'index', 'index.sqlite')
+  let scratch: SyncDatabase | undefined
+  let catalog: SessionSearchCatalog | undefined
   return {
     root,
     databasePath,
@@ -76,7 +82,26 @@ export async function openSessionSearchIndexerHarness(
     claudeProjectDir: join(roots.claudeProjectsDir, 'project'),
     read: (query) => withConnection(databasePath, true, query),
     write: (query) => withConnection(databasePath, false, query),
-    cleanup: () => rm(root, { recursive: true, force: true })
+    inventory: (path) => {
+      scratch ??= new SyncDatabase('')
+      catalog ??= new SessionSearchCatalog(scratch)
+      const inventory = new SessionFileInventory(
+        path,
+        async (command) => catalog!.response(command),
+        `fixture:${path}`
+      )
+      const drain = inventory.drain.bind(inventory)
+      inventory.drain = async (...args) => {
+        const result = await drain(...args)
+        await inventory.acknowledge(result.receipts)
+        return result
+      }
+      return inventory
+    },
+    cleanup: async () => {
+      scratch?.close()
+      await rm(root, { recursive: true, force: true })
+    }
   }
 }
 
@@ -100,6 +125,7 @@ export async function writeClaudeTranscript(
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, `${claudeLines(turns, sessionId, 0).join('\n')}\n`)
+  notifySessionSearchFileChange(path)
 }
 
 export function claudeLines(
@@ -125,6 +151,7 @@ export async function renameReplaceTranscript(
   await rename(replacement, path)
   const later = new Date(before.mtimeMs + 5_000)
   await utimes(path, later, later)
+  notifySessionSearchFileChange(path)
 }
 
 export async function writeMessageGraphTranscript(

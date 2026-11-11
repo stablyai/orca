@@ -1,3 +1,4 @@
+import type { SessionSearchReadContext } from '../../ai-vault-search/session-search-work-queue'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { SessionFileCandidate } from '../session-scanner-types'
 
@@ -38,6 +39,8 @@ export type TranscriptSessionIdentity = {
 }
 
 export type TranscriptReadStart = {
+  searchWork?: SessionSearchReadContext
+  metadataOnly?: boolean
   candidate: SessionFileCandidate
   indexing?: boolean
   signal?: AbortSignal
@@ -70,6 +73,7 @@ export type TranscriptReadConsumer = {
   finish(outcome: TranscriptReadOutcome): void
   /** The read has consumed exactly [0, offset), whose bytes hash to digest. */
   prefixReached?(offset: number, digest: string): void
+  needsPrefix?(offset: number): boolean
 }
 
 export type TranscriptConsumer = {

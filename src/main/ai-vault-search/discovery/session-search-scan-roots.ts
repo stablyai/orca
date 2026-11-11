@@ -1,3 +1,4 @@
+import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { AI_VAULT_AGENT_SOURCES } from '../../ai-vault/session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from '../../ai-vault/session-scanner-roots'
@@ -27,7 +28,7 @@ export type SessionSearchDiscovery = {
 /** Infinity sweeps every candidate; finite limits use the sidebar’s newest-per-root rule. */
 export async function discoverSessionSearchCandidates(
   roots: SessionSearchScanRoots,
-  args: { limitPerAgent: number; signal?: AbortSignal }
+  args: { limitPerAgent: number; signal?: AbortSignal; raw?: boolean }
 ): Promise<SessionSearchDiscovery> {
   const issues: AiVaultScanIssue[] = []
   const options: AiVaultScanOptions = { ...roots, signal: args.signal }
@@ -36,7 +37,7 @@ export async function discoverSessionSearchCandidates(
     limitPerAgent: args.limitPerAgent,
     issues
   })
-  const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
+  const candidates = args.raw ? [] : await sessionCandidatesFromDiscoveries(discoveries, options)
   return { candidates, discoveries, issues }
 }
 
@@ -70,7 +71,7 @@ export function sessionSearchRootListings(
 function constituentRoots(
   roots: SessionSearchScanRoots,
   wslHomeDirs: readonly string[],
-  discovery: SessionFileDiscovery
+  discovery: Pick<SessionFileDiscovery, 'agent' | 'rootDir'>
 ): string[] {
   const declared = AI_VAULT_AGENT_SOURCES[discovery.agent]?.rootDirs(roots, wslHomeDirs) ?? []
   if (declared.includes(discovery.rootDir)) {
@@ -78,6 +79,26 @@ function constituentRoots(
   }
   // Merged discoveries use declared roots; custom sources without declarations report real directories.
   return declared.length > 0 ? declared : [discovery.rootDir]
+}
+
+export function sessionSearchPhysicalRoot(
+  roots: SessionSearchScanRoots,
+  discovery: Pick<SessionFileDiscovery, 'agent' | 'rootDir'>,
+  path: string
+): string | null | undefined {
+  const agent = discovery.agent
+  if (
+    (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') &&
+    splitOpenCodeSqliteCandidate(path, agent === 'zcode' ? 'zcode' : 'opencode')
+  ) {
+    return null
+  }
+  return (
+    owningRoot(
+      constituentRoots(roots, normalizedWslHomeDirs(roots.wslHomeDirs), discovery),
+      path
+    ) ?? undefined
+  )
 }
 
 function owningRoot(constituents: readonly string[], path: string): string | null {

@@ -43,6 +43,10 @@ type FileCursor = Pick<FileRow, 'session_row_id' | 'byte_offset'>
 export type SessionSearchFileWrite = {
   /** Commit named chunks at the ceiling; spill anonymous reads privately until atomic publication. */
   add(message: TranscriptMessage): void
+  /** Resolves only after the writer acknowledges final publication. */
+  settled?(): Promise<boolean>
+  needsPrefix?(offset: number): boolean
+  prefixReached?(offset: number, digest: string): void
   failed?(): boolean
   cancelled?(): boolean
   drain?(): Promise<void>

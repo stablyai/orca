@@ -1,170 +1,263 @@
+import { admitSessionSearchRead } from './session-search-read-admission'
+import type { SessionSearchDiscoveryTransfer } from '../session-search-catalog-candidate-types'
+import {
+  retireSessionSearchPassSources,
+  wakeSessionSearchPassRetirements
+} from '../session-search-pass-retirement'
+import type { SessionSearchPassState } from '../session-search-pass-state'
+export { SessionSearchPassState } from '../session-search-pass-state'
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
 } from '../../ai-vault/scanners/cursor/session-scanner-cursor-chat-meta'
 import { recordSessionScanIssue } from '../../ai-vault/session-scan-issues'
+import { withSessionDiscovery } from '../../ai-vault/session-discovery-context'
 import {
   mergeDegradedRoots,
   scanIssueDegradedRoots,
   unreadableRoots,
   type SessionSearchDegradedRoot
 } from '../discovery/session-search-degraded-roots'
-import { retireDeletedSessionSearchSources } from '../discovery/session-search-deleted-sources'
 import type { SessionSearchDirectoryReader } from '../discovery/session-search-directory-listings'
 import { runSessionSearchIndexPass } from './session-search-index-pass'
 import {
   discoverSessionSearchCandidates,
-  isUnderScanRoot,
-  sessionSearchEmptiedRoots,
-  sessionSearchRootListings,
   type SessionSearchScanRoots
 } from '../discovery/session-search-scan-roots'
-import type {
-  SessionSearchFileRow,
-  SessionSearchIndexStore
-} from '../storage/session-search-store-types'
-import { sessionSearchEnumeratedContainers } from '../discovery/session-search-synthetic-sources'
-
-// Bound recent-cycle retirement work and prioritize rows within the recency window.
-const RETIREMENT_ROWS_PER_CYCLE = 512
-
-// Count directory reads so many rows under one unreadable directory cannot exhaust the budget.
-const RETIREMENT_DIRECTORIES_PER_PASS = 512
+import type { SessionSearchIndexStore } from '../storage/session-search-store-types'
 
 export type SessionSearchPassArgs = {
   store: SessionSearchIndexStore
+  state: SessionSearchPassState
   roots: SessionSearchScanRoots
-  /** A sweep lists every root; a cycle lists the newest N per agent. */
   full: boolean
+  primaryWake?: number
   recentPerAgent: number
-  /** Roots with transcripts on the previous pass; undefined before any observation. */
   previousRootsWithFiles?: ReadonlySet<string>
-  /** The deadline stops transcript reads; discovery and retirement still finish. */
-  overdue?: () => boolean
-  /** Cache directory reads across discovery-health and retirement checks for this pass. */
+  purge?: boolean
+  onPurged?: () => void
+  startReadDeadline?: () => () => boolean
+  discoveryOverdue?: () => boolean
   listings: SessionSearchDirectoryReader
   signal?: AbortSignal
 }
 
 export type SessionSearchPassResult = {
-  /** Roots with discovered transcripts, retained to detect newly emptied roots. */
   rootsWithFiles: Set<string>
   degradedRoots: SessionSearchDegradedRoot[]
-  /** Ignore health findings from an incomplete pass. */
   completed: boolean
-  /** Deferred reads require another sweep to reach backlog outside the recent window. */
   outOfTime: boolean
-  /** Deferred candidates excluding due rows, which status already counts from the database. */
   left: number
+  pending: boolean
 }
 
 export async function runSessionSearchPass(
   args: SessionSearchPassArgs
 ): Promise<SessionSearchPassResult> {
-  const { store, signal } = args
+  const { store, state, signal } = args
   await store.prepare?.()
-  if (args.full) {
-    // Apply narrowed retention before the new instance’s first discovery.
+  await state.prepare(store)
+  if (args.purge ?? args.full) {
     await store.purgeOlderThan(store.retentionCutoff, signal)
+    args.onPurged?.()
   }
+  await state.candidates.beginPublications(args.full || !!args.purge)
+  state.discovery.begin({
+    full: args.full,
+    primaryWake: args.primaryWake,
+    maintenance: args.purge ?? args.full,
+    recentLimit: args.recentPerAgent,
+    overdue: args.discoveryOverdue ?? (() => false)
+  })
+  if (args.full) {
+    state.needsRetirement = true
+  }
+  await wakeSessionSearchPassRetirements(args)
   return withCursorChatMetaScan(async () => {
-    const swept = await discoverSessionSearchCandidates(args.roots, {
-      limitPerAgent: args.full ? Number.POSITIVE_INFINITY : args.recentPerAgent,
-      signal
-    })
-    const issues: AiVaultScanIssue[] = [...swept.issues]
-
-    let completed = true
-    let outOfTime = false
-    let left = 0
-    const rows = new Map(store.files().map((row) => [row.path, row]))
-    try {
-      const read = await runSessionSearchIndexPass(store, swept.candidates, {
-        signal,
-        rows,
-        overdue: args.overdue
-      })
-      outOfTime = read.outOfTime
-      left = read.left
-    } catch (error) {
-      if (!signal?.aborted) {
-        throw error
+    const accept = async (
+      discoveries: Parameters<typeof state.candidates.update>[0],
+      partial: boolean,
+      existing?: Awaited<ReturnType<typeof state.candidates.update>>,
+      forced: ReadonlySet<string> = new Set(),
+      metadata: ReadonlySet<string> = new Set(),
+      transfer?: SessionSearchDiscoveryTransfer
+    ) => {
+      let update =
+        existing ??
+        (await state.candidates.update(
+          discoveries,
+          new Set(),
+          { ...args.roots, signal },
+          forced,
+          new Map(),
+          partial,
+          metadata,
+          new Map(),
+          transfer
+        ))
+      if (update.scopeCounts) {
+        state.acceptCounts(update.scopeCounts)
       }
-      completed = false
+      if (update.work) {
+        state.queue.update(update.work)
+        await state.retire.refresh()
+      }
+      do {
+        if (!update.transferred) {
+          await state.parkedRetire.deletePage(
+            update.candidates.map((candidate) => candidate.file.path)
+          )
+          state.queue.update(
+            await state.candidates.admitChanges(update.receipts, !args.full, state.recovering)
+          )
+        }
+        if (!state.candidates.pendingChanges || args.discoveryOverdue?.()) {
+          break
+        }
+        update = await state.candidates.update(
+          [],
+          new Set(),
+          { ...args.roots, signal },
+          new Set(),
+          new Map(),
+          true
+        )
+      } while (state.candidates.pendingChanges)
     }
-
-    const listings = sessionSearchRootListings(args.roots, swept.discoveries)
+    let discoveryLane = Promise.resolve()
+    const serializeDiscovery = <T>(consume: () => Promise<T>): Promise<T> => {
+      const accepted = discoveryLane.then(consume)
+      discoveryLane = accepted.then(
+        () => undefined,
+        () => undefined
+      )
+      return accepted
+    }
+    state.discovery.onSeedAdmission((root, agent) =>
+      serializeDiscovery(async () => {
+        const rows = await state.candidates.changedForRoot(root, agent)
+        if (rows.length) {
+          await state.parkedRetire.deletePage(rows.map((row) => row.candidate.file.path))
+          state.queue.update(
+            await state.candidates.admitChanges(
+              rows.map(({ key, revision }) => ({ key, revision })),
+              !args.full,
+              state.recovering
+            )
+          )
+        }
+        return !(await state.candidates.changedForRoot(root, agent)).length
+      })
+    )
+    state.discovery.onRemoved((paths, observations) =>
+      serializeDiscovery(async () => {
+        if (!paths.length) {
+          return
+        }
+        const work = await state.candidates.remove(new Set(paths), new Map(), observations)
+        if (work) {
+          state.queue.update(work)
+          await state.retire.refresh()
+        }
+        await accept([], true)
+      })
+    )
+    state.discovery.onDiscovery((discovery, forced, metadata, inputs) =>
+      serializeDiscovery(async () => {
+        await accept(
+          [discovery],
+          true,
+          undefined,
+          forced,
+          metadata,
+          inputs
+            ? {
+                inputs,
+                recent: !args.full,
+                recovering: state.recovering
+              }
+            : undefined
+        )
+        return inputs !== undefined
+      })
+    )
+    const swept = await withSessionDiscovery(state.discovery, () =>
+      discoverSessionSearchCandidates(args.roots, { limitPerAgent: Infinity, signal, raw: true })
+    ).finally(() => state.discovery.settled())
+    await state.discovery.end()
+    const issues: AiVaultScanIssue[] = [...swept.issues]
+    const update = await state.candidates.update(
+      swept.discoveries,
+      state.discovery.removed,
+      { ...args.roots, signal },
+      new Set(),
+      new Map(),
+      false,
+      new Set()
+    )
+    await accept([], false, update)
+    await state.discovery.containers.continueRetirements(
+      async (agents, receipts) => {
+        const work = await state.candidates.remove(new Set(), agents, new Map(), receipts)
+        if (work) {
+          state.queue.update(work)
+          await state.retire.refresh()
+        }
+        await accept([], true)
+      },
+      args.discoveryOverdue ?? (() => false),
+      signal
+    )
+    if (!state.discovery.pending) {
+      state.recovering = false
+    }
+    const readOverdue = args.startReadDeadline?.() ?? (() => false)
+    const read = await runSessionSearchIndexPass(store, state.queue, {
+      signal,
+      overdue: readOverdue,
+      publications: state.candidates,
+      admit: (work) => admitSessionSearchRead(args, work)
+    })
+    await state.candidates.reconcilePublications(
+      store,
+      readOverdue,
+      signal,
+      async (candidate, root) =>
+        (await state.queue.hasPublicationDebt(candidate.file.path)) ||
+        (await state.discovery.hasPublicationDebt(candidate, root, args.roots))
+    )
+    const listings = state.discovery.listings()
     const roots = listings.map((listing) => listing.root)
     const rootsWithFiles = new Set(
       listings.filter((listing) => listing.files > 0).map((listing) => listing.root)
     )
-    const previousRootsWithFiles = args.previousRootsWithFiles
-    // An incomplete read pass cannot prove deletions or clear degraded-root findings.
-    const retirement = completed
-      ? await retireDeletedSessionSearchSources({
-          store,
-          paths: retirementCandidates(rows, swept, roots, args.full),
-          roots,
-          // Only unlimited discovery can prove a synthetic session is absent from its container.
-          enumeratedContainers: args.full
-            ? sessionSearchEnumeratedContainers(swept.candidates, issues)
-            : undefined,
-          emptiedRoots: previousRootsWithFiles
-            ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
-            : new Set(),
-          listings: args.listings,
-          directoryLimit: RETIREMENT_DIRECTORIES_PER_PASS,
-          signal
-        })
-      : { retired: [], unverifiable: [], unchecked: [], degradedRoots: [] }
-
+    const degraded = await retireSessionSearchPassSources(args, roots, rootsWithFiles)
     for (const refusal of cursorChatMetaRefusals()) {
-      recordSessionScanIssue(issues, {
-        agent: 'cursor',
-        path: refusal.chatsRoot,
-        ...refusal.text
-      })
+      recordSessionScanIssue(issues, { agent: 'cursor', path: refusal.chatsRoot, ...refusal.text })
     }
-    // Discovery suppresses readdir failures; check empty roots explicitly to expose those failures.
-    const unlistable = completed
-      ? await unreadableRoots(
-          roots.filter((root) => !rootsWithFiles.has(root)),
-          args.listings,
-          signal
-        )
-      : []
-
+    const unlistable = await unreadableRoots(
+      listings
+        .filter(({ root, absent }) => !absent && !rootsWithFiles.has(root))
+        .map(({ root }) => root),
+      args.listings,
+      signal
+    )
     await store.flush?.()
     return {
       rootsWithFiles,
       degradedRoots: mergeDegradedRoots(
-        scanIssueDegradedRoots(roots, issues),
-        retirement.degradedRoots,
+        scanIssueDegradedRoots(
+          [...roots, ...state.discovery.containers.issueRoots(issues)],
+          issues
+        ),
+        degraded,
         unlistable
       ),
-      completed,
-      outOfTime,
-      left
+      completed: true,
+      outOfTime: read.outOfTime,
+      left: state.queue.left,
+      pending: state.pending
     }
   })
-}
-
-/** Retire undiscovered rows; recent cycles check only the newest rows under discovered roots. */
-function retirementCandidates(
-  rows: ReadonlyMap<string, SessionSearchFileRow>,
-  swept: { candidates: readonly { file: { path: string } }[] },
-  roots: readonly string[],
-  full: boolean
-): string[] {
-  const discovered = new Set(swept.candidates.map((candidate) => candidate.file.path))
-  const undiscovered = [...rows.values()].filter((row) => !discovered.has(row.path))
-  if (full) {
-    return undiscovered.map((row) => row.path)
-  }
-  return undiscovered
-    .filter((row) => roots.some((root) => isUnderScanRoot(row.path, root)))
-    .sort((left, right) => right.mtimeMs - left.mtimeMs)
-    .slice(0, RETIREMENT_ROWS_PER_CYCLE)
-    .map((row) => row.path)
 }

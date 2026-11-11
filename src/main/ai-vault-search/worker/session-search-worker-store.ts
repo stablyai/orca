@@ -1,6 +1,10 @@
+import type { SessionSearchReadContext } from '../session-search-work-queue'
+import { sessionSearchForegroundTransfer } from '../session-search-foreground-transfer'
+import { SELF_CONTAINED_TRANSCRIPT_AGENTS } from '../indexing/session-search-index-consumer'
 import { ownRetainedString } from '../../../shared/own-retained-string'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 import type {
+  TranscriptReadStart,
   TranscriptMessage,
   TranscriptReadOutcome,
   TranscriptSessionIdentity
@@ -14,6 +18,7 @@ import { searchMessageRows } from '../storage/session-search-message-rows'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'
 import type {
   SearchWorkerCommand,
+  SearchWorkerResponse,
   SessionSearchSnapshotRow
 } from './session-search-worker-protocol'
 import { SessionSearchWorkerStoreBase } from './session-search-worker-store-base'
@@ -22,13 +27,52 @@ const TRANSFER_BYTES = 8 * 1024 * 1024
 const BATCH_BYTES = 64 * 1024
 
 export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
+  beginUnpreparedWrite(start: TranscriptReadStart): SessionSearchFileWrite | null {
+    if (!this.acceptingReads || this.bytes >= TRANSFER_BYTES) {
+      return null
+    }
+    const epoch = this.client.epoch
+    const coverageEpoch = this.snapshotEpoch
+    const owner = new AbortController()
+    this.invalidations.set(owner, start.candidate.file.path)
+    const signal = start.signal ? AbortSignal.any([owner.signal, start.signal]) : owner.signal
+    return sessionSearchForegroundTransfer(
+      { ...start, signal },
+      ++this.nextHandle,
+      {
+        send: (command) => this.send(command),
+        active: () =>
+          this.acceptingReads &&
+          this.client.epoch === epoch &&
+          this.snapshotEpoch === coverageEpoch,
+        retain: (bytes) => {
+          if (!start.indexing && this.bytes + bytes > TRANSFER_BYTES) {
+            return false
+          }
+          this.bytes += bytes
+          return true
+        },
+        release: (bytes) => {
+          this.bytes -= bytes
+        },
+        finished: () => {
+          this.invalidations.delete(owner)
+        }
+      },
+      SELF_CONTAINED_TRANSCRIPT_AGENTS[start.candidate.agent] &&
+        (start.candidate.file.sidecar === undefined || start.candidate.file.sidecar === 'none')
+    )
+  }
+
   beginWrite(
     candidate: SessionFileCandidate,
     mode: 'append' | 'replace',
     offset: number,
     identity?: () => TranscriptSessionIdentity | null,
     indexing = false,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    metadataOnly = false,
+    read?: SessionSearchReadContext
   ): SessionSearchFileWrite | null {
     if (
       !this.acceptingReads ||
@@ -43,6 +87,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
     const owner = new AbortController()
     this.invalidations.set(owner, candidate.file.path)
     const readSignal = signal ? AbortSignal.any([owner.signal, signal]) : owner.signal
+    let settlement: Promise<boolean> = Promise.resolve(false)
     let ended = false
     let cancelled = false
     let failed = false
@@ -59,7 +104,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
       snapshotEpoch === this.snapshotEpoch &&
       !readSignal.aborted
     const valid = () => active() && !failed
-    const post = (command: SearchWorkerCommand) => {
+    const post = (command: SearchWorkerCommand): Promise<SearchWorkerResponse> => {
       if (!valid()) {
         return Promise.resolve({ id: 0, accepted: false })
       }
@@ -86,7 +131,15 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           return { id: 0, accepted: false }
         })
     }
-    void post({ op: 'begin', handle, candidate, mode, offset })
+    void post({
+      op: 'begin',
+      metadataOnly,
+      handle,
+      candidate,
+      mode,
+      offset,
+      work: indexing ? read?.receipt : undefined
+    })
     const discard = () => {
       cancelled = true
       this.bytes -= size
@@ -124,6 +177,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
         .catch(() => undefined)
     }
     return {
+      settled: () => settlement,
       failed: () => failed,
       cancelled: () => !active(),
       drain: async () => {
@@ -168,7 +222,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
         }
         batch()
         ended = true
-        const old = this.committed.get(candidate.file.path)
+        const old = this.coverage.get(candidate.file.path)
         const speculative: SessionSearchSnapshotRow = {
           path: candidate.file.path,
           identity:
@@ -186,14 +240,25 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           contentHash: hash
         }
         this.speculative.set(candidate.file.path, speculative)
-        void post({ op: 'finish', handle, outcome, hash })
-          .then(() => {
+        const finished = post({ op: 'finish', handle, outcome, hash })
+        if (indexing && read) {
+          read.settlement = finished.then((response) => response.settlement)
+        }
+        settlement = finished
+          .then((response) => {
+            const accepted =
+              response.accepted === true &&
+              valid() &&
+              response.deltas?.some(
+                (delta) => delta.path === candidate.file.path && delta.row?.state === 'current'
+              ) === true
             if (this.speculative.get(candidate.file.path) === speculative) {
               this.speculative.delete(candidate.file.path)
             }
             this.invalidations.delete(owner)
+            return accepted
           })
-          .catch(() => undefined)
+          .catch(() => false)
         return true
       },
       discard: () => {

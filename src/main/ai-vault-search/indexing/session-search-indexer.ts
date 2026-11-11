@@ -1,4 +1,5 @@
 import { systemSessionSearchClock, type SessionSearchClock } from './session-search-clock'
+import { waitForAiVaultScan } from '../../ai-vault/ai-vault-scan-cancellation'
 import {
   DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES,
   DEFAULT_SESSION_SEARCH_PASS_DEADLINE_FRACTION,
@@ -8,7 +9,7 @@ import {
 } from './session-search-indexer-options'
 import { SessionSearchDirectoryListings } from '../discovery/session-search-directory-listings'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
-import { runSessionSearchPass } from './session-search-pass'
+import { runSessionSearchPass, SessionSearchPassState } from './session-search-pass'
 import { sessionSearchHistoryCutoffMs } from '../session-search-retention-policy'
 import type { SessionSearchStateCounts } from '../storage/session-search-store-types'
 import { SessionSearchWorkerStore } from '../worker/session-search-worker-store'
@@ -60,6 +61,13 @@ export class SessionSearchIndexer {
   private lastCounts: SessionSearchStateCounts | null = null
   private cyclesSinceSweep = 0
   private sweepNext = false
+  /** Retention/root maintenance is independent of unfinished discovery and reads. */
+  private maintenanceNext = false
+  private primaryWakeNext: number | undefined
+  private primaryWakeRevision = 0
+  private sweepInProgress = false
+  private retirement: Promise<void> | null = null
+  private readonly work: SessionSearchPassState
   private started = false
   private closed = false
 
@@ -89,21 +97,31 @@ export class SessionSearchIndexer {
       )
     }
     // Claim ownership before async initialization so another indexer cannot race the writer open.
-    this.store = new SessionSearchWorkerStore(options.databasePath, onError, () => {
-      this.sweepNext = true
-    })
+    this.work = new SessionSearchPassState(options.watcherEntryPath)
+    this.store = new SessionSearchWorkerStore(
+      options.databasePath,
+      onError,
+      () => {
+        this.sweepNext = true
+      },
+      (path) => {
+        const row = this.store.fileRow(path)
+        this.work.candidates.rowChanged(path, row)
+      }
+    )
     liveIndexerPaths.add(this.ownershipPath)
     this.store.setRetentionCutoffMs(this.cutoffMs())
-    this.unregister = registerSessionSearchIndexConsumer(this.store)
+    this.unregister = registerSessionSearchIndexConsumer(this.store, this.work.candidates)
   }
 
-  /** Begin with a full sweep; subsequent ticks reconcile recent files and sweep periodically. */
+  /** Begin inventory capture, then consume changes and retained debt at the normal cadence. */
   start(): Promise<void> {
     if (this.closed || this.started) {
       return this.loop.settled
     }
     this.started = true
     this.sweepNext = true
+    this.maintenanceNext = true
     return this.tick()
   }
 
@@ -115,7 +133,11 @@ export class SessionSearchIndexer {
     if (!this.started) {
       throw new Error('SessionSearchIndexer.reconcile: start() first')
     }
-    this.sweepNext ||= options.full === true
+    if (options.full === true) {
+      this.sweepNext = true
+      this.maintenanceNext = true
+      this.primaryWakeNext = ++this.primaryWakeRevision
+    }
     return this.tick()
   }
 
@@ -147,7 +169,7 @@ export class SessionSearchIndexer {
 
   close(): Promise<void> {
     if (this.closed) {
-      return this.store.retired()
+      return this.retired()
     }
     // Preserve final counts for status calls after the store closes.
     this.lastCounts = this.readCounts() ?? this.lastCounts
@@ -156,8 +178,14 @@ export class SessionSearchIndexer {
     this.loop.close()
     this.unregister()
     this.store.close()
-    liveIndexerPaths.delete(this.ownershipPath)
-    return this.store.retired()
+    this.retirement = Promise.all([
+      this.store.retired(),
+      this.work.close(),
+      this.loop.settled
+    ]).then(() => {
+      liveIndexerPaths.delete(this.ownershipPath)
+    })
+    return this.retirement
   }
 
   async initialize(): Promise<void> {
@@ -170,7 +198,7 @@ export class SessionSearchIndexer {
   }
 
   retired(): Promise<void> {
-    return this.store.retired()
+    return this.retirement ?? this.store.retired()
   }
 
   settled(): Promise<void> {
@@ -199,7 +227,7 @@ export class SessionSearchIndexer {
       return 'degraded'
     }
     // Deferred candidates may have no rows, so due-row counts alone cannot prove completion.
-    if (this.left > 0) {
+    if (this.left > 0 || this.work.pending) {
       return 'indexing'
     }
     return counts.due === 0 && this.lastSweepCompletedAt !== null ? 'current' : 'indexing'
@@ -213,57 +241,69 @@ export class SessionSearchIndexer {
   }
 
   private async pass(signal: AbortSignal): Promise<void> {
-    // Refresh the cutoff each pass so purged transcripts cannot immediately be re-indexed.
     this.store.setRetentionCutoffMs(this.cutoffMs())
-    const startedAt = this.clock.now()
+    const primaryWake = this.primaryWakeNext
     const full = this.sweepNext
-    // Consume the flag before awaiting so requests arriving during this pass survive.
+    const maintenance = this.maintenanceNext || full
     this.sweepNext = false
+    this.maintenanceNext = maintenance
+    this.sweepInProgress ||= full
     try {
-      if (full && this.options.resolveRoots) {
-        const roots = await this.options.resolveRoots(signal)
+      if (maintenance && this.options.resolveRoots) {
+        const roots = await waitForAiVaultScan(this.options.resolveRoots(signal), signal)
         if (signal.aborted) {
           return
         }
         this.roots = roots
       }
+      const discoveryStarted = this.clock.now()
       const result = await runSessionSearchPass({
         store: this.store,
+        state: this.work,
         roots: this.roots,
         full,
+        primaryWake,
+        purge: maintenance,
+        onPurged: () => {
+          this.maintenanceNext = false
+        },
         recentPerAgent: this.recentPerAgent,
         previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
-        overdue: () => this.clock.now() - startedAt >= this.passDeadlineMs,
+        discoveryOverdue: () =>
+          this.clock.now() - discoveryStarted >=
+          (this.options.discoveryDeadlineMs ?? this.passDeadlineMs),
+        startReadDeadline: () => {
+          const readsStartedAt = this.clock.now()
+          return () => this.clock.now() - readsStartedAt >= this.passDeadlineMs
+        },
         listings: new SessionSearchDirectoryListings(),
         signal
       })
       if (!result.completed) {
-        // Preserve previous health findings and retry the sweep after an incomplete pass.
-        this.sweepNext ||= full
         return
+      }
+      if (this.primaryWakeNext === primaryWake) {
+        this.primaryWakeNext = undefined
       }
       this.degradedRoots = result.degradedRoots
       this.previousRootsWithFiles = result.rootsWithFiles
       this.lastReconcileAt = this.clock.now()
       this.left = result.left
-      // Repeat full discovery while backlogged so reads outside the recency window can progress.
-      this.sweepNext ||= result.outOfTime
-      if (full) {
-        // Deferred reads prevent a sweep from establishing that the index is current.
-        if (!result.outOfTime) {
-          this.lastSweepCompletedAt = this.lastReconcileAt
-        }
-        this.cyclesSinceSweep = 0
-        return
+      if (this.sweepInProgress && !result.pending) {
+        this.lastSweepCompletedAt = this.lastReconcileAt
+        this.sweepInProgress = false
       }
-      this.cyclesSinceSweep += 1
+      this.cyclesSinceSweep++
       if (this.cyclesSinceSweep >= this.fullSweepEveryCycles) {
-        this.sweepNext = true
+        this.maintenanceNext = true
+        this.primaryWakeNext = ++this.primaryWakeRevision
+        this.cyclesSinceSweep = 0
       }
     } catch (error) {
-      // Retry a failed sweep rather than waiting for the periodic cadence.
-      this.sweepNext ||= full
-      throw error
+      // The owned frontiers retain progress; a failure never promotes continuation into discovery.
+      if (!signal.aborted) {
+        throw error
+      }
     }
   }
 

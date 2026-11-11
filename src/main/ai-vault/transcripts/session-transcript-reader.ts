@@ -1,3 +1,4 @@
+import type { SessionSearchReadContext } from '../../ai-vault-search/session-search-work-queue'
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
 import { createHash } from 'node:crypto'
 import { readTranscriptSlice } from '../../native-chat/wsl-transcript-fs-access'
@@ -18,6 +19,7 @@ import {
 } from './session-transcript-record-budget'
 
 type TranscriptSessionEnrichment = {
+  searchWork?: SessionSearchReadContext
   /** Complete consumer metadata before committing; the returned fold stays unmodified. */
   indexing?: boolean
   sessionForConsumers?: (session: AiVaultSession | null) => Promise<AiVaultSession | null>
@@ -95,6 +97,7 @@ export async function readResumableTranscript(
   channel.beginRead({
     candidate: args.candidate,
     indexing: args.indexing,
+    searchWork: args.indexing ? args.searchWork : undefined,
     signal: args.signal,
     mode: canResume ? 'append' : 'replace',
     previousByteOffset: startOffset,
@@ -108,10 +111,13 @@ export async function readResumableTranscript(
       path: file.path,
       start: startOffset,
       prefixHash,
-      prefixCheckpoints: prefixOffsets && {
-        offsets: prefixOffsets,
-        reached: (offset, digest) => channel.prefixReached(offset, digest)
-      },
+      prefixCheckpoints: prefixHash
+        ? {
+            offsets: prefixOffsets,
+            needed: (offset) => channel.needsPrefix(offset),
+            reached: (offset, digest) => channel.prefixReached(offset, digest)
+          }
+        : undefined,
       onLine: (line) => state.consumeLine(line),
       drain: () => channel.drain(),
       // Preserve `this` for parsers that implement these hooks as methods.
@@ -195,6 +201,7 @@ export async function readWholeTranscript(
     mode: 'replace',
     previousByteOffset: 0,
     indexing: args.indexing,
+    searchWork: args.indexing ? args.searchWork : undefined,
     signal: args.signal
   })
   try {

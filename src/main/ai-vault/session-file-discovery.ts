@@ -1,12 +1,15 @@
-import { dirname, extname, relative } from 'node:path'
-import type { AiVaultAgentSource } from './session-scanner-agent-sources'
+import { dirname, extname, isAbsolute, relative } from 'node:path'
+import type { AiVaultAgentSource } from './session-scanner-types'
 
 export function isDiscoverableSessionFile(
-  source: AiVaultAgentSource,
+  source: Pick<AiVaultAgentSource, 'extensions' | 'filePredicate' | 'directoryPredicate'>,
   rootDir: string,
   filePath: string
 ): boolean {
-  if (!source.extensions.includes(extname(filePath).toLowerCase())) {
+  if (
+    !source.extensions.includes('*') &&
+    !source.extensions.includes(extname(filePath).toLowerCase())
+  ) {
     return false
   }
   if (source.filePredicate && !source.filePredicate(filePath)) {
@@ -24,4 +27,9 @@ export function isDiscoverableSessionFile(
 
 export function pathSegments(filePath: string): string[] {
   return filePath.split(/[\\/]/)
+}
+
+export function isInsideSessionRoot(root: string, path: string): boolean {
+  const rel = relative(root, path)
+  return !isAbsolute(rel) && rel !== '..' && !rel.startsWith('../') && !rel.startsWith('..\\')
 }

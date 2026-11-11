@@ -48,7 +48,7 @@ export function codexRolloutHardlinkIdentity(file: {
 }
 
 /** Prefer the real host home, then managed homes, so resume uses the canonical authentication lane. */
-function codexSessionRootRank(codexHome: string | null): number {
+export function codexSessionRootRank(codexHome: string | null): number {
   if (codexHome === null) {
     return 0
   }

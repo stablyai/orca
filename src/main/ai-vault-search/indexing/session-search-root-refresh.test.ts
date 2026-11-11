@@ -1,9 +1,12 @@
 import '../worker/session-search-worker.test-fixture'
-import 'node:path'
+import { join } from 'node:path'
+import { SessionSearchEngine } from '../query/session-search-engine'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SessionSearchIndexer } from './session-search-indexer'
 import {
   openSessionSearchIndexerHarness,
+  FakeSessionSearchClock,
+  writeClaudeTranscript,
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
@@ -22,6 +25,33 @@ afterEach(async () => {
   resetSessionParseCacheForTests()
   resetTranscriptConsumersForTests()
   await harness.cleanup()
+})
+
+it('finds a changed session location on maintenance after ordinary cycles reuse the old location', async () => {
+  const clock = new FakeSessionSearchClock()
+  let roots = harness.roots
+  const resolveRoots = async () => roots
+  indexer = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots,
+    resolveRoots,
+    historyDays: null,
+    clock,
+    fullSweepEveryCycles: 2
+  })
+  await indexer.start()
+  const newRoot = join(harness.root, 'late')
+  const id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+  await writeClaudeTranscript(join(newRoot, 'project', `${id}.jsonl`), ['a late conversation'], id)
+  roots = { ...roots, claudeProjectsDir: newRoot }
+  clock.advance(20_000)
+  await indexer.settled()
+  expect(indexer.status().filesIndexed).toBe(0)
+  clock.advance(20_000)
+  await indexer.settled()
+  expect(
+    harness.read((db) => new SessionSearchEngine(db).search({ query: 'a late conversation' }).hits)
+  ).toHaveLength(1)
 })
 
 it('does not access a closed store when pending discovery completes', async () => {
@@ -46,10 +76,15 @@ it('does not access a closed store when pending discovery completes', async () =
 
 it('retries discovery after failure without silently sweeping stale roots', async () => {
   const errors = vi.fn()
-  const resolveRoots = vi
-    .fn()
-    .mockRejectedValueOnce(new Error('unavailable'))
-    .mockResolvedValue(harness.roots)
+  let unavailable = true
+  const path = join(harness.claudeProjectDir, 'recovery.jsonl')
+  await writeClaudeTranscript(path, ['recovered conversation'], 'recovery')
+  const resolveRoots = async () => {
+    if (unavailable) {
+      throw new Error('unavailable')
+    }
+    return harness.roots
+  }
   indexer = new SessionSearchIndexer({
     databasePath: harness.databasePath,
     roots: harness.roots,
@@ -60,7 +95,14 @@ it('retries discovery after failure without silently sweeping stale roots', asyn
   await indexer.start()
   expect(errors).toHaveBeenCalledTimes(1)
   expect(indexer.status().lastSweepCompletedAt).toBeNull()
+  expect(indexer.status().filesIndexed).toBe(0)
+  unavailable = false
   await indexer.reconcile()
-  expect(resolveRoots).toHaveBeenCalledTimes(2)
-  expect(indexer.status().lastSweepCompletedAt).not.toBeNull()
+  expect(
+    harness.read((db) =>
+      db
+        .prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'recovered'")
+        .get()
+    )
+  ).toEqual({ n: 2 })
 })

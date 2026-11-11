@@ -20,29 +20,37 @@ export async function deleteExpiredSearchFiles(
   reclaim = true
 ): Promise<void> {
   if (cutoffMs !== null) {
-    const expired = db
-      .prepare('SELECT path FROM files WHERE mtime_ms < ? ORDER BY mtime_ms')
-      .all(cutoffMs) as { path: string }[]
-    for (const { path } of expired) {
-      if (closed()) {
-        return
+    let after = ''
+    while (!closed()) {
+      const expired = db
+        .prepare('SELECT path FROM files WHERE path > ? AND mtime_ms < ? ORDER BY path LIMIT 256')
+        .all(after, cutoffMs)
+        .map((row) => ({ path: String(row.path) }))
+      if (!expired.length) {
+        break
       }
-      db.exec('BEGIN IMMEDIATE')
-      try {
-        // Recheck expiry under the write lock in case a read refreshed this file after the initial scan.
-        const file = db
-          .prepare('SELECT session_row_id FROM files WHERE path = ? AND mtime_ms < ?')
-          .get(path, cutoffMs) as { session_row_id: number | null } | undefined
-        if (file) {
-          db.prepare('DELETE FROM sessions WHERE id = ?').run(file.session_row_id)
-          db.prepare('DELETE FROM files WHERE path = ?').run(path)
+      for (const { path } of expired) {
+        if (closed()) {
+          return
         }
-        db.exec('COMMIT')
-      } catch (error) {
-        db.exec('ROLLBACK')
-        throw error
+        db.exec('BEGIN IMMEDIATE')
+        try {
+          // Recheck expiry under the write lock in case a read refreshed this file after the initial scan.
+          const file = db
+            .prepare('SELECT session_row_id FROM files WHERE path = ? AND mtime_ms < ?')
+            .get(path, cutoffMs) as { session_row_id: number | null } | undefined
+          if (file) {
+            db.prepare('DELETE FROM sessions WHERE id = ?').run(file.session_row_id)
+            db.prepare('DELETE FROM files WHERE path = ?').run(path)
+          }
+          db.exec('COMMIT')
+        } catch (error) {
+          db.exec('ROLLBACK')
+          throw error
+        }
+        await yieldStep()
       }
-      await yieldStep()
+      after = expired.at(-1)!.path
     }
   }
   if (reclaim) {

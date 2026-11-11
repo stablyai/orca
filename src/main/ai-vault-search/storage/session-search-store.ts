@@ -1,3 +1,36 @@
+import { SessionSearchTransactionEffects } from '../session-search-transaction-effects'
+import { initializeSessionSearchStorage } from '../session-search-storage-bootstrap'
+import { admitSessionSearchStoreWrite } from '../session-search-store-write'
+import { applySessionSearchFileState } from '../session-search-file-state'
+import {
+  validSessionSearchRemoval,
+  type SessionSearchRemovalReceipt
+} from '../session-search-observation-authority'
+import {
+  transitionSessionSearchCandidates,
+  requireSessionSearchCandidateReason,
+  transitionSessionSearchWork
+} from '../session-search-store-transitions'
+import { SessionSearchWorkCatalog } from '../session-search-work-catalog'
+import type {
+  SessionSearchReadContext,
+  SessionSearchWorkCommand,
+  SessionSearchWorkResult
+} from '../session-search-work-queue'
+import {
+  coversSessionSearchTranscript,
+  sessionSearchResumableCursor
+} from '../session-search-committed-coverage'
+import {
+  SessionSearchCatalogCandidates,
+  type SessionSearchCandidateCommand
+} from '../session-search-catalog-candidates'
+import { SessionSearchCatalog, type SessionSearchCatalogCommand } from '../session-search-catalog'
+import {
+  iterateSessionSearchFileRows,
+  readSessionSearchFileRows,
+  readSessionSearchStateCounts
+} from '../session-search-file-rows'
 import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import type {
   SessionSearchFileRow,
@@ -6,13 +39,11 @@ import type {
   SessionSearchStateCounts
 } from './session-search-store-types'
 import type SyncDatabase from '../../sqlite/sync-database'
-import { asRecord } from '../../ai-vault/session-scanner-record-value'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../../ai-vault/transcripts/session-transcript-consumers'
-import {
-  fileIdentity,
-  type SessionSearchFileIdentity,
-  type SessionSearchIndexedFile
+import type {
+  SessionSearchFileIdentity,
+  SessionSearchIndexedFile
 } from './session-search-file-cursor'
 import {
   SESSION_SEARCH_COMMIT_CHARS,
@@ -26,6 +57,10 @@ import { openSessionSearchDatabase } from './session-search-schema'
 export class SessionSearchStore {
   private readonly db: SyncDatabase
   private readonly writer: SessionSearchIndexWriter
+  private candidateCatalog: SessionSearchCatalogCandidates | undefined
+  private scratch: SessionSearchCatalog | undefined
+  private readonly effects: SessionSearchTransactionEffects
+  private workCatalog: SessionSearchWorkCatalog | undefined
   private closed = false
   private retentionCutoffMs: number | null = null
   // Coalesce replacements into one drain, rerunning if more rows become orphaned.
@@ -39,9 +74,24 @@ export class SessionSearchStore {
         '[ai-vault-search] index write failed:',
         error instanceof Error ? error.name : 'IndexError'
       ),
-    private readonly onMessagesChanged: (delta: number) => void = () => undefined
+    private readonly onMessagesChanged: (delta: number) => void = () => undefined,
+    publishSourceWake: (previous: SessionSearchFileRow, row: SessionSearchFileRow) => void = () =>
+      undefined
   ) {
+    this.effects = new SessionSearchTransactionEffects(
+      () => {
+        const candidates = this.catalogCandidates.rollbackPoint()
+        const work = this.workCatalog?.rollbackPoint()
+        return () => {
+          candidates()
+          work?.()
+        }
+      },
+      (path) => this.fileRow(path),
+      publishSourceWake
+    )
     this.db = openSessionSearchDatabase(path)
+    initializeSessionSearchStorage(this.db)
     ensureSessionSearchQuerySchema(this.db)
     this.writer = new SessionSearchIndexWriter(
       this.db,
@@ -90,6 +140,58 @@ export class SessionSearchStore {
     return this.retentionCutoffMs
   }
 
+  get catalogPending(): boolean {
+    return this.candidateCatalog?.hasPending ?? false
+  }
+  get catalogCandidates(): SessionSearchCatalogCandidates {
+    this.candidateCatalog ??= new SessionSearchCatalogCandidates(
+      this.db,
+      (path) => this.removeFile(path),
+      (run) => this.catalogStorage.transaction('search_candidate_accept', run)
+    )
+    return this.candidateCatalog
+  }
+  candidates(command: SessionSearchCandidateCommand) {
+    return transitionSessionSearchCandidates(this, command)
+  }
+  work(command: SessionSearchWorkCommand): Promise<SessionSearchWorkResult> {
+    return transitionSessionSearchWork(this, this.catalogWork, command)
+  }
+  get catalogWork(): SessionSearchWorkCatalog {
+    this.workCatalog ??= new SessionSearchWorkCatalog(this.db, this.catalogStorage)
+    return this.workCatalog
+  }
+  onSourceWake(previous: SessionSearchFileRow, row: SessionSearchFileRow): void {
+    this.effects.wake(previous, row)
+  }
+  get catalogStorage(): SessionSearchCatalog {
+    this.scratch ??= new SessionSearchCatalog(
+      this.db,
+      (path, reason) => requireSessionSearchCandidateReason(this, path, reason),
+      this.effects
+    )
+    return this.scratch
+  }
+  async catalog(command: SessionSearchCatalogCommand) {
+    return this.catalogStorage.response(command)
+  }
+
+  removeReadWork(path: string): void {
+    this.workCatalog?.removeAccepted(path)
+  }
+
+  validRemoval(path: string, receipt: SessionSearchRemovalReceipt): boolean {
+    return !!this.scratch && validSessionSearchRemoval(this.scratch, path, receipt)
+  }
+
+  fileRow(path: string): SessionSearchFileRow | undefined {
+    return readSessionSearchFileRows(this.db, path)[0]
+  }
+
+  *fileRows(): IterableIterator<SessionSearchFileRow> {
+    yield* iterateSessionSearchFileRows(this.db)
+  }
+
   indexedFile(path: string, identity: SessionSearchFileIdentity): SessionSearchIndexedFile | null {
     try {
       return this.writer.indexedFile(path, identity)
@@ -99,68 +201,11 @@ export class SessionSearchStore {
     }
   }
 
-  /** A cold list read must not rewrite a complete, unchanged search entry. */
   coversTranscript(candidate: SessionFileCandidate): boolean {
-    const file = candidate.file
-    if (this.closed || typeof file.sizeBytes !== 'number') {
-      return false
-    }
-    const identity = fileIdentity(file)
-    try {
-      return (
-        this.db
-          .prepare(
-            // With a known file identity, a missing stored identity must force a rewrite.
-            `SELECT 1 FROM files WHERE path = ? AND state = 'current'
-           AND mtime_ms = ? AND size_bytes = ? AND byte_offset = size_bytes
-           AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
-          )
-          .get(
-            file.path,
-            file.mtimeMs,
-            file.sizeBytes,
-            identity?.dev ?? null,
-            identity?.dev ?? null,
-            identity?.ino ?? null
-          ) !== undefined
-      )
-    } catch (error) {
-      this.onError(error)
-      return false
-    }
+    return coversSessionSearchTranscript(this.db, candidate, this.closed, this.onError)
   }
-
-  /** A current cursor with bytes past it, and the hash a replacement read must reproduce to append there. */
   resumableCursor(candidate: SessionFileCandidate): SessionSearchResumableCursor | null {
-    const file = candidate.file
-    if (this.closed || typeof file.sizeBytes !== 'number') {
-      return null
-    }
-    const identity = fileIdentity(file)
-    try {
-      const row = asRecord(
-        this.db
-          .prepare(
-            `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
-             WHERE path = ? AND state = 'current' AND prefix_hash IS NOT NULL
-             AND byte_offset > 0 AND byte_offset < ?
-             AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
-          )
-          .get(
-            file.path,
-            file.sizeBytes,
-            identity?.dev ?? null,
-            identity?.dev ?? null,
-            identity?.ino ?? null
-          )
-      )
-      return typeof row?.byteOffset === 'number' && typeof row.prefixHash === 'string'
-        ? { byteOffset: row.byteOffset, prefixHash: row.prefixHash }
-        : null
-    } catch (error) {
-      this.onError(error)
-      return null
-    }
+    return sessionSearchResumableCursor(this.db, candidate, this.closed, this.onError)
   }
 
   beginWrite(
@@ -169,7 +214,10 @@ export class SessionSearchStore {
     previousByteOffset: number,
     identity?: () => TranscriptSessionIdentity | null,
     _indexing?: boolean,
-    _signal?: AbortSignal
+    _signal?: AbortSignal,
+    metadataOnly = false,
+    read?: SessionSearchReadContext,
+    onContentAccepted?: (revision: string) => void
   ): SessionSearchFileWrite | null {
     if (
       this.closed ||
@@ -178,7 +226,20 @@ export class SessionSearchStore {
       return null
     }
     try {
-      return this.writer.beginWrite(candidate, mode, previousByteOffset, identity)
+      return admitSessionSearchStoreWrite(
+        this.db,
+        this.writer,
+        this.candidateCatalog,
+        candidate,
+        mode,
+        previousByteOffset,
+        identity,
+        metadataOnly,
+        () => this.fileRow(candidate.file.path),
+        () => this.closed,
+        onContentAccepted,
+        read ? { read, store: this } : undefined
+      )
     } catch (error) {
       this.reportWriteFailure(error)
       return null
@@ -195,100 +256,47 @@ export class SessionSearchStore {
   }
 
   files(): SessionSearchFileRow[] {
-    return (
-      this.db
-        .prepare(
-          // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
-          `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
-                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
-                  state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
-           FROM files`
-        )
-        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-        dev: number | null
-        ino: number | null
-      })[]
-    ).map((row) => ({
-      path: row.path,
-      identity:
-        typeof row.dev === 'number' && typeof row.ino === 'number'
-          ? { dev: row.dev, ino: row.ino }
-          : null,
-      mtimeMs: row.mtimeMs,
-      sizeBytes: row.sizeBytes,
-      state: row.state,
-      failCount: row.failCount,
-      failedMtimeMs: row.failedMtimeMs
-    }))
+    return readSessionSearchFileRows(this.db)
   }
 
-  setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
+  setFileState(
+    path: string,
+    state: SessionSearchFileState,
+    atMtimeMs?: number,
+    publish = true
+  ): void {
     try {
-      if (state === 'failed') {
-        // Persist initial failures too, or unreadable new files retry forever.
-        this.db
-          .prepare(
-            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
-             VALUES (?, 0, ?, 'failed', 1, ?)
-             ON CONFLICT(path) DO UPDATE SET
-               state = 'failed',
-               fail_count = files.fail_count + 1,
-               failed_mtime_ms = excluded.failed_mtime_ms`
-          )
-          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
-        return
+      if (publish) {
+        this.candidateCatalog?.rowChanged(path)
       }
-      this.db
-        .prepare(
-          'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
-        )
-        .run(state, path)
+      applySessionSearchFileState(
+        this.db,
+        path,
+        state,
+        atMtimeMs,
+        state === 'failed' ? this.catalogStorage : this.scratch
+      )
     } catch (error) {
       this.onError(error)
     }
+  }
+  settleAcceptedFile(path: string): void {
+    applySessionSearchFileState(this.db, path, 'current', undefined, this.scratch)
   }
 
   stateCounts(): SessionSearchStateCounts {
-    const rows = this.db.prepare('SELECT state, count(*) AS n FROM files GROUP BY state').all() as {
-      state: SessionSearchFileState
-      n: number
-    }[]
-    const counts: SessionSearchStateCounts = {
-      current: 0,
-      due: 0,
-      failed: 0,
-      sessionsByAgent: this.sessionsByAgent(),
-      messages: 0
-    }
-    for (const row of rows) {
-      counts[row.state] = Number(row.n)
-    }
-    counts.messages = Number(
-      asRecord(this.db.prepare('SELECT count(*) AS n FROM messages').get())?.n ?? 0
-    )
-    return counts
-  }
-
-  // Count indexed sessions without scanning their messages on every status poll.
-  private sessionsByAgent(): Record<string, number> {
-    const rows = this.db.prepare('SELECT agent, count(*) AS n FROM sessions GROUP BY agent').all()
-    const counts: Record<string, number> = {}
-    for (const row of rows) {
-      const agent = asRecord(row)?.agent
-      const total = asRecord(row)?.n
-      if (typeof agent === 'string' && typeof total === 'number') {
-        counts[agent] = total
-      }
-    }
-    return counts
+    return readSessionSearchStateCounts(this.db)
   }
 
   /** Only proven deletion permits removal; unreadable sources retain their indexed rows. */
-  removeFile(path: string): void {
+  removeFile(path: string): boolean {
     try {
       this.writer.removeFile(path)
+      this.candidateCatalog?.rowChanged(path)
+      return true
     } catch (error) {
       this.onError(error)
+      return false
     }
   }
 

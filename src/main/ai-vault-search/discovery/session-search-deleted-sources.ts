@@ -20,6 +20,16 @@ export type SessionSearchRetirement = {
   degradedRoots: SessionSearchDegradedRoot[]
 }
 
+export type SessionSearchContainerProofInput = {
+  path: string
+  container: string
+  id: string
+  agent?: string | null
+}
+export type SessionSearchContainerProof = (
+  inputs: readonly SessionSearchContainerProofInput[]
+) => Promise<(path: string) => boolean | null>
+
 export type SessionSearchRetirementArgs = {
   store: SessionSearchIndexStore
   /** Indexed paths absent from this pass’s discovery. */
@@ -29,7 +39,7 @@ export type SessionSearchRetirementArgs = {
   /** Roots that listed transcripts on the previous pass and none on this one. */
   emptiedRoots?: ReadonlySet<string>
   /** Complete successful container enumerations; see session-search-synthetic-sources.ts. */
-  enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
+  enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>> | SessionSearchContainerProof
   listings: SessionSearchDirectoryReader
   /** Bound directory work rather than rows so one unreadable directory cannot starve later rows. */
   directoryLimit?: number
@@ -63,6 +73,16 @@ export async function retireDeletedSessionSearchSources(
     degradedRoots: []
   }
   const degraded = new Map<string, string>()
+  await store.prepareCoverage?.(paths.slice(0, 256))
+  const enumerated =
+    typeof args.enumeratedContainers === 'function'
+      ? await args.enumeratedContainers(
+          paths.slice(0, 256).flatMap((path) => {
+            const synthetic = splitSyntheticSessionSource(path)
+            return synthetic ? [{ path, ...synthetic, agent: store.fileRow(path)?.agent }] : []
+          })
+        )
+      : args.enumeratedContainers
   for (const [index, path] of paths.entries()) {
     // Synthetic paths name entries inside containers, not filesystem objects.
     const synthetic = splitSyntheticSessionSource(path)
@@ -78,11 +98,23 @@ export async function retireDeletedSessionSearchSources(
       emptiedRoots,
       signal
     })
+    if (!store.coverageKnown?.(path)) {
+      await store.prepareCoverage?.([path])
+    }
     const proof = synthetic
-      ? proveSyntheticSource(synthetic, containerProof, args.enumeratedContainers)
+      ? await proveSyntheticSource(
+          synthetic,
+          containerProof,
+          enumerated,
+          store.fileRow(path)?.agent,
+          path
+        )
       : containerProof
     if (proof.verdict === 'gone') {
-      store.removeFile(path)
+      if (!(await store.removeFile(path))) {
+        retirement.unchecked.push(path)
+        continue
+      }
       retirement.retired.push(path)
       if (retirement.retired.length % REMOVALS_PER_FLUSH === 0) {
         await store.flush?.()
@@ -143,15 +175,27 @@ async function proveSource(
 }
 
 /** Prove container availability first; only a full enumeration can establish an entry’s absence. */
-function proveSyntheticSource(
+async function proveSyntheticSource(
   synthetic: { container: string; id: string },
   containerProof: SessionSearchSourceVerdict,
-  enumerated?: ReadonlyMap<string, ReadonlySet<string>>
-): SessionSearchSourceVerdict {
+  enumerated?: ReadonlyMap<string, ReadonlySet<string>> | ((path: string) => boolean | null),
+  agent?: string | null,
+  path = ''
+): Promise<SessionSearchSourceVerdict> {
   if (containerProof.verdict !== 'present') {
     return containerProof
   }
-  const ids = enumerated?.get(synthetic.container)
+  if (typeof enumerated === 'function') {
+    const present = enumerated(path)
+    return present === null
+      ? {
+          verdict: 'unverifiable',
+          reason: `${synthetic.container} was not enumerated in full this pass.`
+        }
+      : { verdict: present ? 'present' : 'gone' }
+  }
+  const ids =
+    enumerated?.get(`${agent}:${synthetic.container}`) ?? enumerated?.get(synthetic.container)
   // Unknown schemas can enumerate empty; require nonempty evidence before retiring container entries.
   if (!ids || ids.size === 0) {
     return {

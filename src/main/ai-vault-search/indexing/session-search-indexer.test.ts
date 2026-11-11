@@ -1,6 +1,7 @@
 import '../worker/session-search-worker.test-fixture'
+import { notifySessionSearchRootChanges } from '../session-search-watcher.test-fixture'
 import 'node:fs'
-import { rm, stat } from 'node:fs/promises'
+import { rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
@@ -74,7 +75,19 @@ function transcriptPath(name = SESSION_ID): string {
   return join(harness.claudeProjectDir, `${name}.jsonl`)
 }
 
+function rowFor(path: string) {
+  return harness.read((db: SyncDatabase) =>
+    db.prepare('SELECT state, fail_count AS failCount FROM files WHERE path = ?').get(path)
+  )
+}
+
+function readsPerPass(files: number): { passDeadlineMs: number; discoveryDeadlineMs: number } {
+  clock.costPerNowMs = 1_000
+  return { passDeadlineMs: files * 1_000, discoveryDeadlineMs: Infinity }
+}
+
 async function nextCycle(): Promise<void> {
+  notifySessionSearchRootChanges()
   clock.advance(INTERVAL_MS)
   await indexer?.settled()
 }
@@ -113,4 +126,27 @@ it('keeps a root that is gone at the first sweep after a restart', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
   await indexer?.reconcile({ full: true })
   expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
+})
+
+it('retains a deferred recent file after it leaves the top-N window', async () => {
+  await newIndexer({ ...readsPerPass(1), recentPerAgent: 2 }).start()
+  const ids = [
+    '11111111-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    '22222222-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    '33333333-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+  ]
+  const paths = ids.map((id) => transcriptPath(id))
+  await writeClaudeTranscript(paths[0], ['deferredreviewneedle'], ids[0])
+  await writeClaudeTranscript(paths[1], ['firstreviewneedle'], ids[1])
+  const time = Date.UTC(2099, 0, 1)
+  await utimes(paths[0], new Date(time), new Date(time))
+  await utimes(paths[1], new Date(time + 1000), new Date(time + 1000))
+  await nextCycle()
+  expect(rowFor(paths[0])).toBeUndefined()
+  expect(indexer?.status().filesDue).toBe(1)
+  await writeClaudeTranscript(paths[2], ['newestreviewneedle'], ids[2])
+  await utimes(paths[2], new Date(time + 2000), new Date(time + 2000))
+  await nextCycle()
+  await nextCycle()
+  expect(sessionsMatching('deferredreviewneedle')).toEqual([ids[0]])
 })

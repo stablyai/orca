@@ -1,13 +1,14 @@
+import {
+  currentSessionDiscovery,
+  type SessionDiscoveryDependency
+} from '../../session-discovery-context'
+import { wslGatedReadFile, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
+import { createSessionJsonlDependency } from '../../session-jsonl-dependency'
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { createInterface } from 'node:readline'
 import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
-import {
-  openTranscriptReadStream,
-  wslGatedStat
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import { readSessionIndexJsonl, type SessionIndexJsonlRead } from '../../session-index-jsonl-read'
 import { asRecord } from '../../session-scanner-record-value'
 import { extractString } from '../../session-scanner-values'
 import { KimiSessionIndexCache } from './session-scanner-kimi-index-cache'
@@ -54,7 +55,7 @@ export function kimiPrimaryAgentWirePath(
 }
 
 // Share parsed indexes by path and file identity; one home can hold many sessions.
-const workDirCacheByIndexPath = new KimiSessionIndexCache()
+const workDirCacheByIndexPath = new KimiSessionIndexCache<SessionIndexJsonlRead | undefined>()
 
 export function clearKimiSessionIndexCache(): void {
   workDirCacheByIndexPath.clear()
@@ -83,53 +84,68 @@ export async function readKimiWorkDirBySessionId(
     workDirCacheByIndexPath.get(
       indexPath,
       {
+        dev: identity.dev,
+        ino: identity.ino,
         changeTimeMs: identity.ctimeMs,
         mtimeMs: identity.mtimeMs,
         sizeBytes: identity.size
       },
       generation,
-      () =>
-        parseKimiSessionIndex(indexPath).then(({ map, refused }) => {
-          // Evict inside the shared loader so every concurrent caller retries refused reads without a signature change.
-          if (refused) {
-            workDirCacheByIndexPath.delete(indexPath, generation)
-          }
-          return map
-        })
+      async (previous) => {
+        try {
+          return await readSessionIndexJsonl(
+            indexPath,
+            identity,
+            await previous,
+            parseKimiWorkDirRecord
+          )
+        } catch {
+          // Refusal never becomes an accepted signature; the next caller must retry.
+          workDirCacheByIndexPath.delete(indexPath, generation)
+          return undefined
+        }
+      }
     ),
     signal
-  )
+  ).then((read) => read?.values ?? new Map<string, string>())
 }
 
-async function parseKimiSessionIndex(
-  indexPath: string
-): Promise<{ map: Map<string, string>; refused: boolean }> {
-  const map = new Map<string, string>()
-  // Share partial results after read failure so one broken index does not hide every session under its home.
+function parseKimiWorkDirRecord(line: string): readonly [string, string] | null {
+  let record: Record<string, unknown> | null
   try {
-    const lines = createInterface({
-      input: openTranscriptReadStream(indexPath, { encoding: 'utf-8' }, 'scan'),
-      crlfDelay: Infinity
-    })
-    for await (const line of lines) {
-      if (!line.trim()) {
-        continue
-      }
-      let record: Record<string, unknown> | null
-      try {
-        record = asRecord(JSON.parse(line) as unknown)
-      } catch {
-        continue
-      }
-      const sessionId = extractString(record?.sessionId)
-      const workDir = extractString(record?.workDir)
-      if (sessionId && workDir) {
-        // Later lines win so a resumed session reflects its most recent workDir.
-        map.set(sessionId, workDir)
-      }
-    }
-  } catch (error) {
-    return { map, refused: error instanceof WslTranscriptFsError }
+    record = asRecord(JSON.parse(line) as unknown)
+  } catch {
+    return null
   }
-  return { map, refused: false }
+  const id = extractString(record?.sessionId),
+    cwd = extractString(record?.workDir)
+  return id && cwd ? [id, cwd] : null
+}
+
+export const kimiSearchDependencies: (root: string) => readonly SessionDiscoveryDependency[] = (
+  root
+) => [
+  {
+    path: dirname(root),
+    mode: 'shallow',
+    fileKey: (path) => basename(dirname(path)),
+    eventKey: (path) => (basename(path) === 'session_index.jsonl' ? 'index' : null),
+    observe: (catalog) =>
+      createSessionJsonlDependency(
+        join(dirname(root), 'session_index.jsonl'),
+        parseKimiWorkDirRecord,
+        catalog
+      )
+  }
+]
+
+export async function kimiSearchWirePath(
+  statePath: string,
+  signal?: AbortSignal
+): Promise<string | undefined> {
+  if (!currentSessionDiscovery()) {
+    return undefined
+  }
+  const value: unknown = JSON.parse(await wslGatedReadFile(statePath, 'utf-8', 'scan', signal))
+  return kimiPrimaryAgentWirePath(statePath, asRecord(value))
 }

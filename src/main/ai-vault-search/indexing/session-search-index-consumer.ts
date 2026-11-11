@@ -1,3 +1,8 @@
+import { sessionSearchAppendAdmission } from '../session-search-append-admission'
+import type {
+  SessionSearchCandidatePublications,
+  SessionSearchPublicationLease
+} from '../session-search-candidate-publication'
 import { inSessionParseFileLane } from '../../ai-vault/parse-cache/session-parse-file-lane'
 import { requestWholeTranscriptRead } from '../../ai-vault/transcripts/session-transcript-reader'
 import { traceSessionSearch } from '../session-search-trace'
@@ -11,7 +16,6 @@ import {
   type TranscriptReadStart
 } from '../../ai-vault/transcripts/session-transcript-consumers'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
-import { fileIdentity } from '../storage/session-search-file-cursor'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'
 import type {
   SessionSearchResumableCursor,
@@ -48,30 +52,39 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
 
 /** Proven index gaps need whole reads; declined transfers leave committed coverage unchanged. */
 export class SessionSearchIndexConsumer implements TranscriptConsumer {
-  constructor(private readonly store: SessionSearchIndexStore) {}
+  constructor(
+    private readonly store: SessionSearchIndexStore,
+    private readonly onCommitted?: (write: SessionSearchFileWrite) => void,
+    private readonly publications?: SessionSearchCandidatePublications
+  ) {}
 
   resumableOffset(candidate: SessionFileCandidate): number | null {
     return this.store.resumableCursor(candidate)?.byteOffset ?? null
   }
 
-  beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
+  beginRead(start: TranscriptReadStart): SessionSearchReadConsumer | null {
     const { candidate } = start
     if (this.store.acceptingReads === false) {
       return null
     }
+    const unprepared = this.store.coverageKnown?.(candidate.file.path) === false
     // A fully covered self-contained transcript has nothing new to publish, even under another agent’s fold.
     if (
+      !unprepared &&
       SELF_CONTAINED_TRANSCRIPT_AGENTS[candidate.agent] &&
       (candidate.file.sidecar === undefined || candidate.file.sidecar === 'none') &&
       this.store.coversTranscript(candidate)
     ) {
       return null
     }
-    if (start.mode === 'append') {
-      const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
-      if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
-        const recoverable = this.store.resumableCursor(candidate)
-        if (recoverable && recoverable.byteOffset < start.previousByteOffset) {
+    if (!unprepared && start.mode === 'append') {
+      const admission = sessionSearchAppendAdmission(
+        this.store,
+        candidate,
+        start.previousByteOffset
+      )
+      if (admission !== 'target') {
+        if (admission === 'lag') {
           if (start.indexing) {
             // Why: invalidate after this lane saves its resume point, before the next read acquires it.
             void inSessionParseFileLane(candidate.file.path, async () =>
@@ -86,28 +99,54 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
       }
     }
     // A restart dropped the parser's resume point; append past our cursor once the reread proves the prefix.
-    const resume = start.mode === 'replace' ? this.provableCursor(start) : null
-    const write = resume
-      ? this.store.beginWrite(
-          candidate,
-          'append',
-          resume.byteOffset,
-          start.identity,
-          start.indexing,
-          start.signal
-        )
-      : this.store.beginWrite(
-          candidate,
-          start.mode,
-          start.previousByteOffset,
-          start.identity,
-          start.indexing,
-          start.signal
-        )
-    if (!write) {
+    const resume = !unprepared && start.mode === 'replace' ? this.provableCursor(start) : null
+    const publication = this.publications?.beginPublication(candidate)
+    if (this.publications && !publication) {
       return null
     }
-    return new SessionSearchReadConsumer(this.store, start, write, resume)
+    const signal = publication
+      ? start.signal
+        ? AbortSignal.any([start.signal, publication.signal])
+        : publication.signal
+      : start.signal
+    const write = unprepared
+      ? (this.store.beginUnpreparedWrite?.({ ...start, signal }) ?? null)
+      : resume
+        ? this.store.beginWrite(
+            candidate,
+            'append',
+            resume.byteOffset,
+            start.identity,
+            start.indexing,
+            signal,
+            start.metadataOnly,
+            start.indexing ? start.searchWork : undefined
+          )
+        : this.store.beginWrite(
+            candidate,
+            start.mode,
+            start.previousByteOffset,
+            start.identity,
+            start.indexing,
+            signal,
+            start.metadataOnly,
+            start.indexing ? start.searchWork : undefined
+          )
+    if (!write) {
+      publication?.release()
+      return null
+    }
+    if (publication) {
+      publication.signal.addEventListener('abort', () => write.discard(), { once: true })
+    }
+    return new SessionSearchReadConsumer(
+      this.store,
+      start,
+      write,
+      resume,
+      this.onCommitted,
+      publication ?? undefined
+    )
   }
 
   private provableCursor(start: TranscriptReadStart): SessionSearchResumableCursor | null {
@@ -127,14 +166,21 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     private readonly store: SessionSearchIndexStore,
     private readonly start: TranscriptReadStart,
     private readonly write: SessionSearchFileWrite,
-    private readonly resume: SessionSearchResumableCursor | null = null
+    private readonly resume: SessionSearchResumableCursor | null = null,
+    private readonly onCommitted?: (write: SessionSearchFileWrite) => void,
+    private readonly publication?: SessionSearchPublicationLease
   ) {}
 
   async drain(): Promise<void> {
     await this.write.drain?.()
   }
 
+  needsPrefix(offset: number): boolean {
+    return this.write.needsPrefix?.(offset) ?? false
+  }
+
   prefixReached(offset: number, digest: string): void {
+    this.write.prefixReached?.(offset, digest)
     if (this.resume?.byteOffset === offset) {
       this.prefixProven = digest === this.resume.prefixHash
     }
@@ -155,10 +201,16 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     }
   }
 
-  finish(outcome: TranscriptReadOutcome): void {
-    if (outcome.cancelled || this.write.cancelled?.() || this.write.failed?.()) {
+  finish(outcome: TranscriptReadOutcome): void | Promise<void> {
+    if (
+      outcome.cancelled ||
+      this.publication?.valid() === false ||
+      this.write.cancelled?.() ||
+      this.write.failed?.()
+    ) {
       // Cancellation must not count toward the failure limit for a healthy file.
       this.write.discard()
+      this.publication?.release()
       return
     }
     const { candidate } = this.start
@@ -171,6 +223,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
         rescueRejections: 1,
         rescueRejection: 'prefix-mismatch-or-unreached'
       })
+      this.publication?.release()
       return
     }
     let committed = false
@@ -183,14 +236,31 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       this.write.discard()
     }
     if (committed) {
-      this.store.writeCommitted(candidate)
+      if (!this.start.searchWork?.settlement) {
+        this.store.writeCommitted(candidate)
+      }
+      const acknowledge = (accepted: boolean) => {
+        if (accepted && this.publication?.valid() !== false) {
+          this.publication?.committed()
+          this.onCommitted?.(this.write)
+        }
+        this.publication?.release()
+      }
+      if (this.write.settled) {
+        return this.write.settled().then(acknowledge, () => acknowledge(false))
+      }
+      acknowledge(true)
       return
     }
     // Stamp and count repeated read failures so unchanged unreadable files can be held out.
     this.store.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
+    this.publication?.release()
   }
 }
 
-export function registerSessionSearchIndexConsumer(store: SessionSearchIndexStore): () => void {
-  return registerTranscriptConsumer(new SessionSearchIndexConsumer(store))
+export function registerSessionSearchIndexConsumer(
+  store: SessionSearchIndexStore,
+  publications?: SessionSearchCandidatePublications
+): () => void {
+  return registerTranscriptConsumer(new SessionSearchIndexConsumer(store, undefined, publications))
 }

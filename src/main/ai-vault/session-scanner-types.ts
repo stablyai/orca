@@ -1,3 +1,4 @@
+import type { SessionDiscoveryDependency } from './session-discovery-context'
 import type { Dirent } from 'node:fs'
 import type {
   AiVaultAgent,
@@ -89,6 +90,8 @@ export type SessionFileCandidate = {
 }
 
 export type SessionFileDiscovery = {
+  sourceOrder?: ReadonlyMap<string, number>
+  complete?: boolean
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
@@ -170,4 +173,22 @@ export type SessionFileWalkOptions = {
   strictErrors?: boolean
   readDirectory?: (dirPath: string) => Promise<Dirent[]>
   signal?: AbortSignal
+}
+
+/** Shared discovery rules constrain which paths the delete validator accepts. */
+export type AiVaultAgentSource = {
+  // Resolve lazily: module-time Grok resolution breaks cross-chunk initialization ordering.
+  rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
+  extensions: readonly string[]
+  filePredicate?: (filePath: string) => boolean
+  // Sidecar stats affect freshness and recency; async resolution supports non-derived paths.
+  contentDependencyPath?: (
+    filePath: string,
+    signal?: AbortSignal
+  ) => string | undefined | Promise<string | undefined>
+  // Return false to skip a directory; depth 0 is a child of the root.
+  directoryPredicate?: (name: string, depth: number) => boolean
+  // Share the per-agent limit across alternate roots for one install.
+  mergeRootDiscoveries?: boolean
+  searchDependencies?: (root: string) => readonly SessionDiscoveryDependency[]
 }

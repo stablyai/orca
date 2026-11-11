@@ -23,7 +23,8 @@ type JsonlReadResult = {
 }
 
 export type JsonlPrefixCheckpoints = {
-  offsets: ReadonlySet<number>
+  offsets?: ReadonlySet<number>
+  needed?: (offset: number) => boolean
   /** Called once the consumed prefix ends at an offset, before the next line is read. */
   reached: (offset: number, digest: string) => void
 }
@@ -115,7 +116,10 @@ export async function consumeCompleteJsonlLines(args: {
           hash.update(chunk.subarray(hashedThrough, lineStart))
           hashedThrough = lineStart
           committedHash = null
-          if (args.prefixCheckpoints?.offsets.has(consumedThrough)) {
+          if (
+            args.prefixCheckpoints?.offsets?.has(consumedThrough) ||
+            args.prefixCheckpoints?.needed?.(consumedThrough)
+          ) {
             args.prefixCheckpoints.reached(consumedThrough, hash.copy().digest('hex'))
           }
         }

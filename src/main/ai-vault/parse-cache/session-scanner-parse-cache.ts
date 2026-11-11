@@ -1,3 +1,4 @@
+import type { SessionSearchReadContext } from '../../ai-vault-search/session-search-work-queue'
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
 import { createQoderSessionResumeState } from '../scanners/qoder/session-scanner-qoder-parser'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
@@ -111,12 +112,13 @@ export async function parseAgentSessionFileCached(
   stats?: SessionParseStats,
   requireRead?: SessionParseReadRequirement,
   signal?: AbortSignal,
-  indexing = false
+  indexing = false,
+  searchWork?: SessionSearchReadContext
 ): Promise<AiVaultSession | null> {
   // Serialize lookup/read/store because overlapping parses share a resume point and message channel.
   return inSessionParseFileLane(
     candidate.file.path,
-    () => parseCachedInLane(candidate, platform, stats, requireRead, signal, indexing),
+    () => parseCachedInLane(candidate, platform, stats, requireRead, signal, indexing, searchWork),
     signal
   )
 }
@@ -156,7 +158,8 @@ async function parseCachedInLane(
   stats?: SessionParseStats,
   requireRead?: SessionParseReadRequirement,
   signal?: AbortSignal,
-  indexing = false
+  indexing = false,
+  searchWork?: SessionSearchReadContext
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
   const key = sessionParseCacheKey(candidate.agent, file.path)
@@ -212,7 +215,8 @@ async function parseCachedInLane(
       stats,
       signal,
       sessionForConsumers,
-      indexing
+      indexing,
+      searchWork: indexing ? searchWork : undefined
     })
     storeSessionParseCacheEntry(key, {
       agent: candidate.agent,
@@ -236,6 +240,7 @@ async function parseCachedInLane(
     signal,
     sessionForConsumers,
     indexing,
+    searchWork: indexing ? searchWork : undefined,
     onSkippedRecords: (records) => {
       skippedRecords = mergeSkippedTranscriptRecords([], records)
     }

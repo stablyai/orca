@@ -1,4 +1,4 @@
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 
 export function codexHomeForSessionsDir(
   sessionsDir: string,
@@ -24,4 +24,10 @@ export function uniqueCodexSessionsDirs(paths: readonly string[]): string[] {
     unique.push(trimmed)
   }
   return unique
+}
+
+export function isCodexSessionFile(filePath: string): boolean {
+  return (
+    !filePath.toLowerCase().endsWith('.zst') || /^rollout-.+\.jsonl\.zst$/.test(basename(filePath))
+  )
 }

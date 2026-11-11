@@ -15,6 +15,7 @@ import type { SessionSearchIndexerOptions } from './indexing/session-search-inde
 import type { SessionSearchHostScope } from './session-search-service'
 
 export type SessionSearchInstanceOptions = {
+  watcherEntryPath?: string
   databasePath: string
   roots: SessionSearchScanRoots
   resolveRoots?: SessionSearchIndexerOptions['resolveRoots']

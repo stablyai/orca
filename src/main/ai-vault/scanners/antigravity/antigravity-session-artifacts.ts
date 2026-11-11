@@ -21,6 +21,7 @@ export function recordAntigravityArtifactPath(
       first = entry.name
     }
   }
+  artifactPaths.delete(dirPath)
   if (first !== null) {
     artifactPaths.set(dirPath, join(dirPath, first))
   }

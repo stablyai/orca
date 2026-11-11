@@ -1,3 +1,4 @@
+import { currentSessionDiscovery } from '../../session-discovery-context'
 import { completeAntigravityTranscriptPairs } from './antigravity-transcript-candidates'
 import { recordAntigravityArtifactPath } from './antigravity-session-artifacts'
 import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/antigravity-session-origin'
@@ -40,7 +41,9 @@ export function antigravityDiscoveries(
     )
   ]
   return rootDirs.map((rootDir) => {
-    const antigravityArtifactPaths = new Map<string, string>()
+    const antigravityArtifactPaths = currentSessionDiscovery()
+      ? undefined
+      : new Map<string, string>()
     return discoverFiles({
       rootDir,
       limit,
@@ -49,12 +52,18 @@ export function antigravityDiscoveries(
       extensions: ['.jsonl'],
       filePredicate: isAntigravityTranscriptPath,
       directoryPredicate: shouldDescendAntigravityBrainDirectory,
-      onDirectoryEntries: (dirPath, entries) =>
-        recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries),
+      onDirectoryEntries: antigravityArtifactPaths
+        ? (dirPath, entries) =>
+            recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries)
+        : undefined,
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
       signal: options.signal
     })
-      .then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
+      .then((discovery) =>
+        currentSessionDiscovery()
+          ? discovery
+          : completeAntigravityTranscriptPairs(discovery, issues)
+      )
       .then((discovery) => ({ ...discovery, antigravityArtifactPaths }))
   })
 }
