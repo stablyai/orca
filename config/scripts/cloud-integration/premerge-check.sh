@@ -14,9 +14,11 @@ if [[ -z "${PREMERGE_IN_WORKTREE:-}" ]]; then
   branch=$(git rev-parse --abbrev-ref HEAD)
   git fetch -q private +cloud/integration:refs/remotes/private/cloud/integration
   dir=$(mktemp -d "${TMPDIR:-/tmp}/cloud-premerge-XXXX")
+  # Until the exec below hands over, a kill or failure here removes the temp worktree (exec doesn't fire this trap).
+  trap 'git worktree remove --force "$dir" >/dev/null 2>&1 || true; rm -rf "$dir"; git worktree prune >/dev/null 2>&1 || true' EXIT
+  trap 'exit 130' INT TERM
   git worktree add -q --detach "$dir" HEAD
   if ! (cd "$dir" && git merge -q --no-edit "$base"); then
-    git worktree remove --force "$dir" >/dev/null 2>&1 || true
     exit 1
   fi
   # Re-run the MERGED copy of this script, so a branch cut before a gate change still gets the current gate.
@@ -32,29 +34,53 @@ branch=${PREMERGE_BRANCH:-unknown}
 if [[ -z "${PREMERGE_SLOT:-}" ]]; then
   lock_dir=${PREMERGE_LOCK_DIR:-$([[ -d /tmp/vdrv ]] && echo /tmp/vdrv || echo "${TMPDIR:-/tmp}")}
   exec /usr/bin/python3 -I -c '
-import fcntl, os, subprocess, sys, time
-lock_dir, slots, script, branch = sys.argv[1], max(1, int(sys.argv[2])), sys.argv[3], sys.argv[4]
-start, last, held = time.time(), -1.0, None
-while held is None:
-    for i in range(1, slots + 1):
-        f = open(os.path.join(lock_dir, f"premerge-slot-{i}.lock"), "a")
+import fcntl, os, shutil, signal, subprocess, sys, time
+lock_dir, slots, wt, branch = sys.argv[1], max(1, int(sys.argv[2])), sys.argv[3], sys.argv[4]
+script = os.path.join(wt, "config/scripts/cloud-integration/premerge-check.sh")
+child = None
+def cleanup():
+    # Whatever happens (killed while queued or while running, or finished), the temp merge worktree goes away.
+    common = subprocess.run(["git", "-C", wt, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            capture_output=True, text=True).stdout.strip()
+    subprocess.run(["git", "-C", wt, "worktree", "remove", "--force", wt], capture_output=True)
+    shutil.rmtree(wt, ignore_errors=True)
+    if common:
+        subprocess.run(["git", "--git-dir", common, "worktree", "prune"], capture_output=True)
+def on_signal(sig, _frame):
+    if child is not None and child.poll() is None:
+        child.send_signal(sig)
         try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            held = (i, f)
-            break
-        except BlockingIOError:
-            f.close()
-    if held is None:
-        waited = time.time() - start
-        if last < 0 or waited - last >= 30:
-            print(f"premerge: queued for one of {slots} slots ({branch}), waited {int(waited)}s", flush=True)
-            last = waited
-        time.sleep(5)
-waited = int(time.time() - start)
-print(f"premerge: got slot {held[0]}/{slots} after {waited}s", flush=True)
-env = dict(os.environ, PREMERGE_SLOT=str(held[0]))
-sys.exit(subprocess.call(["bash", script], env=env))
-' "$lock_dir" "${PREMERGE_MAX_CONCURRENT:-2}" "$dir/config/scripts/cloud-integration/premerge-check.sh" "$branch"
+            child.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            child.kill()
+    print(f"premerge: stopped by signal {sig}; removed {wt}", flush=True)
+    sys.exit(128 + sig)
+signal.signal(signal.SIGINT, on_signal)
+signal.signal(signal.SIGTERM, on_signal)
+try:
+    start, last, held = time.time(), -1.0, None
+    while held is None:
+        for i in range(1, slots + 1):
+            f = open(os.path.join(lock_dir, f"premerge-slot-{i}.lock"), "a")
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                held = (i, f)
+                break
+            except BlockingIOError:
+                f.close()
+        if held is None:
+            waited = time.time() - start
+            if last < 0 or waited - last >= 30:
+                print(f"premerge: queued for one of {slots} slots ({branch}), waited {int(waited)}s", flush=True)
+                last = waited
+            time.sleep(5)
+    print(f"premerge: got slot {held[0]}/{slots} after {int(time.time() - start)}s", flush=True)
+    child = subprocess.Popen(["bash", script], env=dict(os.environ, PREMERGE_SLOT=str(held[0])))
+    rc = child.wait()
+finally:
+    cleanup()
+sys.exit(rc)
+' "$lock_dir" "${PREMERGE_MAX_CONCURRENT:-2}" "$dir" "$branch"
 fi
 trap 'git -C "$dir" worktree remove --force "$dir" >/dev/null 2>&1 || true' EXIT
 cd "$dir"
