@@ -76,8 +76,8 @@ function ProfileBody({ userId }: { userId: string }): React.JSX.Element {
       .catch(() => UNAVAILABLE)
       .then((result) => {
         if (result.ok) {
+          // The footer says "Poked {name}"; a toast too would say it twice.
           setPoke({ kind: 'sent', at: result.value.at })
-          toast.success(t('auto.components.teammates.poked', 'Poked {{name}}', { name }))
         } else {
           setPoke({ kind: 'refused', message: pokeRefusalCopy(result, name, t) })
         }
