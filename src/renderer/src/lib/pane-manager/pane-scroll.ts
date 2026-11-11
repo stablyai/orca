@@ -311,7 +311,8 @@ export function releaseScrollStateMarker(state: ScrollState): void {
   state.firstVisibleLineMarker = state.firstVisibleLogicalLineMarker = undefined
 }
 
-function cancelPendingFitScrollRestore(terminal: TerminalScrollIntentTarget): void {
+// Exported for a deliberate scroll that a restore captured before it must not undo (WAKE-SCROLLBACK-SCROLL).
+export function cancelPendingFitScrollRestore(terminal: TerminalScrollIntentTarget): void {
   const pending = pendingFitScrollRestores.get(terminal)
   if (!pending) {
     return

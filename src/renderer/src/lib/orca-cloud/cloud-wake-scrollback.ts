@@ -319,7 +319,9 @@ export function composeWakeRestore(block: string, terminal: WokenTerminal): stri
 export async function finishWakeScrollbackRestore(
   restore: WakeScrollbackRestore,
   terminal: WokenTerminal,
-  write: (data: string) => Promise<void>
+  write: (data: string) => Promise<void>,
+  /** Puts the person back on their line; the pane may pass one that keeps its scroll intent in step. */
+  scrollTo: (line: number) => void = (line) => terminal.scrollToLine(line)
 ): Promise<boolean> {
   const data = composeWakeRestore(restore.block, terminal)
   if (data !== null) {
@@ -333,7 +335,7 @@ export async function finishWakeScrollbackRestore(
     return false
   }
   if (restore.scrolledTo !== null) {
-    terminal.scrollToLine(restore.scrolledTo)
+    scrollTo(restore.scrolledTo)
   }
   return true
 }

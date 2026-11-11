@@ -39,11 +39,8 @@ import { makePaneKey } from '../../../../../../../shared/workspace-layout/stable
 import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
 import { captureCloudPaneBeforeWake } from '@/lib/orca-cloud/cloud-wake-pane-capture'
 import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
-import {
-  armWakeScrollback,
-  forgetWakeScrollback,
-  noteWakeViewport
-} from '@/lib/orca-cloud/cloud-wake-scrollback'
+import { armWakeScrollback, forgetWakeScrollback } from '@/lib/orca-cloud/cloud-wake-scrollback'
+import { listenForWakeScroll } from '@/lib/orca-cloud/cloud-wake-scroll-listener'
 import { restartPaneExists } from '@/lib/orca-cloud/cloud-agent-restart-pane-watch'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
@@ -196,15 +193,7 @@ export function TerminalPaneRecoveryPortals({
     if (!isCloud || !(cloudAsleep || cloudWaking)) {
       return
     }
-    const listening = new AbortController()
-    for (const pane of managedPanes) {
-      pane.container.addEventListener(
-        'wheel',
-        () => requestAnimationFrame(() => noteWakeViewport(pane.leafId, pane.terminal)),
-        { passive: true, signal: listening.signal }
-      )
-    }
-    return () => listening.abort()
+    return listenForWakeScroll(managedPanes)
   }, [isCloud, cloudAsleep, cloudWaking, managedPanes])
   // A pane closed, or its tab or workspace went away: drop its kept pre-sleep output.
   const leafIdsRef = useRef<(typeof managedPanes)[number]['leafId'][]>([])

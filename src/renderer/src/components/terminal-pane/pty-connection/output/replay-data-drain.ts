@@ -1,5 +1,4 @@
 import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { syncTerminalScrollIntentFromViewport } from '@/lib/pane-manager/terminal-scroll-intent'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -20,6 +19,7 @@ import {
 } from '../reattach/cursor-agent-reattach-screen'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { keepWakeScrollPlace } from './wake-scroll-place'
 import {
   beginWakeScrollbackRestore,
   finishWakeScrollbackRestore,
@@ -195,16 +195,13 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         continue
       }
       if (preSleep) {
+        const terminal = session.pane.terminal
         await finishWakeScrollbackRestore(
           preSleep,
-          session.pane.terminal,
-          session.writeReplayDataAsync
+          terminal,
+          session.writeReplayDataAsync,
+          keepWakeScrollPlace(terminal)
         )
-        if (preSleep.scrolledTo !== null) {
-          // Record the person's place as a pin, so post-fit scroll-intent restores keep it there
-          // instead of following output to the bottom.
-          syncTerminalScrollIntentFromViewport(session.pane.terminal, { allowBufferShrink: true })
-        }
         if (!isCurrentPayload()) {
           continue
         }
