@@ -12412,7 +12412,7 @@
               "tokenHint": "Les tokens d'accès de dépôt, projet et espace de travail se créent depuis la page de paramètres Bitbucket correspondante et nécessitent un accès en lecture aux pull requests.",
               "basicHint": "Créez un token API Atlassian pour votre compte, puis associez-le à l'adresse e-mail qui en est propriétaire.",
               "scopesTitle": "Sélectionnez ces portées du token API Bitbucket :",
-              "scopeUser": "Vérifier votre compte",
+              "scopeUser": "Afficher le nom de votre compte",
               "scopeRepository": "Lire les statuts de build",
               "scopeReadPullRequest": "Lire les pull requests",
               "scopeWritePullRequest": "Créer des pull requests",
@@ -17550,13 +17550,10 @@
           "showMore": "Afficher plus"
         },
         "AutomationDetail": {
-          "a1d52c2189": "Couverture d'utilisation",
-          "449fc83bf7": "Tokens",
           "401f40ae79": "Dépense est.",
           "a7c312430d": "Dernière exécution",
           "2df8970cd5": "Agent",
           "e353ab9516": "Pré-vérification",
-          "620b22145e": "Marge",
           "15ea446b93": "Session",
           "5405a09b1f": "Lieu d'exécution",
           "2f8baf5360": "Créer depuis",
@@ -17566,7 +17563,6 @@
           "1f6026358e": "Supprimer l'automatisation",
           "d79452fb30": "Reprendre l'automatisation",
           "91a4155e95": "Mettre l'automatisation en pause",
-          "4b1ea02d2e": "Modifier l'automatisation",
           "2fb1605beb": "Exécuter maintenant",
           "221916d93c": "Créez une automatisation pour planifier le travail des agents.",
           "b09b2384fd": "En pause",
@@ -17581,9 +17577,6 @@
           "graceHours_one": "{{count}} heure",
           "graceHours_other": "{{count}} heures",
           "graceHours_many": "{{count}} heures",
-          "usageCoverageRuns_one": "{{known}}/{{count}} exécution",
-          "usageCoverageRuns_other": "{{known}}/{{count}} exécutions",
-          "usageCoverageRuns_many": "{{known}}/{{count}} exécutions",
           "usageUnavailable": "Indisponible",
           "noRuns": "Aucune exécution",
           "projectDefault": "Valeur par défaut du projet",
@@ -20749,7 +20742,6 @@
           "browsePlugins": "Parcourir les plugins",
           "browseThemePlugins": "Parcourir les plugins de thèmes",
           "colorMode": "Mode de couleur",
-          "colorModeCaption": "Clair, sombre ou selon votre système.",
           "darkLook": "Style sombre",
           "darkLooks": "Styles sombres",
           "lightLook": "Style clair",
@@ -20765,10 +20757,8 @@
           "slotLabel": "Style à modifier",
           "sourceBuiltIn": "Intégré",
           "sourceCommunity": "Palette de terminal",
-          "themes": "Thème",
-          "themesCaption": "Facultatif. Allez plus loin avec des thèmes d’app et des palettes de terminal."
-        },
-        "subtitle": "Choisissez clair ou sombre, puis un thème si vous le souhaitez. Modifiable à tout moment dans les Réglages."
+          "themes": "Thème"
+        }
       },
       "integrations": {
         "capabilities": {

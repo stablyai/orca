@@ -1,6 +1,7 @@
 import { appendFile, mkdir, mkdtemp, rm, stat, truncate, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, expect, it, vi } from 'vitest'
 import { isAiVaultScanCancelledError } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from '../session-scanner'
@@ -306,4 +307,40 @@ it('reports the transcript size, not the cache key, as a whole-file read offset'
 
   const read = consumer.reads.find((entry) => entry.start.candidate.agent === 'cline')
   expect(read?.outcome?.byteOffset).toBe((await stat(metadataPath)).size)
+})
+
+it('covers an archived Codex rollout through its compressed size, never resuming into it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-transcript-consumers-zst-'))
+  tempRoots.push(root)
+  const path = join(root, 'rollout-2026-05-01T10-00-00-archived.jsonl.zst')
+  const records = [
+    { type: 'session_meta', payload: { id: 'archived', cwd: '/repo' } },
+    {
+      timestamp: '2026-05-01T10:00:01.000Z',
+      type: 'response_item',
+      payload: { type: 'message', role: 'user', content: [{ type: 'text', text: 'old ask' }] }
+    }
+  ]
+  await writeFile(path, zstdCompressSync(`${jsonLines(records)}\n`))
+  const stats = await stat(path)
+  const candidate: SessionFileCandidate = {
+    agent: 'codex',
+    file: {
+      path,
+      mtimeMs: stats.mtimeMs,
+      modifiedAt: stats.mtime.toISOString(),
+      sizeBytes: stats.size
+    },
+    codexHome: null
+  }
+  const consumer = recordingConsumer()
+
+  await parseAgentSessionFileCached(candidate, 'darwin', undefined, 'any')
+  await parseAgentSessionFileCached(candidate, 'darwin', undefined, 'any')
+
+  expect(consumer.reads.map((read) => [read.start.mode, read.outcome?.byteOffset])).toEqual([
+    ['replace', stats.size],
+    ['replace', stats.size]
+  ])
+  expect(textsFor(consumer.reads, 'codex')).toEqual(['user:old ask', 'user:old ask'])
 })

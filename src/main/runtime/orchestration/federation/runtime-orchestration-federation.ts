@@ -19,10 +19,10 @@ import type {
 import { OrchestrationError } from '../orchestration-error'
 import {
   clearFederationAckCheckpoints,
-  releaseFederationAckCheckpoint,
-  syncFederatedDispatch,
-  FederationAcknowledgmentRecovery
-} from '../legacy-remote-home/legacy-remote-home'
+  releaseFederationAckCheckpoint
+} from '../legacy-remote-home/federation-ack-checkpoints'
+import { syncFederatedDispatch } from '../legacy-remote-home/federation-sync'
+import { FederationAcknowledgmentRecovery } from '../legacy-remote-home/federation-acknowledgment-recovery'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
 import {

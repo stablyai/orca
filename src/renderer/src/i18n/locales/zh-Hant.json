@@ -12315,7 +12315,7 @@
               "tokenHint": "存放庫、專案與工作區的存取權杖須在對應的 Bitbucket 設定頁面建立，並具備 PR 讀取權限。",
               "basicHint": "為您的帳戶建立 Atlassian API 權杖，再搭配該帳戶的電子郵件地址使用。",
               "scopesTitle": "請選擇下列 Bitbucket API 權杖範圍：",
-              "scopeUser": "驗證您的帳戶",
+              "scopeUser": "顯示您的帳戶名稱",
               "scopeRepository": "讀取建置狀態",
               "scopeReadPullRequest": "讀取 PR",
               "scopeWritePullRequest": "建立 PR",
@@ -17347,13 +17347,10 @@
         },
         "AutomationDetail": {
           "host": "主機",
-          "a1d52c2189": "用量資料涵蓋率",
-          "449fc83bf7": "token",
           "401f40ae79": "預估花費",
           "a7c312430d": "最後一次執行",
           "2df8970cd5": "代理程式",
           "e353ab9516": "預檢查",
-          "620b22145e": "寬限期",
           "15ea446b93": "工作階段",
           "5405a09b1f": "執行位置",
           "2f8baf5360": "建立自",
@@ -17363,7 +17360,6 @@
           "1f6026358e": "刪除自動化",
           "d79452fb30": "恢復自動化",
           "91a4155e95": "暫停自動化",
-          "4b1ea02d2e": "編輯自動化",
           "2fb1605beb": "立即執行",
           "221916d93c": "建立自動化來開始安排代理程式工作。",
           "b09b2384fd": "已暫停",
@@ -17373,7 +17369,6 @@
           "noGrace": "無寬限期",
           "graceMinutes_other": "{{count}} 分鐘",
           "graceHours_other": "{{count}} 小時",
-          "usageCoverageRuns_other": "{{known}}/{{count}} 次執行",
           "usageUnavailable": "無法使用",
           "noRuns": "無執行紀錄",
           "projectDefault": "專案預設值",
@@ -18959,7 +18954,6 @@
           "browsePlugins": "瀏覽外掛程式",
           "browseThemePlugins": "瀏覽主題外掛程式",
           "colorMode": "色彩模式",
-          "colorModeCaption": "淺色、深色或跟隨系統。",
           "darkLook": "深色外觀",
           "darkLooks": "深色外觀",
           "lightLook": "淺色外觀",
@@ -18975,10 +18969,8 @@
           "slotLabel": "要編輯的外觀",
           "sourceBuiltIn": "內建",
           "sourceCommunity": "終端機調色盤",
-          "themes": "主題",
-          "themesCaption": "選用。使用 App 主題和終端機調色盤進一步自訂。"
-        },
-        "subtitle": "選擇淺色或深色，也可以再選一個主題。兩者都能隨時在設定中變更。"
+          "themes": "主題"
+        }
       },
       "integrations": {
         "capabilities": {

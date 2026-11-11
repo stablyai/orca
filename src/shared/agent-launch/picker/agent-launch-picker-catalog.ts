@@ -5,7 +5,10 @@ import {
   structuredModelEfforts
 } from '../../agent-session/options/structured-agent-session-discovered-model'
 import { createClaudeCatalogOptions } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
-import type { CatalogOption } from '../../agent-session/options/agent-session-option-catalog-types'
+import type {
+  CatalogModel,
+  CatalogOption
+} from '../../agent-session/options/agent-session-option-catalog-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import { sourceControlActionOptions } from '../../source-control/ai/recipes/source-control-action-options'
 import {
@@ -141,15 +144,9 @@ export function agentPickerModels(
     if (entry.catalog.origin !== 'unknown') {
       return entry.catalog.models
     }
-    return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map((model) => ({
-      id: model.id,
-      label: model.label,
-      description: model.description,
-      isDefault: model.isDefault === true,
-      efforts: model.options.flatMap((option) =>
-        option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
-      )
-    }))
+    return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map(
+      agentPickerModelFromCatalogModel
+    )
   }
   return agentPickerModelMenu(entry, surface).rows
 }
@@ -160,4 +157,16 @@ export function agentPickerUsesComposerModelMenu(
   surface: AgentPickerSurface
 ) {
   return !entry.textGeneration && !(entry.agent === 'antigravity' && surface === 'terminal')
+}
+
+export function agentPickerModelFromCatalogModel(model: CatalogModel): AgentPickerModel {
+  return {
+    id: model.id,
+    label: model.label,
+    description: model.description,
+    isDefault: model.isDefault === true,
+    efforts: model.options.flatMap((option) =>
+      option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
+    )
+  }
 }

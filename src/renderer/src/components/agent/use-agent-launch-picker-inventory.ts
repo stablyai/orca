@@ -29,6 +29,9 @@ import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/a
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
+import { resolveWorktreeModelDiscoveryRuntime } from '../native-chat/session/options/catalog/native-chat-session-option-discovery'
+import { agentPickerListsCliModels } from './agent-launch-picker-cli-model-catalog'
 import {
   agentPickerModelCatalogReads,
   readAgentPickerLaunchSupport
@@ -158,6 +161,22 @@ export function useAgentLaunchPickerInventorySource(
       concreteWorkspace
     ]
   )
+  // Without a concrete workspace, CLI discovery can only ask this machine, so other hosts keep the seed.
+  // SSH discovery has no route yet, so SSH workspaces keep it too.
+  const discoveryWorktreeId = draftTarget.worktreeId ?? null
+  const ownerRuntime =
+    discoveryWorktreeId || target?.kind === 'local'
+      ? resolveWorktreeModelDiscoveryRuntime(store.getState(), discoveryWorktreeId)
+      : null
+  const cliDiscoveryRuntime: RuntimeGitContext | null =
+    !ownerRuntime || ownerRuntime.connectionId
+      ? null
+      : discoveryWorktreeId
+        ? ownerRuntime
+        : { ...ownerRuntime, worktreePath: repo?.path ?? '' }
+  const reads = agentPickerModelCatalogReads({ target, worktree: selector, cliDiscoveryRuntime })
+  const observesHostCatalog =
+    model.state === 'settled' && model.rows.some(reads.refreshOnInvalidation)
   const key = useMemo(
     () =>
       JSON.stringify([
@@ -165,8 +184,7 @@ export function useAgentLaunchPickerInventorySource(
         context?.workspace,
         context?.pairingRevision,
         context?.runtimeId,
-        registeredAgents,
-        coherentCatalog,
+        ...(observesHostCatalog ? [registeredAgents, coherentCatalog] : []),
         worktreeId,
         selector,
         executionHostId,
@@ -190,7 +208,8 @@ export function useAgentLaunchPickerInventorySource(
       model,
       settings,
       registeredAgents,
-      coherentCatalog
+      coherentCatalog,
+      observesHostCatalog
     ]
   )
   const build = (defaults: AgentPickerDefaultSettings | null | undefined) =>
@@ -204,7 +223,7 @@ export function useAgentLaunchPickerInventorySource(
         ).map((entry) => ({
           ...entry,
           coherentCatalog,
-          ...(!target ||
+          ...((!target && !(cliDiscoveryRuntime && agentPickerListsCliModels(entry))) ||
           !entry.surfaces.length ||
           (registeredAgents &&
             !registeredAgents.some(({ agent }) => agent === entry.agent) &&
@@ -240,7 +259,7 @@ export function useAgentLaunchPickerInventorySource(
     [key, open, fallback]
   )
   useEffect(() => {
-    if (!viewActive || !open || !target || model.state !== 'settled') {
+    if (!viewActive || !open || (!target && !cliDiscoveryRuntime) || model.state !== 'settled') {
       return
     }
     const controller = new AbortController()
@@ -249,7 +268,7 @@ export function useAgentLaunchPickerInventorySource(
       fallback,
       {
         settings:
-          target.kind !== 'environment'
+          target?.kind !== 'environment'
             ? undefined
             : async () => {
                 const defaults = await readHostAgentLaunchDefaults(
@@ -272,10 +291,8 @@ export function useAgentLaunchPickerInventorySource(
                     }))
                   : undefined
               },
-        ...agentPickerModelCatalogReads({
-          target,
-          worktree: selector
-        }),
+        ...reads,
+        subscribeInvalidation: observesHostCatalog ? reads.subscribeInvalidation : undefined,
         support: (entry) => readAgentPickerLaunchSupport(target, selector, entry.agent)
       },
       {
