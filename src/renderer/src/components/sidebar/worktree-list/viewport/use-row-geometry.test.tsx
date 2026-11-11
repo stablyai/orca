@@ -13,6 +13,7 @@ afterEach(cleanup)
 it('unnests only the picked host copy outside the padded folder surface, even with its header offscreen', () => {
   const child = { id: 'r::/child', hostId: 'ssh:box' as const }
   const twin = { id: 'r::/child', hostId: 'local' as const }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Geometry reads only the identity, depth and grouping fields supplied here.
   const rows = [
     {
       type: 'folder-workspace',
@@ -34,13 +35,12 @@ it('unnests only the picked host copy outside the padded folder surface, even wi
   ] as unknown as RenderRow[]
   const container = document.createElement('div')
   container.scrollTop = 200
-  container.getBoundingClientRect = () =>
-    ({ left: 100, right: 300, top: 100, bottom: 500 }) as DOMRect
+  container.getBoundingClientRect = () => new DOMRect(100, 100, 200, 400)
   const content = document.createElement('div')
   content.setAttribute('data-worktree-sidebar-content', '')
-  content.getBoundingClientRect = () =>
-    ({ left: 104, right: 292, top: -99, bottom: 901 }) as DOMRect
+  content.getBoundingClientRect = () => new DOMRect(104, -99, 188, 1000)
   container.append(content)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Folder retention reads cached endpoints; drag-window methods are unused in this test.
   const virtualization = {
     virtualizer: {
       measurementsCache: [
