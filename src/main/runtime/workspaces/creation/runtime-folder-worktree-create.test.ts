@@ -40,7 +40,7 @@ const repo: Repo = {
 
 function createDeps() {
   const createTerminal = vi
-    .fn<CreateArgs['deps']['createTerminal']>()
+    .fn<CreateArgs['deps']['terminals']['createTerminal']>()
     .mockResolvedValue({ handle: 'term-1', worktreeId: 'folder-1', title: null })
   const store = {
     getSettings: () => ({ workspaceDir: '/ws', nestWorkspaces: false }),
@@ -50,10 +50,14 @@ function createDeps() {
   const deps: CreateArgs['deps'] = {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create reads only these three store methods; any other would throw on call rather than read a wrong value.
     store: store as unknown as CreateArgs['deps']['store'],
-    ptySpawnAvailable: true,
-    createTerminal,
-    pasteDraft: vi.fn(),
-    sendFollowup: vi.fn(),
+    terminals: {
+      canSpawn: true,
+      createTerminal,
+      pasteDraft: vi.fn(),
+      sendFollowup: vi.fn(),
+      provision: vi.fn(async () => ({ setupSpawned: false, setupTerminalHandle: null })),
+      activate: vi.fn()
+    },
     invalidateResolvedWorktrees: vi.fn(),
     notifyWorktreesChanged: vi.fn(),
     emitCreated: vi.fn(),

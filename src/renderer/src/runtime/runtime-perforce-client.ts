@@ -31,7 +31,7 @@ import {
 import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import { assertRuntimeEnvironmentCapability } from './rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from './rpc/targets/runtime-worktree-selector'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
 export type PerforceClientSettings = Partial<
