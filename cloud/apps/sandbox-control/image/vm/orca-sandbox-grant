@@ -47,7 +47,7 @@ process.stdin.on("data", (c) => (input += c)).on("end", () => {
     console.error("offer unavailable")
     process.exit(1)
   }
-  require("node:fs").appendFileSync(process.env.ORCA_GRANT_LEDGER, res.deviceId + "\n", { mode: 0o600 })
+  if (process.env.ORCA_GRANT_LEDGER) require("node:fs").appendFileSync(process.env.ORCA_GRANT_LEDGER, res.deviceId + "\n", { mode: 0o600 })
   const recipient = Buffer.from(process.env.ORCA_GRANT_RECIPIENT_KEY, "base64")
   if (recipient.length !== 32) { console.error("bad key length"); process.exit(2) }
   const recipientKey = crypto.createPublicKey({ key: { kty: "OKP", crv: "X25519", x: recipient.toString("base64url") }, format: "jwk" })
