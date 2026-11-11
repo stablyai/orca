@@ -1,11 +1,9 @@
-import { useContext } from 'react'
 import { Text, View } from 'react-native'
 import type { ClaudeSessionStatus } from '../../../../../src/shared/native-chat/claude-session-status'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { MobileClaudeSessionStatusContext } from './mobile-claude-session-status-context'
 import {
   viewClaudeSessionStatus,
   type ClaudeSessionStatusView
@@ -34,10 +32,10 @@ function compactionColor(tone: ClaudeSessionStatusView['compactionTone']): strin
 }
 
 /** A read-only line above the composer field: how full the context is and how often it was compacted. */
-export function MobileNativeChatClaudeSessionStatusRow({
+export function MobileClaudeStatusRow({
   status
 }: {
-  status: ClaudeSessionStatus | null
+  status: ClaudeSessionStatus | null | undefined
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -78,13 +76,6 @@ export function MobileNativeChatClaudeSessionStatusRow({
         })}
       </Text>
     </View>
-  )
-}
-
-/** The row for the chat on screen, supplied by the native chat overlay. */
-export function MobileNativeChatClaudeSessionStatus(): React.JSX.Element | null {
-  return (
-    <MobileNativeChatClaudeSessionStatusRow status={useContext(MobileClaudeSessionStatusContext)} />
   )
 }
 

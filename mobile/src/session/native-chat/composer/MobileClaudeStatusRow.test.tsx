@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ClaudeSessionStatus } from '../../../../../src/shared/native-chat/claude-session-status'
-import { MobileNativeChatClaudeSessionStatusRow } from './MobileNativeChatClaudeSessionStatusRow'
+import { MobileClaudeStatusRow } from './MobileClaudeStatusRow'
 
 vi.mock('react-native', () => ({
   Text: 'Text',
@@ -21,7 +21,7 @@ afterEach(() => {
 function render(status: ClaudeSessionStatus | null): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined
   act(() => {
-    renderer = create(createElement(MobileNativeChatClaudeSessionStatusRow, { status }))
+    renderer = create(createElement(MobileClaudeStatusRow, { status }))
   })
   rendered.push(renderer!)
   return renderer!

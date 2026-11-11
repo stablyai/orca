@@ -1,3 +1,4 @@
+import type { ClaudeSessionStatus } from '../../../../../src/shared/native-chat/claude-session-status'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import {
   useCallback,
@@ -36,6 +37,8 @@ import { setBoundedScopeCacheEntry } from '../../../../../src/shared/native-chat
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
 
 export type MobileNativeChatSessionOptionsController = {
+  /** Read by the composer's status row; only a terminal-backed Claude chat has one. */
+  claudeSessionStatus?: ClaudeSessionStatus | null
   optionSurface?: SessionOptionsSurface
   conversationCommands?: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
@@ -65,6 +68,8 @@ type HookArgs = {
   agent: string | null
   scopeKey: string | null
   reportedModel: string | null
+  /** The session file's view of the chat; its model outranks the hook's. */
+  sessionReport?: ClaudeSessionStatus | null
   discoveredModels?: CatalogModel[] | null
   modelSwitchCommand?: string
   dispatchCommand: (
@@ -164,6 +169,8 @@ export function useMobileNativeChatSessionOptions(
   args: HookArgs
 ): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, discoveredModels } = args
+  const fileModel = args.sessionReport?.model ?? null
+  const fileEffort = args.sessionReport?.effort ?? null
   const catalog = agent ? getAgentSessionOptionCatalog(agent) : null
   const identity = agent && scopeKey && catalog ? `${scopeKey}\0${agent}` : null
   const canSwitchOmpModel = args.modelSwitchCommand === 'orca-model'
@@ -220,25 +227,32 @@ export function useMobileNativeChatSessionOptions(
   }, [discoveredModels, entry])
 
   useEffect(() => {
-    if (!surface || !scopeKey || !catalog || !reportedModel) {
+    const reported = fileModel ?? reportedModel
+    if (!surface || !scopeKey || !catalog || !reported) {
       return
     }
     // Phone-only: desktop reads Claude's model from its terminal screen, which the phone cannot see, so Claude keeps the hook model too.
     // OMP reports exact selectors, including models absent from cached discovery.
-    const matched =
+    const searched = { ...catalog, models: discoveredModels ?? catalog.models }
+    const listed =
       agent === 'omp'
-        ? reportedModel.trim()
-        : matchNativeChatCatalogModelId(
-            { ...catalog, models: discoveredModels ?? catalog.models },
-            reportedModel,
-            { allowUnlisted: agent === 'codex' }
-          )
-    if (!matched || appliedReportByScope.get(scopeKey) === matched) {
+        ? reported.trim()
+        : matchNativeChatCatalogModelId(searched, reported, { allowUnlisted: agent === 'codex' })
+    // The session file names the model that actually answered, even one this catalog predates.
+    const matched =
+      listed ??
+      (fileModel
+        ? matchNativeChatCatalogModelId(searched, reported, { allowUnlisted: true })
+        : null)
+    const applied = fileEffort ? `${matched}\0${fileEffort}` : matched
+    if (!matched || !applied || appliedReportByScope.get(scopeKey) === applied) {
       return
     }
-    setBoundedScopeCacheEntry(appliedReportByScope, scopeKey, matched)
-    surface.reportSessionOptions({ model: matched })
-  }, [agent, catalog, discoveredModels, reportedModel, scopeKey, surface])
+    setBoundedScopeCacheEntry(appliedReportByScope, scopeKey, applied)
+    surface.reportSessionOptions(
+      fileEffort ? { model: matched, effort: fileEffort } : { model: matched }
+    )
+  }, [agent, catalog, discoveredModels, fileEffort, fileModel, reportedModel, scopeKey, surface])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,
@@ -279,7 +293,14 @@ export function useMobileNativeChatSessionOptions(
   const pendingId = pending && pending.identity === identity ? pending.id : null
 
   return useMemo(
-    () => ({ snapshot, pendingId, setOption, invokeAction, recordCommand }),
-    [snapshot, pendingId, setOption, invokeAction, recordCommand]
+    () => ({
+      snapshot,
+      pendingId,
+      setOption,
+      invokeAction,
+      recordCommand,
+      claudeSessionStatus: args.sessionReport
+    }),
+    [snapshot, pendingId, setOption, invokeAction, recordCommand, args.sessionReport]
   )
 }

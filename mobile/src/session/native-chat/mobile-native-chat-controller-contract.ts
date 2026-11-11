@@ -1,4 +1,3 @@
-import type { ClaudeSessionStatus } from '../../../../src/shared/native-chat/claude-session-status'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/native-chat-picker-items'
 import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
@@ -103,7 +102,6 @@ export type MobileNativeChatController = {
   nativeChatQueued: MobileStructuredQueuedMessageControls
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
   nativeChatContextUsage: NativeChatContextUsageSummary | null
-  nativeChatClaudeSessionStatus: ClaudeSessionStatus | null
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
   nativeChatRewind: AgentSessionRewindSurface | undefined
