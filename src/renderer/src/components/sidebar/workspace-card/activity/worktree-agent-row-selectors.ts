@@ -35,8 +35,10 @@ type WorktreeAgentRowsState = Pick<
   unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
 }
 
+type TabOwnershipRows = Record<string, readonly { id: string }[]>
+
 type TabWorktreeIndexCache = {
-  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
+  tabsByWorktree: TabOwnershipRows
   tabIdToWorktreeId: Map<string, string>
 }
 
@@ -75,9 +77,7 @@ export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] 
 }
 
 // Settings reuses this tab index to avoid rescanning every bucket on each store write.
-export function getTabIdToWorktreeId(
-  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
-): Map<string, string> {
+export function getTabIdToWorktreeId(tabsByWorktree: TabOwnershipRows): Map<string, string> {
   if (tabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree) {
     return tabWorktreeIndexCache.tabIdToWorktreeId
   }
