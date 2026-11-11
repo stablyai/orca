@@ -372,9 +372,8 @@ export function OverageControls({
       <SettingsDisabledControlTooltip reason={blockedReason}>
         <Button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground"
+          variant="link-muted"
+          size="inline"
           aria-disabled={busy || paymentFailed || undefined}
           onClick={() => {
             if (!busy && !paymentFailed) {
