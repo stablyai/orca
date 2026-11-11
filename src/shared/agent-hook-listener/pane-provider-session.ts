@@ -264,7 +264,7 @@ export function retainHookRootContext(
     previous.payload.agentType === incoming.payload.agentType &&
     ((incoming.payload.agentType === 'codex' && incoming.toolAgentId) ||
       (fromHook &&
-        ['copilot', 'hermes', 'antigravity'].includes(incoming.payload.agentType ?? '') &&
+        ['copilot', 'hermes', 'antigravity', 'droid'].includes(incoming.payload.agentType ?? '') &&
         sameTerminalOwner))
       ? previous
       : undefined
