@@ -31,8 +31,8 @@ import type { StoreRuntimeState } from '../store-runtime-state'
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
 import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
-import { isWslMoveProjectSessionFrozen } from '../../moving-wsl-projects/wsl-move-scope-guard'
-import { dropOrcadTerminalRestoreHintsForWorktrees } from '../../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
+import { isWslMoveProjectSessionFrozen } from '../../moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { dropOrcadTerminalRestoreHintsForWorktrees } from '../../migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { applyNewWindowsDriveProjectDefault } from '../../../wsl/filesystem/wsl-drive-project-new-default'
 

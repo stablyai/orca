@@ -1,7 +1,7 @@
 /** The app window as the WSL move's write hold reloads it (wsl-move-window-write-hold.ts). */
 import type { WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { WslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+import type { WslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 
 /**
  * Settings cannot restore its page, so a reload from it would open General (and keep reopening

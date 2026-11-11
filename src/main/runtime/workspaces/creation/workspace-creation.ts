@@ -24,17 +24,16 @@ import {
   prepareRuntimeLocalWorktreeSetup
 } from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
-import {
-  startRuntimeLocalWorktreeTerminals,
-  type RuntimeLocalWorktreeTerminalPorts
-} from '../startup/runtime-local-worktree-terminal-startup'
+import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
+import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
 import type { RuntimeWorkspaceCreateEvents } from '../../../workspaces/creation/workspace-create-telemetry'
+
 import {
   createdWorkspaceActivationCallbacks,
   wslUserAct
 } from '../startup/workspace-create-activation'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { resolveManagedWorktreeCreateStartup } from '../startup/managed-worktree-create-startup'
 import type { WorkspaceCreationHandle } from '../lifecycle/workspace-lifecycle-creations'
 import { workspaceLifecycleKey } from '../lifecycle/workspace-lifecycle-commands'
