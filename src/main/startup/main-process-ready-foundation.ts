@@ -61,7 +61,7 @@ import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
   reconcileManagedWslCliRegistrations
-} from '../cli/wsl-cli-registration-reconciliation'
+} from '../cli/wsl/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
