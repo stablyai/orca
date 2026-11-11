@@ -5,6 +5,7 @@ import {
 import {
   getOrcaCloudBillingSearchEntries,
   getOrcaCloudEnvironmentsSearchEntries,
+  getOrcaCloudLocalCommandsSearchEntries,
   getOrcaCloudMcpSearchEntries,
   getOrcaCloudSecretsSearchEntries,
   getOrcaCloudTeamSearchEntries
@@ -12,7 +13,16 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import { Boxes, CreditCard, KeySquare, LockKeyhole, Plug, Users, Workflow } from 'lucide-react'
+import {
+  Boxes,
+  CreditCard,
+  KeySquare,
+  LockKeyhole,
+  Plug,
+  SquareTerminal,
+  Users,
+  Workflow
+} from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 /** One home for everything Orca Cloud; only builds with a control plane show it. */
@@ -78,6 +88,17 @@ export function buildOrcaCloudSettingsSections(
       ),
       icon: Plug,
       searchEntries: getOrcaCloudMcpSearchEntries(),
+      group
+    },
+    {
+      id: 'cloud-local-commands',
+      title: t('localCommands.settings.title', 'Commands on this computer'),
+      description: t(
+        'localCommands.settings.description',
+        'Let agents in your cloud workspaces ask to run a command on this computer. You approve each one.'
+      ),
+      icon: SquareTerminal,
+      searchEntries: getOrcaCloudLocalCommandsSearchEntries(),
       group
     },
     {

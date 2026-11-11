@@ -1,0 +1,135 @@
+import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { z } from 'zod'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
+import {
+  LOCAL_COMMAND_MAX_COMMAND_CHARS,
+  LOCAL_COMMAND_MAX_CWD_CHARS
+} from '../../shared/local-commands/local-command-contract'
+
+const MAX_RULES = 200
+const SandboxId = z.string().regex(/^sbx_[0-9a-f]{24}$/)
+
+const WorkspaceSettingSchema = z.object({
+  enabled: z.boolean(),
+  sharedAllowed: z.boolean(),
+  updatedAt: z.number()
+})
+
+const RuleSchema = z.object({
+  id: z.string().min(1).max(64),
+  sandboxId: SandboxId,
+  command: z.string().min(1).max(LOCAL_COMMAND_MAX_COMMAND_CHARS),
+  cwd: z
+    .string()
+    .min(1)
+    .max(LOCAL_COMMAND_MAX_CWD_CHARS * 4),
+  createdAt: z.number()
+})
+
+const FileSchema = z.object({
+  version: z.literal(1),
+  workspaces: z.record(SandboxId, WorkspaceSettingSchema),
+  rules: z.array(RuleSchema).max(MAX_RULES)
+})
+
+export type LocalCommandWorkspaceSetting = z.infer<typeof WorkspaceSettingSchema>
+export type LocalCommandRule = z.infer<typeof RuleSchema>
+type LocalCommandSettingsFile = z.infer<typeof FileSchema>
+
+const EMPTY: LocalCommandSettingsFile = { version: 1, workspaces: {}, rules: [] }
+
+export function isLocalCommandSandboxId(value: unknown): value is string {
+  return SandboxId.safeParse(value).success
+}
+
+/**
+ * Per-workspace switches and "Always allow" rules, on this computer only (never synced: they are
+ * this computer's consent). Off when absent; an unreadable file reads as everything off.
+ */
+export class LocalCommandSettingsStore {
+  private cached: LocalCommandSettingsFile | null = null
+  private readonly path: string
+
+  constructor(userDataPath: string) {
+    this.path = join(userDataPath, 'local-commands.json')
+  }
+
+  workspace(sandboxId: string): LocalCommandWorkspaceSetting | null {
+    return this.read().workspaces[sandboxId] ?? null
+  }
+
+  enabledSandboxIds(): string[] {
+    return Object.entries(this.read().workspaces)
+      .filter(([, setting]) => setting.enabled)
+      .map(([sandboxId]) => sandboxId)
+  }
+
+  setEnabled(sandboxId: string, enabled: boolean, sharedAllowed: boolean, now: number): void {
+    const next = this.read()
+    if (enabled) {
+      next.workspaces[sandboxId] = { enabled, sharedAllowed, updatedAt: now }
+    } else {
+      // Turning it off also forgets this workspace's "Always allow" rules: the next time it is on,
+      // every command is asked about again.
+      delete next.workspaces[sandboxId]
+      next.rules = next.rules.filter((rule) => rule.sandboxId !== sandboxId)
+    }
+    this.write(next)
+  }
+
+  rules(): LocalCommandRule[] {
+    return [...this.read().rules]
+  }
+
+  /** Exact match only: same workspace, same characters, same resolved folder. */
+  findRule(sandboxId: string, command: string, cwd: string): LocalCommandRule | null {
+    return (
+      this.read().rules.find(
+        (rule) => rule.sandboxId === sandboxId && rule.command === command && rule.cwd === cwd
+      ) ?? null
+    )
+  }
+
+  addRule(sandboxId: string, command: string, cwd: string, now: number): LocalCommandRule {
+    const existing = this.findRule(sandboxId, command, cwd)
+    if (existing) {
+      return existing
+    }
+    const next = this.read()
+    const rule: LocalCommandRule = { id: randomUUID(), sandboxId, command, cwd, createdAt: now }
+    // Oldest first out at the cap; a forgotten rule only means one more prompt.
+    next.rules = [...next.rules, rule].slice(-MAX_RULES)
+    this.write(next)
+    return rule
+  }
+
+  removeRule(id: string): boolean {
+    const next = this.read()
+    const before = next.rules.length
+    next.rules = next.rules.filter((rule) => rule.id !== id)
+    if (next.rules.length === before) {
+      return false
+    }
+    this.write(next)
+    return true
+  }
+
+  private read(): LocalCommandSettingsFile {
+    if (!this.cached) {
+      try {
+        const parsed = FileSchema.safeParse(JSON.parse(readFileSync(this.path, 'utf8')))
+        this.cached = parsed.success ? parsed.data : structuredClone(EMPTY)
+      } catch {
+        this.cached = structuredClone(EMPTY)
+      }
+    }
+    return structuredClone(this.cached)
+  }
+
+  private write(next: LocalCommandSettingsFile): void {
+    writeFileAtomically(this.path, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 })
+    this.cached = next
+  }
+}

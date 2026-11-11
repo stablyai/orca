@@ -12,6 +12,8 @@ type OrcadPostReadyDeps = {
   startAgentStateRules: () => Promise<void>
   /** Paired phones dictate through this host; keep its model loaded the same way the desktop does. */
   startSpeechWarmup: () => Promise<void>
+  /** Orca Cloud: gives agent CLIs run_local_command; the person's desktop decides every run. */
+  startCloudAgentTools: () => Promise<void>
 }
 
 /** RPC handlers, then terminals: what the reconnecting desktop asks for first. Never rejects. */
@@ -30,6 +32,11 @@ export async function startOrcadPostReadyWork(deps: OrcadPostReadyDeps): Promise
     }),
     deps.startSpeechWarmup().catch((error: unknown) => {
       console.warn(`[speech] Could not start the speech model warm-up: ${errorMessage(error)}`)
+    }),
+    deps.startCloudAgentTools().catch((error: unknown) => {
+      console.warn(
+        `[orcad] Could not register the local-command MCP server: ${errorMessage(error)}`
+      )
     })
   ])
 }
@@ -55,6 +62,14 @@ export function orcadPostReadyDeps(
     startSpeechWarmup: async () => {
       const { startSpeechModelWarmup } = await import('../speech/speech-model-warmup')
       startSpeechModelWarmup(store)
+    },
+    startCloudAgentTools: async () => {
+      const { isCloudWorkspaceOrcad } = await import('../runtime/secrets/session-env-names')
+      if (isCloudWorkspaceOrcad()) {
+        const { registerLocalCommandMcpServer } =
+          await import('../runtime/local-commands/local-command-mcp-registration')
+        await registerLocalCommandMcpServer()
+      }
     }
   }
 }

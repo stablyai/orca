@@ -18,6 +18,7 @@ import {
 import type { ReaderKeyAccess } from '../cloud-workspaces/cloud-read-snapshot-reader'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
+import type { CloudWorkspace } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
@@ -113,6 +114,16 @@ export async function readCloudWorkspaceSnapshot(
   }
   const s = await getService().catch(() => null)
   const result = await s?.readSnapshot(sandboxId)
+  return result?.ok ? result.value : null
+}
+
+/** The registry row (owner, sharing, title) for a workspace; null when it can't be read. Never wakes it. */
+export async function readCloudWorkspaceRecord(sandboxId: string): Promise<CloudWorkspace | null> {
+  if (!Id.safeParse(sandboxId).success) {
+    return null
+  }
+  const s = await getService().catch(() => null)
+  const result = await s?.get(sandboxId)
   return result?.ok ? result.value : null
 }
 

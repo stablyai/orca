@@ -18,6 +18,7 @@ import { CloudSecretsSection } from '../cloud-secrets/CloudSecretsSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudPredictiveWakeSetting } from './CloudPredictiveWakeSetting'
 import { OrcaCloudMcpServersPane } from './OrcaCloudMcpServersPane'
+import { OrcaCloudLocalCommandsPane } from './OrcaCloudLocalCommandsPane'
 
 type OrcaCloudAccount = {
   orgId: string | null
@@ -165,4 +166,8 @@ export function OrcaCloudEnvironmentsPane(): React.JSX.Element {
 
 export function OrcaCloudMcpPane(): React.JSX.Element {
   return <OrcaCloudAccountGate>{() => <OrcaCloudMcpServersPane />}</OrcaCloudAccountGate>
+}
+
+export function OrcaCloudLocalCommandsSettingsPane(): React.JSX.Element {
+  return <OrcaCloudAccountGate>{() => <OrcaCloudLocalCommandsPane />}</OrcaCloudAccountGate>
 }

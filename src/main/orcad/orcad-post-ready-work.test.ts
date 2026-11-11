@@ -20,10 +20,13 @@ describe('orcad post-ready work', () => {
       },
       startSpeechWarmup: async () => {
         order.push('speech')
+      },
+      startCloudAgentTools: async () => {
+        order.push('cloud-tools')
       }
     })
 
-    expect(order).toEqual(['methods', 'terminals', 'rules', 'speech'])
+    expect(order).toEqual(['methods', 'terminals', 'rules', 'speech', 'cloud-tools'])
   })
 
   it('never rejects, and one failure does not stop the rest', async () => {
@@ -35,7 +38,8 @@ describe('orcad post-ready work', () => {
         warmRpcMethods: () => Promise.reject(new Error('import failed')),
         warmTerminalList: () => Promise.reject(new Error('daemon gone')),
         startAgentStateRules: () => Promise.reject(new Error('no rules')),
-        startSpeechWarmup
+        startSpeechWarmup,
+        startCloudAgentTools: async () => {}
       })
     ).resolves.toBeUndefined()
 

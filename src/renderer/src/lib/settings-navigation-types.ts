@@ -51,6 +51,7 @@ const SETTINGS_NAV_TARGETS = [
   'cloud-secrets',
   'cloud-environments',
   'cloud-mcp',
+  'cloud-local-commands',
   'cloud-api-keys',
   'cloud-routines',
   'linear',

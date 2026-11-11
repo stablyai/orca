@@ -61,6 +61,10 @@ import {
   installCloudMcpSync,
   registerCloudMcpSyncHandlers
 } from '../agent-mcp-sync/desktop/cloud-mcp-sync-ipc'
+import {
+  installLocalCommands,
+  registerLocalCommandHandlers
+} from '../local-commands/local-command-service'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
@@ -88,6 +92,7 @@ export function installHostedSandbox(
   )
   registerCloudMcpSyncHandlers()
   const userDataPath = app.getPath('userData')
+  registerLocalCommandHandlers(userDataPath)
   const config = getHostedSandboxConfig(
     userDataPath,
     withCloudBuildDefaults(process.env),
@@ -117,6 +122,7 @@ export function installHostedSandbox(
     onListed: (account, listed) => gonePrune.observeList(account, listed),
     relistMs: 10 * 60_000
   })
+  installLocalCommands(userDataPath)
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,
     getAccessToken: config.getAccessToken

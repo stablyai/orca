@@ -1,4 +1,12 @@
-import { Boxes, ChevronRight, CreditCard, LockKeyhole, Plug, Users } from 'lucide-react'
+import {
+  Boxes,
+  ChevronRight,
+  CreditCard,
+  LockKeyhole,
+  Plug,
+  SquareTerminal,
+  Users
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
@@ -26,7 +34,12 @@ export function OrcaCloudSettingsLinks({
       icon: Boxes,
       label: t('settings.orcaCloud.environments.title', 'Cloud environments')
     },
-    { pane: 'cloud-mcp', icon: Plug, label: t('cloudMcpSync.title', 'MCP servers') }
+    { pane: 'cloud-mcp', icon: Plug, label: t('cloudMcpSync.title', 'MCP servers') },
+    {
+      pane: 'cloud-local-commands',
+      icon: SquareTerminal,
+      label: t('localCommands.settings.title', 'Commands on this computer')
+    }
   ]
   return (
     <nav
