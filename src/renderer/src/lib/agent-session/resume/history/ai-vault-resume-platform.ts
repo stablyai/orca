@@ -1,4 +1,4 @@
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getAiVaultResumeWorkspacePath } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'

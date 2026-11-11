@@ -10,11 +10,9 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { flashFocusedPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
-import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
@@ -23,6 +21,8 @@ import {
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
+import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (

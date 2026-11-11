@@ -4,7 +4,7 @@ import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktre
 import type { AppState } from '@/store/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getHoveredWorkspaceIdentity } from '../../workspace-actions/deletion/hovered-workspace-delete'
+import { getHoveredWorkspaceIdentity } from './hovered-workspace-identity'
 import { computeRenderedSidebarRows } from '../../worktree-list/listing/rendered-sidebar-worktree-order'
 import { getPublishedVisibleWorktreeShortcutTargets } from '../../worktree-list/listing/visible-worktrees'
 import { computeVisibleWorktrees } from '../../worktree-list/listing/compute-visible-worktrees'
@@ -28,7 +28,6 @@ function resolveTargetWorktree(
 ): Worktree | undefined {
   const hovered = getHoveredWorkspaceIdentity(doc)
   if (hovered) {
-    // Hovered cards outrank active ones, matching workspace deletion shortcuts.
     return getIndexedAllWorktrees(selectWorktreesByRepo(state)).find(
       (worktree) =>
         worktree.id === hovered.workspaceId &&
