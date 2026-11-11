@@ -1,9 +1,5 @@
 import type { Worktree } from '../../../../../shared/worktree/types'
-import {
-  worktreeOwnerHostIds,
-  worktreeOwnerIdentity
-} from '@/lib/workspace/ownership/workspace-catalog-owner-index'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import { worktreeOwnerIdentity } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { readRecordChanges } from '../../keyed-record-change-reads'
 import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from './workspace-record-fields'
 
@@ -23,18 +19,11 @@ const EMPTY_BUCKETS: ContentBuckets = {}
 const EMPTY_WORKTREES: Record<string, readonly never[]> = {}
 const EMPTY_DETECTED: Record<string, { worktrees: readonly never[] }> = {}
 
-type Membership = {
-  ids: Set<string>
-  hostsById: Map<string, ReadonlySet<ExecutionHostId>>
-  changed: ReadonlySet<string>
-}
+type Membership = { ids: Set<string>; changed: ReadonlySet<string> }
 
-function createContentMembership(
-  onInspectBucket?: (id: string) => void,
-  onInspectContent?: (id: string) => void
-) {
+function createContentMembership(onInspectBucket?: (id: string) => void) {
   let previous: ContentBuckets = EMPTY_BUCKETS
-  let membership: Membership = { ids: new Set(), hostsById: new Map(), changed: new Set() }
+  let membership: Membership = { ids: new Set(), changed: new Set() }
   return (source: ContentBuckets): Membership => {
     if (source === previous) {
       return membership
@@ -43,44 +32,14 @@ function createContentMembership(
     const addressed = changes?.kind === 'addressed'
     const keys = addressed ? changes.keys : new Set([...Object.keys(source), ...membership.ids])
     let next = membership.ids
-    let hostsById = membership.hostsById
     const changed = new Set<string>()
     for (const id of keys) {
       onInspectBucket?.(id)
       const hasContent = Boolean(source[id]?.length)
-      const hosts = new Set<ExecutionHostId>()
-      for (const entry of source[id] ?? []) {
-        onInspectContent?.(id)
-        if (
-          entry &&
-          typeof entry === 'object' &&
-          'executionHostId' in entry &&
-          typeof entry.executionHostId === 'string'
-        ) {
-          const host = parseExecutionHostId(entry.executionHostId)?.id
-          if (host) {
-            hosts.add(host)
-          }
-        }
-      }
-      const previousHosts = hostsById.get(id)
-      const sameHosts =
-        hosts.size === (previousHosts?.size ?? 0) &&
-        [...hosts].every((host) => previousHosts?.has(host))
-      if (next.has(id) === hasContent && sameHosts) {
+      if (next.has(id) === hasContent) {
         continue
       }
-      if (!sameHosts) {
-        if (hostsById === membership.hostsById) {
-          hostsById = new Map(hostsById)
-        }
-        if (hosts.size) {
-          hostsById.set(id, hosts)
-        } else {
-          hostsById.delete(id)
-        }
-      }
-      if (next.has(id) !== hasContent && next === membership.ids) {
+      if (next === membership.ids) {
         next = new Set(membership.ids)
       }
       if (hasContent) {
@@ -92,7 +51,7 @@ function createContentMembership(
     }
     previous = source
     if (changed.size) {
-      membership = { ids: next, hostsById, changed }
+      membership = { ids: next, changed }
     }
     return membership
   }
@@ -119,20 +78,10 @@ function rowIdentity(row: PresentationRow): string {
 export function createWorkspacePresentationSelector<W extends PresentationRow>(options?: {
   onInspectBucket?: (id: string) => void
   onInspectDetectedRow?: (id: string) => void
-  onInspectContent?: (id: string) => void
 }) {
-  const terminalMembership = createContentMembership(
-    options?.onInspectBucket,
-    options?.onInspectContent
-  )
-  const unifiedMembership = createContentMembership(
-    options?.onInspectBucket,
-    options?.onInspectContent
-  )
-  const browserMembership = createContentMembership(
-    options?.onInspectBucket,
-    options?.onInspectContent
-  )
+  const terminalMembership = createContentMembership(options?.onInspectBucket)
+  const unifiedMembership = createContentMembership(options?.onInspectBucket)
+  const browserMembership = createContentMembership(options?.onInspectBucket)
   let previousVisible: Record<string, readonly W[]> = EMPTY_WORKTREES
   let previousDetected: NonNullable<WorkspacePresentationState<W>['detectedWorktreesByRepo']> =
     EMPTY_DETECTED
@@ -207,15 +156,10 @@ export function createWorkspacePresentationSelector<W extends PresentationRow>(o
     for (const repoId of affectedRepos) {
       const listed = visible[repoId]
       const listedIdentities = new Set((listed ?? []).map(rowIdentity))
-      const listedIds = new Set((listed ?? []).map((row) => row.id))
       const retained = (candidatesByRepo.get(repoId) ?? []).filter(
         (row) =>
           memberships.some((membership) => membership.ids.has(row.id)) &&
-          !listedIdentities.has(rowIdentity(row)) &&
-          (!listedIds.has(row.id) ||
-            memberships.some((membership) =>
-              worktreeOwnerHostIds(row).some((host) => membership.hostsById.get(row.id)?.has(host))
-            ))
+          !listedIdentities.has(rowIdentity(row))
       )
       if (retained.length) {
         retainedRepoIds.add(repoId)

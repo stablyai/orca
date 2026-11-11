@@ -64,11 +64,11 @@ export function getActiveExecutionHostIdForWorktree(
   if (state.activeWorktreeId !== worktreeId) {
     return undefined
   }
-  // Why: most activations pass no host; a bare 'local' there stamped SSH worktrees' tabs as local.
+  // Missing host evidence stays unresolved; a local default would falsely stamp remote twins' content.
   return (
     state.activeWorkspaceExecutionHostId ??
     getResolvedExecutionHostIdForWorktree(state, worktreeId) ??
-    LOCAL_EXECUTION_HOST_ID
+    undefined
   )
 }
 

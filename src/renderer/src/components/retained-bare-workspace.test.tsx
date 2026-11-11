@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 
 import type { DetectedWorktree } from '../../../shared/worktree/types'
+import type { Tab } from '../../../shared/tab-types'
+import { buildUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { afterEach, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
@@ -422,15 +424,26 @@ it('keeps host twins ambiguous and drops truly removed identities despite retain
   ).toEqual([checkout.id])
 })
 
-it('does not lend a listed owner’s content to a hidden host twin', () => {
+it('preserves unresolved browser ownership after restoring hostless content beside a hidden twin', async () => {
+  Object.defineProperty(window, 'api', { configurable: true, value: apiProxy() })
   const listed = { ...checkout, hostId: 'ssh:a' as const }
-  const hidden = { ...listed, hostId: 'runtime:other' as const, runtimeOwnerEnvironmentId: 'other' }
+  const hidden = { ...listed, hostId: 'ssh:b' as const }
+  const saved: Tab = {
+    id: 'legacy-chat',
+    entityId: 'legacy-chat',
+    worktreeId: listed.id,
+    groupId: 'twin-group',
+    contentType: 'agent-session',
+    label: 'Legacy conversation',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  }
   useAppStore.setState(
     {
       ...initialState,
       repos: [{ ...TEST_REPO, executionHostId: 'ssh:a', connectionId: 'a' }],
-      activeWorktreeId: listed.id,
-      activeWorkspaceExecutionHostId: null,
       worktreesByRepo: { repo1: [listed] },
       detectedWorktreesByRepo: {
         repo1: {
@@ -440,65 +453,120 @@ it('does not lend a listed owner’s content to a hidden host twin', () => {
           worktrees: [{ ...hidden, ownership: 'external', selectedCheckout: false, visible: false }]
         }
       },
-      unifiedTabsByWorktree: {
+      unifiedTabsByWorktree: { [listed.id]: [saved] },
+      groupsByWorktree: {
         [listed.id]: [
-          {
-            id: 'saved-twin',
-            entityId: 'saved-twin',
-            worktreeId: listed.id,
-            groupId: 'twin-group',
-            contentType: 'agent-session',
-            label: 'Saved twin',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
+          { id: 'twin-group', worktreeId: listed.id, activeTabId: saved.id, tabOrder: [saved.id] }
         ]
       }
     },
     true
   )
-  const state = useAppStore.getState()
-  expect(selectWorkspacePresentationWorktrees(state)).toBe(state.worktreesByRepo)
-  expect(getResolvedExecutionHostIdForWorktree(state, listed.id)).toBe('ssh:a')
-  expect(searchTabs('Saved twin').map((entry) => entry.executionHostId)).toEqual(['ssh:a'])
-  const created = state.createUnifiedTab(listed.id, 'terminal', {
-    id: 'new-twin-tab',
-    entityId: 'new-twin'
+  const session = {
+    ...getDefaultWorkspaceSession(),
+    ...buildUnifiedTabSessionData(useAppStore.getState()),
+    activeRepoId: 'repo1',
+    activeWorktreeId: listed.id,
+    activeWorkspaceExecutionHostId: null
+  }
+  useAppStore.setState({ unifiedTabsByWorktree: {}, groupsByWorktree: {}, activeWorktreeId: null })
+  useAppStore.getState().hydrateWorkspaceSession(session)
+  useAppStore.getState().hydrateTabsSession(session)
+  const foundation = renderHook(() => useTerminalWorkspaceFoundation())
+  expect(foundation.result.current.workspaceSurfaces.filter((row) => row.id === listed.id)).toEqual(
+    [{ id: listed.id, path: listed.path }]
+  )
+  expect(getResolvedExecutionHostIdForWorktree(useAppStore.getState(), listed.id)).toBeNull()
+  expect(searchTabs('Legacy conversation')).toEqual([])
+  await act(async () => {
+    await useAppStore.getState().openNewBrowserTabInActiveWorkspace('twin-group')
   })
-  expect(created.executionHostId).toBe('ssh:a')
-  useAppStore.setState((current) => ({
-    unifiedTabsByWorktree: replaceRecordEntries<AppState['unifiedTabsByWorktree'][string]>(
-      current.unifiedTabsByWorktree,
-      [
-        [
-          listed.id,
-          current.unifiedTabsByWorktree[listed.id].map((tab) =>
-            tab.id === 'saved-twin' ? { ...tab, executionHostId: 'runtime:other' } : tab
-          )
-        ]
-      ]
-    )
-  }))
+  const unqualified = useAppStore
+    .getState()
+    .unifiedTabsByWorktree[listed.id].find((tab) => tab.contentType === 'browser')
+  expect(unqualified?.executionHostId).toBeUndefined()
+  expect(useAppStore.getState().browserTabsByWorktree[listed.id]).toHaveLength(1)
   expect(
-    selectWorkspacePresentationWorktrees(useAppStore.getState()).repo1.map((row) => row.hostId)
-  ).toEqual(['ssh:a', 'runtime:other'])
-  expect(searchTabs('Saved twin').map((entry) => entry.executionHostId)).toEqual(['runtime:other'])
-  useAppStore.setState((current) => ({
-    unifiedTabsByWorktree: replaceRecordEntries<AppState['unifiedTabsByWorktree'][string]>(
-      current.unifiedTabsByWorktree,
-      [
-        [
-          listed.id,
-          current.unifiedTabsByWorktree[listed.id].map((tab) => ({
-            ...tab,
-            executionHostId: 'ssh:a'
-          }))
-        ]
-      ]
-    )
-  }))
-  const restored = useAppStore.getState()
-  expect(selectWorkspacePresentationWorktrees(restored)).toBe(restored.worktreesByRepo)
+    useAppStore.getState().unifiedTabsByWorktree[listed.id].find((tab) => tab.id === saved.id)
+      ?.executionHostId
+  ).toBeUndefined()
+  let explicitB: Tab | undefined
+  act(() => {
+    explicitB = useAppStore.getState().createUnifiedTab(listed.id, 'agent-session', {
+      id: 'b-chat',
+      entityId: 'b-chat',
+      label: 'B conversation',
+      executionHostId: 'ssh:b',
+      targetGroupId: 'twin-group'
+    })
+  })
+  expect(explicitB?.executionHostId).toBe('ssh:b')
+  const bResult = searchTabs('B conversation')[0]
+  expect(bResult?.executionHostId).toBe('ssh:b')
+  let activation: ReturnType<typeof activateWorkspaceTabPaletteResult> | undefined
+  act(() => {
+    activation = activateWorkspaceTabPaletteResult(bResult, activateAndRevealWorkspace)
+  })
+  expect(activation?.status).toBe('activated')
+  expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('ssh:b')
+  await act(async () => {
+    await useAppStore.getState().openNewBrowserTabInActiveWorkspace('twin-group')
+  })
+  expect(
+    useAppStore
+      .getState()
+      .unifiedTabsByWorktree[listed.id].filter((tab) => tab.contentType === 'browser')
+      .map((tab) => tab.executionHostId)
+  ).toEqual([undefined, 'ssh:b'])
+  act(() => {
+    useAppStore.setState({ activeWorkspaceExecutionHostId: 'ssh:a' })
+  })
+  await act(async () => {
+    await useAppStore.getState().openNewBrowserTabInActiveWorkspace('twin-group')
+  })
+  expect(
+    useAppStore
+      .getState()
+      .unifiedTabsByWorktree[listed.id].filter((tab) => tab.contentType === 'browser')
+      .map((tab) => tab.executionHostId)
+  ).toEqual([undefined, 'ssh:b', 'ssh:a'])
+  act(() => {
+    useAppStore.setState({ activeWorkspaceExecutionHostId: null })
+  })
+  let splitTab: Tab | null = null
+  act(() => {
+    splitTab = useAppStore
+      .getState()
+      .createUnifiedTabInSplit(
+        listed.id,
+        'terminal',
+        { sourceGroupId: 'twin-group', splitDirection: 'horizontal' },
+        { id: 'unqualified-split', entityId: 'unqualified-split' }
+      )
+  })
+  expect(splitTab).not.toBeNull()
+  expect(
+    useAppStore
+      .getState()
+      .unifiedTabsByWorktree[listed.id].find((tab) => tab.id === 'unqualified-split')
+      ?.executionHostId
+  ).toBeUndefined()
+  act(() => {
+    useAppStore.setState({ detectedWorktreesByRepo: {} })
+  })
+  const unique = useAppStore
+    .getState()
+    .createUnifiedTab(listed.id, 'terminal', { id: 'unique-tab', entityId: 'unique-tab' })
+  expect(unique.executionHostId).toBe('ssh:a')
+  act(() => {
+    useAppStore.setState({
+      worktreesByRepo: { repo1: [checkout] },
+      repos: [TEST_REPO],
+      activeWorkspaceExecutionHostId: null
+    })
+  })
+  const local = useAppStore
+    .getState()
+    .createUnifiedTab(listed.id, 'terminal', { id: 'local-tab', entityId: 'local-tab' })
+  expect(local.executionHostId).toBe('local')
 })
