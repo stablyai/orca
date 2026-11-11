@@ -311,14 +311,18 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       },
       resumeRemotePane,
       freshIfResumeFoundNothing,
-      buildFreshCommand: (agent, leafId) => `fresh ${agent} ${leafId}`
+      buildFreshCommand: (agent, leafId, agentArgs) => `fresh ${agent} ${leafId} ${agentArgs}`
     })
     await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
     expect(order).toEqual(['stop', 'resume', 'reconnect'])
     // RA-11e: after the reconnect, the resume is watched once for "no conversation" (then fresh).
     await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
     expect(freshIfResumeFoundNothing).toHaveBeenCalledWith(
-      expect.objectContaining({ replacedPtyId: REMOTE, freshCommand: `fresh claude ${LEAF}` })
+      expect.objectContaining({
+        replacedPtyId: REMOTE,
+        // RA-11d: the fallback gets the pane's recorded args too.
+        freshCommand: `fresh claude ${LEAF} --model opus --effort high`
+      })
     )
     expect(resumeRemotePane).toHaveBeenCalledWith({
       // RA-11d: the pane's own launch rides along to the host.

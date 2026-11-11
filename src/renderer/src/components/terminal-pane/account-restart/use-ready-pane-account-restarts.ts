@@ -117,18 +117,26 @@ export function runReadyPaneAccountRestarts<
   /** RA-11e: start fresh in the same pane when a resume found no conversation. */
   freshIfResumeFoundNothing?: typeof freshIfResumeFoundNothing
   /** The fresh-launch command for this tab's pane (no session to resume). */
-  buildFreshCommand?: (agent: AccountRestartAgent, leafId: string) => string
+  buildFreshCommand?: (
+    agent: AccountRestartAgent,
+    leafId: string,
+    agentArgs?: string | null
+  ) => string
 }): void {
   const args = {
     stopRemotePane: stopRemotePaneTerminalForRestart,
     resumeRemotePane: resumeRemotePaneAgent,
     freshIfResumeFoundNothing,
-    buildFreshCommand: (agent: AccountRestartAgent, leafId: string) =>
-      buildFreshAccountRestartCommand(agent, {
-        tabId: input.tabId,
-        leafId,
-        worktreeId: worktreeIdForTab(input.tabId) ?? ''
-      }),
+    buildFreshCommand: (agent: AccountRestartAgent, leafId: string, agentArgs?: string | null) =>
+      buildFreshAccountRestartCommand(
+        agent,
+        {
+          tabId: input.tabId,
+          leafId,
+          worktreeId: worktreeIdForTab(input.tabId) ?? ''
+        },
+        agentArgs
+      ),
     ...input
   }
   for (const pane of args.panes) {
@@ -221,7 +229,12 @@ export function runReadyPaneAccountRestarts<
                       pane.leafId
                     ] ?? null,
                   replacedPtyId: ptyId,
-                  freshCommand: args.buildFreshCommand(agent, pane.leafId)
+                  // RA-11d: a fresh fallback keeps the pane's own model, effort and flags too.
+                  freshCommand: args.buildFreshCommand(
+                    agent,
+                    pane.leafId,
+                    launchedStartup.launchConfig?.agentArgs
+                  )
                 })
               )
               .then((startedFresh) => {
