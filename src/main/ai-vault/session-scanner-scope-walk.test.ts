@@ -1,6 +1,7 @@
-import { link, mkdtemp, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { link, mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { truncateAiVaultListResult } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
@@ -139,6 +140,55 @@ async function writeRollout(sessionsDir: string, id: string, cwd: string, day: s
 }
 
 describe('scanAiVaultSessions — scope before the recency cap', () => {
+  it.each([undefined, ['/repo']])(
+    'lists a rollout once, as its plain file, beside its .zst archive (scope %j)',
+    async (scopePaths) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-zst-twin-'))
+      tempRoots.push(root)
+      const roots = isolatedScanRoots(root)
+      const plain = await writeRollout(roots.codexSessionsDir, 'twin', '/repo', '11')
+      await writeFile(`${plain}.zst`, zstdCompressSync(await readFile(plain)))
+      const archived = await writeRollout(roots.codexSessionsDir, 'archived-only', '/repo', '13')
+      await writeFile(`${archived}.zst`, zstdCompressSync(await readFile(archived)))
+      await rm(archived)
+
+      const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', scopePaths })
+
+      expect(
+        result.sessions
+          .filter((session) => session.agent === 'codex')
+          .map((session) => [session.sessionId, session.filePath])
+      ).toEqual(
+        expect.arrayContaining([
+          ['twin', plain],
+          ['archived-only', `${archived}.zst`]
+        ])
+      )
+      expect(result.sessions.filter((session) => session.agent === 'codex')).toHaveLength(2)
+    }
+  )
+
+  it('lists the live rollout when another account home holds only its archive', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-zst-homes-'))
+    tempRoots.push(root)
+    const homeA = join(root, 'codex-accounts', 'a', 'home', 'sessions')
+    const homeB = join(root, 'codex-accounts', 'b', 'home', 'sessions')
+    const archived = await writeRollout(homeA, 'moved', '/repo', '11')
+    await writeFile(`${archived}.zst`, zstdCompressSync(await readFile(archived)))
+    await rm(archived)
+    const live = await writeRollout(homeB, 'moved', '/repo', '11')
+
+    const result = await scanAiVaultSessions({
+      ...isolatedScanRoots(root),
+      additionalCodexSessionsDirs: [homeA, homeB],
+      platform: 'darwin'
+    })
+
+    expect(
+      result.sessions.filter((session) => session.agent === 'codex').map((s) => s.filePath)
+    ).toEqual([live])
+  })
+
   it('lists an older in-scope Codex session once across hardlinked homes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-walk-'))
     tempRoots.push(root)
