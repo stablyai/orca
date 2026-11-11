@@ -75,7 +75,12 @@ export function CloudRunningStripPortal({
     accounts.load.status.credentials[agent].state !== 'active' &&
     accounts.load.status.credentials[agent].state !== 'expiring' &&
     accounts.load.status.credentials[agent].state !== 'none'
-  const usesAccount = useWorkspaceUsesAccount(running ? environmentId : null, agent, expired)
+  const usesAccount = useWorkspaceUsesAccount(
+    running ? environmentId : null,
+    agent,
+    expired,
+    orcaCloudAgentAccountsLoadedAt()
+  )
   const hold = useCloudAgentHold(paneKey)
   const gate = useAgentSignInGate(paneKey)
   const held = hold !== null || gate !== null

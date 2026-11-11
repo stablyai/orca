@@ -187,7 +187,9 @@ export function workspaceUsesAccount(view: AgentSourcesView, agent: HostAgentSig
 export function useWorkspaceUsesAccount(
   runtimeEnvironmentId: string | null,
   agent: HostAgentSignInAgent | null,
-  wanted: boolean
+  wanted: boolean,
+  /** Changes on every account read; a failed Source read retries then (never on its own). */
+  retryToken: number
 ): boolean | null {
   const key = runtimeEnvironmentId && agent ? `${runtimeEnvironmentId}:${agent}` : null
   useSyncExternalStore(
@@ -200,7 +202,12 @@ export function useWorkspaceUsesAccount(
       return
     }
     const read = sourceReads.get(key)
-    if (read === 'pending' || (read && Date.now() - read.at < SOURCE_READ_MS)) {
+    // A good answer holds for 10 min; a failed one (e.g. right after start, before main knows the
+    // sandbox) is retried on the next account read.
+    if (
+      read === 'pending' ||
+      (read && read.usesAccount !== null && Date.now() - read.at < SOURCE_READ_MS)
+    ) {
       return
     }
     const api = window.api.orcaCloudAgents
@@ -216,7 +223,7 @@ export function useWorkspaceUsesAccount(
       .workspaceSources({ runtimeEnvironmentId })
       .then((result) => settle(result.ok ? workspaceUsesAccount(result.value, agent) : null))
       .catch(() => settle(null))
-  }, [wanted, key, runtimeEnvironmentId, agent])
+  }, [wanted, key, runtimeEnvironmentId, agent, retryToken])
   const read = key ? sourceReads.get(key) : undefined
   return read && read !== 'pending' ? read.usesAccount : null
 }
