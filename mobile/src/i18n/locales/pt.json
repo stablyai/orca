@@ -1483,6 +1483,8 @@
       "durationMinutes_other": "{{count}} minutos",
       "durationMinutes_many": "{{count}} minutos",
       "discard": "Descartar gravação",
+      "cancelSending": "Cancelar envio",
+      "sendingIn": "Enviando em {{seconds}} s",
       "retry": "Tentar ditado novamente",
       "retryShort": "Tentar novamente"
     },
@@ -1507,6 +1509,7 @@
       "listeningOnComputer": "Ouvindo. Transcrevendo no computador.",
       "finishing": "Finalizando.",
       "inserted": "Inserido.",
+      "insertedSending": "Inserido. Será enviado em {{duration}}.",
       "cancelled": "Ditado cancelado.",
       "movedTo": "Este telefone parou de transcrever. Continuando em {{computer}}.",
       "movedToComputer": "Este telefone parou de transcrever. Continuando no computador.",

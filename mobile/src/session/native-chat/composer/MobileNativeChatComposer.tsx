@@ -165,7 +165,9 @@ export function MobileNativeChatComposer({
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
   const menu = useMobileNativeChatComposerMenu({
     value,
+    // Typing and every menu pick edit through here; dictation writes the draft from above.
     onChangeText: (text) => {
+      dictation.autoSend.withdraw()
       if (editSession && draftScopeKey) {
         pruneMobileNativeChatDraftSkills(
           draftScopeKey,
@@ -301,7 +303,7 @@ export function MobileNativeChatComposer({
             value={value}
             skillToken={menu.skillToken}
             onChangeText={menu.onFieldChange}
-            onKeyboardSubmit={() => {
+            onKeyboardSubmit={dictation.autoSend.takeOver(() => {
               const first = menu.rows[0]
               if (first) {
                 menu.pick(first)
@@ -311,15 +313,18 @@ export function MobileNativeChatComposer({
                 // Nothing of its own to send, so the head card goes; the queue decides whether it may.
                 headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
               }
-            }}
-            onFocus={() => {
+            })}
+            // A focus without a tap (VoiceOver, a hardware keyboard) takes over too.
+            onFocus={dictation.autoSend.takeOver(() => {
               setFocused(true)
               if (draftScopeKey) {
                 focusMobileNativeChatTextDestination(draftScopeKey)
               }
-            }}
+            })}
+            // A tap reaches here even when the field already has focus, unlike onFocus.
+            onTouchStart={dictation.autoSend.withdraw}
             onBlur={() => setFocused(false)}
-            onWebPaste={onWebPaste}
+            onWebPaste={dictation.autoSend.takeOver(onWebPaste)}
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
             dictationPreview={dictation.preview}
@@ -344,6 +349,7 @@ export function MobileNativeChatComposer({
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             <MobileNativeChatDictationLeading
               {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
+              autoSend={dictation.autoSend}
             >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}

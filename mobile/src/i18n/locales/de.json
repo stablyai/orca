@@ -1320,6 +1320,8 @@
       "durationMinutes_one": "{{count}} Minute",
       "durationMinutes_other": "{{count}} Minuten",
       "discard": "Aufnahme verwerfen",
+      "cancelSending": "Senden abbrechen",
+      "sendingIn": "Senden in {{seconds}} s",
       "retry": "Diktat wiederholen",
       "retryShort": "Wiederholen"
     },
@@ -1344,6 +1346,7 @@
       "listeningOnComputer": "Hört zu. Transkription auf dem Computer.",
       "finishing": "Wird abgeschlossen.",
       "inserted": "Eingefügt.",
+      "insertedSending": "Eingefügt. Wird in {{duration}} gesendet.",
       "cancelled": "Diktat abgebrochen.",
       "movedTo": "Dieses Telefon hat die Transkription beendet. Weiter auf {{computer}}.",
       "movedToComputer": "Dieses Telefon hat die Transkription beendet. Weiter auf dem Computer.",

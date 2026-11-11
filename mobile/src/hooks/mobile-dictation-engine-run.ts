@@ -3,7 +3,11 @@ import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setu
 import type { DictationCapture } from '../platform/dictation-capture-contract'
 import type { OnDeviceSpeech } from '../platform/on-device-speech-contract'
 import { openMobileDictationCapture } from './mobile-dictation-capture-open'
-import { createMobileDictationId, type DictationStatus } from './mobile-dictation-session-state'
+import {
+  createMobileDictationId,
+  type DictationStatus,
+  type MobileDictationTranscriptHandler
+} from './mobile-dictation-session-state'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileDictationAudioPhase,
@@ -46,7 +50,7 @@ export type MobileDictationRun = {
   readonly recording: RefObject<MobileDictationRecording>
   readonly sendHeldAudio: RefObject<() => void>
   readonly finish: RefObject<(emptyTranscriptMessage: string) => Promise<void>>
-  readonly onTranscript: RefObject<(text: string) => void>
+  readonly onTranscript: RefObject<MobileDictationTranscriptHandler>
   readonly onAudioLimitReached: RefObject<(() => void) | undefined>
   readonly worktreeId: RefObject<string | undefined>
   readonly keptTranscript: MobileDictationTranscriptSoFar
@@ -90,7 +94,7 @@ export function settleMobileDictation(
   run.pendingAudioBudget.current.reset()
   run.applyStatus('idle')
   if (text) {
-    run.onTranscript.current(text)
+    run.onTranscript.current(text, { partial: false })
   } else {
     run.reportError(new Error(emptyTranscriptMessage))
   }

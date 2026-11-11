@@ -13,10 +13,13 @@ export type MobileDictationEngineShown = { kind: 'phone' | 'computer'; movedAt: 
 // offline: the computer was out of reach when it failed, which is the reason the user needs.
 export type MobileDictationKeptFailure = { message: string; offline: boolean }
 
+export type MobileDictationTranscriptHandler = (text: string, heard: { partial: boolean }) => void
+
 export type UseMobileDictationOptions = {
   client: RpcClient | null
   enabled: boolean
-  onTranscript: (text: string) => void
+  // partial: a failure handed over only the words heard so far.
+  onTranscript: MobileDictationTranscriptHandler
   // kept: the recording is kept for Retry, so the failure shows in place rather than as a toast.
   onError?: (error: Error, outcome: { kept: boolean }) => void
   // The computer's filler switch, for text the phone recognizes itself; unknown means on.

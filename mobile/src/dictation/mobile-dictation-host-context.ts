@@ -39,7 +39,7 @@ export type MobileDictationScreen = {
   // The one "shown" rule (mobile-dictation-shown.ts): true while the in-place controls stand for the dictation.
   readonly shown: () => boolean
   // The starting screen inserts where it started (cursor, live input); false when it cannot, so the host inserts instead.
-  readonly insert: (text: string) => boolean
+  readonly insert: (text: string, heard: { partial: boolean }) => boolean
   // Setup refusals open its setup sheet; other failures toast on it.
   readonly reportFailure: (err: Error) => void
   readonly toast: (message: string) => void

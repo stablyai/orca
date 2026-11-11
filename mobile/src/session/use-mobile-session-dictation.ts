@@ -9,6 +9,7 @@ import {
 import { useFocusEffect, useNavigation } from 'expo-router'
 import { HOST_SESSION_ROUTE } from '../navigation/host-stack-navigation'
 import { useMobileSessionDictationSetup } from './use-mobile-session-dictation-setup'
+import { useMobileSessionDictationAutoSend } from './use-mobile-session-dictation-auto-send'
 import { triggerError } from '../platform/haptics'
 import { useClipboardWriter } from '../platform/clipboard'
 import {
@@ -62,6 +63,7 @@ export function useMobileSessionDictation(
   const sessionKey = JSON.stringify([hostId, executionHost ?? null, worktreeId])
   const [instance] = useState(() => ({}))
   const [inFront, setInFront] = useState(true)
+  const autoSend = useMobileSessionDictationAutoSend(connState === 'connected')
   useFocusEffect(
     useCallback(() => {
       setInFront(true)
@@ -112,10 +114,11 @@ export function useMobileSessionDictation(
 
   const destination = useMobileDictationDestination(nativeChatController)
   // Chat dictation is inserted locally; a terminal's words are typed into it live, while it is the active one.
-  const insertHere = (text: string): boolean => {
+  const insertHere = (text: string, heard: { partial: boolean }): boolean => {
     if (destination.landsInChat(showNativeChatRef.current)) {
       if (destination.insertInChat(text)) {
-        host.announce(dictationAnnounceCopy.inserted())
+        const countdown = autoSend.start(heard)
+        host.announce(dictationAnnounceCopy.inserted(countdown?.delayMs))
       } else {
         keepUndeliveredDictation(text)
       }
@@ -167,7 +170,7 @@ export function useMobileSessionDictation(
         instance,
         sessionKey,
         shown: () => screenRef.current.shown,
-        insert: (text) => screenRef.current.insert(text),
+        insert: (text, heard) => screenRef.current.insert(text, heard),
         reportFailure: (err) => {
           dictationRouteContextRef.current = null
           screenRef.current.reportFailure(err)
@@ -197,6 +200,7 @@ export function useMobileSessionDictation(
     removeFillerWords,
     dictationTerms,
     silenceSeconds,
+    autoSendDelayMs,
     dictationNeedsSetupRef,
     closeDictationSetup,
     refreshDictationMode
@@ -227,6 +231,8 @@ export function useMobileSessionDictation(
     const routeContext = activeHandle ? { handle: activeHandle } : null
     dictationRouteContextRef.current = routeContext
     const target = destination.captureDestination(showNativeChat, activeHandle)
+    // Only a dictation started into a chat's draft sends itself; a terminal's never does, even if a chat replaces it.
+    autoSend.arm(target?.field === 'chat' ? target.scope : null, autoSendDelayMs)
     const paneKey = mobileSessionTabPaneKey(activeSessionTab)
     // A refused start comes back through this screen's reportFailure while it is shown, or the host's toast.
     void startHost({
@@ -253,6 +259,8 @@ export function useMobileSessionDictation(
       computerName
     })
   }, [
+    autoSend,
+    autoSendDelayMs,
     computerName,
     activeHandle,
     activeSessionTab,
@@ -307,6 +315,7 @@ export function useMobileSessionDictation(
 
   return {
     dictation,
+    dictationAutoSend: autoSend,
     dictationLeaveHold,
     ...previews,
     startDictation,

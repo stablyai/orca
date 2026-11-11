@@ -17,6 +17,7 @@ import {
 import type { MobileNativeChatSteerHead } from './use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatSteerChordPreview } from './use-mobile-native-chat-steer-chord-preview'
 import { useMobileNativeChatDictationFailed } from './MobileNativeChatDictationLeading'
+import { useMobileNativeChatSendWhenDictationEnds } from './use-mobile-native-chat-composer-auto-send'
 
 /** Send's slot outside a queued edit: Send, Stop where Send can't deliver, or what a held Cmd/Ctrl would do. */
 export function MobileNativeChatComposerSendSlot({
@@ -34,7 +35,7 @@ export function MobileNativeChatComposerSendSlot({
   sendDisabled,
   attaching,
   stop,
-  onSend
+  onSend: send
 }: {
   fieldRef: RefObject<TextInputInstance | null>
   value: string
@@ -54,6 +55,7 @@ export function MobileNativeChatComposerSendSlot({
   onSend: (intent?: MobileNativeChatSendIntent, keepFocus?: boolean) => void
 }): React.JSX.Element | null {
   const dictationFailed = useMobileNativeChatDictationFailed()
+  const onSend = useMobileNativeChatSendWhenDictationEnds(draftScopeKey, send, sendDisabled)
   const steerChord = useMobileNativeChatSteerChordPreview({
     fieldRef,
     hasDraft: value.trim() !== '' || attachmentCount > 0,
