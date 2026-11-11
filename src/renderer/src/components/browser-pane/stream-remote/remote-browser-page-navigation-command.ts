@@ -69,6 +69,28 @@ export async function runRemoteBrowserNavigationCommand(
   const ownsAction = (): boolean =>
     sequence === navigationSequence.current &&
     isCurrentRemoteOperationToken({ ...operationToken, remotePageId: pageId })
+  const reportFailure = (error: unknown): void => {
+    if (!ownsAction()) {
+      return
+    }
+    if (isRemoteBrowserPageMissingError(error)) {
+      closeMissingRemotePage(pageId)
+      return
+    }
+    const message = error instanceof Error ? error.message : 'Remote browser command failed.'
+    setPaneNotice({ kind: 'consequence', text: message })
+    // Why: goto results carry no load error, but the rejection keeps Electron's "ERR_NAME (-code)" text.
+    const netError = /\b(ERR_[A-Z_]+) \((-\d+)\)/.exec(message)
+    onUpdatePageState(browserTab.id, {
+      loading: false,
+      // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
+      loadError: {
+        code: netError ? Number(netError[2]) : 0,
+        description: netError ? netError[1] : message,
+        validatedUrl: redactKagiSessionToken(url ?? browserTab.url)
+      }
+    })
+  }
   setPaneBusy(true)
   setPaneNotice(null)
   // A standing failure stays visible until the native outcome is observed.
@@ -101,58 +123,40 @@ export async function runRemoteBrowserNavigationCommand(
     if (!ownsAction()) {
       return
     }
-    let tab: Pick<BrowserTabInfo, 'loadError'> | null
-    try {
-      tab = await lifecycle.session.refreshTabInfo(pageToken)
-    } catch (error) {
-      if (!ownsAction()) {
-        return
-      }
-      if (isRemoteBrowserPageMissingError(error)) {
-        throw error
-      }
-      if (result) {
-        if (!result.url.startsWith('chrome-error:')) {
-          applyRemoteTabMetadata(result)
+    await lifecycle.session.refreshTabInfo(pageToken, {
+      onApplied: (tab) => {
+        if (!ownsAction() || !commandError || tab.loadError) {
+          return
         }
-        return
-      }
-      throw commandError ?? error
-    }
-    if (!ownsAction() || !tab) {
-      return
-    }
-    if (commandError && !tab.loadError) {
-      if (tab.loadError === undefined) {
-        throw commandError
-      }
-      setPaneNotice({
-        kind: 'consequence',
-        text:
-          commandError instanceof Error ? commandError.message : 'Remote browser command failed.'
-      })
-    }
-  } catch (error) {
-    if (!ownsAction()) {
-      return
-    }
-    if (isRemoteBrowserPageMissingError(error)) {
-      closeMissingRemotePage(pageId)
-      return
-    }
-    const message = error instanceof Error ? error.message : 'Remote browser command failed.'
-    setPaneNotice({ kind: 'consequence', text: message })
-    // Why: goto results carry no load error, but the rejection keeps Electron's "ERR_NAME (-code)" text.
-    const netError = /\b(ERR_[A-Z_]+) \((-\d+)\)/.exec(message)
-    onUpdatePageState(browserTab.id, {
-      loading: false,
-      // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
-      loadError: {
-        code: netError ? Number(netError[2]) : 0,
-        description: netError ? netError[1] : message,
-        validatedUrl: redactKagiSessionToken(url ?? browserTab.url)
+        if (tab.loadError === undefined) {
+          reportFailure(commandError)
+        } else {
+          setPaneNotice({
+            kind: 'consequence',
+            text:
+              commandError instanceof Error
+                ? commandError.message
+                : 'Remote browser command failed.'
+          })
+        }
+      },
+      onError: (error) => {
+        if (!ownsAction()) {
+          return
+        }
+        if (isRemoteBrowserPageMissingError(error)) {
+          reportFailure(error)
+        } else if (result) {
+          if (!result.url.startsWith('chrome-error:')) {
+            applyRemoteTabMetadata(result)
+          }
+        } else {
+          reportFailure(commandError ?? error)
+        }
       }
     })
+  } catch (error) {
+    reportFailure(error)
   } finally {
     if (ownsAction()) {
       onUpdatePageState(browserTab.id, { loading: false })

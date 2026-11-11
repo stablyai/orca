@@ -1,4 +1,3 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { RuntimeStatus } from '../../../../../shared/runtime-types'
 import { RemoteBrowserPageSession } from './remote-browser-page-session'
 import { openRemoteBrowserScreencastStream } from './remote-browser-screencast-subscription'
@@ -74,6 +73,25 @@ export class RemoteBrowserStreamLifecycle {
       this.setStatus(REMOTE_BROWSER_STREAM_IDLE)
       return () => {}
     }
+    const handleOpenFailure = (error: unknown): void => {
+      if (cancelled) {
+        return
+      }
+      if (isRemoteBrowserPageMissingError(error)) {
+        deps.closeMissingRemotePage(tokens.remotePage)
+        return
+      }
+      const failure = resolveRemoteBrowserStreamFailure(error, 'opening')
+      if (failure.logRawError) {
+        console.warn('[browser-pane] remote browser failed to open:', error)
+      }
+      // The host can close before subscribe rejects; preserve the newer armed restart’s ownership of status.
+      if (this.restartScheduler.isScheduled) {
+        return
+      }
+      // An initial open has no retry budget; preserve manual recovery.
+      this.setStatus(remoteBrowserStreamStopped(failure.message))
+    }
     void this.session
       .ensureRemotePage(operationToken)
       .then(async (pageId) => {
@@ -81,8 +99,14 @@ export class RemoteBrowserStreamLifecycle {
           return
         }
         const pageToken = { ...operationToken, remotePageId: pageId }
-        await this.session.refreshTabInfo(pageToken)
-        if (cancelled || !tokens.isCurrent(pageToken)) {
+        let readFailed = false
+        await this.session.refreshTabInfo(pageToken, {
+          onError: (error) => {
+            readFailed = true
+            handleOpenFailure(error)
+          }
+        })
+        if (readFailed || cancelled || !tokens.isCurrent(pageToken)) {
           return
         }
         const subscription = await this.startStream(pageId)
@@ -92,25 +116,7 @@ export class RemoteBrowserStreamLifecycle {
         }
         this.adoptSubscription(subscription)
       })
-      .catch((error: unknown) => {
-        if (cancelled) {
-          return
-        }
-        if (isRemoteBrowserPageMissingError(error)) {
-          deps.closeMissingRemotePage(tokens.remotePage)
-          return
-        }
-        const failure = resolveRemoteBrowserStreamFailure(error, 'opening')
-        if (failure.logRawError) {
-          console.warn('[browser-pane] remote browser failed to open:', error)
-        }
-        // The host can close before subscribe rejects; preserve the newer armed restart’s ownership of status.
-        if (this.restartScheduler.isScheduled) {
-          return
-        }
-        // An initial open has no retry budget; preserve manual recovery.
-        this.setStatus(remoteBrowserStreamStopped(failure.message))
-      })
+      .catch(handleOpenFailure)
     return () => {
       cancelled = true
       this.retireInFlightWork()?.unsubscribe()
@@ -213,8 +219,8 @@ export class RemoteBrowserStreamLifecycle {
     if (!operationToken || !tokens.isCurrent(operationToken)) {
       return null
     }
-    const target: RuntimeClientTarget = {
-      kind: 'environment',
+    const target = {
+      kind: 'environment' as const,
       environmentId: operationToken.environmentId
     }
     const status = await deps.callRpc<RuntimeStatus>(target, 'status.get', undefined, {

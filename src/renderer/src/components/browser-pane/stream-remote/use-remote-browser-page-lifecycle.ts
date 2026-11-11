@@ -58,6 +58,7 @@ export function useRemoteBrowserPageLifecycle({
   const pendingFrameDecodeRef = useRef(0)
   const mountedRef = useRef(true)
   const isActiveRef = useRef(isActive)
+  const currentWorkspaceIdRef = useRef(browserTab.workspaceId)
   const currentBrowserTabIdRef = useRef(browserTab.id)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
@@ -70,15 +71,21 @@ export function useRemoteBrowserPageLifecycle({
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
 
   useLayoutEffect(() => {
+    currentWorkspaceIdRef.current = browserTab.workspaceId
     currentBrowserTabIdRef.current = browserTab.id
     currentBrowserTabUrlRef.current = browserTab.url
     activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
     isActiveRef.current = isActive
     runtimeWorktreeRef.current = runtimeWorktree
-  }, [activeRuntimeEnvironmentId, browserTab.id, browserTab.url, isActive, runtimeWorktree])
+  }, [
+    activeRuntimeEnvironmentId,
+    browserTab.id,
+    browserTab.workspaceId,
+    browserTab.url,
+    isActive,
+    runtimeWorktree
+  ])
 
-  const currentWorkspaceIdRef = useRef(browserTab.workspaceId)
-  currentWorkspaceIdRef.current = browserTab.workspaceId
   if (!lifecycleRef.current) {
     const observation = createRemoteBrowserPageObservation({
       readState: useAppStore.getState,

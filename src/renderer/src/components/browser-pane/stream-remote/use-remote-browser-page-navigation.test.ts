@@ -117,6 +117,7 @@ function renderNavigation(count = 1) {
     applyTabInfo: (tab) => project(tab),
     closeMissingRemotePage: vi.fn()
   })
+  const closeMissing = vi.fn()
   const busy = vi.fn()
   const notice = vi.fn()
   const hook = renderHook(() =>
@@ -131,7 +132,7 @@ function renderNavigation(count = 1) {
       runtimeTarget: () => ({ kind: 'environment', environmentId: identity.environmentId }),
       createRemoteOperationToken: () => tokens.createOperationToken(),
       isCurrentRemoteOperationToken: (token) => tokens.isCurrent(token),
-      closeMissingRemotePage: vi.fn(),
+      closeMissingRemotePage: closeMissing,
       onSetUrl: useAppStore.getState().setBrowserPageUrl,
       onUpdatePageState: useAppStore.getState().updateBrowserPageState,
       setPaneNotice: notice,
@@ -139,7 +140,7 @@ function renderNavigation(count = 1) {
     })
   )
   project = (tab) => hook.result.current.applyRemoteTabInfo(tab)
-  return { ...hook, session, tokens, identity, busy, notice }
+  return { ...hook, session, tokens, identity, busy, notice, closeMissing }
 }
 
 function currentPage(): BrowserPage {
@@ -490,6 +491,58 @@ describe('remote browser authoritative page state', () => {
     expect(currentPage().loadError).toBeNull()
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
   })
+
+  it.each(['rejected', 'resolved', 'missing'] as const)(
+    'keeps a queued native replacement after an admitted %s read failure',
+    async (outcome) => {
+      const { result, notice, closeMissing } = renderNavigation()
+      act(() => result.current.applyRemoteTabInfo(failedTab()))
+      const read = deferred<unknown>()
+      vi.mocked(callRuntimeRpc).mockImplementation((_target, method) => {
+        if (typeof method !== 'string') {
+          return Promise.resolve(undefined)
+        }
+        if (method === 'browser.tabShow') {
+          return read.promise
+        }
+        if (outcome === 'rejected') {
+          return Promise.reject(new Error('ERR_CERT_AUTHORITY_INVALID (-202)'))
+        }
+        return Promise.resolve({ url: 'https://old.test/', title: 'Old' })
+      })
+      let pending!: Promise<void>
+      await act(async () => {
+        pending = result.current.runRemoteNavigation('browser.goto', 'https://old.test/')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      const native = read.promise.catch(() =>
+        queueMicrotask(() => {
+          useAppStore.getState().setBrowserPageUrl('page-a', 'https://native.test/')
+          useAppStore
+            .getState()
+            .updateBrowserPageState('page-a', { loadError: null, loading: false, title: 'Native' })
+          notice.mockClear()
+          closeMissing.mockClear()
+        })
+      )
+      await act(async () => {
+        read.reject(
+          outcome === 'missing'
+            ? Object.assign(new Error('page missing'), { code: 'browser_tab_not_found' })
+            : new Error('read timed out')
+        )
+        await pending
+        await native
+      })
+      expect(currentPage().url).toBe('https://native.test/')
+      expect(currentPage().title).toBe('Native')
+      expect(currentPage().loadError).toBeNull()
+      expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
+      expect(notice).not.toHaveBeenCalled()
+      expect(closeMissing).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([100, 1000])(
     'drops an obsolete read without visiting %i unrelated workspace pages after map replacement',
