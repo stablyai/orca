@@ -18536,7 +18536,6 @@
           "browsePlugins": "プラグインを見る",
           "browseThemePlugins": "テーマプラグインを見る",
           "colorMode": "カラーモード",
-          "colorModeCaption": "ライト、ダーク、または OS に合わせる。",
           "darkLook": "ダークルック",
           "darkLooks": "ダークルック",
           "lightLook": "ライトルック",
@@ -18552,10 +18551,8 @@
           "slotLabel": "編集するルック",
           "sourceBuiltIn": "組み込み",
           "sourceCommunity": "ターミナルパレット",
-          "themes": "テーマ",
-          "themesCaption": "任意。アプリテーマやターミナルパレットでさらにカスタマイズできます。"
-        },
-        "subtitle": "ライトかダークを選び、必要ならテーマも選びましょう。どちらも設定からいつでも変更できます。"
+          "themes": "テーマ"
+        }
       },
       "integrations": {
         "capabilities": {

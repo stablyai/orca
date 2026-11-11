@@ -11,7 +11,7 @@ import type { DurableProfileStateMutation } from '../loading-store/store-runtime
 import {
   keepPartitionEditorViews,
   partitionEditorViewsOf
-} from '../loading-store/layout-editor-views'
+} from '../loading-store/workspace-sessions/layout-editor-views'
 import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
 import {
   applyCommandToSession,

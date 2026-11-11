@@ -4,15 +4,30 @@ import { createCoreTablesSql } from './create-core-tables-sql'
 import { createGraphTablesSql } from './create-graph-tables-sql'
 import { DERIVED_DELIVERY_SCHEMA_SQL } from './migrate-v41'
 import { REMOVED_WORK_SCHEMA_SQL } from '../reset/removed-orchestration-work-store'
+import { REMOTE_OWNED_SCHEMA_SQL } from '../remote-owned/remote-owned-schema-sql'
 import { PEER_RUN_SCHEMA_SQL } from '../peer-runs/peer-run-queue-sql'
 
 export function createTables(this: OrchestrationDb): void {
   this.db.exec(
-    `${createCoreTablesSql()}\n${createGraphTablesSql()}\n${REMOVED_WORK_SCHEMA_SQL}\n${PEER_RUN_SCHEMA_SQL}\n${SESSION_LINK_SCHEMA_SQL}`
+    `${createCoreTablesSql()}\n${createGraphTablesSql()}\n${REMOVED_WORK_SCHEMA_SQL}\n${REMOTE_OWNED_SCHEMA_SQL}\n${PEER_RUN_SCHEMA_SQL}\n${SESSION_LINK_SCHEMA_SQL}`
   )
   // Unreleased builds saved each send's fence as NOT NULL; nothing reads it, and new rows carry none.
   if (this.hasColumn('structured_mail_sends', 'fence')) {
     this.db.exec('ALTER TABLE structured_mail_sends DROP COLUMN fence')
+  }
+  // Unreleased builds of remote-owned workers kept an orphan-lookup fence on placements and had no settled-here mark.
+  for (const column of ['reserved_by_runtime', 'outcome_unknown']) {
+    if (this.hasColumn('remote_placements', column)) {
+      this.db.exec(`ALTER TABLE remote_placements DROP COLUMN ${column}`)
+    }
+  }
+  if (!this.hasColumn('remote_run_links', 'server_name')) {
+    this.db.exec('ALTER TABLE remote_run_links ADD COLUMN server_name TEXT')
+  }
+  if (!this.hasColumn('remote_dispatches', 'task_settled_here')) {
+    this.db.exec(
+      'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'
+    )
   }
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
