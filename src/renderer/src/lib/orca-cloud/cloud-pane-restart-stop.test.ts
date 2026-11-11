@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const calls: { method: string; params: unknown; environmentId: string }[] = []
 let showPtyId: string | null = 'host-pty-7'
 let stopResult: Record<string, unknown> = {}
+let readTail: string[] = []
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async (target: { environmentId: string }, method: string, params: unknown) => {
     calls.push({ method, params, environmentId: target.environmentId })
+    if (method === 'terminal.read') {
+      return { terminal: { tail: readTail } }
+    }
     return method === 'terminal.show' ? { terminal: { ptyId: showPtyId } } : stopResult
   }
 }))
@@ -16,7 +20,7 @@ vi.mock(
   () => ({ agentProviderSessionForHostEnsure: async (_env: string, session: unknown) => session })
 )
 
-const { resumeRemotePaneAgent, stopRemotePaneTerminalForRestart } =
+const { freshIfResumeFoundNothing, resumeRemotePaneAgent, stopRemotePaneTerminalForRestart } =
   await import('./cloud-pane-restart-stop')
 
 describe('stopRemotePaneTerminalForRestart (RA-11 paired pane)', () => {
@@ -79,5 +83,59 @@ describe('resumeRemotePaneAgent (RA-11 paired pane)', () => {
         placement: { tabId: 'host-tab::leaf', leafId: 'leaf-1' }
       }
     })
+  })
+})
+
+describe('freshIfResumeFoundNothing (RA-11e)', () => {
+  const sleep = () => Promise.resolve()
+  let clock = 0
+  const now = () => (clock += 1_000)
+  beforeEach(() => {
+    calls.length = 0
+    clock = 0
+  })
+
+  it('a resume that found no conversation starts the agent fresh in the same pane, once', async () => {
+    readTail = ['$ claude --resume s1', 'No conversation found with session ID: s1', '$ ']
+    const relaunched = await freshIfResumeFoundNothing({
+      currentPtyId: () => 'remote:env-1@@term_new',
+      replacedPtyId: 'remote:env-1@@term_old',
+      freshCommand: 'claude --dangerously-skip-permissions',
+      sleep,
+      now
+    })
+    expect(relaunched).toBe(true)
+    const sends = calls.filter((c) => c.method === 'terminal.send')
+    expect(sends).toHaveLength(1)
+    expect(sends[0]).toMatchObject({
+      environmentId: 'env-1',
+      params: { terminal: 'term_new', text: 'claude --dangerously-skip-permissions', enter: true }
+    })
+  })
+
+  it('a resume that worked is left alone', async () => {
+    readTail = ['Claude Code v2.1.319', '❯ say hi 1']
+    const relaunched = await freshIfResumeFoundNothing({
+      currentPtyId: () => 'remote:env-1@@term_new',
+      replacedPtyId: 'remote:env-1@@term_old',
+      freshCommand: 'claude',
+      sleep,
+      now
+    })
+    expect(relaunched).toBe(false)
+    expect(calls.some((c) => c.method === 'terminal.send')).toBe(false)
+  })
+
+  it('never reads the old terminal: waits for the pane to bind a new PTY', async () => {
+    readTail = ['No conversation found with session ID: s1']
+    const relaunched = await freshIfResumeFoundNothing({
+      currentPtyId: () => 'remote:env-1@@term_old',
+      replacedPtyId: 'remote:env-1@@term_old',
+      freshCommand: 'claude',
+      sleep,
+      now
+    })
+    expect(relaunched).toBe(false)
+    expect(calls).toEqual([])
   })
 })

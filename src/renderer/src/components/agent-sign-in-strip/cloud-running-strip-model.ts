@@ -66,9 +66,8 @@ export function cloudRestartAttemptModel(
       status: 'busy',
       title,
       compactTitle: title,
-      detail: attempt.resumable
-        ? t('agentSignInStrip.restartingResume', 'Picking up where you left off.')
-        : t('agentSignInStrip.renewedFresh', 'Starts a new conversation.'),
+      // Neutral while it runs: a recorded session may turn out to have no conversation (RA-11e).
+      detail: attempt.resumable ? '' : t('agentSignInStrip.renewedFresh', 'Starts a new conversation.'),
       // The spinner and the words are the whole state: no button to click twice.
       primary: null,
       noClose: true,
@@ -98,5 +97,29 @@ export function cloudRestartAttemptModel(
         agent
       }
     )
+  }
+}
+
+/** RA-11e: the resume found no conversation, so the agent started a new one. Shown briefly. */
+export function cloudRestartFreshModel(
+  agent: CloudAgentRestartAttempt['agent'],
+  t: Translate
+): CloudStripModel {
+  const title = t('agentSignInStrip.startedFresh', 'Started a new conversation.')
+  const detail = t('agentSignInStrip.startedFreshDetail', '{{agent}} had nothing to pick up.', {
+    agent: HOST_AGENT_SIGN_IN_AGENT_NAME[agent]
+  })
+  return {
+    code: null,
+    paste: null,
+    otherWays: false,
+    description: null,
+    status: 'done',
+    title,
+    compactTitle: title,
+    detail,
+    primary: null,
+    noClose: true,
+    announcement: `${title} ${detail}`
   }
 }
