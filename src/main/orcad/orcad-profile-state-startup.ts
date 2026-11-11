@@ -1,6 +1,7 @@
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import type { ProfileStateStoreFactoryResult } from '../persistence/profile-state/profile-state-store-factory'
-import { ensureActiveOrcaProfile, initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
+import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import { initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
 import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { emitOrcadProfileStateAuthoritySelected } from './orcad-profile-state-telemetry'
