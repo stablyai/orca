@@ -18433,17 +18433,17 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "Show less",
-          "showMore": "Show more"
+          "showMore": "Show more",
+          "copied": "Copied",
+          "copyFailed": "Copy failed",
+          "copyPrompt": "Copy prompt"
         },
         "AutomationDetail": {
           "host": "Host",
-          "a1d52c2189": "Usage coverage",
-          "449fc83bf7": "Tokens",
           "401f40ae79": "Est. spend",
           "a7c312430d": "Last run",
           "2df8970cd5": "Agent",
           "e353ab9516": "Precheck",
-          "620b22145e": "Grace",
           "15ea446b93": "Session",
           "5405a09b1f": "Run location",
           "2f8baf5360": "Create from",
@@ -18453,7 +18453,6 @@
           "1f6026358e": "Delete automation",
           "d79452fb30": "Resume automation",
           "91a4155e95": "Pause automation",
-          "4b1ea02d2e": "Edit automation",
           "2fb1605beb": "Run Now",
           "221916d93c": "Create an automation to start scheduling agent work.",
           "b09b2384fd": "Paused",
@@ -18465,8 +18464,6 @@
           "graceMinutes_other": "{{count}} minutes",
           "graceHours_one": "{{count}} hour",
           "graceHours_other": "{{count}} hours",
-          "usageCoverageRuns_one": "{{known}}/{{count}} run",
-          "usageCoverageRuns_other": "{{known}}/{{count}} runs",
           "usageUnavailable": "Unavailable",
           "noRuns": "No runs",
           "projectDefault": "Project default",
@@ -18476,7 +18473,12 @@
           "precheckNone": "None",
           "migrate": "Migrate",
           "migrateNotice": "{{host}} was upgraded to a new remote host. Migrate this automation to keep it running.",
-          "needsMigration": "Needs migration"
+          "needsMigration": "Needs migration",
+          "repeats": "Repeats",
+          "missedRunGrace": "Missed-run grace",
+          "execution": "Execution",
+          "notRunYet": "Not run yet",
+          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
