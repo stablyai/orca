@@ -4,9 +4,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { runAsWslLaunchUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
+import type * as DistroGate from '../../wsl/discovery/wsl-background-distro-gate'
 import type { Repo } from '../../../shared/repo-types'
 
-const { query, provider } = vi.hoisted(() => ({ query: vi.fn(), provider: vi.fn() }))
+const { query, provider, running } = vi.hoisted(() => ({
+  query: vi.fn(),
+  provider: vi.fn(),
+  running: vi.fn()
+}))
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (original) => ({
+  ...(await original<typeof DistroGate>()),
+  readWslDistroRunningState: running
+}))
+const originalPlatform = process.platform
 vi.mock('../../providers/execution-host-provider-dispatch', () => ({
   resolveGitRouteForHost: () => ({ kind: 'local', createProvider: provider })
 }))
@@ -21,6 +32,7 @@ afterEach(async () => {
     await rm(root, { recursive: true, force: true })
     root = undefined
   }
+  Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   vi.clearAllMocks()
 })
 
@@ -46,7 +58,7 @@ describe('workspace Git storage authority', () => {
     expect(await workspaceRootIsBare({ ...repo, kind: 'folder' }, repo.path)).toBe(false)
   })
 
-  it('uses authoritative checkout and bare graph rows without probing their roots', async () => {
+  it('uses checkout graph proof but confirms bare roots before refusing', async () => {
     const { repo, bare } = await layout()
     const worktrees = [
       { path: bare, head: '', branch: '', isBare: true, isMainWorktree: true },
@@ -54,7 +66,11 @@ describe('workspace Git storage authority', () => {
     ]
     expect(await workspaceRootIsBare(repo, bare, { worktrees })).toBe(true)
     expect(await workspaceRootIsBare(repo, '/checkout', { worktrees })).toBe(false)
-    expect(query).not.toHaveBeenCalled()
+    expect(query).toHaveBeenCalledTimes(1)
+    await rm(bare, { recursive: true })
+    execFileSync('git', ['init', '--quiet', bare])
+    expect(await workspaceRootIsBare(repo, bare, { worktrees })).toBe(false)
+    expect(query).toHaveBeenCalledTimes(2)
   })
 
   it('joins cold-start root probes and releases them after settlement, keeping runtimes separate', async () => {
@@ -75,4 +91,25 @@ describe('workspace Git storage authority', () => {
     expect(provider).toHaveBeenCalledWith({ wslDistro: 'Ubuntu' })
     expect(provider).toHaveBeenCalledWith({ wslDistro: 'Debian' })
   })
+})
+
+it('classifies a stopped WSL UNC root for a user act without waking it for passive restore', async () => {
+  const { repo } = await layout()
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  running.mockResolvedValue('stopped')
+  const cwd = '\\\\wsl.localhost\\Ubuntu\\home\\u\\project'
+  query.mockResolvedValue({ stdout: 'true' })
+  const userStart = () =>
+    runAsWslLaunchUserAct({ isWsl: true, passiveRestore: false, distro: 'Ubuntu' }, () =>
+      workspaceRootIsBare(repo, cwd, { wslDistro: 'Ubuntu' })
+    )
+  expect(await workspaceRootIsBare(repo, cwd, { wslDistro: 'Ubuntu' })).toBe(false)
+  expect(query).not.toHaveBeenCalled()
+  expect(await userStart()).toBe(true)
+  query.mockResolvedValue({ stdout: 'false' })
+  expect(await userStart()).toBe(false)
+  query.mockRejectedValueOnce(new Error('temporarily unavailable'))
+  expect(await userStart()).toBe(false)
+  query.mockResolvedValue({ stdout: 'true' })
+  expect(await userStart()).toBe(true)
 })

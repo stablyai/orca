@@ -6,7 +6,7 @@ import {
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
-import { listDetectedGitWorktrees } from '../ipc/worktrees/listing/detected-worktree-scan-cache'
+import { readFreshDetectedGitWorktrees } from '../ipc/worktrees/listing/detected-worktree-scan-cache'
 import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import { isDeepStrictEqual } from 'node:util'
 import type { Automation } from '../../shared/automations/automation-definition'
@@ -213,10 +213,10 @@ export async function runAutomationRequestPrecheck(
   const cwd = workspace?.repoId === target.repo.id ? workspace.worktreePath : target.cwd
   if (automation.workspaceMode === 'existing' && !isFolderRepo(target.repo)) {
     const local = getRepoExecutionHostId(target.repo) === LOCAL_EXECUTION_HOST_ID
-    const scan = local ? await listDetectedGitWorktrees(store, target.repo).catch(() => null) : null
+    const worktrees = local ? readFreshDetectedGitWorktrees(store, target.repo) : undefined
     if (
       await workspaceRootIsBare(target.repo, cwd, {
-        ...(scan && !scan.superseded ? { worktrees: scan.gitWorktrees } : {}),
+        worktrees,
         ...(local ? getLocalProjectWorktreeGitOptions(store, target.repo) : {})
       })
     ) {

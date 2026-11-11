@@ -1,21 +1,28 @@
 // An update counts the server's terminals, then stops it: a terminal started between the two
 // would die with the stop, uncounted. The last census closes admission so none can start.
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { z } from 'zod'
 import {
   ORCAD_UPDATE_ADMISSION_FENCE_MS,
   OrcadTerminalCensusParamsSchema
 } from '../../../../shared/orcad-terminal-census'
 import { TerminalHost } from '../../../daemon/terminal-host/terminal-host'
-import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
+import { resolveWorktreeScanRuntime } from '../../workspaces/catalog/runtime-worktree-scan-cache'
+import type * as ProviderDispatch from '../../../providers/execution-host-provider-dispatch'
 import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from '../../rpc/methods/orcad/orcad-terminal-census'
 import { TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE } from './terminal-update-admission'
 
-const { collect, listLiveDaemonPtyIds } = vi.hoisted(() => ({
+const { collect, listLiveDaemonPtyIds, rootQuery } = vi.hoisted(() => ({
   collect: vi.fn(),
+  rootQuery: vi.fn(),
   listLiveDaemonPtyIds: vi.fn<() => Promise<string[] | null>>()
 }))
+vi.mock('../../../providers/execution-host-provider-dispatch', async (original) => ({
+  ...(await original<typeof ProviderDispatch>()),
+  resolveGitRouteForHost: () => ({ kind: 'local', createProvider: () => ({ exec: rootQuery }) })
+}))
+beforeEach(() => rootQuery.mockResolvedValue({ stdout: 'false' }))
 vi.mock('../../../orcad/orcad-terminal-census', () => ({ collectOrcadTerminalCensus: collect }))
 vi.mock('../../../daemon/providers/lifecycle/daemon-provider-state', () => ({
   listLiveDaemonPtyIds
@@ -87,10 +94,7 @@ describe("an update's last terminal census", () => {
 
 describe('bare storage terminal admission', () => {
   it('refuses fresh creation and cannot recreate a saved session that exited before attachment', async () => {
-    const path = TEST_WORKTREE_ID.slice(TEST_WORKTREE_ID.indexOf('::') + 2)
-    vi.mocked(listWorktreesStrict).mockResolvedValueOnce([
-      { path, head: '', branch: '', isBare: true, isMainWorktree: true }
-    ])
+    rootQuery.mockResolvedValue({ stdout: 'true' })
     const runtime = new OrcaRuntimeService(store)
     await expect(runtime.acquireWorktreeTerminalSpawn(target)).rejects.toThrow(
       'This folder contains Git storage'
@@ -122,4 +126,66 @@ describe('bare storage terminal admission', () => {
       await host.dispose()
     }
   })
+})
+
+it('launch classification never starts or waits for full scans at fleet scale', async () => {
+  const runtime = new OrcaRuntimeService(store)
+  const repo = store.getRepos()[0]!
+  const key = `${repo.id}\0local`
+  const scan = vi.spyOn(runtime, 'listRepoWorktreesForResolution' as never)
+  const metadata = vi.spyOn(store, 'getAllWorktreeMeta')
+  for (const population of [750, 7500]) {
+    const graph = Array.from({ length: population }, (_, index) => ({
+      path: `/fleet/${index}`,
+      head: 'abc',
+      branch: '',
+      isBare: false,
+      isMainWorktree: false
+    }))
+    graph[0]!.path = TEST_WORKTREE_ID.slice(TEST_WORKTREE_ID.indexOf('::') + 2)
+    const cached = {
+      generation: 0,
+      runtimeKey: resolveWorktreeScanRuntime(store, repo).runtimeKey,
+      result: { ok: true as const, worktrees: graph },
+      expiresAt: Date.now() + 30000,
+      scannedAt: Date.now(),
+      adminFingerprint: null
+    }
+    runtime['worktreeScanCache'].set(key, cached)
+    rootQuery.mockClear()
+    const panes = population === 750 ? 100 : 1000
+    for (let index = 0; index < panes; index++) {
+      const release = await runtime.acquireWorktreeTerminalSpawn(target)
+      release()
+    }
+    expect(rootQuery).not.toHaveBeenCalled()
+    cached.expiresAt = 0
+    runtime['worktreeScanInFlight'].set(key, {
+      generation: 0,
+      runtimeKey: cached.runtimeKey,
+      promise: new Promise(() => {})
+    })
+    const releases = await Promise.all(
+      Array.from({ length: panes }, () => runtime.acquireWorktreeTerminalSpawn(target))
+    )
+    releases.forEach((release) => release())
+    expect(rootQuery).toHaveBeenCalledTimes(1)
+    rootQuery.mockClear()
+    runtime['worktreeScanGenerations'].set(key, 1)
+    for (let index = 0; index < panes; index++) {
+      const release = await runtime.acquireWorktreeTerminalSpawn(target)
+      release()
+    }
+    expect(rootQuery).toHaveBeenCalledTimes(panes)
+    runtime['worktreeScanGenerations'].clear()
+    runtime['worktreeScanInFlight'].clear()
+  }
+  rootQuery.mockResolvedValue({ stdout: 'true' })
+  await expect(runtime.acquireWorktreeTerminalSpawn(target)).rejects.toThrow(
+    'This folder contains Git storage'
+  )
+  expect(scan).not.toHaveBeenCalled()
+  expect(metadata).not.toHaveBeenCalled()
+  scan.mockRestore()
+  metadata.mockRestore()
 })

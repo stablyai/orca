@@ -299,11 +299,14 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     if (!repo || isFolderRepo(repo)) {
       return false
     }
-    const deps = this.repoWorktreeRowDeps()
-    const scan =
-      deps.getCachedSuccessfulScan?.(repo) ?? (await this.listRepoWorktreesForResolution(repo))
+    const key = `${repo.id}\0${target.hostId}`
     return workspaceRootIsBare(repo, parsed.worktreePath, {
-      ...(scan.ok ? { worktrees: scan.worktrees } : {}),
+      worktrees: ScanCache.readFreshWorktreeScan(
+        this.requireStore(),
+        repo,
+        this.worktreeScanCache.get(key),
+        this.worktreeScanGenerations.get(key) ?? 0
+      ),
       ...(target.hostId === LOCAL_EXECUTION_HOST_ID
         ? getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
         : {})

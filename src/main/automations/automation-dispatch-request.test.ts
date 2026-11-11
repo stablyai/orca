@@ -4,13 +4,20 @@ import type { Repo } from '../../shared/repo-types'
 import type * as PrecheckRunner from './precheck-runner'
 import type { Store } from '../persistence/loading-store/store'
 
-const { runPrecheck, scan } = vi.hoisted(() => ({ runPrecheck: vi.fn(), scan: vi.fn() }))
+const { runPrecheck, scan, query } = vi.hoisted(() => ({
+  runPrecheck: vi.fn(),
+  scan: vi.fn(),
+  query: vi.fn()
+}))
+vi.mock('../providers/execution-host-provider-dispatch', () => ({
+  resolveGitRouteForHost: () => ({ kind: 'local', createProvider: () => ({ exec: query }) })
+}))
 vi.mock('./precheck-runner', async (original) => ({
   ...(await original<typeof PrecheckRunner>()),
   runAutomationPrecheck: runPrecheck
 }))
 vi.mock('../ipc/worktrees/listing/detected-worktree-scan-cache', () => ({
-  listDetectedGitWorktrees: scan
+  readFreshDetectedGitWorktrees: scan
 }))
 vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
@@ -41,13 +48,11 @@ const automation = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  scan.mockResolvedValue({
-    superseded: false,
-    gitWorktrees: [
-      { path: '/project/.bare', head: '', branch: '', isBare: true, isMainWorktree: true },
-      { path: '/project/main', head: 'abc', branch: '', isBare: false, isMainWorktree: false }
-    ]
-  })
+  query.mockResolvedValue({ stdout: 'true' })
+  scan.mockReturnValue([
+    { path: '/project/.bare', head: '', branch: '', isBare: true, isMainWorktree: true },
+    { path: '/project/main', head: 'abc', branch: '', isBare: false, isMainWorktree: false }
+  ])
 })
 
 it('refuses an existing bare workspace before its command can run', async () => {

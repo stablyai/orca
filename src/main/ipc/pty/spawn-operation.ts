@@ -1,3 +1,4 @@
+import { runAsWslLaunchUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
 import type { PaneSpawnOperation } from './pane/pane-spawn-operation'
 import type { AdoptStablePaneArgs } from './ipc/spawn-types'
 import { adoptedOutcome, type PtySpawnOutcome } from './spawn-outcome'
@@ -105,13 +106,23 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     const runtime = ctx.deps.runtime
     const acquire = runtime?.acquireWorktreeTerminalSpawn
     ctx.releaseWorktreeSpawn = acquire
-      ? await acquire.call(runtime, spawnWorktreeTarget(args.worktreeId, args.connectionId), {
-          refuseSleptWorktree: args.refuseSleptWorktree,
-          reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
-          requireAttachOnly: () => {
-            ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
-          }
-        })
+      ? await runAsWslLaunchUserAct(
+          {
+            isWsl: Boolean(ctx.expectedWslDistro),
+            distro: ctx.expectedWslDistro,
+            passiveRestore:
+              ctx.spawnOptions.wslPassiveRestore === true ||
+              ctx.spawnOptions.wslBackgroundStart === true
+          },
+          () =>
+            acquire.call(runtime, spawnWorktreeTarget(args.worktreeId, args.connectionId), {
+              refuseSleptWorktree: args.refuseSleptWorktree,
+              reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
+              requireAttachOnly: () => {
+                ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
+              }
+            })
+        )
       : undefined
     const facts = adapter.facts()
     const chooseFresh = await prepareSavedPtyResume(ctx, facts)

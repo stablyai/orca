@@ -7,7 +7,8 @@ import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
 import { getSshConnectionManager } from '../../ssh/targets/ssh-target-registry'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { assertWslUncPathRunning } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { isWslUserActFor } from '../../wsl/discovery/wsl-user-act-scope'
+import { assertWslUncPathRunning, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 export const BARE_WORKSPACE_LAUNCH_ERROR =
   'This folder contains Git storage, not checked-out files. Open a checkout to start a terminal or chat.'
@@ -24,11 +25,12 @@ export function workspaceRootIsBare(
     return Promise.resolve(false)
   }
   const known = options.worktrees?.find((row) => areWorktreePathsEqual(row.path, root))
-  if (known) {
-    return Promise.resolve(known.isBare)
+  if (known && !known.isBare) {
+    return Promise.resolve(false)
   }
   const hostId = getRepoExecutionHostId(repo)
-  const key = JSON.stringify([hostId, options.wslDistro, root])
+  const distro = hostId === 'local' ? wslDistroForPath(root, options.wslDistro) : null
+  const key = JSON.stringify([hostId, options.wslDistro, root, distro && isWslUserActFor(distro)])
   const pending = rootProbes.get(key)
   if (pending) {
     return pending

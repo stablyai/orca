@@ -10,6 +10,9 @@ import {
   type ProjectRuntimeResolutionStore
 } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 
+import type { RuntimeWorktreeScanCache } from './runtime-worktree-scan-state'
+import { WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS } from './worktree-scan-admin-budget'
+
 const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 const WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS = 5 * 60_000
 
@@ -40,4 +43,20 @@ export function resolveWorktreeScanCacheTtlMs(
   return !getRepoRoutingConnectionId(repo) && isAgentScratchRepoRootPath(repo.path)
     ? WORKTREE_SCAN_AGENT_SCRATCH_TTL_MS
     : WORKTREE_SCAN_CACHE_TTL_MS
+}
+
+/** Launch proof only: reading a miss must not start or join catalog refresh work. */
+export function readFreshWorktreeScan(
+  store: ProjectRuntimeResolutionStore,
+  repo: Repo,
+  cached: RuntimeWorktreeScanCache | undefined,
+  generation: number
+) {
+  return cached?.result.ok &&
+    cached.generation === generation &&
+    cached.runtimeKey === resolveWorktreeScanRuntime(store, repo).runtimeKey &&
+    cached.expiresAt > Date.now() &&
+    cached.scannedAt + WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS > Date.now()
+    ? cached.result.worktrees
+    : undefined
 }
