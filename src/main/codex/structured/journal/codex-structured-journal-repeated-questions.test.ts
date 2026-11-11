@@ -93,7 +93,7 @@ it.each([
       saved.map((item) => (item.body.kind === 'question' ? item.body.question : null))
     ).toEqual(questions)
     expect(saved.map((item) => item.revision)).toEqual(ids[0] === ids[1] ? [2] : [1, 1])
-    expect(await published.at(-1)).toEqual(await readTestJournalSnapshot(journal))
+    expect((await Promise.all(published)).at(-1)).toEqual(await readTestJournalSnapshot(journal))
     translator.dispose()
     deferred.close()
   }

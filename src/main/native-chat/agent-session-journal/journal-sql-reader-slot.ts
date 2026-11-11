@@ -8,6 +8,7 @@ import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 
 import { restoreJournalSqlFailure } from './journal-sql-failure'
+import { AgentSessionJournalError } from './writing/journal-write-guards'
 
 import type {
   JournalSqlReaderOperation,
@@ -131,7 +132,9 @@ export class ReaderSlot {
     })
     this.worker.on('error', (error) => this.fail(error))
     this.worker.once('exit', (code) => {
-      this.fail(new Error(`journal SQL reader exited (${code})`))
+      if (!this.closing) {
+        this.fail(new Error(`journal SQL reader exited (${code})`))
+      }
       this.exited.resolve()
     })
     // Startup can fail before a caller awaits readiness.
@@ -180,6 +183,14 @@ export class ReaderSlot {
     result: Promise<JournalSqlReaderResult>
   } {
     const id = ++this.nextId
+    if (this.closing) {
+      return {
+        id,
+        result: Promise.reject(
+          new AgentSessionJournalError('journal_closed', 'journal SQL reader is closed')
+        )
+      }
+    }
     if (this.failed) {
       return { id, result: Promise.reject(this.failure ?? new Error('journal SQL reader failed')) }
     }
@@ -188,7 +199,9 @@ export class ReaderSlot {
       this.pending.set(id, { resolve, reject })
       void this.ready.promise
         .then(() => {
-          this.worker.postMessage({ id, operation } satisfies JournalSqlReaderRequest)
+          if (this.pending.has(id)) {
+            this.worker.postMessage({ id, operation } satisfies JournalSqlReaderRequest)
+          }
         })
         .catch((error: unknown) => {
           this.pending.delete(id)
@@ -202,13 +215,27 @@ export class ReaderSlot {
   }
 
   close(): Promise<void> {
-    return (this.closing ??= this.worker.terminate().then(() => this.exited.promise))
+    return (this.closing ??= Promise.resolve()
+      .then(() => {
+        const error = new AgentSessionJournalError('journal_closed', 'journal SQL reader is closed')
+        this.ready.reject(error)
+        this.rejectPending(error)
+        return this.worker.terminate()
+      })
+      .then(() => this.exited.promise))
   }
 
   private fail(error: Error): void {
+    if (this.closing) {
+      return
+    }
     this.failed = true
     this.failure ??= error
     this.ready.reject(error)
+    this.rejectPending(error)
+  }
+
+  private rejectPending(error: Error): void {
     for (const pending of this.pending.values()) {
       pending.reject(error)
     }

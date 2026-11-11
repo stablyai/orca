@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -12,6 +12,7 @@ import {
 import { message } from './journal-sql-message.test-fixture'
 import type { JournalSqlMessage } from './journal-sql-message-commit'
 import { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import { ReaderSlot } from './journal-sql-reader-slot'
 
 const roots: string[] = []
 const owners: JournalSqlOwner[] = []
@@ -93,6 +94,47 @@ it('uses the common writer transport and returns committed domain bodies in orde
       .all()
   ).toEqual([])
   probe.close()
+})
+
+it.each([false, true])('cancels reader requests on requested close (ready: %s)', async (ready) => {
+  const { filename } = await fixture()
+  const slot = new ReaderSlot(filename, filename, journalSqlReaderPath())
+  const operation = { kind: 'import-state', sessionId: 'session' } as const
+  try {
+    if (ready) {
+      await slot.request(operation)
+    }
+    const cancelled = expect(slot.request(operation)).rejects.toMatchObject({
+      name: 'AgentSessionJournalError',
+      code: 'journal_closed'
+    })
+    await Promise.all([slot.close(), cancelled])
+    await expect(slot.request(operation)).rejects.toMatchObject({
+      name: 'AgentSessionJournalError',
+      code: 'journal_closed'
+    })
+  } finally {
+    await slot.close()
+  }
+})
+
+it('rejects outstanding and later reader requests when the worker exits unexpectedly', async () => {
+  const { root, filename } = await fixture()
+  const workerPath = join(root, 'unexpected-reader-exit.cjs')
+  await writeFile(
+    workerPath,
+    `const { parentPort } = require('node:worker_threads')
+parentPort.on('message', () => process.exit(7))
+parentPort.postMessage({ type: 'ready' })`
+  )
+  const slot = new ReaderSlot(filename, filename, workerPath)
+  const operation = { kind: 'import-state', sessionId: 'session' } as const
+  try {
+    await expect(slot.request(operation)).rejects.toThrow('journal SQL reader exited (7)')
+    await expect(slot.request(operation)).rejects.toThrow('journal SQL reader exited (7)')
+  } finally {
+    await slot.close()
+  }
 })
 
 it('correlates interleaved replies and resumes current bodies after writer closure and replay pruning', async () => {
