@@ -31,6 +31,9 @@ export type CloudSetupPageProps = {
   onExit: () => void
   /** "All set": shown for a moment before the workspace starts. */
   starting: boolean
+  /** Setup finished while the page was hidden: "All set" waits for an explicit Start (RR-b). */
+  heldForStart?: boolean
+  onStart?: () => void
 }
 
 type StepState = 'done' | 'current' | 'todo'
@@ -154,7 +157,14 @@ function BrowserWaiting({ flow }: { flow: CloudSetupFlow }): React.JSX.Element {
   )
 }
 
-function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | null {
+function StepActions({
+  flow,
+  onStart
+}: {
+  flow: CloudSetupFlow
+  /** Present while "All set" waits for Start (the page was hidden when setup finished). */
+  onStart?: (() => void) | null
+}): React.JSX.Element | null {
   const t = useTranslate()
   const browser = (label: string, onClick: () => void): React.JSX.Element => (
     <Button type="button" onClick={onClick} disabled={flow.busy}>
@@ -229,6 +239,14 @@ function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | nu
     case 'checking':
       return <Skeleton className="h-9 w-40" />
     case 'done':
+      if (onStart) {
+        return (
+          // The one action left on a page the user came back to: focused, so Enter starts.
+          <Button type="button" autoFocus onClick={onStart}>
+            {t('cloudSetupPage.start', 'Start')}
+          </Button>
+        )
+      }
       return (
         <span className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden />
@@ -260,7 +278,9 @@ export function CloudSetupPage({
   agent = null,
   onBackToComposer,
   onExit,
-  starting
+  starting,
+  heldForStart = false,
+  onStart
 }: CloudSetupPageProps): React.JSX.Element {
   const t = useTranslate()
   const titleId = React.useId()
@@ -268,7 +288,8 @@ export function CloudSetupPage({
   // A finished step opened from the stepper or Back; null shows the current step.
   const [viewing, setViewing] = React.useState<CloudSetupStepId | null>(null)
   // Every row reads done but hasn't held yet: still "Checking" until the layer says it's starting.
-  const shown: CloudSetupFlow = starting
+  const allSet = starting || heldForStart
+  const shown: CloudSetupFlow = allSet
     ? { ...flow, action: 'done' }
     : flow.action === 'done'
       ? { ...flow, action: 'checking' }
@@ -361,7 +382,7 @@ export function CloudSetupPage({
           steps={flow.steps}
           current={flow.current}
           viewing={viewing}
-          allDone={starting}
+          allDone={allSet}
           onView={setViewing}
         />
 
@@ -394,7 +415,7 @@ export function CloudSetupPage({
               {t('cloudSetupPage.continue', 'Continue')}
             </Button>
           ) : (
-            <StepActions flow={shown} />
+            <StepActions flow={shown} onStart={heldForStart ? onStart : null} />
           )}
         </div>
       </div>
