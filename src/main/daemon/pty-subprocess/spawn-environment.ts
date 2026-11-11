@@ -6,6 +6,7 @@ import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-ses
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
+import { ORCA_PTY_SESSION_ENV } from '../../runtime/terminal/stop/pty-marked-stragglers'
 import {
   applyCloudSessionEnv,
   cachedCloudSessionEnv
@@ -224,6 +225,9 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   // Mirror pane identity only after stripping, so aliases cannot retain removed ownership.
   applyScrubSafeAgentEnvAliases(env)
   env.LANG ??= 'en_US.UTF-8'
+  // Every process of this PTY, including ones that later leave its session, can be found and reaped by
+  // id after a stop (runtime/terminal/stop/pty-marked-stragglers.ts). Set last so nothing overrides it.
+  env[ORCA_PTY_SESSION_ENV] = opts.sessionId
   return env
 }
 
