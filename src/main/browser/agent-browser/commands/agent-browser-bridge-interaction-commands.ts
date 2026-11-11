@@ -115,7 +115,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           await chooser.release()
         }
       },
-      { elements: [element], ownsFileChooser: true }
+      { elements: [element], skipFileChooserBlock: true }
     )
   }
 

@@ -88,7 +88,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     browserPageId?: string,
     options: { reportEffects?: boolean } = {}
   ): Promise<BrowserGotoResult> {
-    return this.enqueuePageAction(
+    return this.enqueueNavigation(
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {

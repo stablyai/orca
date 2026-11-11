@@ -214,20 +214,20 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
   }
 
   async back(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
-    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueueNavigation(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['back'])) as BrowserBackResult
     })
   }
 
   async forward(worktreeId?: string, browserPageId?: string): Promise<BrowserBackResult> {
-    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueueNavigation(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
     })
   }
 
   async reload(worktreeId?: string, browserPageId?: string): Promise<BrowserReloadResult> {
     // Reload directly because a process swap can destroy the helper session mid-command.
-    return this.enqueuePageAction(worktreeId, browserPageId, async (_sessionName, target) => {
+    return this.enqueueNavigation(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')

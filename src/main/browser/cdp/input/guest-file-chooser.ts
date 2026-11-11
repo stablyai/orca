@@ -3,10 +3,13 @@ import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { BrowserError } from '../../browser-error'
 import { acquireElectronDebugger } from '../debugger/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
+import { withTimeout as rejectAfterTimeout } from '../commands/cdp-screenshot'
 import { runOutsideRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 // A click's user activation lasts 5s in Chromium, so its picker cannot open any later.
 const FILE_CHOOSER_OPEN_TIMEOUT_MS = 5_000
+// Page.enable waits on the renderer; a hung page must not wedge its command queue.
+const PAGE_ENABLE_TIMEOUT_MS = 2_000
 
 export type OpenedFileChooser = { backendNodeId: number | null; sessionId: string | undefined }
 
@@ -43,9 +46,14 @@ export async function interceptFileChooser(
       resolveOpened({ backendNodeId: params?.backendNodeId ?? null, sessionId })
     }
   }
-  wc.debugger.on('message', onMessage)
+  // The getter throws once the guest is destroyed, e.g. after a click that closes its popup.
+  const dbg = wc.debugger
+  dbg.on('message', onMessage)
   const release = async (): Promise<void> => {
-    wc.debugger.removeListener('message', onMessage)
+    dbg.removeListener('message', onMessage)
+    if (wc.isDestroyed()) {
+      return
+    }
     // Desktop-owned cleanup: a revoked host scope must not leave the user's pickers intercepted.
     await runOutsideRemoteCliBrowserScope(() =>
       Promise.all(
@@ -64,7 +72,11 @@ export async function interceptFileChooser(
     await Promise.all(
       sessionIds.map(async (sessionId) => {
         // Chromium reports choosers only with Page on; a page with no agent session may not have it.
-        await sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId)
+        await rejectAfterTimeout(
+          sendGuestCdpCommand(wc, 'Page.enable', {}, sessionId),
+          PAGE_ENABLE_TIMEOUT_MS,
+          'The page is not responding, so Orca did not send the input.'
+        )
         await sendGuestCdpCommand(
           wc,
           'Page.setInterceptFileChooserDialog',

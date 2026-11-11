@@ -76,6 +76,19 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     })
   }
 
+  /** Navigation delivers no user activation, so it opens no file picker to block. */
+  protected enqueueNavigation<T>(
+    worktreeId: string | undefined,
+    browserPageId: string | undefined,
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: EnqueueTargetedCommandOptions = {}
+  ): Promise<T> {
+    return this.enqueuePageAction(worktreeId, browserPageId, execute, {
+      ...options,
+      skipFileChooserBlock: true
+    })
+  }
+
   protected async enqueueTargetedCommand<T>(
     worktreeId: string | undefined,
     browserPageId: string | undefined,
@@ -105,7 +118,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
     const reportEffects = options.reportEffects === true && agentCommand.agent
     // Page actions deliver agent or remote input; a desktop picker would activate Orca over the user's work.
-    const blockFileChooser = options.reportEffects === true && options.ownsFileChooser !== true
+    const blockFileChooser = options.reportEffects === true && options.skipFileChooserBlock !== true
     const expectedUrl = getRequestedPageUrl()
 
     // A dialog blocks the page until it is answered. A command still waiting never runs; one
@@ -150,25 +163,30 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
                 }
                 running = true
                 // The effects baseline can take seconds, so the check sits inside it, next to the action.
+                const wc = blockFileChooser ? this.getWebContents(target.webContentsId) : null
+                // Only the input itself, so the user's own pickers work during the effects wait.
+                const deliver = (): Promise<T> =>
+                  wc
+                    ? withFileChooserBlocked(wc, () => execute(session, target), {
+                        agent: agentCommand.agent
+                      })
+                    : execute(session, target)
                 const guarded = (): Promise<T> =>
                   expectedUrl === undefined
-                    ? execute(session, target)
+                    ? deliver()
                     : runExpectingPageUrl(
                         expectedUrl,
                         target.browserPageId,
                         () => this.livePageUrls(target),
-                        () => execute(session, target)
+                        deliver
                       )
-                const report = (): Promise<T> =>
+                const act = (): Promise<T> =>
                   reportEffects
                     ? runWithActionEffects(
                         this.actionEffectsHost(worktreeId, pageId, session),
                         guarded
                       )
                     : guarded()
-                const wc = blockFileChooser ? this.getWebContents(target.webContentsId) : null
-                const act = (): Promise<T> =>
-                  wc ? withFileChooserBlocked(wc, report, { agent: agentCommand.agent }) : report()
                 return origin.bridged
                   ? this.runHostCommand(session, target.webContentsId, gate, origin, act)
                   : act()
