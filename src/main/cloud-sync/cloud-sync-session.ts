@@ -41,11 +41,12 @@ export type { WatchSubscribe, WatchSubscription }
 /**
  * Safety net for anything the watch missed. The VM's watcher can miss a directory created along
  * with its parent (`mkdir -p .context/shots`), so small folders are re-checked often (a few
- * calls each) and large mirrors less often: 30 ms per file, between 30 s and 10 min.
+ * calls each) and large mirrors less often: 30 ms per file, between 30 s and 10 min, and never
+ * more than 5% of the time (a slow pass, e.g. on an image without files.statMany, waits longer).
  */
 const SAFETY_TICK_MS = 30_000
-export function safetyIntervalMs(files: number): number {
-  return Math.min(10 * 60_000, Math.max(SAFETY_TICK_MS, files * 30))
+export function safetyIntervalMs(files: number, lastPassMs = 0): number {
+  return Math.min(10 * 60_000, Math.max(SAFETY_TICK_MS, files * 30, lastPassMs * 20))
 }
 const WATCH_RETRY_MIN_MS = 5_000
 const WATCH_RETRY_MAX_MS = 5 * 60_000
@@ -77,6 +78,7 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
   let watchRetryTimer: ReturnType<typeof setTimeout> | null = null
   let safetyTimer: ReturnType<typeof setInterval> | null = null
   let lastFullPassAt = 0
+  let lastFullPassMs = 0
   const abort = new AbortController()
   let state: CloudSyncState = emptySyncState(deps.workspaceId, deps.folder, choice, 'starting')
   const changes = createChangeBatcher({
@@ -154,6 +156,8 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
     const listed = await listScope(deps.call, selector, scope(), limits.maxFiles, abort.signal)
     const remote = await statFiles(deps.call, selector, listed.paths, abort.signal)
     const paths = new Set([...remote.keys(), ...Object.keys(current.entries)])
+    // Manifest cost only (listing + stat), not the copying a first pass does.
+    lastFullPassMs = now() - lastFullPassAt
     await apply({ remote, paths, scoped: null, truncated: listed.truncated ? 1 : 0 })
   }
 
@@ -292,7 +296,7 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
       await requestFullPass()
       await openWatch()
       safetyTimer = setInterval(() => {
-        if (now() - lastFullPassAt >= safetyIntervalMs(state.files)) {
+        if (now() - lastFullPassAt >= safetyIntervalMs(state.files, lastFullPassMs)) {
           void requestFullPass()
         }
       }, SAFETY_TICK_MS)

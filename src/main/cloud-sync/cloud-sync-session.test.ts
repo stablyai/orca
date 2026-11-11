@@ -224,5 +224,7 @@ describe('safetyIntervalMs', () => {
     expect(safetyIntervalMs(21)).toBe(30_000)
     expect(safetyIntervalMs(2_000)).toBe(60_000)
     expect(safetyIntervalMs(100_000)).toBe(600_000)
+    // A 20 s manifest (no files.statMany on the image) waits 400 s: at most 5% of the time.
+    expect(safetyIntervalMs(2_000, 20_000)).toBe(400_000)
   })
 })
