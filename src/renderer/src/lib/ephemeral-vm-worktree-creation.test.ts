@@ -17,7 +17,7 @@ const { state, gate, cleanup, retry } = vi.hoisted(() => {
       ]
     },
     gate: vi.fn(),
-    cleanup: vi.fn(async () => true),
+    cleanup: vi.fn(async (_request: unknown, _actions?: unknown) => true),
     retry: vi.fn()
   }
 })
