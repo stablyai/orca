@@ -23530,7 +23530,8 @@
         "wakingElapsed": "Waking… {{elapsed}}",
         "staleCopy": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
         "keychainUnavailable": "Orca can’t open the saved copy because this computer’s keychain isn’t available. Wake the workspace to see it.",
-        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca."
+        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca.",
+        "justNow": "just now"
       }
     },
     "runtimeDownload": {
@@ -26873,7 +26874,8 @@
       "failed": "Couldn’t start",
       "unknown": "Checking…",
       "starting": "Starting",
-      "wakeFailed": "Couldn’t wake"
+      "wakeFailed": "Couldn’t wake",
+      "goingToSleep": "Going to sleep…"
     },
     "unarchive": "Unarchive",
     "change": {

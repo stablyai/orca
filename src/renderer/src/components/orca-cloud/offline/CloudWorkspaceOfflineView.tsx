@@ -23,6 +23,10 @@ export type CloudOfflineViewProps = {
   onCancel: (id: string) => void
   onEdit: (id: string, text: string) => Promise<boolean>
   headingRef?: React.Ref<HTMLHeadingElement>
+  /** Sleep chosen here and still running: the status line says so. */
+  goingToSleep?: boolean
+  /** Kept on screen right after Sleep: nothing here wakes it but "Wake to continue". */
+  viewOnly?: boolean
 }
 
 /** A terminal tail opens at its newest lines, the way the live pane did. */
@@ -45,9 +49,11 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
     snapshot.chats.length > 0 ? 'chat' : snapshot.terminals.length > 0 ? 'terminals' : 'changes'
   const empty = snapshot.capturedAt === null
   const asOf = snapshot.capturedAt === null ? null : asOfParts(snapshot.capturedAt, now)
-  const stateLine = asOf
-    ? t('components.orcaCloud.read.asOf', 'Asleep · As of {{when}}', { when: asOf.relative })
-    : t('orcaCloudWorkspace.asleep.noCopy', 'Asleep · nothing cached yet')
+  const stateLine = props.goingToSleep
+    ? t('orcaCloudWorkspace.state.goingToSleep', 'Going to sleep…')
+    : asOf
+      ? t('components.orcaCloud.read.asOf', 'Asleep · As of {{when}}', { when: asOf.relative })
+      : t('orcaCloudWorkspace.asleep.noCopy', 'Asleep · nothing cached yet')
   // Sections may come from the copy the workspace saved when it went to sleep (Orca Cloud).
   const fromCloud = snapshot.source === 'cloud' || snapshot.source === 'mixed'
   return (
@@ -115,6 +121,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                 onQueue={props.onQueue}
                 onCancel={props.onCancel}
                 onEdit={props.onEdit}
+                viewOnly={props.viewOnly}
               />
             </TabsContent>
             <TabsContent value="terminals" className="mt-3 flex min-h-0 flex-1 flex-col">

@@ -1,4 +1,5 @@
 // Display helpers for a sleeping workspace's read-only copy (owner asleep view and team read view).
+import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { Translate } from '@/i18n/use-translate'
 import { formatRelative } from '@/lib/orca-cloud/orca-cloud-workspace-state'
@@ -7,9 +8,16 @@ import type { ReadSnapshotAgentStatus } from '../../../../../shared/cloud-worksp
 // Intl formatter caches key on option identity, so this must be a module constant.
 const ABSOLUTE: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }
 
-/** "As of" parts: relative for the label, absolute (glossary dateStyle medium) for hover. */
+/**
+ * "As of" parts: relative for the label, absolute (glossary dateStyle medium) for hover. A copy
+ * from the last minute (the one Sleep just saved) reads "just now", not a ticking second count.
+ */
 export function asOfParts(at: number, now: number): { relative: string; absolute: string } {
-  return { relative: formatRelative(at, now), absolute: uiDateTimeFormat(ABSOLUTE).format(at) }
+  const relative =
+    Math.abs(now - at) < 60_000
+      ? translate('components.orcaCloud.read.justNow', 'just now')
+      : formatRelative(at, now)
+  return { relative, absolute: uiDateTimeFormat(ABSOLUTE).format(at) }
 }
 
 export type ChecksTone = 'success' | 'failure' | 'pending' | 'neutral'

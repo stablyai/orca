@@ -24,6 +24,7 @@ import {
 import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { isWakeActive } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { claimPredictiveWake } from '@/lib/orca-cloud/cloud-predictive-wake'
+import { releaseWorktreeSleepView } from '@/lib/worktree-sleep-view'
 
 /** Coded failures render through the catalog; a thrown IPC error only has its message. */
 async function settleLifecycleCall(
@@ -56,6 +57,8 @@ export async function activateWorktreeFromSidebar(
     })
     return { ok: true }
   }
+  // Opening (or "Wake to continue" on) a workspace kept read-only after its Sleep wakes it.
+  releaseWorktreeSleepView(worktreeId)
   // Keep navigation independent from an optional runtime wake IPC.
   activateAndRevealWorktree(worktreeId, {
     navigationIntent: 'user-open',
