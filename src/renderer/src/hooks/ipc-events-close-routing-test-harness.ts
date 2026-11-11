@@ -263,6 +263,7 @@ export async function useIpcEventsForCloseRouting({
         onClearDismissal: () => () => {}
       },
       browser: {
+        unregisterGuest: vi.fn(async () => {}),
         onGuestLoadFailed: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
         onSessionProfilesChanged: () => () => {},

@@ -1,9 +1,9 @@
 import {
   browserGuestActivity,
   retiredBrowserGuestResources,
-  onBrowserGuestActivity,
-  type BrowserGuestActivity
+  onBrowserGuestActivity
 } from './browser-guest-activity'
+import { BrowserGuestPriorityIndex } from './browser-guest-priority-index'
 
 export const BROWSER_GUEST_HIDDEN_PAGE_RETENTION_LIMIT = 32
 const RECENT_SELECTION_MS = 30 * 60_000
@@ -15,40 +15,59 @@ export function installBrowserGuestPageRetention(args: {
   limit?: number
 }): () => void {
   const hidden = new Set<string>()
-  const candidates = new Map<string, { entry: BrowserGuestActivity; lastUsed: number }>()
-  const recent = new Map<string, { entry: BrowserGuestActivity; expires: number }>()
+  const candidates = new BrowserGuestPriorityIndex()
+  const recent = new BrowserGuestPriorityIndex()
   const limit = args.limit ?? BROWSER_GUEST_HIDDEN_PAGE_RETENTION_LIMIT
   let disposed = false
   let scheduled = false
   let timer: ReturnType<typeof setTimeout> | null = null
   const overBudget = (): boolean => hidden.size + retiredBrowserGuestResources.size > limit
   const schedule = (): void => {
-    if (disposed || scheduled || !overBudget()) {
+    if (disposed || scheduled) {
+      return
+    }
+    if (!overBudget()) {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
       return
     }
     scheduled = true
     queueMicrotask(() => {
       scheduled = false
-      if (disposed || retiredBrowserGuestResources.size >= 4) {
+      if (disposed) {
         return
       }
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
-      const now = Date.now()
-      for (const [pageId, parked] of recent) {
-        if (parked.expires > now) {
-          break
-        }
-        recent.delete(pageId)
-        candidates.set(pageId, { entry: parked.entry, lastUsed: parked.entry.lastUsed })
+      if (retiredBrowserGuestResources.size >= 4) {
+        return
       }
-      for (const [pageId, { entry }] of candidates) {
-        if (!overBudget() || retiredBrowserGuestResources.size >= 4) {
+      const now = Date.now()
+      while (recent.peek()) {
+        const next = recent.peek()
+        if (!next || next.key > now) {
           break
         }
-        candidates.delete(pageId)
+        const { pageId, entry } = next
+        recent.delete(pageId)
+        if (
+          browserGuestActivity.get(pageId) === entry &&
+          !entry.visible &&
+          !args.isBlocked(pageId)
+        ) {
+          candidates.set(pageId, entry, entry.lastUsed)
+        }
+      }
+      while (overBudget() && retiredBrowserGuestResources.size < 4 && candidates.peek()) {
+        const next = candidates.pop()
+        if (!next) {
+          break
+        }
+        const { pageId, entry } = next
         if (browserGuestActivity.get(pageId) !== entry || entry.visible || args.isBlocked(pageId)) {
           continue
         }
@@ -60,14 +79,14 @@ export function installBrowserGuestPageRetention(args: {
           // A detached/unknown owner remains counted and parked until its own lifecycle update.
         }
       }
-      const first = recent.values().next().value
-      if (overBudget() && first) {
+      const first = recent.peek()
+      if (overBudget() && retiredBrowserGuestResources.size < 4 && first) {
         timer = setTimeout(
           () => {
             timer = null
             schedule()
           },
-          Math.max(1, first.expires - Date.now())
+          Math.max(1, first.key - Date.now())
         )
       }
     })
@@ -86,25 +105,16 @@ export function installBrowserGuestPageRetention(args: {
       const expires = entry.lastSelectedAt + RECENT_SELECTION_MS
       if (expires > Date.now()) {
         candidates.delete(pageId)
-        if (recent.get(pageId)?.expires !== expires) {
-          recent.delete(pageId)
-          recent.set(pageId, { entry, expires })
-        }
+        recent.set(pageId, entry, expires)
       } else {
         recent.delete(pageId)
-        if (candidates.get(pageId)?.lastUsed !== entry.lastUsed) {
-          candidates.delete(pageId)
-        }
-        candidates.set(pageId, { entry, lastUsed: entry.lastUsed })
+        candidates.set(pageId, entry, entry.lastUsed)
       }
     }
     schedule()
   }
   const removeListener = onBrowserGuestActivity(update)
-  // Only initial installation needs to order already-existing selection times.
-  for (const [pageId] of [...browserGuestActivity].sort(
-    (a, b) => a[1].lastSelectedAt - b[1].lastSelectedAt
-  )) {
+  for (const [pageId] of browserGuestActivity) {
     update(pageId)
   }
   return () => {

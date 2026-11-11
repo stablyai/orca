@@ -44,6 +44,8 @@ vi.mock('electron', () => ({
   session: { fromPartition: (partition: string) => mocks.sessions.get(partition) },
   ipcMain: {
     removeHandler: vi.fn(),
+    on: vi.fn(),
+    removeAllListeners: vi.fn(),
     handle: (channel: string, handler: (event: { sender: unknown }, args: unknown) => unknown) =>
       mocks.handlers.set(channel, handler)
   }

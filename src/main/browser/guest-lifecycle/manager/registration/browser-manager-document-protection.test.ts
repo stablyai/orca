@@ -99,8 +99,8 @@ it('protects document audio privately and retires the old owner without adding t
     expect(send).toHaveBeenLastCalledWith('browser:guest-discard-protection-changed', {
       browserPageId: 'document',
       webContentsId: 7,
-      protection: 'discardable',
-      reason: 'clean'
+      protection: 'protected',
+      reason: 'history'
     })
     const replacement = attach(8)
     expect(send.mock.calls.some(([channel]) => channel === 'browser:audio-state-changed')).toBe(
@@ -117,8 +117,8 @@ it('protects document audio privately and retires the old owner without adding t
     expect(send).toHaveBeenLastCalledWith('browser:guest-discard-protection-changed', {
       browserPageId: 'document',
       webContentsId: 8,
-      protection: 'discardable',
-      reason: 'clean'
+      protection: 'protected',
+      reason: 'history'
     })
     replacement.destroy()
     expect(getWorkspaceDocPageGuest('document', host.id)).toBeNull()

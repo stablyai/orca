@@ -37,7 +37,7 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
     )
   }
   let requestId = 0
-  const navigate = (url: string, method = 'GET', complete = true): void => {
+  const navigate = (url: string, method = 'GET', committed = true): void => {
     guest.emit('did-start-navigation', {
       url,
       frame: mainFrame,
@@ -54,9 +54,8 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
       timestamp: 0
     }
     reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', details)
-    guest.emit('did-navigate', {}, url)
-    if (complete) {
-      reportBrowserSessionWebRequest(guest.session, 'onCompleted', details)
+    if (committed) {
+      guest.emit('did-navigate', {}, url, 200, 'OK')
     }
     guest.emit('dom-ready')
     report(false)
@@ -128,7 +127,7 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
     length = 1
     navigate('https://example.test/new-sole-get')
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
-    navigate('https://example.test/uncompleted', 'GET', false)
+    navigate('https://example.test/uncommitted', 'GET', false)
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
     navigate('https://example.test/overlap')
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')

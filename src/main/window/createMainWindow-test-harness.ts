@@ -27,9 +27,15 @@ export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSp
 export const powerMonitorOnMock: MainWindowSpy = vi.fn()
 export const powerMonitorRemoveListenerMock: MainWindowSpy = vi.fn()
 export const routePartitionAllowedMock: Mock<(partition: string) => boolean> = vi.fn(() => false)
-export const appMock: { isPackaged: boolean; on: MainWindowSpy; removeListener: MainWindowSpy } = {
+export const appMock: {
+  isPackaged: boolean
+  on: MainWindowSpy
+  off: MainWindowSpy
+  removeListener: MainWindowSpy
+} = {
   isPackaged: true,
   on: vi.fn(),
+  off: vi.fn(),
   removeListener: vi.fn()
 }
 export const macosTahoeMock = { value: false }

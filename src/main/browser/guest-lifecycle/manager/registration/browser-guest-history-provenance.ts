@@ -16,7 +16,6 @@ export type BrowserGuestHistoryProtection = {
     requestId: number | null
     method: string | null
     committed: boolean
-    completed: boolean
     ambiguous: boolean
   } | null
 }
@@ -38,7 +37,7 @@ export function installBrowserGuestHistoryProvenance(
         owner.historyEdits = true
       }
       const previous = owner.episode
-      const ambiguous = Boolean(previous && (!previous.completed || !previous.committed))
+      const ambiguous = Boolean(previous && !previous.committed)
       if (ambiguous) {
         owner.historyMethodUnknown = true
       }
@@ -48,7 +47,6 @@ export function installBrowserGuestHistoryProvenance(
         requestId: null,
         method: null,
         committed: false,
-        completed: false,
         ambiguous
       }
       owner.knownGet = false
@@ -58,19 +56,7 @@ export function installBrowserGuestHistoryProvenance(
       publish()
     }
   }
-  const certify = (): void => {
-    const episode = owner.episode
-    if (!episode?.committed || !episode.completed) {
-      return
-    }
-    owner.knownGet = !episode.ambiguous && episode.method === 'GET'
-    if (!owner.knownGet) {
-      owner.historyMethodUnknown = true
-    }
-    rederiveSoleHistory()
-    publish()
-  }
-  const committed = (_event: Electron.Event, url: string): void => {
+  const committed = (_event: Electron.Event, url: string, status: number): void => {
     owner.documentSeen = true
     owner.currentEdited = false
     owner.coverageUnknown = false
@@ -84,10 +70,36 @@ export function installBrowserGuestHistoryProvenance(
     if (episode.url !== navigationUrl(url) || episode.requestId === null) {
       episode.ambiguous = true
     }
-    certify()
+    owner.knownGet =
+      !episode.ambiguous &&
+      episode.method === 'GET' &&
+      /^https?:/.test(url) &&
+      Number.isInteger(status) &&
+      status >= 200 &&
+      status < 400
+    if (!owner.knownGet) {
+      owner.historyMethodUnknown = true
+    }
+    rederiveSoleHistory()
+    publish()
+  }
+  const redirected = (
+    details: Electron.Event<Electron.WebContentsDidRedirectNavigationEventParams>
+  ): void => {
+    if (details.isMainFrame) {
+      if (owner.episode) {
+        owner.episode.ambiguous = true
+      }
+      owner.historyMethodUnknown = true
+      publish()
+    }
   }
   const stopRequests = observeBrowserGuestRequests(guest.id, (session, event, details) => {
-    if (details.resourceType !== 'mainFrame' || session !== guest.session) {
+    if (
+      event !== 'onBeforeRequest' ||
+      details.resourceType !== 'mainFrame' ||
+      session !== guest.session
+    ) {
       return
     }
     const episode = owner.episode
@@ -96,38 +108,25 @@ export function installBrowserGuestHistoryProvenance(
       publish()
       return
     }
-    if (event === 'onBeforeRequest') {
-      if (
-        episode.requestId !== null ||
-        !details.frame ||
-        details.frame !== episode.frame ||
-        episode.url !== navigationUrl(details.url)
-      ) {
-        episode.ambiguous = true
-      }
-      episode.requestId = details.id
-      episode.method = details.method
-    } else if (event === 'onBeforeRedirect' || event === 'onErrorOccurred') {
+    if (
+      episode.requestId !== null ||
+      !details.frame ||
+      details.frame !== episode.frame ||
+      episode.url !== navigationUrl(details.url)
+    ) {
       episode.ambiguous = true
-      owner.historyMethodUnknown = true
-    } else if (event === 'onCompleted') {
-      if (
-        episode.requestId !== details.id ||
-        episode.url !== navigationUrl(details.url) ||
-        (details.statusCode !== undefined && details.statusCode >= 400)
-      ) {
-        episode.ambiguous = true
-      }
-      episode.completed = true
-      certify()
     }
+    episode.requestId = details.id
+    episode.method = details.method
   })
   guest.on('did-navigate', committed)
   guest.on('did-start-navigation', navigation)
+  guest.on('did-redirect-navigation', redirected)
   return () => {
     stopRequests()
     guest.off('did-navigate', committed)
     guest.off('did-start-navigation', navigation)
+    guest.off('did-redirect-navigation', redirected)
   }
 }
 

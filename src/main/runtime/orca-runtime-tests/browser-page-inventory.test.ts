@@ -13,6 +13,7 @@ import {
   HEADLESS_LEAF_ID
 } from './orca-runtime-test-fixtures.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import { buildMobileSessionTabSnapshots } from '../../../renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from '../../../renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness'
@@ -89,13 +90,20 @@ function fixture(runtime = createRuntime()) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this bridge implements the list, registration and switch methods reached by the runtime.
   runtime.setAgentBrowserBridge(bridge as never)
-  electronMocks.webContents.fromId.mockReturnValue({ isDestroyed: () => false })
+  electronMocks.webContents.fromId.mockReturnValue({
+    isDestroyed: () => false,
+    isLoading: () => false
+  })
+  vi.spyOn(browserManager, 'getGuestWebContentsId').mockImplementation((id) => live.get(id) ?? null)
   const sync = (snapshots = publication(), extra: Partial<RuntimeSyncWindowGraph> = {}) =>
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots, ...extra })
   const list = () => runtime.browserTabList({ worktree: `id:${TEST_WORKTREE_ID}` })
   return { runtime, live, titles, bridge, sync, list }
 }
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('accepted saved browser page inventory', () => {
   it('lists reclaimed siblings and lazily switches only the requested saved identity', async () => {
@@ -144,9 +152,9 @@ describe('accepted saved browser page inventory', () => {
       browserPageId: 'A',
       switched: 1
     })
-    expect(activated).toEqual([{ worktreeId: TEST_WORKTREE_ID, browserPageId: 'A' }])
+    expect(activated).toEqual([{ browserPageId: 'A' }])
     expect([...live.keys()]).toEqual(['C', 'A'])
-    expect(bridge.tabSwitch).toHaveBeenCalledWith(undefined, TEST_WORKTREE_ID, 'A')
+    expect(bridge.tabSwitch).toHaveBeenCalledWith(undefined, undefined, 'A')
     await expect(runtime.browserTabSwitch({ page: 'arbitrary' })).rejects.toThrow('out of range')
   })
 

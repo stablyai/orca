@@ -52,7 +52,7 @@ describe('BrowserPane webview preferences', () => {
       }
       return refreshedContainer
     })
-    registryMocks.destroyPersistentWebview.mockImplementation(() => {
+    registryMocks.replacePersistentWebview.mockImplementation(() => {
       staleWebview.remove()
       staleContainer.remove()
       registryMocks.webviewRegistry.delete('browser-page-1')
@@ -66,7 +66,7 @@ describe('BrowserPane webview preferences', () => {
       resolveContainer
     })
 
-    expect(registryMocks.destroyPersistentWebview).toHaveBeenCalledWith('browser-page-1')
+    expect(registryMocks.replacePersistentWebview).toHaveBeenCalledWith('browser-page-1')
     expect(resolveContainer).toHaveBeenCalledTimes(1)
     expect(ensuredWebview).not.toBeNull()
     expect(ensuredWebview?.created).toBe(true)

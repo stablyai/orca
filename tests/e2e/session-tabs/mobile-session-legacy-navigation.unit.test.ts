@@ -10,6 +10,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../src/shared/runtime-session-contracts'
+import { electronMocks } from '../../../src/main/runtime/orca-runtime-test-mocks/setup.spec'
 import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
 
 const A = 'agent-session:chat-a'
@@ -145,6 +146,10 @@ describe('legacy host navigation through inventory reconstruction', () => {
       })!
     }
     setSession(saved)
+    electronMocks.webContents.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      isLoading: () => false
+    })
     runtime.setOffscreenBrowserBackend({
       createTab: vi.fn(async () => ({ browserPageId: 'unused' })),
       closeTab: vi.fn(async () => {}),

@@ -80,7 +80,7 @@ it.each(['edited', 'POST', 'unknown'])(
           { generation: mainFrame.send.mock.lastCall?.[1], dirty }
         )
       }
-      const navigate = (url: string, method = 'GET', completed = true): void => {
+      const navigate = (url: string, method = 'GET', committed = true): void => {
         guest.emit('did-start-navigation', {
           url,
           frame: mainFrame,
@@ -97,9 +97,8 @@ it.each(['edited', 'POST', 'unknown'])(
           timestamp: 0
         }
         reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', details)
-        guest.emit('did-navigate', {}, url)
-        if (completed) {
-          reportBrowserSessionWebRequest(guest.session, 'onCompleted', details)
+        if (committed) {
+          guest.emit('did-navigate', {}, url, 200, 'OK')
         }
         guest.emit('dom-ready')
         report(false)
