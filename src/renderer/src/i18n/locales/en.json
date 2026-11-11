@@ -23706,7 +23706,10 @@
       }
     },
     "cloudWorkspaces": {
-      "newCloudWorkspace": "New cloud workspace"
+      "newCloudWorkspace": "New cloud workspace",
+      "emptyStartBody": "It runs in a sandbox, so your agents keep working even when this computer is off.",
+      "emptyMineYoursTitle": "You don’t have any cloud workspaces yet.",
+      "emptyFirstTitle": "Start your first cloud workspace"
     },
     "worktreeCreation": {
       "pendingNativeChat": {
