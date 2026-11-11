@@ -1,4 +1,8 @@
-import { consumeReopenAfterSleep } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
+import {
+  noteSleptRemotePageAnswered,
+  sleptRemotePageMissingAction,
+  useReopenSleptRemotePage
+} from './use-slept-remote-page'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -60,6 +64,8 @@ export function useRemoteBrowserPageLifecycle({
   const mountedRef = useRef(true)
   const isActiveRef = useRef(isActive)
   const currentBrowserTabIdRef = useRef(browserTab.id)
+  const currentWorktreeIdRef = useRef(browserTab.worktreeId)
+  const currentWorkspaceIdRef = useRef(browserTab.workspaceId)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
   const runtimeWorktreeRef = useRef(runtimeWorktree)
@@ -72,11 +78,21 @@ export function useRemoteBrowserPageLifecycle({
 
   useLayoutEffect(() => {
     currentBrowserTabIdRef.current = browserTab.id
+    currentWorktreeIdRef.current = browserTab.worktreeId
+    currentWorkspaceIdRef.current = browserTab.workspaceId
     currentBrowserTabUrlRef.current = browserTab.url
     activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
     isActiveRef.current = isActive
     runtimeWorktreeRef.current = runtimeWorktree
-  }, [activeRuntimeEnvironmentId, browserTab.id, browserTab.url, isActive, runtimeWorktree])
+  }, [
+    activeRuntimeEnvironmentId,
+    browserTab.id,
+    browserTab.url,
+    browserTab.workspaceId,
+    browserTab.worktreeId,
+    isActive,
+    runtimeWorktree
+  ])
 
   if (!lifecycleRef.current) {
     lifecycleRef.current = new RemoteBrowserStreamLifecycle({
@@ -107,7 +123,14 @@ export function useRemoteBrowserPageLifecycle({
         // Every transition invalidates the pane notice; stale direct feedback would outrank the stream’s failure beside Reconnect.
         setPaneNotice(null)
       },
-      applyTabInfo: (tab) => streamBridgeRef.current.applyTabInfo(tab),
+      applyTabInfo: (tab) => {
+        noteSleptRemotePageAnswered({
+          id: currentBrowserTabIdRef.current,
+          workspaceId: currentWorkspaceIdRef.current,
+          worktreeId: currentWorktreeIdRef.current
+        })
+        streamBridgeRef.current.applyTabInfo(tab)
+      },
       clearFrame: () => streamBridgeRef.current.clearFrame(),
       handleFrameBytes: (token, bytes) => streamBridgeRef.current.handleFrameBytes(token, bytes),
       closeMissingRemotePage: (remotePageId) =>
@@ -118,6 +141,13 @@ export function useRemoteBrowserPageLifecycle({
     })
   }
   const lifecycle = lifecycleRef.current
+
+  const isMounted = useCallback(() => mountedRef.current, [])
+  useReopenSleptRemotePage(
+    { id: browserTab.id, worktreeId: browserTab.worktreeId },
+    lifecycle,
+    isMounted
+  )
 
   const runtimeTarget = useCallback(() => {
     return activeRuntimeEnvironmentId
@@ -148,15 +178,16 @@ export function useRemoteBrowserPageLifecycle({
         state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
       }
       lifecycle.abandonRemotePage()
-      // Slept with its VM (NEW-01): the tab stays. While asleep it waits; once the workspace is
-      // open again it opens a new host page at its URL.
-      if (state.asleepBrowserWorktreeIds[browserTab.worktreeId]) {
+      // Slept with its VM (NEW-01, LC2-P1): wait, or reopen at its URL, instead of closing.
+      const action = sleptRemotePageMissingAction({
+        id: browserTab.id,
+        worktreeId: browserTab.worktreeId
+      })
+      if (action !== 'close') {
         clearStreamFrame()
-        return
-      }
-      if (consumeReopenAfterSleep(browserTab.id)) {
-        clearStreamFrame()
-        lifecycle.open()
+        if (action === 'reopen') {
+          lifecycle.open()
+        }
         return
       }
       if (remoteViewportTimerRef.current !== null) {
