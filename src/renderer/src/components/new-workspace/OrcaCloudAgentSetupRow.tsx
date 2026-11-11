@@ -2,8 +2,8 @@
 // Later" hint: it says how the composer's agent will sign in, links to the one-time setup in
 // Settings → Agent accounts, and never blocks Start or signs in per sandbox.
 import { useEffect } from 'react'
+import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import { CircleCheck, CircleDashed, Info, TriangleAlert } from 'lucide-react'
-import { useAppStore } from '@/store/index'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,12 +19,9 @@ import { noteComposerAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-ag
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 import { agentName, keySourceLabel } from '../settings/agent-accounts/orca-cloud-accounts-copy'
 
-/** Settings → Agent accounts, scrolled to the Orca Cloud section (S0). The composer stays open. */
+/** The focused Orca Cloud sign-in sheet (JA-04), over the composer, which stays open. */
 export function openOrcaCloudAgentAccounts(): void {
-  const state = useAppStore.getState()
-  state.openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
-  // The target alone only pre-selects the pane; the page has to open too (Neil, P0: "does nothing").
-  state.openSettingsPage()
+  openOrcaCloudSignInSheet()
 }
 
 export function orcaCloudAgentCoveredLabel(

@@ -2290,7 +2290,9 @@
         "preparingCloudEnvironment": "Preparing environment…",
         "startingSandbox": "Starting sandbox…",
         "cloningRepository": "Cloning the repository…",
-        "updatingRepository": "Updating the repository…"
+        "updatingRepository": "Updating the repository…",
+        "cloudBlockedAsleep": "Asleep",
+        "cloudCouldNotOpen": "Couldn’t open"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -14599,7 +14601,6 @@
           "sectionDescription": "For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets."
         },
         "cloudRoutines": {
-          "queued": "Run queued. It shows up in the history below.",
           "pausedSr": "(paused)",
           "createdByPerson": "by <person></person>",
           "lastRun": "Last run:",
@@ -14608,7 +14609,6 @@
           "runningShowHistory": "{{routineName}} is running. Show run history",
           "runNowLabel": "Run {{routineName}} now",
           "alreadyRunning": "A run is already in progress.",
-          "runningNow": "Running…",
           "runNow": "Run now",
           "more": "More actions for {{routineName}}",
           "hideHistory": "Hide run history",
@@ -27920,7 +27920,6 @@
     "signIn": "Sign in",
     "loadFailed": "Couldn’t load your agent accounts.",
     "title": "Orca Cloud",
-    "help": "Set up once on this computer. Every cloud workspace uses it, including new, cloned and restarted ones.",
     "policy": "Your Claude and ChatGPT accounts are used only in your own workspaces. Teammates never use them.",
     "codeCopied": "Code copied",
     "agent": {
@@ -27949,7 +27948,8 @@
     "unavailableDetail": "Signing in once with your {{product}} account isn’t available in Orca Cloud yet. Each new cloud workspace asks you to sign in.",
     "allUnavailable": "Claude and Codex sign in for each cloud workspace for now.",
     "pasteTokenInstead": "Paste a token instead",
-    "rowMenu": "{{agent}} account options"
+    "rowMenu": "{{agent}} account options",
+    "helpAccountWide": "Set up once. Every cloud workspace uses it, including new, cloned and restarted ones."
   },
   "vmBuildAgents": {
     "menu": {
@@ -28162,6 +28162,12 @@
     "header": "Setting up Orca Cloud",
     "headerFor": "Setting up Orca Cloud for {{name}}",
     "resumeDraft": "Open draft"
+  },
+  "orcaCloudSignInSheet": {
+    "title": "Agents in Orca Cloud",
+    "description": "Set up Claude and Codex once. Every cloud workspace uses them, including new, cloned and restarted ones.",
+    "footerLabel": "Related settings",
+    "allAccounts": "All agent accounts"
   },
   "orcaCloudSync": {
     "menuItem": "Mirror to this computer…",
