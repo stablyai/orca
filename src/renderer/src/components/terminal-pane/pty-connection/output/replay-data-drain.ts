@@ -119,7 +119,12 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       let preSleep: WakeScrollbackRestore | null = null
       if (clearBeforeReplay) {
         // WAKE-SCROLLBACK: a woken cloud pane's pre-sleep output, put back once this snapshot painted.
-        preSleep = beginWakeScrollbackRestore(session.pane.leafId, session.pane.terminal)
+        preSleep = beginWakeScrollbackRestore(
+          session.pane.leafId,
+          session.pane.terminal,
+          Date.now(),
+          payload.ptyId
+        )
         if (carriesNormalBuffer) {
           // Wait for queued alt-screen transitions before choosing replay’s target buffer.
           await waitForTerminalOutputParsed(session.pane.terminal)

@@ -50,6 +50,7 @@ export function captureCloudPaneBeforeWake(args: {
     sleptAt: args.asleepSince,
     agentPane,
     maxRows: normalizeDesktopTerminalScrollbackRows(state.settings?.terminalScrollbackRows),
-    readOnlyCopy: () => readOnlyCopyLines(worktreeId, ptyId)
+    readOnlyCopy: () => readOnlyCopyLines(worktreeId, ptyId),
+    ptyId
   })
 }

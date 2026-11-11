@@ -20,6 +20,8 @@ type PendingHistory = {
    * replay (a cold restore while still asleep) must not take it.
    */
   armed: boolean
+  /** The pre-sleep terminal: a snapshot for a different one belongs to the woken terminal. */
+  ptyId: string | null
 }
 
 // Keyed by the pane's durable leaf id; cleared once restored, or when the pane goes away.
@@ -60,6 +62,8 @@ export function captureWakeScrollback(
     agentPane: boolean
     maxRows: number
     readOnlyCopy?: () => Promise<readonly string[] | null>
+    /** The pane's terminal before the sleep; a replay for any other one is the woken terminal's. */
+    ptyId?: string | null
   }
 ): void {
   const existing = pending.get(leafId)
@@ -72,6 +76,7 @@ export function captureWakeScrollback(
   const entry: PendingHistory = {
     sleptAt: options.sleptAt ?? Date.now(),
     armed: false,
+    ptyId: options.ptyId ?? null,
     text: text.replace(SGR, '').trim() === '' ? null : text
   }
   pending.set(leafId, entry)
@@ -149,10 +154,15 @@ export type WakeScrollbackRestore = {
 export function beginWakeScrollbackRestore(
   leafId: string,
   terminal: WokenTerminal,
-  wokeAt = Date.now()
+  wokeAt = Date.now(),
+  /** The terminal this snapshot is for. */
+  ptyId: string | null = null
 ): WakeScrollbackRestore | null {
   const entry = pending.get(leafId)
-  if (!entry?.armed) {
+  // Armed by the workspace leaving "asleep", or (sooner, with no race against React) by the
+  // snapshot being for a new terminal: a cold restore while asleep is for the old one.
+  const newTerminal = entry?.ptyId != null && ptyId !== null && ptyId !== entry.ptyId
+  if (!entry || !(entry.armed || newTerminal)) {
     return null
   }
   pending.delete(leafId)

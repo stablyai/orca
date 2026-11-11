@@ -16,7 +16,7 @@ vi.mock('@/i18n/i18n', () => ({
 
 afterEach(() => resetWakeScrollbackForTests())
 
-const SLEPT_AT = new Date(2026, 10, 11, 14, 2).getTime()
+const SLEPT_AT = Date.now() - 29 * 60_000
 const DIVIDER = /^── Slept .+–.+ · processes stopped ──$/
 
 function write(terminal: Terminal, data: string): Promise<void> {
@@ -126,7 +126,7 @@ describe('WAKE-SCROLLBACK', () => {
     await wake(terminal, 'leaf-1', '$ ')
     await write(terminal, 'echo two\r\ntwo\r\n$ ')
     captureWakeScrollback('leaf-1', terminal, {
-      sleptAt: SLEPT_AT + 3_600_000,
+      sleptAt: SLEPT_AT + 10 * 60_000,
       agentPane: false,
       maxRows: 5000
     })
@@ -138,6 +138,25 @@ describe('WAKE-SCROLLBACK', () => {
     expect(lines.indexOf('one')).toBeLessThan(dividers[0]!)
     expect(lines.indexOf('two')).toBeGreaterThan(dividers[0]!)
     expect(lines.indexOf('two')).toBeLessThan(dividers[1]!)
+  })
+
+  it('a snapshot for the new (woken) terminal takes it at once, before React arms it', async () => {
+    const terminal = pane(4)
+    await write(terminal, '$ ls\r\nREADME\r\n$ ')
+    captureWakeScrollback('leaf-1', terminal, {
+      sleptAt: SLEPT_AT,
+      agentPane: false,
+      maxRows: 5000,
+      ptyId: 'remote:env::term-old'
+    })
+    // A cold restore of the old terminal while still asleep: not taken.
+    expect(
+      beginWakeScrollbackRestore('leaf-1', terminal, Date.now(), 'remote:env::term-old')
+    ).toBeNull()
+    // The woken terminal's snapshot: taken, even though nothing armed it yet.
+    expect(
+      beginWakeScrollbackRestore('leaf-1', terminal, Date.now(), 'remote:env::term-new')?.block
+    ).toContain('README')
   })
 
   it('a replay before the workspace leaves "asleep" (a cold restore) does not take it', async () => {
