@@ -2,7 +2,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
@@ -173,8 +173,9 @@ export class JournalSqlStatusContext {
   itemFence = (id: string) => this.current(id)?.fence
 
   runningTurn = () => {
-    const boundary = this.select({ kind: 'boundary', raw: true })[Symbol.iterator]().next().value
-    return boundary ? runningStructuredAgentSessionTurnItemBySequence([boundary.item]) : null
+    const item = this.select({ kind: 'boundary', raw: true })[Symbol.iterator]().next().value?.item
+    const turn = item ? readAgentJournalTurn(item.body) : null
+    return item && turn?.state === 'running' ? { item, turnId: turn.turnId } : null
   }
 
   recoverableSubmissions = (): AgentJournalSubmission[] => {

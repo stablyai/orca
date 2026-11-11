@@ -1,5 +1,6 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
+import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
 // session or start a new one, then return its protocol facts to the host. A saved session the
 // agent cannot reopen is replaced by a new one, with a warning row that any later start writes if
@@ -109,6 +110,7 @@ export async function initializeAcpStructuredSession(
       replayed = input.lanes.finishLoad()
       attaching.translator.finishLoad()
     } catch (error) {
+      withAcpStartupDiagnostic(error, connection, spec.dialect)
       takeover = await acpReopenTakeover(error, resume, {
         // An agent already exited, its output still draining, has no session to take over in.
         over: connection.closed || connection.exited || input.abandoned(),
