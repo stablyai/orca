@@ -1,4 +1,5 @@
 // A restarted runtime can reissue a surviving worker PTY's handle; the worker still reports with its env handle.
+// The env is consistency evidence, not caller authentication; incarnation match is record continuity, not liveness.
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import './runtime-test-module-registration.spec'
@@ -152,7 +153,7 @@ describe('worker_done after a restart reissues the surviving worker PTY handle',
     expect(runtime.getTerminalHandleForPaneKey(PANE)).not.toBe(EXPORTED_HANDLE)
   })
 
-  it('settles worker_done from the same surviving process', async () => {
+  it('settles worker_done when the pane still records the Dispatch incarnation', async () => {
     const { runtime, db, taskId, dispatchId } = await restartWithSurvivingWorker()
 
     const result = await sendWorkerDone(runtime, taskId, dispatchId)
@@ -162,7 +163,7 @@ describe('worker_done after a restart reissues the surviving worker PTY handle',
     expect(db.getTask(taskId)?.status).toBe('completed')
   })
 
-  it('refuses worker_done when the pane now runs a replacement process', async () => {
+  it('refuses worker_done when the pane now records a replacement incarnation', async () => {
     const { runtime, db, taskId, dispatchId } = await restartWithSurvivingWorker('inc-replacement')
 
     const result = await sendWorkerDone(runtime, taskId, dispatchId)
