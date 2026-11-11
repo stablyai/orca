@@ -105,15 +105,48 @@ describe('useWakeAttachHold', () => {
     const { result, rerender } = hook(() => false, retry)
     rerender({ wake: { ...waking, phase: 'ready' } })
     expect(result.current.wake?.phase).toBe('connecting')
+    // Reconnected as soon as main said ready.
+    expect(retry).toHaveBeenCalledTimes(1)
     act(() => vi.advanceTimersByTime(PAST_CAP))
     // The quiet retry: still Connecting…, no card yet.
-    expect(retry).toHaveBeenCalledTimes(1)
+    expect(retry).toHaveBeenCalledTimes(2)
     expect(result.current.terminalStalled).toBe(false)
     expect(result.current.wake?.phase).toBe('connecting')
     act(() => vi.advanceTimersByTime(PAST_CAP))
-    expect(retry).toHaveBeenCalledTimes(1)
+    expect(retry).toHaveBeenCalledTimes(2)
     expect(result.current.terminalStalled).toBe(true)
     expect(result.current.wake?.phase).toBe('failed')
+  })
+
+  it('reconnects the pane in front as soon as main says ready, not at the cap', () => {
+    // A pane that sat through an app restart asleep has no path back of its own: the reconnect at
+    // ready is what brings it back, as fast as a normal wake.
+    let attached: boolean | null = false
+    const retry = vi.fn(() => {
+      attached = true
+      return true
+    })
+    const { result, rerender } = hook(() => attached, retry)
+    rerender({ wake: { ...waking, phase: 'ready' } })
+    expect(retry).toHaveBeenCalledTimes(1)
+    expect(retry).toHaveBeenLastCalledWith('ws')
+    act(() => vi.advanceTimersByTime(WAKE_ATTACH_POLL_MS))
+    expect(result.current.wake).toBeUndefined()
+    act(() => vi.advanceTimersByTime(PAST_CAP * 2))
+    expect(retry).toHaveBeenCalledTimes(1)
+    expect(result.current.terminalStalled).toBe(false)
+  })
+
+  it('does not reconnect a pane that is attached at ready, or a wake that failed', () => {
+    let attached: boolean | null = true
+    const retry = vi.fn(() => true)
+    const { rerender } = hook(() => attached, retry)
+    rerender({ wake: { ...waking, phase: 'ready' } })
+    attached = false
+    rerender({ wake: { ...waking, startedAt: T0 } })
+    rerender({ wake: { ...waking, startedAt: T0, phase: 'failed' } })
+    act(() => vi.advanceTimersByTime(PAST_CAP * 2))
+    expect(retry).not.toHaveBeenCalled()
   })
 
   it('Try again re-runs the attach (not a wake) and waits for the pane once more', () => {
@@ -123,7 +156,10 @@ describe('useWakeAttachHold', () => {
     rerender({ wake: { ...waking, phase: 'ready' } })
     act(() => vi.advanceTimersByTime(PAST_CAP * 2))
     expect(result.current.terminalStalled).toBe(true)
+    const before = retry.mock.calls.length
     act(() => result.current.retry())
+    // Once: the button's own reconnect, not a second one from the hold restarting.
+    expect(retry).toHaveBeenCalledTimes(before + 1)
     expect(retry).toHaveBeenLastCalledWith('ws')
     expect(result.current.terminalStalled).toBe(false)
     expect(result.current.wake?.phase).toBe('connecting')
@@ -144,7 +180,7 @@ describe('useWakeAttachHold', () => {
     act(() => vi.advanceTimersByTime(WAKE_ATTACH_POLL_MS))
     expect(result.current.terminalStalled).toBe(false)
     expect(result.current.wake).toBeUndefined()
-    expect(retry).toHaveBeenCalledTimes(1)
+    expect(retry).toHaveBeenCalledTimes(2)
   })
 
   it('a restart with no wake in flight never shows the card', () => {
