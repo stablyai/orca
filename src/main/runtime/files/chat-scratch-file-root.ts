@@ -17,12 +17,12 @@ function chatScratchRoot(): string {
   return nativeChatScratchRootFor(getProfileUserDataPath())
 }
 
-export function resolveRuntimeAuthorizedPath(
+export async function resolveRuntimeAuthorizedPath(
   targetPath: string,
   store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
-  const floating = getFloatingWorkspaceFileRoots(store)
+  const floating = await getFloatingWorkspaceFileRoots(store)
   return resolveAuthorizedPath(targetPath, store, {
     ...options,
     extraRoots: [chatScratchRoot(), ...floating.extraRoots],
