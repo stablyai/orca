@@ -5,7 +5,7 @@
 // retries fences that did not land after a host left (edge-relay-fence.ts).
 import type { RelayDatabase, SqlRow } from './database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
-import { inEdgeCohort, type EdgeRelayConfig } from './edge-relay.js'
+import { inEdgeCohort, mayBeOnEdge, type EdgeRelayConfig } from './edge-relay.js'
 import { forEachBounded, retryPendingFences } from './edge-relay-fence.js'
 
 type Identity = { userId: string; relayHostId: string }
@@ -128,6 +128,11 @@ export class EdgeEvacuation {
         // hosts that the next ask put straight back (a drain every few minutes). A host that asks
         // for a region outside the scope leaves on that ask.
         if (inEdgeCohort(this.config, identity.relayHostId, 'any', identity.userId)) { continue }
+        if (!mayBeOnEdge(this.config, identity.relayHostId, identity.userId)) {
+          // leaveCeilingPermille is set below a rollout this host was moved under: its asks skip
+          // the leave read, so it would be re-placed without its devices. Raise the ceiling.
+          console.error(JSON.stringify({ event: 'orca_relay_edge_row_above_ceiling' }))
+        }
         if (this.drainedAt.has(drainKey(identity))) { continue }
         leaving.push(identity)
         // Resume after the last host taken, so the rest of the page is read next tick.

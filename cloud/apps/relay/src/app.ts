@@ -59,6 +59,7 @@ import {
   EdgeMoveBusyError,
   inEdgeCohort,
   mapEpochFloor,
+  mayBeOnEdge,
   type EdgeAssignments
 } from './edge-relay.js'
 import {
@@ -497,8 +498,9 @@ export function createRelayApp(
       edge?.ready === true &&
       body.data.regionCorrection?.action !== 'report' &&
       inEdgeCohort(edge.config, claims.relayHostId, requestedRegion, claims.sub)
-    if (edge?.pushes && !toEdge) {
+    if (edge?.pushes && !toEdge && mayBeOnEdge(edge.config, claims.relayHostId, claims.sub)) {
       // Any lane below may re-place a host whose row is on the edge; its devices come back first.
+      // Hosts that were never in a cohort skip this row read (most asks; the pool is small).
       try {
         leftEdge = await edge.leaveEdge(identity)
       } catch (error) {
@@ -828,7 +830,11 @@ export function createRelayApp(
         relayHostId: body.data.relayHostId
       }
       // A host on the relay edge: the liveness rule below would read its row as no answer.
-      const onEdge = await operations.edgeAssignments?.edgeAssignment(identity)
+      const edgeAssignments = operations.edgeAssignments
+      const onEdge =
+        edgeAssignments && mayBeOnEdge(edgeAssignments.config, identity.relayHostId, identity.userId)
+          ? await edgeAssignments.edgeAssignment(identity)
+          : null
       if (onEdge) {
         return context.json({
           v: 1,
