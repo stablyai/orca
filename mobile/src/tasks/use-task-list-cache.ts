@@ -135,8 +135,8 @@ export function useTaskListCache(view: TaskListView) {
     )
   }, [hostId, queryClient])
 
-  // A read of a list starts on that filter's kept rows, else on its own rows still shown, else the spinner, so another
-  // filter's rows never sit under a new search; it is also the list this provider opens on next launch.
+  // A read of a list starts on that filter's kept rows, else on its own rows still shown, else the spinner, so a new
+  // search never starts on another filter's rows; it is also the list this provider opens on next launch.
   const begin = useCallback(
     (params: HostQueryParams | null, provider: string): void => {
       cancelRead()

@@ -48,6 +48,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     loadGenerationRef,
     loadLinearContext,
     loadTasks,
+    loading,
     revalidating,
     selectedHostedRepos,
     setError,
@@ -150,9 +151,10 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     !githubCountedTotalPages &&
     (provenPageLimit === null || githubPages.length < provenPageLimit) &&
     hasRepoWithFullPage(githubPages.at(-1) ?? [], githubPerRepoLimit)
-  // A filter's kept pages stand in while it re-reads; paging from them would mix old and new rows.
+  // Pages kept or left from another filter stand in while a list loads; paging from them would mix old and new rows.
   const githubCanShowPagination =
     !revalidating &&
+    !loading &&
     (githubTotalPages > 1 || (githubPages.length > 0 && githubCanLoadUncountedNextPage))
   const githubPagePickerPages = useMemo(() => {
     const visible = new Set<number>()
@@ -181,6 +183,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         targetPage < 0 ||
         githubPaginationLoading ||
         revalidating ||
+        loading ||
         selectedHostedRepos.length === 0
       ) {
         return
@@ -267,6 +270,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       githubPages,
       githubPaginationLoading,
       loadGenerationRef,
+      loading,
       revalidating,
       selectedHostedRepos,
       setGithubCountedTotalPages,
