@@ -21041,7 +21041,10 @@
         "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
         "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
         "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
-        "viewOwnerProfile": "View {{name}}'s profile"
+        "viewOwnerProfile": "View {{name}}'s profile",
+        "restartElsewhere": "Restart it from the computer that created it.",
+        "makePrivateSidebar": "Teammates’ devices are disconnected. Only the owner will be able to open it.",
+        "shareFailed": "Couldn’t change who can open it. Try again."
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -26980,10 +26983,10 @@
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
       "generic": "Something went wrong. Try again."
     },
-    "restartConfirmTitle": "Restart sandbox?",
+    "restartConfirmTitle": "Restart workspace?",
     "restartConfirm": "Running agents stop and resume after the restart. Your files are kept.",
-    "restartFailed": "Couldn’t restart the sandbox",
-    "restarted": "Sandbox restarted",
+    "restartFailed": "Couldn’t restart the workspace",
+    "restarted": "Workspace restarted",
     "restartedDetail": "Orca resumes your agents after the restart.",
     "archiveFailed": "Couldn’t archive the workspace",
     "undo": "Undo",

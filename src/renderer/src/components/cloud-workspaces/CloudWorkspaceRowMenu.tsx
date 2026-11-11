@@ -12,6 +12,7 @@ import {
   Lock,
   MoreHorizontal,
   Play,
+  RotateCw,
   UserRoundCog,
   Users
 } from 'lucide-react'
@@ -40,6 +41,10 @@ import type {
 import { MemberAvatar } from './CloudMemberAvatars'
 import { openTeammateProfile } from '../teammates/teammate-profile-store'
 import { memberName, presentMembers, type MemberDirectory } from './cloud-workspace-format'
+import {
+  cloudWorkspaceActionGroups,
+  type CloudWorkspaceAction
+} from './cloud-workspace-action-groups'
 
 export type RowActions = {
   /** Opens it, waking it first when it is asleep. */
@@ -57,6 +62,8 @@ export type RowActions = {
   unarchive: (w: CloudWorkspace) => void
   /** Put a running sandbox to sleep (frees a running slot). */
   sleep: (w: CloudWorkspace) => void
+  /** Restart it; only offered where this desktop runs it (the sidebar has the same action). */
+  restart?: (w: CloudWorkspace) => void
   /** Delete the sandbox and its disk, after a confirmation. */
   remove: (w: CloudWorkspace) => void
 }
@@ -110,6 +117,23 @@ export function CloudWorkspaceRowMenu({
     : []
   // Focus returns to ⋯ on close; after a mouse open that would leave a ring nobody asked for.
   const openedByPointer = useRef(false)
+  // The same action list the sidebar menu renders (JA-14); this menu adds Home-only arrangement.
+  const groups = cloudWorkspaceActionGroups({
+    surface: 'home',
+    status: w.status,
+    archivedAt: w.archivedAt,
+    visibility: w.visibility,
+    canOpen,
+    canManage,
+    readableAsleep: isReadableAsleep(w),
+    canRestart:
+      actions.restart !== undefined &&
+      w.access === 'owner' &&
+      (w.status === 'running' || w.status === 'failed'),
+    hasMembers: members.length > 0
+  })
+  const has = (action: CloudWorkspaceAction): boolean =>
+    groups.some((group) => group.actions.includes(action))
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
@@ -284,7 +308,13 @@ export function CloudWorkspaceRowMenu({
               </DropdownMenuSub>
             )}
             <DropdownMenuSeparator />
-            {w.status === 'running' && w.archivedAt === null ? (
+            {has('restart') && actions.restart ? (
+              <DropdownMenuItem onSelect={() => actions.restart?.(w)}>
+                <RotateCw />
+                {t('orcaCloudWorkspace.restart', 'Restart')}
+              </DropdownMenuItem>
+            ) : null}
+            {has('sleep') ? (
               <DropdownMenuItem onSelect={() => actions.sleep(w)}>
                 <Moon />
                 {t('auto.components.cloudWorkspaces.sleep', 'Sleep')}
