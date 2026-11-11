@@ -3,8 +3,8 @@ import { pluginFilterKinds } from '../list/plugin-list-filter'
 import { pickNewPlugins } from '../../../../../shared/plugins/catalog/plugin-added-at'
 import { pluginListedAt } from '../list/plugin-listed-at'
 
-/** Cards a highlight row offers; the grid shows as many as fit one row (1–4 columns). */
-export const PLUGIN_HIGHLIGHT_ROW_LIMIT = 4
+/** Cards the Featured row offers; the grid shows as many as fit one row (1–4 columns). */
+export const PLUGIN_FEATURED_LIMIT = 4
 
 /** A plugin someone could install from a highlight row right now. */
 function isOfferable(entry: PluginListEntry, orcaVersion: string | null): boolean {
@@ -39,37 +39,25 @@ export function pickFeaturedPlugins(
     }
     kindsShown.add(kind)
     featured.push(entry)
-    if (featured.length === PLUGIN_HIGHLIGHT_ROW_LIMIT) {
+    if (featured.length === PLUGIN_FEATURED_LIMIT) {
       break
     }
   }
   return featured
 }
 
-export type NewlyAddedPlugins = {
-  rows: PluginListEntry[]
-  /** Every listed plugin added in the last week, installed or not, for "N this week". */
-  thisWeek: number
-}
-
 /**
- * Newest listings first, inside the website's 30-day window. Null hides the row: no plugin has an
- * estimated listing date, or none is recent and installable.
+ * Newest listings first, inside the website's 30-day window, up to the website's nine. Empty hides
+ * the row: no plugin has an estimated listing date, or none is recent and installable.
  */
 export function pickNewlyAddedPlugins(
   entries: readonly PluginListEntry[],
   orcaVersion: string | null,
   now: number
-): NewlyAddedPlugins | null {
-  // Why the row limit: the row is one grid row (at most four columns), so the site's nine never fit.
-  const rows = pickNewPlugins(
+): PluginListEntry[] {
+  return pickNewPlugins(
     entries.filter((entry) => isOfferable(entry, orcaVersion)),
     pluginListedAt,
-    now,
-    { limit: PLUGIN_HIGHLIGHT_ROW_LIMIT }
-  ).items
-  if (rows.length === 0) {
-    return null
-  }
-  return { rows, thisWeek: pickNewPlugins(entries, pluginListedAt, now).addedThisWeek }
+    now
+  )
 }

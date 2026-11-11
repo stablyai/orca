@@ -12,7 +12,6 @@ export function PluginListToolbar({
   onUpdateAll,
   filter,
   sources,
-  showAddedThisWeek,
   onFilterChange,
   refreshBusy,
   onRefresh
@@ -22,8 +21,6 @@ export function PluginListToolbar({
   onUpdateAll: () => void
   filter: PluginListFilter
   sources: readonly PluginMarketplaceHostSourceState[]
-  /** Some catalog dates its entries, so the Added this week filter can match something. */
-  showAddedThisWeek: boolean
   onFilterChange: (filter: PluginListFilter) => void
   refreshBusy: boolean
   onRefresh: () => void
@@ -38,12 +35,7 @@ export function PluginListToolbar({
         </Button>
       ) : null}
       {sources.length > 0 ? (
-        <PluginFilterPopover
-          filter={filter}
-          sources={sources}
-          showAddedThisWeek={showAddedThisWeek}
-          onChange={onFilterChange}
-        />
+        <PluginFilterPopover filter={filter} sources={sources} onChange={onFilterChange} />
       ) : null}
       <Tooltip>
         <TooltipTrigger asChild>

@@ -20003,16 +20003,7 @@
           "featured": "Featured",
           "featuredDetail": "most installed, one per category",
           "newlyAdded": "Newly added",
-          "newlyAddedDetail": "across your catalogs",
-          "thisWeek": "{{value0}} this week",
-          "seeAll": "See all"
-        },
-        "PluginCard": {
-          "new": "New"
-        },
-        "PluginFilterPopover": {
-          "added": "Added",
-          "thisWeek": "This week"
+          "newlyAddedDetail": "across your catalogs"
         }
       },
       "agent-workspace-trust-decision": {

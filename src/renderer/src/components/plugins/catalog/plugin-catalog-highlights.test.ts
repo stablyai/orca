@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
 import { pluginListEntryFromListing, type PluginListEntry } from '../list/plugin-list-entries'
-import { matchesPluginFilter, NO_PLUGIN_LIST_FILTER } from '../list/plugin-list-filter'
 import { pickFeaturedPlugins, pickNewlyAddedPlugins } from './plugin-catalog-highlights'
 
 const NOW = Date.parse('2026-11-09T20:00:00Z')
@@ -74,10 +73,12 @@ describe('pickFeaturedPlugins', () => {
 
 describe('pickNewlyAddedPlugins', () => {
   it('hides the row when no plugin has an estimated listing date', () => {
-    expect(pickNewlyAddedPlugins([entry('acme.one'), entry('acme.two')], '1.4.256', NOW)).toBeNull()
+    expect(pickNewlyAddedPlugins([entry('acme.one'), entry('acme.two')], '1.4.256', NOW)).toEqual(
+      []
+    )
   })
 
-  it('lists the newest installable plugins first, one row, and counts the whole week', () => {
+  it('lists the newest installable plugins first, inside the 30-day window', () => {
     const entries = [
       entry('acme.hour', { addedAt: '2026-11-09T19:00:00.000Z' }),
       entry('acme.days', { addedAt: '2026-11-06T00:00:00.000Z' }),
@@ -92,32 +93,28 @@ describe('pickNewlyAddedPlugins', () => {
 
     const picked = pickNewlyAddedPlugins(entries, '1.4.256', NOW)
 
-    expect(picked?.rows.map((item) => item.pluginKey)).toEqual([
+    expect(picked.map((item) => item.pluginKey)).toEqual([
       'acme.minutes',
       'acme.hour',
       'acme.days',
-      'acme.weeks'
+      'acme.weeks',
+      'acme.month'
     ])
-    expect(picked?.thisWeek).toBe(4)
   })
 
   it('hides the row when the newest listing is over 30 days old', () => {
     expect(
       pickNewlyAddedPlugins([entry('acme.old', { addedAt: '2026-10-09T00:00:00.000Z' })], null, NOW)
-    ).toBeNull()
+    ).toEqual([])
   })
-})
 
-describe('Added this week filter', () => {
-  it('keeps only plugins listed in the last seven days', () => {
-    const filter = { ...NO_PLUGIN_LIST_FILTER, addedThisWeek: true }
-
-    expect(
-      matchesPluginFilter(entry('acme.new', { addedAt: '2026-11-03T21:00:00Z' }), filter, NOW)
-    ).toBe(true)
-    expect(matchesPluginFilter(entry('acme.old', { addedAt: '2026-11-01' }), filter, NOW)).toBe(
-      false
+  it('offers up to nine, as the website does', () => {
+    const entries = Array.from({ length: 12 }, (_, index) =>
+      entry(`acme.p${index}`, { addedAt: new Date(NOW - (index + 1) * 3_600_000).toISOString() })
     )
-    expect(matchesPluginFilter(entry('acme.undated'), filter, NOW)).toBe(false)
+
+    expect(pickNewlyAddedPlugins(entries, null, NOW).map((item) => item.pluginKey)).toEqual(
+      Array.from({ length: 9 }, (_, index) => `acme.p${index}`)
+    )
   })
 })

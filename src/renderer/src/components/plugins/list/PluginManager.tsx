@@ -336,7 +336,6 @@ export function PluginManager({
             onUpdateAll={() => updateDialog.open(updates)}
             filter={listFilter}
             sources={catalog.sources}
-            showAddedThisWeek={allEntries.some((entry) => entry.listing?.addedAt)}
             onFilterChange={setListFilter}
             refreshBusy={catalog.refreshBusy}
             onRefresh={() => void catalog.refresh()}
@@ -378,7 +377,6 @@ export function PluginManager({
                 entries={allEntries}
                 orcaVersion={orcaVersion}
                 cardHandlers={cardHandlers}
-                onSeeAllNew={() => setListFilter({ ...listFilter, addedThisWeek: true })}
               />
             ) : null}
             {/* Why the error and loading too: until installed plugins are read, Not installed can't tell what you have. */}

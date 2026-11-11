@@ -43,26 +43,21 @@ export function pluginAddedAgeMs(addedAt: string | null | undefined, now: number
   return Math.max(0, now - time)
 }
 
-export type NewPlugins<T> = { items: T[]; addedThisWeek: number }
-
 /** Newest listings first, within the window. Items without a usable date never appear. */
 export function pickNewPlugins<T>(
   items: readonly T[],
   addedAtOf: (item: T) => string | null | undefined,
   now: number,
   { limit = PLUGIN_NEW_LIMIT, windowDays = PLUGIN_NEW_WINDOW_DAYS } = {}
-): NewPlugins<T> {
-  const recent = items.flatMap((item) => {
-    const age = pluginAddedAgeMs(addedAtOf(item), now)
-    return age !== null && age <= windowDays * DAY_MS ? [{ item, age }] : []
-  })
-  return {
-    items: recent
-      .sort((a, b) => a.age - b.age)
-      .slice(0, limit)
-      .map(({ item }) => item),
-    addedThisWeek: recent.filter(({ age }) => age <= 7 * DAY_MS).length
-  }
+): T[] {
+  return items
+    .flatMap((item) => {
+      const age = pluginAddedAgeMs(addedAtOf(item), now)
+      return age !== null && age <= windowDays * DAY_MS ? [{ item, age }] : []
+    })
+    .sort((a, b) => a.age - b.age)
+    .slice(0, limit)
+    .map(({ item }) => item)
 }
 
 /**

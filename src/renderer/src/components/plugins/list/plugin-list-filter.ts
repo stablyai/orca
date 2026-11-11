@@ -1,18 +1,15 @@
 import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/plugin-catalog-types'
 import type { PluginListEntry } from './plugin-list-entries'
-import { isPluginListedWithin, PLUGIN_ADDED_THIS_WEEK_MS } from './plugin-listed-at'
 
-/** Narrowing the list by kind, by catalog and by listing date; empty sets mean "any". */
+/** Narrowing the list by kind and by catalog; empty sets mean "any". */
 export type PluginListFilter = {
   categories: ReadonlySet<string>
   sourceIds: ReadonlySet<string>
-  addedThisWeek: boolean
 }
 
 export const NO_PLUGIN_LIST_FILTER: PluginListFilter = {
   categories: new Set(),
-  sourceIds: new Set(),
-  addedThisWeek: false
+  sourceIds: new Set()
 }
 
 // Why: "official" is trust, shown by the verified mark; it isn't a kind of plugin to filter by.
@@ -101,14 +98,7 @@ export function pluginFilterCategories(entries: readonly PluginListEntry[]): [st
   return [...counts.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
 }
 
-export function matchesPluginFilter(
-  entry: PluginListEntry,
-  filter: PluginListFilter,
-  now: number = Date.now()
-): boolean {
-  if (filter.addedThisWeek && !isPluginListedWithin(entry, PLUGIN_ADDED_THIS_WEEK_MS, now)) {
-    return false
-  }
+export function matchesPluginFilter(entry: PluginListEntry, filter: PluginListFilter): boolean {
   if (filter.categories.size > 0) {
     const kinds = pluginFilterKinds(entry)
     if (![...filter.categories].some((kind) => kinds.has(kind))) {
@@ -122,5 +112,5 @@ export function matchesPluginFilter(
 }
 
 export function pluginFilterSize(filter: PluginListFilter): number {
-  return filter.categories.size + filter.sourceIds.size + (filter.addedThisWeek ? 1 : 0)
+  return filter.categories.size + filter.sourceIds.size
 }

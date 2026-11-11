@@ -34,7 +34,7 @@ describe('estimatePluginAddedAt', () => {
 })
 
 describe('pickNewPlugins', () => {
-  it("lists dated plugins newest first, within the window, and counts this week's", () => {
+  it('lists dated plugins newest first, within the window', () => {
     const plugins = [
       plugin('undated', null),
       plugin('week-old', ago(24 * 6)),
@@ -42,21 +42,15 @@ describe('pickNewPlugins', () => {
       plugin('stale', ago(24 * 45)),
       plugin('month', ago(24 * 20))
     ]
-    expect(pickNewPlugins(plugins, addedAtOf, NOW)).toEqual({
-      items: [
-        plugin('fresh', ago(1)),
-        plugin('week-old', ago(24 * 6)),
-        plugin('month', ago(24 * 20))
-      ],
-      addedThisWeek: 2
-    })
+    expect(pickNewPlugins(plugins, addedAtOf, NOW)).toEqual([
+      plugin('fresh', ago(1)),
+      plugin('week-old', ago(24 * 6)),
+      plugin('month', ago(24 * 20))
+    ])
   })
 
   it('is empty while no catalog entry has a listing date', () => {
-    expect(pickNewPlugins([plugin('a', null), plugin('b', null)], addedAtOf, NOW)).toEqual({
-      items: [],
-      addedThisWeek: 0
-    })
+    expect(pickNewPlugins([plugin('a', null), plugin('b', null)], addedAtOf, NOW)).toEqual([])
   })
 
   it("never shows a date in the future or one that doesn't parse", () => {
@@ -65,13 +59,13 @@ describe('pickNewPlugins', () => {
       plugin('garbled', 'soon'),
       plugin('skew', ago(-0.5))
     ]
-    expect(pickNewPlugins(plugins, addedAtOf, NOW).items.map((p) => p.id)).toEqual(['skew'])
+    expect(pickNewPlugins(plugins, addedAtOf, NOW).map((p) => p.id)).toEqual(['skew'])
   })
 
   it('caps the row at nine by default', () => {
     const plugins = Array.from({ length: 12 }, (_, index) => plugin(`p${index}`, ago(index)))
-    expect(pickNewPlugins(plugins, addedAtOf, NOW).items).toHaveLength(9)
-    expect(pickNewPlugins(plugins, addedAtOf, NOW, { limit: 3 }).items.map((p) => p.id)).toEqual([
+    expect(pickNewPlugins(plugins, addedAtOf, NOW)).toHaveLength(9)
+    expect(pickNewPlugins(plugins, addedAtOf, NOW, { limit: 3 }).map((p) => p.id)).toEqual([
       'p0',
       'p1',
       'p2'

@@ -1,9 +1,7 @@
-import { ChevronRight } from 'lucide-react'
 import { useNow } from '@/hooks/use-now'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatAddedAgo } from '../../../../../shared/plugins/catalog/plugin-added-at'
 import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
-import { Button } from '../../ui/button'
 import { PluginListGroup } from '../list/PluginListGroup'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { pluginListedAt } from '../list/plugin-listed-at'
@@ -14,14 +12,12 @@ import { pickFeaturedPlugins, pickNewlyAddedPlugins } from './plugin-catalog-hig
 export function PluginCatalogHighlights({
   entries,
   orcaVersion,
-  cardHandlers,
-  onSeeAllNew
+  cardHandlers
 }: {
   /** Installed and listed plugins; the rows offer only ones that can be installed now. */
   entries: readonly PluginListEntry[]
   orcaVersion: string | null
   cardHandlers: CatalogCardHandlers
-  onSeeAllNew: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -29,7 +25,7 @@ export function PluginCatalogHighlights({
   const now = useNow(60_000)
   const featured = pickFeaturedPlugins(entries, installCounts, orcaVersion)
   const newlyAdded = pickNewlyAddedPlugins(entries, orcaVersion, now)
-  if (featured.length === 0 && !newlyAdded) {
+  if (featured.length === 0 && newlyAdded.length === 0) {
     return null
   }
   const addedLabel = (entry: PluginListEntry): string | undefined => {
@@ -63,33 +59,16 @@ export function PluginCatalogHighlights({
           ))}
         </PluginListGroup>
       ) : null}
-      {newlyAdded ? (
+      {newlyAdded.length > 0 ? (
         <PluginListGroup
           layout="grid"
-          singleRow
           title={t('auto.components.plugins.PluginCatalogHighlights.newlyAdded', 'Newly added')}
           detail={t(
             'auto.components.plugins.PluginCatalogHighlights.newlyAddedDetail',
             'across your catalogs'
           )}
-          aside={
-            newlyAdded.thisWeek > 0 ? (
-              <span className="inline-flex items-center gap-1.5">
-                {t(
-                  'auto.components.plugins.PluginCatalogHighlights.thisWeek',
-                  '{{value0}} this week',
-                  { value0: newlyAdded.thisWeek }
-                )}
-                <span aria-hidden="true">·</span>
-                <Button variant="link" size="inline" onClick={onSeeAllNew}>
-                  {t('auto.components.plugins.PluginCatalogHighlights.seeAll', 'See all')}
-                  <ChevronRight />
-                </Button>
-              </span>
-            ) : undefined
-          }
         >
-          {newlyAdded.rows.map((entry) => (
+          {newlyAdded.map((entry) => (
             <CatalogCard
               key={entry.pluginKey}
               entry={entry}

@@ -1,4 +1,4 @@
-import { BadgeCheck, Check, Sparkles } from 'lucide-react'
+import { BadgeCheck, Check } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Badge } from '../../ui/badge'
@@ -19,8 +19,6 @@ type PluginCardProps = {
   /** Replaces the description, e.g. an install error; keeps the two-line height. */
   notice?: { text: string; tone: 'destructive' | 'warning' }
   chips?: React.ReactNode
-  /** Listed recently: a New badge on the art unless it is installed. */
-  isNew?: boolean
   /** Replaces the install count after the publisher, e.g. "Added 3h ago". */
   metaDetail?: string
   action: React.ReactNode
@@ -39,7 +37,6 @@ export function PluginCard({
   palettes,
   notice,
   chips,
-  isNew = false,
   metaDetail,
   action,
   onOpen,
@@ -85,11 +82,6 @@ export function PluginCard({
           <Badge variant="dot" data-plugin-installed-badge="" className="absolute top-2 left-2">
             <Check className="text-status-success" aria-hidden="true" />
             {t('auto.components.settings.PluginCardAction.installed', 'Installed')}
-          </Badge>
-        ) : isNew ? (
-          <Badge variant="dot" data-plugin-new-badge="" className="absolute top-2 left-2">
-            <Sparkles aria-hidden="true" />
-            {t('auto.components.plugins.PluginCard.new', 'New')}
           </Badge>
         ) : null}
       </div>

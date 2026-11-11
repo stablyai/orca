@@ -102,6 +102,41 @@ const entries = [
     'Warm paper light and charcoal dark for Orca: chat, code, diffs and terminal.',
     ['themes'],
     { addedAt: addedHoursAgo(80) }
+  ),
+  entry(
+    'quietloop.focus-timer',
+    'Focus Timer',
+    'A pomodoro timer in the status bar that pauses agent notifications while you focus.',
+    ['panels'],
+    { addedAt: addedHoursAgo(26 * 4) }
+  ),
+  entry(
+    'nordlys.aurora-theme',
+    'Aurora',
+    'Cool northern-lights greens and violets for the app, code and terminal.',
+    ['themes'],
+    { addedAt: addedHoursAgo(24 * 6) }
+  ),
+  entry(
+    'petrel.markdown-tables',
+    'Markdown Tables',
+    'Edit Markdown tables as a grid: add rows and columns, sort, and paste from spreadsheets.',
+    ['editors'],
+    { addedAt: addedHoursAgo(24 * 11) }
+  ),
+  entry(
+    'kodama.deutsch',
+    'Deutsch',
+    'Deutsche Übersetzung der Orca-Oberfläche.',
+    ['language-packs'],
+    { addedAt: addedHoursAgo(24 * 17) }
+  ),
+  entry(
+    'lantern.port-watch',
+    'Port Watch',
+    'See which local ports your worktrees are serving and open them in the browser.',
+    ['panels'],
+    { addedAt: addedHoursAgo(24 * 23) }
   )
 ]
 
@@ -139,12 +174,7 @@ function setup(): void {
 function render(): React.JSX.Element {
   return (
     <div className="@container/plugin-catalog space-y-8 p-6">
-      <PluginCatalogHighlights
-        entries={entries}
-        orcaVersion="1.4.256"
-        cardHandlers={handlers}
-        onSeeAllNew={() => undefined}
-      />
+      <PluginCatalogHighlights entries={entries} orcaVersion="1.4.256" cardHandlers={handlers} />
     </div>
   )
 }
