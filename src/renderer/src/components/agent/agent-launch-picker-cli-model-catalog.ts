@@ -1,11 +1,17 @@
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { independentAgentModelCatalog } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
-import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import {
+  findCatalogModel,
+  getAgentSessionOptionCatalog
+} from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { agentPickerModelFromCatalogModel } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
-import { mergeDiscoveredCatalogModels } from '../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
+import {
+  catalogModelsFromModelDiscovery,
+  mergeDiscoveredCatalogModels
+} from '../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
-import { discoverNativeChatCatalogModels } from '../native-chat/session/options/catalog/native-chat-session-option-discovery'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
 
 /** Terminal-only agents the host catalog doesn't list take their models from the CLI's own listing. */
 export function agentPickerListsCliModels(
@@ -23,15 +29,25 @@ export async function readAgentPickerCliModelCatalog(
   runtime: RuntimeGitContext
 ): Promise<AgentSessionModelCatalogResult> {
   const catalog = getAgentSessionOptionCatalog(agent)
-  const discovered = catalog ? await discoverNativeChatCatalogModels(agent, runtime) : null
+  const result = catalog ? await discoverRuntimeCommitMessageModels(runtime, agent) : null
+  // Only a real listing may replace the seed: the picker retires saved picks missing from it.
+  const discovered =
+    result?.success && result.catalogOrigin === 'probe'
+      ? catalogModelsFromModelDiscovery(agent, result)
+      : null
   if (!catalog || !discovered) {
     return { origin: 'unknown' }
   }
   return {
     origin: 'probe',
     fetchedAt: Date.now(),
-    models: mergeDiscoveredCatalogModels(agent, catalog, discovered).map(
-      agentPickerModelFromCatalogModel
+    models: mergeDiscoveredCatalogModels(agent, catalog, discovered).map((model) =>
+      // Launch gives an unlisted model the catalog's generic options, so the picker offers the same.
+      agentPickerModelFromCatalogModel(
+        findCatalogModel(catalog, model.id)
+          ? model
+          : { ...model, options: catalog.unknownModelOptions ?? [] }
+      )
     )
   }
 }

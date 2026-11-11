@@ -157,8 +157,9 @@ export function useAgentLaunchPickerInventorySource(
     [context, worktreeId, selector, executionHostId, model, settings]
   )
   // Without a concrete workspace, CLI discovery can only ask this machine, so other hosts keep the seed.
-  const cliDiscoveryRuntime = (): RuntimeGitContext | null =>
-    draftTarget.worktreeId
+  // SSH discovery has no route yet, so SSH workspaces keep it too.
+  const cliDiscoveryRuntime = (): RuntimeGitContext | null => {
+    const runtime = draftTarget.worktreeId
       ? resolveWorktreeModelDiscoveryRuntime(store.getState(), draftTarget.worktreeId)
       : target?.kind === 'local'
         ? {
@@ -168,6 +169,8 @@ export function useAgentLaunchPickerInventorySource(
             worktreePath: repo?.path ?? ''
           }
         : null
+    return runtime?.connectionId ? null : runtime
+  }
   const build = (defaults: AgentPickerDefaultSettings | null | undefined) =>
     model.state === 'settled'
       ? agentPickerEntriesFromRows(
