@@ -51,7 +51,6 @@ function useReview(props: Review) {
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [generation, setGeneration] = useState(0)
-  const [sideBySide, setSideBySide] = useState(false)
   const registry = useCombinedDiffSectionLoadRegistry(sections)
   const entrySet = useCombinedDiffEntrySet({
     file: props.file,
@@ -67,7 +66,6 @@ function useReview(props: Review) {
     setGeneration,
     setSectionHeights,
     setSections,
-    setSideBySide,
     viewStateKey: props.viewStateKey
   })
   const loader = useCombinedDiffSectionLoader({
@@ -109,7 +107,6 @@ function useReview(props: Review) {
     scrollContainerRef,
     sectionHeights,
     sections,
-    sideBySide,
     viewStateKey: props.viewStateKey
   })
   return {

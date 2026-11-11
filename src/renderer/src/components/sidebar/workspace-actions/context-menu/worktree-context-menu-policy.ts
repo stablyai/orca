@@ -1,7 +1,8 @@
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import '@/lib/workspace/creation/new-workspace-composer-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace-dialog-repo'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -132,7 +133,7 @@ export function canCreateChildWorktree(args: {
   return (
     args.repo != null &&
     isGitRepoKind(args.repo) &&
-    getComposerEligibleRepos([args.repo]).length > 0 &&
+    getNewWorkspaceDialogEligibleRepos([args.repo]).length > 0 &&
     !args.folderWorkspaceId &&
     !args.worktree.isArchived
   )

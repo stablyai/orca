@@ -6,8 +6,8 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
-import { defaultCreationHost } from '@/lib/default-creation-host'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { defaultCreationHost } from '@/runtime/hosts/selection/default-creation-host'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -28,7 +28,7 @@ import {
 } from './pending-runtime-repo-removals'
 import { RuntimeRpcCallError } from '../../runtime/rpc/calls/runtime-rpc-result'
 import { readWslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
-import { showWslHostWindowsDriveRefusal } from '@/lib/wsl-host-windows-drive-refusal-toast'
+import { showWslHostWindowsDriveRefusal } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -215,7 +215,7 @@ export function createRepoAddActions(
           const {
             resolveDismissedOnboardingFolderAgentLaunch,
             revealOnboardingFolderWithAgentLaunch
-          } = await import('@/lib/onboarding-folder-agent-launch')
+          } = await import('@/components/onboarding/onboarding-folder-agent-launch')
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
           const launch = await resolveDismissedOnboardingFolderAgentLaunch({
             worktreeId: folderWorktree.id,

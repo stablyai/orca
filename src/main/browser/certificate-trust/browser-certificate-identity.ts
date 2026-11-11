@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { normalizeCertificateError } from '../../../shared/browser-certificate-errors'
+import { normalizeCertificateError } from '../../../shared/browser/certificate-trust/browser-certificate-errors'
 
 export const SUPPORTED_CERTIFICATE_ERROR = 'ERR_CERT_AUTHORITY_INVALID'
 export const SUPPORTED_CERTIFICATE_ERROR_CODE = -202

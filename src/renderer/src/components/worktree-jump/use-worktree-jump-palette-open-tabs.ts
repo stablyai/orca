@@ -4,13 +4,17 @@ import {
   searchBrowserPages,
   type SearchableBrowserPage
 } from '@/lib/browser/palette/browser-palette-search'
-import { buildSearchableSimulatorTabs, searchSimulatorTabs } from '@/lib/simulator-palette-search'
-import type { SearchableSimulatorTab } from '@/lib/simulator-palette-search-types'
+import {
+  buildSearchableSimulatorTabs,
+  searchSimulatorTabs
+} from '@/lib/simulator/search/simulator-palette-search'
+import type { SearchableSimulatorTab } from '@/lib/simulator/search/simulator-palette-search-types'
 import '@/lib/workspace/search/tabs/workspace-tab-search-types'
-import { buildSearchableWorkspaceTabEntries as buildSearchableWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
 import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+
 import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
-import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
+import { comparePaletteRankedItems } from '@/lib/workspace/search/palette/cmd-j-section-leadership'
 import { getPaletteWorktreeIdentity } from '@/lib/workspace/search/palette-repo-resolution'
 import type {
   BrowserPaletteItem,
@@ -19,14 +23,8 @@ import type {
   WorkspaceTabPaletteItem,
   WorktreePaletteItem
 } from './worktree-jump-palette-model'
-import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
-import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
-import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
-import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
-import {
-  encodePaletteIdentity,
-  type PaletteSearchContext
-} from '../../../../shared/palette-match/palette-ranking'
+import type { WorktreeJumpPaletteOpenTabsInput } from './worktree-jump-palette-open-tabs-input'
+import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 import {
   buildBrowserPaletteItems,
   buildOpenTabPaletteItems,
@@ -40,13 +38,6 @@ import { useTranslate } from '@/i18n/use-translate'
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []
 const EMPTY_WORKSPACE_TAB_ENTRIES: SearchableWorkspaceTab[] = []
-
-type WorktreeJumpPaletteOpenTabsInput = WorktreeJumpPaletteStoreState &
-  WorktreeJumpPaletteWorktrees &
-  Pick<WorktreeJumpPaletteFilter, 'repoMap' | 'repoByHostIdentity'> &
-  Pick<WorktreeJumpPaletteLocalState, 'deferredQuery'> & {
-    paletteSearchContext: PaletteSearchContext
-  }
 
 export function useWorktreeJumpPaletteOpenTabs({
   paletteStatusInputsActive,
@@ -81,6 +72,7 @@ export function useWorktreeJumpPaletteOpenTabs({
   paletteSearchContext,
   hasQuery,
   worktreeMatches,
+  hidesPaletteWorkspace,
   resolveWorktree
 }: WorktreeJumpPaletteOpenTabsInput) {
   const t = useTranslate()
@@ -174,7 +166,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     if (!paletteStatusInputsActive) {
       return EMPTY_WORKSPACE_TAB_ENTRIES
     }
-    return buildSearchableWorkspaceTabs({
+    return buildSearchableWorkspaceTabEntries({
       worktrees: browserSortedWorktrees,
       ownershipWorktrees: workspaces,
       repoMap,
@@ -249,7 +241,10 @@ export function useWorktreeJumpPaletteOpenTabs({
             }
           : null
       })
-      .filter((item): item is WorktreePaletteItem => item !== null)
+      .filter(
+        (item): item is WorktreePaletteItem =>
+          item !== null && !hidesPaletteWorkspace?.(item.worktree)
+      )
     if (!hasQuery) {
       return items
     }
@@ -272,7 +267,7 @@ export function useWorktreeJumpPaletteOpenTabs({
         }
       )
     )
-  }, [hasQuery, resolveWorktree, worktreeMatches])
+  }, [hasQuery, hidesPaletteWorkspace, resolveWorktree, worktreeMatches])
   const browserItems = useMemo<BrowserPaletteItem[]>(
     () => buildBrowserPaletteItems(browserMatches),
     [browserMatches]

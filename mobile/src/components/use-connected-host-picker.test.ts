@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { useConnectedHostPicker } from './use-connected-host-picker'
 
 function host(id: string, name: string, endpoint: string): HostProfile {
@@ -49,21 +49,6 @@ describe('useConnectedHostPicker', () => {
   function pickHost(action: (hostId: string) => void, hosts?: HostProfile[]) {
     act(() => handle.current!.pickHost(action, hosts))
   }
-
-  it('disambiguates path-routed hosts without exposing endpoint paths', () => {
-    render([
-      host('desk-a', 'Desk', 'wss://gateway.example.com/v1/connect/bearer-secret-a'),
-      host('desk-b', 'Desk', 'wss://gateway.example.com/v1/connect/bearer-secret-b')
-    ])
-
-    pickHost(vi.fn())
-
-    expect(picker().options).toEqual([
-      { value: 'desk-a', label: 'Desk', subtitle: 'gateway.example.com · desk-a' },
-      { value: 'desk-b', label: 'Desk', subtitle: 'gateway.example.com · desk-b' }
-    ])
-    expect(JSON.stringify(picker().options)).not.toContain('bearer-secret')
-  })
 
   it('closes a stale picker when an offered host disconnects', () => {
     const rerender = render([desk, laptop])

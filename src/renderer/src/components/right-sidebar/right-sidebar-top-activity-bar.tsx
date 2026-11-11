@@ -3,7 +3,7 @@ import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
 import type { ActivityBarPosition } from '@/store/slices/editor/types/open-file'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { ActivityBarButton, TopActivityOverflowMenu } from './activity-bar-buttons'
@@ -41,7 +41,7 @@ export function RightSidebarTopActivityBar({
     <ContextMenu>
       <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
         {!hasDesktopWindowChrome && (
-          <TooltipProvider delayDuration={400}>
+          <TooltipProvider>
             <ContextMenuTrigger
               asChild
               onContextMenu={contextPlugin.onContextMenu}
@@ -87,7 +87,7 @@ export function RightSidebarTopActivityBar({
           </TooltipProvider>
         )}
         {hasDesktopWindowChrome && (
-          <TooltipProvider delayDuration={400}>
+          <TooltipProvider>
             <div
               className={cn(
                 'ml-auto flex shrink-0 items-center pr-1',
@@ -100,7 +100,7 @@ export function RightSidebarTopActivityBar({
         )}
       </div>
       {hasDesktopWindowChrome && (
-        <TooltipProvider delayDuration={400}>
+        <TooltipProvider>
           <ContextMenuTrigger
             asChild
             onContextMenu={contextPlugin.onContextMenu}

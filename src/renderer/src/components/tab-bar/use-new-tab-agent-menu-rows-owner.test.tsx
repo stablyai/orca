@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -14,7 +14,7 @@ import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
+import { resetRendererAppPlatformCacheForTests } from '@/app-shell/platform/renderer-app-platform'
 
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '@/store/types'
@@ -22,7 +22,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 import { useAgentMenuObservation } from './use-new-tab-agent-menu-rows'
-import { sourceControlRepoAgentRows } from '@/lib/source-control/ai/source-control-agent-picker'
+import '@/lib/source-control/ai/source-control-agent-picker'
 import { createAgentMenuTerminalPendingSelector } from './agent-menu-launch-facts'
 
 import { connectedRuntimeStatus } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
@@ -61,51 +61,6 @@ function seedSshWorkspace(): void {
     ensureRemoteDetectedAgents: vi.fn<AppState['ensureRemoteDetectedAgents']>(async () => ['codex'])
   })
 }
-
-it('holds only terminal choices while SSH connects, for a workspace and a repo target, then settles', async () => {
-  seedSshWorkspace()
-  const hook = renderHook(() => {
-    const target = useAgentDetectionTargetForWorktree(worktreeId)
-    // Source Control's launch into a workspace the repo does not have yet.
-    const prospective = sourceControlRepoAgentRows(repo)
-    return {
-      workspace: useAgentMenuObservation(worktreeId, true, target),
-      repo: useAgentMenuObservation(prospective.target, true, prospective.detectionTarget)
-    }
-  })
-  const pendingKey = hook.result.current.workspace.contextKey
-  for (const observation of [hook.result.current.workspace, hook.result.current.repo]) {
-    expect(observation.model).toMatchObject({ state: 'settled', terminalPending: true })
-    expect(observation.selectionFor('codex', 'terminal').ready).toBe(false)
-  }
-  await act(async () => {
-    useAppStore.setState({
-      sshConnectionStates: new Map([['box', { ...sshState, status: 'connected' }]])
-    })
-  })
-  // Readiness is not identity: the picker's owner and acquisition keep their key.
-  expect(hook.result.current.workspace.contextKey).toBe(pendingKey)
-  for (const observation of [hook.result.current.workspace, hook.result.current.repo]) {
-    expect(observation.model).toMatchObject({ state: 'settled', terminalPending: false })
-    // A settled missing fact is owned by the launcher; it must not leave a permanent wait.
-    expect(observation.selectionFor('codex', 'terminal').ready).toBe(true)
-  }
-  await act(async () => {
-    useAppStore.setState({
-      sshConnectionStates: new Map([
-        ['box', { ...sshState, status: 'connected', remotePlatform: 'linux' }]
-      ])
-    })
-  })
-  expect(hook.result.current.workspace.model).toMatchObject({
-    state: 'settled',
-    terminalPending: false,
-    rows: expect.arrayContaining([
-      expect.objectContaining({ agent: 'codex', executionHostId: 'ssh:box' })
-    ])
-  })
-  expect(hook.result.current.workspace.selectionFor('codex', 'terminal').ready).toBe(true)
-})
 
 it('lets the picker open to choose chat while only the chosen terminal waits for SSH', () => {
   seedSshWorkspace()

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileRelayCredentialBundle } from '../transport/hosts/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../host-credentials/mobile-relay-credential-bundle'
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   recoverMobileRelayPairing,
@@ -10,7 +10,7 @@ import type {
   connectMobileRelayForPairing,
   PairingCandidateClient
 } from './mobile-relay-physical-client'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 

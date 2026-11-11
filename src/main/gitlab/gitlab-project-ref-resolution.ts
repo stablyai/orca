@@ -18,7 +18,7 @@ import {
   DEFAULT_GITLAB_HOSTS,
   normalizeGitLabHost,
   parseGitLabProjectRef,
-  parseRemoteProjectRefCandidate,
+  parseGitLabProjectRefCandidate,
   type ProjectRef
 } from './project-ref-parser'
 
@@ -158,7 +158,7 @@ async function resolveProjectRefForRemote(
       publish(result)
       return result
     }
-    const remoteCandidate = parseRemoteProjectRefCandidate(stdout)
+    const remoteCandidate = parseGitLabProjectRefCandidate(stdout)
     if (
       remoteCandidate &&
       (await isGlabConfiguredForRemoteHost(

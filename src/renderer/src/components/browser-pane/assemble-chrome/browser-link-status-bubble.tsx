@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { windowDipToCssPx } from '@/lib/ui-zoom'
+import { cn } from '@/lib/class-names'
+import { windowDipToCssPx } from '@/app-shell/chrome/ui-zoom'
 import { toDisplayUrl } from '../describe-page/browser-page-url-display'
 
 // Chrome's status bubble timings (status_bubble_views.cc, status_bubble.h).

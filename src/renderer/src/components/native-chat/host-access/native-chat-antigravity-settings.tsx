@@ -2,7 +2,7 @@ import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { agentSessionSignInFor } from '../../../../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../../../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import { NativeChatActionButton } from '../composer/controls/NativeChatActionButton'
 
 /** Links Orca's own Antigravity sign-in; chats on the host's agy (`system`) use agy's instead. */
@@ -15,7 +15,7 @@ export function nativeChatAntigravitySignInContent(
   if (
     failureKind !== 'notSignedIn' ||
     account === 'system' ||
-    agentSessionSignInFor(agentName)?.agent !== 'antigravity'
+    agentSessionSetupFor(agentName)?.agent !== 'antigravity'
   ) {
     return undefined
   }

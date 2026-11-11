@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 // Use a bespoke radio for two-line copy plus badge (STYLEGUIDE’s distinct-role exception).
 export function MobilePairingPathOption({

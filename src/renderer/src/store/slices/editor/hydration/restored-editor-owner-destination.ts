@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import { assertEditorFileOperationCurrent } from '@/lib/editor-file-operation-provenance'
+import { assertEditorFileOperationCurrent } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
 import type { OpenFile } from '../types/open-file'
 import { writeEditorBuffer } from '../buffers/editor-buffer-record'

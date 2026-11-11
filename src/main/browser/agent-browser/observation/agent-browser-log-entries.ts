@@ -3,7 +3,7 @@ import type {
   BrowserConsoleResult,
   BrowserNetworkEntry,
   BrowserNetworkLogResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 
 // Shapes agent-browser prints for `console --json` and `network requests --json` (0.27 and 0.41).
 export type AgentBrowserConsoleOutput = { messages: { type: string; text: string }[] }

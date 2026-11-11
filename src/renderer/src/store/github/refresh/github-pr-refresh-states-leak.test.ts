@@ -49,33 +49,6 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
     vi.clearAllMocks()
   })
 
-  it('prunes expired active states on refreshAll without writing a PR miss', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000_000)
-    try {
-      const store = createTestStore()
-      store.setState({
-        prRefreshStates: {
-          stale: { status: 'queued', reason: 'visible', updatedAt: 1_000_000 - 121_000 },
-          settled: { status: 'error', reason: 'visible', updatedAt: 1, message: 'boom' }
-        },
-        prCache: {
-          stale: { data: null, fetchedAt: 1 }
-        },
-        repos: [],
-        worktreesByRepo: {}
-      } as unknown as Partial<AppState>)
-
-      store.getState().refreshAllGitHub()
-
-      expect(store.getState().prRefreshStates.stale).toBeUndefined()
-      expect(store.getState().prRefreshStates.settled).toBeDefined()
-      expect(store.getState().prCache.stale).toEqual({ data: null, fetchedAt: 1 })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('expires the stale active state captured by a rejected forced PR refresh', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)

@@ -137,6 +137,8 @@ export type AgentJournalPromptOption = {
   id: string
   label: string
   description?: string
+  /** A block the user compares before choosing (a mockup or snippet), shown as plain monospace text. */
+  preview?: string
 }
 
 export type AgentJournalFreeTextInput = {

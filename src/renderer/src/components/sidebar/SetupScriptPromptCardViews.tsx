@@ -2,12 +2,11 @@ import React from 'react'
 import { Check, LoaderCircle, PackageCheck, RefreshCw, ScrollText, Settings, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { getDetectedSetupScriptTextareaRows } from '@/lib/script-textarea-rows'
-import { getSetupScriptFirstLine } from '@/lib/setup-script-prompt'
+import { getDetectedSetupScriptTextareaRows } from '@/components/script-editor/rows/script-textarea-rows'
 
 type DismissButtonProps = {
   onDismiss: () => void
@@ -45,38 +44,7 @@ export type DetectedSetupPreviewProps = {
   provenance: string | null
 }
 
-function DetectedSetupSection({
-  provenance,
-  children
-}: {
-  provenance: string | null
-  children: React.ReactNode
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <div className="mt-3 border-t border-worktree-sidebar-border pt-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        <PackageCheck className="size-3.5" />
-        {t('auto.components.sidebar.SetupScriptPromptCardViews.7275f674cc', 'Detected setup')}
-      </div>
-      {children}
-      {provenance ? (
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          <Trans
-            i18n={i18n}
-            defaults={t(
-              'auto.components.sidebar.SetupScriptPromptCardViews.detectedFromSource',
-              'Detected from <source>{{source}}</source>'
-            )}
-            values={{ source: provenance }}
-            components={{ source: <code className="rounded bg-muted px-1 py-0.5" /> }}
-          />
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
+// Package-manager guesses only: imports are summarized in one line and reviewed in a dialog.
 export function DetectedSetupPreview({
   setup,
   onSetupChange,
@@ -84,7 +52,11 @@ export function DetectedSetupPreview({
 }: DetectedSetupPreviewProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <DetectedSetupSection provenance={provenance}>
+    <div className="mt-3 border-t border-worktree-sidebar-border pt-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <PackageCheck className="size-3.5" />
+        {t('auto.components.sidebar.SetupScriptPromptCardViews.7275f674cc', 'Detected setup')}
+      </div>
       <textarea
         value={setup}
         aria-label={t(
@@ -96,27 +68,20 @@ export function DetectedSetupPreview({
         rows={getDetectedSetupScriptTextareaRows(setup)}
         className="setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
-    </DetectedSetupSection>
-  )
-}
-
-export type DetectedSetupSummaryProps = {
-  setup: string
-  provenance: string | null
-}
-
-// Imported scripts can be long, so the card shows one line and the review dialog shows all of it.
-export function DetectedSetupSummary({
-  setup,
-  provenance
-}: DetectedSetupSummaryProps): React.JSX.Element {
-  const { firstLine, hasMore } = getSetupScriptFirstLine(setup)
-  return (
-    <DetectedSetupSection provenance={provenance}>
-      <code className="block truncate rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground">
-        {hasMore ? `${firstLine} …` : firstLine}
-      </code>
-    </DetectedSetupSection>
+      {provenance ? (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'auto.components.sidebar.SetupScriptPromptCardViews.detectedFromSource',
+              'Detected from <file>{{source}}</file>'
+            )}
+            values={{ source: provenance }}
+            components={{ file: <code className="rounded bg-muted px-1 py-0.5" /> }}
+          />
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -129,7 +94,7 @@ export function ReviewSetupAction({ onReview }: ReviewSetupActionProps): React.J
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="default"
       size="sm"
       className="mt-3 h-7 w-full text-xs"
       onClick={onReview}
@@ -228,6 +193,7 @@ export function SetupScriptPromptBody({
       />
     )
   }
+  const sourceElement = <span className="break-words text-foreground" />
   if (isPackageManagerSuggestion) {
     return (
       <>
@@ -243,11 +209,11 @@ export function SetupScriptPromptBody({
       <Trans
         i18n={i18n}
         defaults={t(
-          'auto.components.sidebar.SetupScriptPromptCardViews.foundSetupCommandIn',
-          'Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.'
+          'auto.components.sidebar.SetupScriptPromptCardViews.foundSetupScriptIn',
+          'Found a setup script in <file>{{source}}</file>.'
         )}
         values={{ source: candidateSource }}
-        components={{ source: <span className="break-words" /> }}
+        components={{ file: sourceElement }}
       />
     )
   }

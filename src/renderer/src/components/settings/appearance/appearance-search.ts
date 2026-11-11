@@ -104,7 +104,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
 
 export const getZoomEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('auto.components.settings.appearance.search.c5e933970f', 'UI Zoom'),
+    title: translate('auto.components.settings.appearance.search.37e6b58b0e', 'UI zoom'),
     description: translate(
       'auto.components.settings.appearance.search.adddb91a3d',
       'Scale the entire application interface.'
@@ -119,7 +119,7 @@ export const getZoomEntries = createLocalizedCatalog((): SettingsSearchEntry[] =
 
 export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('auto.components.settings.appearance.search.ddb991024d', 'IDE Font'),
+    title: translate('auto.components.settings.appearance.search.aff6e6afdf', 'IDE font'),
     description: translate(
       'auto.components.settings.appearance.search.07c7c38fac',
       'Choose the font used by the Orca interface.'
@@ -185,8 +185,8 @@ export const getFollowSymlinkedDirectoriesEntry = (
 export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
-      'auto.components.settings.appearance.search.f8129fb544',
-      'Show Git-Ignored Files'
+      'auto.components.settings.appearance.search.4af9002a0c',
+      'Show Git-ignored files'
     ),
     description: translate(
       'auto.components.settings.appearance.search.7164edf71a',
@@ -212,7 +212,7 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('auto.components.settings.appearance.search.fdd31b00d0', 'Titlebar App Name'),
+    title: translate('auto.components.settings.appearance.search.fb2353b8dd', 'Titlebar app name'),
     description: translate(
       'auto.components.settings.appearance.search.18b4c4c30b',
       'Show Orca in the titlebar.'
@@ -247,10 +247,7 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
     title: translate('auto.components.settings.AppearancePane.terminalTitle', 'Terminal')
   },
   {
-    title: translate(
-      'auto.components.settings.AppearancePane.windowSidebarTitle',
-      'Window & Sidebar'
-    ),
+    title: translate('auto.components.settings.AppearancePane.e90c5d745a', 'Window & sidebar'),
     description: translate(
       'auto.components.settings.AppearancePane.windowSidebarSummary',
       'Sidebar, status bar, and file explorer'

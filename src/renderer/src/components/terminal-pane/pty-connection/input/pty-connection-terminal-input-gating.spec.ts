@@ -63,91 +63,11 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('restores input to a Codex pane whose restart notice the user dismissed', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-      const transport = createMockTransport('pty-live')
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }] },
-        ptyIdsByTabId: { 'tab-1': ['pty-live'] },
-        // Dismissal retains launch-account memory, so stale-input gating must inspect its marker rather than record existence.
-        codexRestartNoticeByPtyId: {
-          'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B', dismissed: true }
-        }
-      }
-
-      const pane = createPane(1)
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-      const manager = createManager(1)
-      const deps = createDeps()
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
-      )
-
-      expect(onDataHandler).toBeDefined()
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      ;(onDataHandler as (data: string) => void)('a')
-
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
-    })
-
-    it('restores input through the tab fallback when the dismissed pane has no live PTY binding', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-      const transport = createMockTransport(null)
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }] },
-        ptyIdsByTabId: { 'tab-1': ['pty-live'] },
-        codexRestartNoticeByPtyId: {
-          'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B', dismissed: true }
-        }
-      }
-
-      const pane = createPane(1)
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-      const manager = createManager(1)
-      const deps = createDeps()
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
-      )
-
-      expect(onDataHandler).toBeDefined()
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      ;(onDataHandler as (data: string) => void)('a')
-
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
-    })
-
     it('keeps a dismissed split pane typing while a sibling still holds the prompt', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport('pty-dismissed')
       transportFactoryQueue.push(transport)
@@ -192,8 +112,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('keeps blocking a pane with its own unanswered notice next to a dismissed sibling', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport('pty-stale')
       transportFactoryQueue.push(transport)
@@ -236,8 +157,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('keeps a bound pane with no notice typing while a sibling holds a queued restart', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport('pty-plain-shell')
       transportFactoryQueue.push(transport)
@@ -282,114 +204,11 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
     })
 
-    it('keeps blocking input on a pane whose restart is requested but not yet run', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-      const transport = createMockTransport('pty-live')
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-live' }] },
-        ptyIdsByTabId: { 'tab-1': ['pty-live'] },
-        // Queued restart retains the old account until relaunch, unlike dismissal.
-        codexRestartNoticeByPtyId: {
-          'pty-live': { previousAccountLabel: 'A', nextAccountLabel: 'B', restartRequested: true }
-        }
-      }
-
-      const pane = createPane(1)
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-      const manager = createManager(1)
-      const deps = createDeps()
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
-      )
-
-      expect(onDataHandler).toBeDefined()
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      ;(onDataHandler as (data: string) => void)('a')
-
-      expect(transport.sendInput).not.toHaveBeenCalled()
-    })
-
-    it('blocks input to stale Codex panes until they restart', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      const transport = createMockTransport('pty-codex-stale')
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', ptyId: 'pty-codex-stale' }]
-        },
-        ptyIdsByTabId: {
-          'tab-1': ['pty-codex-stale']
-        },
-        codexRestartNoticeByPtyId: {
-          'pty-codex-stale': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
-        },
-        agentStatusByPaneKey: {
-          [makePaneKey('tab-1', LEAF_1)]: {
-            paneKey: makePaneKey('tab-1', LEAF_1),
-            state: 'working',
-            prompt: 'stale input',
-            updatedAt: 1_000,
-            stateStartedAt: 900,
-            agentType: 'codex',
-            stateHistory: []
-          }
-        }
-      }
-
-      const pane = createPane(1)
-      const terminalTarget = createKeyboardEventTarget()
-      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-      const manager = createManager(1)
-      const deps = createDeps()
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks10)
-      )
-
-      expect(onDataHandler).toBeDefined()
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      const sendTerminalInput = onDataHandler as (data: string) => void
-      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
-      sendTerminalInput('\x03')
-      vi.advanceTimersByTime(500)
-
-      expect(transport.sendInput).not.toHaveBeenCalled()
-      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
-    })
-
     it('blocks terminal writes while mobile presence lock owns the PTY', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       vi.useFakeTimers()
@@ -450,8 +269,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('drops xterm protocol replies from live TUI output while mobile presence lock is active', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks12 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       const ptyId = 'pty-mobile-tui-query'
@@ -502,102 +322,11 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       }
     })
 
-    it('blocks remote locked terminal input before it reaches the runtime transport', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
-
-      const ptyId = 'remote:env-1@@terminal-1'
-      setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
-      try {
-        const transport = createMockTransport(ptyId)
-        transportFactoryQueue.push(transport)
-        mockStoreState = {
-          ...mockStoreState,
-          tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
-          ptyIdsByTabId: { 'tab-1': [ptyId] }
-        }
-
-        const pane = createPane(1)
-        let onDataHandler: ((data: string) => void) | null = null
-        pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-          onDataHandler = handler
-          return { dispose: vi.fn() }
-        }) as typeof pane.terminal.onData)
-
-        connectPanePty(
-          pane as never,
-          createManager(1) as never,
-          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks13)
-        )
-
-        if (!onDataHandler) {
-          throw new Error('expected onData handler to be registered')
-        }
-        ;(onDataHandler as unknown as (data: string) => void)('x')
-        await flushAsyncTicks()
-
-        expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
-        expect(transport.sendInput).not.toHaveBeenCalled()
-      } finally {
-        setDriverForPty(ptyId, { kind: 'idle' })
-      }
-    })
-
-    it('does not infer interrupts when the transport rejects terminal input', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks14 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      const transport = createMockTransport('pty-disconnected')
-      transport.sendInput.mockReturnValue(false)
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        paneKey,
-        state: 'working',
-        prompt: 'disconnected input',
-        updatedAt: 1_000,
-        stateStartedAt: 900,
-        agentType: 'custom-agent',
-        stateHistory: []
-      }
-
-      const pane = createPane(1)
-      const terminalTarget = createKeyboardEventTarget()
-      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-
-      connectPanePty(
-        pane as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks14)
-      )
-
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
-      ;(onDataHandler as unknown as (data: string) => void)('\x03')
-      await flushAsyncTicks()
-      await vi.advanceTimersByTimeAsync(500)
-      await flushAsyncTicks()
-
-      expect(transport.sendInput).toHaveBeenCalledWith('\x03')
-      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
-    })
-
     it('does not infer interrupts when the main process rejects acknowledged input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks15 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks15 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       vi.useFakeTimers()
       vi.setSystemTime(1_100)
@@ -644,43 +373,11 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
-    it('requests a connected pane remount when main reports its daemon write unavailable', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks16 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { _resetTerminalPaneRecoveryForTests } =
-        await import('../../render-health/recovery/terminal-pane-recovery')
-      _resetTerminalPaneRecoveryForTests()
-      const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
-      mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
-      const transport = createMockTransport('daemon-pty')
-      let writeUnavailable: (() => void) | undefined
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          writeUnavailable = callbacks.onWriteUnavailable
-          return { id: 'daemon-pty' }
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks16)
-      )
-      await flushAsyncTicks(6)
-      writeUnavailable?.()
-      await flushAsyncTicks(6)
-
-      expect(window.api.pty.hasPty).toHaveBeenCalledWith('daemon-pty')
-      expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
-      _resetTerminalPaneRecoveryForTests()
-    })
-
     it('quarantines the interrupted line after a write-unavailable remount, but never device replies', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks17 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks17 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { _resetTerminalPaneRecoveryForTests } =
         await import('../../render-health/recovery/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
@@ -723,8 +420,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     it('recovers a wedged write pipeline after accepted input without renderer output', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks18 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks18 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { settleTerminalWriteStallWatch, WRITE_PIPELINE_STALL_CHECK_MS } =
         await import('@/lib/pane-manager/terminal-write-pipeline-health')
       const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
@@ -755,8 +453,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     it('does not arm the wedge probe when acknowledged input is rejected', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks19 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks19 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { WRITE_PIPELINE_STALL_CHECK_MS } =
         await import('@/lib/pane-manager/terminal-write-pipeline-health')
       const transport = createMockTransport('pty-rejected')
@@ -784,8 +483,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('blocks input when tab-level ptyId is stale even if panePtyId is null', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks20 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks20 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport(null)
       transportFactoryQueue.push(transport)

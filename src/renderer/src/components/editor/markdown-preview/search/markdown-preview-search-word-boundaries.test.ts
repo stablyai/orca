@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import './markdown-preview-search'
-import { findTextMatchRanges } from '../../../../lib/text-match-ranges'
+import { findTextMatchRanges } from '../../../../lib/text-search/text-match-ranges'
 
 describe('whole-word search around combining marks', () => {
   it('does not match a Devanagari word inside a longer word ending in a vowel sign', () => {

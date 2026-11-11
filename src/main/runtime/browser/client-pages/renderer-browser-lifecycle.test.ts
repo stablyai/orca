@@ -9,7 +9,7 @@ import { electronMocks } from '../../orca-runtime-test-mocks/setup.spec'
 import { TEST_WORKTREE_ID, store } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import '../../../../shared/constants'
 
-import type { BrowserTabInfo } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
 

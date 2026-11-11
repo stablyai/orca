@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import {
   getCreationProgressLabel,
   type PendingWorktreeCreation

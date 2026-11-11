@@ -2,6 +2,7 @@ import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-au
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { readShellStartupEnvVar } from '../pty/shell-startup/shell-startup-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
 
 export type CommitMessageAgentEnvironmentResolvers = {
   prepareForCodexLaunch?: (
@@ -114,10 +115,16 @@ export async function prepareLocalCommitMessageAgentEnv(
   if (shellConfigEnv) {
     return shellConfigEnv
   }
-  if (!resolvers) {
+  if (!resolvers && agentId !== 'claude') {
     return { ok: true }
   }
   const base = hostBase ?? cloneProcessEnv()
+  if (agentId === 'claude') {
+    stripInheritedClaudeSessionEnv(base)
+  }
+  if (!resolvers) {
+    return { ok: true, env: base }
+  }
 
   try {
     if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
@@ -158,5 +165,5 @@ export async function prepareLocalCommitMessageAgentEnv(
     }
   }
 
-  return hostBase ? { ok: true, env: hostBase } : { ok: true }
+  return hostBase || agentId === 'claude' ? { ok: true, env: base } : { ok: true }
 }
