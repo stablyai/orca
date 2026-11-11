@@ -4170,7 +4170,8 @@
                 "uploadingFiles_one": "{{count}} Datei wird in die Laufzeitumgebung hochgeladen…",
                 "uploadingFiles_other": "{{count}} Dateien werden in die Laufzeitumgebung hochgeladen…",
                 "uploadingFilesToRemote_one": "{{count}} Datei wird auf den Remote-Host hochgeladen…",
-                "uploadingFilesToRemote_other": "{{count}} Dateien werden auf den Remote-Host hochgeladen…"
+                "uploadingFilesToRemote_other": "{{count}} Dateien werden auf den Remote-Host hochgeladen…",
+                "writeTargetGone": "Das Terminal wurde geschlossen, bevor der Drop eingegeben werden konnte. Dateien liegen unter:"
               }
             }
           },

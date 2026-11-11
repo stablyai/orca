@@ -11,6 +11,7 @@ import {
   type captureTerminalDropTarget,
   getCurrentTerminalDropTransport
 } from './terminal-drop-target'
+import { showTerminalDropTargetGone } from './terminal-drop-target-gone'
 import {
   getTerminalTargetShellForWorktreePath,
   resolveTerminalDropTargetShell
@@ -242,6 +243,8 @@ async function pasteResolvedDropPaths(
     args.dropTarget
   )
   if (!liveTransport) {
+    // The upload finished; say where the files landed instead of returning silently.
+    showTerminalDropTargetGone(args.paths)
     return
   }
   const writeResult = await writeTerminalDropPathsToCapturedTarget({

@@ -4087,7 +4087,8 @@
                 "skippedItems_other": "已略過 {{count}} 個項目。",
                 "failedUploads_other": "{{count}} 個檔案上傳失敗。",
                 "uploadingFiles_other": "正在將 {{count}} 個檔案上傳至執行環境…",
-                "uploadingFilesToRemote_other": "正在將 {{count}} 個檔案上傳至遠端…"
+                "uploadingFilesToRemote_other": "正在將 {{count}} 個檔案上傳至遠端…",
+                "writeTargetGone": "終端機在路徑輸入前已關閉。檔案位於："
               }
             }
           },

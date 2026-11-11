@@ -16794,6 +16794,7 @@
                 "uploadingFiles_many": "Enviando {{count}} arquivos para o runtime…",
                 "uploadingFilesToRemote_one": "Enviando {{count}} arquivo para o host remoto…",
                 "uploadingFilesToRemote_other": "Enviando {{count}} arquivos para o host remoto…",
+                "writeTargetGone": "O terminal foi fechado antes de o caminho ser digitado. Os arquivos estão em:",
                 "uploadingFilesToRemote_many": "Enviando {{count}} arquivos para o host remoto…"
               }
             }

@@ -4707,7 +4707,8 @@
                 "uploadingFiles_one": "Uploading {{count}} file to runtime…",
                 "uploadingFiles_other": "Uploading {{count}} files to runtime…",
                 "uploadingFilesToRemote_one": "Uploading {{count}} file to remote…",
-                "uploadingFilesToRemote_other": "Uploading {{count}} files to remote…"
+                "uploadingFilesToRemote_other": "Uploading {{count}} files to remote…",
+                "writeTargetGone": "The terminal closed before the drop could be typed. Files are at:"
               }
             }
           },

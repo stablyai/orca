@@ -4268,7 +4268,8 @@
                 "uploadingFilesToRemote_one": "Загружается {{count}} файл на удалённый сервер…",
                 "uploadingFilesToRemote_few": "Загружаются {{count}} файла на удалённый сервер…",
                 "uploadingFilesToRemote_many": "Загружается {{count}} файлов на удалённый сервер…",
-                "uploadingFilesToRemote_other": "Загружается {{count}} файла на удалённый сервер…"
+                "uploadingFilesToRemote_other": "Загружается {{count}} файла на удалённый сервер…",
+                "writeTargetGone": "Терминал закрылся до ввода пути. Файлы находятся в:"
               }
             }
           },
