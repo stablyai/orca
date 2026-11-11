@@ -27959,7 +27959,7 @@
     "useChatGPT": "Use my ChatGPT account",
     "notSetUpKey": "Not set up · using {{key}}",
     "notSetUp": "Not set up",
-    "notSetUpDetail": "One sign-in on this computer. Then every cloud workspace can use it.",
+    "notSetUpDetail": "One sign-in. Then every cloud workspace can use it.",
     "tryAgain": "Try again",
     "expired": "Your {{agent}} sign-in expired",
     "expiredDetail": "Cloud workspaces use {{key}} until you renew. Nothing else changed.",
@@ -28077,7 +28077,6 @@
     "openRow": "Open agent accounts for {{host}}",
     "emptyTitle": "Only this computer so far",
     "emptyDetail": "When you add an SSH host, pair a machine or start a cloud workspace, its sign-ins show up here.",
-    "footnote": "“Signed in” means the host confirmed it in the last minute. Orca Cloud comes from your Orca account, so there’s nothing to check per sandbox. Orca doesn’t wake a sandbox just to check sign-ins.",
     "summary": "Checked {{count}} hosts. {{attention}} need attention.",
     "cell": {
       "signedIn": "Signed in",
