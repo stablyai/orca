@@ -83,6 +83,7 @@ export function useNativeChatSkills(
   const paneDiscoveryCache = useRef(new Map<string, SkillDiscoveryResult>())
   // Consume retry intent once; a generation-wide force flag would leak across pane switches.
   const forceNextDiscovery = useRef(false)
+  const activeDiscoveryKey = useRef<string | null>(null)
   const profile = getNativeChatAgentProfile(agent)
 
   useEffect(() => {
@@ -90,6 +91,13 @@ export function useNativeChatSkills(
     if (!profile || !enabled || !context) {
       // Without a current pane, discard retry intent before it can force another pane’s scan.
       forceNextDiscovery.current = false
+      // Why: a successful scan is only a snapshot of the open picker. Keeping it,
+      // or the scan still in flight, after close hides skills installed while shut.
+      paneDiscoveryCache.current.clear()
+      if (activeDiscoveryKey.current) {
+        inFlightDiscovery.delete(activeDiscoveryKey.current)
+        activeDiscoveryKey.current = null
+      }
       setState(IDLE_STATE)
       return
     }
@@ -110,6 +118,7 @@ export function useNativeChatSkills(
     }
 
     const paneCacheKey = context.key
+    activeDiscoveryKey.current = paneCacheKey
     const cached = paneDiscoveryCache.current.get(paneCacheKey)
     if (cached) {
       emitNativeChatSkillDiscovery({
@@ -127,10 +136,11 @@ export function useNativeChatSkills(
     const request = getOrStartDiscovery(context, forced)
     void request.then(
       (result) => {
-        paneDiscoveryCache.current.set(paneCacheKey, result)
+        // Why: a scan that finishes after close must not become the next open's snapshot.
         if (cancelled) {
           return
         }
+        paneDiscoveryCache.current.set(paneCacheKey, result)
         emitNativeChatSkillDiscovery({
           agent,
           outcome: 'ready',
