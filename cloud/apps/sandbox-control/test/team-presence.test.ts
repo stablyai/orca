@@ -40,10 +40,16 @@ describe('teammate profiles', () => {
     outbox.run('u1', secretId, accountId, now - DAY - 2 * HOUR, now - DAY)
     outbox.run('u2', sharedId, accountId, now - 30 * MIN, now)
 
+    // Not shared until Alice turns on "Pokes and activity"; workspaces she shared still show.
+    const hidden = (await t.req(t.bob, 'GET', '/v1/team/members/alice/profile?utcOffsetMin=0')).body.profile
+    expect(hidden).toMatchObject({ usage: null, pokes: { enabled: false, teammateEnabled: false } })
+    expect(hidden.recentWorkspaces).toHaveLength(1)
+    await t.req(t.alice, 'PUT', '/v1/team/pokes/settings', { enabled: true })
+
     const seen = await t.req(t.bob, 'GET', '/v1/team/members/alice/profile?utcOffsetMin=0')
     expect(seen.status).toBe(200)
     const profile = seen.body.profile
-    expect(profile).toMatchObject({ userId: 'alice', self: false, name: 'Alice Doe', pokes: { enabled: false, teammateEnabled: null } })
+    expect(profile).toMatchObject({ userId: 'alice', self: false, name: 'Alice Doe', pokes: { enabled: false, teammateEnabled: true } })
     expect(profile.recentWorkspaces.map((w: { id: string }) => w.id)).toEqual([sharedId])
     expect(profile.usage.own).toBeNull()
     expect(profile.usage.levels).toHaveLength(182)

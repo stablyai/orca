@@ -100,8 +100,8 @@ function pokeFooterCopy(
   if (!pokes.enabled) {
     return {
       note: t(
-        'auto.components.teammates.pokesOffYou',
-        'Pokes are off. Turn them on in Settings → Experimental.'
+        'auto.components.teammates.pokesOffYouActivity',
+        'Pokes are off. Turn on Pokes and activity in Settings → Experimental.'
       ),
       canPoke: false,
       turnOn: true
@@ -178,7 +178,17 @@ export function TeammateProfileView(props: TeammateProfileViewProps): React.JSX.
           {t('auto.components.teammates.usageHeading', 'Usage')}
         </h3>
         {profile ? (
-          <TeammateUsageHeatmap usage={profile.usage} self={self} name={props.name} />
+          profile.usage ? (
+            <TeammateUsageHeatmap usage={profile.usage} self={self} name={props.name} />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'auto.components.teammates.activityNotShared',
+                '{{name}} hasn’t shared their activity.',
+                { name: props.name }
+              )}
+            </p>
+          )
         ) : props.error ? null : (
           <UsageSkeleton />
         )}

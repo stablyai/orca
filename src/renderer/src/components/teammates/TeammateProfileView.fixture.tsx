@@ -162,6 +162,19 @@ export const quietTeammate = defineFixture({
   )
 })
 
+/** A teammate who hasn't turned on "Pokes and activity": no heatmap, a plain line instead. */
+export const activityNotShared = defineFixture({
+  width: 600,
+  render: () => (
+    <Frame>
+      <TeammateProfileView
+        {...base}
+        profile={profile({ usage: null, pokes: { enabled: true, teammateEnabled: false } })}
+      />
+    </Frame>
+  )
+})
+
 /** Rate limited after a poke. */
 export const pokeCooldown = defineFixture({
   width: 600,

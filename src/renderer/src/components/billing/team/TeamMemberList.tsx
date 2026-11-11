@@ -1,4 +1,12 @@
-import { Crown, LogOut, MailPlus, MoreHorizontal, UserMinus, XCircle } from 'lucide-react'
+import {
+  Crown,
+  LogOut,
+  MailPlus,
+  MoreHorizontal,
+  UserMinus,
+  UserRound,
+  XCircle
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -120,7 +128,23 @@ function RowMenu({
   const name =
     row.kind === 'member' ? (row.member.displayName ?? row.member.email) : row.invite.email
   const items: React.ReactNode[] = []
+  const profileUserId = row.kind === 'member' && row.status === 'active' ? row.member.userId : null
+  if (profileUserId && props.onOpenProfile) {
+    items.push(
+      <DropdownMenuItem key="profile" onSelect={() => props.onOpenProfile?.(profileUserId)}>
+        <UserRound />
+        {t('auto.components.billing.team.viewProfile', 'View profile')}
+      </DropdownMenuItem>
+    )
+  }
+  // Profile sits apart from the role and membership actions below it.
+  const separateFromProfile = (): void => {
+    if (items.length === 1 && profileUserId && props.onOpenProfile) {
+      items.push(<DropdownMenuSeparator key="profile-sep" />)
+    }
+  }
   if (row.kind === 'invite' && row.manageable) {
+    separateFromProfile()
     items.push(
       <DropdownMenuItem
         key="resend"
@@ -141,6 +165,7 @@ function RowMenu({
     )
   }
   if (row.kind === 'member' && row.manageable) {
+    separateFromProfile()
     if (props.viewerRole === 'owner' && row.member.role !== 'owner') {
       items.push(
         <DropdownMenuItem key="owner" onSelect={() => props.onMakeOwner(row.member)}>
@@ -162,6 +187,7 @@ function RowMenu({
     )
   }
   if (row.self) {
+    separateFromProfile()
     items.push(
       <DropdownMenuItem
         key="leave"

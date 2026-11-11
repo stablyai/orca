@@ -9,8 +9,8 @@ export function pokeRefusalCopy(
   switch (result.reason ?? '') {
     case 'pokes_off':
       return t(
-        'auto.components.teammates.pokesOffYou',
-        'Pokes are off. Turn them on in Settings → Experimental.'
+        'auto.components.teammates.pokesOffYouActivity',
+        'Pokes are off. Turn on Pokes and activity in Settings → Experimental.'
       )
     case 'teammate_pokes_off':
       return t('auto.components.teammates.pokesOffThem', '{{name}} hasn’t turned on Pokes yet.', {

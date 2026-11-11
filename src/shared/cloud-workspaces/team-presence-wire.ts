@@ -37,12 +37,13 @@ export const TeammateProfileSchema = z.object({
   self: z.boolean(),
   /** The member's own token name, when the control plane has seen one; the roster wins over it. */
   name: z.string().max(80).nullable(),
-  usage: TeammateUsageSchema,
+  /** null: the teammate hasn't turned on "Pokes and activity", so their activity isn't shared. */
+  usage: TeammateUsageSchema.nullable(),
   recentWorkspaces: z.array(CloudWorkspaceSchema).max(20),
   pokes: z.object({
     /** The viewer has Pokes turned on. */
     enabled: z.boolean(),
-    /** The teammate has it on too; null unless the viewer has it on (and for yourself). */
+    /** The teammate has it on (it also shares their activity); null on your own profile. */
     teammateEnabled: z.boolean().nullable()
   })
 })

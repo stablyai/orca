@@ -10955,11 +10955,12 @@
               "password": "password manager"
             },
             "pokes": {
-              "title": "Pokes",
-              "description": "Poke a teammate from their profile. Works when you both turn it on.",
               "poke": "poke",
               "nudge": "nudge",
-              "teammate": "teammate"
+              "teammate": "teammate",
+              "activityTitle": "Pokes and activity",
+              "activityDescription": "Teammates can poke you and see which days you used Orca Cloud. Amounts stay private.",
+              "activity": "activity"
             }
           }
         },
@@ -20705,7 +20706,8 @@
           "nameTaken": "That team name is taken. Try another.",
           "totalPerMonth": "{{total}} per month",
           "totalPerYear": "{{total}} per year",
-          "openProfile": "Open {{value0}}’s profile"
+          "openProfile": "Open {{value0}}’s profile",
+          "viewProfile": "View profile"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -21043,8 +21045,6 @@
         "pokesNeedTeam": "Sign in to Orca and switch to a team to use Pokes.",
         "pokesSaveFailed": "Couldn’t save. Check your connection and try again.",
         "unreachable": "Can’t reach Orca Cloud right now. Check your connection.",
-        "pokesSettingCopy": "Poke a teammate from their profile, and see their pokes in Orca. Pokes only work when you both turn this on.",
-        "pokesToggle": "Toggle Pokes",
         "someone": "A teammate",
         "pokedYou": "{{name}} poked you",
         "pokeBack": "Poke back",
@@ -21052,7 +21052,6 @@
         "viewProfile": "View profile",
         "title": "Teammate profile",
         "description": "Role, daily Orca Cloud usage and recent workspaces.",
-        "pokesOffYou": "Pokes are off. Turn them on in Settings → Experimental.",
         "pokesOffThem": "{{name}} hasn’t turned on Pokes yet.",
         "loadFailed": "Couldn’t load this profile",
         "tryAgain": "Try again",
@@ -21076,14 +21075,18 @@
         "heatmapSummarySelf": "You used Orca Cloud on {{active}} of the last {{days}} days",
         "heatmapSummary": "{{name}} used Orca Cloud on {{active}} of the last {{days}} days",
         "heatmapEmpty": "No Orca Cloud usage in the last 26 weeks.",
-        "heatmapHintSelf": "Sandbox hours and agent usage each day. Only you see the amounts.",
         "heatmapHint": "Each day compared with their busiest day. Amounts stay private.",
         "legendLess": "Less",
         "legendMore": "More",
         "pokeCooldown": "You just poked {{name}}. Try again in a minute.",
         "pokeRate": "That’s a lot of pokes. Try again later.",
         "pokeOffline": "Can’t reach Orca Cloud right now. Check your connection.",
-        "pokeFailed": "Couldn’t send the poke. Try again."
+        "pokeFailed": "Couldn’t send the poke. Try again.",
+        "pokesActivitySettingCopy": "Teammates can poke you and see which days you used Orca Cloud. Amounts stay private.",
+        "pokesActivityToggle": "Toggle Pokes and activity",
+        "pokesOffYouActivity": "Pokes are off. Turn on Pokes and activity in Settings → Experimental.",
+        "activityNotShared": "{{name}} hasn’t shared their activity.",
+        "heatmapHintSelfHover": "Hover a day to see your sandbox hours."
       }
     },
     "i18n": {

@@ -8,7 +8,7 @@ import { getExperimentalSearchEntry } from '../settings/advanced/experimental-se
 import { pokesAccountKey } from './poke-copy'
 import { readPokes, setPokesEnabled, usePokesState } from './pokes-store'
 
-/** Settings → Experimental → Pokes. Saved on Orca Cloud for this team, so it follows you. */
+/** Settings → Experimental → Pokes and activity (poke and be poked, share your daily activity). Saved on Orca Cloud for this team, so it follows you. */
 export function PokesExperimentalSetting(): React.JSX.Element {
   const t = useTranslate()
   const entry = getExperimentalSearchEntry().pokes
@@ -51,8 +51,8 @@ export function PokesExperimentalSetting(): React.JSX.Element {
           <Label>{entry.title}</Label>
           <p className="text-xs text-muted-foreground">
             {t(
-              'auto.components.teammates.pokesSettingCopy',
-              'Poke a teammate from their profile, and see their pokes in Orca. Pokes only work when you both turn this on.'
+              'auto.components.teammates.pokesActivitySettingCopy',
+              'Teammates can poke you and see which days you used Orca Cloud. Amounts stay private.'
             )}
           </p>
           {note ? <p className="text-xs text-foreground">{note}</p> : null}
@@ -61,7 +61,10 @@ export function PokesExperimentalSetting(): React.JSX.Element {
           checked={enabled}
           disabled={!accountKey || current?.enabled === null || current === null}
           aria-busy={current?.saving || undefined}
-          aria-label={t('auto.components.teammates.pokesToggle', 'Toggle Pokes')}
+          aria-label={t(
+            'auto.components.teammates.pokesActivityToggle',
+            'Toggle Pokes and activity'
+          )}
           onCheckedChange={(next) => {
             if (accountKey && !current?.saving) {
               void setPokesEnabled(accountKey, next)

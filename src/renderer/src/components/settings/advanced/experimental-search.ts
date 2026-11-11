@@ -187,10 +187,13 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
       ephemeralVms: getEphemeralVmsSearchEntry(),
       browserExtensions: getBrowserExtensionsExperimentalSearchEntry(),
       pokes: {
-        title: translate('auto.components.settings.experimental.search.pokes.title', 'Pokes'),
+        title: translate(
+          'auto.components.settings.experimental.search.pokes.activityTitle',
+          'Pokes and activity'
+        ),
         description: translate(
-          'auto.components.settings.experimental.search.pokes.description',
-          'Poke a teammate from their profile. Works when you both turn it on.'
+          'auto.components.settings.experimental.search.pokes.activityDescription',
+          'Teammates can poke you and see which days you used Orca Cloud. Amounts stay private.'
         ),
         keywords: [
           ...translateSearchKeyword(
@@ -208,6 +211,10 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
           ...translateSearchKeyword(
             'auto.components.settings.experimental.search.pokes.teammate',
             'teammate'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.pokes.activity',
+            'activity'
           )
         ],
         targetSectionId: 'experimental-pokes'

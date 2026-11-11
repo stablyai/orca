@@ -92,8 +92,8 @@ export function TeammateUsageHeatmap({
       ? t('auto.components.teammates.heatmapEmpty', 'No Orca Cloud usage in the last 26 weeks.')
       : self
         ? t(
-            'auto.components.teammates.heatmapHintSelf',
-            'Sandbox hours and agent usage each day. Only you see the amounts.'
+            'auto.components.teammates.heatmapHintSelfHover',
+            'Hover a day to see your sandbox hours.'
           )
         : t(
             'auto.components.teammates.heatmapHint',

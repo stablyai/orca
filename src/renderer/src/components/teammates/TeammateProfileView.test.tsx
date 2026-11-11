@@ -63,6 +63,12 @@ it('sends you to Settings when your Pokes are off, and disables Poke when theirs
   expect(screen.getByRole('button', { name: /Poke/ }).hasAttribute('disabled')).toBe(true)
 })
 
+it('says when a teammate has not shared their activity', () => {
+  view({ profile: profile({ usage: null, pokes: { enabled: true, teammateEnabled: false } }) })
+  expect(screen.getByText('Grace Hopper hasn’t shared their activity.')).toBeTruthy()
+  expect(screen.queryByRole('img')).toBeNull()
+})
+
 it('shows no Poke on your own profile', () => {
   view({ profile: profile({ self: true, pokes: { enabled: true, teammateEnabled: null } }) })
   expect(screen.queryByRole('button', { name: /Poke/ })).toBeNull()

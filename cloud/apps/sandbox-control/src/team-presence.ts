@@ -5,7 +5,8 @@
 //   PUT  /v1/team/pokes/settings {enabled}
 //   POST /v1/team/pokes/seen {ids}
 // Privacy: a profile shows what a teammate can already see (name, role from the roster, workspaces
-// they can open) plus a 0–4 intensity per day. Exact amounts only go to the person themself. The
+// they can open). The 0–4 intensity per day is shared only by people who turned on "Pokes and
+// activity" (the same opt-in as Pokes); exact amounts only ever go to the person themself. The
 // heatmap counts the member's sandbox time (usage_outbox, attributed to the workspace owner) plus
 // model spend their own client reported (member_usage_hours).
 import { z } from 'zod'
@@ -136,7 +137,6 @@ export async function memberProfile(db: D1Database, caller: SandboxCaller, userI
   }
   const offset = Number(url.searchParams.get('utcOffsetMin') ?? '0')
   const utcOffsetMin = Number.isInteger(offset) && Math.abs(offset) <= 14 * 60 ? offset : 0
-  const usage = await memberDailyUsage(db, caller.accountId, userId, now, utcOffsetMin)
   const { results } = await db
     .prepare(
       `SELECT * FROM sandboxes WHERE account_id = ? AND status <> 'destroyed' AND archived_at IS NULL
@@ -152,19 +152,21 @@ export async function memberProfile(db: D1Database, caller: SandboxCaller, userI
     caller.orgId ? pokesEnabled(db, caller.accountId, caller.userId) : Promise.resolve(false),
     caller.orgId && !self ? pokesEnabled(db, caller.accountId, userId) : Promise.resolve(false)
   ])
+  // Your own heatmap always; a teammate's only when they chose to share it.
+  const usage = self || theirs ? await memberDailyUsage(db, caller.accountId, userId, now, utcOffsetMin) : null
   return {
     profile: {
       userId,
       self,
       name: names.get(userId) ?? null,
-      usage: {
+      usage: usage && {
         start: usage.start,
         levels: usage.levels,
         activeDays: usage.activeDays,
         own: self ? { computeMs: usage.computeMs, usdMicros: usage.usdMicros } : null
       },
       recentWorkspaces,
-      pokes: { enabled: mine, teammateEnabled: mine && !self ? theirs : null }
+      pokes: { enabled: mine, teammateEnabled: self ? null : theirs }
     }
   }
 }
