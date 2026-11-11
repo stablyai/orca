@@ -185,17 +185,40 @@ export function humanizeOrcaCloudLogLine(line: string, t: Translate): string | n
   return null
 }
 
-// "Starting the sandbox…" would only repeat the step's own label.
-const DETAIL_PHASES = new Set(['checking-entitlement', 'booting', 'connecting'])
+/** Past this, a still-running "Start sandbox" names what it is waiting on (N-01: no silent 30 s). */
+export const PROVISION_STAGE_AFTER_MS = 5_000
 
-/** The latest progress phase in the log, in plain words, for the running step's detail line. */
-export function latestOrcaCloudPhaseLabel(log: string, t: Translate): string | null {
-  const lines = log.split('\n')
+/**
+ * What a "Start sandbox" step that has run past PROVISION_STAGE_AFTER_MS is waiting on, in plain words:
+ * the desktop still preparing the project (before the create is sent), the sandbox starting, or the
+ * desktop connecting to it. Null before then, so a normal start stays quiet.
+ */
+export function provisionStageLabel(
+  entry: { phase?: string; provisioningLog?: string },
+  elapsedMs: number | null,
+  t: Translate
+): string | null {
+  if (elapsedMs === null || elapsedMs < PROVISION_STAGE_AFTER_MS) {
+    return null
+  }
+  if (entry.phase === 'preparing') {
+    return t(
+      'auto.components.worktree.creation.orcaCloudBuildLog.preparingProject',
+      'Getting your project ready…'
+    )
+  }
+  const lines = (entry.provisioningLog ?? '').split('\n')
   for (let index = lines.length - 1; index >= 0; index--) {
     const phase = PHASE_LINE.exec(lines[index].trim())?.[1]
-    if (phase && phaseLabel(phase, t)) {
-      return DETAIL_PHASES.has(phase) ? phaseLabel(phase, t) : null
+    if (phase === 'connecting' || phase === 'checking-entitlement') {
+      return phaseLabel(phase, t)
+    }
+    if (phase === 'provisioning' || phase === 'booting') {
+      break
     }
   }
-  return null
+  return t(
+    'auto.components.worktree.creation.orcaCloudBuildLog.provisioning',
+    'Starting the sandbox…'
+  )
 }

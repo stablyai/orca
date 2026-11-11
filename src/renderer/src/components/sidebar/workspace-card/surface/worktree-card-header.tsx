@@ -13,6 +13,7 @@ import {
 } from '../identity/worktree-card-header-items'
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeCardHostMark } from '../host/WorktreeCardHostMark'
+import { CloudAgentHeldMark } from '@/components/orca-cloud/CloudAgentHeldMark'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
@@ -111,6 +112,9 @@ export function WorktreeCardHeader({
           }
           onBeginEditingConsumed={affiliateListMode ? undefined : () => setRenamingWorktreeId(null)}
         />
+
+        {/* N-03: the agent waits on its pane's strip (Orca Cloud): this mark is the signal away. */}
+        {!titleRenaming ? <CloudAgentHeldMark worktreeId={worktree.id} /> : null}
 
         {typeof worktree.firstAgentMessageRenameError === 'string' &&
         worktree.firstAgentMessageRenameError.length > 0 &&

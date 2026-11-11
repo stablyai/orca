@@ -166,6 +166,31 @@ export const cloudStarting = frame(
   T0 + 3_000
 )
 
+// N-01: past 5 s the running "Start sandbox" names what it waits on (one frame per stage).
+export const cloudStageProject = frame(
+  entry({ phase: 'preparing', provisioningLog: '', phaseLog: [] }, CLOUD_RECIPE),
+  null,
+  T0 + 12_000
+)
+
+export const cloudStagePlan = frame(
+  entry({ provisioningLog: '[orca-cloud] checking-entitlement' }, CLOUD_RECIPE),
+  null,
+  T0 + 12_000
+)
+
+export const cloudStageStarting = frame(
+  entry({ provisioningLog: CLOUD_LOG }, CLOUD_RECIPE),
+  null,
+  T0 + 12_000
+)
+
+export const cloudStageConnecting = frame(
+  entry({ provisioningLog: `${CLOUD_LOG}\n[orca-cloud] connecting` }, CLOUD_RECIPE),
+  null,
+  T0 + 12_000
+)
+
 export const cloudPreparing = frame(
   entry(
     { environmentCheck: { status: 'running', startedAt: T0 + 4_800 }, provisioningLog: LOG },

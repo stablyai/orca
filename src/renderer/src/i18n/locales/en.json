@@ -4363,7 +4363,8 @@
             "refusedProvider2": "Orca Cloud is unavailable right now.",
             "rollingOver2": "Restarting the sandbox…",
             "cloning": "Cloning the repository…",
-            "updating": "Updating the repository…"
+            "updating": "Updating the repository…",
+            "preparingProject": "Getting your project ready…"
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",
@@ -16745,7 +16746,7 @@
             "orcaCloudRenew": "Renew",
             "orcaCloudPaymentFailed": "Payment failed",
             "orcaCloudSignInButton": "Sign in",
-            "orcaCloudHosted": "Hosted sandbox",
+            "orcaCloudHosted": "Sandbox",
             "orcaCloudSpecs2": "{{value0}} vCPU · {{value1}} GB",
             "orcaCloudPlanEnded": "Your Team plan ended",
             "orcaCloudCapReached": "Spend cap reached",
@@ -23313,19 +23314,6 @@
         "showMore": "Show more repositories…",
         "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer."
       },
-      "cloudStart": {
-        "setUpAgentOnce": "Set up {{agent}} once",
-        "agentNotStartedShort": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start.",
-        "agentNotStartedIn": "{{agent}} isn’t set up for Orca Cloud, so it didn’t start in {{workspace}}.",
-        "copyCode": "Copy code",
-        "openSettings": "Open Settings",
-        "signInBrowser": "Finish signing in to {{agent}} in your browser…",
-        "signInDevice": "Enter {{code}} at {{host}} to sign in to {{agent}}.",
-        "signInPaste": "Paste the {{agent}} setup token in Settings to finish.",
-        "signInSaving": "Saving…",
-        "agentWillNotStartShort": "{{agent}} isn’t set up for Orca Cloud, so it won’t start.",
-        "agentWillNotStartIn": "{{agent}} isn’t set up for Orca Cloud, so it won’t start in {{workspace}}."
-      },
       "agentLabel": "Agent"
     },
     "JiraIssueWorkspace": {
@@ -24939,8 +24927,10 @@
       "existingHint": "New commits go on this branch.",
       "new": "New branch",
       "newHint": "Create a new local branch",
+      "newHintCloud": "Create a new branch.",
       "newName": "New branch name",
-      "automaticName": "Automatic name"
+      "automaticName": "Automatic name",
+      "titleCloud": "Branch for this workspace"
     },
     "links": {
       "foreignReview": "This review belongs to another repository. Add reviews from this workspace’s repository.",
@@ -27548,6 +27538,10 @@
     "failedLocalNextV2": "Use Move to this computer from the sandbox panel to bring them over. Your files are safe in the cloud workspace."
   },
   "orcaCloud": {
+    "agentHold": {
+      "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
+      "expired": "{{agent}} sign-in expired"
+    },
     "continueOffer": {
       "title": "An agent was interrupted by the restart",
       "action": "Continue"

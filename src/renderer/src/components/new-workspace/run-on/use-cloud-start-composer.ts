@@ -31,21 +31,9 @@ import {
   orcaCloudNeedsGitHubRepo,
   type CloudStartView
 } from './cloud-start-view'
-import { showCloudAgentNotStartedToast } from '@/lib/orca-cloud/cloud-agent-not-started-toast'
 import { orcaCloudWallNotice, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
-import { isOrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 
 export type { CloudStartView } from './cloud-start-view'
-
-/**
- * The agent isn't set up: its pane holds on the "Set up once" strip (PC-3b), so the toast only
- * names the workspace once the user has moved to another one (design-squad journey).
- */
-function showAgentNotStartedToast(agent: string | null, workspaceName: string): void {
-  if (isOrcaCloudAccountAgent(agent)) {
-    showCloudAgentNotStartedToast(agent, workspaceName, { onlyWhenAway: true })
-  }
-}
 
 export function useCloudStartComposer({
   active,
@@ -121,12 +109,10 @@ export function useCloudStartComposer({
   })
   const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, cloudSelected)
   const setupNeeded = cloudSetupRequired(steps, { teamSwitch: switchTeam !== null })
-  // The agent has no Orca Cloud account (the user skipped setting it up). It is still created with
-  // the workspace: its launch holds on the pane's "Set up once" strip and never reaches the agent's
-  // own /login (PC-3b, #385), and its first prompt waits for it.
-  const agentUnset =
-    cloudSelected && steps.some((step) => step.id === 'agent' && step.state === 'optional')
-  const onCreateRaw = useCloudOnlyCreate({
+  // An agent with no Orca Cloud account is still created with the workspace: its launch holds on
+  // the pane's "Set up once" strip and never reaches the agent's own /login (PC-3b, #385). In the
+  // workspace the strip asks; away, the sidebar row's mark does (N-03: no toast follows the user).
+  const onCreate = useCloudOnlyCreate({
     cloudOnly,
     createWorkspace,
     prompt,
@@ -134,12 +120,6 @@ export function useCloudStartComposer({
     profileId,
     onClose
   })
-  const onCreate = useCallback(() => {
-    onCreateRaw()
-    if (agentUnset) {
-      showAgentNotStartedToast(agent, prompt)
-    }
-  }, [agent, agentUnset, onCreateRaw, prompt])
 
   const { markTouched } = useRunOnDefault({
     active,

@@ -46,7 +46,7 @@ import {
   type VmBuildStepTimings
 } from './vm-build-timing'
 import { cloneStageLabel, headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
-import { humanizeOrcaCloudLogLine, latestOrcaCloudPhaseLabel } from './orca-cloud-build-log'
+import { humanizeOrcaCloudLogLine, provisionStageLabel } from './orca-cloud-build-log'
 import {
   orcaCloudCloneProgress,
   orcaCloudPlannedRepoMode
@@ -269,7 +269,7 @@ export function VmBuildSheet({
                   cloud={cloud}
                   detail={
                     cloud && step.id === 'provision' && step.state === 'running'
-                      ? latestOrcaCloudPhaseLabel(entry.provisioningLog ?? '', t)
+                      ? provisionStageLabel(entry, step.elapsedMs, t)
                       : step.id === 'clone' && step.state === 'running'
                         ? cloneStageLabel(step.stage, t, step.cloneMode)
                         : null
@@ -277,6 +277,7 @@ export function VmBuildSheet({
                   timing={timings[step.id] ?? null}
                   stopped={failure !== null}
                   t={t}
+                  waitedMs={steps.find((candidate) => candidate.id === 'provision')?.elapsedMs ?? 0}
                 />
               ))}
               {/* Orca Cloud: agent setup happens after create (the setup page and the workspace's

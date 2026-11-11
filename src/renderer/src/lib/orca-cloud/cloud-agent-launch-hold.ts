@@ -97,7 +97,16 @@ type Entry = CloudAgentHold & { release: (outcome: 'proceed' | 'cancel') => void
 const holds = new Map<string, Entry>()
 const listeners = new Set<() => void>()
 
+/** Every current hold, as one stable snapshot for subscribers (rebuilt on each change). */
+let holdsSnapshot: readonly CloudAgentHold[] = []
+
 function notify(): void {
+  holdsSnapshot = [...holds.values()].map(({ paneKey, agent, prompt, reason }) => ({
+    paneKey,
+    agent,
+    prompt,
+    reason
+  }))
   for (const listener of listeners) {
     listener()
   }
@@ -114,6 +123,20 @@ export function useCloudAgentHold(paneKey: string): CloudAgentHold | null {
     () => holds.get(paneKey) ?? null,
     () => null
   )
+}
+
+/** All held launches (N-03: the sidebar row marks a workspace whose agent waits on its strip). */
+export function useCloudAgentHolds(): readonly CloudAgentHold[] {
+  return useSyncExternalStore(
+    subscribe,
+    () => holdsSnapshot,
+    () => holdsSnapshot
+  )
+}
+
+/** The tab a hold's pane key belongs to: `tab:<id>` for a host tab, else `<tabId>:<leaf>`. */
+export function cloudAgentHoldTabId(paneKey: string): string {
+  return paneKey.startsWith('tab:') ? paneKey.slice(4) : (paneKey.split(':')[0] ?? paneKey)
 }
 
 export function readCloudAgentHold(paneKey: string): CloudAgentHold | null {
