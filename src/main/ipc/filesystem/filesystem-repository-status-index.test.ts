@@ -1,5 +1,5 @@
-import { afterEach, expect, it, vi } from 'vitest'
-import { handlers } from './filesystem-test-harness'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { handlers, resetFilesystemIpcMocks } from './filesystem-test-harness'
 import type { StateWriteListener } from '../../persistence/loading-store/write-scheduling'
 
 const read = vi.hoisted(() =>
@@ -25,6 +25,8 @@ vi.mock('../../wsl/discovery/distro-catalog', () => ({
 import { registerFilesystemGitStatusHandlers } from './filesystem-git-status-handlers'
 import { createFilesystemHandlerContext } from './filesystem-handler-context'
 import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
+
+beforeEach(resetFilesystemIpcMocks)
 
 const originalPlatform = process.platform
 afterEach(() =>

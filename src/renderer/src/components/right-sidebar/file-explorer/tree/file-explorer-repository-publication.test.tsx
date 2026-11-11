@@ -120,6 +120,7 @@ it.each([1, 10])(
       ]
     })
     await act(() => vi.advanceTimersByTimeAsync(1000))
+    await act(() => vi.advanceTimersByTimeAsync(1000))
     const initialPublications = fixture.publications.length
     fixture.projections.clear()
     act(() => start())
@@ -195,6 +196,7 @@ it.each(['hide', 'input'] as const)(
         { path: 'repo', kind: 'repository', status: { entries: [], conflictOperation: 'unknown' } }
       ]
     })
+    await act(() => vi.advanceTimersByTimeAsync(1000))
     await act(() => vi.advanceTimersByTimeAsync(1000))
     const empty = fixture.result.current[0].ignored
     const before = fixture.publications.length

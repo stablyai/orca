@@ -84,7 +84,10 @@ beforeEach(() => {
         cancelGenerateCommitMessage: gitCancelGenerateCommitMessage
       },
       runtime: { call: runtimeCall },
-      runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
+      runtimeEnvironments: {
+        call: runtimeEnvironmentTransportCall,
+        cancelSubscription: vi.fn().mockResolvedValue(undefined)
+      }
     }
   })
 })
