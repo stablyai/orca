@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 
+/** An Engine manifest with `badgeCount` copies of `badge` merged over a valid one. */
 function manifest(
   badge: Record<string, unknown>,
   overrides: Record<string, unknown> = {},

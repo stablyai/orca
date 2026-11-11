@@ -54,6 +54,7 @@ export function fontContributionRows(
   }))
 }
 
+/** One row per worktree badge title, each described as a badge beside matching workspaces. */
 export function worktreeBadgeContributionRows(
   titles: readonly string[],
   t: Translate = translate

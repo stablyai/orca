@@ -26,6 +26,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>
 }))
 
+/** The live Engine plugin, its badge limited to `host` and searching `searchDepth` folders down. */
 function enginePlugin(host: 'local' | 'any' = 'local', searchDepth = 0): PluginHostListEntry {
   return {
     pluginKey: 'orca-samples.engine',

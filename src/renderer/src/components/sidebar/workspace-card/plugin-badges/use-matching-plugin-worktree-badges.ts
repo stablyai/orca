@@ -32,15 +32,18 @@ const RESCAN_AFTER_MS = 30_000
 let scans: ReadonlyMap<string, FolderScan> = new Map()
 const listeners = new Set<() => void>()
 
+/** Registers a `useSyncExternalStore` listener for scan changes; returns its unsubscribe. */
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
+/** The current scans snapshot; replaced, never mutated, so React sees each change. */
 function getScans(): ReadonlyMap<string, FolderScan> {
   return scans
 }
 
+/** Records one scan in a new snapshot and notifies every subscribed card. */
 function setScan(key: string, scan: FolderScan): void {
   scans = new Map(scans).set(key, scan)
   listeners.forEach((listener) => listener())

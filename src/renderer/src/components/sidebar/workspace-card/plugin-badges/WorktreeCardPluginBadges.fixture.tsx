@@ -81,6 +81,7 @@ const store = {
   worktreeCardProperties: ['status' as const, 'branch' as const]
 }
 
+/** A workspace holding engine projects above one holding none, as the sidebar shows them. */
 function Cards(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-1 bg-worktree-sidebar p-2 pb-24 text-worktree-sidebar-foreground">
@@ -116,6 +117,7 @@ export const menuOpen = defineFixture({
   store,
   setup: () => installPlugin(true),
   render: () => <Cards />,
+  /** Opens the badge's menu from the keyboard and hides the hover card that opens with it. */
   interact: async (frame) => {
     const badge = await waitForBadge(frame)
     badge.focus()

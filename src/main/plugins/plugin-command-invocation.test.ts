@@ -44,6 +44,7 @@ const worktree: Workspace = {
   host: 'local'
 }
 
+/** The args `commandId` of `target` would run with, given what the workspace resolver returns. */
 async function argsFor(
   commandId: string,
   args: unknown,

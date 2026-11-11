@@ -20,6 +20,7 @@ export const PLUGIN_WORKTREE_BADGE_MAX_SEARCHED_FOLDERS = 256
 
 const SINCE = PLUGIN_WORKTREE_BADGES_SINCE
 
+/** Whether a badge icon is the path of an `.svg` file rather than a panel icon name. */
 export function isPluginWorktreeBadgeSvgIcon(icon: string): boolean {
   return /\.svg$/i.test(icon)
 }
