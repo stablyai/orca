@@ -198,6 +198,45 @@ describe('OMP _omp/subagents roster', () => {
     send(translator, roster(3, [{ id: 'a', status: 'completed' }]))
     expect(translator.subagents.drainEvidence()).toEqual([])
   })
+  it('reopens a completed child when a later roster reports it working', () => {
+    const translator = newTranslator()
+    send(translator, roster(1, [{ id: 'a', status: 'running' }]))
+    expect(translator.subagents.drainEvidence()).toMatchObject([{ type: 'live' }])
+    send(translator, roster(2, [{ id: 'a', status: 'completed' }]))
+    expect(translator.subagents.drainEvidence()).toMatchObject([
+      { type: 'ended', outcome: 'succeeded' }
+    ])
+    send(translator, roster(3, [{ id: 'a', status: 'running' }]))
+    expect(translator.subagents.drainEvidence()).toMatchObject([
+      { type: 'live', child: { handle: { id: 'a' }, state: 'working' } }
+    ])
+    send(translator, roster(4, [{ id: 'a', status: 'completed' }]))
+    expect(translator.subagents.drainEvidence()).toMatchObject([
+      { type: 'ended', outcome: 'succeeded' }
+    ])
+  })
+
+  it('applies a live roster received during session load after load finishes', () => {
+    const translator = newTranslator()
+    translator.beginLoad()
+    expect(send(translator, roster(1, [{ id: 'a', status: 'running' }]))).toEqual([])
+    expect(translator.subagents.drainEvidence()).toEqual([])
+    translator.finishLoad()
+    expect(translator.subagents.drainEvidence()).toMatchObject([
+      { type: 'live', child: { handle: { id: 'a' }, state: 'working' } }
+    ])
+  })
+
+  it('keeps the highest-seq roster received during session load', () => {
+    const translator = newTranslator()
+    translator.beginLoad()
+    send(translator, roster(5, [{ id: 'newer', status: 'running' }]))
+    send(translator, roster(4, [{ id: 'stale', status: 'running' }]))
+    translator.finishLoad()
+    expect(translator.subagents.drainEvidence()).toMatchObject([
+      { type: 'live', child: { handle: { id: 'newer' }, state: 'working' } }
+    ])
+  })
   it('settles children omitted from a newer full snapshot', () => {
     const translator = newTranslator()
     send(translator, roster(1, [{ id: 'a', status: 'running' }]))

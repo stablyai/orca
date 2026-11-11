@@ -20,6 +20,7 @@ import { translateAcpRequest } from '../requests/acp-timeline-requests'
 import { ACP_SUBSTANTIVE_UPDATES, acpSessionUpdate } from './acp-session-update'
 import { AcpSubagents } from './acp-subagents'
 import { AcpChildSessions } from './acp-child-sessions'
+import { AcpLoadWindow } from './acp-load-roster'
 import { AcpTimelineOwnership } from './acp-timeline-ownership'
 import { AcpTurnFailures } from './acp-turn-failures'
 import { acpAuthenticationRequired, acpPromptErrorDetail } from '../turns/acp-prompt-failure'
@@ -44,11 +45,14 @@ export class AcpTimelineTranslator {
   private readonly backgroundTasks: AcpBackgroundTaskTimeline
   /** Drained by the lane in journal order. */
   readonly subagents = new AcpSubagents()
+  private readonly load = new AcpLoadWindow(
+    this.subagents,
+    () => this.prompts.current !== undefined
+  )
   readonly children: AcpChildSessions
   private readonly ownership: AcpTimelineOwnership
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
   private readonly failures: AcpTurnFailures
-  private loading = false
   private readonly context = new AcpContextTimeline()
   protected activeTurn?: string
 
@@ -68,6 +72,7 @@ export class AcpTimelineTranslator {
 
   dispose(): void {
     this.ownership.dispose()
+    this.load.dispose()
     this.subagents.dispose()
   }
 
@@ -79,9 +84,7 @@ export class AcpTimelineTranslator {
     at: number,
     compactionTurn?: string
   ): { promptId: string; events: ProviderTimelineEvent[] } {
-    if (this.loading) {
-      throw new Error('ACP prompt overlaps a prompt or load')
-    }
+    this.load.assertPromptAllowed()
     const prompt = this.prompts.open(clientMessageId, at, compactionTurn)
     if (this.prompts.current?.opened) {
       this.ownership.operation().open(prompt.promptId)
@@ -130,14 +133,12 @@ export class AcpTimelineTranslator {
 
   /** Discard loaded history except context-window information. */
   beginLoad(): void {
-    if (this.prompts.current || this.loading) {
-      throw new Error('ACP load overlaps a prompt or load')
-    }
-    this.loading = true
+    this.load.begin()
   }
 
-  finishLoad(): void {
-    this.loading = false
+  /** Ends the load window; a roster it held is the live state now. */
+  finishLoad(): ProviderTimelineEvent[] {
+    return this.load.finish({ thread: this.options.sessionId })
   }
 
   reconcileSubagent(
@@ -167,7 +168,7 @@ export class AcpTimelineTranslator {
     }
     const extension = this.dialect.notification?.(method, params, at)
     const open = this.prompts.current?.opened ? this.prompts.current.turn : this.activeTurn
-    const child = this.children.notification(method, params, extension, this.loading, open, at)
+    const child = this.children.notification(method, params, extension, this.load.loading, open, at)
     if (child) {
       return child
     }
@@ -177,13 +178,16 @@ export class AcpTimelineTranslator {
     if (method !== 'session/update' && !extension) {
       return []
     }
+    if (this.load.defer(extension?.subagentRoster, at)) {
+      return []
+    }
     const envelope = acpNotificationEnvelopeSchema.safeParse(params)
     const read = method === 'session/update' ? readAcpSessionEvent(params) : null
     const standard = read?.kind === 'known' ? read.notification : undefined
     const update = standard?.update
     const markedReplay =
       (envelope.success && envelope.data._meta?.isReplay === true) || extension?.replay === true
-    if (markedReplay || (extension?.replay === undefined && this.loading)) {
+    if (markedReplay || (extension?.replay === undefined && this.load.loading)) {
       return this.context.history(update, extension?.usage, at, { thread: this.options.sessionId })
     }
     const providerTurn = extension?.turn
@@ -224,15 +228,7 @@ export class AcpTimelineTranslator {
       events.push(...this.subagents.translate(extension.subagents, join, at))
     }
     if (extension?.subagentRoster) {
-      events.push(
-        ...this.subagents.translateRoster(
-          extension.subagentRoster.seq,
-          extension.subagentRoster.children,
-          extension.subagentRoster.retainedIds,
-          join,
-          at
-        )
-      )
+      events.push(...this.subagents.translateRoster(extension.subagentRoster, join, at))
     }
     if (extension?.usage) {
       events.push(...this.context.update(extension.usage, join))

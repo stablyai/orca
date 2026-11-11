@@ -58,18 +58,21 @@ export class AcpSubagents {
 
   /** Snapshots replace the roster; a repeated or older seq is stale. Retained ids stay live. */
   translateRoster(
-    seq: number,
-    children: readonly AcpSubagentUpdate[],
-    retainedIds: readonly string[],
+    roster: { seq: number; children: readonly AcpSubagentUpdate[]; retainedIds: readonly string[] },
     join: ProviderTimelineJoin,
     at: number
   ): ProviderTimelineEvent[] {
+    const { seq, children, retainedIds } = roster
     if (seq <= this.rosterSeq) {
       return []
     }
     this.rosterSeq = seq
     const present = new Set([...children.map((child) => child.id), ...retainedIds])
-    const updates: AcpSubagentUpdate[] = [...children]
+    const updates: AcpSubagentUpdate[] = children.map((child) =>
+      child.state === 'working' && this.known.get(child.id)?.ended !== undefined
+        ? { ...child, restart: true as const }
+        : child
+    )
     for (const id of this.known.keys()) {
       if (!present.has(id)) {
         updates.push({ id, state: 'stopped', knownOnly: true })

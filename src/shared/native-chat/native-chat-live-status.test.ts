@@ -7,6 +7,8 @@ import {
   nativeChatHookHasWorkingSubagents
 } from './native-chat-live-status'
 import { shouldShowNativeChatWorking } from './native-chat-working-suppression'
+import { OMP_ACP_DIALECT } from '../../main/acp/acp-dialects/omp-dialect'
+import { AcpTimelineTranslator } from '../../main/acp/timeline/acp-timeline-translator'
 
 function assistant(id: string, text: string): NativeChatMessage {
   return {
@@ -148,14 +150,27 @@ describe('mergeNativeChatLiveSession', () => {
       new URL('../../main/acp/fixtures/omp-subagents-roster.jsonl', import.meta.url),
       'utf8'
     )
-    const frames: { children: { id: string; status: string; updatedAt: number }[] }[] = text
+    const frames: unknown[] = text
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line))
-    const subagentsOf = (children: (typeof frames)[number]['children']) =>
-      children
-        .filter((child) => child.status === 'running')
-        .map((child) => ({ id: child.id, state: 'working' as const, startedAt: child.updatedAt }))
+    const translator = new AcpTimelineTranslator({
+      sessionId: 'session-a',
+      dialect: OMP_ACP_DIALECT
+    })
+    // Live children as the host records them: the evidence each roster frame emits.
+    const working = new Map<string, number>()
+    const replay = (frame: unknown) => {
+      translator.notification('_omp/subagents', frame, 0)
+      for (const evidence of translator.subagents.drainEvidence()) {
+        if (evidence.type === 'live') {
+          working.set(evidence.child.handle.id, evidence.observedAt)
+        } else if (evidence.type === 'ended') {
+          working.delete(evidence.handle.id)
+        }
+      }
+      return [...working].map(([id, startedAt]) => ({ id, state: 'working' as const, startedAt }))
+    }
     const base = {
       messages: [assistant('a-1', 'lead done')],
       sessionId: 'session-a',
@@ -164,14 +179,17 @@ describe('mergeNativeChatLiveSession', () => {
       stateStartedAt: 0,
       transcriptLifecycle: { state: 'completed' as const, turnId: 'turn-1', timestamp: 2 }
     }
-    const liveRoster = { stateStartedAt: 0, subagents: subagentsOf(frames[0].children) }
+    const liveRoster = { stateStartedAt: 0, subagents: replay(frames[0]) }
     expect(
       mergeNativeChatLiveSession({
         ...base,
         hookHasWorkingSubagents: nativeChatHookHasWorkingSubagents(liveRoster)
       }).status
     ).toBe('working')
-    const settledRoster = { stateStartedAt: 0, subagents: subagentsOf(frames[3].children) }
+    for (const frame of frames.slice(1, 3)) {
+      replay(frame)
+    }
+    const settledRoster = { stateStartedAt: 0, subagents: replay(frames[3]) }
     expect(
       mergeNativeChatLiveSession({
         ...base,
