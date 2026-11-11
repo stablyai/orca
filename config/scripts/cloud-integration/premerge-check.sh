@@ -22,9 +22,8 @@ pnpm lint
 
 tests=()
 if [[ "${PREMERGE_FULL:-}" == 1 ]]; then
-  # Full suite (what every build cut runs before its smoke). Slow; use for risky or wide changes.
-  node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null
-  npx vitest run --config config/vitest.config.ts
+  # Full suite via the repo's own runner (what every build cut runs before its smoke). Slow; use for wide changes.
+  pnpm test
 else
   # Targeted tests. Sibling filenames alone missed real regressions (#347 broke a *-race.test.ts in the same folder),
   # so for each changed source this also runs (a) every test in its folder and (b) every test under src/ that
@@ -48,8 +47,10 @@ else
   done < <(git diff --name-only --diff-filter=AMR "$base"...HEAD -- 'src/*')
   if ((${#tests[@]} > 0)); then
     tests=($(printf "%s\n" "${tests[@]}" | sort -u)) # repo paths have no spaces
+    node config/scripts/workspace-package-build/build-workspace-packages.mjs >/dev/null
     node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null
-    npx vitest run --config config/vitest.config.ts "${tests[@]}"
+    # run-vitest.mjs applies the repo's test env policy (e.g. ORCA_BACKGROUND_LAUNCH=1); bare vitest gives false failures.
+    node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts "${tests[@]}"
   fi
 fi
 for app in $(git diff --name-only "$base"...HEAD -- cloud/apps | cut -d/ -f1-3 | sort -u); do
