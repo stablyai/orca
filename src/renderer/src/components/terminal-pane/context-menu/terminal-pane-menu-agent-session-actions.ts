@@ -1,4 +1,5 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { TerminalPaneAgentIdCopy } from './terminal-pane-context-menu-types'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
 import { copyAgentSessionContextFromPane } from '../clipboard/terminal-agent-session-context-copy'
 import {
@@ -80,4 +81,23 @@ export function createTerminalPaneMenuAgentSessionActions({
   const onCopyAgentSessionContext = async (): Promise<void> =>
     copyAgentSessionContextFromMenuPane(resolveMenuPane())
   return { onForkAgentSession, onContinueAgentSessionInNewSession, onCopyAgentSessionContext }
+}
+
+/** Copy Agent ID shows exactly when Copy Session ID does: both name the pane's current agent. */
+export function terminalPaneMenuAgentIdProps(
+  contextMenu: {
+    onCopyAgentSessionId: () => Promise<void>
+    agentIdCopy: TerminalPaneAgentIdCopy
+  },
+  menuAgentSessionId: string | null
+): {
+  canCopyAgentSessionId: boolean
+  onCopyAgentSessionId: () => void
+  agentIdCopy?: TerminalPaneAgentIdCopy
+} {
+  return {
+    canCopyAgentSessionId: menuAgentSessionId !== null,
+    onCopyAgentSessionId: () => void contextMenu.onCopyAgentSessionId(),
+    ...(menuAgentSessionId !== null ? { agentIdCopy: contextMenu.agentIdCopy } : {})
+  }
 }

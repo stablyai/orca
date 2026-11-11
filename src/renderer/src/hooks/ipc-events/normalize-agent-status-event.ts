@@ -36,13 +36,15 @@ export function normalizeAgentStatusMetadata(
     !data.launchToken &&
     data.launchConfig === undefined &&
     !authorityRestartId &&
-    !data.paneOwner
+    !data.paneOwner &&
+    !data.orcaSessionId
   ) {
     return undefined
   }
   return {
     ...(authorityRestartId ? { authorityRestartId } : {}),
     ...(data.providerSession ? { providerSession: data.providerSession } : {}),
+    ...(data.orcaSessionId ? { orcaSessionId: data.orcaSessionId } : {}),
     ...(data.launchToken ? { launchToken: data.launchToken } : {}),
     ...(data.launchConfig !== undefined ? { launchConfig: data.launchConfig } : {}),
     ...(data.paneOwner ? { paneOwner: data.paneOwner } : {})

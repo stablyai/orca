@@ -26,6 +26,7 @@ export type RuntimeAgentRowSnapshot = {
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
+  orcaSessionId?: string
   programStatus?: ProgramStatusFacet
 }
 
@@ -161,6 +162,7 @@ export function selectFreshAgentRowForMobileTab(args: {
     ...pickHostTurnEnd(match),
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
+    ...(match.orcaSessionId ? { orcaSessionId: match.orcaSessionId } : {}),
     ...(match.programStatus ? { programStatus: match.programStatus } : {}),
     ...(match.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: match.evidenceObservedAt }

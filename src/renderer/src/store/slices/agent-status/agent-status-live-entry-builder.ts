@@ -197,6 +197,12 @@ export function buildAgentStatusLiveEntry(
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
+  // A clockless OSC write names no conversation; it keeps the id while the conversation stays.
+  const orcaSessionId =
+    metadata?.orcaSessionId ??
+    (providerSession && existing?.providerSession?.id === providerSession.id
+      ? existing.orcaSessionId
+      : undefined)
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -243,6 +249,7 @@ export function buildAgentStatusLiveEntry(
     ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(orcaSessionId ? { orcaSessionId } : {}),
     ...(launchAttested !== undefined ? { launchAttested } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }

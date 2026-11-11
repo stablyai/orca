@@ -75,6 +75,7 @@ export function toAgentStatusIpcPayload(
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
     ...(entry.programStatus ? { programStatus: entry.programStatus } : {}),
+    ...(entry.orcaSessionId ? { orcaSessionId: entry.orcaSessionId } : {}),
     ...entry.payload
   }
 }

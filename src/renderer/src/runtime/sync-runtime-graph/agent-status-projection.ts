@@ -53,7 +53,8 @@ function serializeAgentStatusEntry(
     interrupted: entry.interrupted ?? null,
     // A failure changes the verdict and leaves `interrupted` as it was.
     mainAgent: mainAgentKey(entry.mainAgent),
-    programStatus: entry.programStatus ? programStatusFacetContent(entry.programStatus) : null
+    programStatus: entry.programStatus ? programStatusFacetContent(entry.programStatus) : null,
+    orcaSessionId: entry.orcaSessionId ?? null
   })
 }
 

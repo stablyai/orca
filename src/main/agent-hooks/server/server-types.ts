@@ -54,6 +54,8 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   programStatus?: ProgramStatusFacet
   /** Facet-only publication; state readers must not infer a transition. */
   programStatusOnly?: true
+  /** The pane's terminal agent id on this host, stamped at publication; never persisted. */
+  orcaSessionId?: string
   /** The lead's full final reply for the turn `leadTurnKey` names; main-process only, never persisted or published. */
   acceptedReply?: { text: string; leadTurnKey: number }
 }

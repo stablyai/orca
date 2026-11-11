@@ -18,6 +18,7 @@ import {
 import type { AgentSessionRecordReader } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
+import { agentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
 
 /** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */
 export type SessionRecipient = { sessionId: OrcaSessionId; address: OrcaSessionAddress }
@@ -51,6 +52,12 @@ export function readSessionRecipient(
   if (found?.kind === 'provider-id') {
     return providerIdRefusal(recipient, found.orcaSessionId, store)
   }
+  if (sessionId && found?.kind !== 'found') {
+    const terminal = terminalAgentRefusal(sessionId)
+    if (terminal) {
+      return terminal
+    }
+  }
   return sessionId && found?.kind === 'found'
     ? { sessionId, address: formatOrcaSessionAddress(sessionId) }
     : null
@@ -64,6 +71,11 @@ export function refuseUndeliverableSessionRecipient(
   noEffect = 'No message was sent.'
 ): SessionRecipientRefusal | null {
   const { sessionId } = recipient
+  // Before the host check: terminal-only users have no agent-session host to blame.
+  const terminal = terminalAgentRefusal(sessionId, noEffect)
+  if (terminal) {
+    return terminal
+  }
   if (!store) {
     return {
       code: CODES.unknown,
@@ -119,5 +131,24 @@ function providerIdRefusal(
   return {
     code: CODES.providerId,
     message: `${id} is the provider's own session id, which changes on /clear. This session's Orca session ID is ${address}; address it by that instead. ${noEffect}`
+  }
+}
+
+/** Terminal agents have Orca ids, but mail reaches them only through their terminal for now. */
+function terminalAgentRefusal(
+  sessionId: OrcaSessionId,
+  noEffect = 'No message was sent.'
+): SessionRecipientRefusal | null {
+  const rows = agentHookServer.terminalAgentRows(sessionId)
+  if (!rows) {
+    return null
+  }
+  const places = rows.map((row) =>
+    row.worktreeId ? `pane ${row.paneKey} in workspace ${row.worktreeId}` : `pane ${row.paneKey}`
+  )
+  const where = places.length > 0 ? `, running in ${places.join('; ')}` : ''
+  return {
+    code: CODES.terminalAgent,
+    message: `Agent ${sessionId} is a terminal agent${where}. Messaging terminal agents by ID isn't supported yet; address its terminal instead. ${noEffect}`
   }
 }

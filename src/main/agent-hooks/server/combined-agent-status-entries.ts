@@ -10,14 +10,14 @@ import {
 import type { AgentStatusStore } from '../../../shared/agent-status/store/agent-status-store'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
-import type { ProgramStatusFacetStore } from './program-status/facet-store'
 
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export function combinedAgentStatusEntries(
   source: {
     state: HookListenerState
-    programStatusFacets: Pick<ProgramStatusFacetStore, 'stitch'>
+    /** Runtime-only decorations every published row carries. */
+    publication: { stitch(row: EnrichedAgentHookEventPayload): EnrichedAgentHookEventPayload }
     canonicalStatusStore: Pick<AgentStatusStore, 'getParents' | 'getParent'>
     canonicalSubjectsByPane: ReadonlyMap<string, ReadonlyMap<string, AgentStatusSubject>>
     canonicalListingOrder: ReadonlyMap<string, number>
@@ -34,7 +34,7 @@ export function combinedAgentStatusEntries(
   for (const [paneKey, entry] of legacy) {
     rows.push({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
-      entry: source.programStatusFacets.stitch(entry as EnrichedAgentHookEventPayload),
+      entry: source.publication.stitch(entry as EnrichedAgentHookEventPayload),
       order: getLegacyStatusListingOrder(source.state, paneKey) ?? UNORDERED_STATUS_ROW
     })
   }

@@ -20,6 +20,8 @@ import { combinedAgentStatusEntries } from './combined-agent-status-entries'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { PaneAgentIdentities } from '../identity/pane-agent-identities'
+import { agentIdentityDatabasePath } from '../identity/agent-identity-store'
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
   protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
@@ -43,8 +45,18 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     this.clearStartupPromptClaims = clear
   }
 
+  protected readonly agentIdentities = new PaneAgentIdentities(() =>
+    this.lastStatusFilePath ? agentIdentityDatabasePath(this.lastStatusFilePath) : null
+  )
+
+  /** Runtime-only decorations every published row carries: its facet and its agent id. */
+  private readonly publication = {
+    stitch: (row: EnrichedAgentHookEventPayload): EnrichedAgentHookEventPayload =>
+      this.agentIdentities.stamp(this.programStatusFacets.stitch(row))
+  }
+
   protected emitEnrichedStatus(row: EnrichedAgentHookEventPayload): void {
-    const enriched = this.programStatusFacets.stitch(row)
+    const enriched = this.publication.stitch(row)
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
       try {
@@ -72,7 +84,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return combinedAgentStatusEntries(
       {
         state: this.state,
-        programStatusFacets: this.programStatusFacets,
+        publication: this.publication,
         canonicalStatusStore: this.canonicalStatusStore,
         canonicalSubjectsByPane: this.canonicalSubjectsByPane,
         canonicalListingOrder: this.canonicalListingOrder
@@ -241,7 +253,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     if (legacy) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
       const row = legacy as EnrichedAgentHookEventPayload
-      return [toAgentStatusIpcPayload(this.programStatusFacets.stitch(row))]
+      return [toAgentStatusIpcPayload(this.publication.stitch(row))]
     }
     const rows: AgentStatusIpcPayload[] = []
     for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {

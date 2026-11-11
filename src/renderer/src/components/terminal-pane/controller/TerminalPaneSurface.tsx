@@ -1,4 +1,5 @@
 import { TerminalCrewPortals } from '../../orchestration-crew/TerminalCrewPortals'
+import { terminalPaneMenuAgentIdProps } from '../context-menu/terminal-pane-menu-agent-session-actions'
 import { createPortal } from 'react-dom'
 import { TerminalPaneFileDropOwner } from '../input/file-drop/TerminalPaneFileDropOwner'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -318,8 +319,7 @@ export function TerminalPaneSurface({
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
-        canCopyAgentSessionId={menuAgentSessionId !== null}
-        onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
+        {...terminalPaneMenuAgentIdProps(contextMenu, menuAgentSessionId)}
       />
       <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
       {quickCommandEditorOpen ? (

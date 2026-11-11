@@ -1,4 +1,5 @@
 import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
@@ -141,7 +142,16 @@ export function buildMirroredAgentStatusPatch(
         ? entry
         : {
             ...withHostProgramStatus(nextEntry, entry.programStatus),
-            ...(entry.launchAttested !== undefined ? { launchAttested: entry.launchAttested } : {})
+            ...(entry.launchAttested !== undefined ? { launchAttested: entry.launchAttested } : {}),
+            // Only the host names its agents; the client never mints one.
+            ...(entry.orcaSessionId &&
+            agentProviderSessionsEqual(
+              entry.agentType,
+              entry.providerSession,
+              nextEntry.providerSession
+            )
+              ? { orcaSessionId: entry.orcaSessionId }
+              : {})
           }
     const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
     nextByPaneKey.set(entry.paneKey, {
