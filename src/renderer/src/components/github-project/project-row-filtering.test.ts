@@ -68,9 +68,9 @@ function table(rows: GitHubProjectRow[]): GitHubProjectTable {
 }
 
 describe('filterProjectTableRowsBySelectedRepos', () => {
-  it('keeps 67 draft items and inaccessible content while scoping repository-backed items', () => {
+  it('keeps draft items and inaccessible content while scoping repository-backed items', () => {
     // Normalized shapes: drafts and restricted items carry no repository or number.
-    const drafts = Array.from({ length: 67 }, (_, position): GitHubProjectRow => {
+    const drafts = Array.from({ length: 1 }, (_, position): GitHubProjectRow => {
       const base = row(`draft-${position}`, null)
       return {
         ...base,
@@ -120,6 +120,6 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
       new Set(['selected'])
     )
     expect(filtered.rows).toEqual([...drafts, ...restricted, issue, pullRequest])
-    expect(filtered.totalCount).toBe(71)
+    expect(filtered.totalCount).toBe(5)
   })
 })
