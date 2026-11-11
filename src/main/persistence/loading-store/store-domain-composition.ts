@@ -1,4 +1,5 @@
 import type { StoreRuntimeState } from './store-runtime-state'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { Store } from './store'
 import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
 import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
@@ -185,8 +186,10 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     layoutCommands: new LayoutCommandPersistence(
       runtime,
       sessions,
-      // Retry persistence for terminal closes retained after failed writes.
-      ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined
+      // Retry persistence for terminal closes retained after failed writes; a close edits sessions only.
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? () => scheduleSave(scheduling, WORKSPACE_SESSION_DOMAINS)
+        : undefined
     ),
     sshProfiles,
     retiredWorktreeNames,
