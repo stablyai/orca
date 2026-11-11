@@ -1,5 +1,6 @@
 // Pure presentation logic for Orca Cloud workspace surfaces (sidebar dot, status panel, overlays).
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type {
   CloudOomEvent,
   CloudWakeProgressEvent
@@ -150,9 +151,17 @@ export function formatCents(cents: number): string {
   )
 }
 
-/** "5 minutes ago", "yesterday" in the UI language. */
+// Intl formatter caches key on option identity, so this must be a module constant.
+const DATE_MEDIUM: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
+/** Past this, a count of days ("5,362 days ago") stops being readable: show the date instead. */
+const RELATIVE_LIMIT_SECONDS = 30 * 86_400
+
+/** "5 minutes ago", "yesterday" in the UI language; "Mar 6, 2012" beyond about a month. */
 export function formatRelative(at: number, now: number): string {
   const seconds = Math.round((at - now) / 1000)
+  if (Math.abs(seconds) > RELATIVE_LIMIT_SECONDS) {
+    return uiDateTimeFormat(DATE_MEDIUM).format(at)
+  }
   const rtf = new Intl.RelativeTimeFormat(getIntlLocale(), { numeric: 'auto' })
   const abs = Math.abs(seconds)
   if (abs < 60) {
