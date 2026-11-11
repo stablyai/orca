@@ -20961,6 +20961,9 @@
         "worker": "Worker · {{name}}",
         "openWorker": "Open worker",
         "answerFailed": "{{name}}: {{detail}}",
+        "answerAllowed": "Allowed · {{name}}",
+        "answerDenied": "Denied · {{name}}",
+        "answerAlreadyClosed": "{{name}}: this prompt had already closed",
         "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
         "strip_one": "{{count}} approval",
         "strip_other": "{{count}} approvals",
@@ -20971,7 +20974,7 @@
         "allowedInTerminal": "Allowed in the worker's terminal",
         "deniedInTerminal": "Denied in the worker's terminal",
         "answeredInChat": "Answered in the worker's chat",
-        "noLongerOpen": "No longer open",
+        "closedUnnamed": "Closed without a recorded answer",
         "autoDenied": "Auto-denied by Claude after 2:00",
         "answerInTerminal": "Answer it in the worker's terminal"
       },

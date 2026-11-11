@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useOrchestrationCrew } from '@/components/orchestration-crew/use-orchestration-crew'
@@ -18,6 +19,7 @@ import {
   workerApprovalTimeLeft
 } from './worker-approval-card-model'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { NativeChatTimedRow } from '../conversation/slots/native-chat-timed-rows'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -31,6 +33,8 @@ import type {
 export type NativeChatWorkerApproval = {
   approval: WorkerApprovalPayload
   at: string
+  /** An older host sends no ask time; its newest message's time stands in. */
+  askedAt?: string
   worker: OrchestrationCrewRow
 }
 
@@ -47,7 +51,7 @@ export function useNativeChatWorkerApprovals(
     () =>
       crew.sections.managing
         .flatMap((worker) => (worker.approvals ?? []).map((entry) => ({ ...entry, worker })))
-        .sort((a, b) => a.at.localeCompare(b.at)),
+        .sort((a, b) => (a.askedAt ?? a.at).localeCompare(b.askedAt ?? b.at)),
     [crew]
   )
   const [now, setNow] = useState(Date.now)
@@ -70,7 +74,7 @@ export function useNativeChatWorkerApprovals(
 const cardSelector = (approvalId: string) =>
   `[data-native-chat-worker-approval="${CSS.escape(approvalId)}"]`
 
-/** Open cards and receipts at the end of the conversation; a card here never takes focus or cancels the chat's turn. */
+/** Worker approval cards and receipts; a card here never takes focus or cancels the chat's turn. */
 export function NativeChatWorkerApprovalRows({
   approvals,
   target
@@ -85,19 +89,36 @@ export function NativeChatWorkerApprovalRows({
     (entry: NativeChatWorkerApproval, decision: WorkerApprovalDecision) => {
       const { approvalId, worker } = entry.approval
       setSubmitting((current) => new Set(current).add(approvalId))
+      const name = entry.worker.label
       callRuntimeRpc(target, 'orchestration.approvalAnswer', {
         dispatch: worker.dispatchId,
         prompt: approvalId,
         decision,
         ...(decision === 'deny' ? { reason: OWNER_DENY_REASON } : {})
       })
-        .catch((error: unknown) =>
-          toast.error(
-            t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
-              name: entry.worker.label,
-              detail: error instanceof Error ? error.message : String(error)
-            })
+        .then(() =>
+          toast.success(
+            decision === 'allow'
+              ? t('components.native-chat.approval.answerAllowed', 'Allowed · {{name}}', { name })
+              : t('components.native-chat.approval.answerDenied', 'Denied · {{name}}', { name })
           )
+        )
+        .catch((error: unknown) =>
+          // Closed before this answer: its receipt says how, so this is no failure of the click.
+          error instanceof RuntimeRpcCallError && error.code === 'approval_not_open'
+            ? toast.info(
+                t(
+                  'components.native-chat.approval.answerAlreadyClosed',
+                  '{{name}}: this prompt had already closed',
+                  { name }
+                )
+              )
+            : toast.error(
+                t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
+                  name,
+                  detail: error instanceof Error ? error.message : String(error)
+                })
+              )
         )
         .finally(() =>
           setSubmitting((current) => {
@@ -206,17 +227,28 @@ function useSecondClock(active: boolean): number {
   return now
 }
 
-/** A coordinator chat's worker approvals: card rows for its transcript, and the strip above its composer. */
+/** A coordinator chat's worker approvals: each card in its transcript at the time the worker
+ *  asked, open or answered, and the strip above its composer that reaches the open ones. */
 export function useNativeChatWorkerApprovalSlots(
   pane: { target: RuntimeClientTarget; sessionId: string },
   rootRef: React.RefObject<HTMLElement | null>
-): { rows: React.ReactNode; strip: React.ReactNode } {
+): { timedRows: readonly NativeChatTimedRow[]; strip: React.ReactNode } {
   const approvals = useNativeChatWorkerApprovals(
     pane.target,
     isOrcaSessionId(pane.sessionId) ? formatOrcaSessionAddress(pane.sessionId) : null
   )
+  const { target } = pane
+  const timedRows = useMemo(
+    () =>
+      approvals.map((entry) => ({
+        key: `worker-approval:${entry.approval.approvalId}`,
+        at: Date.parse(entry.askedAt ?? entry.at),
+        node: <NativeChatWorkerApprovalRows approvals={[entry]} target={target} />
+      })),
+    [approvals, target]
+  )
   return {
-    rows: <NativeChatWorkerApprovalRows approvals={approvals} target={pane.target} />,
+    timedRows,
     strip: <NativeChatWorkerApprovalStrip approvals={approvals} rootRef={rootRef} />
   }
 }

@@ -142,9 +142,9 @@ export function readCrewApprovals(
   db: OrchestrationDb,
   aliases: string[],
   closedSince: string
-): { approval: WorkerApprovalPayload; at: string }[] {
+): { approval: WorkerApprovalPayload; at: string; askedAt: string }[] {
   const rows = z
-    .object({ id: z.string(), payload: z.string(), created_at: z.string() })
+    .object({ id: z.string(), payload: z.string(), created_at: z.string(), asked_at: z.string() })
     .array()
     .parse(
       db.db
@@ -153,19 +153,24 @@ export function readCrewApprovals(
           FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
             AND id LIKE 'msg\\_stop\\_%' ESCAPE '\\' AND payload LIKE '%"approval":%' AND json_valid(payload)
             AND json_type(payload, '$.approval') = 'object'
-        ), newest AS (SELECT approval_id, MAX(sequence) AS sequence FROM reports GROUP BY approval_id)
-        SELECT reports.id, reports.payload, reports.created_at FROM reports
+        ), newest AS (SELECT approval_id, MAX(sequence) AS sequence, MIN(created_at) AS asked_at
+          FROM reports GROUP BY approval_id)
+        SELECT reports.id, reports.payload, reports.created_at, newest.asked_at FROM reports
         JOIN newest ON newest.sequence = reports.sequence
         WHERE json_extract(reports.payload, '$.approval.state') = 'open'
           OR julianday(reports.created_at) >= julianday(?)
         ORDER BY reports.sequence DESC LIMIT ${CREW_APPROVAL_ROWS}`)
         .all(JSON.stringify(aliases), closedSince)
     )
-  const shown: { approval: WorkerApprovalPayload; at: string }[] = []
+  const shown: { approval: WorkerApprovalPayload; at: string; askedAt: string }[] = []
   for (const row of rows) {
     const approval = readApprovalReport(row)
     if (approval) {
-      shown.push({ approval, at: exposeUtcTimestamp(row.created_at) ?? row.created_at })
+      shown.push({
+        approval,
+        at: exposeUtcTimestamp(row.created_at) ?? row.created_at,
+        askedAt: exposeUtcTimestamp(row.asked_at) ?? row.asked_at
+      })
     }
   }
   return shown.toReversed()

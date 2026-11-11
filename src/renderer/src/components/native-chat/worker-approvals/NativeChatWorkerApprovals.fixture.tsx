@@ -1,4 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { NativeChatMessageList } from '../NativeChatMessageList'
+import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
 import {
   NativeChatWorkerApprovalRows,
@@ -126,7 +129,7 @@ function closed(
 ): NativeChatWorkerApproval {
   return {
     approval: approval(id, bash, {
-      state: outcome.decision ? 'answered' : 'expired',
+      state: outcome.by === 'auto' ? 'expired' : 'answered',
       allowedActions: [],
       outcome
     }),
@@ -142,7 +145,7 @@ export const answered = defineFixture({
       <NativeChatWorkerApprovalRows
         target={target}
         approvals={[
-          closed('a', { by: 'person', decision: 'allow', reason: null, reasonDelivered: true }),
+          closed('a', { by: 'person', decision: 'allow', reason: null, reasonDelivered: false }),
           closed('b', {
             by: 'person',
             decision: 'deny',
@@ -160,28 +163,90 @@ export const answered = defineFixture({
             by: 'worker-terminal',
             decision: 'allow',
             reason: null,
-            reasonDelivered: true
+            reasonDelivered: false
           }),
           closed('e', {
             by: 'worker-terminal',
             decision: 'deny',
             reason: null,
-            reasonDelivered: true
+            reasonDelivered: false
           }),
           closed(
             'f',
             { by: 'worker-chat', decision: 'allow', reason: null, reasonDelivered: false },
             docs
           ),
-          closed('g', { by: 'auto', decision: 'deny', reason: null, reasonDelivered: true }),
+          closed('g', { by: 'auto', decision: 'deny', reason: null, reasonDelivered: false }),
           closed('h', {
             by: 'terminal-only',
             decision: null,
             reason: null,
-            reasonDelivered: true
+            reasonDelivered: false
           }),
           closed('i', { by: 'unknown', decision: null, reason: null, reasonDelivered: false })
         ]}
+      />
+    </div>
+  )
+})
+
+// A coordinator chat that kept replying after a worker asked twice: each card sits at its own time.
+const CHAT_START = Date.parse('2026-11-11T20:09:00.000Z')
+function reply(id: string, role: NativeChatMessage['role'], minute: number, text: string) {
+  const message: NativeChatMessage = {
+    id,
+    role,
+    source: 'transcript',
+    timestamp: CHAT_START + minute * 60_000,
+    blocks: [{ type: 'text', text }]
+  }
+  return message
+}
+const transcript: NativeChatLiveSession = {
+  messages: [
+    reply('ask', 'user', 0, 'Have a worker build the bot settings page.'),
+    reply('started', 'assistant', 1, 'A worker is on it in dungeness.'),
+    reply('status', 'user', 4, 'How is it going?'),
+    reply('answer', 'assistant', 5, 'It finished the settings rows and is wiring the avatar now.'),
+    reply('next', 'user', 7, 'Also check the tree spacing.'),
+    reply('ack', 'assistant', 8, 'Added it to the worker task.')
+  ],
+  agent: 'claude',
+  sessionId: 'fixture',
+  status: 'ready',
+  readPhase: 'ready',
+  hasMore: false,
+  loadingEarlier: false,
+  olderHistoryGeneration: 0,
+  loadEarlier: async () => 'applied'
+}
+const allowedAt = new Date(CHAT_START + 2.5 * 60_000).toISOString()
+const askedLater = new Date(CHAT_START + 6.5 * 60_000).toISOString()
+
+export const inTranscript = defineFixture({
+  width: 760,
+  render: () => (
+    <div className="native-chat-appearance flex h-[760px] flex-col bg-chat-pane">
+      <NativeChatMessageList
+        session={transcript}
+        isWorking={false}
+        expandSignal={false}
+        timedRows={[
+          {
+            ...closed('allowed', {
+              by: 'person',
+              decision: 'allow',
+              reason: null,
+              reasonDelivered: false
+            }),
+            at: allowedAt
+          },
+          { ...openBash, at: askedLater }
+        ].map((entry) => ({
+          key: entry.approval.approvalId,
+          at: Date.parse(entry.at),
+          node: <NativeChatWorkerApprovalRows approvals={[entry]} target={target} />
+        }))}
       />
     </div>
   )

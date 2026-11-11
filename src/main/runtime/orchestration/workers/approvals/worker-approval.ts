@@ -98,9 +98,11 @@ export function closedApproval(
 ): WorkerApprovalPayload {
   const closed: WorkerApprovalPayload = {
     ...open,
-    state: outcome.decision === null ? 'expired' : 'answered',
+    // Expired is the agent's own timeout alone; every other close, named or not, is not one.
+    state: outcome.by === 'auto' ? 'expired' : 'answered',
     allowedActions: [],
-    outcome
+    // Only a reason can be delivered.
+    outcome: { ...outcome, reasonDelivered: outcome.reason !== null && outcome.reasonDelivered }
   }
   // A countdown means nothing once the prompt is closed.
   delete closed.expiresAt

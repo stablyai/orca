@@ -51,7 +51,7 @@ export function workerApprovalReceiptBody(
   }
 }
 
-/** Who answered, from the closing message's evidence; anything it does not name is "No longer open". */
+/** Who answered, from the closing message's evidence; a close it does not name says only that. */
 export function workerApprovalReceiptText(approval: WorkerApprovalPayload, t: Translate): string {
   const outcome = approval.outcome
   const decision = outcome?.decision ?? null
@@ -78,7 +78,7 @@ export function workerApprovalReceiptText(approval: WorkerApprovalPayload, t: Tr
       )
     case 'unknown':
     case undefined:
-      return t('components.native-chat.approval.noLongerOpen', 'No longer open')
+      return t('components.native-chat.approval.closedUnnamed', 'Closed without a recorded answer')
   }
 }
 

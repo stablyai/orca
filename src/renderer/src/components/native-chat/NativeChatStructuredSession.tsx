@@ -319,7 +319,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     structuredAttachments
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
-                    trailing={workerApprovals.rows}
+                    timedRows={workerApprovals.timedRows}
                   />
                 </NativeChatHostSetupContext.Provider>
               </NativeChatUsageLimitActionsProvider>

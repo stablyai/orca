@@ -24,7 +24,14 @@ export const CrewRow = z.object({
   pendingQuestion: z.object({ preview: z.string(), at: z.string() }).optional(),
   /** This worker's permission prompts addressed to the viewing party, each as its newest message: open ones, and recent receipts. */
   approvals: z
-    .array(z.object({ approval: WorkerApprovalPayloadSchema, at: z.string() }))
+    .array(
+      z.object({
+        approval: WorkerApprovalPayloadSchema,
+        at: z.string(),
+        /** When the worker asked: where its card sits in the chat, open or answered. */
+        askedAt: z.string().optional()
+      })
+    )
     .optional(),
   sendAddress: CrewParty.optional(),
   openTarget: z
