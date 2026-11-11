@@ -205,6 +205,18 @@ describe('MacosLoginSessionDeathWatch', () => {
     expect(onRetire).toHaveBeenCalledTimes(1)
   })
 
+  it('does not retire when DNS recovers before the retirement check', async () => {
+    const { watch, clock, onRetire, setResolverHealth } = createWatch({
+      outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED]
+    })
+    watch.start()
+    await drainMicrotasks()
+    await clock.advance(140_000)
+    setResolverHealth('healthy')
+    await clock.advance(100_000)
+    expect(onRetire).not.toHaveBeenCalled()
+  })
+
   it.each(['healthy', 'unknown'] as const)(
     'runs no login probe while resolver health is %s, then retires once it degrades',
     async (initialResolverHealth) => {
