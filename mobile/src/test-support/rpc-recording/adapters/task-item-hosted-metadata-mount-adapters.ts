@@ -254,16 +254,25 @@ export function taskItemHostedMetadataMountAdapters(
       'use-mobile-tasks-workspace-and-project-state.tsx'
     ).useMobileTasksWorkspaceAndProjectState
     return mountModelHook(modules, context, {
-      useHook: (model: Parameters<typeof useActions>[0]) => {
+      useHook: (
+        model: Parameters<typeof useActions>[0] &
+          Pick<Parameters<typeof useWorkspace>[0], 'actionItem'>
+      ) => {
         const initialDraft = useRef(model.linearCommentDraft)
         const { linearCommentDraft, setLinearCommentDraft } = useWorkspace(
           mountFixture<Parameters<typeof useWorkspace>[0]>({
+            actionItem: model.actionItem,
             setActionItem: model.setActionItem
           })
         )
+        // The comment box is kept per item, so its fixture text goes in once the item is selected.
+        const seeded = useRef(false)
         useLayoutEffect(() => {
-          setLinearCommentDraft(initialDraft.current)
-        }, [setLinearCommentDraft])
+          if (!seeded.current && model.actionItem) {
+            seeded.current = true
+            setLinearCommentDraft(initialDraft.current)
+          }
+        })
         useCommittedOwnerProjection(context, { linearCommentDraft })
         return useActions(Object.assign(model, { linearCommentDraft, setLinearCommentDraft }))
       },

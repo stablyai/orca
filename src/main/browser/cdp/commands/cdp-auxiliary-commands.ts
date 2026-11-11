@@ -14,7 +14,7 @@ import type {
   BrowserInterceptedRequest,
   BrowserNetworkLogResult,
   BrowserViewportResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { CdpCommandSender } from '../debugger/cdp-command-sender'
 
 type ActiveCdpContext = {

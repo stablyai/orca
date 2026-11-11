@@ -49,9 +49,7 @@ vi.mock('../sessions/profiles/browser-session-registry', () => ({
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
-vi.mock('../../codex-accounts/fs-utils', () => ({
-  copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
-}))
+
 vi.mock('../../../shared/windows-retry-file-operations', () => ({
   copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
 }))

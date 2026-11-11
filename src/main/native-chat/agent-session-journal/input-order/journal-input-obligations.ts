@@ -265,6 +265,10 @@ export function journalInputPresentationMember(
   state: JournalReducerState,
   itemId: string
 ): boolean {
+  // Renders ask this of every row on each commit; parsing each key froze main in big chats (#40682).
+  if (state.inputs.rejections.size === 0) {
+    return true
+  }
   const identity = parseAgentJournalItemKey(itemId)
   return (
     identity?.provider !== 'orca' ||

@@ -1,8 +1,4 @@
-import type { MutableRefObject } from 'react'
-import type { Editor } from '@tiptap/react'
-import type { EditorView } from '@tiptap/pm/view'
 import { toast } from 'sonner'
-import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   httpLinkActionDestinationsFor,
   openRoutedHttpLink
@@ -13,8 +9,11 @@ import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
 } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
+import {
+  isLocalPathOpenBlocked,
+  showLocalPathOpenBlockedToast
+} from '@/lib/files/os-open/local-path-open-guard'
+import { getLinkSourceLocalOpenOwner } from '@/lib/links/ownership/link-source-local-open-owner'
 import {
   absolutePathToFileUri as toFileUrlForOsEscape,
   resolveMarkdownLinkTarget
@@ -22,13 +21,15 @@ import {
 import { openMarkdownFileLinkWithSystemDefault } from '../../markdown/link-routing/markdown-file-link-system-open'
 import { scrollToAnchorInEditor } from '../../markdown/navigation/markdown-anchor-scroll'
 import { getRichMarkdownCommentAtPos } from '../review/rich-markdown-review-annotations'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
-import {
-  classifyHtmlSuperscriptLinkAction,
-  type RichMarkdownHtmlSuperscriptLinkContext
-} from '../citations/rich-markdown-html-superscript-link-context'
+import { classifyHtmlSuperscriptLinkAction } from '../citations/rich-markdown-html-superscript-link-context'
+import type { RichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
+import type { MutableRefObject } from 'react'
+import type { Editor } from '@tiptap/react'
+import type { EditorView } from '@tiptap/pm/view'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 
 export type ActivateMarkdownLink = (
   href: string,

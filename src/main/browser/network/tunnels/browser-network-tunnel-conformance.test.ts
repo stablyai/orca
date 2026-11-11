@@ -4,7 +4,7 @@ import {
   BrowserNetworkTunnelOpcode,
   decodeBrowserNetworkTunnelFrame,
   decodeBrowserNetworkTunnelWindowUpdate
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from './browser-network-tunnel-outbound-memory-budget'

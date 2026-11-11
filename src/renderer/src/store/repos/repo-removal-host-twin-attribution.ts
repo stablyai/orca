@@ -7,11 +7,11 @@ import {
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { collectPtyIdsForTab } from '../terminals/terminal-tab-retirement'
 import { toVisibleTabType } from '../../../../shared/tab-types'
-import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-alias'
+import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
-} from '@/lib/unified-tab-host-ownership'
+} from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { worktreePurgePublishers } from './repo-removal-publisher-index'
 
 /**

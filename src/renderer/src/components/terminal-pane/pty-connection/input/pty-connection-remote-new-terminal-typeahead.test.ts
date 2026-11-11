@@ -67,7 +67,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -139,7 +139,9 @@ async function connectNewRemotePane() {
     }
   })
   const connectArgs = [pane, createManager(1), buildPaneConnectionDeps(() => mockStoreState)]
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
 
   bindPaneAgentTitleMocks(connectArgs[2], agentTitleMocks)
 

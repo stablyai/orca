@@ -1,14 +1,14 @@
 import { buildProcessBoundaryGround } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { serializeWithAbsoluteCursor } from '../../../../../../shared/terminal/replay/terminal-serialize-absolute-cursor'
-import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
+import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-output/terminal-write-pipeline-health'
 import {
   registerPtySerializer,
   registerPtyTitleSource
 } from '../../snapshots/pty-buffer-serializer'
-import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
-import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
-import { terminalMouseEncodingRestoreAnsi } from '@/lib/pane-manager/terminal-mouse-encoding-tracker'
+import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
+import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
+import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scroll/terminal-scrollback-clear'
+import { terminalMouseEncodingRestoreAnsi } from '@/lib/pane-manager/terminal-protocol/terminal-mouse-encoding-tracker'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

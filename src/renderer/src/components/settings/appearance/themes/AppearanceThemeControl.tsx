@@ -22,8 +22,8 @@ import {
   isPluginTerminalThemeSelected,
   terminalThemeUpdate
 } from '../../../plugins/state/plugin-theme-apply'
-import { findCodeEditorTheme } from '@/lib/code-editor-theme'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { findCodeEditorTheme } from '@/lib/editor/appearance/code-editor-theme'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { requestPluginBrowse } from '@/store/plugins/navigation/plugin-preview-request'
 import { useCatalogAppThemes, type CatalogAppTheme } from './use-catalog-app-themes'
 import {
@@ -222,8 +222,8 @@ export function AppearanceThemeSlotSelect({
               {
                 value: MATCH_TERMINAL_APP_THEME,
                 label: t(
-                  'auto.components.settings.AppearanceThemeControl.matchTerminal',
-                  'Match Terminal'
+                  'auto.components.settings.AppearanceThemeControl.7ad388ec82',
+                  'Match terminal'
                 ),
                 detail: (
                   <>

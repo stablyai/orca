@@ -35,13 +35,6 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["'tests/e2e/computer-*.e2e.ts'"]
   },
   {
-    name: 'agent-status benchmark',
-    manual: true,
-    include: ['config/scripts/performance/agent-lineage/agent-status-hot-path-benchmark.ts'],
-    sources: ['config/vitest.agent-status-benchmark.config.ts'],
-    mirrors: ["'config/scripts/performance/agent-lineage/agent-status-hot-path-benchmark.ts'"]
-  },
-  {
     name: 'mobile',
     include: ['mobile/src/**/*.test.ts', 'mobile/src/**/*.test.tsx', 'mobile/scripts/**/*.test.ts'],
     sources: ['mobile/vitest.config.ts'],

@@ -29,9 +29,10 @@ export async function dispatchNativeChatStructuredComposerText(
   const pickedModeSkill =
     agentSessionInteractionCommand('codex', prompt) !== null &&
     skills.some((skill) => prompt.trimEnd() === `/${skill.name}`)
+  // A sent command releases the draft now, as a pending message does; a refusal hands it back.
   const { handled, ...command } = pickedModeSkill
     ? { handled: false, accepted: false, error: null }
-    : await transport.dispatchCommand(prompt)
+    : await transport.dispatchCommand(prompt, onPending)
   // Commands already reveal at keypress; messages reveal unless admitted as queued cards.
   if (handled) {
     return { ...command, revealsTranscript: false }

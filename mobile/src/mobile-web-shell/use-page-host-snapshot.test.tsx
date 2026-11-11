@@ -46,7 +46,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     getItem: async (key: string) => doubles.store.get(key) ?? null
   }
 }))
-vi.mock('../transport/hosts/host-store', () => ({
+vi.mock('../host-catalog/host-store', () => ({
   loadHosts: async () => {
     if (doubles.hostsReject) {
       throw new Error('the keychain would not answer')

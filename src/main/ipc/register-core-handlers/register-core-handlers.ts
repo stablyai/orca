@@ -89,7 +89,7 @@ import type { ClaudeUsageStore } from '../../claude-usage/store'
 import type { CodexUsageStore } from '../../codex-usage/store'
 import type { OpenCodeUsageStore } from '../../opencode-usage/store'
 import type { MuseUsageStore } from '../../muse-usage/store'
-import type { RateLimitService } from '../../rate-limits/service'
+import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
 import type { AutomationService } from '../../automations/service'
@@ -199,7 +199,7 @@ export function registerCoreHandlers(
   registerGrokAccountHandlers()
   registerCursorAccountHandlers()
   registerRateLimitHandlers(rateLimits, codexAccounts)
-  registerGitHubHandlers(store, stats)
+  registerGitHubHandlers(store, stats, runtime)
   registerGitLabHandlers(store)
   registerHostedReviewHandlers(store, stats)
   registerLinearHandlers()
@@ -251,7 +251,7 @@ export function registerCoreHandlers(
   registerSessionHandlers(store, runtime)
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
-  registerEmulatorVideoStreamHandlers()
+  registerEmulatorVideoStreamHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
   registerEmulatorScrcpyTouchHandler()
   registerEmulatorScrcpyKeyboardHandler()
   registerWorkspaceSpaceHandlers(store)

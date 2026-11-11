@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type {
   GoogleCookieClearLocalTarget,
   GoogleCookieClearTarget
-} from '../../../shared/browser-google-cookie-clear'
+} from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

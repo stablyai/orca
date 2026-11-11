@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { emulatorErrorText } from '@/lib/emulator-error-copy'
+import { emulatorErrorText } from '@/lib/simulator/launch/emulator-error-copy'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import { EMULATOR_FAILURE_COPY } from '../../../../shared/emulator-failure-copy'
 

@@ -3,18 +3,19 @@ import { useCallback } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
-import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+
+import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
 import { useAppStore } from '@/store'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-issue-workspace-open'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { bindTaskPageJiraItemSourceContext } from './jira/task-page-jira-item-source-context'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { shouldHideTaskPageListChrome } from './task-page-list-chrome-visibility'
 import { getJiraIssueWorkspaceSeed } from './task-page-source-context'
 import { findJiraIssueDefaultRepo } from '../../../../shared/jira/jira-project-reference'
-import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) {
   const {
     setTaskResumeState,
@@ -62,7 +63,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   // Linear string IDs need the provider-generic numeric placeholder 0.
   const openComposerForLinearItem = useCallback(
     (issue: LinearIssue): void => {
-      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue)
+      const linkedWorkItem = buildLinearWorkspaceSource(issue)
       openModal('new-workspace-composer', {
         linkedWorkItem,
         taskSourceContext: linearTaskSourceContext,

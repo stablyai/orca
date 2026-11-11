@@ -1,3 +1,6 @@
+import { copyCodexConversation } from '../../../../../codex/codex-conversation-copy'
+import type * as AppServerSession from '../../../../../codex/app-server/codex-app-server-session'
+import { tmpdir } from 'node:os'
 import { createRestTestRig } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import { forkTestSource } from '../../../../../native-chat/agent-session-wire/acquisition/testing/structured-agent-session-fork.test-fixture'
 import { agentSessionRecordFixture } from '../../../../../native-chat/agent-session-record-test-fixture'
@@ -20,6 +23,15 @@ import type { RpcResponse } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
 import './structured-agent-session-create'
+
+const codex = vi.hoisted(() => ({ request: vi.fn() }))
+vi.mock('../../../../../codex/app-server/codex-app-server-session', async (importOriginal) => ({
+  ...(await importOriginal<typeof AppServerSession>()),
+  runCodexAppServerSession: async (
+    _launch: unknown,
+    body: (rpc: AppServerSession.CodexAppServerRpc) => Promise<unknown>
+  ) => body({ request: codex.request, notify: () => {} })
+}))
 
 const SESSION = 'session-alpha'
 const OPERATION = '1800000000000-00000000000000000000000000000001'
@@ -305,6 +317,55 @@ it('does not prove no copy when source revalidation fails after the native copy'
     })
     expect(refusal).not.toHaveProperty('createAttemptRefusedBeforeCommit')
     expect(rig.store.getRecord('codex_changed_after_copy')).toBeNull()
+  } finally {
+    setStructuredAgentSessionHost(null)
+    await rig.dispose()
+  }
+})
+
+it('settles a redirected Codex preparation refusal but not a dispatched child-read failure', async () => {
+  const { rig, test, createFork } = await forkHost()
+  test.record.conversationName = '  Release notes  '
+  try {
+    test.copy.mockImplementation((input) =>
+      copyCodexConversation(input, {
+        resolveLaunchArgs: () => [],
+        resolveWorkspacePath: async () => tmpdir(),
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] })
+      })
+    )
+    codex.request.mockRejectedValue(new Error('source read failed'))
+    expect(refusalOf(await createFork('codex_source_read_failed'))).toMatchObject({
+      code: 'agent_session_identity_required',
+      details: { reason: 'transcriptUnreadable' },
+      createAttemptRefusedBeforeCommit: true
+    })
+    expect(rig.store.getRecord('codex_source_read_failed')).toBeNull()
+    codex.request.mockImplementation(async (method: string) => {
+      if (method === 'thread/read') {
+        return { thread: { id: '019e6b26-18e2-7103-b7a0-7ba6bb071123', historyMode: 'paginated' } }
+      }
+      if (method === 'thread/fork') {
+        return { thread: { id: '01a1bde0-5ded-7f03-a1bf-3dae1613d8c7' } }
+      }
+      throw new Error('child read failed')
+    })
+    // Source listing succeeds before the child read fails.
+    codex.request
+      .mockImplementationOnce(async () => ({
+        thread: { id: '019e6b26-18e2-7103-b7a0-7ba6bb071123', historyMode: 'paginated' }
+      }))
+      .mockImplementationOnce(async () => ({
+        data: [{ id: 'completed-turn', status: 'completed' }],
+        nextCursor: null
+      }))
+    const refusal = refusalOf(await createFork('codex_child_read_failed'))
+    expect(refusal).toMatchObject({
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'providerRejected' }
+    })
+    expect(refusal).not.toHaveProperty('createAttemptRefusedBeforeCommit')
+    expect(rig.store.getRecord('codex_child_read_failed')).toBeNull()
   } finally {
     setStructuredAgentSessionHost(null)
     await rig.dispose()

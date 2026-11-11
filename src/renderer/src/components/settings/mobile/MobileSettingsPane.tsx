@@ -61,8 +61,8 @@ export function MobileSettingsPane(): React.JSX.Element {
 
         <SearchableSetting
           title={t(
-            'auto.components.settings.MobileSettingsPane.1de96ec8a6',
-            'Show Orca Mobile Button'
+            'auto.components.settings.MobileSettingsPane.49089c92b3',
+            'Show Orca Mobile button'
           )}
           description={t(
             'auto.components.settings.MobileSettingsPane.682293cadf',
@@ -73,8 +73,8 @@ export function MobileSettingsPane(): React.JSX.Element {
           {/* Why: the in-page removal toast points users to Settings > Mobile. */}
           <SettingsSwitchRow
             label={t(
-              'auto.components.settings.MobileSettingsPane.1de96ec8a6',
-              'Show Orca Mobile Button'
+              'auto.components.settings.MobileSettingsPane.49089c92b3',
+              'Show Orca Mobile button'
             )}
             description={t(
               'auto.components.settings.MobileSettingsPane.d4f2b65f30',

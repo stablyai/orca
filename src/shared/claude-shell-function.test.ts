@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getPosixClaudeShellFunction, getFishClaudeShellFunction } from './claude-shell-function'
+import { agentSessionSignInCommand } from './agent-session/lifecycle/agent-session-setup-commands'
 // Skip missing zsh/fish instead of failing with exit 127 on CI images.
 const POSIX_SHELLS = ['/bin/bash', '/bin/zsh'].filter((shell) => existsSync(shell))
 const FISH = ['/opt/homebrew/bin/fish', '/usr/local/bin/fish', '/usr/bin/fish'].find(existsSync)
@@ -39,11 +40,15 @@ function fixture() {
   const run = (
     shell: string,
     env: string[] = [],
-    fakeKind: 'summary' | 'printenv' = 'summary',
-    userSetup = ''
+    fakeKind: 'summary' | 'printenv' | 'direct' = 'summary',
+    userSetup = '',
+    command = 'claude'
   ) => {
     if (fakeKind === 'printenv') {
       writeFileSync(fake, '#!/bin/sh\nenv\n')
+    } else if (fakeKind === 'direct') {
+      // A subshell left between the pane shell and Claude leads Claude's foreground group.
+      writeFileSync(fake, '#!/bin/sh\n[ "$PPID" = "$PANE_SHELL_PID" ] && echo direct\n')
     }
     const fish = shell.endsWith('fish')
     const fn = fish ? getFishClaudeShellFunction() : getPosixClaudeShellFunction()
@@ -63,7 +68,7 @@ function fixture() {
         shell,
         ...(fish ? ['--no-config'] : shell.endsWith('zsh') ? ['-f'] : ['--norc', '--noprofile']),
         '-c',
-        `${guard}\n${userSetup}\n${fn}\nclaude`
+        `${guard}\n${userSetup}\n${fn}\n${command}`
       ],
       { encoding: 'utf8', cwd: root }
     )
@@ -79,6 +84,21 @@ const injected = (home: string) => [
 ]
 
 describe.each(SHELLS)('the claude function in %s', (shell) => {
+  it('signs the system account in while a managed profile is selected, preserving later routing', () => {
+    const f = fixture()
+    writeFileSync(f.pointer, f.a)
+    const command = agentSessionSignInCommand('claude', { account: 'system', remote: false })
+    const env = [...injected(f.a), 'ORCA_CLAUDE_USER_CONFIG_DIR=/user/system account/']
+    const result = f.run(shell, env, 'summary', '', `${command}; claude`)
+    expect(result.stdout).toBe(
+      `HOME=/user/system account/ KEY=fake TWIN=none\nHOME=${f.a} KEY=fake TWIN=${f.a}\n`
+    )
+    expect(result.status).toBe(23)
+    expect(f.run(shell, injected(f.a), 'summary', '', command!).stdout).toBe(
+      'HOME=default KEY=fake TWIN=none\n'
+    )
+  })
+
   it("re-reads the selection on every launch and keeps the shell's auth for an account", () => {
     const f = fixture()
     writeFileSync(f.pointer, f.a)
@@ -187,4 +207,18 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     writeFileSync(f.pointer, f.a)
     expect(f.run(shell, deliberate).stdout).toBe('HOME=/somewhere/else KEY=fake TWIN=none\n')
   })
+
+  it.skipIf(shell.endsWith('fish'))(
+    'replaces the subshell so Claude is a direct child of the pane shell',
+    () => {
+      const f = fixture()
+      const own = 'ORCA_CLAUDE_USER_CONFIG_DIR=/user/own'
+      const setup = 'export PANE_SHELL_PID=$$'
+      writeFileSync(f.pointer, f.a)
+      expect(f.run(shell, [], 'direct', setup).stdout).toBe('direct\n')
+      writeFileSync(f.pointer, '')
+      expect(f.run(shell, [...injected(f.a), own], 'direct', setup).stdout).toBe('direct\n')
+      expect(f.run(shell, [], 'direct', setup).stdout).toBe('direct\n')
+    }
+  )
 })

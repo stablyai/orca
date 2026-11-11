@@ -1,7 +1,8 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { removeTempDirs } from '../../testing/remove-temp-dirs.test-support'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
@@ -31,20 +32,9 @@ function pairingCode(
 
 describe('runtime environment store', () => {
   const tempDirs: string[] = []
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
-  beforeEach(() => {
-    // Why: this suite tests store timestamps, while secure-file tests cover Windows ACLs.
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-  })
-
-  afterEach(() => {
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
-    for (const dir of tempDirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true })
-    }
+  afterEach(async () => {
+    await removeTempDirs(tempDirs.splice(0))
   })
 
   function writeProfileKeypair(userDataPath: string, fill: number): void {

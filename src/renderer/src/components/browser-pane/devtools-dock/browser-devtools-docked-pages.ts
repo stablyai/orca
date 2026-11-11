@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import { browserDevToolsDockFraction } from '../../../../../shared/browser-devtools-dock'
+import { browserDevToolsDockFraction } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 
 // Why module state: main reports dock changes for pages whose chrome may be unmounted
 // (worktree switched away), and the chrome must still know on remount.

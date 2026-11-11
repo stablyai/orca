@@ -82,6 +82,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
   const [directionPadEnabled, setDirectionPadEnabled] = useState(true)
+  const [smartRailEnabled, setSmartRailEnabled] = useState(false)
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
   )
@@ -182,6 +183,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setCustomKeys,
     directionPadEnabled,
     setDirectionPadEnabled,
+    smartRailEnabled,
+    setSmartRailEnabled,
     visibleBuiltInIds,
     setVisibleBuiltInIds,
     showCustomKeyModal,

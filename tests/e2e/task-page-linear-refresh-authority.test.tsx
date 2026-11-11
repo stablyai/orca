@@ -8,7 +8,7 @@ import {
   source
 } from '../../src/renderer/src/components/task-page/linear/task-page-linear-refresh-test-fixtures'
 
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 
 import type { LinearIssue } from '../../src/shared/linear/issue-types'

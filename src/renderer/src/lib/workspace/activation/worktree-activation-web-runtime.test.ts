@@ -17,15 +17,6 @@ import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/hosted-ter
 import '../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 import '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
-
-import { createAutomationRunWorkspaceAction } from '../../../components/automations/automation-run-workspace-action'
-import { resolveAutomationRunTarget } from '../../../components/automations/automation-run-open-target'
-import { makeRun } from '../../../components/automations/automations-page-fixtures'
-import {
-  makeFolderWorkspace,
-  makeProjectGroup
-} from '../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 registerWorktreeActivationReset()
 const originalCreateTab = useAppStore.getState().createTab
@@ -39,41 +30,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
   resetWebRuntimeWakeTerminalRespawnForTests()
   resetWebSessionTabsSnapshotFreshnessForTests()
-})
-
-describe('activateAndRevealWorktree', () => {
-  it('real historical workspace-only inherited folder enters through the fresh native folder path', () => {
-    const before = useAppStore.getState()
-    const folder = makeFolderWorkspace({
-      id: 'fresh-history-folder',
-      projectGroupId: 'fresh-history-group'
-    })
-    const workspaceId = folderWorkspaceKey(folder.id)
-    seedEmptyActivatableWorktree(makeCreatedAgentWorktree())
-    const run = makeRun({ workspaceId, terminalPaneKey: null, terminalPtyId: null })
-    useAppStore.setState({
-      folderWorkspaces: [folder],
-      projectGroups: [
-        { ...makeProjectGroup(), id: folder.projectGroupId, executionHostId: 'ssh:box' }
-      ],
-      unifiedTabsByWorktree: {},
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      ptyIdsByTabId: {},
-      everActivatedWorktreeIds: new Set()
-    })
-    try {
-      const runTargetFor = () =>
-        resolveAutomationRunTarget(useAppStore.getState(), run, { kind: 'desktop' })
-      expect(runTargetFor().viewState.canOpen).toBe(true)
-      // SAFETY: only the historical resolver is consumed by this action.
-      createAutomationRunWorkspaceAction({ list: { runTargetFor } })(run)
-      expect(useAppStore.getState().activeWorktreeId).toBe(workspaceId)
-      expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('ssh:box')
-    } finally {
-      useAppStore.setState(before, true)
-    }
-  })
 })
 
 describe('ensureWorktreeHasInitialTerminal', () => {
@@ -111,38 +67,6 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     // held for the first mirrored tab rather than silently dropped.
     expect(result).toBeNull()
     expect(useAppStore.getState().pendingIssueCommandSplitByTabId).toEqual({})
-
-    useAppStore.setState({
-      tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] }
-    } as unknown as Partial<AppStoreState>)
-
-    expect(useAppStore.getState().pendingIssueCommandSplitByTabId['mirror-tab-1']).toEqual({
-      command: 'gh issue view 42'
-    })
-  })
-
-  it('does not create a fallback while a backend startup terminal awaits mirroring', () => {
-    useAppStore.setState({
-      getKnownWorktreeById: ((id: string) =>
-        id === 'wt-1'
-          ? { id: 'wt-1' }
-          : undefined) as unknown as AppStoreState['getKnownWorktreeById']
-    } as Partial<AppStoreState>)
-    const store = createMockStore()
-
-    const result = ensureWorktreeHasInitialTerminal(
-      store,
-      'wt-1',
-      undefined,
-      undefined,
-      { command: 'gh issue view 42' },
-      undefined,
-      { backendStartupTerminalSpawned: true }
-    )
-
-    expect(result).toBeNull()
-    expect(store.createTab).not.toHaveBeenCalled()
-    expect(store.setActiveTab).not.toHaveBeenCalled()
 
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] }

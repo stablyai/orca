@@ -9,7 +9,7 @@ const shortcutState = vi.hoisted(
   })
 )
 
-vi.mock('@/lib/shortcut-platform', () => ({
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({
   getShortcutPlatform: () => shortcutState.platform
 }))
 

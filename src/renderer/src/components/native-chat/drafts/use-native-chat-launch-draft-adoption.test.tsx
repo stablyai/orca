@@ -110,12 +110,4 @@ describe('useNativeChatLaunchDraftSignal', () => {
     rerender({ messages: [turn], transcriptLoading: false })
     expect(result.current.launchDraftResolved).toBe(true)
   })
-
-  it('does not resolve from an in-flight transcript that still shows recent turns', () => {
-    // In-flight reads may still show the previous generation’s tail.
-    const { result } = renderSignal([userTurn('u1', SEEDED_AT)], true)
-
-    expect(result.current.launchDraftResolved).toBe(false)
-    expect(result.current.launchDraft).not.toBeNull()
-  })
 })

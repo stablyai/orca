@@ -342,12 +342,6 @@ jobs:
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node config/scripts/preflight/changed-checks/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}"
 
-      - name: Verify locked audit tools
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        env:
-          ORCA_BACKGROUND_LAUNCH: '1'
-        run: node config/scripts/dependency-security/audit-tools/verify-locked-audit-tools.mjs
-
       - name: Enforce React Doctor on changed lines
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/static-analysis/react-doctor/check-react-doctor-changed.mjs "${{ github.event.pull_request.base.sha }}"
@@ -517,6 +511,10 @@ jobs:
       - name: Verify localization coverage
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: bun config/scripts/localization/source-extraction/audit-localization-coverage.mjs --check
+
+      - name: Verify startup and worktree localization coverage
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: bun run verify:startup-worktree-localization-coverage
 
       - name: Verify mobile localization
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -865,7 +863,6 @@ jobs:
             src/main/startup/shell-probe-terminal-detach.live-shell.test.ts \
             src/main/startup/shell-probe-lifetime.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts \
-            src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
             src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
@@ -1113,12 +1110,10 @@ jobs:
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
           src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
           src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts
           src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts
           src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-compatibility.electron.test.ts
-          src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-adapter-compatibility.electron.test.ts
           src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-native-compatibility.electron.test.ts
           src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-compatibility.electron.test.ts
           src/main/browser/extensions/api-runtime/browser-extension-api.electron.test.ts

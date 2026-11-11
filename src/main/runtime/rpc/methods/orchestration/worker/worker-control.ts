@@ -1,7 +1,7 @@
 import { exposeDispatchContext } from './dispatch-context-exposure'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/workers/lifecycle/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import {
   exposeObservation,
   exposeWorker,
@@ -17,16 +17,19 @@ import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestrat
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
-import { showFederatedWorker } from '../federation/federated-worker-show'
+import {
+  readFederatedWorkerOutput,
+  showFederatedWorker
+} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import {
   WorkerDispatchParams,
   WorkerReadParams
 } from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerShow',
+    access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime }) => {
@@ -76,12 +79,14 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         terminal: observation.exact ? observation.terminal : null,
         observation: exposeObservation(observation),
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null,
-        autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource)
+        autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource),
+        coordinatedFrom: db.getPeerRun(dispatch.run_id)?.home_label ?? null
       }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerRead',
+    access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
@@ -199,8 +204,9 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       return { ...output, projection: projectFleetWorker(runtime, db, params.dispatch) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerAbandon',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller, orchestrationCompatibilityEvidence }) => {

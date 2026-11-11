@@ -14,7 +14,7 @@ const shortcutState = vi.hoisted(
   })
 )
 
-vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'darwin' }))
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({ getShortcutPlatform: () => 'darwin' }))
 vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector: (state: typeof shortcutState) => unknown) => selector(shortcutState),

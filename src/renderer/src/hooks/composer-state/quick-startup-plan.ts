@@ -6,7 +6,7 @@ import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../sh
 import { terminalSessionOptionInputs } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { useAppStore } from '@/store/index'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
 import type { ComposerModel } from './composer-model'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -17,13 +17,12 @@ import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-w
 import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import '@/diagnostics/telemetry/telemetry'
+import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
-import {
-  requireExecutionHostPlatform,
-  type ExecutionHostPlatformFact
-} from '@/lib/execution-host-facts'
+import { requireExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 
 export type QuickComposerStartupInput = {
   agent: TuiAgent | null

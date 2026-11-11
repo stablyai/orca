@@ -14,6 +14,7 @@ import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
+import { DEFAULT_STATUS_BAR_USAGE_FORMAT } from './status-bar-usage-format'
 import { buildDefaultSettings } from './default-global-settings'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './agent-launch/startup/setup-agent-startup-policy'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
@@ -47,24 +48,6 @@ export const DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY = 0.9
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
-}
-
-export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
-// Why: inert blank-tab URL shared by main/renderer so the attach policy can allow just this one data URL and reject others.
-export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
-
-export const BROWSER_FAMILY_LABELS: Record<string, string> = {
-  chrome: 'Google Chrome',
-  chromium: 'Chromium',
-  comet: 'Comet',
-  helium: 'Helium',
-  vivaldi: 'Vivaldi',
-  arc: 'Arc',
-  edge: 'Microsoft Edge',
-  brave: 'Brave',
-  firefox: 'Firefox',
-  safari: 'Safari',
-  manual: 'File'
 }
 
 /** ProseMirror mounts whole documents. M-series Electron measurements at 300/450/600KB: longest tasks 0.66/1.02/1.41s; 600KB typing p95 39ms (#17134/#17147/#17158). Use cheap pre-parse byte guard, then source mode with Open anyway. */
@@ -120,8 +103,9 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     modelsDir: '',
     dictationLanguage: DICTATION_LANGUAGE_AUTO,
     dictationMode: 'toggle' as const,
+    dictationHoldToRecord: true,
+    removeFillerWords: true,
     terminalConfirmBeforeInsert: false,
-    userModels: [],
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,
     microphoneDeviceLabel: null,
@@ -186,6 +170,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
+    activityBarPosition: 'top',
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
@@ -238,6 +223,7 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarVisible: true,
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
+    statusBarUsageFormat: { ...DEFAULT_STATUS_BAR_USAGE_FORMAT },
     dismissedUpdateVersion: null,
     dismissedUnexpectedSignoutVersion: null,
     lastUpdateCheckAt: null,

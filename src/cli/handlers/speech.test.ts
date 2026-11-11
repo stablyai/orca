@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RuntimeClientError } from '../runtime-client'
-import { callOpenAiKeyMethod, readOpenAiKeyFromStdin } from './speech'
+import { readOpenAiKeyFromStdin } from './speech'
 
 async function* chunks(...parts: string[]): AsyncGenerator<Buffer> {
   for (const part of parts) {
@@ -25,19 +24,5 @@ describe('orca speech openai-key set', () => {
   it('refuses empty and oversized input', async () => {
     await expect(readOpenAiKeyFromStdin(piped('  \n'))).rejects.toThrow('No key on stdin')
     await expect(readOpenAiKeyFromStdin(piped('x'.repeat(1025)))).rejects.toThrow('too long')
-  })
-})
-
-describe('orca speech openai-key against an older server', () => {
-  it('names the update instead of surfacing method_not_found', async () => {
-    const client = {
-      call: async (): Promise<never> => {
-        throw new RuntimeClientError('method_not_found', 'Unknown method: speech.openAiKey.status')
-      }
-    }
-    await expect(callOpenAiKeyMethod(client, 'speech.openAiKey.status')).rejects.toMatchObject({
-      code: 'incompatible_runtime',
-      message: expect.stringContaining('Update Orca on the server')
-    })
   })
 })

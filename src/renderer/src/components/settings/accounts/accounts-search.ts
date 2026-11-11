@@ -6,7 +6,7 @@ import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 
 export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.accounts.search.d09fb5ca92', 'Account Location'),
+    title: translate('auto.components.settings.accounts.search.5e2101f61f', 'Account location'),
     description: translate(
       'auto.components.settings.accounts.search.b84a5b0c8a',
       'Choose whether provider accounts are inspected and added on this device or in WSL.'
@@ -25,7 +25,7 @@ export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.accounts.search.17c5d244eb', 'Codex Accounts'),
+    title: translate('auto.components.settings.accounts.search.54c541fc6e', 'Codex accounts'),
     description: translate(
       'auto.components.settings.accounts.search.b40d5b6570',
       'Optional account switching for Codex and live rate limit fetching.'
@@ -55,7 +55,7 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.accounts.search.a4bcfd6f86', 'Active Codex Account'),
+    title: translate('auto.components.settings.accounts.search.4518496456', 'Active Codex account'),
     description: translate(
       'auto.components.settings.accounts.search.87a4a8584e',
       'Choose which optional saved Codex account powers live quota reads.'
@@ -109,8 +109,8 @@ export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
 export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.accounts.search.6ed1401020',
-      'OpenCode Go Session Cookie'
+      'auto.components.settings.accounts.search.f0e6678f99',
+      'OpenCode Go session cookie'
     ),
     description: translate(
       'auto.components.settings.accounts.search.25591bf95b',
@@ -130,8 +130,8 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.accounts.search.4ee2029e9c',
-      'OpenCode Go Workspace ID'
+      'auto.components.settings.accounts.search.8eef999193',
+      'OpenCode Go workspace id'
     ),
     description: translate(
       'auto.components.settings.accounts.search.38d22ff8d6',
@@ -153,7 +153,7 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsMiniMaxSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.accounts.search.733f9e2a93', 'MiniMax Usage'),
+    title: translate('auto.components.settings.accounts.search.9b6ce52c36', 'MiniMax usage'),
     description: translate(
       'auto.components.settings.accounts.search.f8374c3151',
       'Configure MiniMax usage tracking. Pick the overseas or China endpoint, then paste a session cookie or save an API key that works on either host.'
@@ -198,7 +198,7 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('accounts.antigravity.searchTitle', 'Antigravity Accounts'),
+    title: translate('accounts.antigravity.fd47b5a5dd', 'Antigravity accounts'),
     description: translate(
       'accounts.antigravity.searchDescription',
       'Save and select native agy Google accounts on the execution host.'
@@ -216,7 +216,7 @@ export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => 
 
 export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.accounts.search.cursor.title', 'Cursor Usage'),
+    title: translate('auto.components.settings.accounts.search.cursor.39bbdebe13', 'Cursor usage'),
     description: translate(
       'auto.components.settings.accounts.search.cursor.description',
       'Plan usage read from the Cursor sign-in already on this computer (cursor-agent login).'
@@ -248,7 +248,10 @@ export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsZcodePlanSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.accounts.search.zcodePlan.title', 'GLM Coding Plan'),
+    title: translate(
+      'auto.components.settings.accounts.search.zcodePlan.0db9d0465f',
+      'GLM coding plan'
+    ),
     description: translate(
       'auto.components.settings.accounts.search.zcodePlan.description',
       'Track Z.AI or Zhipu (BigModel) GLM Coding Plan usage. Pick the site and save the plan API key.'

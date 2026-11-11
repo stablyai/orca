@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { readStructuredAgentSessionItem } from '@/runtime/native-chat/journal/structured-agent-session-journal-reads'
 import { supportsStructuredAgentSessionItemDetail } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'

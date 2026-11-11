@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { getDiffCommentLineLabel } from '@/lib/source-control/review/comments/diff-comment-compat'
 import { useTranslate } from '@/i18n/use-translate'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 

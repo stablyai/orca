@@ -14,7 +14,7 @@ import type {
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
 import type { Store } from '../persistence/loading-store/store'
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { getSelectedCodexAccountIdForTarget } from './runtime-selection'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'

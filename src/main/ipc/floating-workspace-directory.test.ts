@@ -6,6 +6,7 @@ import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
 import {
+  getFloatingWorkspaceFileRoots,
   trustFloatingWorkspaceDirectory,
   resolveFloatingTerminalCwd,
   sanitizeFloatingWorkspaceDirectorySetting
@@ -89,5 +90,25 @@ describe('floating workspace directory', () => {
     await expect(
       sanitizeFloatingWorkspaceDirectorySetting(store as never, selectedLink)
     ).resolves.toBe('')
+  })
+
+  it('never re-points an existing trusted folder swapped for a link when trusting another', async () => {
+    await mkdir(path.join(tempRoot, 'a'))
+    const approved = await realpath(path.join(tempRoot, 'a'))
+    const elsewhere = path.join(tempRoot, 'b')
+    const other = path.join(tempRoot, 'c')
+    await mkdir(elsewhere)
+    await mkdir(other)
+    const store = createStore({ floatingTerminalCwd: approved })
+    await trustFloatingWorkspaceDirectory(store, approved)
+    await rm(approved, { recursive: true })
+    await symlinkDirectory(elsewhere, approved)
+
+    await trustFloatingWorkspaceDirectory(store, other)
+
+    const canonicalElsewhere = await realpath(elsewhere)
+    expect(store.settings.floatingTerminalTrustedCwds).not.toContain(canonicalElsewhere)
+    store.settings = { ...store.settings, floatingTerminalCwd: canonicalElsewhere }
+    expect(getFloatingWorkspaceFileRoots(store).exactRoots).toEqual([])
   })
 })

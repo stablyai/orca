@@ -1,5 +1,5 @@
 import { useGitHubOperationOwner } from '@/hooks/useGitHubOperationScope'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   resolvePullRequestRepo,
   parseOwnerRepoFromItemUrl

@@ -1,7 +1,7 @@
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
-import type * as NativeChatSend from '../../../session/native-chat/mobile-native-chat-send'
+import type * as NativeChatSend from '../../../session/native-chat/composer/mobile-native-chat-send'
 import type * as NativeChatSessionOptionPersistence from '../../../session/native-chat/input/mobile-native-chat-session-option-persistence'
 
 const TERMINAL = 'terminal-1'
@@ -14,7 +14,7 @@ export function nativeChatWriteMountAdapters(
   return {
     'nativeChat.terminal-write': ({ client }) => {
       const send = modules.load<typeof NativeChatSend>(
-        'mobile/src/session/native-chat/mobile-native-chat-send.ts'
+        'mobile/src/session/native-chat/composer/mobile-native-chat-send.ts'
       )
       const outcomes: Record<string, unknown> = {}
       return {

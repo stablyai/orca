@@ -1,3 +1,4 @@
+import type { DictationTerm } from './dictation-dictionary'
 import type { RepoIcon } from './repo-icon'
 import type { GhAccountBinding } from './github/account-binding'
 import type { GitHubRepositoryIdentity } from './github/pull-request-types'
@@ -103,6 +104,8 @@ export type Repo = {
   projectHostSetupMethod?: RepoProjectHostSetupMethod
   /** Local row a WSL host now owns, kept for a downgrade; set only by the mover's retention pass. */
   orcadRetained?: OrcadRetainedMarker
+  /** Dictation terms used only in this repo, kept in Orca (on the repo's host), never in the checkout. */
+  dictationTerms?: DictationTerm[]
 }
 
 /** Shared IPC shape for repos:getBaseRefDefault across main/preload/renderer; remoteCount avoids a second hint lookup. */

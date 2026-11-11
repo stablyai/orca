@@ -1,16 +1,18 @@
 import { readBrowserActionEffects } from '../../shared/browser-action-effects'
 import { writeCliScreenshotTempFile } from '../cli-screenshot-temp-file'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import { formatBrowserAnnotationsAsMarkdown } from '../../shared/browser/annotations/browser-annotation-output'
 import type {
   BrowserProfileListResult,
   BrowserScreenshotResult,
   BrowserSnapshotResult,
+  BrowserTabAnnotationsResult,
   BrowserTabCurrentResult,
   BrowserTabListResult,
   BrowserTabProfileCloneResult,
   BrowserTabProfileShowResult,
   BrowserTabShowResult
-} from '../../shared/runtime-browser-contracts'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 
 export function formatSnapshot(result: BrowserSnapshotResult): string {
   // Older runtimes leave url and title unset.
@@ -130,6 +132,13 @@ export function formatTabShow(result: BrowserTabShowResult | BrowserTabCurrentRe
     `profile: ${tab.profileLabel ?? tab.profileId ?? 'unknown'}`,
     ...(tab.openerBrowserPageId ? [`popup opened by: ${tab.openerBrowserPageId}`] : [])
   ].join('\n')
+}
+
+// The same text the tab's Copy button gives, so an agent reads what the user would send.
+export function formatTabAnnotations(result: BrowserTabAnnotationsResult): string {
+  return result.annotations.length > 0
+    ? formatBrowserAnnotationsAsMarkdown(result.annotations)
+    : `No unsent notes on tab ${result.tab.browserPageId}`
 }
 
 export function formatTabProfileShow(result: BrowserTabProfileShowResult): string {

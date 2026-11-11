@@ -146,17 +146,6 @@ describe('the page pane hook', () => {
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })
 
-  it('switches to a pane the host document hands the session already showing', () => {
-    // A notification for the session on top reaches it as URL params, since a second copy is never pushed.
-    bridge.route = { pathname: '/h/host-1' }
-    const tree = render(true)
-    pageUrl.params = { paneKey: `tab-b:${LEAF}` }
-    act(() => {
-      tree.update(createElement(Probe, { terminalsLoaded: true }))
-    })
-    expect(switched.map((tab) => tab.id)).toEqual(['second'])
-  })
-
   it('switches to the agent row tapped in the host list when the page opened the session itself', () => {
     // #34235: the shell route stays the host list, so the tapped pane is only in the page URL.
     bridge.route = { pathname: '/h/host-1' }

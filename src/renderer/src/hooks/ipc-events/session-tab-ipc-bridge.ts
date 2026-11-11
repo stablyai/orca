@@ -1,3 +1,4 @@
+import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { isLocalSessionTabCloseOwned } from '@/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
 import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 import {
@@ -35,7 +36,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         guardPinnedTabClose({
           isPinned: isUnifiedTabPinned(store, worktreeId, browserTarget.workspaceId),
           tabLabel: resolvePinnedTabLabel(store, worktreeId, browserTarget.workspaceId),
-          onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
+          onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId),
+          unsentNotes: hasUnsentBrowserNotes(store, browserTarget.workspaceId)
         })
         return
       }
@@ -111,7 +113,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
         tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
         onClose: closeAndRespond,
-        onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR)
+        onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR),
+        unsentNotes: browserTarget ? hasUnsentBrowserNotes(store, browserTarget.workspaceId) : false
       })
     })
   )

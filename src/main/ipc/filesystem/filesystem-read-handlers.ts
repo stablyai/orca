@@ -1,4 +1,5 @@
 import { classifyFilesystemDirectoryEntries } from './filesystem-symlink-directory-entries'
+import { hasSymlinkBelowRoot } from './filesystem-symlink-ancestor'
 import { markdownDocumentsFromRelativePaths } from '../../../shared/file-listing/markdown-document-paths'
 import {
   capturePathExistence,
@@ -198,6 +199,16 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         { wake: args.wakeWslDistro === true }
       )
     }
+  )
+
+  ipcMain.handle(
+    'fs:hasSymlinkBelowRoot',
+    (_event, args: { rootPath: string; path: string }): Promise<boolean> =>
+      guardWslUncPathAccess(args.rootPath, async () => {
+        // Why the root: the walk stops at the first link, so it never touches anything outside it.
+        await resolveDesktopAuthorizedPath(args.rootPath, store)
+        return hasSymlinkBelowRoot(args.rootPath, args.path)
+      })
   )
 
   ipcMain.handle(

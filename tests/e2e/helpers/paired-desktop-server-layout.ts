@@ -2,7 +2,8 @@
 import type { Page } from '@stablyai/playwright-test'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
+import '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { toWebTerminalSurfaceTabId } from '../../../src/shared/workspace-layout/terminal-surface-id'
 import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
 import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
@@ -23,7 +24,7 @@ export async function readServerLayout(
   const snapshot = new Promise<unknown>((resolve) => {
     resolveSnapshot = resolve
   })
-  const subscription = await subscribeRemoteRuntimeRequest<unknown>(
+  const subscription = await subscribeRemoteRuntimeTransport<unknown>(
     pairedRuntimeConnectionFromOffer(decodePairingOffer(host.offer.pairingUrl)),
     'layout.subscribe',
     { workspaces: [worktreeId] },

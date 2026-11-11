@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../../store/index'
 import { getExecutionHostIdForWorktree } from '../../../lib/workspace/ownership/worktree-runtime-owner'
-import { getRuntimeTargetForFileOwner } from '../../../lib/file-owner-runtime-target'
-import { getActiveWorkspaceOwnerTarget } from '../../../lib/resolved-worktree-execution-host'
+import { getRuntimeTargetForFileOwner } from '../../../lib/files/access/file-owner-runtime-target'
+import { getActiveWorkspaceOwnerTarget } from '../../../lib/workspace/ownership/resolved-worktree-execution-host'
 import {
   runtimeRpcTargetForAuthorityKey,
   runtimeTargetForOwnerEnvironment,
   runtimeTargetEnvironmentId
 } from './runtime-client-target'
-import '../../../lib/wsl-host-account-owner'
+import '../../provider-accounts/ownership/wsl-host-account-owner'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 /** Target the workspace owner rather than the focused host or port scans hit the wrong machine. Direct-SSH owners return null. */

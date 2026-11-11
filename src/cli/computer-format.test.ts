@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ComputerActionResult } from '../shared/runtime-types'
-import { formatComputerAction, prepareComputerCliJsonResult } from './computer-format'
+import { prepareComputerCliJsonResult } from './computer-format'
 import { printResult } from './format'
 
 describe('prepareComputerCliJsonResult', () => {
@@ -50,72 +49,5 @@ describe('prepareComputerCliJsonResult', () => {
     }
 
     expect(prepareComputerCliJsonResult(response)).toBe(response)
-  })
-})
-
-describe('formatComputerAction', () => {
-  it.each([
-    { kind: 'full tree', treeText: 'tree', treeDiff: undefined },
-    {
-      kind: 'diff',
-      treeText: '~ 1 button Save',
-      treeDiff: { baseSnapshotId: 'snap-before', changed: 1, added: 0, removed: 0 }
-    },
-    { kind: 'empty tree', treeText: '', treeDiff: undefined }
-  ])('prints $kind without claiming unverified actions completed', ({ treeText, treeDiff }) => {
-    const result: ComputerActionResult = {
-      snapshot: {
-        id: 'snap-1',
-        app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
-        window: { title: 'Finder', id: 42, width: 800, height: 600 },
-        coordinateSpace: 'window',
-        treeText,
-        treeDiff,
-        elementCount: 5,
-        focusedElementId: null
-      },
-      screenshot: null,
-      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' }
-    }
-
-    const output = formatComputerAction('click', result)
-
-    expect(output).toContain('Click attempted, unverified (verification metadata unavailable)')
-    expect(output).toContain('Inspect with the command above')
-    expect(output).not.toContain('Click completed')
-    if (treeText) {
-      expect(output).toContain(`\n\n${treeText}`)
-    } else {
-      expect(output).not.toContain('\n\n')
-    }
-  })
-
-  it('does not treat accessibility actions without verification as completed', () => {
-    const result: ComputerActionResult = {
-      snapshot: {
-        id: 'snap-1',
-        app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
-        window: { title: 'Finder', id: 42, width: 800, height: 600 },
-        coordinateSpace: 'window',
-        treeText: 'tree',
-        elementCount: 5,
-        focusedElementId: null
-      },
-      screenshot: null,
-      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
-      action: {
-        path: 'accessibility',
-        actionName: 'click',
-        targetWindowId: 42
-      }
-    }
-
-    const output = formatComputerAction('click', result)
-
-    expect(output).toContain(
-      'Click attempted via accessibility, unverified (accessibility action unasserted)'
-    )
-    expect(output).toContain('Inspect with the command above')
-    expect(output).not.toContain('Click completed')
   })
 })

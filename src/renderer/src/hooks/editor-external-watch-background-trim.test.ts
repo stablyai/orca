@@ -7,7 +7,7 @@ import {
   PINNED_RECURSIVE_WATCH_WORKSPACE_COUNT,
   WARM_RECURSIVE_WATCH_WORKSPACE_COUNT
 } from './editor-external-watch-scope'
-import { getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitKey } from '@/lib/workspace/activation/worktree-visit-recency'
 import { getDefaultSettings } from '../../../shared/constants'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'

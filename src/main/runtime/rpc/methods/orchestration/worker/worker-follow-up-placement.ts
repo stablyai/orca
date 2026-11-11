@@ -1,3 +1,4 @@
+import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -10,6 +11,7 @@ import {
   structuredWorkerSession
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { WorkerFollowUpPlacement } from './worker-follow-up-choice'
+import { publishChatTabInBackground } from '../../../../session-tabs/background-chat-tab-publication'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {
@@ -49,6 +51,12 @@ export async function reopenWorkerTerminal(
 ): Promise<ReopenedWorker | null> {
   const resumed = await runtime.resumeAgentSessionInWorkspace(worktreeId, {
     ...session,
+    // Why always a recipe: without its own note the worker resumes unrecorded, never with another pane's.
+    launchConfig: resolveResumeLaunchRecipe(
+      session.launchConfig,
+      session.agent,
+      session.providerSession
+    ),
     // A retry of this follow-up reconciles the pane it may have started.
     mutationId: dispatchId
   })
@@ -128,13 +136,7 @@ export async function reopenWorkerChat(
   const running = structuredWorkerSession(identity)
   const sessionId = running.kind === 'here' ? running.sessionId : identity.sessionId
   const userOpened = host.isSessionTabVisible(sessionId)
-  const revealed = await host.revealSession(sessionId)
-  await runtime.publishStructuredAgentSessionTab({
-    workspaceId: revealed.workspaceId,
-    sessionId: revealed.sessionId,
-    agent: revealed.agent,
-    activate: false
-  })
+  await publishChatTabInBackground(runtime, host, sessionId)
   return {
     handle,
     chat: true,

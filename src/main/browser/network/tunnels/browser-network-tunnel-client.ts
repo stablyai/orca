@@ -3,7 +3,7 @@ import {
   encodeBrowserNetworkTunnelOpen,
   type BrowserNetworkTunnelFrame,
   type BrowserNetworkTunnelOpen
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { BrowserNetworkTunnelConnectionCredit } from './browser-network-tunnel-connection-credit'
 import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
 import {

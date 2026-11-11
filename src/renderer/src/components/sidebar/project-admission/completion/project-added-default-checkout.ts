@@ -1,13 +1,13 @@
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import type {
   AddRepoDefaultCheckoutHandoffSource,
   EventProps
 } from '../../../../../../shared/telemetry-events'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import {

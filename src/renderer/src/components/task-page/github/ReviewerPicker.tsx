@@ -2,7 +2,7 @@ import type { Dispatch, RefCallback, SetStateAction } from 'react'
 import { Check } from 'lucide-react'
 
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Input } from '@/components/ui/input'
 import { PopoverContent } from '@/components/ui/popover'
 

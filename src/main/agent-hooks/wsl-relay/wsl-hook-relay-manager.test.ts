@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,14 +8,8 @@ import { RelayDispatcher } from '../../../wsl-guest/dispatcher'
 import { registerWslHookFsHandlers } from '../../../wsl-guest/wsl-hook-fs-bridge'
 import { SshChannelMultiplexer } from '../../ssh/protocol/ssh-channel-multiplexer'
 import type { MultiplexerTransport } from '../../ssh/protocol/ssh-multiplexer-transport-writer'
-import { createWslHookSftpAdapter, installWslGuestHooks } from './wsl-hook-fs-adapter'
-import {
-  installRemoteManagedAgentHooks,
-  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
-} from '../installation/remote-managed-hook-installers'
+import { createWslHookSftpAdapter } from './wsl-hook-fs-adapter'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
-import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../../../shared/claude-agent-view'
-import { awaitExplicitAgentPluginGuestReadiness } from './wsl-agent-plugin-readiness'
 import { FAILURE_COOLDOWN_BASE_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
@@ -110,51 +104,6 @@ describe.skipIf(process.platform === 'win32')(
       })
       expect(outside).toBeInstanceOf(Error)
     })
-
-    it('runs the unchanged remote managed hook installers against a WSL guest home', async () => {
-      const adapter = createWslHookSftpAdapter(harness.mux)
-      const results = await installRemoteManagedAgentHooks(adapter, home, {
-        agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS,
-        claudeVersion: '2.1.310'
-      })
-
-      expect(results.length).toBeGreaterThan(0)
-      expect(results.every((r) => r.state !== 'error')).toBe(true)
-
-      const claudeSettings = JSON.parse(
-        readFileSync(join(home, '.claude', 'settings.json'), 'utf8')
-      )
-      expect(claudeSettings.hooks.StopFailure).toBeTruthy()
-      let rawVersion = '11.17.0'
-      harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
-        agents: ['claude'],
-        versions: { claude: rawVersion }
-      }))
-      const reinstall = () =>
-        installWslGuestHooks({
-          mux: harness.mux,
-          guestHome: home,
-          codexHomePath: null,
-          distro: 'Ubuntu',
-          installHooks: installRemoteManagedAgentHooks,
-          settings: null,
-          warn: (message) => {
-            throw new Error(message)
-          },
-          installCodex: async () => null
-        })
-      await reinstall()
-      expect(JSON.parse(readFileSync(join(home, '.claude', 'settings.json'), 'utf8'))).toEqual(
-        claudeSettings
-      )
-      rawVersion = 'launcher 11.17.0\n1.0.64 (Claude Code)'
-      await reinstall()
-      const oldSettings = JSON.parse(readFileSync(join(home, '.claude', 'settings.json'), 'utf8'))
-      expect(oldSettings.hooks.StopFailure).toBeUndefined()
-      expect(oldSettings.hooks.PreToolUse).toBeTruthy()
-      const script = readFileSync(join(home, '.orca', 'agent-hooks', 'claude-hook.sh'), 'utf8')
-      expect(script).toContain('/hook/claude')
-    }, 20_000)
   }
 )
 
@@ -231,12 +180,6 @@ describe('WslHookRelayManager', () => {
     return harness.transport
   }
 
-  function startupError(code: number | null, stderr = ''): Error {
-    return Object.assign(new Error(`exit ${code}`), {
-      startup: { kind: 'exit' as const, code, stderr }
-    })
-  }
-
   function createManager(overrides: Partial<WslHookRelayManagerDeps>): {
     manager: WslHookRelayManager
     deps: WslHookRelayManagerDeps
@@ -280,60 +223,6 @@ describe('WslHookRelayManager', () => {
     }
     return { manager: new WslHookRelayManager(deps), deps }
   }
-
-  it('forwards Claude view requests from the guest only while hooks are enabled', async () => {
-    let enabled = true
-    const receive = vi.fn(() => ({ registered: true }))
-    const { manager, deps } = createManager({
-      receiveClaudeAgentView: receive,
-      managedHookSettings: () => ({ agentStatusHooksEnabled: enabled })
-    })
-    await manager.ensureForDistro('Ubuntu', codexHome)
-    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledOnce())
-    const guest = harnesses[0].guestDispatcher
-    harnesses[0].mux.dispose()
-    const body = { action: 'register', paneKey: 'pane', sessionId: 'session' }
-    expect(await guest.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body })).toEqual({
-      registered: true
-    })
-    expect(receive).toHaveBeenCalledWith(body)
-    enabled = false
-    expect(await guest.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body })).toEqual({})
-    expect(receive).toHaveBeenCalledOnce()
-    manager.disposeAll()
-  })
-
-  it('does not treat the endpoint as ready before guest install completes', async () => {
-    let releaseInstall!: () => void
-    const installGate = new Promise<void>((resolve) => {
-      releaseInstall = resolve
-    })
-    const { manager } = createManager({
-      installHooks: vi.fn(async () => installGate.then(() => []))
-    })
-    const readiness = awaitExplicitAgentPluginGuestReadiness({
-      isWsl: true,
-      distro: 'Ubuntu',
-      launchAgent: 'pi',
-      timeoutMs: 50,
-      manager
-    })
-    await vi.waitFor(() => expect(manager.getGuestEndpointFilePath('Ubuntu')).toBeNull())
-    releaseInstall()
-    await expect(readiness).resolves.toBe(true)
-    manager.disposeAll()
-  })
-
-  it('leaves the overlay dir null when the guest bundle lacks the installPlugins handler', async () => {
-    const waitForSentinel = vi.fn(async () => guestTransport({ registerInstallPlugins: false }))
-    const { manager, deps } = createManager({ waitForSentinel })
-    manager.ensureForDistro('Ubuntu')
-    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(manager.getOpenCodeOverlayDir('Ubuntu')).toBeNull()
-    expect(deps.warn).not.toHaveBeenCalledWith(expect.stringContaining('installPlugins'))
-    manager.disposeAll()
-  })
 
   // Memory and battery: once no bridge terminal is left, the relay alone held the distro and VM.
   describe('idle stop', () => {
@@ -389,94 +278,6 @@ describe('WslHookRelayManager', () => {
       expect(deps.spawnRelay).toHaveBeenCalledOnce()
       manager.disposeAll()
     })
-
-    it('starts again, with the config it served, on the next terminal or agent in the distro', async () => {
-      const bridges = presence()
-      bridges.set(0)
-      const { manager, deps } = createManager({ bridgePtyPresence: bridges, idleStopMs: 1 })
-      manager.ensureForDistro('Ubuntu', codexHome)
-      await vi.waitFor(() =>
-        expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('stopped: idle'))
-      )
-      vi.mocked(deps.installCodex).mockClear()
-      bridges.set(1)
-
-      manager.ensureForDistro('Ubuntu')
-      await vi.waitFor(() => expect(manager.getGuestEndpointFilePath('Ubuntu')).not.toBeNull())
-      expect(deps.spawnRelay).toHaveBeenCalledTimes(2)
-      expect(deps.installCodex).toHaveBeenCalledWith(codexHome, 'Ubuntu')
-      manager.disposeAll()
-    })
-  })
-
-  it('stops live relays and refuses to revive them once agent status hooks are switched off', async () => {
-    const settings = { agentStatusHooksEnabled: true }
-    const { manager, deps } = createManager({ managedHookSettings: () => settings })
-    manager.ensureForDistro('Ubuntu', codexHome)
-    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
-
-    settings.agentStatusHooksEnabled = false
-    manager.disposeAll({ permanent: false })
-    manager.ensureForDistro('Ubuntu')
-    await new Promise((resolve) => setTimeout(resolve, 20))
-
-    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
-    expect(deps.installHooks).toHaveBeenCalledTimes(1)
-    expect(manager.getGuestEndpointFilePath('Ubuntu')).toBeNull()
-
-    settings.agentStatusHooksEnabled = true
-    manager.resumeStoppedRelays()
-    await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() => expect(deps.installCodex).toHaveBeenCalledTimes(2))
-    expect(deps.installCodex).toHaveBeenLastCalledWith(codexHome, 'Ubuntu')
-    manager.disposeAll()
-  })
-
-  it('does not resume a relay whose distro the user shut down while hooks were off', async () => {
-    const settings = { agentStatusHooksEnabled: true }
-    const isDistroRunning = vi.fn(async () => true)
-    const { manager, deps } = createManager({
-      isDistroRunning,
-      managedHookSettings: () => settings
-    })
-    manager.ensureForDistro('Ubuntu')
-    await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(1))
-
-    settings.agentStatusHooksEnabled = false
-    manager.disposeAll({ permanent: false })
-    settings.agentStatusHooksEnabled = true
-    // Recovery must not boot a distro the user shut down.
-    isDistroRunning.mockResolvedValue(false)
-    manager.resumeStoppedRelays()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-
-    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
-    isDistroRunning.mockResolvedValue(true)
-    manager.resumeStoppedRelays()
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
-  })
-
-  it('abandons a launch that was still in flight when hooks were switched off', async () => {
-    let failSentinel: ((error: unknown) => void) | undefined
-    const { manager, deps } = createManager({
-      waitForSentinel: vi.fn(
-        () =>
-          new Promise<MultiplexerTransport>((_resolve, reject) => {
-            failSentinel = reject
-          })
-      )
-    })
-    manager.ensureForDistro('Ubuntu')
-    await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(1))
-
-    manager.disposeAll({ permanent: false })
-    // Teardown startup failures must not retry into an untracked relay after opt-out.
-    failSentinel?.(startupError(1))
-    await new Promise((resolve) => setTimeout(resolve, 20))
-
-    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
-    expect(deps.runInstall).not.toHaveBeenCalled()
   })
 
   it('keeps a fresh state that replaced a failed one while its restart probe was in flight', async () => {

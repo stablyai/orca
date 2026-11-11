@@ -1,4 +1,4 @@
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 
 /** Drops Electron's "Error invoking remote method" wrapper; an empty message stays empty (still a failed read). */
 export function describeFileExplorerReadError(error: unknown): string {

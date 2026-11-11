@@ -1,5 +1,5 @@
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { registerRendererMemoryProfileContributor } from '../renderer-memory-profile'
+import { registerRendererMemoryProfileContributor } from '../../diagnostics/memory/renderer-memory-profile'
 import type { PaneRenderingDiagnostics } from './pane-manager-types'
 
 type RegisteredPaneManager = {

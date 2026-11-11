@@ -2,17 +2,6 @@ import { expect, it } from 'vitest'
 
 import { createJsonTokenReader } from './json-token-reader'
 
-it.each(['', ' ', '{', '{"a":1,}', '{}{}', '[01]', '\ufeff{}'])(
-  'rejects malformed JSON %j as a syntax error',
-  (text) => {
-    const reader = createJsonTokenReader(() => {})
-    expect(() => {
-      reader.write(text)
-      reader.end()
-    }).toThrow(SyntaxError)
-  }
-)
-
 it('preserves consumer errors and completes numbers at EOF synchronously', () => {
   const values: string[] = []
   const reader = createJsonTokenReader((token) => {

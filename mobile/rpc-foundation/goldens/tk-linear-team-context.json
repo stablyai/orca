@@ -4,10 +4,10 @@
   "family": "tasks.linear-team-context",
   "namedDeltas": [],
   "values": {
-    "1288b8513745": {
-      "name": "linearStatesError",
-      "ordinal": 13,
-      "value": ""
+    "031c50459130": {
+      "name": "createTeamId",
+      "ordinal": 10,
+      "value": "team-1"
     },
     "2afc4b1311c1": {
       "createTeamId": "team-1",
@@ -22,24 +22,9 @@
         }
       ]
     },
-    "33218d06f656": {
-      "name": "linearStates",
-      "ordinal": 6,
-      "value": []
-    },
-    "356f2cb9a0df": {
-      "name": "linearStatesLoading",
-      "ordinal": 17,
-      "value": false
-    },
-    "3abc893d377b": {
-      "name": "mutatingStatus",
-      "ordinal": 3,
-      "value": false
-    },
-    "475ec9a66266": {
+    "38ed617d559f": {
       "name": "linearTeams",
-      "ordinal": 10,
+      "ordinal": 9,
       "value": [
         {
           "id": "team-1",
@@ -49,9 +34,44 @@
         }
       ]
     },
-    "5711e2717b76": {
-      "name": "linearStates",
+    "3abc893d377b": {
+      "name": "mutatingStatus",
+      "ordinal": 3,
+      "value": false
+    },
+    "4fcc46dfeb77": {
+      "name": "linear.listTeams#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\"}"
+    },
+    "5dcdc7fd7492": {
+      "name": "linearSubIssueTitle",
+      "ordinal": 4,
+      "value": ""
+    },
+    "74335ecb4cd2": {
+      "name": "linearStatesLoading",
       "ordinal": 16,
+      "value": false
+    },
+    "74505ce2789a": {
+      "name": "linearStates",
+      "ordinal": 5,
+      "value": []
+    },
+    "77a7eff4a3cc": {
+      "name": "linearStatesLoading",
+      "ordinal": 11,
+      "value": true
+    },
+    "82b36eab5101": {
+      "name": "creatingTask",
+      "ordinal": 6,
+      "value": false
+    },
+    "a14f6c361136": {
+      "name": "linearStates",
+      "ordinal": 15,
       "value": [
         {
           "color": "#000000",
@@ -61,24 +81,34 @@
         }
       ]
     },
-    "60a0395d07c7": {
-      "name": "linearStatesLoading",
-      "ordinal": 12,
-      "value": true
-    },
-    "610f6c28e7a1": {
-      "name": "linearSubIssueTitle",
-      "ordinal": 5,
-      "value": ""
-    },
-    "9131972798ca": {
-      "name": "linear.teamStates#1",
-      "ordinal": 15,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.teamStates\",\"params\":{\"teamId\":\"team-1\",\"workspaceId\":\"linear-workspace\"}}"
-    },
-    "95b075d66243": {
+    "b5ba6f00c4fb": {
       "name": "linear.teamStates#1",
       "ordinal": 14,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.teamStates\",\"params\":{\"teamId\":\"team-1\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "b6bf81e9e237": {
+      "createTeamId": "team-1",
+      "states": [
+        {
+          "color": "#000000",
+          "id": "state-1",
+          "name": "Todo",
+          "type": "unstarted"
+        }
+      ],
+      "statesLoading": false,
+      "teams": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "c88d134e7a42": {
+      "name": "linear.teamStates#1",
+      "ordinal": 13,
       "args": [
         {
           "name": "method",
@@ -116,41 +146,6 @@
         }
       }
     },
-    "9dc1f136772e": {
-      "name": "linearCommentDraft",
-      "ordinal": 4,
-      "value": ""
-    },
-    "b164dfd464b3": {
-      "name": "linear.listTeams#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\"}"
-    },
-    "b1adae647a3f": {
-      "name": "createTeamId",
-      "ordinal": 11,
-      "value": "team-1"
-    },
-    "b6bf81e9e237": {
-      "createTeamId": "team-1",
-      "states": [
-        {
-          "color": "#000000",
-          "id": "state-1",
-          "name": "Todo",
-          "type": "unstarted"
-        }
-      ],
-      "statesLoading": false,
-      "teams": [
-        {
-          "id": "team-1",
-          "key": "ENG",
-          "name": "Engineering",
-          "workspaceId": "linear-workspace"
-        }
-      ]
-    },
     "cc2ece9478f0": {
       "name": "actionItem",
       "ordinal": 1,
@@ -158,9 +153,29 @@
         "$rpc": "null"
       }
     },
-    "ceb71a750e06": {
+    "db66582f88a9": {
+      "name": "linearStatesError",
+      "ordinal": 12,
+      "value": ""
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eda130337c99": {
+      "name": "detailPayload",
+      "ordinal": 2,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "ee01f277ffc4": {
       "name": "linear.listTeams#1",
-      "ordinal": 8,
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -196,26 +211,6 @@
           ]
         }
       }
-    },
-    "e9a162defc32": {
-      "name": "creatingTask",
-      "ordinal": 7,
-      "value": false
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "eda130337c99": {
-      "name": "detailPayload",
-      "ordinal": 2,
-      "value": {
-        "$rpc": "null"
-      }
     }
   },
   "recording": {
@@ -224,8 +219,8 @@
       {
         "id": "open-composer-settled",
         "observation": {
-          "sender": ["ceb71a750e06"],
-          "payloads": ["b164dfd464b3"],
+          "sender": ["ee01f277ffc4"],
+          "payloads": ["4fcc46dfeb77"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a"
@@ -235,20 +230,19 @@
             "cc2ece9478f0",
             "eda130337c99",
             "3abc893d377b",
-            "9dc1f136772e",
-            "610f6c28e7a1",
-            "33218d06f656",
-            "e9a162defc32",
-            "475ec9a66266",
-            "b1adae647a3f"
+            "5dcdc7fd7492",
+            "74505ce2789a",
+            "82b36eab5101",
+            "38ed617d559f",
+            "031c50459130"
           ]
         }
       },
       {
         "id": "select-metadata-item-settled",
         "observation": {
-          "sender": ["ceb71a750e06", "95b075d66243"],
-          "payloads": ["b164dfd464b3", "9131972798ca"],
+          "sender": ["ee01f277ffc4", "c88d134e7a42"],
+          "payloads": ["4fcc46dfeb77", "b5ba6f00c4fb"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a",
@@ -259,16 +253,15 @@
             "cc2ece9478f0",
             "eda130337c99",
             "3abc893d377b",
-            "9dc1f136772e",
-            "610f6c28e7a1",
-            "33218d06f656",
-            "e9a162defc32",
-            "475ec9a66266",
-            "b1adae647a3f",
-            "60a0395d07c7",
-            "1288b8513745",
-            "5711e2717b76",
-            "356f2cb9a0df"
+            "5dcdc7fd7492",
+            "74505ce2789a",
+            "82b36eab5101",
+            "38ed617d559f",
+            "031c50459130",
+            "77a7eff4a3cc",
+            "db66582f88a9",
+            "a14f6c361136",
+            "74335ecb4cd2"
           ]
         }
       }

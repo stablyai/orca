@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   captureDescendantSnapshot,
   type DescendantSnapshot
@@ -19,7 +19,7 @@ export type ProviderProcessTeardownVerdict =
 
 const activeTeardowns = new WeakMap<object, Promise<ProviderProcessTeardownVerdict>>()
 
-type TeardownChild = Pick<ChildProcessHandle, 'pid' | 'kill'>
+type TeardownChild = Pick<ChildProcess, 'pid' | 'kill'>
 
 export type ProviderProcessTeardownDeps = {
   site: string

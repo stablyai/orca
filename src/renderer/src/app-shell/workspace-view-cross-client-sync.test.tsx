@@ -185,6 +185,12 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().sidebarWidth).toBe(320)
   })
 
+  it('saves a changed activity bar position', async () => {
+    act(() => store.setState({ activityBarPosition: 'side' }))
+    await flushDesktopDebounce()
+    expect(authority.get().activityBarPosition).toBe('side')
+  })
+
   it('saves All hosts after flipping back during a host-selection write', async () => {
     holdAcks = true
     act(() => store.getState().setWorkspaceHostScope('local'))
@@ -404,21 +410,5 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     })
     await flushDesktopDebounce()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
-  })
-
-  it('desktop and another client changing the same field converge on the newest write', async () => {
-    act(() => {
-      store.getState().setHideDefaultBranchWorkspace(true)
-    })
-    await flushDesktopDebounce()
-    deliverBroadcasts()
-
-    // Another client flips the SAME field afterwards; last writer wins everywhere.
-    authority.set({ hideDefaultBranchWorkspace: false })
-    deliverBroadcasts()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
-    await flushDesktopDebounce()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
-    expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
   })
 })

@@ -12,7 +12,7 @@ import {
   parsePathInput,
   shouldDeferRemoteFileBrowserPasteResolve
 } from './remote-file-browser-entry-actions'
-import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-control-paste'
+import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-input/paste/text-control-paste'
 import {
   committedPrefix,
   resolvePathInput as resolvePathInputAgainstListings,

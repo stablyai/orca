@@ -1,18 +1,16 @@
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import {
   mapLinearIssueRead,
   type LinearIssueLease
 } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import {
-  getComposerEligibleRepos,
-  resolveComposerActiveRepoId
-} from '@/lib/new-workspace-composer-repo'
-import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
-import { lookupCmdJGitHubUrlWorkItem } from '@/lib/cmd-j-github-url-lookup'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
+import { resolveComposerActiveRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
+import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
+import { lookupCmdJGitHubUrlWorkItem } from '@/lib/workspace/search/palette/cmd-j-github-url-lookup'
 import { lookupLinearIssueUrl } from '@/lib/work-items/linear/linear-issue-url-lookup'
 import {
   withResolvedCmdJGitHubPreview,
@@ -21,8 +19,11 @@ import {
 } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
+
+import {
+  type TaskSourceContext,
+  buildTaskSourceContextFromRepo
+} from '../../../../shared/work-items/task-source-context'
 import type { WorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 export type CmdJLinearIssuePreview = {
@@ -41,9 +42,15 @@ export type CmdJGitHubWorkItemPreview = {
   sourceContext: TaskSourceContext | null
 }
 
+/** The target New workspace would default to, used to scope task-link lookups to the same checkout. */
 function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.getState>) {
-  const eligibleRepos = getComposerEligibleRepos(state.repos)
-  const activeRepoId = resolveComposerActiveRepoId(state.repos, eligibleRepos, state.activeRepoId)
+  const eligibleRepos = getNewWorkspaceDialogEligibleRepos(state.repos)
+  const activeRepoId = resolveComposerActiveRepoId(
+    state.repos,
+    eligibleRepos,
+    state.activeRepoId,
+    state.runtimeEnvironments
+  )
   const resolution = resolveWorkspaceCreationTarget({
     eligibleRepos,
     projects: state.projects,

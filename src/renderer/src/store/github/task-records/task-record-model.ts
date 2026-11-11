@@ -1,7 +1,7 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubProjectRow } from '../../../../../shared/github/project-types'
-import type { GitHubTaskObservation } from '@/lib/github-task-observation'
+import type { GitHubTaskObservation } from '@/lib/work-items/github/github-task-observation'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'

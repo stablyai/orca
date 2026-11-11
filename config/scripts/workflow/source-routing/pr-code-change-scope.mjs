@@ -209,7 +209,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
-  'src/shared/browser-network-tunnel-protocol',
+  'src/shared/browser/network/tunnels/browser-network-tunnel-protocol',
   // Both released/current WebSocket transports must accept web upgrade marker (cross-version-web-upgrade-marker).
   'src/main/runtime/rpc/ws-transport.ts',
   'src/shared/web-origin-security.ts',

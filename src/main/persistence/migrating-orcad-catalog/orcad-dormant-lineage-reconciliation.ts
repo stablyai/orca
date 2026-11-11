@@ -9,8 +9,8 @@ import {
   worktreeWorkspaceKey,
   type WorkspaceKey
 } from '../../../shared/workspace-scope'
-import { folderParentDefeatsInferredParent } from '../loading-store/folder-parent-lineage-persistence'
-import { ownsRawIdBucket } from '../loading-store/metadata-lineage-operations'
+import { folderParentDefeatsInferredParent } from '../loading-store/workspace-lineage/folder-parent-lineage-persistence'
+import { ownsRawIdBucket } from '../loading-store/workspace-lineage/metadata-lineage-operations'
 
 /** One imported child's parent records; `legacy: null` deletes a destination worktree row. */
 export type PreparedChildLineage = {

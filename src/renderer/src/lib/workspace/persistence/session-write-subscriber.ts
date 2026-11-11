@@ -3,7 +3,7 @@ import { isDecorativeAgentTitleFrameChange } from '../../../../../shared/agent-s
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
-import { createWorktreeTabBucketProjection } from '../../worktree-tab-bucket-projection'
+import { createWorktreeTabBucketProjection } from '../tabs/worktree-tab-bucket-projection'
 
 type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 type TabsByWorktree = AppState['tabsByWorktree']

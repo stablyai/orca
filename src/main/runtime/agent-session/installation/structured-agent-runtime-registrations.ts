@@ -64,6 +64,9 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
           resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
+          ...(deps.prepareLaunchAccountHome
+            ? { prepareLaunchAccountHome: deps.prepareLaunchAccountHome }
+            : {}),
           ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
         })
       ),
