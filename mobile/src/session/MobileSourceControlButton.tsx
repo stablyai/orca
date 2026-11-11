@@ -10,33 +10,29 @@ import {
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostQuery } from '../query/host-query'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { UNCACHED_LINKED_PR_STATE } from '../../../src/shared/runtime-worktree-contracts'
 
 // Its own component so catalog updates re-render only this button, not the whole session header.
 export function MobileSourceControlButton({
   hostId,
   worktreeId,
-  client,
-  connected,
   active,
   onPress
 }: {
   hostId: string
   worktreeId: string
-  client: RpcClient | null
-  connected: boolean
   active: boolean
   onPress: () => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  // The host list's catalog row carries the branch PR's cached state.
+  // Cache-only: the host list reads worktree.ps, and a session's first paint must not wait behind it.
   const { data } = useHostQuery(
     hostWorktreeCatalogQuery,
-    { hostId, client: connected ? client : null },
+    { hostId, client: null },
     HOST_LIST_TARGET,
-    NO_HOST_LIST_INPUT
+    NO_HOST_LIST_INPUT,
+    { enabled: false }
   )
   const pr = data?.worktrees.find((row) => row.worktreeId === worktreeId)?.linkedPR ?? null
   const knownState = pr && pr.state !== UNCACHED_LINKED_PR_STATE ? pr.state : null

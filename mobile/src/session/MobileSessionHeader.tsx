@@ -32,7 +32,6 @@ export function MobileSessionHeader({
   const {
     hostId,
     worktreeId,
-    client,
     isFloatingWorkspaceRoute,
     presentedConnState,
     forceReconnectHost,
@@ -114,8 +113,6 @@ export function MobileSessionHeader({
         <MobileSourceControlButton
           hostId={hostId}
           worktreeId={worktreeId}
-          client={client}
-          connected={connState === 'connected'}
           active={activePanel === 'sourceControl'}
           onPress={() => handlePanelTap('sourceControl')}
         />
