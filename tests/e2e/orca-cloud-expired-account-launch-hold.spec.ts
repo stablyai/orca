@@ -82,6 +82,7 @@ function hostClaudeTabs(page: Page, worktreeId: string): Promise<number> {
 test('an expired Orca-account sign-in holds a cloud Claude launch on the strip', async (// oxlint-disable-next-line no-empty-pattern -- This test owns its host launch.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'paired hosts run on macOS and Linux here')
+  // Two Electron apps (host and client) start per run.
   test.setTimeout(240_000)
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
