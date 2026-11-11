@@ -9,7 +9,7 @@ const MAX_VALUE_BYTES = 120
 export const DEFAULT_WINDOW_TITLE_TEMPLATE =
   '${appName}${separator}${repo} / ${worktree} [${issueKey}]'
 
-// Text survives only between filled values (the piece next to the later one), so no dangling " / " or "[]".
+/** Text survives only between filled values (the piece next to the later one), so no dangling " / " or "[]". */
 function renderSegment(segment: string, values: Map<string, string>): string {
   const parts = segment.split(VARIABLE_PATTERN)
   const filled = parts.map((part, i) => i % 2 === 1 && values.has(part))
@@ -30,6 +30,7 @@ function renderSegment(segment: string, values: Map<string, string>): string {
     .trim()
 }
 
+/** Fills `${name}` variables with sanitized, capped values and joins `${separator}` segments that rendered text. */
 export function renderWindowTitle(
   template: string,
   values: Partial<Record<(typeof WINDOW_TITLE_VARIABLES)[number], string | null>>

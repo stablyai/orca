@@ -5,8 +5,9 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { DebouncedSettingsTextInput } from '../form-controls/DebouncedSettingsTextInput'
 import { getWindowTitleEntries } from './appearance-window-title-search'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
+/** Opt-in switch plus a template field that previews the live title. */
 export function WindowTitleSetting({
   settings,
   updateSettings
@@ -14,9 +15,10 @@ export function WindowTitleSetting({
   settings: Pick<GlobalSettings, 'showWorkspaceInWindowTitle' | 'windowTitle'>
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const entry = getWindowTitleEntries()[0]
   const enabled = settings.showWorkspaceInWindowTitle === true
-  const templateLabel = translate('settings.appearance.windowTitle.templateLabel', 'Title template')
+  const templateLabel = t('settings.appearance.windowTitle.templateLabel', 'Title template')
   const currentTitle = useResolvedWindowTitle()
   return (
     <SearchableSetting
@@ -36,7 +38,7 @@ export function WindowTitleSetting({
             label={templateLabel}
             description={
               <>
-                {translate(
+                {t(
                   'settings.appearance.windowTitle.templateDescription',
                   'Variables: {{variables}}. {{separator}} adds “ — ” only between filled parts. Leave empty for the default.',
                   {
@@ -45,13 +47,9 @@ export function WindowTitleSetting({
                   }
                 )}
                 <span className="block text-foreground">
-                  {translate(
-                    'settings.appearance.windowTitle.preview',
-                    'Current title: {{title}}',
-                    {
-                      title: currentTitle
-                    }
-                  )}
+                  {t('settings.appearance.windowTitle.preview', 'Current title: {{title}}', {
+                    title: currentTitle
+                  })}
                 </span>
               </>
             }

@@ -256,6 +256,20 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
+/** Settings inside the Interface section's Advanced disclosure; a search hit on any of them reveals it. */
+export function getAppearanceAdvancedEntries(options: {
+  isDesktopWindows: boolean
+  isDesktopMac: boolean
+}): SettingsSearchEntry[] {
+  return [
+    ...getTitlebarEntries(),
+    ...getWindowTitleEntries(),
+    ...getReduceVisualEffectsEntries(),
+    ...getSystemTrayEntries({ showSystemTray: options.isDesktopWindows }),
+    ...getMenuBarIconEntries({ showMenuBarIcon: options.isDesktopMac })
+  ]
+}
+
 type AppearancePaneSearchOptions = {
   showDesktopThemeImports?: boolean
   showSystemTray?: boolean

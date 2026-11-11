@@ -5,7 +5,6 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
 import { WindowTitleSetting } from './WindowTitleSetting'
-import { getWindowTitleEntries } from './appearance-window-title-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import {
@@ -19,6 +18,7 @@ import { FontAutocomplete } from './fonts/FontAutocomplete'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import {
+  getAppearanceAdvancedEntries,
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getThemeEntries,
@@ -133,13 +133,7 @@ export function AppearanceInterfaceSection({
       disabled: true
     })
   }
-  const advancedEntries = [
-    ...getTitlebarEntries(),
-    ...getWindowTitleEntries(),
-    ...getReduceVisualEffectsEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
-  ]
+  const advancedEntries = getAppearanceAdvancedEntries({ isDesktopWindows, isDesktopMac })
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
   const languageTitle = t('settings.appearance.language.title', 'Language')
 

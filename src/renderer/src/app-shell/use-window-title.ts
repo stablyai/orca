@@ -1,19 +1,19 @@
 import { useEffect } from 'react'
 import { stripLeadingAgentTitleDecoration } from '../../../shared/agent-status/title/agent-title-decoration'
 import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
-import { branchName } from '../lib/git-utils'
+import { branchName } from '../lib/source-control/branches/branch-name'
 import { DEFAULT_WINDOW_TITLE_TEMPLATE, renderWindowTitle } from '../lib/window-title-template'
 import { resolveLinkedTaskIdentifier } from '../lib/workspace/search/worktrees/worktree-palette-evidence'
-import { useStructuredChatTabNames } from '../runtime/structured-chat-name-observation'
+import { useStructuredChatTabNames } from '../runtime/native-chat/naming/structured-chat-name-observation'
 import {
   projectedStructuredChatTabName,
   type StructuredChatTabNames
-} from '../runtime/structured-chat-tab-name'
+} from '../runtime/native-chat/naming/structured-chat-tab-name'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
 import { selectRepoByIdForActiveWorkspace } from '../store/repos/active-workspace-repository'
 
-// Same precedence as the tab bar: terminal-owned titles fill gaps in the unified tab.
+/** Names the active tab like the tab bar does: terminal-owned titles fill gaps in the unified tab. */
 function selectActiveTabLabel(
   s: AppState,
   worktreeId: string,
@@ -53,6 +53,14 @@ function selectActiveTabLabel(
 // Keeps each surface's own idle title (e.g. "Orca Web").
 const idleTitle = typeof document === 'undefined' ? 'Orca' : document.title
 
+if (import.meta !== undefined && import.meta.hot) {
+  // HMR re-reads document.title above, so hand it back idle instead of a workspace title.
+  import.meta.hot.dispose(() => {
+    document.title = idleTitle
+  })
+}
+
+/** Renders the title template for the active workspace; null while the setting is off or nothing is active. */
 function selectWindowTitle(s: AppState, chatNames: StructuredChatTabNames): string | null {
   const worktree = s.activeWorktreeId
     ? s.getKnownWorktreeById(s.activeWorktreeId, s.activeWorkspaceExecutionHostId ?? undefined)
@@ -73,13 +81,14 @@ function selectWindowTitle(s: AppState, chatNames: StructuredChatTabNames): stri
   })
 }
 
+/** The title the window shows now, falling back to the surface's idle title. */
 export function useResolvedWindowTitle(): string {
   // Chat names live outside the store; subscribing here re-runs the selector when one changes.
   const chatNames = useStructuredChatTabNames()
   return useAppStore((s) => selectWindowTitle(s, chatNames)) || idleTitle
 }
 
-// Time trackers read the native title, which Electron mirrors from document.title.
+/** Time trackers read the native title, which Electron mirrors from document.title. */
 export function useWindowTitle(): void {
   const title = useResolvedWindowTitle()
   useEffect(() => {
