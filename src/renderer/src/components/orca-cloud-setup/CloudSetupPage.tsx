@@ -241,7 +241,7 @@ function StepActions({
     case 'done':
       if (onStart) {
         return (
-          // oxlint-disable-next-line jsx-a11y/no-autofocus -- SAFETY: the one action left on a page the user just came back to; Enter starts
+          // The one action left on a page the user came back to: focused, so Enter starts.
           <Button type="button" autoFocus onClick={onStart}>
             {t('cloudSetupPage.start', 'Start')}
           </Button>
