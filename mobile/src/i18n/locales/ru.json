@@ -2594,7 +2594,8 @@
     "tabStrip": {
       "checkingCapabilities": "Проверяем возможности Orca на компьютере — повторите попытку чуть позже",
       "newTab": "Новая вкладка",
-      "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере"
+      "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Очистить терминал",

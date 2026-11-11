@@ -2450,7 +2450,8 @@
     "tabStrip": {
       "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
       "newTab": "新規タブ",
-      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。"
+      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。",
+      "tabStatus": "{{title}}、{{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "ターミナルをクリア",
