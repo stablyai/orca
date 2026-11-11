@@ -20976,7 +20976,6 @@
         "connected": "{{value0}} is connected. Its projects are in the sidebar.",
         "copyFailed": "Couldn't copy the link. Try again.",
         "copyLink": "Copy link",
-        "copyWorkspaceLink": "Copy workspace link",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
