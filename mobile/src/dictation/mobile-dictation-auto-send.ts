@@ -1,8 +1,8 @@
 import type { MobileSpeechSetup } from './mobile-dictation-setup'
-
-// The desktop's DICTATION_AUTO_SEND_DELAYS_MS; its module (src/shared/constants) would pull every settings default into the phone.
-const AUTO_SEND_DELAYS_MS = [1000, 2000, 3000, 5000]
-const DEFAULT_AUTO_SEND_DELAY_MS = 2000
+import {
+  DEFAULT_DICTATION_AUTO_SEND_DELAY_MS,
+  dictationAutoSendDelayMs
+} from '../../../src/shared/dictation-auto-send'
 
 /** The computer's "Send when dictation ends" delay; null when it is off or the computer predates it. */
 export function mobileDictationAutoSendDelayMs(
@@ -11,10 +11,9 @@ export function mobileDictationAutoSendDelayMs(
   if (setup.autoSendAfterDictation !== true) {
     return null
   }
-  return (
-    AUTO_SEND_DELAYS_MS.find((delayMs) => delayMs === setup.autoSendDelayMs) ??
-    DEFAULT_AUTO_SEND_DELAY_MS
-  )
+  return dictationAutoSendDelayMs({
+    autoSendDelayMs: setup.autoSendDelayMs ?? DEFAULT_DICTATION_AUTO_SEND_DELAY_MS
+  })
 }
 
 export type MobileDictationAutoSendCountdown = {

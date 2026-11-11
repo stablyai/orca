@@ -4,7 +4,8 @@ import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
 } from '../../../shared/runtime-worktree-contracts'
-import { dictationAutoSendDelayMs, getDefaultVoiceSettings } from '../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { dictationAutoSendDelayMs } from '../../../shared/dictation-auto-send'
 import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
 import {
   getCatalogModel,
