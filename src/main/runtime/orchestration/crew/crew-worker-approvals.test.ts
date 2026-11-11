@@ -48,3 +48,38 @@ it("puts each approval's newest report on its worker's row, drops stale receipts
     ['apr_open', 'open']
   ])
 })
+
+it('keeps showing an open approval behind more closed ones than the row bound', () => {
+  const { db, deps, run, assign } = fixture()
+  const dispatch = assign('term_worker')
+  const report = (approvalId: string, open: boolean) =>
+    db.insertMessage({
+      id: approvalReportId(dispatch.id, approvalId, open ? 'open' : 'closed'),
+      from: 'term_worker',
+      to: `run:${run.id}`,
+      subject: approvalId,
+      type: open ? 'escalation' : 'status',
+      runId: run.id,
+      payload: JSON.stringify({
+        approval: {
+          v: 1,
+          approvalId,
+          state: open ? 'open' : 'expired',
+          worker: { handle: 'term_worker', dispatchId: dispatch.id, taskId: dispatch.task_id },
+          summary: { title: 'Allow Bash?', detail: null, reason: null },
+          allowedActions: open ? ['allow', 'deny'] : []
+        }
+      })
+    })
+  report('apr_still_open', true)
+  for (let i = 0; i < 150; i++) {
+    report(`apr_${i}`, true)
+    report(`apr_${i}`, false)
+  }
+  db.db
+    .prepare(`UPDATE messages SET created_at = datetime('now', '-2 hours') WHERE subject <> ?`)
+    .run('apr_still_open')
+
+  const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
+  expect(row.approvals?.map(({ approval }) => approval.approvalId)).toEqual(['apr_still_open'])
+})

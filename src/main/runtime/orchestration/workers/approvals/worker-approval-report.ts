@@ -58,9 +58,15 @@ export function recentOpenApprovalReports(
     .array()
     .parse(
       db.db
-        .prepare(`SELECT id, payload, from_handle FROM messages WHERE type = 'escalation'
-          AND json_valid(payload) AND json_extract(payload, '$.approval.state') = 'open'
-          ORDER BY sequence DESC LIMIT ${RECENT_ESCALATIONS}`)
+        .prepare(`SELECT o.id, o.payload, o.from_handle FROM messages o
+          WHERE o.type = 'escalation' AND o.id LIKE 'msg\\_stop\\_%' ESCAPE '\\'
+            AND json_valid(o.payload) AND json_extract(o.payload, '$.approval.state') = 'open'
+            -- A closed approval keeps its open report; leave it out before the bound.
+            AND NOT EXISTS (SELECT 1 FROM messages c WHERE c.run_id = o.run_id
+              AND c.id LIKE 'msg\\_stop\\_%' ESCAPE '\\' AND json_valid(c.payload)
+              AND json_extract(c.payload, '$.approval.approvalId') = json_extract(o.payload, '$.approval.approvalId')
+              AND json_extract(c.payload, '$.approval.state') <> 'open')
+          ORDER BY o.sequence DESC LIMIT ${RECENT_ESCALATIONS}`)
         .all()
     )
   return rows.flatMap((row) => {
@@ -70,18 +76,19 @@ export function recentOpenApprovalReports(
   })
 }
 
-/** Closes an approval Orca reported, from its stored escalation; a no-op once a close exists. */
+/** Closes an approval Orca reported, from its stored escalation; a no-op once a close exists.
+ *  True once a closing line is on record, or there is nothing Orca reported to close. */
 export function closeReportedApproval(
   db: OrchestrationDb,
   dispatch: DispatchContextRow,
   approvalId: string,
   outcome: WorkerApprovalOutcome,
   deps: Pick<WorkerTurnStopReportDeps, 'notify'>
-): void {
+): boolean {
   const row = db.getMessageById(approvalReportId(dispatch.id, approvalId, 'open'))
   const open = row ? readApprovalReport(row) : null
   if (!row || !open) {
-    return
+    return true
   }
   reportWorkerApprovalClosed(
     db,
@@ -89,6 +96,7 @@ export function closeReportedApproval(
     { from: row.from_handle, approval: closedApproval(open, outcome) },
     deps
   )
+  return db.getMessageById(approvalReportId(dispatch.id, approvalId, 'closed')) !== undefined
 }
 
 function parseJson(text: string | null): unknown {

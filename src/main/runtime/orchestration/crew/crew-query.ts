@@ -133,7 +133,7 @@ export function readCrewTraffic(
   )
 }
 
-// Why a bound: one coordinator's recent approvals; an older open one is long past any worker's wait.
+// Why a bound: one coordinator's open and recently closed approvals, newest report each.
 const CREW_APPROVAL_ROWS = 100
 
 /** Each worker approval's newest report to this party: open ones, and ones closed since `closedSince`.
@@ -144,29 +144,27 @@ export function readCrewApprovals(
   closedSince: string
 ): { approval: WorkerApprovalPayload; at: string }[] {
   const rows = z
-    .object({
-      id: z.string(),
-      payload: z.string(),
-      created_at: z.string(),
-      recent: z.number()
-    })
+    .object({ id: z.string(), payload: z.string(), created_at: z.string() })
     .array()
     .parse(
       db.db
-        .prepare(`SELECT id, payload, created_at, julianday(created_at) >= julianday(?) AS recent FROM messages
-      WHERE to_handle IN (SELECT value FROM json_each(?)) AND payload LIKE '%"approval":%'
-      ORDER BY sequence DESC LIMIT ${CREW_APPROVAL_ROWS}`)
-        .all(closedSince, JSON.stringify(aliases))
+        .prepare(`WITH reports AS (
+          SELECT id, payload, created_at, sequence, json_extract(payload, '$.approval.approvalId') AS approval_id
+          FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
+            AND id LIKE 'msg\\_stop\\_%' ESCAPE '\\' AND payload LIKE '%"approval":%' AND json_valid(payload)
+            AND json_type(payload, '$.approval') = 'object'
+        ), newest AS (SELECT approval_id, MAX(sequence) AS sequence FROM reports GROUP BY approval_id)
+        SELECT reports.id, reports.payload, reports.created_at FROM reports
+        JOIN newest ON newest.sequence = reports.sequence
+        WHERE json_extract(reports.payload, '$.approval.state') = 'open'
+          OR julianday(reports.created_at) >= julianday(?)
+        ORDER BY reports.sequence DESC LIMIT ${CREW_APPROVAL_ROWS}`)
+        .all(JSON.stringify(aliases), closedSince)
     )
-  const seen = new Set<string>()
   const shown: { approval: WorkerApprovalPayload; at: string }[] = []
   for (const row of rows) {
     const approval = readApprovalReport(row)
-    if (!approval || seen.has(approval.approvalId)) {
-      continue
-    }
-    seen.add(approval.approvalId)
-    if (approval.state === 'open' || row.recent === 1) {
+    if (approval) {
       shown.push({ approval, at: exposeUtcTimestamp(row.created_at) ?? row.created_at })
     }
   }

@@ -13,16 +13,20 @@ import type { ChatWorkerPrompt } from '../../../../orchestration/workers/approva
 
 const chat = vi.hoisted(() => {
   const state: {
-    isChat: boolean
+    custody: 'chat' | 'terminal' | 'unverifiable'
     answer: ReturnType<typeof vi.fn>
     prompt: ChatWorkerPrompt | null
-  } = { isChat: true, answer: vi.fn(), prompt: null }
+  } = { custody: 'chat', answer: vi.fn(), prompt: null }
   return state
 })
 
 vi.mock('../../../../orchestration/mailbox/routing/structured-session-mail-target', () => ({
   structuredMailboxCustody: () =>
-    chat.isChat ? { sessionId: 'session-1', dispatchId: null } : 'elsewhere'
+    chat.custody === 'chat'
+      ? { sessionId: 'session-1', dispatchId: null }
+      : chat.custody === 'terminal'
+        ? 'elsewhere'
+        : 'unverifiable'
 }))
 vi.mock(
   '../../../../orchestration/workers/approvals/chat-worker-approval-prompt',
@@ -119,7 +123,7 @@ const coordinator = { answeredBy: 'coordinator' as const, reason: 'Use a script 
 
 describe('answering a worker approval', () => {
   it("closes a chat worker's card at once when its own chat already answered it", async () => {
-    chat.isChat = true
+    chat.custody = 'chat'
     chat.answer.mockResolvedValue({ ok: false, code: 'approval_not_open', message: 'gone' })
     chat.prompt = { revision: 2, body: item('desktop-renderer') }
     const ctx = setup('item_1')
@@ -132,7 +136,7 @@ describe('answering a worker approval', () => {
   })
 
   it("mails a deny reason to a chat worker only when it is the coordinator's", async () => {
-    chat.isChat = true
+    chat.custody = 'chat'
     chat.answer.mockResolvedValue({
       ok: true,
       prompt: { revision: 2, body: item('trusted-local:orchestration:approval:x') },
@@ -147,8 +151,16 @@ describe('answering a worker approval', () => {
     expect(byCoordinator.mailToWorker()).toEqual([{ body: 'Use a script file.' }])
   })
 
+  it("refuses, and leaves the card open, when Orca can't tell what kind of worker it is", async () => {
+    chat.custody = 'unverifiable'
+    const ctx = setup('item_1')
+
+    await expect(ctx.call('deny', coordinator)).rejects.toMatchObject({ code: 'approval_refused' })
+    expect(ctx.closings()).toEqual([])
+  })
+
   it('closes a terminal prompt Orca no longer holds, so its card stops offering answers', async () => {
-    chat.isChat = false
+    chat.custody = 'terminal'
     const ctx = setup('apr_1')
 
     await expect(ctx.call('deny', coordinator)).rejects.toMatchObject({

@@ -66,6 +66,14 @@ export async function answerWorkerApproval(
   }
   const notify = (handle: string, type: string): void => runtime.notifyMessageArrived(handle, type)
   const custody = structuredMailboxCustody(`dispatch:${dispatch.id}`, db)
+  // Orca can't tell whether this is a chat worker: answering or closing either way could be wrong.
+  if (custody === 'unverifiable' && !runtime.terminalWorkerApprovals.isHeld(params.prompt)) {
+    throw new OrchestrationError(
+      'approval_refused',
+      `Orca could not read the worker's chat, so ${params.prompt} was not answered. Try again.`,
+      { effectsApplied: false }
+    )
+  }
   // A chat worker's prompt is its journal item; a terminal worker's is its waiting hook, if any.
   if (typeof custody !== 'object') {
     const answered = await runtime.terminalWorkerApprovals.answer({

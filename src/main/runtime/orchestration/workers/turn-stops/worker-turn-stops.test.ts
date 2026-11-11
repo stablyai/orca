@@ -34,7 +34,11 @@ function setup(assignee = HANDLE) {
   const dispatch = createRootDispatch(db, task.id, assignee, assignee === HANDLE ? PANE : undefined)
   const waiting = new Set<string>()
   const notify = vi.fn()
-  const deps = { getDb: () => db, isWaitingForMail: (m: string) => waiting.has(m), notify }
+  const deps = {
+    getDb: (): OrchestrationDb | null => db,
+    isWaitingForMail: (m: string) => waiting.has(m),
+    notify
+  }
   const mail = () => db.getUnreadRunMailbox(run.id, 100, ['escalation'])
   return { db, run, dispatch, waiting, notify, deps, mail }
 }
@@ -636,6 +640,34 @@ describe('chat worker approvals', () => {
       )
       expect(terminal.body).not.toContain('The user has been shown')
     }
+    const chatWorker = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    reportWorkerTurnStop(
+      chatWorker.db,
+      { kind: 'local', dispatch: chatWorker.dispatch },
+      {
+        from: formatOrcaSessionAddress(CHAT_SESSION),
+        stopKey: 's1',
+        reason: 'needs-input',
+        lastOutput: undefined,
+        approval: {
+          v: 1,
+          approvalId: 'item_1',
+          state: 'open',
+          worker: {
+            handle: formatOrcaSessionAddress(CHAT_SESSION),
+            dispatchId: chatWorker.dispatch.id,
+            taskId: chatWorker.dispatch.task_id
+          },
+          summary: { title: 'Allow Bash?', detail: null, reason: null },
+          allowedActions: ['allow', 'deny']
+        }
+      },
+      chatWorker.deps
+    )
+    // A chat worker's own chat in Orca shows the prompt, even when the coordinator has no card.
+    expect(chatWorker.mail()[0].body).toContain(
+      "Your chat has no approval card for it; only the worker's own chat in Orca shows it."
+    )
     const noDeny = report(true, ['allow']).body
     expect(noDeny).toContain('The user has been shown Allow in your chat in Orca.')
     expect(noDeny).not.toContain('orchestration deny')
@@ -683,6 +715,25 @@ describe('chat worker approvals', () => {
     const closing = all().filter((message) => message.type === 'status')
     expect(closing).toHaveLength(1)
     expect(closing[0].body).toContain("Denied in the worker's own chat")
+  })
+
+  it('keeps a settled approval until its closing line can be written', async () => {
+    const { ctx, prompts, report, publish, idle, all } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    prompts.set('item_1', { revision: 2, body: approval('deny') })
+    const getDb = ctx.deps.getDb
+    ctx.deps.getDb = () => null
+    publish()
+    await settle()
+    ctx.deps.getDb = getDb
+    publish()
+    await settle()
+
+    const closing = all().filter((message) => message.subject === 'Worker approval answered')
+    expect(closing).toHaveLength(1)
   })
 
   it('reports a prompt Orca can answer neither way as a plain prompt, with no card', async () => {

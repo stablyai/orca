@@ -78,17 +78,22 @@ export class ChatWorkerApprovalWatch {
       if (prompt === undefined || prompt?.body.resolution.state === 'pending') {
         continue
       }
-      session.approvals.delete(approvalId)
       const outcome = chatApprovalCloseOutcome(prompt)
       const db = this.deps.getDb()
-      if (!outcome || !db) {
+      if (outcome && !db) {
+        // Keep it: the next journal change retries once the database is back.
         continue
       }
-      for (const dispatchId of dispatchIds) {
-        const dispatch = db.getDispatchContextById(dispatchId)
-        if (dispatch) {
-          closeReportedApproval(db, dispatch, approvalId, outcome, this.deps)
+      if (outcome && db) {
+        for (const dispatchId of dispatchIds) {
+          const dispatch = db.getDispatchContextById(dispatchId)
+          if (!dispatch || closeReportedApproval(db, dispatch, approvalId, outcome, this.deps)) {
+            dispatchIds.delete(dispatchId)
+          }
         }
+      }
+      if (!outcome || dispatchIds.size === 0) {
+        session.approvals.delete(approvalId)
       }
     }
     if (session.approvals.size === 0 && this.sessions.get(sessionId) === session) {

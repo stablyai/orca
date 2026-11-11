@@ -110,7 +110,9 @@ function describeNextStep(
       `${
         chatCoordinator
           ? `The user has been shown ${shown} in your chat in Orca.`
-          : `No one has been shown this prompt in Orca. Tell the user that worker ${stop.from} is waiting for permission in its ${where}.`
+          : where === 'chat'
+            ? `Your chat has no approval card for it; only the worker's own chat in Orca shows it. Tell the user that worker ${stop.from} is waiting for permission in its chat.`
+            : `No one has been shown this prompt in Orca. Tell the user that worker ${stop.from} is waiting for permission in its terminal.`
       } Don't block on it: carry on with other work. You'll get a message when it's answered. Don't message this worker until then.`,
       allowedActions.includes('deny')
         ? `If this is holding up the task, deny it with a reason so the worker continues another way: \`orchestration deny --dispatch ${dispatchId} --prompt ${approvalId} --reason "<what to do instead>"\`.`
