@@ -4362,7 +4362,8 @@
             "refusedProvider2": "Orca Cloud is unavailable right now.",
             "rollingOver2": "Restarting the sandbox…",
             "cloning": "Cloning the repository…",
-            "updating": "Updating the repository…"
+            "updating": "Updating the repository…",
+            "preparingProject": "Getting your project ready…"
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",

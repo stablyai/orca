@@ -6,7 +6,7 @@ import { appendStampedLog } from '@/lib/pending-creation-provisioning-log'
 import { deriveVmBuildSteps } from './vm-build-steps'
 import { classifyVmBuildFailure } from './vm-build-failure'
 import { holdRunningSteps } from './use-minimum-running-steps'
-import { humanizeOrcaCloudLogLine } from './orca-cloud-build-log'
+import { humanizeOrcaCloudLogLine, provisionStageLabel } from './orca-cloud-build-log'
 import { cloneStageLabel, stepLabel } from './vm-build-sheet-copy'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -181,6 +181,28 @@ describe('holdRunningSteps', () => {
       'done',
       'running'
     ])
+  })
+})
+
+describe('provisionStageLabel (N-01)', () => {
+  const t: Translate = (_key, fallback) => fallback
+
+  it('stays quiet for a normal start, then names what the sandbox step waits on', () => {
+    const log = '[orca-cloud] provisioning\n'
+    expect(
+      provisionStageLabel({ phase: 'provisioning-vm', provisioningLog: log }, 4000, t)
+    ).toBeNull()
+    expect(provisionStageLabel({ phase: 'preparing' }, 6000, t)).toBe('Getting your project ready…')
+    expect(provisionStageLabel({ phase: 'provisioning-vm', provisioningLog: log }, 6000, t)).toBe(
+      'Starting the sandbox…'
+    )
+    expect(
+      provisionStageLabel(
+        { phase: 'provisioning-vm', provisioningLog: `${log}[orca-cloud] connecting\n` },
+        6000,
+        t
+      )
+    ).toBe('Connecting to the sandbox…')
   })
 })
 
