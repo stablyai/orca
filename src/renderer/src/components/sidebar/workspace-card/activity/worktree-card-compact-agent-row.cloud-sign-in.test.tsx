@@ -435,7 +435,7 @@ describe.each([
   it('tells an expired sign-in to renew', () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
     const [, text] = statusButtons(render(makeAgent(CLOUD_WORKTREE, true)))
-    expect(focusTooltip(text)?.textContent).toBe('Renew once for Orca Cloud')
+    expect(focusTooltip(text)?.textContent).toBe('Renew for Orca Cloud')
   })
 
   // JA-04 (#349): "Set up once" opens the focused "Agents in Orca Cloud" sheet, not Settings.

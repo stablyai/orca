@@ -87,6 +87,6 @@ export function cloudAgentRowSignInLabel(signIn: CloudAgentRowSignIn, t: Transla
 /** Where the fix lives; the row's status opens it (Settings → Agent accounts). */
 export function cloudAgentRowSignInTooltip(signIn: CloudAgentRowSignIn, t: Translate): string {
   return signIn === 'expired'
-    ? t('agentSignInStrip.rowExpiredTooltip', 'Renew once for Orca Cloud')
+    ? t('agentSignInStrip.rowExpiredTooltip', 'Renew for Orca Cloud')
     : t('agentSignInStrip.rowNeedsSignInTooltip', 'Set up once for Orca Cloud')
 }

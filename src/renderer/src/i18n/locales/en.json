@@ -28117,7 +28117,7 @@
     "rowNeedsSignIn": "Needs sign-in",
     "rowNeedsSignInTooltip": "Set up once for Orca Cloud",
     "rowExpired": "Sign-in expired",
-    "rowExpiredTooltip": "Renew once for Orca Cloud",
+    "rowExpiredTooltip": "Renew for Orca Cloud",
     "sandbox": "the sandbox",
     "queued": "Queued prompt: {{prompt}}",
     "pasteLabel": "Code from claude.ai",
