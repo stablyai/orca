@@ -61,11 +61,24 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   /** Point a terminal at its mail once it takes input and is settled; refusal re-arms the recheck. */
   protected deliverPendingMessagesForPty(ptyId: string): void {
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    if (!terminal) {
+      return
+    }
     if (
-      terminal &&
-      isMailboxTerminalTakingInput(terminal) &&
-      this.checkDeliverySettledAndArmRecheck(ptyId)
+      !terminal.lastAgentStatusObservedLive &&
+      (terminal.lastAgentStatus === 'idle' || terminal.lastAgentStatus === 'working')
     ) {
+      // Why: a restored or reattached PTY keeps its idle/working status but starts without a live
+      // observation, so mail waited for an unrelated status edge; probe the surviving agent once
+      // per recheck and recheck again while mail is waiting.
+      this.restoreReattachedAgentStatus(ptyId)
+      this.armDeliveryRecheck(ptyId)
+      return
+    }
+    if (!isMailboxTerminalTakingInput(terminal)) {
+      return
+    }
+    if (this.checkDeliverySettledAndArmRecheck(ptyId)) {
       this.orchestrationMailboxNotifications.deliverForTerminal(terminal)
     }
   }
@@ -88,7 +101,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
   }
 
-  private armDeliveryRecheck(ptyId: string): void {
+  protected armDeliveryRecheck(ptyId: string): void {
     if (this.deliveryRecheckTimersByPtyId.has(ptyId)) {
       return
     }
@@ -108,8 +121,12 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
         : quietRemainingMs + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByPtyId.delete(ptyId)
-      // Delivery rechecks settlement first; the agent may have become busy again.
-      this.deliverPendingMessagesForPty(ptyId)
+      try {
+        // Delivery rechecks settlement first; the agent may have become busy again.
+        this.deliverPendingMessagesForPty(ptyId)
+      } catch {
+        // A runtime disposed between scheduling and firing must not surface as an uncaught timer error.
+      }
     }, delay)
     timer.unref?.()
     this.deliveryRecheckTimersByPtyId.set(ptyId, timer)

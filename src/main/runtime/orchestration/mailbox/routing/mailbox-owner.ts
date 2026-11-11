@@ -25,6 +25,15 @@ export function isMailboxTerminalTakingInput(
   )
 }
 
+/** A restored PTY keeps its idle/working status but starts without a live observation; mail should re-probe, not wait for an unrelated edge. */
+export function isMailboxTerminalAwaitingLiveStatus(
+  terminal: Pick<OrchestrationMailboxTerminal, 'lastAgentStatus' | 'lastAgentStatusObservedLive'>
+): boolean {
+  return (
+    !terminal.lastAgentStatusObservedLive && agentStatusTakesTypedInput(terminal.lastAgentStatus)
+  )
+}
+
 export type RoutedOrchestrationMailbox = {
   mailboxHandle: string
   types: string[]

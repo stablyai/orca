@@ -5,6 +5,7 @@ import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { OrchestrationMailboxPointerDelivery } from './mailbox-pointer-delivery'
+import type { OrchestrationMailboxTerminal } from '../routing/mailbox-owner'
 import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 import {
@@ -187,5 +188,57 @@ describe('retiring a pty mid-delivery', () => {
       db.close()
       vi.useRealTimers()
     }
+  })
+})
+
+describe('mailbox pointer delivery before a live status observation', () => {
+  function deliveryFor(terminal: OrchestrationMailboxTerminal): {
+    delivery: OrchestrationMailboxPointerDelivery<never>
+    recheck: ReturnType<typeof vi.fn>
+    resolveMailbox: ReturnType<typeof vi.fn>
+  } {
+    const db = new OrchestrationDb(':memory:')
+    const recheck = vi.fn()
+    const resolveMailbox = vi.fn(() => 'run:run-1')
+    const deps = {
+      ...pointerDeps(db, () => WRITE_ACCEPTED),
+      mailboxOwner: { resolve: resolveMailbox },
+      deliveryTarget: {
+        resolveTerminal: () => terminal,
+        deferForAbsenceProbe: () => false
+      },
+      recheckPendingDelivery: recheck
+    }
+    return {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double for the two class deps this case touches; the delivery constructor is exercised by the suite's existing cases.
+      delivery: new OrchestrationMailboxPointerDelivery(deps as never),
+      recheck,
+      resolveMailbox
+    }
+  }
+
+  it('arms a recheck for a restored idle terminal instead of waiting for a status edge', () => {
+    const { delivery, recheck, resolveMailbox } = deliveryFor({
+      ...TERMINAL,
+      lastAgentStatusObservedLive: false
+    })
+
+    delivery.deliverForHandle('term-1')
+
+    expect(recheck).toHaveBeenCalledWith('pty-1')
+    expect(resolveMailbox).not.toHaveBeenCalled()
+  })
+
+  it('leaves a terminal without an agent status to the existing status edges', () => {
+    const { delivery, recheck, resolveMailbox } = deliveryFor({
+      ...TERMINAL,
+      lastAgentStatus: null,
+      lastAgentStatusObservedLive: false
+    })
+
+    delivery.deliverForHandle('term-1')
+
+    expect(recheck).not.toHaveBeenCalled()
+    expect(resolveMailbox).not.toHaveBeenCalled()
   })
 })

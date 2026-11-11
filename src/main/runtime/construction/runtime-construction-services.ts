@@ -249,6 +249,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract controllerKnowsPtyIsLive(ptyId: string): boolean
   protected abstract isLeafPtyProvenAbsent(ptyId: string): Promise<boolean>
   protected abstract checkDeliverySettledAndArmRecheck(ptyId: string): boolean
+  protected abstract armDeliveryRecheck(ptyId: string): void
   protected abstract isPtyAwaitingUserInput(ptyId: string): boolean
   abstract getTerminalOrchestrationCliCommand(
     handle: string

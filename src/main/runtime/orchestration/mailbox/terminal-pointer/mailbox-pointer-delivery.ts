@@ -5,6 +5,7 @@ import {
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 import {
+  isMailboxTerminalAwaitingLiveStatus,
   isMailboxTerminalTakingInput,
   type OrchestrationMailboxTerminal
 } from '../routing/mailbox-owner'
@@ -37,7 +38,16 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     try {
       const terminal = this.deps.deliveryTarget.resolveTerminal(handle)
       // Skip ownership resolution, and the reconciliation it schedules, for a terminal deliver() would refuse.
-      if (!terminal || !isMailboxTerminalTakingInput(terminal)) {
+      if (!terminal) {
+        return
+      }
+      if (isMailboxTerminalAwaitingLiveStatus(terminal)) {
+        // Why: a restored PTY keeps its idle/working status but has no live observation yet; its mail
+        // waited for an unrelated status edge. Recheck instead of dropping the message edge.
+        this.deps.recheckPendingDelivery?.(terminal.ptyId)
+        return
+      }
+      if (!isMailboxTerminalTakingInput(terminal)) {
         return
       }
       const mailboxHandle = this.deps.mailboxOwner.resolve(terminal, handle)
