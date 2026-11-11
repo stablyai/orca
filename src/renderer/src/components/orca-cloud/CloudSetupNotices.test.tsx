@@ -50,7 +50,12 @@ describe('CloudSetupNoticesDock (DS-o)', () => {
     view.rerender(<CloudSetupNoticesDock workspaceId="w1" />)
     expect(toast.dismiss).toHaveBeenCalledWith(cloudSetupToastId('env-1'))
     toast.dismiss.mockClear()
+    vi.useFakeTimers()
     view.unmount()
+    // Applied a tick later, so a StrictMode remount can claim the toast back first.
+    expect(toast.dismiss).not.toHaveBeenCalled()
+    vi.runAllTimers()
     expect(toast.dismiss).toHaveBeenCalledWith(cloudSetupToastId('env-1'))
+    vi.useRealTimers()
   })
 })

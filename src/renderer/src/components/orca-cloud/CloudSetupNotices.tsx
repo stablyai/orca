@@ -180,6 +180,7 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
       toast.dismiss(toastId)
       return
     }
+    cancelPendingDismiss(toastId)
     toast.custom(
       () => (
         <CloudSetupNoticesView
@@ -197,12 +198,35 @@ export function CloudSetupNoticesDock({ workspaceId }: { workspaceId: string }):
   useEffect(
     () => () => {
       if (toastId) {
-        toast.dismiss(toastId)
+        dismissSoon(toastId)
       }
     },
     [toastId]
   )
   return null
+}
+
+// A remount (StrictMode, a re-keyed surface) re-shows the toast in the same tick. Sonner applies a
+// dismiss a frame later, after that re-show, so dismiss only once nothing has claimed the id back.
+const pendingDismiss = new Map<string, ReturnType<typeof setTimeout>>()
+
+function dismissSoon(toastId: string): void {
+  cancelPendingDismiss(toastId)
+  pendingDismiss.set(
+    toastId,
+    setTimeout(() => {
+      pendingDismiss.delete(toastId)
+      toast.dismiss(toastId)
+    }, 0)
+  )
+}
+
+function cancelPendingDismiss(toastId: string): void {
+  const timer = pendingDismiss.get(toastId)
+  if (timer !== undefined) {
+    clearTimeout(timer)
+    pendingDismiss.delete(toastId)
+  }
 }
 
 export function cloudSetupToastId(environmentId: string): string {
