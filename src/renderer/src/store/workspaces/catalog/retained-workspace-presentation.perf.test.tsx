@@ -3,6 +3,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { makeAgentEntry } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
@@ -14,12 +15,35 @@ import {
   selectWorkspacePresentationWorktrees
 } from './retained-workspace-presentation'
 import type { Worktree } from '../../../../../shared/worktree/types'
+import type * as PaletteRepoResolution from '@/lib/workspace/search/palette-repo-resolution'
+import { useWorktreeJumpPaletteStoreState } from '@/components/worktree-jump/use-worktree-jump-palette-store-state'
 
 vi.mock('../../../../../shared/sidebar-inputs-switch', () => ({
   ORCA_SIDEBAR_INPUTS_IS_MAIN: false
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async () => undefined)
+}))
+
+const { dedupeRows } = vi.hoisted(() => ({ dedupeRows: vi.fn() }))
+vi.mock('@/lib/workspace/search/palette-repo-resolution', async (importOriginal) => {
+  const actual = await importOriginal<typeof PaletteRepoResolution>()
+  return {
+    ...actual,
+    dedupePaletteWorktrees: (rows: Worktree[]) => {
+      dedupeRows(rows.length)
+      return actual.dedupePaletteWorktrees(rows)
+    }
+  }
+})
+vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
+  useSettingsNavigationMetadata: () => []
+}))
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', () => ({
+  usePluginCommands: () => []
+}))
+vi.mock('@/store/plugins/file-creation/plugin-new-files', () => ({
+  usePluginNewFiles: () => []
 }))
 
 const initialState = useAppStore.getInitialState()
@@ -207,5 +231,68 @@ it.each([100, 1000])(
     })
     expect(inspected).toEqual([])
     expect(selectPresentation(useAppStore.getState())).toBe(useAppStore.getState().worktreesByRepo)
+  }
+)
+
+it.each([100, 1000])(
+  'adds no closed-palette listing work after an activity write among %i workspaces',
+  (count) => {
+    const rows = Array.from({ length: count }, (_, index) =>
+      makeWorktree({ id: `repo-${index}::/checkout`, repoId: `repo-${index}`, hostId: 'local' })
+    )
+    const hidden = makeWorktree({
+      id: 'repo-0::/.bare',
+      repoId: 'repo-0',
+      hostId: 'local',
+      isBare: true
+    })
+    useAppStore.setState(
+      {
+        ...initialState,
+        worktreesByRepo: Object.fromEntries(rows.map((row) => [row.repoId, [row]])),
+        detectedWorktreesByRepo: {
+          'repo-0': {
+            repoId: 'repo-0',
+            source: 'git',
+            authoritative: true,
+            worktrees: [
+              { ...hidden, ownership: 'external', selectedCheckout: false, visible: false }
+            ]
+          }
+        },
+        tabsByWorktree: { [hidden.id]: [makeTab({ id: 'saved-shell', worktreeId: hidden.id })] }
+      },
+      true
+    )
+    const palette = renderHook(
+      ({ visible }) => useWorktreeJumpPaletteStoreState({ visible, lingering: false }),
+      {
+        initialProps: { visible: true }
+      }
+    )
+    expect(palette.result.current.presentationWorkspaces.some((row) => row.id === hidden.id)).toBe(
+      true
+    )
+    palette.rerender({ visible: false })
+    dedupeRows.mockClear()
+    act(() => {
+      useAppStore.getState().bumpWorktreeActivity(rows[0].id)
+    })
+    // Only the pre-existing checkout list may run while closed; retained search has no output.
+    expect(dedupeRows.mock.calls).toEqual([[count]])
+    expect(palette.result.current.presentationWorkspaces).toEqual([])
+    palette.rerender({ visible: true })
+    expect(palette.result.current.presentationWorkspaces.some((row) => row.id === hidden.id)).toBe(
+      true
+    )
+    act(() => {
+      useAppStore.setState((state) => ({
+        tabsByWorktree: replaceRecordEntries<AppState['tabsByWorktree'][string]>(
+          state.tabsByWorktree,
+          [[hidden.id, null]]
+        )
+      }))
+    })
+    expect(palette.result.current.presentationWorkspaces).toBe(palette.result.current.workspaces)
   }
 )

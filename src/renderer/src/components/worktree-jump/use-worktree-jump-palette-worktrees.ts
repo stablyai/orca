@@ -185,13 +185,14 @@ export function useWorktreeJumpPaletteWorktrees({
     migrationUnsupportedByPtyId,
     terminalLayoutsByTabId
   ])
-  const openTabWorkspaces = useMemo(
-    () =>
-      filterPredicate
-        ? presentationWorkspaces.filter(filterPredicate.matchesWorktree)
-        : presentationWorkspaces,
-    [presentationWorkspaces, filterPredicate]
-  )
+  const openTabWorkspaces = useMemo(() => {
+    if (!paletteStatusInputsActive) {
+      return EMPTY_SORTED_WORKTREES
+    }
+    return filterPredicate
+      ? presentationWorkspaces.filter(filterPredicate.matchesWorktree)
+      : presentationWorkspaces
+  }, [paletteStatusInputsActive, presentationWorkspaces, filterPredicate])
   const sortedWorktrees = useMemo(
     () =>
       hasQuery
