@@ -7,6 +7,7 @@ import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
 import { getCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 
 const OFFER_TOAST_ID = 'claude-theme-sync-offer'
 
@@ -65,10 +66,24 @@ function showClaudeThemeSyncOffer(): void {
   })
 }
 
-function isOnCloudWorkspace(state: AppState): boolean {
-  return (
-    state.activeWorktreeId !== null && getCloudWorkspaceSnapshot().ids.has(state.activeWorktreeId)
-  )
+/**
+ * The sync changes Claude Code on THIS computer. Hold the offer while the active workspace runs
+ * elsewhere (Orca Cloud, a VM, SSH, an Orca server) or is still being created: a brand-new cloud
+ * workspace is not in the cloud id list yet when its Claude terminal appears (RA-6).
+ */
+function isAwayFromThisComputer(state: AppState): boolean {
+  if (state.activePendingCreationId) {
+    return true
+  }
+  const id = state.activeWorktreeId
+  if (!id) {
+    return false
+  }
+  if (getCloudWorkspaceSnapshot().ids.has(id) || state.ephemeralVmRuntimesByWorkspaceId?.[id]) {
+    return true
+  }
+  const host = state.activeWorkspaceExecutionHostId
+  return Boolean(host && host !== LOCAL_EXECUTION_HOST_ID)
 }
 
 /**
@@ -76,12 +91,16 @@ function isOnCloudWorkspace(state: AppState): boolean {
  * use: hold the offer while one is active and make it once a local workspace is (RA-6).
  */
 function offerOnLocalWorkspace(): () => void {
-  if (!isOnCloudWorkspace(useAppStore.getState())) {
+  if (!isAwayFromThisComputer(useAppStore.getState())) {
     showClaudeThemeSyncOffer()
     return () => {}
   }
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    if (state.activeWorktreeId !== previous.activeWorktreeId && !isOnCloudWorkspace(state)) {
+    const moved =
+      state.activeWorktreeId !== previous.activeWorktreeId ||
+      state.activePendingCreationId !== previous.activePendingCreationId ||
+      state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
+    if (moved && !isAwayFromThisComputer(state)) {
       unsubscribe()
       showClaudeThemeSyncOffer()
     }
