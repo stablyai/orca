@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   adoptLiveWorkspacePtySurfaces,
   type LiveSurfaceAdoptionStore
@@ -8,15 +8,24 @@ import type { LiveTerminalSurfaceOwnerIndex } from '../ownership/worktree-live-t
 const WORKTREE_ID = 'repo-1::/workspace/repo'
 const RECORDED_TAB_ID = 'recorded-tab'
 const ORPHAN_PTY_ID = '3'
+const NOW = 1_700_000_000_000
 
 describe('orphan local counter PTY adoption on workspace activation', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('mints no fresh tab when its recorded pane cannot be restored', async () => {
     const state = {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
       ptyIdsByTabId: {},
       closedTerminalTabTombstonesByTabId: {
-        [RECORDED_TAB_ID]: { closedAt: Date.now(), worktreeId: WORKTREE_ID }
+        [RECORDED_TAB_ID]: { closedAt: NOW, worktreeId: WORKTREE_ID }
       },
       createTab: vi.fn()
     }
