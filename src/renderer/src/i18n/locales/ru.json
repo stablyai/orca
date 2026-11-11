@@ -924,7 +924,7 @@
       "defaultSurfaceSetAllChat": "Перевести все в чат",
       "defaultSurfaceSetAllTerminal": "Перевести все в терминал",
       "sameAsChoice": "Как у {{agent}} · {{choice}}",
-      "chatUnavailableOnWindows": "В Windows {{value0}} Chat работает через agy. Обновите agy и войдите с личным аккаунтом Google, запустив agy на этом компьютере; до тех пор {{value0}} открывается в терминале.",
+      "chatUnavailableOnWindows": "В Windows {{value0}} Chat работает через agy. Установите или обновите agy и войдите с личным аккаунтом Google; если для Chat выбрана учётная запись Google Cloud, выберите «Личная» в Настройках. До тех пор {{value0}} открывается в терминале.",
       "undetectedCommandHint": "Если CLI {{agent}} установлен вне PATH, укажите полный путь к исполняемому файлу на этом хосте."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -4381,7 +4381,7 @@
             "startChat": "Начните чат с {{value0}}",
             "cliTag": "(CLI)",
             "agentsLoading": "Загрузка агентов",
-            "chatNotOnWindows": "Нужен вход в agy"
+            "chatNotOnWindows": "Проверьте настройку agy"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Переключить вкладку",
@@ -20865,7 +20865,7 @@
         "turnWorking": "Агент этого чата работает. Переключите ветку после завершения его хода.",
         "worktree": "Рабочее дерево"
       },
-      "explicitChatWindows": "В Windows этот чат работает через agy. Обновите agy, запустите его и войдите с личным аккаунтом Google, затем повторите попытку или откройте чат в терминале.",
+      "explicitChatWindows": "В Windows этот чат работает через agy. Установите или обновите agy и войдите с личным аккаунтом Google; если для Chat выбрана учётная запись Google Cloud, выберите «Личная» в Настройках. Затем повторите попытку или откройте чат в терминале.",
       "fork": {
         "action": "Создать ответвление от этого ответа",
         "hostUnsupported": "На этом хосте установлена старая версия Orca. Обновите Orca на хосте и повторите попытку.",

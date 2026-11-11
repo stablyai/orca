@@ -30,7 +30,7 @@ export function chatUnavailableLabel(
     case 'not-on-host':
       return t('auto.components.tab.bar.QuickLaunchButton.chatNotOnHost', 'No chat on this host')
     case 'windows':
-      return t('auto.components.tab.bar.QuickLaunchButton.chatNotOnWindows', 'Needs agy sign-in')
+      return t('auto.components.tab.bar.QuickLaunchButton.chatNotOnWindows', 'Check agy setup')
   }
 }
 

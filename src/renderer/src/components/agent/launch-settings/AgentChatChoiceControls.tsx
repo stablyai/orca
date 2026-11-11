@@ -66,7 +66,7 @@ export function ChatUnavailableOnWindowsNote({ label }: { label: string }): Reac
     <p className="text-xs text-muted-foreground">
       {t(
         'settings.agents.chatUnavailableOnWindows',
-        'On Windows, {{value0}} Chat runs on agy. Update agy and sign in with a personal Google account by running agy on this computer; until then, {{value0}} opens in a terminal.',
+        'On Windows, {{value0}} Chat runs on agy. Install or update agy and sign in with a personal Google account; if Chat is set to a Google Cloud account, choose Personal in Settings. Until then, {{value0}} opens in a terminal.',
         { value0: label }
       )}
     </p>

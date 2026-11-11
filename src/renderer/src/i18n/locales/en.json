@@ -1052,7 +1052,7 @@
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}",
-      "chatUnavailableOnWindows": "On Windows, {{value0}} Chat runs on agy. Update agy and sign in with a personal Google account by running agy on this computer; until then, {{value0}} opens in a terminal.",
+      "chatUnavailableOnWindows": "On Windows, {{value0}} Chat runs on agy. Install or update agy and sign in with a personal Google account; if Chat is set to a Google Cloud account, choose Personal in Settings. Until then, {{value0}} opens in a terminal.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -4654,7 +4654,7 @@
             "startChat": "Start a chat with {{value0}}",
             "cliTag": "(CLI)",
             "agentsLoading": "Loading agents",
-            "chatNotOnWindows": "Needs agy sign-in"
+            "chatNotOnWindows": "Check agy setup"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -20984,7 +20984,7 @@
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
       },
-      "explicitChatWindows": "On Windows, this chat runs on agy. Update agy and sign in with a personal Google account by running agy, then try again, or open it in a terminal instead.",
+      "explicitChatWindows": "On Windows, this chat runs on agy. Install or update agy and sign in with a personal Google account; if Chat is set to a Google Cloud account, choose Personal in Settings. Then try again, or open it in a terminal instead.",
       "splitRight": "Split Right",
       "splitDown": "Split Down",
       "sideChat": {

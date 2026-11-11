@@ -868,7 +868,7 @@
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
       "sameAsChoice": "Wie {{agent}} · {{choice}}",
-      "chatUnavailableOnWindows": "Unter Windows läuft {{value0}} Chat über agy. Aktualisiere agy und melde dich auf diesem Computer in agy mit einem privaten Google-Konto an; bis dahin öffnet sich {{value0}} in einem Terminal.",
+      "chatUnavailableOnWindows": "Unter Windows läuft {{value0}} Chat über agy. Installiere oder aktualisiere agy und melde dich mit einem privaten Google-Konto an; ist Chat auf ein Google-Cloud-Konto eingestellt, wähle in den Einstellungen „Persönlich“. Bis dahin öffnet sich {{value0}} in einem Terminal.",
       "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -4276,7 +4276,7 @@
             "startChat": "Chat mit {{value0}} starten",
             "cliTag": "(CLI)",
             "agentsLoading": "Agenten werden geladen",
-            "chatNotOnWindows": "agy-Anmeldung nötig"
+            "chatNotOnWindows": "agy-Einrichtung prüfen"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Tab wechseln",
@@ -20200,7 +20200,7 @@
         "turnWorking": "Der Agent dieses Chats arbeitet. Wechsle den Branch, wenn sein Zug beendet ist.",
         "worktree": "Worktree"
       },
-      "explicitChatWindows": "Unter Windows läuft dieser Chat über agy. Aktualisiere agy, starte agy und melde dich mit einem privaten Google-Konto an. Versuche es dann erneut oder öffne ihn stattdessen in einem Terminal.",
+      "explicitChatWindows": "Unter Windows läuft dieser Chat über agy. Installiere oder aktualisiere agy und melde dich mit einem privaten Google-Konto an; ist Chat auf ein Google-Cloud-Konto eingestellt, wähle in den Einstellungen „Persönlich“. Versuche es dann erneut oder öffne ihn stattdessen in einem Terminal.",
       "fork": {
         "action": "Ab dieser Antwort abzweigen",
         "pending": "Chat wird abgezweigt…",

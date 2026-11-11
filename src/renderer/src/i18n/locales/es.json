@@ -414,7 +414,7 @@
       "defaultSurfaceSetAllChat": "Poner todos en Chat",
       "defaultSurfaceSetAllTerminal": "Poner todos en Terminal",
       "sameAsChoice": "Igual que {{agent}} · {{choice}}",
-      "chatUnavailableOnWindows": "En Windows, {{value0}} Chat se ejecuta con agy. Actualice agy e inicie sesión con una cuenta personal de Google ejecutando agy en este equipo; hasta entonces, {{value0}} se abre en una terminal.",
+      "chatUnavailableOnWindows": "En Windows, {{value0}} Chat se ejecuta con agy. Instale o actualice agy e inicie sesión con una cuenta personal de Google; si Chat está configurado con una cuenta de Google Cloud, elija Personal en Ajustes. Hasta entonces, {{value0}} se abre en una terminal.",
       "undetectedCommandHint": "Si la CLI de {{agent}} está instalada fuera de PATH, introduce la ruta completa a su ejecutable en este host."
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -3788,7 +3788,7 @@
             "agentsLoading": "Cargando agentes",
             "terminalListNeedsServerUpdate": "Actualiza Orca en este servidor para ver los agentes de terminal",
             "terminalListFailed": "No se pudieron listar los agentes de terminal de este espacio de trabajo",
-            "chatNotOnWindows": "Requiere sesión en agy"
+            "chatNotOnWindows": "Compruebe la configuración de agy"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",
@@ -19984,7 +19984,7 @@
         "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
         "worktree": "Worktree"
       },
-      "explicitChatWindows": "En Windows, este chat se ejecuta con agy. Actualice agy, ejecútelo e inicie sesión con una cuenta personal de Google; luego vuelva a intentarlo o ábralo en una terminal.",
+      "explicitChatWindows": "En Windows, este chat se ejecuta con agy. Instale o actualice agy e inicie sesión con una cuenta personal de Google; si Chat está configurado con una cuenta de Google Cloud, elija Personal en Ajustes. Luego vuelva a intentarlo o ábralo en una terminal.",
       "fork": {
         "action": "Crear una rama desde esta respuesta",
         "pending": "Creando una rama de este chat…",
