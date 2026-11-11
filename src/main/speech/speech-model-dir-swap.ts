@@ -1,6 +1,11 @@
-import { existsSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { rm, stat } from 'node:fs/promises'
 import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
+
+const exists = (path: string): Promise<boolean> =>
+  stat(path).then(
+    () => true,
+    () => false
+  )
 
 export function previousSpeechModelDir(modelDir: string): string {
   return `${modelDir}.previous`
@@ -10,14 +15,14 @@ export function previousSpeechModelDir(modelDir: string): string {
 export async function swapInSpeechModelDir(stagingDir: string, modelDir: string): Promise<void> {
   const previousDir = previousSpeechModelDir(modelDir)
   // With no modelDir, previousDir is the old copy an interrupted swap left; keep it until the new one is in.
-  if (existsSync(modelDir)) {
+  if (await exists(modelDir)) {
     await rm(previousDir, { recursive: true, force: true })
     await renameFileWithWindowsRetryAsync(modelDir, previousDir)
   }
   try {
     await renameFileWithWindowsRetryAsync(stagingDir, modelDir)
   } catch (error) {
-    if (existsSync(previousDir)) {
+    if (await exists(previousDir)) {
       await renameFileWithWindowsRetryAsync(previousDir, modelDir).catch(
         (restoreError: unknown) => {
           console.error('[speech] Failed to restore the previous model files:', restoreError)
