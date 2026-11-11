@@ -7,6 +7,7 @@ import { getVisibleEditorTypographySearchDescriptors } from './editor-typography
 import { getFormatOnSaveSearchEntry } from './EditorFormatOnSaveSetting'
 import { getInsertFinalNewlineSearchEntry } from './EditorInsertFinalNewlineSetting'
 import { getEndOfLineSearchEntry } from './EditorEndOfLineSetting'
+import { getGitChangeGutterSearchEntry } from './EditorGitChangeGutterSetting'
 
 export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
   generalSetting(GENERAL_SETTING_ANCHORS.formatOnSave, getFormatOnSaveSearchEntry()),
@@ -137,6 +138,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('settings.general.inlineBlameKeywordAnnotation', 'annotation')
     ]
   }),
+  generalSetting(GENERAL_SETTING_ANCHORS.gitChangeGutter, getGitChangeGutterSearchEntry()),
   generalSetting(GENERAL_SETTING_ANCHORS.markdownView, {
     title: translate('auto.components.settings.general.search.0f9304f821', 'Default Markdown view'),
     description: translate(
