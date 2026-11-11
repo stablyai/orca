@@ -44,7 +44,7 @@ describe('spend cap field', () => {
     expect(onSetOverage).toHaveBeenLastCalledWith({ enabled: false })
   })
 
-  it('puts the rate in one hint and the alert levels as values, not sentences', () => {
+  it('puts the rate in one hint and keeps the alert sentence', () => {
     render(<OverageControls entitlement={sampleTeam} busy={false} onSetOverage={() => {}} />)
     expect(capField().getAttribute('aria-describedby')).toBeTruthy()
     expect(
@@ -52,8 +52,7 @@ describe('spend cap field', () => {
         '$1.00 per sandbox hour after your included hours, billed by the minute. $0 keeps overage off.'
       )
     ).toBeTruthy()
-    const levels = screen.getByRole('list', { name: 'Alert levels' })
-    expect(levels.textContent).toBe('75%90%100%')
+    expect(screen.getByText(/alerted in Orca at 75%, 90% and 100%/)).toBeTruthy()
   })
 
   it('shows members the setting as text', () => {
@@ -65,8 +64,8 @@ describe('spend cap field', () => {
       />
     )
     expect(screen.queryByLabelText('Monthly spend cap')).toBeNull()
-    expect(screen.getByText(/On, up to \$40 a month\./)).toBeTruthy()
-    expect(screen.queryByRole('list', { name: 'Alert levels' })).toBeNull()
+    expect(screen.getByText('On, up to $40 a month.')).toBeTruthy()
+    expect(screen.queryByText(/alerted in Orca/)).toBeNull()
   })
 })
 
@@ -92,7 +91,7 @@ describe('last 30 days', () => {
     )
     expect(screen.getByText('Top workspaces')).toBeTruthy()
     expect(screen.getByText('Checkout retries')).toBeTruthy()
-    expect(screen.getByText('48 sandbox hours')).toBeTruthy()
+    expect(screen.getByText('48 sandbox hours in 30 days')).toBeTruthy()
     cleanup()
     render(
       <PlanBillingUsageHistory
@@ -151,4 +150,21 @@ describe('plan header', () => {
     expect(screen.getByRole('heading', { name: 'Orca Staging Eval Team · Team plan' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Refresh plan' })).toBeNull()
   })
+})
+
+it('gives members an outlined Compare plans and the off line', () => {
+  render(
+    <PlanBillingView
+      result={{ status: 'ok', entitlement: { ...sampleTeam, canManageBilling: false } }}
+      loading={false}
+      busy={false}
+      notice={null}
+      onRefresh={() => {}}
+      onPortal={() => {}}
+      onSetOverage={() => {}}
+      onSeePlans={() => {}}
+    />
+  )
+  expect(screen.getByText('Off. Ask an owner or admin to turn it on.')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Compare plans' }).className).toMatch(/border/)
 })

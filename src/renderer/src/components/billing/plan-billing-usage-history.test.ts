@@ -6,6 +6,7 @@ import {
   usageBarPercent,
   usageChartMaxHours,
   usageTotalLine,
+  usageWindowTotalLine,
   yourUsageLine
 } from './plan-billing-usage-history'
 import { sampleUsageHistory, sampleUsageNames } from './plan-billing-fixtures'
@@ -14,12 +15,13 @@ const HOUR = 3600
 const day = (hours: number) => ({ start: 0, seconds: hours * HOUR })
 
 describe('usage chart scale', () => {
-  it('rounds the busiest day up to 1, 2 or 5 × a power of ten', () => {
+  it('tops the axis at the nearest clean value just above the busiest day', () => {
     expect(usageChartMaxHours([day(0)])).toBe(1)
     expect(usageChartMaxHours([day(0.4)])).toBe(1)
     expect(usageChartMaxHours([day(1.5), day(0.2)])).toBe(2)
-    expect(usageChartMaxHours([day(5.2)])).toBe(10)
-    expect(usageChartMaxHours([day(3)])).toBe(5)
+    expect(usageChartMaxHours([day(5.2)])).toBe(6)
+    expect(usageChartMaxHours([day(3)])).toBe(3)
+    expect(usageChartMaxHours([day(7)])).toBe(8)
     expect(usageChartMaxHours([day(48)])).toBe(50)
     expect(usageChartMaxHours([day(120)])).toBe(200)
   })
@@ -71,5 +73,6 @@ describe('top workspaces and members', () => {
     expect(usageTotalLine(48 * HOUR, translate)).toBe('48 sandbox hours')
     expect(usageTotalLine(HOUR, translate)).toBe('1 sandbox hour')
     expect(usageTotalLine(0.26 * HOUR, translate)).toBe('0.3 sandbox hours')
+    expect(usageWindowTotalLine(48 * HOUR, translate)).toBe('48 sandbox hours in 30 days')
   })
 })

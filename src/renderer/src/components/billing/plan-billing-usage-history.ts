@@ -6,19 +6,18 @@ import { formatHours } from './plan-billing-format'
 
 const HOUR = 3600
 
-/** The y-axis top in hours: the busiest day rounded up to 1, 2 or 5 × a power of ten (min 1). */
+// Axis tops whose half is also a clean tick (0 / mid / max), × a power of ten.
+const NICE_TOPS = [1, 2, 3, 4, 5, 6, 8, 10]
+
+/** The y-axis top in hours: the nearest clean value at or above the busiest day (min 1). */
 export function usageChartMaxHours(days: OrcaBillingUsageHistory['days']): number {
   const busiest = Math.max(0, ...days.map((day) => day.seconds)) / HOUR
   if (busiest <= 1) {
     return 1
   }
   const power = 10 ** Math.floor(Math.log10(busiest))
-  for (const step of [1, 2, 5, 10]) {
-    if (busiest <= step * power) {
-      return step * power
-    }
-  }
-  return 10 * power
+  const top = NICE_TOPS.find((step) => busiest <= step * power) ?? 10
+  return top * power
 }
 
 /** A bar's height as a share of the axis (0..100); a day with any usage stays visible (2%). */
@@ -126,7 +125,16 @@ export function topWorkspaceRows(
   )
 }
 
-/** "41.5 sandbox hours" for the section's total. */
+/** "48 sandbox hours in 30 days": the chart's total, distinct from the month's meter above. */
+export function usageWindowTotalLine(seconds: number, t: Translate): string {
+  return t('auto.components.billing.usage.windowTotal', '{{value}} sandbox hours in 30 days', {
+    value: formatHours(seconds),
+    count: Number(formatHours(seconds)),
+    defaultValue_one: '{{value}} sandbox hour in 30 days'
+  })
+}
+
+/** "41.5 sandbox hours" (a day's readout). */
 export function usageTotalLine(seconds: number, t: Translate): string {
   return t('auto.components.billing.usage.total', '{{value}} sandbox hours', {
     value: formatHours(seconds),

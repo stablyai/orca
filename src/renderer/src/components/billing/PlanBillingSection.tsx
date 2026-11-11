@@ -292,7 +292,13 @@ export function PlanBillingView({
           </Button>
         ) : null}
         {hasPlan ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onSeePlans}>
+          // Members have no other action here, so it gets the button's chrome (and its alignment).
+          <Button
+            type="button"
+            variant={entitlement.canManageBilling ? 'ghost' : 'outline'}
+            size="sm"
+            onClick={onSeePlans}
+          >
             {t('auto.components.billing.comparePlans', 'Compare plans')}
           </Button>
         ) : null}

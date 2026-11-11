@@ -6,7 +6,7 @@ import { formatHours } from './plan-billing-format'
 import {
   topMemberRows,
   topWorkspaceRows,
-  usageTotalLine,
+  usageWindowTotalLine,
   yourUsageLine,
   type UsageBreakdownRow
 } from './plan-billing-usage-history'
@@ -60,7 +60,7 @@ export function PlanBillingUsageHistory({
         action={
           empty ? null : (
             <span className="text-xs text-muted-foreground tabular-nums">
-              {usageTotalLine(history.totalSeconds, t)}
+              {usageWindowTotalLine(history.totalSeconds, t)}
             </span>
           )
         }

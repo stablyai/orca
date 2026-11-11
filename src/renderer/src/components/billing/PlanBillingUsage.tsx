@@ -19,7 +19,6 @@ import {
 import { formatCents, formatRateCents } from './plans/plans-pricing'
 import { capTooHighCopy } from './plan-billing-copy'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '../new-workspace/orca-cloud-run-target-access'
-import { ORCA_USAGE_ALERT_LEVELS } from '../../../../shared/orca-billing-usage-alerts'
 
 /** "Resets and renews Dec 2" when both land the same day (monthly); separate parts otherwise. */
 function resetLine(
@@ -182,8 +181,10 @@ export function OverageControls({
             ? t('auto.components.billing.overage.memberOn', 'On, up to {{cap}} a month.', {
                 cap: formatCents(overage.spendCapCents, locale)
               })
-            : t('auto.components.billing.overage.memberOff', 'Off.')}{' '}
-          {t('auto.components.billing.overageMemberHint', 'Owners and admins can change overage.')}
+            : t(
+                'auto.components.billing.overage.memberOff2',
+                'Off. Ask an owner or admin to turn it on.'
+              )}
         </p>
         {overage.optedIn ? spent : null}
       </div>
@@ -301,40 +302,12 @@ export function OverageControls({
         ) : null}
       </form>
       {overage.optedIn ? spent : null}
-      <UsageAlertLevels />
-    </div>
-  )
-}
-
-/** The fixed alert levels, shown as values rather than a sentence (owners and admins only). */
-function UsageAlertLevels(): React.JSX.Element {
-  const t = useTranslate()
-  const locale = useIntlLocale()
-  const percent = new Intl.NumberFormat(locale, { style: 'percent' })
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/60 pt-3 text-xs">
-      <span className="font-medium">
-        {t('auto.components.billing.overage.alertsLabel', 'Usage alerts')}
-      </span>
-      <ul
-        className="flex gap-1"
-        aria-label={t('auto.components.billing.overage.alertsLevels', 'Alert levels')}
-      >
-        {ORCA_USAGE_ALERT_LEVELS.map((level) => (
-          <li
-            key={level}
-            className="rounded-full border border-border px-2 py-0.5 tabular-nums text-muted-foreground"
-          >
-            {percent.format(level / 100)}
-          </li>
-        ))}
-      </ul>
-      <span className="text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {t(
-          'auto.components.billing.overage.alertsHint',
-          'of your team’s sandbox hours, sent to owners and admins in Orca.'
+          'auto.components.billing.usageAlertsNote',
+          'Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.'
         )}
-      </span>
+      </p>
     </div>
   )
 }
