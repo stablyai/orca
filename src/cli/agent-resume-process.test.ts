@@ -8,6 +8,7 @@ import { runProcess } from '@orca/process-host'
 import { expect, it } from 'vitest'
 import { z } from 'zod'
 
+// Two real CLI cold starts need a subprocess budget on slower Windows and CI hosts.
 it('real CLI processes select a recorded pane or conversation without launching an agent', async () => {
   const manifest = createRequire(resolve('package.json')).resolve('bun/package.json')
   const { bin } = z
