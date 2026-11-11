@@ -4313,7 +4313,8 @@
             "startAgain": "Start again",
             "cloudUnusableTitle": "This sandbox can’t open your workspace",
             "cloudUnusableDeletedBody": "The sandbox was deleted. Start again to try a new one.",
-            "cloudUnusableBody": "Start again on a new sandbox, or delete this one."
+            "cloudUnusableBody": "Start again on a new sandbox, or delete this one.",
+            "stillRunningLocal2": "The VM is running until you choose."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",

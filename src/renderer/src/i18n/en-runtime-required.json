@@ -1357,6 +1357,7 @@
             "checksCountTitleVm_other": "The VM is up, but {{count}} environment checks failed",
             "memberLimitBodyCount_one": "You can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "memberLimitBodyCount_other": "You can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "stillRunningLocal": "The VM is running and using hours until you choose.",
             "teamLimitBodyCount_one": "Your team can run {{count}} sandbox at once ({{value1}} per seat). Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "teamLimitBodyCount_other": "Your team can run {{count}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged."
           },
@@ -1513,6 +1514,9 @@
     }
   },
   "cloudEnvironment": {
+    "form": {
+      "importHint": "Reads Conductor and dev container setup from a local project."
+    },
     "staleness": {
       "branchMovedInRepo_one": "{{branch}} in {{repo}} is {{count}} commit ahead of build #{{number}}",
       "branchMovedInRepo_other": "{{branch}} in {{repo}} is {{count}} commits ahead of build #{{number}}",

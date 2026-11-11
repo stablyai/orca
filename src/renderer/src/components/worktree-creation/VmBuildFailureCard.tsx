@@ -133,8 +133,8 @@ export function VmBuildFailureCard({
               ) : (
                 <p className="text-xs text-muted-foreground">
                   {t(
-                    'auto.components.worktree.creation.VmBuildFailureCard.stillRunningLocal',
-                    'The VM is running and using hours until you choose.'
+                    'auto.components.worktree.creation.VmBuildFailureCard.stillRunningLocal2',
+                    'The VM is running until you choose.'
                   )}
                 </p>
               )

@@ -15,6 +15,8 @@ const SCOPE = [
   'src/renderer/src/components/settings/**/{OrcaCloud,Cloud,PlanBilling,AgentAccounts,Accounts}*.tsx',
   'src/renderer/src/components/worktree-creation/Vm*.tsx',
   'src/renderer/src/components/worktree-creation/*Cloud*.tsx',
+  // Copy tables behind the Vm* components (design-squad scope fix).
+  'src/renderer/src/components/worktree-creation/vm-*.ts',
   'src/renderer/src/lib/*cloud*.ts',
   'mobile/src/**/*{Cloud,cloud}*.tsx'
 ]
@@ -82,6 +84,58 @@ function stringValue(node: ts.Node): string | null {
   return null
 }
 
+const SKIP_ATTRIBUTES = /^(className|class|id|key|testId|data-.*|href|src|role|type|name|variant|size|side|align)$/
+const SKIP_PROPERTIES = /^(className|id|key|testId|kind|type|variant|status|state|icon|href|path|url|pane|section|sectionId)$/
+
+/** A string literal that could be user-visible copy: has a space, isn't a key, import or styling. */
+function isCopyLiteral(node: ts.Node): boolean {
+  if (
+    !ts.isStringLiteral(node) &&
+    !ts.isNoSubstitutionTemplateLiteral(node) &&
+    !ts.isTemplateExpression(node)
+  ) {
+    return false
+  }
+  const text = stringValue(node) ?? ''
+  if (!/\s/.test(text.trim()) || !/[A-Za-z]/.test(text)) {
+    return false // pure identifiers, ids and paths
+  }
+  const parent = node.parent
+  if (
+    ts.isImportDeclaration(parent) ||
+    ts.isExportDeclaration(parent) ||
+    ts.isExternalModuleReference(parent) ||
+    ts.isLiteralTypeNode(parent)
+  ) {
+    return false
+  }
+  if (ts.isPropertyAssignment(parent) && parent.name === node) {
+    return false // object keys
+  }
+  if (ts.isPropertyAssignment(parent) && SKIP_PROPERTIES.test(parent.name.getText().replace(/['"]/g, ''))) {
+    return false
+  }
+  const attr = ts.isJsxAttribute(parent)
+    ? parent
+    : ts.isJsxExpression(parent) && ts.isJsxAttribute(parent.parent)
+      ? parent.parent
+      : null
+  if (attr && SKIP_ATTRIBUTES.test(attr.name.getText())) {
+    return false
+  }
+  // cn()/clsx() class lists and translation keys (the first argument of t()).
+  if (ts.isCallExpression(parent)) {
+    const callee = parent.expression.getText()
+    if (/^(cn|clsx|cva|twMerge)$/.test(callee)) {
+      return false
+    }
+    if (TRANSLATE_CALLEES.has(callee.split('.').pop() ?? '') && parent.arguments[0] === node) {
+      return false
+    }
+  }
+  return true
+}
+
 /** User-visible strings in one file, with their 1-based lines. */
 export function visibleStrings(file: string, source: string): { line: number; text: string }[] {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
@@ -92,7 +146,10 @@ export function visibleStrings(file: string, source: string): { line: number; te
     }
   }
   const visit = (node: ts.Node): void => {
-    if (ts.isJsxText(node)) {
+    if (isCopyLiteral(node)) {
+      // Copy tables, object-literal values and template parts: anywhere these terms can hide.
+      push(node, stringValue(node))
+    } else if (ts.isJsxText(node)) {
       push(node, node.text.trim())
     } else if (ts.isJsxAttribute(node) && node.initializer) {
       const name = node.name.getText(sf)
@@ -130,7 +187,15 @@ export function visibleStrings(file: string, source: string): { line: number; te
     ts.forEachChild(node, visit)
   }
   visit(sf)
-  return out
+  const seen = new Set<string>()
+  return out.filter((entry) => {
+    const key = `${entry.line}:${entry.text}`
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
 }
 
 function scopeFiles(): string[] {
