@@ -68,3 +68,23 @@ export function logRpcSocketClose(options: SocketCloseLogOptions): number | unde
   })
   return event?.code
 }
+
+/** Logs a send the socket was not ready for; true when a connected session's current socket has closed underneath it. */
+export function reportUnreadyRpcSend(
+  socket: WebSocket,
+  evidence: { current: WebSocket | null; hasKey: boolean; state: ConnectionState }
+): boolean {
+  const { readyState } = socket
+  console.log('[net] sendEncrypted FAILED — channel not ready', {
+    hasWs: evidence.current !== null,
+    readyState,
+    hasKey: evidence.hasKey,
+    state: evidence.state
+  })
+  const desynced =
+    evidence.state === 'connected' && evidence.current === socket && readyState !== WebSocket.OPEN
+  if (desynced) {
+    console.log('[net] sendEncrypted detected ws desync — forcing reconnect', { readyState })
+  }
+  return desynced
+}

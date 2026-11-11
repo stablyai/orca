@@ -121,7 +121,6 @@ export function MobileSessionActiveContent({
   const openUrlInOrca = useOpenUrlInOrca(controller)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
-  const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
   const nativeChatImageSource = useMemo(
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
@@ -372,7 +371,7 @@ export function MobileSessionActiveContent({
                 // A workspace routed to another server stops with that server, whose name the phone lacks.
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
                 onOpenUrlInOrca={openUrlInOrca}
-                hostOutage={nativeChatHostOutage}
+                hostOutage={mobileSessionNativeChatHostOutage(controller, hostTitle, t)}
                 onRunInTerminal={(command) =>
                   void controller.handleCreateTerminal(undefined, {
                     startupCommand: command,
