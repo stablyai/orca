@@ -257,6 +257,13 @@ export function AgentLaunchSettingsCatalog({
             <AgentLaunchChoiceEditor
               permissionControlRef={permissionControlRef}
               showArguments={isDetected}
+              catalogTarget={
+                detectionTarget.kind === 'ssh'
+                  ? null
+                  : detectionTarget.kind === 'runtime'
+                    ? { kind: 'environment', environmentId: detectionTarget.environmentId }
+                    : { kind: 'local' }
+              }
               agent={agent.id}
               label={agent.label}
               choices={settings.agentChoices?.defaults[agent.id]}
