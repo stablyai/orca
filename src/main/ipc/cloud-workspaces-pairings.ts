@@ -63,6 +63,9 @@ async function retireOwnedRecords(
       : null
     if (handle?.driverState.sandboxId === sandboxId || handle?.environmentId === sandboxId) {
       await retireGoneCloudSandbox(userDataPath, removedServerStore, runtime)
+      console.log(
+        `[orca-cloud] pruned stale cloud workspace ${sandboxId} (${runtime.workspaceName ?? runtime.id}; deleted from here)`
+      )
     }
   }
 }
