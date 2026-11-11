@@ -11,6 +11,7 @@ import {
   localGenerationLaneKey,
   setLocalGenerationCancelToken
 } from '../../text-generation/source-control-generation-lanes'
+import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/source-control-generation-limits'
 import type {
   InternalTextGenerationResult,
@@ -76,7 +77,7 @@ export async function runOpenCodeTextTask(input: {
           ...common,
           env:
             mergeCommandEnvironment(input.target.env, input.plan.env, process.platform) ??
-            process.env,
+            processEnvWithoutAgentSession(),
           spawn: input.spawnAgent,
           stop: killSourceControlAgentProcess,
           shouldExecute: input.shouldExecute

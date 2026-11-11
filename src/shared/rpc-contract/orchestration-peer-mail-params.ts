@@ -16,7 +16,9 @@ export const PeerMailDeliverParams = z.object({
 
 /** The opening Orca pulls replies queued for its conversations; waits up to waitMs for one. */
 export const PeerMailPullParams = z.object({
-  waitMs: OptionalFiniteNumber
+  waitMs: OptionalFiniteNumber,
+  /** Conversations it could not read and is waiting to retry: their items neither return nor end the wait. */
+  holdBack: z.array(z.string()).max(50).optional()
 })
 
 export const PeerMailAckParams = z.object({

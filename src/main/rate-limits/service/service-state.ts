@@ -23,7 +23,7 @@ import {
   DEFAULT_POLL_MS
 } from './service-types'
 import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
-import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
 import type { NetworkProxySettings } from '../../../shared/network-proxy'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'

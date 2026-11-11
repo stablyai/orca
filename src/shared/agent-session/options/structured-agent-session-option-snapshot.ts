@@ -41,6 +41,18 @@ const PROVIDER_DEFAULT_MODEL_PLACEHOLDER: SessionOptionDescriptor = {
   disabledReason: 'available-after-session-start'
 }
 
+/** A session that lists no models picks one itself; display-only, so Send never captures it. */
+const AGENT_CHOSEN_MODEL: SessionOptionDescriptor = {
+  id: 'model',
+  label: 'Model',
+  category: 'model',
+  kind: { type: 'select', choices: [] },
+  valueSource: 'unknown',
+  reportedModel: 'auto',
+  transport: 'agent-session',
+  settable: false
+}
+
 /** Name a catalog default only when the host says this launch runs it; otherwise use it solely for controls. */
 export function structuredAgentSessionShownModel(
   catalog: AgentSessionOptionCatalog,
@@ -227,16 +239,18 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
           values,
           modelIsCliDefault: isCliDefault
         })
-  return snapshot.length > 0 || state.catalogSource === 'live'
-    ? withUnlistedEffort(
-        catalog,
-        controlsModelId,
-        values.effort,
-        state.verifiedModelIds,
-        snapshot,
-        state.record.agent
-      )
-    : [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
+  if (snapshot.length === 0 && state.catalogSource !== 'live') {
+    return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
+  }
+  const shownSnapshot = withUnlistedEffort(
+    catalog,
+    controlsModelId,
+    values.effort,
+    state.verifiedModelIds,
+    snapshot,
+    state.record.agent
+  )
+  return snapshot.length === 0 ? [AGENT_CHOSEN_MODEL, ...shownSnapshot] : shownSnapshot
 }
 
 export function structuredAgentSessionOptionSnapshot(

@@ -16,7 +16,7 @@ import { RateLimitServiceAntigravityAccounts } from './service-antigravity-accou
 import type { SettledProviderResult } from './service-sibling-provider-result'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { InternalRateLimitState } from './service-types'
-import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
