@@ -3,28 +3,19 @@ import { Badge } from '@/components/ui/badge'
 import type { Translate } from '@/i18n/use-translate'
 import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
 import { environmentCheckBadge, environmentCheckCopy } from './environment-check-copy'
-import { cloudAgentCheckCopy } from './cloud-agent-check-copy'
-import type { OrcaCloudAgentAccountsState } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 
 export function CheckRow({
   check,
   index,
   cloud,
-  accounts,
   t
 }: {
   check: EnvironmentDoctorCheck
   index: number
   cloud: boolean
-  /** Orca Cloud: agent sign-in comes from the Orca account, not the sandbox's own probe. */
-  accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'keyKinds'>
   t: Translate
 }): React.JSX.Element | null {
-  const cloudAgent = cloud ? cloudAgentCheckCopy(check, accounts, t) : null
-  if (cloudAgent?.kind === 'hide') {
-    return null
-  }
-  const copy = cloudAgent ?? environmentCheckCopy(check, t, cloud)
+  const copy = environmentCheckCopy(check, t, cloud)
   const { message } = copy
   // Uncoded fixes end in raw CLI output; on Orca Cloud keep only the advice line above it.
   const remediation =
