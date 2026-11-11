@@ -49,7 +49,32 @@ export type StartInputs = {
   prelude?: { script: string; env?: Record<string, string> }
   /** This session's share-proxy key (src/share-crypto.ts); the proxy keeps it in memory only. */
   shareProxyKey?: string
+  /**
+   * The VM's hostname for this boot (workspaceHostname): terminal prompts read `ubuntu@<workspace>`
+   * instead of the provider's VM id, which changes on every wake (JA-27). Set before orcad starts, so
+   * every shell it opens sees it. Best effort: a failure keeps the provider's name.
+   */
+  hostname?: string
 }
+
+/** A hostname label from a workspace name: lowercase letters, digits and dashes, at most 63 chars. */
+export function workspaceHostname(name: string | null | undefined): string | undefined {
+  const label = (name ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 63)
+    .replace(/-+$/, '')
+  return label.length > 0 ? label : undefined
+}
+
+// Inline per boot, no image change: hostname plus an /etc/hosts entry (sudo would warn without one).
+const HOSTNAME_STEP = [
+  '{ [ -n "${ORCA_HOSTNAME:-}" ] && sudo -n hostname "$ORCA_HOSTNAME" &&',
+  '{ grep -q "[[:space:]]$ORCA_HOSTNAME\\$" /etc/hosts || printf "127.0.1.1 %s\\n" "$ORCA_HOSTNAME" | sudo -n tee -a /etc/hosts; }; }',
+  '>/dev/null 2>&1 || true; unset ORCA_HOSTNAME'
+].join(' ')
 
 /** `NAME=<base64 utf-8 value>` lines, so values with newlines or quotes survive bash intact. */
 export function encodeSecretEnv(env: Record<string, string>): string {
@@ -100,6 +125,10 @@ export async function startOrcad(
   if (inputs.shareProxyKey) {
     env.ORCA_SHARE_PROXY_KEY = inputs.shareProxyKey
   }
+  if (inputs.hostname) {
+    env.ORCA_HOSTNAME = inputs.hostname
+  }
+  const hostnameStep = inputs.hostname ? `${HOSTNAME_STEP}; ` : ''
   // The prelude rides in an env var (the start script's `env -i` keeps it out of orcad) so one
   // round trip both prepares the checkout and starts orcad.
   const result = await provider.runCommand(
@@ -108,11 +137,16 @@ export async function startOrcad(
       ? {
           command: 'bash',
           // The prelude never sees the share-proxy or ready keys; only the start script gets them.
-          args: ['-c', `env -u ORCA_SHARE_PROXY_KEY -u ORCA_READY_KEY bash -c "$ORCA_PRELUDE" 1>&2 || true; unset ORCA_PRELUDE; exec ${START_COMMAND}`],
+          args: [
+            '-c',
+            `${hostnameStep}env -u ORCA_SHARE_PROXY_KEY -u ORCA_READY_KEY bash -c "$ORCA_PRELUDE" 1>&2 || true; unset ORCA_PRELUDE; exec ${START_COMMAND}`
+          ],
           env: { ...env, ...inputs.prelude.env, ORCA_PRELUDE: inputs.prelude.script },
           timeoutMs: START_TIMEOUT_MS
         }
-      : { command: START_COMMAND, env, timeoutMs: START_TIMEOUT_MS }
+      : hostnameStep
+        ? { command: 'bash', args: ['-c', `${hostnameStep}exec ${START_COMMAND}`], env, timeoutMs: START_TIMEOUT_MS }
+        : { command: START_COMMAND, env, timeoutMs: START_TIMEOUT_MS }
   )
   if (result.exitCode !== 0) {
     throw new VmCommandError('orcad_start_failed')
