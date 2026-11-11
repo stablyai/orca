@@ -66,7 +66,9 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
   /** The `--resume` launch for a pane's recorded agent session, as the host window's cold restore builds it. */
   protected resolveMobileSessionResumeCommand(
     workspace: TerminalWorkspaceLaunchScope,
-    record: ResumableAgentSessionSource
+    record: ResumableAgentSessionSource,
+    /** The host proved the session never wrote a transcript (hasMissingAgentTranscript). */
+    options: { freshSession?: boolean } = {}
   ): MobileTerminalResumeCommand | null {
     const providerSession = normalizeAgentProviderSession(record.providerSession)
     if (!this.store || !providerSession || !isResumableTuiAgent(record.agent)) {
@@ -97,7 +99,10 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       isRemote: Boolean(workspace.connectionId),
       launchCwd: workspace.path
     })
-    const startupPlan = buildAgentResumeStartupPlan(resumeInputs)
+    const startupPlan = buildAgentResumeStartupPlan({
+      ...resumeInputs,
+      ...(options.freshSession ? { freshSession: true } : {})
+    })
     if (!startupPlan) {
       return null
     }

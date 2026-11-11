@@ -1,4 +1,4 @@
-import { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'
+import { getAgentForkArgv, getAgentFreshSessionArgv, getAgentResumeArgv } from './agent-resume-argv'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent
@@ -40,10 +40,18 @@ export function buildAgentResumeStartupPlan(args: {
   /** First message the resumed session submits, e.g. to carry on a turn its host cut off. Only
    *  agents whose resume takes a prompt argument (Claude, Codex) send it; others ignore it. */
   continuePrompt?: string | null
+  /** The host proved the session has no transcript: start it fresh under its id where the agent can. */
+  freshSession?: boolean
 }): AgentStartupPlan | null {
-  const resumeArgv = args.fork
-    ? getAgentForkArgv(args.agent, args.providerSession)
-    : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
+  const freshArgv =
+    args.freshSession && !args.fork
+      ? getAgentFreshSessionArgv(args.agent, args.providerSession)
+      : null
+  const resumeArgv =
+    freshArgv ??
+    (args.fork
+      ? getAgentForkArgv(args.agent, args.providerSession)
+      : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath))
   if (!resumeArgv) {
     return null
   }
@@ -54,7 +62,7 @@ export function buildAgentResumeStartupPlan(args: {
       : resumeArgv
   const continuePrompt = args.continuePrompt?.trim()
   const argv =
-    continuePrompt && !args.fork && RESUME_PROMPT_AGENTS.has(args.agent)
+    continuePrompt && !args.fork && !freshArgv && RESUME_PROMPT_AGENTS.has(args.agent)
       ? [...withCwd, continuePrompt]
       : withCwd
   const shell = resolveStartupShell(args.platform, args.shell)

@@ -16,6 +16,7 @@ import type {
 import type { OrcaRuntimeWithMarkPtyLivenessUnverifiable as PtyExitFloor } from '../../terminal/layout/terminal-input-floor'
 import type { OrcaRuntimeWithStopTerminalsForWorktree as SessionEditHost } from '../../terminal/stop/worktree-terminal-stop'
 import { claimSleepRecordForPane, isUnclaimedRunningSleepRecord } from './sleep-record-pane-claim'
+import { hasMissingAgentTranscript } from '../../terminal/launch/agent-transcript-presence'
 import {
   AgentSessionResumeClaims,
   type AgentSessionResumeClaim,
@@ -128,7 +129,13 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
       return null
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-    const resume = this.resolveMobileSessionResumeCommand(workspace, record)
+    // A turn-less Claude wrote no transcript: a wake relaunch starts it fresh instead of "No conversation found".
+    const freshSession = await hasMissingAgentTranscript(
+      record.agent,
+      record.providerSession,
+      workspace.connectionId
+    )
+    const resume = this.resolveMobileSessionResumeCommand(workspace, record, { freshSession })
     if (!resume) {
       return null
     }
