@@ -17,7 +17,7 @@ import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../power/agent-awake-service'
-import type { CrashReportStore } from '../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
 import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
@@ -45,11 +45,11 @@ import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker
-} from '../crash-reporting/gpu-crash-fallback-decision'
-import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
+} from '../crash-reporting/recovery/gpu-crash-fallback-decision'
+import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/capture/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
-import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
-import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/database/profile-state-storage-classification'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 
 export type ProfileStateStartupMetadata = {
   backend: 'sqlite'

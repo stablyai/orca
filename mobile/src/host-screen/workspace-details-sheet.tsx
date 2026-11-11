@@ -5,9 +5,6 @@ import {
   CircleDot,
   ExternalLink,
   GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  GitPullRequestDraft,
   SquareTerminal,
   StickyNote
 } from 'lucide-react-native'
@@ -15,6 +12,7 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { prStateColor } from '../components/WorktreeMetaGlyphs'
+import { PrStateIcon } from '../components/PrStateIcon'
 import {
   LIST_LEADING_INSET,
   LIST_LEADING_SLOT,
@@ -135,20 +133,13 @@ function originLabel(origin: WorkspaceOrigin, t: Translate): string {
 
 function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
   useMobileColorScheme()
-  const color = prStateColor(item.state ?? '')
-  if (
-    item.state === 'merged' ||
-    (item.type === 'mr' && item.state !== 'closed' && item.state !== 'draft')
-  ) {
+  const state = item.state ?? ''
+  const color = prStateColor(state)
+  // GitLab draws every open MR with the merge glyph.
+  if (item.type === 'mr' && state !== 'closed' && state !== 'draft') {
     return <GitMerge size={ICON_SIZE} color={color} />
   }
-  if (item.state === 'closed') {
-    return <GitPullRequestClosed size={ICON_SIZE} color={color} />
-  }
-  if (item.state === 'draft') {
-    return <GitPullRequestDraft size={ICON_SIZE} color={color} />
-  }
-  return <GitPullRequest size={ICON_SIZE} color={color} />
+  return <PrStateIcon state={state} size={ICON_SIZE} color={color} />
 }
 
 function LinkIcon({ item }: { item: WorkspaceDetailLink }) {

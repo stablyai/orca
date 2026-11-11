@@ -136,13 +136,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
-          <DropdownMenuLabel>
-            <span className="block max-w-60 truncate">
-              {isMultiContext || !worktree.displayName
-                ? t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')
-                : worktree.displayName}
-            </span>
-          </DropdownMenuLabel>
+          {/* Why: the highlighted card already names a single worktree. */}
+          {isMultiContext && (
+            <DropdownMenuLabel>
+              {t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
+            </DropdownMenuLabel>
+          )}
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
           {isMultiContext ? (
             sleepItems

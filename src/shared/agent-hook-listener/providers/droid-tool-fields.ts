@@ -60,11 +60,7 @@ export function extractDroidToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  if (
-    eventName === 'PreToolUse' ||
-    eventName === 'PostToolUse' ||
-    eventName === 'PermissionRequest'
-  ) {
+  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??

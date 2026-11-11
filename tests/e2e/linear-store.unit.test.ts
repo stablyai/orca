@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { workspaceFromLinearData } from '../../src/main/linear/linear-workspace-record'
+import { workspaceFromLinearData } from '../../src/main/linear/accounts/linear-workspace-record'
 
 import type { LinearConnectionStatus, LinearViewer } from '../../src/shared/linear/workspace-types'
 import { clearLinearRequestMaps } from '../../src/renderer/src/store/slices/linear/linear-slice-request-state'

@@ -1,37 +1,33 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { createTerminalZeroDimensionsMessage } from '../../../../../shared/terminal/viewport/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/removal-fence-error'
-import { safeFit } from '@/lib/pane-manager/pane-fit'
-// Preserve WebGL hook registration before deferred connection setup.
-import '@/lib/pane-manager/pane-webgl-renderer'
+import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import '@/lib/pane-manager/terminal-rendering/pane-webgl-renderer'
 import {
   getWindowParkVisible,
   subscribeWindowParkVisibility
 } from '@/lib/window-activity/window-park-visibility'
 import { useAppStore } from '@/store/index'
 import { createCodexBackfillErrorDetector } from '../provider-notices/codex-backfill/codex-backfill-error-detector'
-import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
-
+import {
+  hasWorktreeSleepIntent,
+  onWorktreeSleepIntentCleared
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { recordPtyConnectDiagnostic } from './instrumentation/pty-connect-diagnostics'
 import { defersToMainPaneStart } from './spawn/main-pane-start-request'
 import { findTerminalTabForPane } from './terminal-tab-id'
 import { isDeferredSplitInputHold } from './pane-transport-options'
-
-import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindBuildColdRestoreAgentResumeStartup } from './startup/cold-restore-resume-startup'
-
 import { bindForegroundOutputRefresh } from './output/foreground-output-refresh'
 import { bindRegisterPaneSerializer } from './serialization/pane-serializer-register'
 import { bindHandleReattachResult } from './reattach/reattach-result-handler'
 import { runDeferredSessionAttach } from './deferred-session-attach'
-
 import { bindSerializeHiddenOutputSnapshot } from './output-restore/hidden-output-snapshot-serialize'
 import { bindHiddenStartupDelivery } from './spawn/hidden-startup-delivery'
 import { bindHiddenOutputFloodRepaint } from './output-restore/hidden-output-flood-repaint'
 import { bindPaneSerializerReadiness } from './serialization/pane-serializer-readiness'
 import { bindStartupDraftPaste } from './startup/startup-draft-paste'
 import { bindSessionRestoredBannerAdmission } from './notifications/session-restored-banner-admission'
-
 import { bindDeferredColdRestoreAndSnapshot } from './deferred-cold-restore-and-snapshot'
 import {
   bindLivePaneMode2031Observation,
@@ -48,13 +44,11 @@ import {
   bindHiddenRendererQueryAdmission,
   bindHiddenStartupRendererQueryWrite
 } from './output/hidden-startup-renderer-query-write'
-
 import { bindHiddenOutputRestoreChunk } from './output-restore/hidden-output-restore-chunk'
 import { bindSnapshotKittyKeyboardModes } from './emulation/snapshot-kitty-keyboard-modes'
 import { bindRendererOrderedSequence } from './output/renderer-ordered-sequence'
 import { bindHiddenOutputRestoreDrain } from './output-restore/hidden-output-restore-drain'
 import { bindAbandonHiddenOutputRestore } from './output-restore/hidden-output-restore-abandon'
-
 import { bindHiddenOutputRestoreSnapshot } from './output-restore/hidden-output-restore-snapshot'
 import { bindHiddenOutputRestoreRequest } from './output-restore/hidden-output-restore-request'
 import { bindLiveDataCallback } from './output/live-data-callback'
@@ -62,9 +56,11 @@ import {
   bindBeginReattachLiveDataDeferral,
   bindReattachLiveDataDeferral
 } from './output/reattach-live-data-deferral'
-
 import { bindParkRevealSnapshotVerdictActions } from './output-restore/park-reveal-snapshot-verdict'
 import { bindRemoteProgramRedraw } from './geometry/remote-program-redraw'
+import type { ConnectPanePtySession } from './connect-pane-pty-session'
+
+// Preserve WebGL hook registration before deferred connection setup.
 
 export function installRunDeferredConnect(session: ConnectPanePtySession): void {
   const cwdPromise = session.deps.cwdPromise

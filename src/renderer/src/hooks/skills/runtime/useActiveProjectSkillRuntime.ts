@@ -1,33 +1,33 @@
 import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { SkillDiscoveryTarget } from '../../../../../shared/skills'
 import { useActiveSkillDiscoveryRuntimeTarget } from '../discovery/use-active-skill-discovery-runtime-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import {
   getGlobalWindowsExecutionRuntimeContext,
   getLocalProjectExecutionRuntimeContext
-} from '@/lib/local-preflight-context'
+} from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getProjectAgentSkillRuntime,
   getProjectAgentSkillTerminalShellOverride,
   getProjectSkillDiscoveryTarget,
-  getProjectSkillInstallDisabledReason,
-  type ProjectAgentSkillRuntime
+  getProjectSkillInstallDisabledReason
 } from '@/lib/skills/runtime/project-skill-runtime'
+import type { ProjectAgentSkillRuntime } from '@/lib/skills/runtime/project-skill-runtime'
 import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
   resolveBundledSkillTarget,
-  servingExecutionHostId,
-  type BundledSkillTarget
+  servingExecutionHostId
 } from '@/lib/skills/runtime/bundled-skill-target'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { useAppStore } from '@/store/index'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
+import type { SkillDiscoveryTarget } from '../../../../../shared/skills'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 type ActiveProjectSkillRuntime = {
   projectRuntime?: ProjectExecutionRuntimeResolution

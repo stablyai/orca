@@ -2,11 +2,11 @@ import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-ca
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
-import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
+import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
 import { remoteRuntimeTerminalColorPush } from '@/runtime/hosted-terminals/streams/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
 import { registerBackgroundWorktreeRemovalBridge } from './background-worktree-removal-bridge'
 import {

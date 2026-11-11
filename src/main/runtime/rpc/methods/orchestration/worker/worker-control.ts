@@ -7,9 +7,9 @@ import {
   exposeWorker,
   inspectWorkerTerminal,
   projectFleetWorker,
-  resolvePinnedFederatedServer,
   showContextOnlyWorker
 } from './worker-observation'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { readArchivedWorkerOutput } from './worker-archive-read'
 import { readStructuredWorkerOutput } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
@@ -17,10 +17,8 @@ import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestrat
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import {
-  readFederatedWorkerOutput,
-  showFederatedWorker
-} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
+import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
 import {
   WorkerDispatchParams,
   WorkerReadParams
@@ -79,7 +77,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         terminal: observation.exact ? observation.terminal : null,
         observation: exposeObservation(observation),
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null,
-        autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource)
+        autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource),
+        coordinatedFrom: db.getPeerRun(dispatch.run_id)?.home_label ?? null
       }
     }
   }),

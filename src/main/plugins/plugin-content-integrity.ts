@@ -3,6 +3,8 @@ import { hashPluginTree } from './plugin-content-hash'
 export type HashAddressedPluginContent = {
   rootDir: string
   contentHash: string | null
+  /** Hash as discovery did for dev folders, skipping DEV_FOLDER_SKIPPED_DIRECTORIES. */
+  devFolder?: boolean
 }
 
 export type PluginContentIntegrityResult = { ok: true } | { ok: false; error: string }
@@ -19,7 +21,7 @@ export async function verifyHashAddressedPluginContent(
   if (plugin.contentHash === null) {
     return { ok: true }
   }
-  const actual = await hashPluginTree(plugin.rootDir)
+  const actual = await hashPluginTree(plugin.rootDir, { devFolder: plugin.devFolder })
   if (!actual.ok) {
     return { ok: false, error: actual.error }
   }

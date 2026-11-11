@@ -1,10 +1,10 @@
 import * as unhideCoverage from './hidden-unhide-snapshot-coverage'
 import { useAppStore } from '@/store/index'
-import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
+import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-output/terminal-write-pipeline-health'
 import { requestTerminalPaneRecovery } from '../../render-health/recovery/terminal-pane-recovery'
 import { registerStaleDocumentVisibilityRecovery } from '../../viewport/visibility/stale-document-visibility'
 import { warnTerminalLifecycleAnomaly } from '../../layout/reconciliation/terminal-lifecycle-diagnostics'
-import { registerTerminalBacklogRecovery } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
+import { registerTerminalBacklogRecovery } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore

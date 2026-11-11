@@ -262,3 +262,19 @@ export const MobileWebBundleManifestSchema = z
   .superRefine(validateManifestInvariants)
 
 export type MobileWebBundleManifest = z.infer<typeof MobileWebBundleManifestSchema>
+
+/** The running host's reader: a newer install updated in place may add schema-v1 fields, which it drops so it serves only what it supports. */
+export const InstalledMobileWebBundleManifestSchema = z
+  .object({
+    ...MobileWebBundleManifestSchema.shape,
+    assets: z
+      .array(z.object(MobileWebBundleAssetSchema.shape))
+      .min(1)
+      .max(MOBILE_WEB_BUNDLE_MAX_ASSETS),
+    routes: z.array(z.object(MobileWebBundleRouteSchema.shape)).max(MOBILE_WEB_BUNDLE_MAX_ROUTES),
+    catalogs: z
+      .array(z.object(MobileWebBundleCatalogSchema.shape))
+      .max(MOBILE_WEB_BUNDLE_MAX_CATALOGS)
+      .optional()
+  })
+  .superRefine(validateManifestInvariants)

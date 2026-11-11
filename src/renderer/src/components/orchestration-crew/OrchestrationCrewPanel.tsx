@@ -14,7 +14,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { useOrchestrationCrew } from './use-orchestration-crew'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { CrewRowView, IconButton } from './CrewRowView'
 import {

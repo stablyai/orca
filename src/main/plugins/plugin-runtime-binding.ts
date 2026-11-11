@@ -1,4 +1,5 @@
 import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
+import { savedWorkspaceCatalog } from '../persistence/profile-save-domains'
 import type { PluginAgentStatusChangedPayload } from '../../shared/plugins/events/plugin-events'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/plugin-host-api'
 import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
@@ -181,6 +182,7 @@ export function watchPluginWorkspaceContext(input: {
   delegate: PluginRuntimeDelegate
   events: PluginEvents
   onSessionWritten: (listener: () => void) => () => void
+  onStateWritten: (listener: (domains: readonly string[] | undefined) => void) => () => void
   delayMs?: number
 }): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -198,11 +200,19 @@ export function watchPluginWorkspaceContext(input: {
       input.events.emitEvent('workspace.changed', change)
     }
   }
-  const stop = input.onSessionWritten(() => {
+  const schedule = (): void => {
     timer ??= setTimeout(() => void check(), input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
+  }
+  const stopSession = input.onSessionWritten(schedule)
+  // A folder workspace rename reaches the context through the catalog, not the session.
+  const stopCatalog = input.onStateWritten((domains) => {
+    if (savedWorkspaceCatalog(domains)) {
+      schedule()
+    }
   })
   return () => {
-    stop()
+    stopSession()
+    stopCatalog()
     if (timer) {
       clearTimeout(timer)
     }
