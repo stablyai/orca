@@ -11,6 +11,7 @@ import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { useTerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
 import { WorktreeSplitSurface } from './TerminalWorktreeSplitSurface'
+import type { WorkspaceTabDragState } from './tab-group/WorkspaceTabDragLayer'
 import { getEffectiveLayoutForWorktree } from './terminal/split-group-mount'
 import { selectWorkspacePresentationWorktrees } from '@/store/workspaces/catalog/retained-workspace-presentation'
 import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
@@ -39,8 +40,11 @@ vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () =
 }))
 vi.mock('./WorkspacePaneOverlayLayers', () => ({ WorkspacePaneOverlayLayers: () => null }))
 vi.mock('./tab-group/WorkspaceTabDragLayer', () => ({
-  WorkspaceTabDragLayer: ({ children }: { children: (input: object) => React.ReactNode }) =>
-    children({ isTabDragActive: false, hoveredTabInsertion: null, setDragRootNode: () => {} })
+  WorkspaceTabDragLayer: ({
+    children
+  }: {
+    children: (input: WorkspaceTabDragState) => React.ReactNode
+  }) => children({ isTabDragActive: false, hoveredTabInsertion: null, setDragRootNode: () => {} })
 }))
 // Process-backed leaf panes are represented at the layout boundary; hydration, routing and surfaces stay real.
 vi.mock('./tab-group/TabGroupPanel', () => ({
