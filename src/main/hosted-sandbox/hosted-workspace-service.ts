@@ -1,5 +1,7 @@
 // Orca Cloud workspace surfaces for the window: status panel, Restart, archive/unarchive, wake
 // progress and OOM notices. Maps the renderer's workspace id to its Orca Cloud runtime record.
+import { requestCloudGonePrune } from './cloud-gone-prune-request'
+import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { failQueuedCloudPrompts } from './cloud-offline-seam'
 import { ipcMain, type BrowserWindow } from 'electron'
 import { listTeamCloudRuntimes } from './orca-cloud-active-account'
@@ -194,6 +196,10 @@ export function installHostedWorkspaceService(deps: {
       oom.observe(args.workspaceId, found.sandboxId, status)
       return { ok: true, value: status }
     } catch (error) {
+      // Gone server-side: prune it now rather than show "Couldn't start" until the next relist.
+      if (isEnvironmentProviderError(error, 'not_found')) {
+        void requestCloudGonePrune()
+      }
       return failure(error)
     }
   })

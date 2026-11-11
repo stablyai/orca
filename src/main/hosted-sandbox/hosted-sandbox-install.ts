@@ -39,6 +39,7 @@ import { orcaCloudAccountId } from '../../shared/hosted-sandbox/orca-cloud-accou
 import { setOrcaCloudActiveAccountResolver } from './orca-cloud-active-account'
 import { createCloudAccountBackfill } from './cloud-account-backfill'
 import { createCloudSandboxGonePrune } from './cloud-sandbox-gone-prune'
+import { setCloudGonePruneRunner } from './cloud-gone-prune-request'
 import { retireGoneCloudSandbox } from './cloud-sandbox-gone-retire'
 import type { RemovedServerStore } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
 import { createUsageAlertRefreshScheduler } from '../billing/usage-alert-refresh'
@@ -128,6 +129,8 @@ export function installHostedSandbox(
     onListed: (account, listed) => gonePrune.observeList(account, listed),
     relistMs: 10 * 60_000
   })
+  // A cloud list refresh or a not-found status read asks for the prune now (LC-2).
+  setCloudGonePruneRunner(() => accountBackfill.run({ force: true }))
   installLocalCommands(userDataPath)
   const mcpSync = installCloudMcpSync(userDataPath, {
     baseUrl: config.controlPlaneUrl,
