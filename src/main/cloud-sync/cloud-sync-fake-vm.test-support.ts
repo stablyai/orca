@@ -7,6 +7,7 @@ const ParamsSchema = z.looseObject({
   relativePath: z.string().optional(),
   relativePaths: z.array(z.string()).optional(),
   candidatePaths: z.array(z.string()).optional(),
+  includeIgnored: z.boolean().optional(),
   offset: z.number().optional(),
   length: z.number().optional()
 })
@@ -95,7 +96,8 @@ export function createFakeVm(): FakeVm {
         const candidates = p.candidatePaths
         return [...files.keys()].filter(
           (path) =>
-            !ignored.has(path) &&
+            // Like orcad: gitignored files are listed unless includeIgnored is false.
+            (p.includeIgnored !== false || !ignored.has(path)) &&
             !path.startsWith('.context/') &&
             (!candidates || candidates.includes(path))
         )

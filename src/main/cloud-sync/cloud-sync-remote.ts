@@ -164,7 +164,8 @@ export async function listScope(
   const listed = PathList.parse(
     await call(
       'files.listAll',
-      { worktree: selector, maxResults: maxFiles + 1 },
+      // Quick-open listing adds gitignored files unless told not to.
+      { worktree: selector, includeIgnored: false, maxResults: maxFiles + 1 },
       { timeoutMs: LIST_TIMEOUT_MS, signal }
     )
   )
@@ -206,7 +207,12 @@ export async function filterIncluded(
     const listed = PathList.parse(
       await call(
         'files.listAll',
-        { worktree: selector, candidatePaths: batch, maxResults: batch.length },
+        {
+          worktree: selector,
+          includeIgnored: false,
+          candidatePaths: batch,
+          maxResults: batch.length
+        },
         { timeoutMs: LIST_TIMEOUT_MS, signal }
       )
     )

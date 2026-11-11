@@ -4,6 +4,8 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, lstat, mkdir, open, rename, rm, rmdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { FileHandle } from 'node:fs/promises'
+import { z } from 'zod'
 import { transferRuntimeFile } from '../runtime-downloads/runtime-download-transfer'
 import { CONTEXT_DIR, SYNC_TEMP_DIR, ensureSafeParent, hasSafeParents } from './cloud-sync-paths'
 import {
@@ -18,6 +20,12 @@ const DOWNLOAD_CONCURRENCY = 6
 /** files.readChunk's page size (transferRuntimeFile's default). */
 const CHUNK_BYTES = 512 * 1024
 const READ_ONLY_MODE = 0o444
+const PAGE_TIMEOUT_MS = 60_000
+const PageSchema = z.object({
+  contentBase64: z.string(),
+  bytesRead: z.number().int().nonnegative(),
+  eof: z.boolean().optional()
+})
 
 export async function localStatAt(folder: string, relativePath: string): Promise<LocalStat> {
   if (!(await hasSafeParents(folder, relativePath))) {
@@ -106,22 +114,44 @@ export type DownloadInput = {
 
 const INDEX_SAVE_EVERY = 200
 
+/** One page for a file the manifest says is smaller than a page; false when it turned out bigger. */
+async function readWhole(input: DownloadInput, path: string, sink: FileHandle): Promise<boolean> {
+  const page = PageSchema.parse(
+    await input.call(
+      'files.readChunk',
+      { worktree: input.selector, relativePath: path, offset: 0, length: CHUNK_BYTES },
+      { timeoutMs: PAGE_TIMEOUT_MS, signal: input.signal }
+    )
+  )
+  const bytes = Buffer.from(page.contentBase64, 'base64')
+  if (bytes.byteLength !== page.bytesRead || (!page.eof && page.bytesRead >= CHUNK_BYTES)) {
+    // Grew past one page since the manifest: page it properly.
+    await sink.truncate(0)
+    return false
+  }
+  await sink.write(bytes, 0, bytes.byteLength, 0)
+  return true
+}
+
 async function copyOne(input: DownloadInput, path: string, entry: RemoteEntry): Promise<void> {
   const temp = join(input.folder, SYNC_TEMP_DIR, randomUUID())
   try {
     const handle = await open(temp, 'wx', 0o600)
     try {
-      await transferRuntimeFile({
-        call: (method, params, options) => input.call(method, params, options),
-        worktree: input.selector,
-        relativePath: path,
-        sink: handle,
-        signal: input.signal,
-        maxBytes: input.maxFileBytes,
-        // A second page in flight only helps files that have one; small files take one read.
-        concurrency: entry.size > CHUNK_BYTES ? 2 : 1,
-        onProgress: () => undefined
-      })
+      // Most files fit one page and the manifest already has their size: one call, not stat + page.
+      const done = entry.size < CHUNK_BYTES && (await readWhole(input, path, handle))
+      if (!done) {
+        await transferRuntimeFile({
+          call: (method, params, options) => input.call(method, params, options),
+          worktree: input.selector,
+          relativePath: path,
+          sink: handle,
+          signal: input.signal,
+          maxBytes: input.maxFileBytes,
+          concurrency: 2,
+          onProgress: () => undefined
+        })
+      }
     } finally {
       await handle.close()
     }
