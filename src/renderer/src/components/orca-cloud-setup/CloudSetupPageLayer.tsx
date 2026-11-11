@@ -4,6 +4,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { clearCloudStartDraft } from '@/lib/orca-cloud/cloud-start-draft'
+import { cancelCloudCreateIntent } from '@/lib/orca-cloud/cloud-create-intent'
 import {
   closeCloudSetupPage,
   useCloudSetupPageRequest,
@@ -21,11 +25,33 @@ import { useCloudSetupFlow } from './use-cloud-setup-flow'
 /** How long every row must read done before the page starts the workspace. */
 const SETTLE_MS = 1_500
 
+/**
+ * The × leaves setup. Nothing starts later (JA-01): the page and its auto-start go away, and the
+ * on-disk draft is dropped. The draft stays one click away in a toast, as a filled composer.
+ */
+function exitSetup(request: CloudSetupPageRequest): void {
+  cancelCloudCreateIntent(request.intentId)
+  closeCloudSetupPage()
+  clearCloudStartDraft(useAppStore.getState().activeOrcaProfileId ?? null)
+  toast.message(
+    translate('cloudSetupPage.exited', 'Orca Cloud setup closed. Your draft is kept.'),
+    {
+      action: {
+        label: translate('cloudSetupPage.resumeDraft', 'Open draft'),
+        onClick: () => reopenComposer(request, false)
+      }
+    }
+  )
+}
+
 function reopenComposer(request: CloudSetupPageRequest, autoStart: boolean): void {
   // A GitHub-only repository can't be preselected; the composer opens for one more Start.
   const hiddenStart = autoStart && !request.cloudOnlyRepo
   if (!hiddenStart) {
+    // Back, or a start that needs one more press: this setup's intent can never create.
+    cancelCloudCreateIntent(request.intentId)
     closeCloudSetupPage()
+    clearCloudStartDraft(useAppStore.getState().activeOrcaProfileId ?? null)
   } else {
     // Warm the start screen's chunk so it is ready the frame the create takes over.
     void import('@/components/worktree-creation/WorktreeCreationPanel').catch(() => undefined)
@@ -33,7 +59,7 @@ function reopenComposer(request: CloudSetupPageRequest, autoStart: boolean): voi
   useAppStore.getState().openModal('new-workspace-composer', {
     ...request.composer,
     initialEphemeralVmRecipeId: ORCA_CLOUD_RECIPE_ID,
-    ...(hiddenStart ? { cloudAutoStart: true } : {})
+    ...(hiddenStart ? { cloudAutoStart: true, cloudCreateIntent: request.intentId } : {})
   })
   if (hiddenStart) {
     // The page stays up until the start screen has painted: nothing under it may flash.
@@ -76,14 +102,16 @@ function ActiveCloudSetupPage({ request }: { request: CloudSetupPageRequest }): 
     )
     return () => window.clearTimeout(timer)
   }, [request, starting])
-  const onBack = useCallback(() => reopenComposer(request, false), [request])
+  const onBackToComposer = useCallback(() => reopenComposer(request, false), [request])
+  const onExit = useCallback(() => exitSetup(request), [request])
   return (
     <CloudSetupPage
       flow={flow}
       projectName={projectName}
       prompt={request.prompt}
       agentLabel={agentLabel}
-      onBack={onBack}
+      onBackToComposer={onBackToComposer}
+      onExit={onExit}
       starting={starting}
     />
   )
@@ -104,6 +132,7 @@ export function CloudSetupPageLayer(): React.JSX.Element | null {
       return
     }
     if (openedOnRef.current !== activeWorktreeId) {
+      cancelCloudCreateIntent(request.intentId)
       closeCloudSetupPage()
     }
   }, [activeWorktreeId, request])

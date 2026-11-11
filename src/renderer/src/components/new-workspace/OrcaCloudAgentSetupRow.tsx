@@ -21,9 +21,10 @@ import { agentName, keySourceLabel } from '../settings/agent-accounts/orca-cloud
 
 /** Settings → Agent accounts, scrolled to the Orca Cloud section (S0). The composer stays open. */
 export function openOrcaCloudAgentAccounts(): void {
-  useAppStore
-    .getState()
-    .openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
+  const state = useAppStore.getState()
+  state.openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
+  // The target alone only pre-selects the pane; the page has to open too (Neil, P0: "does nothing").
+  state.openSettingsPage()
 }
 
 export function orcaCloudAgentCoveredLabel(

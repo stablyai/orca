@@ -40,9 +40,17 @@ import {
   orcaCloudRepoName,
   PUSH_TO_GITHUB_URL
 } from './vm-build-repo-actions'
-import { useVmBuildStepTimings, type VmBuildStepTimings } from './vm-build-timing'
+import {
+  recordCloudStartSample,
+  useVmBuildStepTimings,
+  type VmBuildStepTimings
+} from './vm-build-timing'
 import { cloneStageLabel, headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
 import { humanizeOrcaCloudLogLine, latestOrcaCloudPhaseLabel } from './orca-cloud-build-log'
+import {
+  orcaCloudCloneProgress,
+  orcaCloudPlannedRepoMode
+} from '@/lib/orca-cloud/orca-cloud-clone-progress'
 
 const NO_STAMPS: readonly number[] = []
 const SUPPORT_URL = 'https://github.com/stablyai/orca/issues/new'
@@ -129,7 +137,12 @@ export function VmBuildSheet({
     [entry.provisioningLog]
   )
   const cloud = isOrcaCloudBuild(entry)
-  const measuredTimings = useVmBuildStepTimings(cloud && stepTimings === undefined)
+  // Clone and update starts are measured apart (the boot plan names the kind before the step runs).
+  const startKind = cloud
+    ? (orcaCloudCloneProgress(entry.provisioningLog ?? '', [])?.mode ??
+      orcaCloudPlannedRepoMode(entry.provisioningLog ?? ''))
+    : null
+  const measuredTimings = useVmBuildStepTimings(cloud && stepTimings === undefined, startKind)
   const timings = stepTimings ?? measuredTimings
   const formatLine = React.useMemo(
     () => (cloud ? (line: string) => humanizeOrcaCloudLogLine(line, t) : undefined),
@@ -150,6 +163,15 @@ export function VmBuildSheet({
       : step
   )
   const steps = useMinimumRunningSteps(derived, failure === null, now)
+  // JA-11: this computer's own "Start sandbox" durations drive the next sheet's hint.
+  const provisionMs = cloud
+    ? derived.find((step) => step.id === 'provision' && step.state === 'done')?.elapsedMs
+    : null
+  React.useEffect(() => {
+    if (provisionMs && startKind) {
+      recordCloudStartSample(creationId, startKind, provisionMs)
+    }
+  }, [creationId, provisionMs, startKind])
   const state: SheetState = failure
     ? failure.kind === 'checks'
       ? 'attention'

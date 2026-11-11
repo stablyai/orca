@@ -58,6 +58,8 @@ export type EphemeralVmApi = {
     branch?: string
     ref?: string
     provisionId?: string
+    /** Orca Cloud: one per Create press, sent as the create's Idempotency-Key. */
+    idempotencyKey?: string
   }) => Promise<
     | {
         ok: true

@@ -6,7 +6,11 @@ import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StepIcon } from './WorktreeSetupSteps'
 import type { VmBuildStep } from './vm-build-steps'
-import { typicalStepSeconds, type VmBuildStepTiming } from './vm-build-timing'
+import {
+  SLOW_WITHOUT_MEASURE_MS,
+  typicalStepSeconds,
+  type VmBuildStepTiming
+} from './vm-build-timing'
 import { formatElapsedTime } from './worktree-creation-clock'
 import { stepLabel, stepStateLabel } from './vm-build-sheet-copy'
 
@@ -44,8 +48,13 @@ export function VmBuildStepRow({
 }): React.JSX.Element {
   const labelId = React.useId()
   // A live percent already says how far along the step is.
-  const hint = step.state === 'running' && step.percent === null ? timing : null
-  const slow = hint !== null && step.elapsedMs !== null && step.elapsedMs > hint.p95Ms
+  const measuring = step.state === 'running' && step.percent === null
+  const hint = measuring ? timing : null
+  // Past the measured p95; with no measurement yet, a sandbox start only after 30 s (JA-11).
+  const slowAfterMs =
+    timing?.p95Ms ?? (cloud && step.id === 'provision' ? SLOW_WITHOUT_MEASURE_MS : null)
+  const slow =
+    measuring && slowAfterMs !== null && step.elapsedMs !== null && step.elapsedMs > slowAfterMs
   const modeUnknown = cloud && step.id === 'clone' && step.state === 'pending' && !step.cloneMode
   const placeholderDue = useDelayedFlag(modeUnknown, PLACEHOLDER_DELAY_MS)
 
@@ -99,9 +108,9 @@ export function VmBuildStepRow({
             {t('auto.components.worktree.creation.VmBuildSheet.stateSkipped', 'Skipped')}
           </span>
         ) : null}
-        {hint ? (
+        {slow || hint ? (
           <span className="text-xs text-muted-foreground">
-            {slow
+            {slow || !hint
               ? t('auto.components.worktree.creation.VmBuildSheet.slow', 'Taking longer than usual')
               : t(
                   'auto.components.worktree.creation.VmBuildSheet.usually',
