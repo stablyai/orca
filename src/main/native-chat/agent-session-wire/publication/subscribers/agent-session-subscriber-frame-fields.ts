@@ -164,17 +164,6 @@ export function subscriberCommandsChanged(
   )
 }
 
-/** Changed queue publications still require delivery when the subscriber is already caught up. */
-export async function subscriberQueuedMessagesChanged(
-  hooks: SubscriberFieldHooks,
-  subscriber: SubscriberFieldState
-): Promise<boolean> {
-  return (
-    hooks.readQueuePublication !== undefined &&
-    (await hooks.readQueuePublication(subscriber.sessionId)) !== subscriber.queuePublication
-  )
-}
-
 /** Publication contains only a version; read completion supplies payload delivery credit. */
 export async function emitSubscriberFrame(
   hooks: SubscriberFieldHooks,

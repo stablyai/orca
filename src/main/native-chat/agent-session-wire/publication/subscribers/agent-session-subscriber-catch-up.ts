@@ -21,7 +21,6 @@ import {
 import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
 import {
   subscriberCommandsChanged,
-  subscriberQueuedMessagesChanged,
   type SubscriberFieldHooks
 } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
@@ -203,7 +202,6 @@ async function emitCaughtUp(
   }
 ): Promise<void> {
   const commandsChanged = subscriberCommandsChanged(port.hooks, subscriber)
-  const queuedChanged = await subscriberQueuedMessagesChanged(port.hooks, subscriber)
   // Ownership/exit changes without rows still require current-work restatement.
   const { work } = current
   const workChanged = work !== undefined && work.workViewKey() !== subscriber.workView
@@ -211,6 +209,9 @@ async function emitCaughtUp(
     await refreshPublishedWork(port, subscriber, current.journal, work, shared)
     return
   }
+  const queue = await port.hooks.readQueuePublication?.(subscriber.sessionId)
+  const queuedChanged =
+    port.hooks.readQueuePublication !== undefined && queue !== subscriber.queuePublication
   if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
     await port.emit(
       subscriber,
@@ -221,7 +222,7 @@ async function emitCaughtUp(
         fence: subscriber.fence,
         ...shared
       },
-      { currentWork: work }
+      { currentWork: work, queuePublication: { value: queue } }
     )
   }
 }
