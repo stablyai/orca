@@ -132,6 +132,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'updateReassuranceSeen',
   'seenMacosUpdateRequirement',
   'setupGuideSidebarDismissed',
+  'setupGuideSettingsDismissed',
   'setupGuideBrowserMilestoneMigrated',
   'setupGuideBrowserMilestoneLegacyComplete',
   'browserImportHintHidden',

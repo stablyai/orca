@@ -267,6 +267,7 @@ export const UiUpdateFields = z
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
     // Declare renderer one-shot dismissals to avoid whole-payload rejections for paired clients.
     setupGuideSidebarDismissed: z.boolean().optional(),
+    setupGuideSettingsDismissed: z.boolean().optional(),
     setupGuideBrowserMilestoneMigrated: z.boolean().optional(),
     setupGuideBrowserMilestoneLegacyComplete: z.boolean().optional(),
     browserImportHintHidden: z.boolean().optional(),

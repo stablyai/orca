@@ -168,6 +168,17 @@ export function normalizeLoadedUiState(
   ) {
     markNeedsSave()
   }
+  // Why: preserve the old Settings checklist dismissal when introducing the independent UI preference.
+  const setupGuideSettingsDismissed =
+    typeof parsed.ui?.setupGuideSettingsDismissed === 'boolean'
+      ? parsed.ui.setupGuideSettingsDismissed
+      : normalizedOnboarding.checklist.dismissed === true
+  if (
+    parsed.ui?.setupGuideSettingsDismissed !== setupGuideSettingsDismissed &&
+    (setupGuideSettingsDismissed || parsed.ui?.setupGuideSettingsDismissed !== undefined)
+  ) {
+    markNeedsSave()
+  }
   // Only upgraded profiles on the new default need the usage-display notice.
   const percentageNoticeDismissed = resolveUsagePercentageDisplayChangeNoticeDismissed({
     rawDismissed: parsed.ui?.usagePercentageDisplayChangeNoticeDismissed,
@@ -210,6 +221,7 @@ export function normalizeLoadedUiState(
     rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
     rightSidebarExplorerView,
     setupGuideSidebarDismissed,
+    setupGuideSettingsDismissed,
     usagePercentageDisplayChangeNoticeDismissed,
     statusBarCompactChangeNoticeDismissed,
     setupGuideBrowserMilestoneMigrated:

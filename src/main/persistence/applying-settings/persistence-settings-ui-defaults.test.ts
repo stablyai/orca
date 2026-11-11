@@ -3,6 +3,7 @@ import {
   testState,
   createStore,
   withPlatform,
+  writeDataFile,
   readDataFile
 } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -10,6 +11,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { ONBOARDING_FLOW_VERSION } from '../../../shared/onboarding-defaults'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -81,5 +83,41 @@ describe('Store', () => {
     await withPlatform('darwin', async () => {
       expect((await createStore()).getSettings().showMenuBarIcon).toBe(false)
     })
+  })
+
+  it('migrates a previously dismissed onboarding checklist to the Settings preference', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: { dismissed: true }
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSettingsDismissed).toBe(true)
+    store.flush()
+    expect(readDataFile()).toMatchObject({ ui: { setupGuideSettingsDismissed: true } })
+  })
+
+  it('preserves an explicit Settings preference over the legacy checklist dismissal', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: { dismissed: true }
+      },
+      ui: { setupGuideSettingsDismissed: false }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSettingsDismissed).toBe(false)
   })
 })
