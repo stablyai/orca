@@ -66,8 +66,10 @@ export function useWorktreeLineageDropCommit(args: {
         const identity = getWorktreeHostIdentity(copy)
         const parent = folderParentOf(identity)
         if (parent) {
-          members ??=
-            worktreeDragGroups.find((group) => group.key === sourceGroupKey)?.worktreeIds ?? []
+          if (members === undefined) {
+            members =
+              worktreeDragGroups.find((group) => group.key === sourceGroupKey)?.worktreeIds ?? []
+          }
           if (members.includes(identity)) {
             folders.add(parent)
           }
