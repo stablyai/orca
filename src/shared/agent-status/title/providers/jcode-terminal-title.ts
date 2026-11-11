@@ -4,7 +4,7 @@ import { CLAUDE_IDLE } from '../agent-title-glyphs'
 // Captured provenance: docs/reference/jcode-hook-events.md.
 // (?<!\s) starts each separator at its whitespace run so long space runs stay linear.
 const JCODE_TITLE_STATUS_RE =
-  /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+\s*|(?<!\s)\s+·\s+(?:\+\d+\s+-\d+|(?:work|last)\s+~\S+|working)(?=\s+·\s+|$)/gu
+  /^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+\s*|(?<!\s)\s+\u00B7\s+(?:\+\d+\s+-\d+|(?:work|last)\s+~\S+|working)(?=\s+\u00B7\s+|$)/gu
 
 /** The jcode title with its per-session emoji and live diff/duration segments removed. */
 export function stripJcodeTitleStatus(title: string): string {
@@ -12,7 +12,7 @@ export function stripJcodeTitleStatus(title: string): string {
 }
 
 // jcode, jcode Puppy and jcode/marsh Puppy (server name) are identity; a bare jcode/<dir> is a shell path.
-const JCODE_IDENTITY_TITLE_RE = /^jcode(?:(?:\/[\w-]+)?\s+[^\s·]+)?$/iu
+const JCODE_IDENTITY_TITLE_RE = /^jcode(?:(?:\/[\w-]+)?\s+[^\s\u00B7]+)?$/iu
 
 /** True when a jcode title says only which jcode session this is, not what it is doing. */
 export function isJcodeIdentityTerminalTitle(title: string | null | undefined): boolean {
@@ -26,7 +26,8 @@ export function isJcodeIdentityTerminalTitle(title: string | null | undefined): 
 }
 
 // title_with_metrics: `· work ~2m05s` (or `· working`) mid-turn, `· last ~2m05s` after it.
-const JCODE_ACTIVITY_TAIL_RE = /\s·\s(?:(work|last)\s~(?:\d+h\d{2}m|\d+m\d{2}s|\d+s)|working)$/u
+const JCODE_ACTIVITY_TAIL_RE =
+  /\s\u00B7\s(?:(work|last)\s~(?:\d+h\d{2}m|\d+m\d{2}s|\d+s)|working)$/u
 
 /** The tail is too generic to identify Jcode, and title-only readers must not see a turn that a
  *  later conversation title drops, so it counts only in a pane already known to run Jcode. */
