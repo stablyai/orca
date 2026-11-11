@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/index'
 import { isTerminalQueryReply } from '../../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying } from '../../snapshots/replay-guard'
+import { TerminalOutputControlInputFilter } from './terminal-output-control-input-filter'
 import {
   isXtermMouseReport,
   isXtermWheelCursorKey
@@ -20,7 +21,16 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { recordAdmittedTerminalUserInput } from '@/diagnostics/telemetry/telemetry'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
+  const outputControlInputFilter = new TerminalOutputControlInputFilter()
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
+    if (wasUserInput) {
+      outputControlInputFilter.reset()
+    } else {
+      data = outputControlInputFilter.filter(data)
+      if (!data) {
+        return
+      }
+    }
     // During replay, drop query replies and pointer-generated mouse/arrows but preserve typing; stale TUI modes could send reports or recall history in the fresh shell (replay-guard.ts).
     if (
       isPaneReplaying(session.deps.replayingPanesRef, session.pane.id) &&
