@@ -70,6 +70,16 @@ describe('the launch composer hold', () => {
     expect(settled).toHaveBeenCalledWith(true)
   })
 
+  it('still refuses when the composer never comes and the agent never exits', async () => {
+    const { host, exitRuntime } = pane()
+    exitRuntime.readLaunchedAgentForeground = vi.fn(async () => 'agent' as const)
+    const watches = new Map<string, Promise<boolean>>()
+    watchLaunchComposer(watches, host, 'pty-1', 'claude', exitRuntime)
+    const watch = watches.get('pty-1')!
+    await vi.runAllTimersAsync()
+    await expect(watch).resolves.toBe(false)
+  })
+
   it('without the exit watch, the same pane is still held at that point (the old 8 s refusal)', async () => {
     const { host, emit } = pane()
     const watches = new Map<string, Promise<boolean>>()
