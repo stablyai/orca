@@ -202,9 +202,15 @@ export function CloudSetupPage({
   const t = useTranslate()
   const titleId = React.useId()
   const headingRef = React.useRef<HTMLHeadingElement>(null)
-  const copy = currentStepCopy(starting ? { ...flow, action: 'done' } : flow, t, agentLabel)
+  // Every row reads done but hasn't held yet: still "Checking" until the layer says it's starting.
+  const shown: CloudSetupFlow = starting
+    ? { ...flow, action: 'done' }
+    : flow.action === 'done'
+      ? { ...flow, action: 'checking' }
+      : flow
+  const copy = currentStepCopy(shown, t, agentLabel)
   // Each new step moves focus to its heading so screen readers hear the change once.
-  const stepKey = starting ? 'done' : `${flow.current?.id ?? 'done'}:${flow.action}`
+  const stepKey = `${shown.current?.id ?? 'done'}:${shown.action}`
   React.useEffect(() => {
     headingRef.current?.focus({ preventScroll: true })
   }, [stepKey])
@@ -227,11 +233,7 @@ export function CloudSetupPage({
         </div>
 
         <div className="mt-8">
-          <SetupStepper
-            steps={flow.steps}
-            current={flow.current}
-            allDone={starting || flow.action === 'done'}
-          />
+          <SetupStepper steps={flow.steps} current={flow.current} allDone={starting} />
         </div>
 
         <div className="mt-8 space-y-3">
@@ -243,7 +245,7 @@ export function CloudSetupPage({
           >
             {copy.title}
           </h1>
-          {flow.action === 'checking' && !starting ? (
+          {shown.action === 'checking' ? (
             <Skeleton className="h-4 w-72" />
           ) : copy.lead ? (
             <p className="text-sm leading-relaxed text-muted-foreground">{copy.lead}</p>
@@ -263,7 +265,7 @@ export function CloudSetupPage({
         ) : null}
 
         <div className="mt-6">
-          <StepActions flow={starting ? { ...flow, action: 'done' } : flow} />
+          <StepActions flow={shown} />
         </div>
 
         <div className="mt-auto pt-12">

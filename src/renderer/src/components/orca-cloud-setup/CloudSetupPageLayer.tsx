@@ -17,6 +17,9 @@ import { prefersReducedMotion } from '@/components/new-workspace/run-on/cloud-st
 import { CloudSetupPage } from './CloudSetupPage'
 import { useCloudSetupFlow } from './use-cloud-setup-flow'
 
+/** How long every row must read done before the page starts the workspace. */
+const SETTLE_MS = 1_500
+
 function reopenComposer(request: CloudSetupPageRequest, autoStart: boolean): void {
   closeCloudSetupPage()
   useAppStore.getState().openModal('new-workspace-composer', {
@@ -35,19 +38,26 @@ function ActiveCloudSetupPage({ request }: { request: CloudSetupPageRequest }): 
   )
   const agentLabel = isOrcaCloudAccountAgent(request.agent) ? agentName(request.agent, t) : null
   const [starting, setStarting] = useState(false)
-  const startedRef = useRef(false)
+  // Rows can all read done for a moment right after a sign-in, before billing, GitHub and agent
+  // accounts answer for the new account. Done must hold for SETTLE_MS before "All set".
+  const done = flow.action === 'done'
   useEffect(() => {
-    if (flow.action !== 'done' || startedRef.current) {
+    if (!done) {
       return
     }
-    startedRef.current = true
-    setStarting(true)
+    const timer = window.setTimeout(() => setStarting(true), SETTLE_MS)
+    return () => window.clearTimeout(timer)
+  }, [done])
+  useEffect(() => {
+    if (!starting) {
+      return
+    }
     const timer = window.setTimeout(
       () => reopenComposer(request, true),
       prefersReducedMotion() ? 0 : CLOUD_SETUP_ALL_SET_HOLD_MS
     )
     return () => window.clearTimeout(timer)
-  }, [flow.action, request])
+  }, [request, starting])
   const onBack = useCallback(() => reopenComposer(request, false), [request])
   return (
     <CloudSetupPage

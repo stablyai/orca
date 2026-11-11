@@ -189,7 +189,6 @@ describe('setup rows and the setup page', () => {
       { id: 'agent', state: 'loading' }
     ]
     expect(cloudSetupRequired(steps)).toBe(false)
-    expect(cloudSetupPageModel(steps).action).toBe('done')
   })
 })
 

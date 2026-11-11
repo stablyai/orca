@@ -40,8 +40,8 @@ function isFinished(step: CloudSetupStep, agentSkipped: boolean): boolean {
     return true
   }
   if (step.id === 'agent') {
-    // Never wait on a slow agent-accounts read: it doesn't block a start.
-    return agentSkipped || step.state === 'loading'
+    // Still loading reads "Checking": the page only says All set once every row has answered.
+    return agentSkipped && step.state !== 'loading'
   }
   return false
 }

@@ -41,3 +41,14 @@ describe('cloudSetupPageModel', () => {
     expect(actionForStep({ id: 'github', state: 'loading' })).toBe('checking')
   })
 })
+
+describe('page settles before it starts', () => {
+  it('a still-loading agent row reads Checking, not All set', () => {
+    const steps: CloudSetupStep[] = [
+      { id: 'account', state: 'done' },
+      { id: 'plan', state: 'done' },
+      { id: 'agent', state: 'loading' }
+    ]
+    expect(cloudSetupPageModel(steps).action).toBe('checking')
+  })
+})
