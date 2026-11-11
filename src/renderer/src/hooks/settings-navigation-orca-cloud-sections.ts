@@ -74,7 +74,7 @@ export function buildOrcaCloudSettingsSections(
       title: t('cloudMcpSync.title', 'MCP servers'),
       description: t(
         'settings.orcaCloud.mcp.description',
-        'MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces.'
+        'MCP servers from Claude and Codex on this computer, synced to your cloud workspaces.'
       ),
       icon: Plug,
       searchEntries: getOrcaCloudMcpSearchEntries(),

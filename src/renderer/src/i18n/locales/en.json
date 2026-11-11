@@ -1361,7 +1361,7 @@
         "keywordSync": "sync",
         "keywordCloud": "cloud",
         "openFor": "MCP servers for {{name}}",
-        "description": "MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces."
+        "description": "MCP servers from Claude and Codex on this computer, synced to your cloud workspaces."
       },
       "environments": {
         "title": "Cloud environments",
@@ -4250,7 +4250,6 @@
             "unavailableTitle": "Orca Cloud is unavailable right now",
             "networkTitle": "Couldn’t reach Orca Cloud",
             "snapshotTitle": "This project’s saved environment is missing",
-            "stillRunningLocal": "The VM is running and using hours until you choose.",
             "tryAgain": "Try again",
             "signIn": "Sign in",
             "more": "More",
@@ -26740,7 +26739,7 @@
     "form": {
       "script": "Install script",
       "import": "Import from repo",
-      "importHint": "Reads Conductor and dev container setup from a local project.",
+      "importHint": "Reads Conductor and Dev Container setup from a local project.",
       "create": "Create and build",
       "save": "Save changes",
       "discard": "Discard",
@@ -27326,7 +27325,7 @@
     },
     "summary": {
       "found": "{{count}} found",
-      "none": "None found in Claude Code or Codex on this computer. Servers you add there show up here.",
+      "none": "None found in Claude or Codex on this computer. Servers you add there show up here.",
       "notSynced": "{{count}} found, not synced yet",
       "pair": "{{synced}}, {{skipped}}",
       "skipped": "{{count}} skipped",

@@ -18,6 +18,8 @@ const SCOPE = [
   // Copy tables behind the Vm* components (design-squad scope fix).
   'src/renderer/src/components/worktree-creation/vm-*.ts',
   'src/renderer/src/lib/*cloud*.ts',
+  // Settings nav copy for the Orca Cloud group (missed by the component globs).
+  'src/renderer/src/hooks/*orca-cloud*.ts',
   'mobile/src/**/*{Cloud,cloud}*.tsx'
 ]
 const EXCLUDE = ['**/__tests__/**', '**/*.test.*', '**/*.fixture.tsx', '**/*.stories.tsx']
@@ -28,8 +30,18 @@ const RULES: Rule[] = [
   { term: 'VM', pattern: /\bVMs?\b|virtual machine/i, use: 'sandbox', row: 'The machine' },
   { term: 'worktree', pattern: /\bworktrees?\b/i, use: 'workspace', row: 'Unit of work' },
   { term: 'Claude Code', pattern: /\bClaude Code\b/i, use: 'Claude', row: 'Agent source' },
-  { term: 'suspend', pattern: /\bsuspend(ed|s|ing)?\b/i, use: 'asleep / go to sleep', row: 'Lifecycle verbs' },
-  { term: 'hibernate', pattern: /\bhibernat/i, use: 'asleep / go to sleep', row: 'Lifecycle verbs' },
+  {
+    term: 'suspend',
+    pattern: /\bsuspend(ed|s|ing)?\b/i,
+    use: 'asleep / go to sleep',
+    row: 'Lifecycle verbs'
+  },
+  {
+    term: 'hibernate',
+    pattern: /\bhibernat/i,
+    use: 'asleep / go to sleep',
+    row: 'Lifecycle verbs'
+  },
   {
     term: 'per hour',
     pattern: /\/hr\b|\$\d+(\.\d+)?\/hour|(?<!sandbox )\bper hour\b/i,
@@ -49,7 +61,12 @@ const RULES: Rule[] = [
     row: 'Mirror to this computer'
   },
   { term: 'credits', pattern: /\bcredits?\b/i, use: 'sandbox hours', row: 'Time unit' },
-  { term: 'payment due', pattern: /payment due|\boverdue\b/i, use: 'Payment failed', row: 'Payment problem' },
+  {
+    term: 'payment due',
+    pattern: /payment due|\boverdue\b/i,
+    use: 'Payment failed',
+    row: 'Payment problem'
+  },
   {
     term: 'spend cap',
     pattern: /Monthly cap \(\$\)|overage limit|\bbudget\b/i,
@@ -84,8 +101,10 @@ function stringValue(node: ts.Node): string | null {
   return null
 }
 
-const SKIP_ATTRIBUTES = /^(className|class|id|key|testId|data-.*|href|src|role|type|name|variant|size|side|align)$/
-const SKIP_PROPERTIES = /^(className|id|key|testId|kind|type|variant|status|state|icon|href|path|url|pane|section|sectionId)$/
+const SKIP_ATTRIBUTES =
+  /^(className|class|id|key|testId|data-.*|href|src|role|type|name|variant|size|side|align)$/
+const SKIP_PROPERTIES =
+  /^(className|id|key|testId|kind|type|variant|status|state|icon|href|path|url|pane|section|sectionId)$/
 
 /** A string literal that could be user-visible copy: has a space, isn't a key, import or styling. */
 function isCopyLiteral(node: ts.Node): boolean {
@@ -112,7 +131,10 @@ function isCopyLiteral(node: ts.Node): boolean {
   if (ts.isPropertyAssignment(parent) && parent.name === node) {
     return false // object keys
   }
-  if (ts.isPropertyAssignment(parent) && SKIP_PROPERTIES.test(parent.name.getText().replace(/['"]/g, ''))) {
+  if (
+    ts.isPropertyAssignment(parent) &&
+    SKIP_PROPERTIES.test(parent.name.getText().replace(/['"]/g, ''))
+  ) {
     return false
   }
   const attr = ts.isJsxAttribute(parent)
@@ -176,7 +198,7 @@ export function visibleStrings(file: string, source: string): { line: number; te
           for (const prop of options.properties) {
             if (
               ts.isPropertyAssignment(prop) &&
-              /^defaultValue/.test(prop.name.getText(sf).replace(/['"]/g, ''))
+              prop.name.getText(sf).replace(/['"]/g, '').startsWith('defaultValue')
             ) {
               push(prop.initializer, stringValue(prop.initializer))
             }
@@ -217,7 +239,7 @@ function findHits(): Hit[] {
   return hits
 }
 
-const ALLOW = allowlist as AllowEntry[]
+const ALLOW: AllowEntry[] = allowlist
 const allowKey = (e: { path: string; line: number; term: string }): string =>
   `${e.path}:${e.line}:${e.term}`
 

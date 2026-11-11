@@ -19,7 +19,7 @@
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmBuildFailureCard.tsx",
-    "line": 143,
+    "line": 137,
     "term": "VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
