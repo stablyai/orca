@@ -36,6 +36,8 @@ type HookCase = {
   anyBytePaintBeforeAgent: boolean
   /** Whether the stand-in sets Claude's own rest title; otherwise the pane keeps the hook's bare name. */
   agentSetsRestTitle: boolean
+  /** Bytes only the user hook emits, to place it in the stream; null for a hook that prints nothing. */
+  hookOutput: string | null
 }
 
 const RECORD_HOOK_ORDER = 'print -r -- "${preexec_functions[*]}" > "$ORCA_TEST_HOOK_ORDER"'
@@ -50,7 +52,8 @@ add-zsh-hook preexec _omz_termsupport_preexec
 `,
     hookName: '_omz_termsupport_preexec',
     anyBytePaintBeforeAgent: false,
-    agentSetsRestTitle: false
+    agentSetsRestTitle: false,
+    hookOutput: '\x1b]2;claude\x07'
   },
   {
     // powerlevel10k's _p9k_preexec and starship (precmd only) print nothing at command start.
@@ -61,7 +64,8 @@ add-zsh-hook preexec _p9k_preexec
 `,
     hookName: '_p9k_preexec',
     anyBytePaintBeforeAgent: false,
-    agentSetsRestTitle: true
+    agentSetsRestTitle: true,
+    hookOutput: null
   },
   {
     // zsh-you-should-use reminds about an alias from preexec: visible text after Orca's marker.
@@ -74,7 +78,8 @@ add-zsh-hook preexec _ysu_preexec
 `,
     hookName: '_ysu_preexec',
     anyBytePaintBeforeAgent: true,
-    agentSetsRestTitle: false
+    agentSetsRestTitle: false,
+    hookOutput: 'Found existing alias for "claude"'
   }
 ]
 
@@ -175,8 +180,6 @@ type SplitCapture = {
   shell: Chunk[]
   /** The stand-in from its first byte on. A chunk that straddled the boundary is split, keeping its time. */
   agent: Chunk[]
-  /** The last read made of shell bytes alone, for measuring the hand-off silence. */
-  lastShellOnlyAt: number
 }
 
 /** Attribute bytes by their offset in the accumulated stream, not by PTY read boundaries: the anchor
@@ -187,13 +190,11 @@ function splitAtAgentStart(chunks: readonly Chunk[]): SplitCapture {
   expect(agentOffset, 'the stand-in must have painted').toBeGreaterThan(0)
   const shell: Chunk[] = []
   const agent: Chunk[] = []
-  let lastShellOnlyAt = chunks[0].at
   let offset = 0
   for (const chunk of chunks) {
     const end = offset + chunk.data.length
     if (end <= agentOffset) {
       shell.push(chunk)
-      lastShellOnlyAt = chunk.at
     } else if (offset >= agentOffset) {
       agent.push(chunk)
     } else {
@@ -203,8 +204,54 @@ function splitAtAgentStart(chunks: readonly Chunk[]): SplitCapture {
     }
     offset = end
   }
-  return { shell, agent, lastShellOnlyAt }
+  return { shell, agent }
 }
+
+/** The launch sequence as stream offsets over the joined bytes: Orca's command-start marker, then
+ *  the user hook's output, then the agent's first byte and its composer. No assertion reads a PTY
+ *  read boundary or a timestamp, so how the kernel chunked the stream cannot fail it (C3-1). */
+function assertLaunchOrder(chunks: readonly Chunk[], hookCase: HookCase): void {
+  const { shell, agent } = splitAtAgentStart(chunks)
+  const shellBytes = shell.map((chunk) => chunk.data).join('')
+  const agentBytes = agent.map((chunk) => chunk.data).join('')
+  const commandStart = shellBytes.indexOf(COMMAND_START)
+  expect(commandStart).toBeGreaterThanOrEqual(0)
+  expect(shellBytes).not.toContain(AGENT_FIRST_BYTES)
+  expect(agentBytes.startsWith(AGENT_FIRST_BYTES)).toBe(true)
+  expect(agentBytes).toContain(CLAUDE_COMPOSER_PROMPT)
+  if (hookCase.hookOutput !== null) {
+    // The later hook printed after Orca's marker and before the agent existed: the C1 F1 shape.
+    expect(shellBytes.indexOf(hookCase.hookOutput, commandStart)).toBeGreaterThan(commandStart)
+  }
+}
+
+/** PTY read shapes a correct capture may arrive in; `agentOffset` is the anchor's stream offset. */
+const RECHUNKINGS: readonly (readonly [
+  string,
+  (stream: string, agentOffset: number) => string[]
+])[] = [
+  ['coalesced into one read', (stream) => [stream]],
+  [
+    'split into 3-byte reads',
+    (stream) =>
+      Array.from({ length: Math.ceil(stream.length / 3) }, (_, i) => stream.slice(i * 3, i * 3 + 3))
+  ],
+  [
+    'the anchor split across two reads',
+    (stream, agentOffset) => [stream.slice(0, agentOffset + 3), stream.slice(agentOffset + 3)]
+  ],
+  [
+    "the shell's last bytes and the agent's first output coalesced in one read",
+    (stream, agentOffset) => {
+      const joinEnd = agentOffset + AGENT_FIRST_BYTES.length + 4
+      return [
+        stream.slice(0, agentOffset - 4),
+        stream.slice(agentOffset - 4, joinEnd),
+        stream.slice(joinEnd)
+      ]
+    }
+  ]
+]
 
 /** Feeds captured bytes the way pty-output-ingestion does: normalized, with the pending-escape carry
  *  kept across calls so an escape cut by a read boundary is not misread. */
@@ -254,13 +301,7 @@ describe.skipIf(process.platform === 'win32')('tui-idle under real zsh preexec h
       () => {
         expect(capture.hookOrder.split(/\s+/)[0]).toBe('__orca_osc133_preexec')
         expect(capture.hookOrder).toContain(hookCase.hookName)
-        const { shell, agent, lastShellOnlyAt } = splitAtAgentStart(capture.chunks)
-        const shellBytes = shell.map((chunk) => chunk.data).join('')
-        expect(shellBytes).toContain(COMMAND_START)
-        expect(shellBytes).not.toContain(AGENT_FIRST_BYTES)
-        expect(agent[0].data.startsWith(AGENT_FIRST_BYTES)).toBe(true)
-        // The stand-in stayed silent for a real interval after the shell handed off.
-        expect(agent[0].at - lastShellOnlyAt).toBeGreaterThanOrEqual(AGENT_SILENT_MS * 0.8)
+        assertLaunchOrder(capture.chunks, hookCase)
       }
     )
 
@@ -277,34 +318,27 @@ describe.skipIf(process.platform === 'win32')('tui-idle under real zsh preexec h
       expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(true)
     })
 
-    itWithZsh.each([
-      ['coalesced into one read', (stream: string) => [stream]],
-      [
-        'split into 3-byte reads',
-        (stream: string) =>
-          Array.from({ length: Math.ceil(stream.length / 3) }, (_, i) =>
-            stream.slice(i * 3, i * 3 + 3)
-          )
-      ]
-    ])('attributes paint the same way with the capture %s', (_label, rechunk) => {
-      const stream = capture.chunks.map((chunk) => chunk.data).join('')
-      const at = capture.chunks[0].at
-      const rechunked = rechunk(stream).map((data) => ({ data, at }))
-      const { shell, agent } = splitAtAgentStart(rechunked)
-      expect(shell.map((chunk) => chunk.data).join('')).toBe(
-        stream.slice(0, stream.indexOf(AGENT_FIRST_BYTES))
-      )
-      expect(agent.map((chunk) => chunk.data).join('')).toBe(
-        stream.slice(stream.indexOf(AGENT_FIRST_BYTES))
-      )
-      const paint = new TerminalCommandPaint()
-      const observe = paintObserver(paint)
-      observe(shell)
-      expect(paint.hasPainted()).toBe(hookCase.anyBytePaintBeforeAgent)
-      expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(false)
-      observe(agent)
-      expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(true)
-    })
+    itWithZsh.each(RECHUNKINGS)(
+      'attributes paint the same way with the capture %s',
+      (_label, rechunk) => {
+        const stream = capture.chunks.map((chunk) => chunk.data).join('')
+        const agentOffset = stream.indexOf(AGENT_FIRST_BYTES)
+        const at = capture.chunks[0].at
+        const rechunked = rechunk(stream, agentOffset).map((data) => ({ data, at }))
+        expect(rechunked.map((chunk) => chunk.data).join('')).toBe(stream)
+        assertLaunchOrder(rechunked, hookCase)
+        const { shell, agent } = splitAtAgentStart(rechunked)
+        expect(shell.map((chunk) => chunk.data).join('')).toBe(stream.slice(0, agentOffset))
+        expect(agent.map((chunk) => chunk.data).join('')).toBe(stream.slice(agentOffset))
+        const paint = new TerminalCommandPaint()
+        const observe = paintObserver(paint)
+        observe(shell)
+        expect(paint.hasPainted()).toBe(hookCase.anyBytePaintBeforeAgent)
+        expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(false)
+        observe(agent)
+        expect(hasTerminalAgentPainted({ commandPaint: paint }, 'claude')).toBe(true)
+      }
+    )
 
     itWithZsh(
       'keeps `terminal wait --for tui-idle` pending through the silent boot, then settles on the composer',

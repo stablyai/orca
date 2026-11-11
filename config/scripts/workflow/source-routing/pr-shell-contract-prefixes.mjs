@@ -16,6 +16,7 @@ export const SHELL_PREFIXES = [
   // unit shards exclude the live-shell test, so these exact files must route here or nothing runs it.
   'src/main/runtime/terminal/input/terminal-command-paint.ts',
   'src/main/runtime/terminal/wait/tui-idle-evidence-source.ts',
+  'src/main/runtime/terminal/wait/tui-idle-evidence.ts',
   'src/main/runtime/terminal/wait/tui-idle-zsh-preexec-hook-order.live-shell.test.ts',
   'src/main/startup/shell-probe-terminal-detach',
   'src/main/startup/shell-probe-lifetime',

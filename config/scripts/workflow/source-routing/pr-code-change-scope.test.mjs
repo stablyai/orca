@@ -2,18 +2,43 @@ import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
+import { UNIT_EXCLUDE } from '../../ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../../../..')
 
-/** The test files pr.yml's shell contracts job runs, read from the step itself so the two lists cannot drift apart silently. */
-function shellContractsJobTests() {
-  const workflow = readFileSync(resolve(projectDir, '.github/workflows/pr.yml'), 'utf8')
-  const step = workflow.split('- name: Test real shell contracts')[1]?.split('\n\n')[0]
-  expect(step, 'pr.yml must keep the "Test real shell contracts" step').toBeDefined()
-  const tests = [...step.matchAll(/^\s+(\S+\.test\.ts)\s*\\?$/gm)].map((match) => match[1])
-  expect(tests.length).toBeGreaterThan(10)
-  return tests
+const SHELL_CONTRACTS_STEP = 'Test real shell contracts'
+
+/** Every test file the shell contracts step's whole `run` script names, across all of its commands.
+ *  The YAML parser owns the block's extent, so a blank line or a later command cannot truncate the
+ *  list (C3-3). Null when the step is gone. */
+function shellContractsStepTests(workflowYaml) {
+  const steps = parse(workflowYaml)?.jobs?.shell_contracts?.steps ?? []
+  const step = steps.find((candidate) => candidate?.name === SHELL_CONTRACTS_STEP)
+  if (typeof step?.run !== 'string') {
+    return null
+  }
+  return step.run.split(/\s+/).filter((token) => token.endsWith('.test.ts'))
+}
+
+/** A pr.yml shaped like the real one around the shell contracts step, with `run` as the block scalar body. */
+function workflowWithShellContractsRun(run) {
+  const body = run
+    .split('\n')
+    .map((line) => (line === '' ? '' : `          ${line}`))
+    .join('\n')
+  return `jobs:
+  shell_contracts:
+    steps:
+      - name: Install fish
+        run: echo fish
+      - name: ${SHELL_CONTRACTS_STEP}
+        run: |
+${body}
+      - name: Later step
+        run: pnpm exec vitest run src/later.test.ts
+`
 }
 
 describe('per-job path classification', () => {
@@ -71,12 +96,52 @@ describe('per-job path classification', () => {
     expect(stdout).toContain('xterm_patch_sync=true\n')
   })
 
+  describe('shell contracts step parsing', () => {
+    it('reads every command of the step, past a blank line, and no other step', () => {
+      const run = [
+        'pnpm exec vitest run --maxWorkers=1 \\',
+        '  src/first.live-shell.test.ts \\',
+        '  src/second.node-pty.test.ts',
+        '',
+        '# A second command after a blank line is still part of the step.',
+        'pnpm exec vitest run src/third.test.ts'
+      ].join('\n')
+      expect(shellContractsStepTests(workflowWithShellContractsRun(run))).toEqual([
+        'src/first.live-shell.test.ts',
+        'src/second.node-pty.test.ts',
+        'src/third.test.ts'
+      ])
+    })
+
+    it('returns the exact list, so a dropped entry is a failure rather than a smaller count', () => {
+      const files = Array.from(
+        { length: 12 },
+        (_, index) => `src/shell-${index}.live-shell.test.ts`
+      )
+      const run = `pnpm exec vitest run --reporter=dot \\\n${files.map((file) => `  ${file} \\`).join('\n')}\n  --bail=1`
+      expect(shellContractsStepTests(workflowWithShellContractsRun(run))).toEqual(files)
+    })
+
+    it('reports a missing step instead of an empty list', () => {
+      expect(shellContractsStepTests('jobs:\n  shell_contracts:\n    steps: []\n')).toBeNull()
+    })
+  })
+
   // Unit shards exclude live-shell tests, so a test the shell contracts job runs must also route a focused
   // edit to that job; otherwise a change to it, or to what it guards, runs no real shell at all (STA-2380 C2 F1).
   it('routes every test the shell contracts job runs to shell_contracts', () => {
-    const unrouted = shellContractsJobTests().filter(
-      (file) => classifyPrJobs([file]).shell_contracts !== true
+    const tests = shellContractsStepTests(
+      readFileSync(resolve(projectDir, '.github/workflows/pr.yml'), 'utf8')
     )
+    expect(tests, `pr.yml must keep the "${SHELL_CONTRACTS_STEP}" step`).not.toBeNull()
+    // Partial-omission guard with an independent source: every real-shell test the unit shards exclude
+    // is run by this job or by nothing, so each must appear in the parsed step.
+    const realShellTests = UNIT_EXCLUDE.filter((file) =>
+      /\.(?:live-shell|node-pty)\.test\.ts$/.test(file)
+    )
+    expect(realShellTests.length).toBeGreaterThan(0)
+    expect(tests).toEqual(expect.arrayContaining(realShellTests))
+    const unrouted = tests.filter((file) => classifyPrJobs([file]).shell_contracts !== true)
     expect(unrouted).toEqual([])
   })
 
@@ -84,6 +149,7 @@ describe('per-job path classification', () => {
     const guarded = [
       'src/main/runtime/terminal/input/terminal-command-paint.ts',
       'src/main/runtime/terminal/wait/tui-idle-evidence-source.ts',
+      'src/main/runtime/terminal/wait/tui-idle-evidence.ts',
       'src/shared/draft-paste-ready-scanner.ts',
       'src/main/runtime/terminal/wait/tui-idle-zsh-preexec-hook-order.live-shell.test.ts'
     ]
