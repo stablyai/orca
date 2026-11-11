@@ -396,7 +396,8 @@ function QuickTabBody({
           agentMenuModel
             ? {
                 model: agentMenuModel,
-                selection: launchSelection,
+                // Orca Cloud has no chat surface, so its one Claude never reads "Claude (CLI)" (PC-9).
+                selection: orcaCloud ? { ...launchSelection, cli: false } : launchSelection,
                 surface: quickAgentSurface,
                 contextKey: observation.contextKey,
                 onPick: handleQuickAgentChange

@@ -20049,7 +20049,6 @@
       "startInTerminal": "터미널에서 {{value0}} 시작"
     },
     "newWorkspace": {
-      "agentOptional": "에이전트 [선택 사항]",
       "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요.",
       "directSetup": {
         "run": "Run setup",
