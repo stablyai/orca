@@ -12,8 +12,8 @@ import type {
   WslDriveUncConversionResult
 } from '../../../shared/wsl-drive-unc-conversion-types'
 import type { WslMoveRefusal } from '../../../shared/wsl-move/wsl-move-driver-types'
-import type { WslMoveTerminalScope } from '../../persistence/moving-wsl-projects/wsl-move-driver-ports'
-import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
+import type { WslMoveTerminalScope } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
+import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-scope'
 import {
   listWslDriveUncConversionsForProfile,
   writeWslDriveUncConversion
