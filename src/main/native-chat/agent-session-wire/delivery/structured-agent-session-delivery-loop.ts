@@ -19,6 +19,7 @@ import type { StructuredAgentSessionStartReadiness } from '../startup/structured
 import { holdRestartedStructuredAgentSessionSends } from '../termination/structured-agent-session-host-lifetime'
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
 import { waitsForCodexTurnOptions } from '../options/structured-agent-session-message-options'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { DeliveryProgress } from './structured-agent-session-delivery-progress'
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
@@ -262,7 +263,10 @@ export class StructuredAgentSessionDeliveryLoop {
       waitsForCodexTurnOptions(
         this.deps.record(sessionId),
         session.journal,
-        next,
+        {
+          body: session.journal.itemBody(agentJournalSubmissionKey(next.clientMessageId)),
+          options: next.options
+        },
         awaitedChild,
         this.deps.adapter
       )

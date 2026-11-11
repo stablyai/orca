@@ -23,6 +23,7 @@ import {
 } from '../operations/structured-agent-session-mutation-plans'
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import { structuredQueueHold } from './structured-agent-session-queued-gate'
+import { waitsForCodexTurnOptions } from '../options/structured-agent-session-message-options'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
@@ -123,6 +124,21 @@ export function sendQueuedStructuredAgentMessage(
       // Commands cannot steer; enforce idle-only Send even for older clients.
       if (row.body.command && work.working()) {
         return invalid("A command can't be sent while the agent is working.")
+      }
+      // Delivery would hold this hand-off, shown as Sending, until the turn ends; the card already waits.
+      const child = context.sessions.get(ctx.sessionId)?.child
+      if (
+        child &&
+        waitsForCodexTurnOptions(record, ctx.journal, row, child, context.deps.adapter)
+      ) {
+        return {
+          ok: false,
+          refusal: refuse(
+            'agent_session_operation_invalid',
+            { reason: 'turnActive' },
+            'This message uses different settings, so it waits for the running turn to end.'
+          )
+        }
       }
       const submissionId = operationId
       const owed = queuedMessageOwed(context.deps, ctx.sessionId, row.body)

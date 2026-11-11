@@ -145,23 +145,9 @@ describe('direct goal settings application', () => {
     const held = (options = choices) =>
       waitsForCodexTurnOptions(
         { provider: 'codex', sessionId: 'session-1' },
+        { newestTurn: () => ({ turnId: 'goal-turn', state: 'running' }) },
         {
-          newestTurn: () => ({ turnId: 'goal-turn', state: 'running' }),
-          itemBody: () => ({
-            kind: 'message',
-            role: 'user',
-            blocks: [{ type: 'text', text: 'Continue' }]
-          })
-        },
-        {
-          clientMessageId: 'follow-up',
-          fence: 7,
-          payloadFingerprint: 'fingerprint',
-          dispatchState: 'pending',
-          providerItemId: null,
-          reason: null,
-          submittedAt: 1,
-          resolvedAt: null,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Continue' }] },
           options
         },
         { fence: 7, generation: acquisition.acquisitionGeneration, phase: 'ready' },
