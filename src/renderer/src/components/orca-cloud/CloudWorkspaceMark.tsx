@@ -131,7 +131,8 @@ function CloudWorkspaceMarkInner({
         align="start"
         sideOffset={10}
         focusRing
-        className="w-72"
+        // Taller than a short window once the sync section is open: scroll instead of clipping.
+        className="scrollbar-sleek max-h-(--radix-popover-content-available-height) w-72 overflow-y-auto"
         aria-label={label}
         tabIndex={-1}
         onPointerEnter={() => clearTimer()}
