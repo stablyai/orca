@@ -109,7 +109,12 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
           : wait
             ? `${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
             : undefined,
-      lastError: value.worker.lastError ?? undefined,
+      lastError:
+        value.worker.state === 'failed' &&
+        !value.worker.agentTerminalHandle &&
+        !value.terminalResource
+          ? `never started: ${value.worker.lastError ?? 'its start failed'}`
+          : (value.worker.lastError ?? undefined),
       autoReleaseAt: value.autoReleaseAt ?? undefined,
       coordinatedFrom: value.coordinatedFrom ?? undefined,
       next: value.projection ? renderOrchestrationArgv(value.projection.nextAction.argv) : undefined

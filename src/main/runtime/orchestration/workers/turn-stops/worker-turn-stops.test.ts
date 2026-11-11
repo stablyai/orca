@@ -109,6 +109,74 @@ describe('terminal worker turn stops', () => {
     await settle()
     expect(ctx.mail()).toHaveLength(0)
   })
+  it('never mails a capability or credential carried in why a worker went away', () => {
+    const ctx = setup()
+    const capability = 'dcap_0123456789abcdefghijKLMN'
+    reportWorkerTurnStop(
+      ctx.db,
+      { kind: 'local', dispatch: ctx.dispatch },
+      {
+        from: HANDLE,
+        reason: 'lost',
+        lastOutput: undefined,
+        cause: `it never started: refused ${capability} at https://user:hunter2@git.example.com/repo`,
+        leftover: `workspace ${capability}`
+      },
+      ctx.deps
+    )
+    const [mail] = ctx.mail()
+    expect(mail?.body).toContain('refused [dispatch capability redacted]')
+    expect(mail?.body).not.toContain(capability)
+    expect(mail?.body).not.toContain('hunter2')
+  })
+
+  it('stays quiet for the turn whose worker_done was rejected, not for later turns', () => {
+    const ctx = setup()
+    const writeToWorker = () => {
+      const mail = ctx.db.insertMessage({
+        from: 'term_coordinator',
+        to: `dispatch:${ctx.dispatch.id}`,
+        subject: 'Start',
+        runId: ctx.run.id
+      })
+      ctx.db.markAsRead([mail.id])
+    }
+    const report = (type: 'worker_done' | 'heartbeat') => {
+      const sent = ctx.db.insertMessage({
+        from: HANDLE,
+        to: `run:${ctx.run.id}`,
+        subject: 'Done',
+        type,
+        payload: JSON.stringify({ taskId: ctx.dispatch.task_id, dispatchId: ctx.dispatch.id }),
+        runId: ctx.run.id
+      })
+      ctx.db.convertLifecycleMessageToRejection(sent.id, 'worker_identity_changed', 'not the owner')
+    }
+    const stop = (stopKey: string, turnStartedAt: number) =>
+      reportWorkerTurnStop(
+        ctx.db,
+        { kind: 'local', dispatch: ctx.dispatch },
+        { from: HANDLE, stopKey, reason: 'finished', lastOutput: undefined, turnStartedAt },
+        ctx.deps
+      )
+    // The rejection is stored on the real clock: after 1970, before 2100.
+    const before = 1_000
+    const after = 4_102_444_800_000
+    writeToWorker()
+    report('heartbeat')
+    stop('turn-1', before)
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+
+    writeToWorker()
+    report('worker_done')
+    stop('turn-2', before)
+    expect(ctx.mail()).toHaveLength(1)
+
+    // A later idle turn that sent nothing is news, though the coordinator has not written since.
+    stop('turn-3', after)
+    expect(ctx.mail()).toHaveLength(2)
+  })
+
 })
 
 describe('chat worker turn stops', () => {
