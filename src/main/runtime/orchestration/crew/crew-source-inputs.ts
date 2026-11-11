@@ -222,12 +222,9 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
     const input = mailbox(aliases)
     return (input.questions ??= db ? readCrewQuestions(db, aliases) : [])
   }
-  // Closed approvals stay as receipts for as long as traffic counts as recent.
   const approvals = (aliases: string[], now: number) => {
     const input = mailbox(aliases)
-    return (input.approvals ??= db
-      ? readCrewApprovals(db, aliases, new Date(now - AGENT_STATUS_STALE_AFTER_MS).toISOString())
-      : [])
+    return (input.approvals ??= db ? readCrewApprovals(db, aliases, now) : [])
   }
   const invalidateTraffic = (addresses?: ReadonlySet<string>) => {
     for (const [key, input] of mail) {

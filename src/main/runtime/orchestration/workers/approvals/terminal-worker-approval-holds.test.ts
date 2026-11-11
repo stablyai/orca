@@ -316,6 +316,26 @@ describe('terminal worker approval holds', () => {
     ])
   })
 
+  it('closes as worker ended, not "answer it in the terminal", when the worker is stopped at the prompt', async () => {
+    const ctx = setup()
+    const asked = hook('tool-1')
+    await opened(ctx, asked)
+    // A stop kills the process; its last screen still shows the dialog.
+    ctx.screen.incarnation = 'run-2'
+    asked.end('hook-gone')
+    await ctx.tick(40)
+
+    expect(ctx.closedWith()).toEqual([
+      {
+        state: 'answered',
+        by: 'worker-ended',
+        decision: null,
+        reason: null,
+        reasonDelivered: false
+      }
+    ])
+  })
+
   it("escalates with Claude's reason once the dialog paints, though a long command hides its box's top", async () => {
     const ctx = setup()
     // The live case (2026-11-11): the escalation came before the paint, and the command was so long
@@ -335,6 +355,18 @@ describe('terminal worker approval holds', () => {
     expect((await escalating)?.summary.reason).toBe(
       'Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed'
     )
+  })
+
+  it('owes no closing line to a prompt whose escalation never went out', async () => {
+    const ctx = setup()
+    const asked = hook('tool-1')
+    ctx.holds.admit(asked.request)
+    // The worker resumed while the escalation waited for the dialog, so no report was sent.
+    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id, () => false)).toBeNull()
+    asked.end('hook-gone')
+    await ctx.tick(40)
+
+    expect(ctx.closings()).toEqual([])
   })
 
   it('closes a prompt left open by an earlier run, once, when the database opens', async () => {

@@ -75,7 +75,11 @@ import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/
 import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
-import { useNativeChatWorkerApprovalSlots } from '@/components/native-chat/worker-approvals/NativeChatWorkerApprovals'
+import {
+  NativeChatPartyWorkerApprovalStack,
+  NativeChatWorkerApprovalTimeline,
+  nativeChatWorkerApprovalParty
+} from '@/components/native-chat/worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
@@ -112,7 +116,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const [optionPickerRequest, setOptionPickerRequest] =
     useState<NativeChatOptionPickerRequest | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
-  const workerApprovals = useNativeChatWorkerApprovalSlots(props, rootRef)
   const historyPhase = structuredChatHistoryPhase(provisionalLaunch, controller.status)
   const hostOutage = useNativeChatHostOutage(props.target)
   const hostNotice = useNativeChatHostOutageNotice(hostOutage)
@@ -127,6 +130,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const hostSendGate = useNativeChatHostSendGate(props.target, props.agent, hostOutage)
   const hostHeld = hostSendGate.sendBlockedReason !== null
   const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry, hostHeld)
+  const workerApprovalParty = nativeChatWorkerApprovalParty(props)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
   const needsFailureFacts =
     submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
@@ -297,30 +301,34 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 view={continuation.view}
               >
                 <NativeChatHostSetupContext.Provider value={setup}>
-                  <NativeChatMessageList
-                    // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
-                    key={`${controller.epoch}:${controller.contextClear.clears}`}
-                    ref={submits.messageListRef}
-                    session={session}
-                    journalItems={controller.journalItems}
-                    journalSubmissions={controller.submissions}
-                    journalLatestTurn={controller.latestTurn}
-                    journalHostWork={controller.hostWork}
-                    subagentRoster={controller.subagentRoster}
-                    railOutline={controller.railOutline}
-                    isVisible={props.isVisible}
-                    isWorking={controller.isWorking}
-                    expandSignal={false}
-                    workingStartedAt={controller.workingStartedAt}
-                    settledTurns={controller.settledTurns}
-                    awaitingInput={prompt === null ? null : 'shown'}
-                    turnActivity={controller.turnActivity}
-                    stopping={stopControls.stopping}
-                    structuredAttachments
-                    runtimeContext={imageRuntimeContext}
-                    deliveryNotices={deliveryNotices}
-                    timedRows={workerApprovals.timedRows}
-                  />
+                  <NativeChatWorkerApprovalTimeline party={workerApprovalParty}>
+                    {(timedRows) => (
+                      <NativeChatMessageList
+                        // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
+                        key={`${controller.epoch}:${controller.contextClear.clears}`}
+                        ref={submits.messageListRef}
+                        session={session}
+                        journalItems={controller.journalItems}
+                        journalSubmissions={controller.submissions}
+                        journalLatestTurn={controller.latestTurn}
+                        journalHostWork={controller.hostWork}
+                        subagentRoster={controller.subagentRoster}
+                        railOutline={controller.railOutline}
+                        isVisible={props.isVisible}
+                        isWorking={controller.isWorking}
+                        expandSignal={false}
+                        workingStartedAt={controller.workingStartedAt}
+                        settledTurns={controller.settledTurns}
+                        awaitingInput={prompt === null ? null : 'shown'}
+                        turnActivity={controller.turnActivity}
+                        stopping={stopControls.stopping}
+                        structuredAttachments
+                        runtimeContext={imageRuntimeContext}
+                        deliveryNotices={deliveryNotices}
+                        timedRows={timedRows}
+                      />
+                    )}
+                  </NativeChatWorkerApprovalTimeline>
                 </NativeChatHostSetupContext.Provider>
               </NativeChatUsageLimitActionsProvider>
             </NativeChatRowActionsProvider>
@@ -346,8 +354,12 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             tasks={controller}
             messageListRef={submits.messageListRef}
           />
-          {/* Workers' approvals stay findable even while this chat has its own prompt. */}
-          {workerApprovals.strip}
+          {/* Workers' open prompts stay pinned here, above this chat's own prompt. */}
+          <NativeChatPartyWorkerApprovalStack
+            party={workerApprovalParty}
+            target={props.target}
+            isVisible={props.isVisible}
+          />
           {prompt ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}

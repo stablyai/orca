@@ -8,6 +8,10 @@ import { getPublishedHostDescriptor } from '../../hosts/platform-probe/host-desc
 import { existsSync } from 'node:fs'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
+import { subscribeWorkerApprovals } from '../../orchestration/crew/worker-approval-stream'
+import { readCrewApprovals } from '../../orchestration/crew/crew-query'
+import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orchestration/orchestration-crew'
 
 export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
@@ -46,4 +50,34 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
   }
 
   watchOrchestrationCrew = (wake: () => void) => this.crewReadModel.subscribe(wake)
+
+  /** A chat coordinator's worker approvals: its own mailbox and its Runs', read only on their changes. */
+  subscribeOrchestrationWorkerApprovals(
+    party: string,
+    emit: (frame: OrchestrationWorkerApprovalsFrame) => void
+  ): () => void {
+    const orcaSessionId = parseOrcaSessionAddress(party)
+    return subscribeWorkerApprovals(
+      {
+        mailboxes: () => {
+          const db = this._orchestrationDb
+          return db && orcaSessionId
+            ? [
+                party,
+                ...db
+                  .runsBoundToCoordinator({ orcaSessionId, paneKey: null, terminalHandle: null })
+                  .map((run) => `run:${run.id}`)
+              ]
+            : []
+        },
+        approvals: (mailboxes) => {
+          const db = this._orchestrationDb
+          return db ? readCrewApprovals(db, mailboxes, Date.now()) : []
+        },
+        workers: () => this.crewReadModel.read(party).sections.managing,
+        watch: this.crewChanges.subscribe
+      },
+      emit
+    )
+  }
 }

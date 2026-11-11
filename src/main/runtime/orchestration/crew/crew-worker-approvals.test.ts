@@ -83,3 +83,39 @@ it('keeps showing an open approval behind more closed ones than the row bound', 
   const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
   expect(row.approvals?.map(({ approval }) => approval.approvalId)).toEqual(['apr_still_open'])
 })
+
+it('closes an open approval once its Dispatch stops running, at the time it ended', () => {
+  const { db, deps, run, assign } = fixture()
+  const dispatch = assign('term_worker')
+  db.insertMessage({
+    id: approvalReportId(dispatch.id, 'apr_open', 'open'),
+    from: 'term_worker',
+    to: `run:${run.id}`,
+    subject: 'apr_open',
+    type: 'escalation',
+    runId: run.id,
+    payload: JSON.stringify({
+      approval: {
+        v: 1,
+        approvalId: 'apr_open',
+        state: 'open',
+        worker: { handle: 'term_worker', dispatchId: dispatch.id, taskId: dispatch.task_id },
+        summary: { title: 'Allow Bash?', detail: null, reason: null },
+        allowedActions: ['allow', 'deny'],
+        expiresAt: '2099-01-01T00:00:00.000Z'
+      }
+    })
+  })
+  db.completeDispatch(dispatch.id)
+
+  const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
+  expect(row.approvals?.map(({ approval }) => approval)).toEqual([
+    expect.objectContaining({
+      approvalId: 'apr_open',
+      state: 'answered',
+      allowedActions: [],
+      outcome: { by: 'worker-ended', decision: null, reason: null, reasonDelivered: false }
+    })
+  ])
+  expect(row.approvals?.[0].approval.expiresAt).toBeUndefined()
+})

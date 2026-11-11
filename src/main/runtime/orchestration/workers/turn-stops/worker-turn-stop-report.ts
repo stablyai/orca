@@ -282,6 +282,7 @@ const CLOSED_BY: Record<NonNullable<WorkerApprovalPayload['outcome']>['by'], str
   'worker-terminal': "in the worker's terminal",
   auto: "by the worker's agent on its own (its 2:00 timeout)",
   'terminal-only': "for Orca; a person must answer it in the worker's terminal",
+  'worker-ended': 'because its worker ended',
   unknown: 'without an answer Orca can name'
 }
 

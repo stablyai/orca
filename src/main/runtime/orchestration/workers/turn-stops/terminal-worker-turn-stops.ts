@@ -25,7 +25,12 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   getProcessIncarnation: (handle: string) => string | null
   readScreen: (handle: string) => Promise<RuntimeTerminalRead>
   /** The pane's open approval Orca can answer; taking it marks it reported. */
-  takeOpenApproval: (paneKey: string, dispatchId: string) => Promise<WorkerApprovalPayload | null>
+  /** `reporting` is read after the wait; the approval is marked reported only when it holds. */
+  takeOpenApproval: (
+    paneKey: string,
+    dispatchId: string,
+    reporting: () => boolean
+  ) => Promise<WorkerApprovalPayload | null>
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
@@ -75,7 +80,12 @@ export class TerminalWorkerTurnStops {
     // One report per approval; the screen shows Claude's own reason for asking.
     const approval =
       reason === 'needs-input' && before?.target.kind === 'local'
-        ? await this.deps.takeOpenApproval(stop.paneKey, before.target.dispatch.id)
+        ? await this.deps.takeOpenApproval(
+            stop.paneKey,
+            before.target.dispatch.id,
+            // The report below follows synchronously, so this is the answer it will see.
+            () => this.stillStopped(stop) !== null
+          )
         : null
     // Both reads awaited: the worker may have resumed, reported, or been handed a new Dispatch since.
     const resolved = this.stillStopped(stop)

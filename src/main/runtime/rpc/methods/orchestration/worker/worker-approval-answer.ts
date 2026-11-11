@@ -9,9 +9,9 @@ import {
 } from '../../../../orchestration/workers/approvals/chat-worker-approval-prompt'
 import {
   chatAnswerOutcome,
-  closedApproval,
   workerApprovalPayload
 } from '../../../../orchestration/workers/approvals/worker-approval'
+import { closedApproval } from '../../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { closeReportedApproval } from '../../../../orchestration/workers/approvals/worker-approval-report'
 import {
   reportWorkerApprovalClosed,

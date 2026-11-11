@@ -5,86 +5,79 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
-import { useOrchestrationCrew } from '@/components/orchestration-crew/use-orchestration-crew'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
 import { NativeChatResolutionReceipt } from '../prompts/NativeChatResolutionReceipt'
-import { NativeChatWorkerLifetimeStrip } from '../worker-lifetime/NativeChatWorkerLifetimeStrip'
 import {
   isWorkerApprovalDecision,
   workerApprovalCard,
   workerApprovalReceiptBody,
   workerApprovalReceiptReason,
   workerApprovalReceiptText,
-  workerApprovalLapsesAt,
   workerApprovalTimeLeft
 } from './worker-approval-card-model'
+import {
+  closeNativeChatWorkerApproval,
+  useNativeChatWorkerApprovals,
+  type NativeChatWorkerApproval
+} from './native-chat-worker-approval-feed'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { NativeChatTimedRow } from '../conversation/slots/native-chat-timed-rows'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import type { OrchestrationCrewRow } from '../../../../../shared/orchestration/orchestration-crew'
 import type {
   WorkerApprovalDecision,
-  WorkerApprovalPayload
+  WorkerApprovalOutcome
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
-
-export type NativeChatWorkerApproval = {
-  approval: WorkerApprovalPayload
-  at: string
-  /** An older host sends no ask time; its newest message's time stands in. */
-  askedAt?: string
-  worker: OrchestrationCrewRow
-}
 
 // The person's own Deny: the worker gets this, word for word where its agent takes a message.
 const OWNER_DENY_REASON = 'Denied by the owner.'
 
-/** This chat's workers' approvals, from its crew's mailbox rows as soon as they are stored; local only in v1. */
-export function useNativeChatWorkerApprovals(
-  target: RuntimeClientTarget | null,
-  party: string | null
-): NativeChatWorkerApproval[] {
-  const crew = useOrchestrationCrew(target?.kind === 'local' ? target : null, party)
-  const all = useMemo(
-    () =>
-      crew.sections.managing
-        .flatMap((worker) => (worker.approvals ?? []).map((entry) => ({ ...entry, worker })))
-        .sort((a, b) => (a.askedAt ?? a.at).localeCompare(b.askedAt ?? b.at)),
-    [crew]
-  )
-  const [now, setNow] = useState(Date.now)
-  const nextLapse = Math.min(
-    ...all.map(({ approval }) => workerApprovalLapsesAt(approval)).filter((at) => at > now)
-  )
-  useEffect(() => {
-    if (!Number.isFinite(nextLapse)) {
-      return
-    }
-    const timer = setTimeout(() => setNow(Date.now()), nextLapse - Date.now())
-    return () => clearTimeout(timer)
-  }, [nextLapse])
-  return useMemo(
-    () => all.filter(({ approval }) => workerApprovalLapsesAt(approval) > now),
-    [all, now]
+/** A worker's answered or lapsed prompt, in the transcript where the worker first asked. */
+export function NativeChatWorkerApprovalReceipt({
+  entry
+}: {
+  entry: NativeChatWorkerApproval
+}): React.JSX.Element {
+  const t = useTranslate()
+  const { approval } = entry
+  return (
+    <div
+      className="px-3 pb-2 sm:px-4"
+      data-native-chat-worker-approval-receipt={approval.approvalId}
+    >
+      <NativeChatResolutionReceipt
+        body={workerApprovalReceiptBody(approval, entry.at, t)}
+        outcome={{
+          worker: entry.worker.label,
+          text: workerApprovalReceiptText(approval, t),
+          ...workerApprovalReceiptReason(approval, t)
+        }}
+      />
+    </div>
   )
 }
 
-const cardSelector = (approvalId: string) =>
-  `[data-native-chat-worker-approval="${CSS.escape(approvalId)}"]`
-
-/** Worker approval cards and receipts; a card here never takes focus or cancels the chat's turn. */
-export function NativeChatWorkerApprovalRows({
+/** Workers' open prompts, pinned above the composer, oldest first; a card here never takes focus
+ *  or cancels the chat's turn. Several scroll within a bounded height. */
+export function NativeChatWorkerApprovalStack({
   approvals,
-  target
+  target,
+  isVisible = true,
+  onClosed
 }: {
   approvals: readonly NativeChatWorkerApproval[]
   target: RuntimeClientTarget
+  /** A hidden pane's countdown stands still; it shows the time again once visible. */
+  isVisible?: boolean
+  /** An answer found the prompt already closed, as this says. */
+  onClosed?: (approvalId: string, outcome: WorkerApprovalOutcome) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const open = approvals.filter(({ approval }) => approval.state === 'open')
   const [submitting, setSubmitting] = useState<ReadonlySet<string>>(new Set())
-  const now = useSecondClock(approvals.some(({ approval }) => approval.expiresAt))
+  const now = useSecondClock(isVisible && open.some(({ approval }) => approval.expiresAt))
   const answer = useCallback(
     (entry: NativeChatWorkerApproval, decision: WorkerApprovalDecision) => {
       const { approvalId, worker } = entry.approval
@@ -103,23 +96,33 @@ export function NativeChatWorkerApprovalRows({
               : t('components.native-chat.approval.answerDenied', 'Denied · {{name}}', { name })
           )
         )
-        .catch((error: unknown) =>
-          // Closed before this answer: its receipt says how, so this is no failure of the click.
-          error instanceof RuntimeRpcCallError && error.code === 'approval_not_open'
-            ? toast.info(
-                t(
+        .catch((error: unknown) => {
+          const closed = closedBeforeAnswer(error)
+          if (!closed) {
+            toast.error(
+              t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
+                name,
+                detail: error instanceof Error ? error.message : String(error)
+              })
+            )
+            return
+          }
+          // Closed before this answer: the card turns into its receipt now, and the click did not fail.
+          onClosed?.(approvalId, closed)
+          toast.info(
+            closed.by === 'worker-ended'
+              ? t(
+                  'components.native-chat.approval.answerWorkerEnded',
+                  '{{name}} has ended, so this prompt is closed',
+                  { name }
+                )
+              : t(
                   'components.native-chat.approval.answerAlreadyClosed',
                   '{{name}}: this prompt had already closed',
                   { name }
                 )
-              )
-            : toast.error(
-                t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
-                  name,
-                  detail: error instanceof Error ? error.message : String(error)
-                })
-              )
-        )
+          )
+        })
         .finally(() =>
           setSubmitting((current) => {
             const next = new Set(current)
@@ -128,29 +131,18 @@ export function NativeChatWorkerApprovalRows({
           })
         )
     },
-    [t, target]
+    [onClosed, t, target]
   )
-  if (approvals.length === 0) {
+  if (open.length === 0) {
     return null
   }
   return (
-    <div className="space-y-4 pb-2" data-native-chat-worker-approvals="">
-      {approvals.map((entry) => {
+    <div
+      className="scrollbar-sleek max-h-[40vh] shrink-0 overflow-y-auto"
+      data-native-chat-worker-approvals=""
+    >
+      {open.map((entry) => {
         const { approval } = entry
-        if (approval.state !== 'open') {
-          return (
-            <div key={approval.approvalId} className="px-3 sm:px-4">
-              <NativeChatResolutionReceipt
-                body={workerApprovalReceiptBody(approval, entry.at, t)}
-                outcome={{
-                  worker: entry.worker.label,
-                  text: workerApprovalReceiptText(approval, t),
-                  ...workerApprovalReceiptReason(approval, t)
-                }}
-              />
-            </div>
-          )
-        }
         const left = workerApprovalTimeLeft(approval.expiresAt, now)
         return (
           <div key={approval.approvalId} data-native-chat-worker-approval={approval.approvalId}>
@@ -175,7 +167,7 @@ export function NativeChatWorkerApprovalRows({
                     )
                   }
                 : {})}
-              placement="transcript"
+              placement="stacked"
             />
           </div>
         )
@@ -184,33 +176,41 @@ export function NativeChatWorkerApprovalRows({
   )
 }
 
-/** "N approvals · Show": counts open approvals, and stays up even while the chat has its own prompt. */
-export function NativeChatWorkerApprovalStrip({
-  approvals,
-  rootRef
-}: {
-  approvals: readonly NativeChatWorkerApproval[]
-  rootRef: React.RefObject<HTMLElement | null>
+/** The pinned stack for a chat's own party; it holds the approvals itself, so the pane does not redraw for them. */
+export function NativeChatPartyWorkerApprovalStack({
+  party,
+  ...stack
+}: Omit<Parameters<typeof NativeChatWorkerApprovalStack>[0], 'approvals'> & {
+  party: string | null
 }): React.JSX.Element | null {
-  const t = useTranslate()
-  const open = approvals.filter(({ approval }) => approval.state === 'open')
-  if (open.length === 0) {
-    return null
-  }
-  return (
-    <NativeChatWorkerLifetimeStrip
-      text={t('components.native-chat.approval.strip', '{{count}} approvals', {
-        count: open.length,
-        defaultValue_one: '{{count}} approval'
-      })}
-      keepOpenLabel={t('components.native-chat.approval.show', 'Show')}
-      onKeepOpen={() =>
-        rootRef.current
-          ?.querySelector(cardSelector(open[0].approval.approvalId))
-          ?.scrollIntoView({ block: 'center' })
+  const onClosed = useCallback(
+    (approvalId: string, outcome: WorkerApprovalOutcome) => {
+      if (party) {
+        closeNativeChatWorkerApproval(party, approvalId, outcome)
       }
+    },
+    [party]
+  )
+  return (
+    <NativeChatWorkerApprovalStack
+      approvals={useNativeChatWorkerApprovals(party)}
+      onClosed={onClosed}
+      {...stack}
     />
   )
+}
+
+/** How a prompt closed when an answer finds it gone: its worker ended, or something else closed it. */
+function closedBeforeAnswer(error: unknown): WorkerApprovalOutcome | null {
+  const code = error instanceof RuntimeRpcCallError ? error.code : null
+  return code === 'dispatch_inactive' || code === 'approval_not_open'
+    ? {
+        by: code === 'dispatch_inactive' ? 'worker-ended' : 'unknown',
+        decision: null,
+        reason: null,
+        reasonDelivered: false
+      }
+    : null
 }
 
 /** A per-second clock, only while some countdown is shown. */
@@ -227,28 +227,40 @@ function useSecondClock(active: boolean): number {
   return now
 }
 
-/** A coordinator chat's worker approvals: each card in its transcript at the time the worker
- *  asked, open or answered, and the strip above its composer that reaches the open ones. */
-export function useNativeChatWorkerApprovalSlots(
-  pane: { target: RuntimeClientTarget; sessionId: string },
-  rootRef: React.RefObject<HTMLElement | null>
-): { timedRows: readonly NativeChatTimedRow[]; strip: React.ReactNode } {
-  const approvals = useNativeChatWorkerApprovals(
-    pane.target,
-    isOrcaSessionId(pane.sessionId) ? formatOrcaSessionAddress(pane.sessionId) : null
-  )
-  const { target } = pane
+/** The chat's address its workers report to, when it can coordinate: a local Orca session (v1). */
+export function nativeChatWorkerApprovalParty(pane: {
+  target: RuntimeClientTarget
+  sessionId: string
+}): string | null {
+  return pane.target.kind === 'local' && isOrcaSessionId(pane.sessionId)
+    ? formatOrcaSessionAddress(pane.sessionId)
+    : null
+}
+
+/** A coordinator chat's answered worker prompts, each in its transcript at the time the worker
+ *  asked. Holds the approvals itself, so only the transcript redraws when they change. */
+export function NativeChatWorkerApprovalTimeline({
+  party,
+  children
+}: {
+  party: string | null
+  children: (timedRows: readonly NativeChatTimedRow[]) => React.ReactNode
+}): React.ReactNode {
+  const approvals = useNativeChatWorkerApprovals(party)
   const timedRows = useMemo(
     () =>
-      approvals.map((entry) => ({
-        key: `worker-approval:${entry.approval.approvalId}`,
-        at: Date.parse(entry.askedAt ?? entry.at),
-        node: <NativeChatWorkerApprovalRows approvals={[entry]} target={target} />
-      })),
-    [approvals, target]
+      approvals.flatMap((entry) =>
+        entry.approval.state === 'open'
+          ? []
+          : [
+              {
+                key: `worker-approval:${entry.approval.approvalId}`,
+                at: Date.parse(entry.askedAt ?? entry.at),
+                node: <NativeChatWorkerApprovalReceipt entry={entry} />
+              }
+            ]
+      ),
+    [approvals]
   )
-  return {
-    timedRows,
-    strip: <NativeChatWorkerApprovalStrip approvals={approvals} rootRef={rootRef} />
-  }
+  return children(timedRows)
 }

@@ -33,8 +33,8 @@ export type NativeChatApprovalCardProps = {
   worker?: { name: string; onOpen: () => void }
   /** Live time left before the agent decides on its own, shown only when its screen shows it. */
   countdown?: string
-  /** `transcript`: a row in the message list, not the composer slot (no slot height, no focus). */
-  placement?: 'composer' | 'transcript'
+  /** `stacked`: one of several cards above the composer, not the chat's own slot (no slot height, no focus). */
+  placement?: 'composer' | 'stacked'
 }
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
@@ -56,7 +56,7 @@ export function NativeChatApprovalCard({
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
-  const inTranscript = placement === 'transcript'
+  const stacked = placement === 'stacked'
   const hasContext = Boolean(
     countdown ||
     approval.description ||
@@ -65,18 +65,16 @@ export function NativeChatApprovalCard({
     approval.subject ||
     approval.detail
   )
-  useNativeChatPromptCardFocus(cardRef, shouldFocus && !inTranscript)
+  useNativeChatPromptCardFocus(cardRef, shouldFocus && !stacked)
   const escape = onCancel ?? (isSubmitting ? undefined : onCollapse)
 
   return (
     <SecuritySurface>
-      <div
-        className={inTranscript ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}
-      >
+      <div className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}>
         <div
           className={cn(
             'mx-auto flex w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4',
-            !inTranscript && 'h-full min-h-0 max-h-full'
+            !stacked && 'h-full min-h-0 max-h-full'
           )}
         >
           <div

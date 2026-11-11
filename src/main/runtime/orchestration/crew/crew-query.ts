@@ -4,7 +4,10 @@ import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-ca
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../db/runs/run-coordinator-orca-session'
-import type { WorkerApprovalPayload } from '../../../../shared/orchestration/approvals/worker-approval-payload'
+import {
+  closedApproval,
+  type WorkerApprovalPayload
+} from '../../../../shared/orchestration/approvals/worker-approval-payload'
 import { readApprovalReport } from '../workers/approvals/worker-approval-report'
 
 const nullable = z.string().nullable()
@@ -133,45 +136,71 @@ export function readCrewTraffic(
   )
 }
 
+const WORKER_ENDED = {
+  by: 'worker-ended',
+  decision: null,
+  reason: null,
+  reasonDelivered: false
+} as const
+
 // Why a bound: one coordinator's open and recently closed approvals, newest report each.
 const CREW_APPROVAL_ROWS = 100
 
-/** Each worker approval's newest report to this party: open ones, and ones closed since `closedSince`.
- *  Only Orca's own stop reports count, never a payload a worker sent itself. Oldest first. */
+/** Each worker approval's newest report to this party: open ones, and ones closed while traffic
+ *  still counts as recent. Only Orca's own stop reports count, never a payload a worker sent itself. Oldest first. */
 export function readCrewApprovals(
   db: OrchestrationDb,
   aliases: string[],
-  closedSince: string
+  now: number
 ): { approval: WorkerApprovalPayload; at: string; askedAt: string }[] {
+  const closedSince = new Date(now - AGENT_STATUS_STALE_AFTER_MS).toISOString()
   const rows = z
-    .object({ id: z.string(), payload: z.string(), created_at: z.string(), asked_at: z.string() })
+    .object({
+      id: z.string(),
+      payload: z.string(),
+      created_at: z.string(),
+      asked_at: z.string(),
+      ended: z.number(),
+      ended_at: z.string()
+    })
     .array()
     .parse(
       db.db
         .prepare(`WITH reports AS (
           SELECT id, payload, created_at, sequence, json_extract(payload, '$.approval.approvalId') AS approval_id
-          FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
+          FROM messages WHERE to_handle IN (SELECT value FROM json_each(?1))
             AND id LIKE 'msg\\_stop\\_%' ESCAPE '\\' AND payload LIKE '%"approval":%' AND json_valid(payload)
             AND json_type(payload, '$.approval') = 'object'
         ), newest AS (SELECT approval_id, MAX(sequence) AS sequence, MIN(created_at) AS asked_at
           FROM reports GROUP BY approval_id)
-        SELECT reports.id, reports.payload, reports.created_at, newest.asked_at FROM reports
-        JOIN newest ON newest.sequence = reports.sequence
-        WHERE json_extract(reports.payload, '$.approval.state') = 'open'
-          OR julianday(reports.created_at) >= julianday(?)
+        SELECT reports.id, reports.payload, reports.created_at, newest.asked_at,
+          d.status IS NOT NULL AND d.status NOT IN ('pending', 'dispatched') AS ended,
+          COALESCE(d.completed_at, reports.created_at) AS ended_at
+        FROM reports JOIN newest ON newest.sequence = reports.sequence
+        LEFT JOIN dispatch_contexts d ON d.id = json_extract(reports.payload, '$.approval.worker.dispatchId')
+        WHERE julianday(reports.created_at) >= julianday(?2)
+          OR (json_extract(reports.payload, '$.approval.state') = 'open'
+            AND (d.status IS NULL OR d.status IN ('pending', 'dispatched')
+              OR julianday(COALESCE(d.completed_at, reports.created_at)) >= julianday(?2)))
         ORDER BY reports.sequence DESC LIMIT ${CREW_APPROVAL_ROWS}`)
         .all(JSON.stringify(aliases), closedSince)
     )
   const shown: { approval: WorkerApprovalPayload; at: string; askedAt: string }[] = []
   for (const row of rows) {
     const approval = readApprovalReport(row)
-    if (approval) {
-      shown.push({
-        approval,
-        at: exposeUtcTimestamp(row.created_at) ?? row.created_at,
-        askedAt: exposeUtcTimestamp(row.asked_at) ?? row.asked_at
-      })
+    if (!approval) {
+      continue
     }
+    // A prompt is answerable only while its Dispatch runs: once that ends, however it ended, it is
+    // closed, and a terminal that is gone cannot be where to answer it.
+    const ended =
+      row.ended === 1 && (approval.state === 'open' || approval.outcome?.by === 'terminal-only')
+    const at = ended ? row.ended_at : row.created_at
+    shown.push({
+      approval: ended ? closedApproval(approval, WORKER_ENDED) : approval,
+      at: exposeUtcTimestamp(at) ?? at,
+      askedAt: exposeUtcTimestamp(row.asked_at) ?? row.asked_at
+    })
   }
   return shown.toReversed()
 }

@@ -26,11 +26,11 @@ import type {
   TerminalWorkerApprovalHoldsDeps
 } from './terminal-worker-approval-hold'
 import { reportWorkerApprovalClosed } from '../turn-stops/worker-turn-stop-report'
-import { closedApproval } from './worker-approval'
-import type {
-  WorkerApprovalDecision,
-  WorkerApprovalOutcome,
-  WorkerApprovalPayload
+import {
+  closedApproval,
+  type WorkerApprovalDecision,
+  type WorkerApprovalOutcome,
+  type WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { TERMINAL_APPROVAL_ID_PREFIX } from './worker-approval-report'
 
@@ -142,9 +142,12 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     return this.byApprovalId.has(approvalId)
   }
 
+  /** `reporting`: whether the caller still sends its report, read last, so a close owes a closing
+   *  line only to an approval whose escalation went out. */
   async takeOpenApproval(
     paneKey: string,
-    dispatchId: string
+    dispatchId: string,
+    reporting: () => boolean = () => true
   ): Promise<WorkerApprovalPayload | null> {
     const hold = this.openByPane.get(paneKey)
     if (hold?.state !== 'open' || hold.dispatch.id !== dispatchId) {
@@ -155,7 +158,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       const screen = this.deps.readScreen(paneKey)
       return screen && showsClaudeDialog(screen) ? screen : null
     })
-    if (hold.state !== 'open' || this.openByPane.get(paneKey) !== hold) {
+    if (hold.state !== 'open' || this.openByPane.get(paneKey) !== hold || !reporting()) {
       return null
     }
     hold.reported = true
@@ -247,7 +250,10 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     if (hold.state !== 'open') {
       return
     }
-    if (!lines || showsClaudeDialog(lines)) {
+    if (!this.stillBound(hold)) {
+      // Stopped, exited or handed on: no terminal is left to answer it in.
+      this.close(hold, { by: 'worker-ended', decision: null })
+    } else if (!lines || showsClaudeDialog(lines)) {
       // The dialog is up but Orca can no longer answer it: a person must, in the terminal.
       this.close(hold, { by: 'terminal-only', decision: null })
     } else {

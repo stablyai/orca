@@ -5,11 +5,12 @@ import type {
   AgentJournalPromptOption
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
-import type {
-  WorkerApprovalAnswerer,
-  WorkerApprovalDecision,
-  WorkerApprovalOutcome,
-  WorkerApprovalPayload
+import {
+  closedApproval,
+  type WorkerApprovalAnswerer,
+  type WorkerApprovalDecision,
+  type WorkerApprovalOutcome,
+  type WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 /** The outcome of a chat prompt Orca answered: its reason is told only when it went to the worker as mail. */
@@ -89,22 +90,4 @@ export function workerApprovalPayload(input: {
     allowedActions: workerApprovalActions(item.options)
   }
   return outcome ? closedApproval(open, outcome) : open
-}
-
-/** The same approval once closed: nothing left to answer, and how it closed. */
-export function closedApproval(
-  open: WorkerApprovalPayload,
-  outcome: WorkerApprovalOutcome
-): WorkerApprovalPayload {
-  const closed: WorkerApprovalPayload = {
-    ...open,
-    // Expired is the agent's own timeout alone; every other close, named or not, is not one.
-    state: outcome.by === 'auto' ? 'expired' : 'answered',
-    allowedActions: [],
-    // Only a reason can be delivered.
-    outcome: { ...outcome, reasonDelivered: outcome.reason !== null && outcome.reasonDelivered }
-  }
-  // A countdown means nothing once the prompt is closed.
-  delete closed.expiresAt
-  return closed
 }
