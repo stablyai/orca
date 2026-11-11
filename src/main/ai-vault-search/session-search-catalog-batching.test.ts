@@ -24,7 +24,9 @@ it.each([40, 400])(
     const catalog = new SessionSearchCatalog(db)
     let envelopes = 0,
       localRows = 0
-    let invalidEnvelope = false
+    let invalidEnvelope:
+      | { kind: SessionSearchCatalogCommand['kind']; requestBytes: number; resultBytes: number }
+      | undefined
     const execute = catalog.execute.bind(catalog)
     const local = vi.spyOn(catalog, 'execute').mockImplementation((command) => {
       const result = execute(command)
@@ -41,9 +43,11 @@ it.each([40, 400])(
     const request = async (command: SessionSearchCatalogCommand) => {
       envelopes++
       const result = catalog.response(command)
-      invalidEnvelope ||=
-        JSON.stringify(command).length * 2 > 256 * 1024 ||
-        JSON.stringify(result).length * 2 > 256 * 1024
+      const requestBytes = JSON.stringify(command).length * 2
+      const resultBytes = JSON.stringify(result).length * 2
+      if (!invalidEnvelope && (requestBytes > 256 * 1024 || resultBytes > 256 * 1024)) {
+        invalidEnvelope = { kind: command.kind, requestBytes, resultBytes }
+      }
       return result
     }
     const root = join(harness.root, 'inputs')
@@ -71,12 +75,12 @@ it.each([40, 400])(
       expect(envelopes).toBeLessThanOrEqual(40 + 12 * pages)
       // Required comparisons and accepted observations visit each input only a fixed number of times locally.
       expect(localRows).toBeLessThanOrEqual(30 * population + 100)
-      expect(invalidEnvelope).toBe(false)
+      expect(invalidEnvelope).toBeUndefined()
     }
     const reset = () => {
       envelopes = 0
       localRows = 0
-      invalidEnvelope = false
+      invalidEnvelope = undefined
       local.mockClear()
     }
     try {
@@ -295,6 +299,7 @@ it.each([40, 400])(
       listings.mockClear()
       // Each retained directory has cancellation, removal and completion phases, with no descendant source reads.
       for (let cycle = 0; cycle < 6 * (population + 1) + 10 && inventory.pending; cycle++) {
+        await inventory.retryFailures()
         const delta = await inventory.drain(args, () => true, 0)
         await inventory.acknowledge(delta.receipts)
       }

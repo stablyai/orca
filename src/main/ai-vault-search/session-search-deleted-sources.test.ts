@@ -327,6 +327,54 @@ it.each([200, 2000])(
   }
 )
 
+it.each([200, 2000])(
+  'yields an all-owned %s-conversation sweep and resumes without repeating membership work',
+  async (population) => {
+    const paths = seedSearchableRows(population)
+    const state = new SessionSearchPassState()
+    await state.prepare(store)
+    for (let offset = 0; offset < paths.length; offset += 64) {
+      await store.candidates({
+        kind: 'batch',
+        rows: paths.slice(offset, offset + 64).map((path) => ({
+          candidate: syntheticCandidate({ path }),
+          root: harness.claudeProjectDir,
+          group: path,
+          alias: path,
+          sqlite: false,
+          preference: 0,
+          sourceOrder: 0
+        }))
+      })
+    }
+    const request = store.candidates.bind(store)
+    let compared = 0
+    const membership = vi.spyOn(store, 'candidates').mockImplementation((command) => {
+      if (command.kind === 'unowned-page') {
+        compared += command.rows.length
+      }
+      return request(command)
+    })
+    try {
+      const args = { ...retirementArgs(state), discoveryOverdue: () => true }
+      let total = 0
+      for (let cycle = 0; cycle < Math.ceil(population / 256) + 1; cycle++) {
+        compared = 0
+        await retireSessionSearchPassSources(args, [harness.claudeProjectDir], new Set())
+        // A reached deadline permits one bounded membership unit, including units with no removals.
+        expect(compared).toBeLessThanOrEqual(256)
+        total += compared
+      }
+      expect(total).toBe(population)
+      expect(retainedRows()).toBe(population)
+      expect(removed).toEqual([])
+    } finally {
+      membership.mockRestore()
+      await state.close()
+    }
+  }
+)
+
 it('keeps one unfinished retirement unit through repeated membership rejection', async () => {
   seedSearchableRows(300)
   store.removeFile = SessionSearchStore.prototype.removeFile.bind(store)
