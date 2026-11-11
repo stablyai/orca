@@ -110,6 +110,12 @@ export function handleRichMarkdownEditorClick({
       worktreeRoot
     })
   }
+  // The right half of an atom resolves past the node, so nodeAt(pos) misses the wikilink.
+  const docLinkTarget = clickedMarkdownDocLinkTarget(view, event)
+  if (docLinkTarget !== null) {
+    onOpenDocLinkRef.current?.(docLinkTarget)
+    return true
+  }
   if (clickedNode?.type.name === 'markdownDocLink') {
     onOpenDocLinkRef.current?.(clickedNode.attrs.target as string)
     return true
@@ -181,6 +187,32 @@ function activateMarkdownImageClick({
     sourceOwner
   })
   return true
+}
+
+function clickedMarkdownDocLinkTarget(view: EditorView, event: MouseEvent): string | null {
+  const target =
+    event.target instanceof Element
+      ? event.target
+      : event.target instanceof Node
+        ? event.target.parentElement
+        : null
+  const link = target?.closest('[data-doc-link-target]')
+  if (!(link instanceof HTMLElement) || !view.dom.contains(link)) {
+    return null
+  }
+  let linkPos: number
+  try {
+    linkPos = view.posAtDOM(link, 0)
+  } catch {
+    return null
+  }
+  const atPos = view.state.doc.nodeAt(linkPos)
+  const docLink =
+    atPos?.type.name === 'markdownDocLink' ? atPos : view.state.doc.resolve(linkPos).nodeBefore
+  if (docLink?.type.name !== 'markdownDocLink') {
+    return null
+  }
+  return docLink.attrs.target as string
 }
 
 function getClickedLinkHref(view: EditorView, event: MouseEvent): string {
