@@ -97,9 +97,7 @@ describe('Bitbucket credential connection', () => {
   it('saves an access token Bitbucket accepts without account access (STA-14576)', async () => {
     const conn = await loadModule()
     // Bitbucket answers /user with 403 for every repository, project or workspace access token.
-    globalThis.fetch = vi.fn(
-      async () => new Response(null, { status: 403 })
-    ) as unknown as typeof fetch
+    globalThis.fetch = vi.fn<typeof fetch>(async () => new Response(null, { status: 403 }))
 
     const result = await conn.connectBitbucket({ authMode: 'token', accessToken: 'repo-token' })
 
