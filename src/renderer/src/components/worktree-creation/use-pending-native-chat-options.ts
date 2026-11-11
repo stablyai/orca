@@ -81,7 +81,7 @@ export function usePendingNativeChatOptions(
             answer
           )
         }
-        setCatalog({
+        setCatalog((previous) => ({
           key,
           state: answer
             ? applyStructuredAgentSessionModelCatalog(
@@ -90,8 +90,12 @@ export function usePendingNativeChatOptions(
                 answer,
                 { newLaunch: true }
               )
-            : settleStructuredAgentSessionBuiltinCatalog(seed, false)
-        })
+            : // A failed re-read keeps a list an earlier read already brought.
+              settleStructuredAgentSessionBuiltinCatalog(
+                previous?.key === key ? previous.state : seed,
+                false
+              )
+        }))
       }
     )
   }, [agent, demand, key, seed, target, worktreeId])
