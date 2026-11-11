@@ -61,6 +61,8 @@ export function cloudAgentHoldReason(
     case 'unavailable':
       return null
   }
+  // A coverage kind added later starts the launch rather than holding on an unknown state.
+  return null
 }
 
 /**
@@ -159,7 +161,11 @@ const LOADING_CAP_MS = 15_000
 async function holdReasonBeforeLaunch(
   agent: HostAgentSignInAgent
 ): Promise<CloudAgentHoldReason | null> {
-  const read = ensureFreshOrcaCloudAgentAccounts().catch(() => readOrcaCloudAgentAccounts())
+  // A failed read that leaves nothing loaded answers at once: start, rather than wait out the cap.
+  const read = ensureFreshOrcaCloudAgentAccounts().catch(() => {
+    const fallback = readOrcaCloudAgentAccounts()
+    return fallback.load.kind === 'ready' ? fallback : null
+  })
   const budget = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))
   const accounts =
     (await Promise.race([read, budget(DECIDE_BUDGET_MS)])) ??
@@ -178,8 +184,9 @@ export async function holdCloudAgentLaunch({
   decided,
   ...hold
 }: HoldRequest): Promise<'proceed' | 'cancel'> {
+  // The caller's read decided to hold; if it no longer does, start rather than wait on a strip.
   const reason = decided
-    ? (cloudAgentHoldReason(hold.agent, readOrcaCloudAgentAccounts()) ?? 'accountExpired')
+    ? cloudAgentHoldReason(hold.agent, readOrcaCloudAgentAccounts())
     : await holdReasonBeforeLaunch(hold.agent)
   if (!reason) {
     return 'proceed'

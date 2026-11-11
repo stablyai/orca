@@ -127,4 +127,12 @@ describe('cloud agent launch hold', () => {
     })
     expect(cloudAgentLaunchHoldReason('claude')).toBe('unknown')
   })
+
+  it('a decided hold whose account is already covered starts at once', async () => {
+    setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
+    await expect(
+      holdCloudAgentLaunch({ paneKey: 'tab:e', agent: 'claude', prompt: null, decided: true })
+    ).resolves.toBe('proceed')
+    expect(readCloudAgentHold('tab:e')).toBeNull()
+  })
 })
