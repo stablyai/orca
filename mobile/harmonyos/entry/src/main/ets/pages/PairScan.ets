@@ -8,8 +8,8 @@ import { lucideColorFilter } from '../settings/LucideColor';
 import { playHapticFeedback } from '../settings/HapticFeedback';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { refreshDesktopConnection } from '../transport/DesktopConnections';
-import { exchangePairingTicket, PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
-import { beginRelayPairing, finishRelayPairing, rememberRelayPairingMove, prepareRelayPairing, commitRelayPairing } from '../transport/RelayPairing';
+import { PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
+import { beginRelayPairing, cancelRelayPairing, exchangeJournalTicket, finishRelayPairing, rememberRelayPairingMove, prepareRelayPairing, commitRelayPairing } from '../transport/RelayPairing';
 import { parsePairingOffer, PairingOffer } from '../transport/E2eeV2Session';
 import { RelayMove } from '../transport/RelayProtocol';
 import { hostIdFor, hostRemovalTimestamp, hostPairingTimestamp, saveHost, clearHostPairingJournal, HostMeta, PairingJournal } from '../storage/HostStore';
@@ -85,6 +85,7 @@ struct PairScan {
   private logScroll: Scroller = new Scroller();
   private priorKeyboardMode?: PageKeyboardAvoidMode;
   private foreground: boolean = true;
+  private pendingPairingHostId: string = '';
   private onForeground = (): void => { this.foreground = true; this.refreshCameraPermission(); };
   private onBackground = (): void => { this.foreground = false; this.cancelCameraDecode(); this.updateCamera(); };
 
@@ -109,6 +110,9 @@ struct PairScan {
 
   private cancelPairing(): void {
     this.disposed = true;
+    if (this.pendingPairingHostId && this.context) {
+      cancelRelayPairing(this.context, this.pendingPairingHostId, this.pairingStartedAt).catch(() => {});
+    }
     if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
     this.attempt?.close(); this.attempt = null;
   }
@@ -275,6 +279,7 @@ struct PairScan {
     }, PAIR_TIMEOUT_MS);
     let context = getContext(this);
     let hostId = hostIdFor(offer.publicKeyB64);
+    this.pendingPairingHostId = hostId;
     let isActive = (): boolean => this.attempt === attempt && !this.disposed && !this.timedOut
       && pairingStartedAt > hostRemovalTimestamp(context, hostId)
       && pairingStartedAt > hostPairingTimestamp(context, hostId);
@@ -308,9 +313,10 @@ struct PairScan {
       let prepared = await prepareRelayPairing(context, journal, meta, client, isActive);
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
-      let token = await exchangePairingTicket(connected, offer.deviceToken, (line: string): void => {
+      if (!journal) { throw new Error('Pairing journal is unavailable'); }
+      let token = await exchangeJournalTicket(context, journal, connected, (line: string): void => {
         if (!this.disposed) { this.appendLog(line); }
-      });
+      }, isActive);
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
       if (prepared) { await commitRelayPairing(context, meta, token, prepared, isActive); }
@@ -318,6 +324,7 @@ struct PairScan {
         await saveHost(context, meta, token, undefined, pairingStartedAt, false, journal ?? undefined, isActive);
         if (journal) { await clearHostPairingJournal(context, hostId, journal).catch(() => {}); }
       }
+      this.pendingPairingHostId = '';
       refreshDesktopConnection(meta.id, 'paired');
       if (this.disposed) { return; }
       this.pairingCode = '';

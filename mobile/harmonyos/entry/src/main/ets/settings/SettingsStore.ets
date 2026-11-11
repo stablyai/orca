@@ -271,6 +271,15 @@ export interface NotificationDeliveryPreferences {
   suppressWhileViewing: boolean;
 }
 const NOTIFICATION_DELIVERY_KEY = 'orca:notificationDeliveryPreferences';
+export function notificationDeliveryEnabled(context: common.Context): boolean {
+  try {
+    let prefs = preferences.getPreferencesSync(context, { name: PREFS_NAME });
+    let enabled = prefs.getSync(KEY_NOTIFICATIONS_LOCAL_ENABLED, boolDefaultFor(KEY_NOTIFICATIONS_LOCAL_ENABLED));
+    let dnd = prefs.getSync(KEY_NOTIFICATIONS_DND_ENABLED, boolDefaultFor(KEY_NOTIFICATIONS_DND_ENABLED));
+    return (typeof enabled === 'boolean' ? enabled : boolDefaultFor(KEY_NOTIFICATIONS_LOCAL_ENABLED))
+      && !(typeof dnd === 'boolean' ? dnd : boolDefaultFor(KEY_NOTIFICATIONS_DND_ENABLED));
+  } catch (e) { return false; }
+}
 export function notificationDeliveryPreferences(context: common.Context): NotificationDeliveryPreferences {
   let prefs = preferences.getPreferencesSync(context, { name: PREFS_NAME });
   let raw = prefs.getSync(NOTIFICATION_DELIVERY_KEY, '');

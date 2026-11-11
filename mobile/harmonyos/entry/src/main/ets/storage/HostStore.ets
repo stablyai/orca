@@ -34,6 +34,8 @@ export interface PairingJournal {
   hash: string;
   offerKey: string;
   deviceToken: string;
+  replacementToken?: string;
+  cancelled?: boolean;
   committedMeta?: HostMeta;
   credential?: RelayCredential;
   draft?: HostMeta;
@@ -176,14 +178,16 @@ export function saveHost(context: common.Context, meta: HostMeta, deviceToken: s
   canCommit?: () => boolean): Promise<void> {
   return mutateHost(async (): Promise<void> => {
     let removedAt = hostRemovalTimestamp(context, meta.id);
+    if (pairingStartedAt <= hostPairingCancellationTimestamp(context, meta.id)) { throw new Error('Pairing was cancelled'); }
     if (!Number.isSafeInteger(pairingStartedAt) || pairingStartedAt < 0 || (removedAt > 0 && pairingStartedAt <= removedAt)) { throw new Error('Pairing was superseded by desktop removal'); }
     let prefs = await loadPrefs(context);
     let lastPairing = prefs.getSync(`paired.${meta.id}`, 0) as number;
     let cleanupKey = `${CLEANUP_PREFIX}${meta.id}`;
     let pendingCleanup = prefs.getSync(cleanupKey, false) === true;
     if (pairingStartedAt < lastPairing || (recovering && pairingStartedAt === 0)) { throw new Error('Pairing was superseded by a newer pairing'); }
-    if (expectedJournal && (expectedJournal.startedAt !== pairingStartedAt
-      || !matchesPairingJournal(await readHostPairingJournal(context, meta.id), expectedJournal))) {
+    let heldJournal = expectedJournal ? await readHostPairingJournal(context, meta.id) : null;
+    if (expectedJournal && (heldJournal?.cancelled === true || expectedJournal.startedAt !== pairingStartedAt
+      || !matchesPairingJournal(heldJournal, expectedJournal))) {
       throw new Error('Pairing journal was superseded');
     }
     let key = base64DecodeCanonical(meta.publicKeyB64);
@@ -213,7 +217,9 @@ export function saveHost(context: common.Context, meta: HostMeta, deviceToken: s
       if (relayCredential) { await putRelayCredential(meta.id, relayCredential); }
       else if (!meta.relay || at < 0) { await removeRelayCredential(meta.id); }
       await writeHostList(context, hosts, (): void => {
-        if (canCommit && !canCommit()) { throw new Error('Pairing was cancelled'); }
+        if ((canCommit && !canCommit()) || pairingStartedAt <= hostPairingCancellationTimestamp(context, meta.id)) {
+          throw new Error('Pairing was cancelled');
+        }
         prefs.putSync(`paired.${meta.id}`, pairingStartedAt);
         if (pendingCleanup) { prefs.deleteSync(cleanupKey); }
       });
@@ -437,6 +443,19 @@ function pairingPrefs(context: common.Context): preferences.Preferences {
   return preferences.getPreferencesSync(context, { name: PAIRING_PREFS_NAME });
 }
 
+export function hostPairingCancellationTimestamp(context: common.Context, hostId: string): number {
+  return pairingPrefs(context).getSync(`cancelled.${hostId}`, 0) as number;
+}
+
+export function cancelHostPairing(context: common.Context, hostId: string, startedAt: number): void {
+  let prefs = pairingPrefs(context);
+  let key = `cancelled.${hostId}`;
+  let previous = prefs.getSync(key, 0) as number;
+  if (startedAt <= previous) { return; }
+  try { prefs.putSync(key, startedAt); prefs.flushSync(); }
+  catch (e) { prefs.putSync(key, previous); throw e as Error; }
+}
+
 function pendingPairingIds(prefs: preferences.Preferences): string[] {
   let ids = JSON.parse(prefs.getSync(PAIRING_PENDING_KEY, '[]') as string) as string[];
   if (!Array.isArray(ids)) { throw new Error('Invalid pairing journal index'); }
@@ -466,6 +485,8 @@ function assertPairingJournal(hostId: string, journal: PairingJournal): void {
     || typeof journal.offerKey !== 'string' || hostIdFromKey(journal.offerKey) !== hostId
     || typeof journal.token !== 'string' || !journal.token || typeof journal.hash !== 'string' || !journal.hash
     || typeof journal.deviceToken !== 'string' || !journal.deviceToken
+    || (journal.cancelled !== undefined && typeof journal.cancelled !== 'boolean')
+    || (journal.replacementToken !== undefined && !/^[a-f0-9]{48}$/.test(journal.replacementToken))
     || (journal.draft !== undefined && (journal.draft?.id !== hostId || journal.draft?.publicKeyB64 !== journal.offerKey))
     || (journal.committedMeta !== undefined
       && (journal.committedMeta?.id !== hostId || journal.committedMeta?.publicKeyB64 !== journal.offerKey))) {
@@ -502,10 +523,12 @@ export function writeHostPairingJournal(context: common.Context, hostId: string,
   expected?: PairingJournal): Promise<void> {
   return mutateHost(async (): Promise<void> => {
     assertPairingJournal(hostId, journal);
+    if (!journal.cancelled && journal.startedAt <= hostPairingCancellationTimestamp(context, hostId)) { throw new Error('Pairing was cancelled'); }
     let removedAt = hostRemovalTimestamp(context, hostId);
     if (removedAt > 0 && journal.startedAt <= removedAt) { throw new Error('Pairing was superseded by desktop removal'); }
     let held = await readHostPairingJournal(context, hostId);
     let lastPairing = hostPairingTimestamp(context, hostId);
+    if (held?.cancelled && journal.startedAt <= held.startedAt && !journal.cancelled) { throw new Error('Pairing was cancelled'); }
     if (expected) {
       let replacesHeld = journal.startedAt > expected.startedAt && journal.startedAt > lastPairing;
       if (journal.startedAt < lastPairing || !matchesPairingJournal(held, expected)

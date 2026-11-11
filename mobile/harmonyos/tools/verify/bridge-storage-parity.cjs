@@ -499,3 +499,32 @@ test('a partial disk write is refused without replacing the committed draft', as
     ['keep-me']
   )
 })
+
+test('an unreadable encoded row refuses the whole batch without replacing saved text', async (t) => {
+  const { DeviceRowStore, context } = deviceRows(t)
+  const store = new DeviceRowStore(context, hostId)
+  for (const table of ['draft', 'cache']) {
+    await store.serve({
+      action: 'write',
+      table,
+      ops: [{ key: 'compose', value: '保留的草稿' }]
+    })
+    const result = await store.serve({
+      action: 'write',
+      table,
+      ops: [
+        { key: 'new-row', value: 'must-not-be-saved' },
+        { key: 'compose', value: '雪'.repeat(300000) }
+      ]
+    })
+    assert.equal(result.written, false)
+    assert.equal(result.refusal, 'too-large')
+    const reopened = new DeviceRowStore(context, hostId)
+    assert.deepEqual(
+      Array.from(
+        (await reopened.serve({ action: 'read', table, keys: ['compose', 'new-row'] })).values
+      ),
+      ['保留的草稿', null]
+    )
+  }
+})

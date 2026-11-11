@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { i18n } from '@kit.LocalizationKit';
+import { endpointLabel } from '../diagnostics/ConnectionDiagnostics';
 import { modelInFlight, SpeechModel, VoiceConfig, VoiceSettingsRpc, VoiceSetup, voiceShortcutMode,
   voiceShortcutModeConfig } from '../dictation/VoiceSetup';
 import { lucideColorFilter } from '../settings/LucideColor';
@@ -46,12 +47,14 @@ struct VoiceSettings {
   @State changeError: string = '';
   @State busyAction: VoiceAction | null = null;
   @State modelsOpen: boolean = false;
+  @State desktopPickerOpen: boolean = false;
+  @State hosts: HostMeta[] = [];
+  @State hostId: string = '';
   @State viewportHeight: number = 0;
   private shown: boolean = false;
   private pageEpoch: number = 0;
   private requestEpoch: number = 0;
   private desktops: VoiceDesktop[] = [];
-  private hostId: string = '';
   private client: SpikeRpcClient | null = null;
   private phone: NativeSpeech | null = null;
   private phoneTimer: number = -1;
@@ -71,6 +74,8 @@ struct VoiceSettings {
     this.checkPhone(epoch);
     listHosts(context).then((hosts: HostMeta[]): void => {
       if (epoch !== this.pageEpoch) { return; }
+      this.hosts = hosts;
+      if (!this.hostId && hosts.length === 1) { this.hostId = hosts[0].id; }
       this.desktops = hosts.map((host: HostMeta): VoiceDesktop =>
         ({ id: host.id, lease: retainDesktopConnection(context, host.id, 'automatic'), unobserve: (): void => {} }));
       this.desktops.forEach((desktop: VoiceDesktop): void => {
@@ -91,8 +96,9 @@ struct VoiceSettings {
     this.phone?.dispose(); this.phone = null;
     this.stopPolling();
     this.desktops.forEach((desktop: VoiceDesktop): void => { desktop.unobserve(); desktop.lease.release(); });
-    this.desktops = []; this.client = null; this.hostId = ''; this.setup = null; this.connected = false;
-    this.modelsOpen = false; this.loading = false; this.busyAction = null; this.loadError = ''; this.changeError = '';
+    this.desktops = []; this.client = null; this.hosts = []; this.setup = null; this.connected = false;
+    this.modelsOpen = false; this.desktopPickerOpen = false; this.loading = false; this.busyAction = null;
+    this.loadError = ''; this.changeError = '';
     this.downloadGraceUntil = 0;
   }
 
@@ -129,18 +135,35 @@ struct VoiceSettings {
 
   private selectDesktop(): void {
     if (!this.shown) { return; }
-    let ready = this.desktops.find((desktop: VoiceDesktop): boolean => desktop.lease.connection.getClient() !== null);
-    this.connecting = !ready && this.desktops.some((desktop: VoiceDesktop): boolean =>
-      ['idle', 'connecting', 'handshaking', 'reconnecting'].includes(desktop.lease.connection.getPhase()));
-    let client = ready?.lease.connection.getClient() ?? null;
+    let desktop = this.desktops.find((candidate: VoiceDesktop): boolean => candidate.id === this.hostId);
+    let client = desktop?.lease.connection.getClient() ?? null;
+    this.connecting = desktop !== undefined && client === null &&
+      ['idle', 'connecting', 'handshaking', 'reconnecting'].includes(desktop.lease.connection.getPhase());
     if (client === this.client) { return; }
     this.requestEpoch++; this.stopPolling();
     this.client = client; this.connected = client !== null; this.loading = false; this.busyAction = null;
-    if (ready && ready.id !== this.hostId) {
-      this.hostId = ready.id; this.setup = null; this.modelsOpen = false;
-      this.loadError = ''; this.changeError = ''; this.downloadGraceUntil = 0;
-    }
     if (client) { this.refresh().catch(() => {}); }
+  }
+
+  private pickDesktop(id: string): void {
+    if (!this.shown || this.busyAction || !this.hosts.some((host: HostMeta): boolean => host.id === id)) { return; }
+    this.desktopPickerOpen = false;
+    if (id === this.hostId) { return; }
+    this.requestEpoch++; this.stopPolling();
+    this.hostId = id; this.client = null; this.setup = null; this.connected = false; this.modelsOpen = false;
+    this.loading = false; this.loadError = ''; this.changeError = ''; this.downloadGraceUntil = 0;
+    this.selectDesktop();
+  }
+
+  private selectedDesktop(): HostMeta | undefined {
+    return this.hosts.find((host: HostMeta): boolean => host.id === this.hostId);
+  }
+
+  private desktopName(): string { return this.selectedDesktop()?.name ?? this.t('选择桌面'); }
+
+  private desktopAddress(): string {
+    let host = this.selectedDesktop();
+    return host ? endpointLabel(host.endpoint) : '';
   }
 
   private async refresh(): Promise<void> {
@@ -165,7 +188,7 @@ struct VoiceSettings {
 
   private async change(action: string, id: string, config: VoiceConfig = {}): Promise<void> {
     let client = this.client;
-    if (!client || this.busyAction || !this.setup) { return; }
+    if (!this.canConfigure() || !client || !this.setup) { return; }
     let epoch = ++this.requestEpoch;
     let rpc = new VoiceSettingsRpc(client);
     this.stopPolling(); this.loading = false; this.busyAction = { kind: action, modelId: id }; this.changeError = '';
@@ -197,7 +220,10 @@ struct VoiceSettings {
 
   private t(label: string): string { return uiText(label, this.uiLocale); }
   private engineAvailable(value: string): boolean { return value !== DICTATION_ENGINE_ONDEVICE || this.phoneStatus !== 'unsupported'; }
-  private canConfigure(): boolean { return this.connected && this.busyAction === null; }
+  private canConfigure(): boolean {
+    return this.connected && this.client !== null && this.setup !== null && this.busyAction === null
+      && this.desktops.find((desktop: VoiceDesktop): boolean => desktop.id === this.hostId)?.lease.connection.getClient() === this.client;
+  }
   private canChooseModel(): boolean { return this.canConfigure() && this.setup?.enabled === true; }
   private offersAuto(): boolean { return this.setup?.dictationHoldToRecord !== undefined; }
   private model(id: string): SpeechModel | undefined {
@@ -261,6 +287,66 @@ struct VoiceSettings {
       .enabled(!this.engineBusy && this.engineAvailable(option.value))
       .opacity(this.engineAvailable(option.value) ? 1 : 0.5)
       .accessibilitySelected(this.engine === option.value).onClick((): void => { this.selectEngine(option.value).catch(() => {}); })
+  }
+
+  @Builder
+  private desktopSelector() {
+    if (this.hosts.length > 0) {
+      Column() {
+        this.title('已配对桌面')
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 12 }) {
+            Image($r('app.media.lucide_monitor')).supportSvg2(true).width(18).height(18)
+              .colorFilter(lucideColorFilter(this.themeSecondary))
+            Column({ space: 3 }) {
+              Text(this.desktopName()).fontFamily('Geist').fontSize(16).fontColor(this.themeText).maxLines(1)
+              if (this.desktopAddress()) {
+                Text(this.desktopAddress()).fontFamily('Geist').fontSize(13).fontColor(this.themeSecondary)
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+            if (this.hosts.length > 1 || !this.selectedDesktop()) {
+              Image($r('app.media.lucide_chevron_down')).supportSvg2(true).width(16).height(16)
+                .colorFilter(lucideColorFilter(this.themeMuted))
+            }
+          }.width('100%').padding(16)
+        }.width('100%').backgroundColor(this.themeSurface).borderRadius(16)
+          .enabled((this.hosts.length > 1 || !this.selectedDesktop()) && this.busyAction === null)
+          .accessibilityText(this.desktopName()).id('voice-desktop-picker')
+          .onClick((): void => { this.desktopPickerOpen = true; })
+      }.width('100%')
+    }
+  }
+
+  @Builder
+  private desktopPicker() {
+    Column() {
+      this.title('选择桌面')
+      List() {
+        ForEach(this.hosts, (host: HostMeta, index: number) => {
+          ListItem() {
+            Column() {
+              if (index > 0) { this.separator() }
+              Button({ type: ButtonType.Normal }) {
+                Row({ space: 12 }) {
+                  Column({ space: 3 }) {
+                    Text(host.name).fontFamily('Geist').fontSize(16).fontColor(this.themeText).maxLines(1)
+                    Text(endpointLabel(host.endpoint)).fontFamily('Geist').fontSize(13).fontColor(this.themeSecondary)
+                      .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+                  if (host.id === this.hostId) {
+                    Image($r('app.media.lucide_check')).supportSvg2(true).width(18).height(18)
+                      .colorFilter(lucideColorFilter(this.themeAccent))
+                  }
+                }.width('100%').padding({ left: 16, right: 16 })
+              }.width('100%').height(56).backgroundColor(Color.Transparent).enabled(this.busyAction === null)
+                .accessibilitySelected(host.id === this.hostId).onClick((): void => { this.pickDesktop(host.id); })
+            }.width('100%')
+          }
+        }, (host: HostMeta): string => host.id)
+      }.height(Math.min(this.hosts.length, 4) * 56.5).width('100%').backgroundColor(this.themeSurface)
+        .borderRadius(16).clip(true).scrollBar(BarState.Auto)
+    }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 20 })
   }
 
   @Builder
@@ -410,6 +496,8 @@ struct VoiceSettings {
       Column({ space: 10 }) {
         Text(this.t('语音模型')).fontFamily('Geist').fontSize(13).fontWeight(FontWeight.Medium)
           .fontColor(this.themeSecondary).width('100%').padding({ left: 4 })
+        Text(this.desktopName()).fontFamily('Geist').fontSize(13).fontColor(this.themeSecondary)
+          .maxLines(1).width('100%').padding({ left: 4 })
         if (this.changeError || this.loadError) { this.note(this.changeError || this.loadError, true) }
         if (!this.connected) { this.note('连接桌面后可管理语音设置。') }
         Column() {
@@ -431,8 +519,11 @@ struct VoiceSettings {
       Scroll() {
         Column({ space: 20 }) {
           this.transcription()
+          this.desktopSelector()
           if (this.connected && this.setup !== null) {
             this.desktopOptions()
+          } else if (this.hosts.length > 0 && !this.selectedDesktop()) {
+            this.note('选择桌面')
           } else if (this.connecting || this.loading) {
             LoadingProgress().width(24).height(24).color(this.themeSecondary)
             this.note('正在加载语音设置…')
@@ -451,5 +542,7 @@ struct VoiceSettings {
       .onSizeChange((_previous: SizeOptions, current: SizeOptions): void => { this.viewportHeight = Number(current.height); })
       .bindSheet(this.modelsOpen, this.modelDrawer, { height: SheetSize.FIT_CONTENT, backgroundColor: this.themeSheet,
         maskColor: 'rgba(0,0,0,0.55)', showClose: false, onDisappear: (): void => { this.modelsOpen = false; } })
+      .bindSheet(this.desktopPickerOpen, this.desktopPicker, { height: SheetSize.FIT_CONTENT, backgroundColor: this.themeSheet,
+        maskColor: 'rgba(0,0,0,0.55)', showClose: false, onDisappear: (): void => { this.desktopPickerOpen = false; } })
   }
 }

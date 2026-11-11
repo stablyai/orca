@@ -1,4 +1,4 @@
-import { getBool, KEY_NOTIFICATIONS_LOCAL_ENABLED, KEY_NOTIFICATIONS_DND_ENABLED, notificationDeliveryPreferences } from '../settings/SettingsStore';
+import { notificationDeliveryEnabled, notificationDeliveryPreferences, NotificationDeliveryPreferences } from '../settings/SettingsStore';
 import { notificationManager } from '@kit.NotificationKit';
 import notification from '@ohos.notification';
 import { common, wantAgent } from '@kit.AbilityKit';
@@ -151,18 +151,24 @@ export class LocalNotifier {
     this.publishChecked(title, body, hostId, worktreeId, paneKey, executionHost).catch((): void => this.log('通知发布失败，请检查系统权限'));
     return true;
   }
+  private deliveryPreferences(hostId: string, worktreeId: string, executionHost: string,
+    event: DesktopNotification | null, test: boolean): NotificationDeliveryPreferences | null {
+    let context = this.context!;
+    if (!test && !notificationDeliveryEnabled(context)) { return null; }
+    let preferences = notificationDeliveryPreferences(context);
+    if (!test && preferences.suppressWhileViewing && hostId === this.viewingHost && worktreeId === this.viewingWorktree
+      && executionHost === this.viewingExecutionHost) { return null; }
+    if (event && ((preferences.onlyWhenDesktopAway && event.desktopAway === false)
+      || (preferences.onlyWhenAgentNeedsInput && event.source === 'agent-task-complete' &&
+        !['blocked', 'waiting', 'needs-input'].includes(event.agentState)))) { return null; }
+    return preferences;
+  }
   private async publishChecked(title: string, body: string, hostId: string, worktreeId: string, paneKey: string,
     executionHost: string, event: DesktopNotification | null = null, test: boolean = false,
     current: () => boolean = (): boolean => true): Promise<boolean> {
     let context = this.context!;
-    if (!test && (!await getBool(context, KEY_NOTIFICATIONS_LOCAL_ENABLED)
-      || await getBool(context, KEY_NOTIFICATIONS_DND_ENABLED))) { return false; }
-    let preferences = notificationDeliveryPreferences(context);
-    if (!test && preferences.suppressWhileViewing && hostId === this.viewingHost && worktreeId === this.viewingWorktree
-      && executionHost === this.viewingExecutionHost) { return false; }
-    if (event && ((preferences.onlyWhenDesktopAway && event.desktopAway === false)
-      || (preferences.onlyWhenAgentNeedsInput && event.source === 'agent-task-complete' &&
-        !['blocked', 'waiting', 'needs-input'].includes(event.agentState)))) { return false; }
+    let preferences = this.deliveryPreferences(hostId, worktreeId, executionHost, event, test);
+    if (!preferences) { return false; }
     if (!await notificationManager.isNotificationEnabled() || !await this.ensureSlot()) { return false; }
     nextNotificationId = Math.max(nextNotificationId + 1, Date.now() % 2000000000); let id = nextNotificationId;
     let uri = `orca://session?hostId=${encodeURIComponent(hostId)}`;
@@ -181,14 +187,15 @@ export class LocalNotifier {
         normal: { title: title, text: body } }, notificationSlotType: notificationManager.SlotType.SOCIAL_COMMUNICATION,
       wantAgent: agent, autoDeletedTime: Date.now() + 24 * 60 * 60 * 1000
     };
-    if (!preferences.sound) { request.notificationFlags = { soundEnabled: NOTIFICATION_FLAG_CLOSE, vibrationEnabled: NOTIFICATION_FLAG_CLOSE }; }
     let identity = event?.identity;
     if (identity) {
       request.extraInfo = { orcaDesktopId: hostId, notificationId: identity.notificationId,
         notificationEpoch: identity.notificationEpoch, notificationSeq: identity.notificationSeq };
       request.appMessageId = `${hostId}/${identity.notificationEpoch}/${identity.notificationSeq}`;
     }
-    if (!current() || (identity && this.isDismissed(identity)) || (event && !this.reserveAlert(event))) { return false; }
+    preferences = this.deliveryPreferences(hostId, worktreeId, executionHost, event, test);
+    if (!preferences || !current() || (identity && this.isDismissed(identity)) || (event && !this.reserveAlert(event))) { return false; }
+    if (!preferences.sound) { request.notificationFlags = { soundEnabled: NOTIFICATION_FLAG_CLOSE, vibrationEnabled: NOTIFICATION_FLAG_CLOSE }; }
     await notificationManager.publish(request);
     if (!current() || (identity && this.isDismissed(identity))) { await notificationManager.cancel(id); return false; }
     return true;

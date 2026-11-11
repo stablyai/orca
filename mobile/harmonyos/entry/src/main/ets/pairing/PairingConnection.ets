@@ -22,25 +22,28 @@ function readPairingResult(reply: RpcSuccess): Record<string, Object> | null {
 }
 
 export async function exchangePairingTicket(connection: PairingConnectionResult, ticket: string,
-  log: (line: string) => void): Promise<string> {
+  log: (line: string) => void, remember: (token: string) => Promise<void>, replacement?: string): Promise<string> {
   let capabilities = connection.status?.['capabilities'];
   if (!Array.isArray(capabilities) || !(capabilities as Object[]).every((value: Object): boolean => typeof value === 'string')
     || !(capabilities as string[]).includes(TICKET_EXCHANGE_CAPABILITY)) { return ticket; }
 
-  let newToken = toHex(randomBytes(24));
+  let newToken = replacement ?? toHex(randomBytes(24));
+  await remember(newToken);
   let params: Record<string, string> = { 'deviceToken': newToken };
-  let result: Record<string, Object> | null = null;
-  try {
-    let reply = await connection.client.request('pairing.exchangeTicket', JSON.stringify(params));
-    if (reply instanceof RpcSuccess) { result = readPairingResult(reply); }
-  } catch (e) {}
-  let deviceId = result?.['deviceId'];
-  if (typeof deviceId === 'string' && deviceId.length > 0) {
+  let reply = await connection.client.request('pairing.exchangeTicket', JSON.stringify(params));
+  if (reply instanceof RpcSuccess) {
+    let deviceId = readPairingResult(reply)?.['deviceId'];
+    if (typeof deviceId !== 'string' || deviceId.length === 0) { throw new Error('Pairing ticket exchange is unresolved'); }
     log('配对码已换成本机独有 token');
     return newToken;
   }
-  log('换票未获确认，继续使用扫码凭证');
-  return ticket;
+  if (['unknown_method', 'method_not_found', 'not_supported', 'forbidden', 'not_a_ticket', 'delegated_device',
+    'ticket_already_exchanged', 'ticket_window_closed', 'ticket_exchange_pending', 'device_token_in_use', 'device_not_found']
+    .includes(reply.errorCode)) {
+    log('桌面未接受换票，继续使用扫码凭证');
+    return ticket;
+  }
+  throw new Error('Pairing ticket exchange is unresolved');
 }
 
 export class PairingConnection {

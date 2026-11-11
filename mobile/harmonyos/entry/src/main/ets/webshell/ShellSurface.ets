@@ -715,7 +715,7 @@ export struct ShellSurface {
         if (this.nativeDevice === nativeDevice) { this.pdfPreview = preview; }
       }, (prompt: ClipboardPastePrompt | null): void => {
         if (this.nativeDevice === nativeDevice) { this.clipboardPrompt = prompt; }
-      });
+      }, (): boolean => this.nativeDevice === nativeDevice && this.ownsNavigation() && !this.navigation.isPending());
     this.nativeDevice = nativeDevice;
     let root = desktopPath(meta.id);
     let shown: ShellRoute = { hostId: meta.id, pathname: this.routePathname, params: this.routeParams };

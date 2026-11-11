@@ -19,6 +19,7 @@ function hostStorage() {
   let waitBeforeTokenRemoval
   let recoveryDial
   let randomSequence = 0
+  let exchangeSequence = 0xaa
   const sha256 = (value) => Uint8Array.from(createHash('sha256').update(value).digest())
   const utf8Encode = (value) => Uint8Array.from(Buffer.from(value))
   const utf8Decode = (value) => Buffer.from(value).toString()
@@ -173,6 +174,8 @@ function hostStorage() {
         'updateHostNameAndEndpoint',
         'hostRemovalTimestamp',
         'hostPairingTimestamp',
+        'hostPairingCancellationTimestamp',
+        'cancelHostPairing',
         'readHostPairingJournal',
         'writeHostPairingJournal',
         'listHostPairingJournals',
@@ -205,13 +208,31 @@ function hostStorage() {
       this.result = JSON.stringify(result)
     }
   }
+  const { exchangePairingTicket } = loadArkts(
+    'pairing/PairingConnection.ets',
+    ['exchangePairingTicket'],
+    {
+      RpcSuccess,
+      randomBytes: (length) => new Uint8Array(length).fill(++exchangeSequence),
+      toHex: (value) => Buffer.from(value).toString('hex')
+    }
+  )
   const openPairing = () =>
     loadArkts(
       'transport/RelayPairing.ets',
-      ['beginRelayPairing', 'prepareRelayPairing', 'commitRelayPairing', 'recoverRelayPairings'],
+      [
+        'beginRelayPairing',
+        'cancelRelayPairing',
+        'finishRelayPairing',
+        'exchangeJournalTicket',
+        'prepareRelayPairing',
+        'commitRelayPairing',
+        'recoverRelayPairings'
+      ],
       {
         ...protocol,
         ...host,
+        exchangePairingTicket,
         randomBytes: (length) => new Uint8Array(length).fill(++randomSequence),
         RpcSuccess,
         PairingConnection: class {
@@ -323,6 +344,300 @@ function hostStorage() {
 }
 
 const active = () => true
+
+function confirmedResumeClient(fixture) {
+  return {
+    getRelayAcceptedVersion: () => 1,
+    async request(method, raw) {
+      assert.equal(method, 'pairing.getEndpoints')
+      const { installReqId, resumeConfirmReqId } = JSON.parse(raw)
+      return fixture.status(installReqId, fixture.installResult(installReqId), {
+        v: 1,
+        reqId: resumeConfirmReqId,
+        currentVersion: 1,
+        acceptedAs: 'current',
+        renewed: true,
+        resumeExpiresAt: 1800172800000
+      })
+    }
+  }
+}
+
+test('an explicitly cancelled pairing stays unpaired after process restart', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  await pairing.cancelRelayPairing({}, meta.id, journal.startedAt)
+  pairing.finishRelayPairing(meta.id, journal.startedAt)
+  fixture.onRecoveryDial(async () => confirmedResumeClient(fixture))
+
+  await fixture.openPairing().recoverRelayPairings({})
+  assert.deepEqual(Array.from(await host.listHosts({})), [])
+  assert.equal(await host.getDeviceToken({}, meta.id), null)
+  assert.equal(await host.getRelayCredential({}, meta.id), null)
+})
+
+test('a failed journal update cannot turn an explicit cancellation into restart recovery', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance, failJournalWrite } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  failJournalWrite()
+  await assert.rejects(
+    pairing.cancelRelayPairing({}, meta.id, journal.startedAt),
+    /Journal write interrupted/
+  )
+  pairing.finishRelayPairing(meta.id, journal.startedAt)
+  fixture.onRecoveryDial(async () => confirmedResumeClient(fixture))
+
+  await fixture.openPairing().recoverRelayPairings({})
+  assert.deepEqual(Array.from(await host.listHosts({})), [])
+  assert.equal(await host.getDeviceToken({}, meta.id), null)
+})
+
+test('cancelling an in-flight install prevents recovery until an explicit retry reconciles it', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance, installedReply, installResult, status } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  const installing = Promise.withResolvers()
+  const installed = Promise.withResolvers()
+  let allowed = true
+  const preparing = pairing.prepareRelayPairing(
+    {},
+    journal,
+    meta,
+    {
+      async request(method, raw) {
+        const args = JSON.parse(raw)
+        if (method === 'pairing.getEndpoints') {
+          return status(args.installReqId, null)
+        }
+        assert.equal(method, 'pairing.provisionRelay')
+        installing.resolve()
+        return installed.promise
+      }
+    },
+    () => allowed
+  )
+  await installing.promise
+  allowed = false
+  await pairing.cancelRelayPairing({}, meta.id, journal.startedAt)
+  pairing.finishRelayPairing(meta.id, journal.startedAt)
+  installed.resolve(installedReply(installResult(journal.reqId)))
+  await assert.rejects(preparing, /cancelled/)
+  fixture.onRecoveryDial(async () => confirmedResumeClient(fixture))
+  const restarted = fixture.openPairing()
+  await restarted.recoverRelayPairings({})
+  assert.deepEqual(Array.from(await host.listHosts({})), [])
+
+  const retry = await restarted.beginRelayPairing({}, offer, advance(), active)
+  const prepared = await restarted.prepareRelayPairing(
+    {},
+    retry,
+    meta,
+    {
+      async request(method, raw) {
+        assert.equal(method, 'pairing.getEndpoints')
+        assert.equal(JSON.parse(raw).installReqId, journal.reqId)
+        return status(journal.reqId, installResult(journal.reqId))
+      }
+    },
+    active
+  )
+  await restarted.commitRelayPairing({}, meta, 'paired-device-token', prepared, active)
+  assert.equal(await host.getDeviceToken({}, meta.id), 'paired-device-token')
+  assert.equal((await host.getRelayCredential({}, meta.id)).token, journal.token)
+})
+
+test('cancelling committed-journal recovery during credential storage preserves the existing pairing', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, client, meta, advance, failHostFlush, onTokenUpdate } = fixture
+  await host.saveHost({}, meta, 'existing-device-token', undefined, advance())
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  const prepared = await pairing.prepareRelayPairing({}, journal, meta, client, active)
+  failHostFlush()
+  await assert.rejects(
+    pairing.commitRelayPairing({}, meta, 'replacement-device-token', prepared, active),
+    /Host preference flush failed/
+  )
+  const updating = Promise.withResolvers()
+  const continueUpdate = Promise.withResolvers()
+  onTokenUpdate(() => {
+    updating.resolve()
+    return continueUpdate.promise
+  })
+  const restarted = fixture.openPairing()
+  const recovery = restarted.recoverRelayPairings({})
+  await updating.promise
+  const cancelled = restarted.cancelRelayPairing({}, meta.id, journal.startedAt)
+  continueUpdate.resolve()
+  await cancelled
+  await recovery
+  assert.equal(await host.getDeviceToken({}, meta.id), 'existing-device-token')
+  assert.equal(await host.getRelayCredential({}, meta.id), null)
+  await fixture.openPairing().recoverRelayPairings({})
+  assert.equal(await host.getDeviceToken({}, meta.id), 'existing-device-token')
+})
+
+test('a lost direct exchange reply preserves its candidate before RPC and reuses it after restart', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance, installedReply } = fixture
+  const directOffer = { ...offer, relay: undefined }
+  const journal = await pairing.beginRelayPairing({}, directOffer, advance(), active)
+  const replacement = 'abababababababababababababababababababababababab'
+  await assert.rejects(
+    pairing.exchangeJournalTicket(
+      {},
+      journal,
+      {
+        status: { capabilities: ['pairing.ticket-exchange.v1'] },
+        client: {
+          async request(method, raw) {
+            assert.equal(method, 'pairing.exchangeTicket')
+            assert.equal(JSON.parse(raw).deviceToken, replacement)
+            assert.equal(
+              (await host.readHostPairingJournal({}, meta.id)).replacementToken,
+              replacement
+            )
+            throw new Error('Reply lost after ticket exchange')
+          }
+        }
+      },
+      () => {},
+      active
+    ),
+    /Reply lost after ticket exchange/
+  )
+  assert.deepEqual(Array.from(await host.listHosts({})), [])
+  const restarted = fixture.openPairing()
+  const retry = await restarted.beginRelayPairing({}, directOffer, advance(), active)
+  const token = await restarted.exchangeJournalTicket(
+    {},
+    retry,
+    {
+      status: { capabilities: ['pairing.ticket-exchange.v1'] },
+      client: {
+        async request(method, raw) {
+          assert.equal(method, 'pairing.exchangeTicket')
+          assert.equal(JSON.parse(raw).deviceToken, replacement)
+          return installedReply({ deviceId: 'confirmed-device' })
+        }
+      }
+    },
+    () => {},
+    active
+  )
+  await host.saveHost({}, meta, token, undefined, retry.startedAt, false, retry, active)
+  assert.equal(await host.getDeviceToken({}, meta.id), replacement)
+})
+
+test('relay recovery reconciles a lost ticket exchange before publishing its credential', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, client, meta, advance, installedReply } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  await pairing.prepareRelayPairing({}, journal, meta, client, active)
+  const replacement = 'abababababababababababababababababababababababab'
+  await assert.rejects(
+    pairing.exchangeJournalTicket(
+      {},
+      journal,
+      {
+        status: { capabilities: ['pairing.ticket-exchange.v1'] },
+        client: {
+          request: async () => {
+            throw new Error('Exchange reply lost')
+          }
+        }
+      },
+      () => {},
+      active
+    ),
+    /Exchange reply lost/
+  )
+  fixture.onRecoveryDial(async () => {
+    const confirmed = confirmedResumeClient(fixture)
+    return {
+      ...confirmed,
+      async request(method, raw) {
+        if (method === 'status.get') {
+          return installedReply({ capabilities: ['pairing.ticket-exchange.v1'] })
+        }
+        if (method === 'pairing.exchangeTicket') {
+          assert.equal(JSON.parse(raw).deviceToken, replacement)
+          return installedReply({ deviceId: 'confirmed-device' })
+        }
+        return confirmed.request(method, raw)
+      }
+    }
+  })
+  await fixture.openPairing().recoverRelayPairings({})
+  assert.deepEqual(
+    Array.from(await host.listHosts({})).map((item) => item.name),
+    ['Example desktop']
+  )
+  assert.equal(await host.getDeviceToken({}, meta.id), replacement)
+  assert.equal((await host.getRelayCredential({}, meta.id)).expiresAt, 1800172800000)
+})
+
+test('a rescan reuses the ticket candidate when recovery replay succeeds but install confirmation is lost', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, client, meta, advance, installedReply } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  await pairing.prepareRelayPairing({}, journal, meta, client, active)
+  const replacement = 'abababababababababababababababababababababababab'
+  await assert.rejects(
+    pairing.exchangeJournalTicket(
+      {},
+      journal,
+      {
+        status: { capabilities: ['pairing.ticket-exchange.v1'] },
+        client: {
+          request: async () => {
+            throw new Error('Exchange reply lost')
+          }
+        }
+      },
+      () => {},
+      active
+    ),
+    /Exchange reply lost/
+  )
+  fixture.onRecoveryDial(async () => ({
+    async request(method, raw) {
+      if (method === 'status.get') {
+        return installedReply({ capabilities: ['pairing.ticket-exchange.v1'] })
+      }
+      if (method === 'pairing.exchangeTicket') {
+        assert.equal(JSON.parse(raw).deviceToken, replacement)
+        return installedReply({ deviceId: 'confirmed-device' })
+      }
+      throw new Error('Install confirmation reply lost')
+    }
+  }))
+  await fixture.openPairing().recoverRelayPairings({})
+  assert.deepEqual(Array.from(await host.listHosts({})), [])
+
+  const restarted = fixture.openPairing()
+  const retry = await restarted.beginRelayPairing({}, offer, advance(), active)
+  const token = await restarted.exchangeJournalTicket(
+    {},
+    retry,
+    {
+      status: { capabilities: ['pairing.ticket-exchange.v1'] },
+      client: {
+        async request(method, raw) {
+          assert.equal(method, 'pairing.exchangeTicket')
+          assert.equal(JSON.parse(raw).deviceToken, replacement)
+          return installedReply({ deviceId: 'confirmed-device' })
+        }
+      }
+    },
+    () => {},
+    active
+  )
+  const prepared = await restarted.prepareRelayPairing({}, retry, meta, client, active)
+  await restarted.commitRelayPairing({}, meta, token, prepared, active)
+  assert.equal(await host.getDeviceToken({}, meta.id), replacement)
+})
 
 test('interrupted relay installation and confirmation recover with the same install and a fresh socket proof', async () => {
   const fixture = hostStorage()

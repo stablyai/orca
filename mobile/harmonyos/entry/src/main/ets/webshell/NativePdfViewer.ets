@@ -30,9 +30,11 @@ export class NativePdfViewer {
   private external = false;
   private presentation: Promise<void> = Promise.resolve();
   private disposed = false;
+  private isActive: () => boolean;
 
-  constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null, onPreview: (preview: PdfPreview | null) => void) {
-    this.context = context; this.client = client; this.onPreview = onPreview;
+  constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null, onPreview: (preview: PdfPreview | null) => void,
+    isActive: () => boolean = (): boolean => true) {
+    this.context = context; this.client = client; this.onPreview = onPreview; this.isActive = isActive;
   }
 
   setClient(client: SpikeRpcClient | null): void {
@@ -68,6 +70,7 @@ export class NativePdfViewer {
       || (executionHost !== undefined && (typeof executionHost !== 'string' || !/^runtime:.+/.test(executionHost)))) {
       throw new Error('Invalid PDF parameters');
     }
+    if (!this.isActive()) { throw new Error('PDF page is not active'); }
     let generation = this.generation + 1; await this.cancel(); this.active(generation);
     let params: ESObject = { worktree: `id:${value['worktreeId']}`, relativePath: value['relativePath'] };
     let stat: ESObject = await this.request('files.stat', params, executionHost); this.active(generation);
@@ -119,8 +122,10 @@ export class NativePdfViewer {
   }
 
   private async present(path: string, title: string, generation: number): Promise<void> {
+    if (!this.isActive()) { throw new Error('PDF page is not active'); }
     if (canIUse('SystemCapability.OfficeService.PDFService.Core')) {
       let controller = await this.loadDocument(path, generation, ''); this.active(generation);
+      if (!this.isActive()) { throw new Error('PDF page is not active'); }
       this.onPreview({ title: title, path: path, controller: controller,
         unlock: controller ? null : (password: string): Promise<pdfViewManager.PdfController | null> =>
           this.unlock(path, generation, password) });
@@ -147,6 +152,7 @@ export class NativePdfViewer {
   private unlock(path: string, generation: number, password: string): Promise<pdfViewManager.PdfController | null> {
     let loaded = this.presentation.then(async (): Promise<pdfViewManager.PdfController | null> => {
       this.active(generation);
+      if (!this.isActive()) { throw new Error('PDF page is not active'); }
       return this.controller ?? await this.loadDocument(path, generation, password);
     });
     this.presentation = loaded.then((): void => {}, (): void => {});
@@ -159,7 +165,7 @@ export class NativePdfViewer {
   }
 
   pause(): Promise<void> {
-    return this.external || this.controller ? Promise.resolve() : this.cancel();
+    return this.external || this.inApp ? Promise.resolve() : this.cancel();
   }
 
   cancel(): Promise<void> {

@@ -158,7 +158,10 @@ export class DeviceRowStore {
   }
   private enqueue(params: ESObject): Promise<RowResult> {
     let previous = queues.get(this.hostId) ?? Promise.resolve<RowResult>({});
-    let next = previous.catch((): RowResult => ({})).then((): Promise<RowResult> => this.perform(params));
+    let next: Promise<RowResult> = previous.catch((): RowResult => ({}))
+      .then((): Promise<RowResult> => this.perform(params)).finally((): void => {
+        if (queues.get(this.hostId) === next) { queues.delete(this.hostId); }
+      });
     queues.set(this.hostId, next);
     return next;
   }
@@ -217,6 +220,7 @@ export class DeviceRowStore {
       for (let i = 0; i < ops.length; i++) {
         let op = ops[i];
         let encoded = op.value === null ? null : this.encodeValue(table, op.key, op.value, key);
+        if (encoded !== null && encoded.length > MAX_VALUE * 2) { return { written: false, refusal: 'too-large' }; }
         changes.set(this.path(table, op.key), encoded);
       }
       let root = this.tableRoot(table);

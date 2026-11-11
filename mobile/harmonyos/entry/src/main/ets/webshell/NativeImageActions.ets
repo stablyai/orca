@@ -22,11 +22,14 @@ export class NativeImageActions {
   private sequence = 0;
   private exportDirectory = '';
   private download: http.HttpRequest | null = null;
+  private isActive: () => boolean;
 
-  constructor(context: common.UIAbilityContext) { this.context = context; }
+  constructor(context: common.UIAbilityContext, isActive: () => boolean = (): boolean => true) {
+    this.context = context; this.isActive = isActive;
+  }
 
   private assertLive(generation: number): void {
-    if (this.closed || generation !== this.generation) { throw new Error('Image page closed'); }
+    if (this.closed || generation !== this.generation || !this.isActive()) { throw new Error('Image page closed'); }
   }
 
   async serve(value: ESObject): Promise<ESObject> {

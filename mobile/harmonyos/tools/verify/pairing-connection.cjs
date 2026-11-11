@@ -114,43 +114,69 @@ test('a revoked device is distinguished from an unsupported handshake', async ()
   }
 })
 
-test('incomplete pairing replies keep the authenticated path and the original ticket', async () => {
-  const capability = 'pairing.ticket-exchange.v1'
+test('ticket exchange keeps legacy and explicitly refused tickets but rejects ambiguous results', async () => {
   const { toHex } = loadArkts('transport/crypto/Bytes.ets', ['toHex'])
-  for (const status of [undefined, { capabilities: [capability] }]) {
-    const peer = createRpcPeer()
-    const { PairingConnection, exchangePairingTicket } = loadArkts(
-      'pairing/PairingConnection.ets',
-      ['PairingConnection', 'exchangePairingTicket'],
-      { ...peer, toHex, randomBytes: (length) => new Uint8Array(length).fill(7) }
-    )
-    function reply(method, result) {
-      const request = peer.sent
-        .map((frame) => JSON.parse(frame))
-        .findLast((frame) => frame.method === method)
-      assert.ok(request, `Expected ${method}`)
-      peer.receiveText(JSON.stringify({ id: request.id, ok: true, result }))
+  class RpcSuccess {
+    constructor(result) {
+      this.result = JSON.stringify(result)
     }
-    const connection = new PairingConnection()
-    const selecting = connection.connect({ ...offer, relay: null }, () => {})
-    await new Promise(setImmediate)
-    reply('status.get', status)
-    const selected = await selecting
-    if (status === undefined) {
-      assert.equal(selected.status, null)
-      assert.equal(
-        await exchangePairingTicket(selected, 'original-ticket', () => {}),
-        'original-ticket'
-      )
-    } else {
-      const incomplete = exchangePairingTicket(selected, 'original-ticket', () => {})
-      reply('pairing.exchangeTicket', undefined)
-      assert.equal(await incomplete, 'original-ticket')
-
-      const confirmed = exchangePairingTicket(selected, 'original-ticket', () => {})
-      reply('pairing.exchangeTicket', { deviceId: 'confirmed-device' })
-      assert.equal(await confirmed, '070707070707070707070707070707070707070707070707')
-    }
-    connection.close()
   }
+  const { exchangePairingTicket } = loadArkts(
+    'pairing/PairingConnection.ets',
+    ['exchangePairingTicket'],
+    {
+      RpcSuccess,
+      toHex,
+      randomBytes: (length) => new Uint8Array(length).fill(7)
+    }
+  )
+  const token = '070707070707070707070707070707070707070707070707'
+  let persisted
+  const remember = async (value) => {
+    persisted = value
+  }
+  const connection = {
+    status: null,
+    client: {
+      async request() {
+        throw new Error('Unsupported legacy exchange')
+      }
+    }
+  }
+  assert.equal(
+    await exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
+    'original-ticket'
+  )
+  connection.status = { capabilities: ['pairing.ticket-exchange.v1'] }
+  connection.client.request = async (_method, params) => {
+    assert.equal(persisted, token)
+    assert.equal(JSON.parse(params).deviceToken, token)
+    return { errorCode: 'not_supported' }
+  }
+  assert.equal(
+    await exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
+    'original-ticket'
+  )
+  connection.client.request = async () => new RpcSuccess(undefined)
+  await assert.rejects(
+    exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
+    /unresolved/
+  )
+  connection.client.request = async () => ({ errorCode: 'timeout' })
+  await assert.rejects(
+    exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
+    /unresolved/
+  )
+  connection.client.request = async () => {
+    throw new Error('Reply lost')
+  }
+  await assert.rejects(
+    exchangePairingTicket(connection, 'original-ticket', () => {}, remember),
+    /Reply lost/
+  )
+  connection.client.request = async () => new RpcSuccess({ deviceId: 'confirmed-device' })
+  assert.equal(
+    await exchangePairingTicket(connection, 'original-ticket', () => {}, remember, token),
+    token
+  )
 })

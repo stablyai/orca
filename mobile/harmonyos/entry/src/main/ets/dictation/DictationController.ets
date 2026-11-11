@@ -234,10 +234,11 @@ export class DictationController {
     try {
       capturer.off('readData');
       await capturer.stop();
-      await capturer.release();
-      this.log('麦克风已关闭');
     } catch (e) {
-      this.log(`关闭麦克风异常: ${(e as Error).message}`);
+      this.log(`停止麦克风异常: ${(e as Error).message}`);
+    } finally {
+      try { await capturer.release(); this.log('麦克风已关闭'); }
+      catch (e) { this.log(`释放麦克风异常: ${(e as Error).message}`); }
     }
   }
 

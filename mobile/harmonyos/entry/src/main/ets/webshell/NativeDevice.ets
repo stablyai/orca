@@ -49,6 +49,7 @@ export class NativeDevice {
   private counter = 0;
   private generation = 0;
   private disposed = false;
+  private isActive: () => boolean;
   private starting = false;
   private captureRelease: Promise<void> | null = null;
   private recordingWindow: window.Window | null = null;
@@ -60,9 +61,10 @@ export class NativeDevice {
 
   constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null = null,
     onPdfPreview: (preview: PdfPreview | null) => void = (_preview: PdfPreview | null): void => {},
-    onClipboardPrompt: (prompt: ClipboardPastePrompt | null) => void = (_prompt: ClipboardPastePrompt | null): void => {}) {
-    this.context = context; this.speech = new NativeSpeech(context);
-    this.images = new NativeImageActions(context); this.pdf = new NativePdfViewer(context, client, onPdfPreview);
+    onClipboardPrompt: (prompt: ClipboardPastePrompt | null) => void = (_prompt: ClipboardPastePrompt | null): void => {},
+    isActive: () => boolean = (): boolean => true) {
+    this.context = context; this.isActive = isActive; this.speech = new NativeSpeech(context, isActive);
+    this.images = new NativeImageActions(context, isActive); this.pdf = new NativePdfViewer(context, client, onPdfPreview, isActive);
     this.onClipboardPrompt = onClipboardPrompt;
   }
   setDesktopClient(client: SpikeRpcClient | null): void { this.pdf.setClient(client); }
@@ -116,6 +118,10 @@ export class NativeDevice {
   }
   async serve(method: string, value: ESObject): Promise<Object> {
     if (this.disposed) { throw new Error('Device session closed'); }
+    let cleanup = ['native.audio.read', 'native.audio.stop', 'native.media.read', 'native.media.name', 'native.media.release'].includes(method)
+      || (method === 'native.speech.act' && ['read', 'finish', 'cancel'].includes(value?.['action']))
+      || (method === 'native.pdf.view' && value?.['action'] === 'cancel');
+    if (!cleanup && !this.isActive()) { throw new Error('Device page is not active'); }
     if (method === 'native.speech.act') { return this.speech.serve(value); }
     if (method === 'native.image.act') { return this.images.serve(value); }
     if (method === 'native.pdf.view') { return this.pdf.serve(value); }
@@ -169,18 +175,18 @@ export class NativeDevice {
     return result;
   }
   async notifyExternalLink(target: string): Promise<void> {
-    if (this.disposed || typeof target !== 'string' || target.length > 8192 || /[\x00-\x20\x7f]/.test(target)
+    if (this.disposed || !this.isActive() || typeof target !== 'string' || target.length > 8192 || /[\x00-\x20\x7f]/.test(target)
       || !/^(?:https?:\/\/[^/@?#]+(?:[/?#]|$)|mailto:[^@\s]+@[^\s]+)/i.test(target)) { throw new Error('Invalid external link'); }
     await this.context.startAbility({ action: 'ohos.want.action.viewData', uri: target });
   }
 
   async notifyHaptic(kind: string): Promise<void> {
-    if (this.disposed || !['mediumImpact', 'selection', 'success', 'error', 'edgeBump'].includes(kind)) { throw new Error('Invalid haptic feedback'); }
+    if (this.disposed || !this.isActive() || !['mediumImpact', 'selection', 'success', 'error', 'edgeBump'].includes(kind)) { throw new Error('Invalid haptic feedback'); }
     await playHapticFeedback(kind);
   }
 
   private checkSelection(generation: number): void {
-    if (this.disposed || generation !== this.selectionGeneration) { throw new Error('Selection cancelled'); }
+    if (this.disposed || generation !== this.selectionGeneration || !this.isActive()) { throw new Error('Selection cancelled'); }
   }
 
   private async readClipboard(mime: string): Promise<pasteboard.PasteData | null> {
@@ -220,7 +226,7 @@ export class NativeDevice {
     this.starting = true; let generation = ++this.generation;
     try {
       let phoneOnly = await readDictationEngine(this.context) === DICTATION_ENGINE_ONDEVICE;
-      if (this.disposed || generation !== this.generation) { throw new Error('Capture cancelled'); }
+      if (this.disposed || generation !== this.generation || !this.isActive()) { throw new Error('Capture cancelled'); }
       let unavailable: Record<string, Object> = { 'started': false, 'sampleRate': 16000, 'permission': 'granted' };
       if (phoneOnly && !this.speech.canCapture()) { return unavailable; }
       let permission = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(this.context, ['ohos.permission.MICROPHONE']);
@@ -228,7 +234,7 @@ export class NativeDevice {
         this.speech.cancel();
         let denied: Record<string, Object> = { 'started': false, 'sampleRate': 16000, 'permission': 'denied' }; return denied;
       }
-      if (this.disposed || generation !== this.generation) { throw new Error('Capture cancelled'); }
+      if (this.disposed || generation !== this.generation || !this.isActive()) { throw new Error('Capture cancelled'); }
       if (phoneOnly && !this.speech.canCapture()) { return unavailable; }
       let options: audio.AudioCapturerOptions = {
         streamInfo: { samplingRate: audio.AudioSamplingRate.SAMPLE_RATE_16000, channels: audio.AudioChannel.CHANNEL_1,
@@ -236,15 +242,15 @@ export class NativeDevice {
         capturerInfo: { source: audio.SourceType.SOURCE_TYPE_MIC, capturerFlags: 0 }
       };
       let capturer = await audio.createAudioCapturer(options);
-      if (this.disposed || generation !== this.generation) { await capturer.release(); throw new Error('Capture cancelled'); }
+      if (this.disposed || generation !== this.generation || !this.isActive()) { await capturer.release(); throw new Error('Capture cancelled'); }
       this.capturer = capturer;
       let recordingWindow = await window.getLastWindow(this.context);
-      if (this.disposed || generation !== this.generation) { await this.stopCapture(); throw new Error('Capture cancelled'); }
+      if (this.disposed || generation !== this.generation || !this.isActive()) { await this.stopCapture(); throw new Error('Capture cancelled'); }
       this.recordingWindow = recordingWindow;
       let previousKeepScreenOn = recordingWindow.getWindowProperties().isKeepScreenOn;
       this.previousKeepScreenOn = previousKeepScreenOn;
       await recordingWindow.setWindowKeepScreenOn(true);
-      if (this.disposed || generation !== this.generation) {
+      if (this.disposed || generation !== this.generation || !this.isActive()) {
         try { await recordingWindow.setWindowKeepScreenOn(previousKeepScreenOn); } catch (e) { }
         await this.stopCapture(); throw new Error('Capture cancelled');
       }
@@ -278,7 +284,7 @@ export class NativeDevice {
         }
       });
       await capturer.start();
-      if (this.disposed || generation !== this.generation) { await this.stopCapture(); throw new Error('Capture cancelled'); }
+      if (this.disposed || generation !== this.generation || !this.isActive()) { await this.stopCapture(); throw new Error('Capture cancelled'); }
       let result: Record<string, Object> = { 'started': true, 'sampleRate': 16000, 'permission': 'granted' }; return result;
     } catch (e) { this.speech.cancel(); await this.stopCapture(); throw new Error((e as Error).message); }
     finally { this.starting = false; }

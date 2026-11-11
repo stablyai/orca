@@ -202,9 +202,14 @@ function pdfHarness(client, preview = {}) {
       }
     }
   }).NativePdfViewer
-  const viewer = new NativePdfViewer({ cacheDir: '/cache' }, client, (document) => {
-    visible = document
-  })
+  const viewer = new NativePdfViewer(
+    { cacheDir: '/cache' },
+    client,
+    (document) => {
+      visible = document
+    },
+    preview.isActive
+  )
   return { viewer, shown, removed, visible: () => visible }
 }
 function pdfClient(onRequest) {
@@ -349,6 +354,9 @@ test('a protected PDF can be retried in Orca until the viewer closes', async () 
   assert.equal(preview.title, 'protected.pdf')
   assert.equal(preview.controller, null)
   assert.equal(await preview.unlock('wrong passphrase'), null)
+  await viewer.pause()
+  assert.equal(visible(), preview)
+  assert.equal(removed.includes(preview.path), false)
   assert.ok(await preview.unlock('fixture passphrase'))
   assert.equal(removed.includes(preview.path), false)
   await viewer.serve({ action: 'cancel' })
@@ -381,6 +389,9 @@ function preferencesHarness() {
       'setNumber',
       'getString',
       'getNumber',
+      'getBool',
+      'setBool',
+      'notificationDeliveryEnabled',
       'readPagePreferencesSync',
       'writePagePreferenceSync'
     ],
@@ -575,7 +586,7 @@ test('desktop notifications retain pane and execution scope and ignore replays o
   assert.equal(delivered.length, 1)
 })
 
-function notifierHarness(settings = {}) {
+function notifierHarness(settings = {}, options = {}) {
   const requests = []
   const cancelled = []
   const prefs = {
@@ -587,15 +598,17 @@ function notifierHarness(settings = {}) {
   }
   const { LocalNotifier } = loadArkts('notifications/LocalNotifier.ets', ['LocalNotifier'], {
     ...notificationIdentity,
-    getBool: async (_context, key) => key === 'enabled',
+    getBool: options.getBool ?? (async (_context, key) => key === 'enabled'),
+    notificationDeliveryEnabled: options.notificationDeliveryEnabled ?? (() => true),
     KEY_NOTIFICATIONS_LOCAL_ENABLED: 'enabled',
     KEY_NOTIFICATIONS_DND_ENABLED: 'dnd',
-    notificationDeliveryPreferences: () => prefs,
+    notificationDeliveryPreferences: () => ({ ...prefs }),
     notificationManager: {
       isNotificationEnabled: async () => true,
       isNotificationEnabledSync: () => true,
       addSlot: async () => {},
       publish: async (request) => {
+        options.onPublish?.()
         requests.push(request)
       },
       getActiveNotifications: async () =>
@@ -610,7 +623,7 @@ function notifierHarness(settings = {}) {
       SlotType: { SOCIAL_COMMUNICATION: 1 }
     },
     wantAgent: {
-      getWantAgent: async (value) => value,
+      getWantAgent: options.getWantAgent ?? (async (value) => value),
       OperationType: { START_ABILITY: 0 },
       WantAgentFlags: { UPDATE_PRESENT_FLAG: 0 }
     }
@@ -763,7 +776,13 @@ function deviceHarness(extra = {}) {
     NativePdfViewer: Pdf,
     ...extra
   })
-  return new NativeDevice(extra.context ?? {}, null, () => {}, extra.onClipboardPrompt)
+  return new NativeDevice(
+    extra.context ?? {},
+    null,
+    () => {},
+    extra.onClipboardPrompt,
+    extra.isActive
+  )
 }
 
 test('a cancelled clipboard prompt leaves the next paste available for explicit confirmation', async () => {
@@ -1053,3 +1072,211 @@ for (const loss of ['focus', 'stopped', 'background']) {
     await device.dispose()
   })
 }
+
+for (const change of ['disabled', 'dnd', 'viewing']) {
+  test(`a notification suppressed by ${change} while preparing its launch target is not delivered`, async () => {
+    const preparing = deferred()
+    const prepared = deferred()
+    const settings = preferencesHarness()
+    const { notifier, requests } = notifierHarness(
+      {},
+      {
+        getBool: (_context, key) =>
+          settings.getBool(
+            {},
+            key === 'enabled' ? 'notifications.localEnabled' : 'notifications.dndEnabled'
+          ),
+        notificationDeliveryEnabled: () => settings.notificationDeliveryEnabled({}),
+        getWantAgent: () => {
+          preparing.resolve()
+          return prepared.promise
+        }
+      }
+    )
+    const delivery = notifier.publishDesktopEventAsync(notificationEvent)
+    await preparing.promise
+    if (change === 'disabled') {
+      await settings.setBool({}, 'notifications.localEnabled', false)
+    } else if (change === 'dnd') {
+      await settings.setBool({}, 'notifications.dndEnabled', true)
+    } else {
+      notifier.setViewing('host', 'workspace', 'runtime:remote')
+    }
+    prepared.resolve({})
+    assert.equal(await delivery, false)
+    assert.deepEqual(requests, [])
+  })
+}
+
+test('an alert uses the sound preference selected while its launch target is being prepared', async () => {
+  const preparing = deferred()
+  const prepared = deferred()
+  const { notifier, requests, prefs } = notifierHarness(
+    {},
+    {
+      getWantAgent: () => {
+        preparing.resolve()
+        return prepared.promise
+      }
+    }
+  )
+  const delivery = notifier.publishDesktopEventAsync(notificationEvent)
+  await preparing.promise
+  prefs.sound = false
+  prepared.resolve({})
+  assert.equal(await delivery, true)
+  assert.equal(requests[0].notificationFlags.soundEnabled, 2)
+})
+
+test('a covered shell cannot acquire native devices but can finish releasing its existing capture', async () => {
+  let visible = true
+  let recording = false
+  const device = deviceHarness({
+    ...microphoneBindings(
+      {
+        on() {},
+        off() {},
+        async start() {
+          recording = true
+        },
+        async stop() {
+          recording = false
+        },
+        async release() {
+          recording = false
+        }
+      },
+      {
+        getWindowProperties: () => ({ isKeepScreenOn: false }),
+        async setWindowKeepScreenOn() {}
+      }
+    ),
+    isActive: () => visible,
+    NativeSpeech: class {
+      endInput() {}
+      dispose() {}
+      async serve() {
+        return { text: 'retained transcript' }
+      }
+    },
+    NativePdfViewer: class {
+      async cancel() {}
+      async dispose() {}
+      async serve() {
+        return {}
+      }
+    }
+  })
+  assert.equal((await device.serve('native.audio.start', { sampleRate: 16000 })).started, true)
+  visible = false
+  await device.pause(true)
+  for (const [method, params] of [
+    ['native.audio.start', { sampleRate: 16000 }],
+    ['native.media.pick', { source: 'files', multiple: false }],
+    ['native.pdf.view', { action: 'open', worktreeId: 'w', relativePath: 'secret.pdf' }],
+    ['native.speech.act', { action: 'start', locale: 'zh-CN' }],
+    ['native.clipboard.read', { mime: 'text' }],
+    ['native.clipboard.write', { mime: 'text', value: 'stale page' }],
+    [
+      'native.image.act',
+      {
+        action: 'run',
+        operation: 'share',
+        source: { kind: 'url', url: 'https://example.com/a.png' }
+      }
+    ]
+  ]) {
+    await assert.rejects(device.serve(method, params), /page is not active/)
+  }
+  assert.equal(recording, false)
+  assert.equal((await device.serve('native.audio.stop', {})).stopped, false)
+  assert.equal(
+    (await device.serve('native.speech.act', { action: 'finish' })).text,
+    'retained transcript'
+  )
+  await device.serve('native.pdf.view', { action: 'cancel' })
+  visible = true
+  assert.equal((await device.serve('native.audio.start', { sampleRate: 16000 })).started, true)
+  await device.dispose()
+})
+
+test('losing navigation ownership during microphone permission cannot acquire a capturer', async () => {
+  const permission = deferred()
+  const requesting = deferred()
+  let visible = true
+  let captured = false
+  const bindings = microphoneBindings({}, {})
+  bindings.abilityAccessCtrl.createAtManager = () => ({
+    requestPermissionsFromUser: () => {
+      requesting.resolve()
+      return permission.promise
+    }
+  })
+  bindings.audio.createAudioCapturer = async () => {
+    captured = true
+    throw new Error('A covered page requested microphone capture')
+  }
+  const device = deviceHarness({ ...bindings, isActive: () => visible })
+  const opening = device.serve('native.audio.start', { sampleRate: 16000 })
+  const cancelled = assert.rejects(opening, /Capture cancelled/)
+  await requesting.promise
+  visible = false
+  permission.resolve({ authResults: [0] })
+  await cancelled
+  assert.equal(captured, false)
+  await device.dispose()
+})
+
+test('a PDF download finishing after navigation ownership changes cannot present its preview', async () => {
+  let visible = true
+  const downloading = deferred()
+  const downloaded = deferred()
+  const client = pdfClient(async (request) => {
+    if (request.method === 'files.stat') {
+      return fileStat
+    }
+    downloading.resolve()
+    await downloaded.promise
+    return fileChunk
+  })
+  const { viewer, shown, removed } = pdfHarness(client, { isActive: () => visible })
+  const opening = viewer.serve({ action: 'open', worktreeId: 'w', relativePath: 'pending.pdf' })
+  const cancelled = assert.rejects(opening, /PDF page is not active/)
+  await downloading.promise
+  visible = false
+  downloaded.resolve()
+  await cancelled
+  assert.deepEqual(shown, [])
+  assert.ok(removed.some((path) => path.endsWith('.pdf')))
+})
+
+test('a queued preference change cannot interleave between the final delivery snapshot and native publication', async () => {
+  let enabled = true
+  let prepared = false
+  let allowedAtPublication = null
+  const snapshot = () => {
+    const current = enabled
+    if (prepared) {
+      queueMicrotask(() => {
+        enabled = false
+      })
+    }
+    return current
+  }
+  const { notifier } = notifierHarness(
+    {},
+    {
+      notificationDeliveryEnabled: snapshot,
+      getBool: async (_context, key) => (key === 'enabled' ? snapshot() : false),
+      getWantAgent: async () => {
+        prepared = true
+        return {}
+      },
+      onPublish: () => {
+        allowedAtPublication = enabled
+      }
+    }
+  )
+  assert.equal(await notifier.publishDesktopEventAsync(notificationEvent), true)
+  assert.equal(allowedAtPublication, true)
+})

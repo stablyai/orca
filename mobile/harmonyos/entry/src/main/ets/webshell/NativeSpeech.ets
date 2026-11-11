@@ -20,11 +20,14 @@ export class NativeSpeech {
   private closed = false;
   private opening: Promise<speechRecognizer.SpeechRecognitionEngine | null> | null = null;
   private startRequested = false;
+  private isActive: () => boolean;
 
-  constructor(context: common.UIAbilityContext) { this.context = context; }
+  constructor(context: common.UIAbilityContext, isActive: () => boolean = (): boolean => true) {
+    this.context = context; this.isActive = isActive;
+  }
 
   canCapture(): boolean {
-    return !this.closed && this.sessionId.length > 0 && !this.starting && !this.finalizing && !this.failure;
+    return !this.closed && this.isActive() && this.sessionId.length > 0 && !this.starting && !this.finalizing && !this.failure;
   }
 
   private async engineFor(locale: string): Promise<speechRecognizer.SpeechRecognitionEngine | null> {
@@ -39,7 +42,7 @@ export class NativeSpeech {
     let generation = this.generation;
     let engine = await speechRecognizer.createEngine({ language: 'zh-CN', online: 1,
       extraParams: { recognizerMode: 'long' } });
-    if (this.closed || generation !== this.generation) { engine.shutdown(); return null; }
+    if (this.closed || generation !== this.generation || !this.isActive()) { engine.shutdown(); return null; }
     engine.setListener({
       onStart: (id: string): void => {
         if (id === this.sessionId && this.starting) { let done = this.starting; this.starting = null; done(true); }
@@ -82,7 +85,7 @@ export class NativeSpeech {
     if (action === 'cancel') { this.cancel(); return {}; }
     if (action === 'read') { return { revision: this.revision, committed: this.committed, tentative: this.tentative, failure: this.failure }; }
     if (action === 'finish') { return this.finish(); }
-    if (this.closed) { throw new Error('Speech session closed'); }
+    if (this.closed || !this.isActive()) { throw new Error('Speech session closed'); }
     if (action === 'start' && (this.startRequested || this.finalizing)) {
       return { started: false, locale: null, reason: 'busy' };
     }
@@ -98,7 +101,7 @@ export class NativeSpeech {
     if (action === 'status') {
       return { status: status, locale: engine ? 'zh-CN' : null, preference: await getString(this.context, KEY_DICTATION_ENGINE) };
     }
-    if (this.closed || requestGeneration !== this.generation) { this.startRequested = false; return { started: false, locale: null, reason: 'failed' }; }
+    if (this.closed || requestGeneration !== this.generation || !this.isActive()) { this.startRequested = false; return { started: false, locale: null, reason: 'failed' }; }
     if (this.sessionId.length > 0 || !engine || status !== 'ready') {
       this.startRequested = false;
       return { started: false, locale: engine ? 'zh-CN' : null, reason: status === 'ready' ? 'busy' : status };
@@ -114,7 +117,7 @@ export class NativeSpeech {
       } catch (e) { this.starting(false); this.starting = null; }
     });
     this.startRequested = false;
-    let started = ready && requestGeneration === this.generation && this.sessionId === id;
+    let started = ready && this.isActive() && requestGeneration === this.generation && this.sessionId === id;
     if (!started && this.sessionId === id) { this.cancel(); }
     return { started: started, locale: 'zh-CN', reason: started ? null : 'failed' };
   }
