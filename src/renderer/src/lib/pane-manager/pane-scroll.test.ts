@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { Terminal } from '@xterm/xterm'
-import { captureScrollState, restoreScrollState, restoreScrollStateAfterFit } from './pane-scroll'
+import {
+  cancelDeferredScrollRestore,
+  cancelPendingFitScrollRestore,
+  captureScrollState,
+  resumePendingFitScrollRestoreAfterFit,
+  restoreScrollState,
+  restoreScrollStateAfterFit
+} from './pane-scroll'
 
 function writeHeadless(terminal: HeadlessTerminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))
@@ -22,6 +29,57 @@ function makeHeadlessRestorable(terminal: HeadlessTerminal): Terminal {
 }
 
 describe('scroll state', () => {
+  // WAKE-SCROLLBACK-SCROLL: a remount's first fit captures "at bottom" while the pane can't render
+  // yet and waits; the person's place, set after it, must not be undone when that restore resumes.
+  async function heldBottomRestore() {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    )
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+    const headless = new HeadlessTerminal({ cols: 20, rows: 5, scrollback: 100 })
+    await writeHeadless(headless, Array.from({ length: 50 }, (_, i) => `line-${i}`).join('\r\n'))
+    const terminal = makeHeadlessRestorable(headless)
+    const atBottom = captureScrollState(terminal)
+    // Not renderable yet: the restore retries on later frames and is kept for the next fit.
+    Object.defineProperty(terminal, 'element', { configurable: true, value: undefined })
+    restoreScrollStateAfterFit(terminal, atBottom, {
+      onRestored: () => {},
+      shouldRestore: () => true
+    })
+    Object.defineProperty(terminal, 'element', { configurable: true, value: {} })
+    // The wake restore puts the person back on their line.
+    headless.scrollToLine(12)
+    return { headless, terminal, frames }
+  }
+
+  it('without cancelling, a held at-bottom fit restore undoes a scroll set after it', async () => {
+    const { headless, frames } = await heldBottomRestore()
+    try {
+      frames.shift()?.(0)
+      expect(headless.buffer.active.viewportY).toBe(headless.buffer.active.baseY)
+    } finally {
+      headless.dispose()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('cancelling pending restores keeps a deliberately set scroll through later frames and fits', async () => {
+    const { headless, terminal, frames } = await heldBottomRestore()
+    try {
+      cancelDeferredScrollRestore(terminal)
+      cancelPendingFitScrollRestore(terminal)
+      while (frames.length > 0) {
+        frames.shift()?.(0)
+      }
+      expect(resumePendingFitScrollRestoreAfterFit(terminal)).toBe(false)
+      expect(headless.buffer.active.viewportY).toBe(12)
+    } finally {
+      headless.dispose()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('retries a fit restore when xterm leaves the viewport short of the target', async () => {
     const frames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>

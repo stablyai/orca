@@ -1,5 +1,9 @@
 import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { syncTerminalScrollIntentFromViewport } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  cancelDeferredScrollRestore,
+  cancelPendingFitScrollRestore
+} from '@/lib/pane-manager/pane-scroll'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -201,8 +205,10 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
           session.writeReplayDataAsync
         )
         if (preSleep.scrolledTo !== null) {
-          // Record the person's place as a pin, so post-fit scroll-intent restores keep it there
-          // instead of following output to the bottom.
+          // The person's place wins: drop restores captured before it (a remount's first fit, at the
+          // bottom, waiting for a later fit) and record it as a pin for the fits still to come.
+          cancelDeferredScrollRestore(session.pane.terminal)
+          cancelPendingFitScrollRestore(session.pane.terminal)
           syncTerminalScrollIntentFromViewport(session.pane.terminal, { allowBufferShrink: true })
         }
         if (!isCurrentPayload()) {
