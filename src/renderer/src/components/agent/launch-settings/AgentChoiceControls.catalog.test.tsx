@@ -196,7 +196,7 @@ it('keeps its own account rows and mounted saved label independent of preload an
       }
     }))
   )
-  expect(model.selectedOptions[0].label).toBe('GPT-6 Luna')
+  expect(model.selectedOptions[0].textContent).toBe('GPT-6 Luna')
   expect(model.getAttribute('aria-busy')).toBe('false')
   expect(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Reasoning effort' }).value).toBe(
     'ultra'
