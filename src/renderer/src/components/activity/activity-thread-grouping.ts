@@ -3,37 +3,21 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
+import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
   activityThreadStatusId,
   agentMeta,
   agentSummary,
   agentTitle,
-  threadAgentStateLabel,
-  type ActivityThreadStatusId
+  threadAgentStateLabel
 } from './activity-thread-presentation'
+import { AGENT_LIST_STATUS_RANK } from '../../../../shared/agent-status/presentation/agent-list-status'
 import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
-// Use exhaustive, unique attention ranks so new states fail typecheck and recency cannot reorder headers.
-const ACTIVITY_STATUS_GROUP_RANK: Record<ActivityThreadStatusId, number> = {
-  waiting: 0,
-  blocked: 1,
-  permission: 2,
-  failed: 3,
-  unconfirmed: 4,
-  working: 5,
-  monitoring: 6,
-  // A user's Stop is not news, so it follows live work, but it is not a finish either.
-  interrupted: 7,
-  unverifiable: 8,
-  done: 9,
-  idle: 10
-}
-
 function activityStatusRank(thread: AgentPaneThread): number {
-  return ACTIVITY_STATUS_GROUP_RANK[activityThreadStatusId(thread)]
+  return AGENT_LIST_STATUS_RANK[activityThreadStatusId(thread)]
 }
 
 export function getActivityThreadGroup(

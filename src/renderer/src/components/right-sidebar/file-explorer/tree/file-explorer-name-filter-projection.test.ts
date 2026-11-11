@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createNameFilteredFileExplorerProjection } from './file-explorer-name-filter-projection'
-import { buildIgnoredSet } from '../../../../lib/git-path-decoration'
+import { buildIgnoredSet } from '../../../../lib/source-control/paths/git-path-decoration'
 
 describe('name-filter filename identity', () => {
   function project(

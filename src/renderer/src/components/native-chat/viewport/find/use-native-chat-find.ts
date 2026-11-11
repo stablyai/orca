@@ -7,14 +7,14 @@ import {
   type RefObject
 } from 'react'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { isEditableTarget } from '@/lib/editable-target'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '../../../../store/index'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
 import { focusNativeChatPromptCard } from '../../prompts/use-native-chat-prompt-card-focus'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 // Keep open state/query with the retained chat so reopen preserves its last search.
 export type NativeChatFind = {

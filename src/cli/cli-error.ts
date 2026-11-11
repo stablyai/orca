@@ -2,7 +2,7 @@ import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recov
 import {
   matchAutomationOwnerConflict,
   stripAutomationOwnerConflictCode
-} from '../shared/automation-owner-conflict'
+} from '../shared/automations/ownership/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
 import { ambiguousWorkspaceChoices, selectorAmbiguityRecovery } from './selector-ambiguity-recovery'

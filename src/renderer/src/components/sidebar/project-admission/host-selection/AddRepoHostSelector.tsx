@@ -6,15 +6,16 @@ import { useBoundedHostRows } from '../../../host-picker/use-bounded-host-rows'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { searchHostsLabel } from '../../../host-picker/host-picker-copy'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import type { SidebarHostOption } from '../../worktree-list/controls/sidebar-host-options'
+import { cn } from '@/lib/class-names'
+
 import {
+  type SidebarHostOption,
   getSidebarHostHealthLabel,
   shouldShowHostScopeControls
 } from '../../worktree-list/controls/sidebar-host-options'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
-import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-availability'
 
@@ -44,7 +45,7 @@ function getHostStatusDetail(host: SidebarHostOption, t?: Translate): string {
     return describeRuntimeCompatBlock(host.compatibility, t)
   }
   const detail = host.failureReason ?? host.detail
-  return `${getSidebarHostHealthLabel(host.health, host.blockedReason, t)}${detail ? ` - ${detail}` : ''}`
+  return `${getSidebarHostHealthLabel(host.health, host.blockedReason, t, host.vmState)}${detail ? ` - ${detail}` : ''}`
 }
 
 export function AddRepoHostSelector({
@@ -92,7 +93,12 @@ export function AddRepoHostSelector({
                 title={getHostStatusDetail(selectedHost, t)}
                 className="shrink-0 text-[11px] font-normal text-muted-foreground"
               >
-                {getSidebarHostHealthLabel(selectedHost.health, selectedHost.blockedReason, t)}
+                {getSidebarHostHealthLabel(
+                  selectedHost.health,
+                  selectedHost.blockedReason,
+                  t,
+                  selectedHost.vmState
+                )}
               </span>
             ) : null}
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />

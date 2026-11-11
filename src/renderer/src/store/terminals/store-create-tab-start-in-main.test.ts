@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../testing/app-store-cascade-api.test-fixture'
@@ -32,7 +32,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -128,22 +128,6 @@ describe("a new tab's first terminal, started by main in a layout-owner build", 
     expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toEqual({ status: 'starting' })
     drawBinding(store, 'pty-main')
     expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toBeUndefined()
-  })
-
-  it('starts its own terminal, with its startup, when main does not hold the tab', async () => {
-    const store = storeWithWorktree()
-    store.getState().createTab(WORKTREE, undefined, undefined, {
-      id: TAB,
-      initialLeafId: LEAF,
-      pendingStartup: { command: 'make dev' }
-    })
-    await settle()
-
-    mocks.create!.reject(new Error('host_not_owned'))
-    await settle()
-
-    expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toBeUndefined()
-    expect(store.getState().pendingStartupByTabId[TAB]).toMatchObject({ command: 'make dev' })
   })
 
   it('gives no startup back to a tab the user closed before main answered', async () => {

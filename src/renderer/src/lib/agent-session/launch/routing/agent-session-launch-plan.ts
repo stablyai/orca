@@ -1,41 +1,37 @@
-import { notifyAgentLaunchFailure, agentLaunchRecoveryMessage } from '@/lib/agent-launch-failure'
+import {
+  notifyAgentLaunchFailure,
+  agentLaunchRecoveryMessage
+} from '@/lib/agent-session/launch/failure/agent-launch-failure'
+import { isLocalExecutionHost, parseExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import '../structured-agent-session-launch-intent'
+import { StructuredAgentSessionOwnerUnresolvedError } from '../structured-agent-session-launch-errors'
+import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
+import type { AgentLaunchRouteArgs, AgentLaunchRouteStore } from './agent-launch-route-input'
+import {
+  resolveAgentLaunchRoute,
+  structuredAgentLaunchDowngrade,
+  structuredAgentLaunchSupported
+} from './agent-launch-routing'
+import type { AgentLaunchRoute, AgentLaunchRoutingInput } from './agent-launch-routing'
+import { beginStructuredAgentLaunchSettlement } from '../continuation/structured-agent-launch-settlement'
+import type {
+  StructuredAgentLaunchHandle,
+  StructuredAgentLaunchHooks,
+  StructuredAgentLaunchSettlement
+} from '../continuation/structured-agent-launch-settlement'
+import { relearnHostStructuredAgents } from '../../../../runtime/native-chat/agent-catalogs/host-structured-agents'
+import { awaitLocalRuntimeCapabilities } from '../../../../runtime/hosts/capabilities/local-runtime-capabilities'
 import type { StructuredLaunchSurfaceAddress } from '../structured-agent-session-launch-record'
 import type {
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
 } from '../../../../../../shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import {
-  isLocalExecutionHost,
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import '../../../launch-structured-agent-session'
-import { StructuredAgentSessionOwnerUnresolvedError } from '../structured-agent-session-launch-errors'
-import {
-  buildAgentLaunchRouteInput,
-  type AgentLaunchRouteArgs,
-  type AgentLaunchRouteStore
-} from './agent-launch-route-input'
-import {
-  resolveAgentLaunchRoute,
-  structuredAgentLaunchDowngrade,
-  structuredAgentLaunchSupported,
-  type AgentLaunchRoute,
-  type AgentLaunchRoutingInput
-} from './agent-launch-routing'
 import type { NativeChatLaunchPromptDelivery } from '../prompt/native-chat-launch-prompt-delivery'
-import {
-  beginStructuredAgentLaunchSettlement,
-  type StructuredAgentLaunchHandle,
-  type StructuredAgentLaunchHooks,
-  type StructuredAgentLaunchSettlement
-} from '../continuation/structured-agent-launch-settlement'
 import type { StructuredAgentLaunchOptions } from '../structured-agent-session-launch-callers'
 import type { AgentLaunchRequestId } from './agent-launch-request-id'
-import { relearnHostStructuredAgents } from '../../../../runtime/native-chat/agent-catalogs/host-structured-agents'
-import { awaitLocalRuntimeCapabilities } from '../../../../runtime/hosts/capabilities/local-runtime-capabilities'
 
 export type AgentLaunchSurface = 'chat' | 'terminal'
 

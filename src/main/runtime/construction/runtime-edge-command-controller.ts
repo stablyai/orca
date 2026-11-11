@@ -1,4 +1,4 @@
-import type { BrowserScreencastResult } from '../../../shared/runtime-browser-contracts'
+import type { BrowserScreencastResult } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { runWithRequestedPageUrl } from '../../browser/cdp/input/browser-expected-page-url'
 import type { RuntimeBrowserCommandHost } from '../browser/commands/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../browser/commands/browser-commands'
@@ -47,6 +47,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserProceedCertificate',
   'browserTabShow',
   'browserTabCurrent',
+  'browserTabAnnotations',
   'browserTabSwitch',
   'browserHover',
   'browserDrag',

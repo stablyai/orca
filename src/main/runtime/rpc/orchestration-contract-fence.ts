@@ -3,8 +3,8 @@ import {
   isRetiredOrchestrationMethod,
   orchestrationMigrationData,
   type OrchestrationMigrationReason
-} from '../../../shared/orchestration-rpc-contract'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
+} from '../../../shared/orchestration/orchestration-rpc-contract'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
 import { errorResponse } from './errors'
 

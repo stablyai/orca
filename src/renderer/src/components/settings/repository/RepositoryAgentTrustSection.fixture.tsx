@@ -1,5 +1,5 @@
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { AgentWorkspaceTrustDecision } from '../../../../../shared/agent-workspace-trust-decision'
+import type { AgentWorkspaceTrustDecision } from '../../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import type { Repo } from '../../../../../shared/repo-types'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
@@ -28,7 +28,6 @@ function fixture(decision: AgentWorkspaceTrustDecision | undefined, globalEnable
   })
 }
 
-export const undecided = fixture(undefined)
 export const preTrust = fixture('pre-trust')
 export const agentAsks = fixture('agent-asks')
 export const globalOff = fixture('pre-trust', false)

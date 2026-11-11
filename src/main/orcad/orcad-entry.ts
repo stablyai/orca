@@ -28,6 +28,8 @@ import { createOrcadStartupTiming } from './orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readiness'
+import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
+import { startOrcadEventLoopWatchdog } from './orcad-event-loop-watchdog'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 
 let closeOrcadObservability = (): Promise<void> => Promise.resolve()
@@ -63,6 +65,11 @@ async function startOrcadRuntime(
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
 ): Promise<Pick<OrcadHandle, 'readiness'>> {
   const { time: timed, report: reportStartupTiming } = createOrcadStartupTiming()
+  // Read before startOrcadDaemon consumes the supervised flag; only a supervised server exits on a long stall.
+  const eventLoopWatchdog = startOrcadEventLoopWatchdog({
+    supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1'
+  })
+  registerCleanup(() => eventLoopWatchdog?.stop())
   // Overlap login-shell probing with imports and store startup.
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
@@ -90,11 +97,11 @@ async function startOrcadRuntime(
   const { resolveDaemonSessionScrollbackRows } =
     await import('../daemon/sessions/daemon-session-scrollback-window')
   const { collectOrcadHealth } = await import('./orcad-health')
-  const { agentHookServer } = await import('../agent-hooks/server')
-  await import('../agent-hooks/managed-agent-hook-controls')
-  const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
+  const { agentHookServer } = await import('../agent-hooks/server/agent-hook-server')
+  await import('../agent-hooks/installation/managed-agent-hook-controls')
+  const { agentHookRuntimeDeps } = await import('../agent-hooks/runtime/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
-    await import('../agent-hooks/hook-status-session-tabs-republish')
+    await import('../agent-hooks/runtime/hook-status-session-tabs-republish')
   const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
     await import('./orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
@@ -219,6 +226,8 @@ async function startOrcadRuntime(
   paneGridsForShutdown = runtime
 
   accountLaunch?.attachToRuntime(runtime)
+  const { wireGitHubIssueLinkTitleFill } = await import('../github/github-issue-link-title-wiring')
+  registerCleanup(wireGitHubIssueLinkTitleFill(profileStore, runtime))
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
 

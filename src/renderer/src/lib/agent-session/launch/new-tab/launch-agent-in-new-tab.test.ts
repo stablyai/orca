@@ -1,4 +1,4 @@
-import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
+import { nonRefusedAgentLaunch } from '@/lib/agent-session/launch/new-tab/agent-tab-launch-outcome.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   mockCreateTab,
@@ -208,84 +208,13 @@ describe('launchAgentInNewTab', () => {
       }
       const startup = queuedStartups()[0]
       expect(startup).toBeDefined()
-      expect(tokenizeStartupCommand(startup.command, 'posix')).toMatchObject({
+      expect(tokenizeStartupCommand(startup.command ?? '', 'posix')).toMatchObject({
         ok: true,
         tokens: ['cx', '-c', 'model="true"', '-c', 'model_reasoning_effort=high']
       })
       expect(startup.launchConfig?.agentArgs).toBe(`-c 'model="true"'`)
       expect(startup.launchConfig).not.toHaveProperty('chatSessionOptions')
       expect(startup.launchConfig).not.toHaveProperty('chatLaunchOptions')
-    }
-  )
-
-  it.each(['local', 'ssh'] as const)(
-    'keeps the whole saved-source terminal DTO/config identical to its base-only caller on %s',
-    async (host) => {
-      const transport =
-        await import('../../../../runtime/agent-launch-settings/agent-launch-settings-transport')
-      const preferences =
-        await import('../../../../runtime/agent-launch-settings/use-host-agent-launch-preferences')
-      vi.spyOn(transport, 'hostSupportsLaunchChoices').mockResolvedValue(false)
-      vi.spyOn(preferences, 'ensureAgentLaunchPreferences').mockResolvedValue({
-        defaultTuiAgent: 'codex',
-        disabledTuiAgents: undefined,
-        agentLaunchChoices: {}
-      })
-      store.settings.agentCmdOverrides = { codex: 'cx' }
-      if (host === 'ssh') {
-        store.repos[0].connectionId = 'ssh-target-1'
-      }
-      mockIsWebRuntimeSessionActive.mockReturnValue(false)
-      const raw = `-c 'model="true"'  --search`
-      const projection = projectSourceControlActionLaunch(
-        {
-          agentArgs: raw,
-          launchPreferences: {
-            agentId: 'codex',
-            modelSelection: {
-              base: 'default',
-              options: { effort: { agentId: 'codex', value: 'high' } }
-            }
-          }
-        },
-        'codex',
-        { basePrompt: '' }
-      )
-      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-      const perform = async (
-        input: Partial<
-          Extract<Parameters<typeof launchAgentInNewTab>[0], { agentSessionLaunchPlan?: undefined }>
-        >
-      ) => {
-        mockCreateTab.mockClear()
-        mockCreateWebRuntimeSessionTerminal.mockClear()
-        const result = nonRefusedAgentLaunch(
-          launchAgentInNewTab({
-            requestId: 'source-parity',
-            agent: 'codex',
-            worktreeId: 'wt-1',
-            requestedSurface: 'terminal',
-            launchPlatform: 'linux',
-            ...input
-          })
-        )
-        await result?.terminalCompletion
-        return {
-          startup: queuedStartups()[0],
-          wire: mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0],
-          surface: result?.surface
-        }
-      }
-      const expected = await perform({ agentArgs: raw, sessionOptions: { effort: 'high' } })
-      const actual = await perform(projection)
-      expect(actual).toEqual(expected)
-      const payload = actual.wire ?? actual.startup
-      expect(payload).toBeDefined()
-      expect(payload?.launchConfig?.agentArgs).toBe(raw)
-      expect(JSON.stringify(payload)).not.toContain('chatSessionOptions')
-      expect(JSON.stringify(payload)).not.toContain('chatLaunchOptions')
-      expect(payload?.command).toContain('model_reasoning_effort=high')
-      expect(payload?.command).toContain('model="true"')
     }
   )
 

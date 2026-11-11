@@ -4,7 +4,7 @@ import type { EditorBufferKeepRequest } from '../slices/editor/buffers/editor-bu
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { buildTerminalTabRetirementPlans } from '../terminals/terminal-tab-retirement'
 import { cancelStructuredLaunchesForWorktrees } from '../slices/worktrees/teardown/purged-structured-launch-retirement'
-import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-worktree-purge'
+import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-purge-scopes'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 import {
   collectRemovedHostTwinState,

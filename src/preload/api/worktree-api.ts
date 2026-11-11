@@ -1,3 +1,5 @@
+import type { WorkspaceMetadataSet } from '../../shared/worktree/workspace-metadata-set'
+import type { SparsePresetFailure } from '../../shared/worktree/sparse-preset-failure'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult,
@@ -156,6 +158,7 @@ export type WorktreeApi = {
   onHeadIdentitiesChanged: (
     callback: (data: { repoId: string; identities: WorktreeHeadIdentity[] }) => void
   ) => () => void
+  onMetadataSet?: (callback: (set: WorkspaceMetadataSet) => void) => () => void
   onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void) => () => void
   onRemoteBranchConflict: (
     callback: (data: WorktreeRemoteBranchConflictEvent) => void
@@ -207,7 +210,7 @@ export type SparsePresetsApi = {
     id?: string
     name: string
     directories: string[]
-  }) => Promise<SparsePreset>
+  }) => Promise<SparsePreset | SparsePresetFailure>
   remove: (args: { repoId: string; presetId: string }) => Promise<void>
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
 }

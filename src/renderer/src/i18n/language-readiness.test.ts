@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { isWebClientLocation } = vi.hoisted(() => ({ isWebClientLocation: vi.fn() }))
-vi.mock('../lib/web-client-location', () => ({ isWebClientLocation }))
+vi.mock('../app-shell/platform/web-client-location', () => ({ isWebClientLocation }))
 
 beforeEach(() => {
   vi.resetModules()

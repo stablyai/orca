@@ -6,7 +6,7 @@ import {
   type FeatureWallWorkflow
 } from '../../../../shared/feature-wall-workflows'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useTranslate } from '@/i18n/use-translate'
 import { getLocalizedFeatureWallTileTitle } from './feature-wall-tour-localized-copy'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'

@@ -1,3 +1,4 @@
+import { GIT_READ_TIMEOUT_MS } from '../../../shared/git/commands/git-command-timeout'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
@@ -62,6 +63,18 @@ export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
 export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
 // A wedged shared scan would otherwise stall every later listing.
 export const WORKTREE_LIST_TIMEOUT_MS = 30_000
+
+export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
+
+export function preparationWorkBudget(options: GitWorktreeExecOptions, refresh: boolean): number {
+  const checkout = resolveWorktreeAddTimeoutMs()
+  const read = options.timeout ?? GIT_READ_TIMEOUT_MS
+  // Include old-Git registration and direct-WSL read fallbacks, each with its own child budget.
+  return (
+    WORKTREE_CREATE_PREPARATION_TTL_MS +
+    (refresh ? 9 * (options.timeout ?? checkout) : 6 * read + 7 * checkout)
+  )
+}
 
 /** Clamp ORCA_WORKTREE_ADD_TIMEOUT_MS; warn for nonblank rejected/clamped values, not fractional truncation. */
 export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {

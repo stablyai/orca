@@ -1,8 +1,8 @@
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { parseWslUncPath } from '../../../../../shared/wsl-paths'
 
 type PaneWslDistroState = Parameters<typeof getLocalProjectExecutionRuntimeContext>[0]

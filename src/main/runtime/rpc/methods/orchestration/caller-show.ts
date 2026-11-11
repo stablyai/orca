@@ -2,12 +2,12 @@ import type {
   OrchestrationCallerShowResult,
   OrchestrationPartyLocationResult,
   OrchestrationSessionAddressResult
-} from '../../../../../shared/orchestration-caller-status'
+} from '../../../../../shared/orchestration/orchestration-caller-status'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   PartyLocationParams,
   SessionAddressParams
@@ -18,7 +18,8 @@ import { locateOrchestrationParty } from '../../../orchestration/addressing/orch
 import { readAgentSessionRecordStore } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { z } from 'zod'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
-import { defineMethod, type RpcContext } from '../../core'
+import type { RpcContext } from '../../core'
+import { defineOrchestrationMethod } from './access/orchestration-method-access'
 import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
 import { ensureStructuredHostInstalled } from '../structured-sessions/creation/structured-agent-session-gate'
 
@@ -64,19 +65,34 @@ function closedWorkerHandle(
 }
 
 export const ORCHESTRATION_CALLER_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.callerShow',
+    access: { kind: 'reads', targets: {} },
     permission: 'workspace',
     params: null,
     // Dispatch already admitted the environment's session; do not resolve another caller from params.
-    handler: (_params, { orchestrationCaller }): OrchestrationCallerShowResult => ({
-      caller: orchestrationCaller
-        ? { orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId), live: true }
-        : null
+    handler: (
+      _params,
+      { orchestrationCaller, orchestrationCompatibilityEvidence, runtime }
+    ): OrchestrationCallerShowResult => ({
+      caller:
+        orchestrationCaller && orchestrationCaller.kind !== 'peer'
+          ? {
+              orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId),
+              live: true
+            }
+          : null,
+      // An Orca-launched agent's own pane and launch secret prove it is one; no hook needs to have fired.
+      terminal:
+        !orchestrationCaller &&
+        runtime.verifyOrchestrationCompatibilityCaller(orchestrationCompatibilityEvidence, {
+          currentRuntimeLaunchSufficient: true
+        }) !== null
     })
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.sessionAddress',
+    access: { kind: 'reads', targets: { sessionId: 'session' } },
     permission: 'workspace',
     params: SessionAddressParams,
     // Only host records know the chat's /clear root.
@@ -92,15 +108,17 @@ export const ORCHESTRATION_CALLER_METHODS = [
       return { orcaSessionId: formatOrcaSessionAddress(party.orcaSessionId) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.partyLocation',
+    access: { kind: 'reads', targets: { address: 'party', messageIds: 'message' } },
     permission: 'workspace',
     params: PartyLocationParams,
     // Resolve the chat sender's live /clear successor on its owning host.
     handler: (params, ctx): Promise<OrchestrationPartyLocationResult> => locateParty(params, ctx)
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.partyOpen',
+    access: { kind: 'localOnly', targets: { address: 'party', messageIds: 'message' } },
     permission: 'workspace',
     params: PartyLocationParams,
     // The lookup, except that a terminal worker Orca closed resumes its conversation in a new terminal.

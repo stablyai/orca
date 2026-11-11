@@ -1,11 +1,9 @@
-import type { AppState } from '@/store/types'
-import { workspaceTabs } from '@/lib/structured-chat-tab-index'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { workspaceTabs } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
-import { getWslDistroFromPath } from '@/lib/local-preflight-context'
+import { getWslDistroFromPath } from '@/runtime/hosts/preflight/local-preflight-context'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
 import { resolvePaneWslDistro } from '@/components/terminal-pane/host-state/terminal-pane-wsl-distro'
-import type { Repo } from '../../../../../../shared/repo-types'
 import { getHostSettingOverride } from '../../../../../../shared/host-setting-overrides'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
@@ -19,9 +17,9 @@ import {
 import {
   isUnresolvedOwnerHostId,
   parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
+  toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
@@ -29,6 +27,8 @@ import {
 import { createNativeChatTabOwnerSelector } from '../../pane/ownership/native-chat-tab-owner'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../../links/actions/native-chat-file-link-context'
 import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
+import type { AppState } from '@/store/types'
+import type { Repo } from '../../../../../../shared/repo-types'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 
 const OWNER_CONTEXT_INPUT_KEYS = FILE_LINK_CONTEXT_INPUT_KEYS.filter(
@@ -57,6 +57,8 @@ export function createNativeChatComposerWorkspaceSelector(
   let runtimeIds: string[] = []
   const selectMachine = createComposerMachineSelector(!target)
   let presentation: {
+    worktreeId?: string
+    repoId?: string
     hostId?: ExecutionHostId
     machine?: string
     checkout?: string
@@ -128,6 +130,8 @@ export function createNativeChatComposerWorkspaceSelector(
         path: path ?? undefined
       }
       presentation = {
+        worktreeId: row?.id,
+        repoId: repo?.id,
         checkout: row?.displayName,
         kind: row
           ? (repo && isFolderRepo(repo)) ||

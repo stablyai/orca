@@ -6,7 +6,7 @@ import type {
   PtySpawnHealthRequest,
   SystemResolverHealthRequest
 } from '../health/daemon-health-requests'
-import type { SpawnIntent } from '../../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { SessionInfo } from './daemon-session-info'
 import type {
   ConfirmForegroundProcessRequest,
@@ -25,6 +25,7 @@ import type {
 import type * as HistorySeedProtocol from '../history/seed-transfer/terminal-history-seed-transfer-protocol'
 import type * as PtyOwnerQueryProtocol from './daemon-pty-owner-query-protocol'
 import type { TerminalSnapshot } from './terminal-snapshot'
+import type { SetLaunchNoteRequest } from './daemon-launch-note-protocol'
 
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
 
@@ -174,7 +175,7 @@ export type TerminalBufferActionRequest = {
   }
 }
 
-// Viewers live above the daemon on orcad; an older daemon rejects this, which callers ignore.
+// Viewers live above the daemon on orcad; gated by focusLossReportSupport (v56, some v55).
 export type ReportFocusLostRequest = {
   id: string
   type: 'reportFocusLost'
@@ -270,6 +271,7 @@ export type DaemonRequest =
   | TakePendingOutputRequest
   | PtyOwnerQueryProtocol.CloseStartupQueryAuthorityRequest
   | PtyOwnerQueryProtocol.SetColorQueryReplyColorsRequest
+  | SetLaunchNoteRequest
 
 export type RpcResponseOk<T = unknown> = {
   id: string

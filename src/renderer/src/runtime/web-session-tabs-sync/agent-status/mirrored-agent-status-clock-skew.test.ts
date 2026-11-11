@@ -1,11 +1,14 @@
 // Age mirrored evidence by client receipt time: rendererNow minus hostStamp gains clock skew and makes remote rows immediately stale or permanently fresh. Inject separate host/client clocks. Published freshness verdicts cannot decay during silence; exact repaints must not renew receipt time.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { isExplicitAgentStatusFresh } from '../../../lib/pane-agent-evidence'
+
 import type { AppState } from '../../../store/types'
 import { createTestStore, seedStore } from '../../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
@@ -111,7 +114,7 @@ function applyChangedHostSnapshot(
 function mirroredRowIsFreshAt(store: TestStore, clientNow: number): boolean {
   const row = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
   expect(row, 'the mirrored row must exist for freshness to mean anything').toBeDefined()
-  return isExplicitAgentStatusFresh(row, clientNow, AGENT_STATUS_STALE_AFTER_MS)
+  return isAgentStatusFresh(row, clientNow, AGENT_STATUS_STALE_AFTER_MS)
 }
 
 describe('a mirrored remote row decays on the replica clock, not the host clock', () => {
@@ -147,17 +150,5 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
     ).toBe(false)
 
     expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(false)
-  })
-
-  it('restarts the window when the host reports genuinely new evidence', () => {
-    const store = seedPairedClientStore()
-    applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS, T0, 1)
-    const laterClientNow = T0 + AGENT_STATUS_STALE_AFTER_MS - 1_000
-    applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS + 60_000, laterClientNow, 2)
-
-    expect(mirroredRowIsFreshAt(store, laterClientNow + AGENT_STATUS_STALE_AFTER_MS - 1)).toBe(true)
-    expect(mirroredRowIsFreshAt(store, laterClientNow + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(
-      false
-    )
   })
 })

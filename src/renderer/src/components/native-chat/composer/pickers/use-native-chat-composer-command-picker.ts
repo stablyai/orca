@@ -22,6 +22,7 @@ export function useNativeChatComposerCommandPicker(
     | 'sessionSkills'
     | 'onPickerOpened'
     | 'onPickerDemand'
+    | 'skillsChecking'
     | 'launchWorktreeId'
     | keyof ResumeArgs['editor']
   > &
@@ -55,6 +56,7 @@ export function useNativeChatComposerCommandPicker(
     commandAvailable,
     sessionSkills,
     onPickerDemand: structuredTransport?.setCommandsMenuOpen,
+    skillsChecking: structuredTransport?.commandsChecking === true,
     ...(!structuredTransport?.setCommandsMenuOpen && structuredTransport?.refreshCommands
       ? { onPickerOpened: structuredTransport.refreshCommands }
       : {})

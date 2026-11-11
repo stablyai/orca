@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import '../../../../orchestration/db/contract-constants'
@@ -14,10 +14,8 @@ import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import './worker-opencode-model-preflight'
 import '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
 describe('orchestration new-worktree workers', () => {
-  type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
@@ -139,110 +137,26 @@ describe('orchestration new-worktree workers', () => {
     }
   }
 
-  it('rejects a new worktree for a folder project before creating effects', async () => {
+  it("skips setup when the project's setup is off and the coordinator did not ask for it", async () => {
     vi.mocked(runtime.showRepo).mockResolvedValue({
       id: 'repo',
-      kind: 'folder'
-    } as never)
-    const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
-    const task = db.createTask({ spec: 'folder task', runId })
-    const method = ORCHESTRATION_METHODS.find(
-      (candidate) => candidate.name === 'orchestration.workerStart'
-    )
-    if (!method) {
-      throw new Error('workerStart method is not registered')
-    }
-
-    await expect(
-      method.handler(
-        method.params!.parse({
-          task: task.id,
-          from: 'term_coord',
-          worktree: 'new-child',
-          name: 'folder-worker',
-          agent: 'codex'
-        }),
-        { runtime }
-      )
-    ).rejects.toMatchObject({
-      code: 'invalid_argument',
-      message:
-        'Folder projects cannot create orchestration worktrees; use current or an exact existing folder workspace.'
-    })
-    expect(createWorktree).not.toHaveBeenCalled()
-    expect(db.getTask(task.id)?.status).toBe('ready')
-    expect(db.getDispatchContext(task.id)).toBeUndefined()
-  })
-
-  describe('from a terminal outside a managed git worktree', () => {
-    beforeEach(async () => {
-      const coordinator = await runtime.showTerminal('term_coord')
-      vi.mocked(runtime.showTerminal).mockResolvedValue({
-        ...coordinator,
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
-      })
-      vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
-    })
-
-    it.each([
-      ['new-child', { repo: 'repo' }],
-      ['new-top-level', {}]
-    ] as const)(
-      'refuses %s without a caller worktree before creating effects',
-      async (worktree, extra) => {
-        const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
-
-        await expect(startWorker({ worktree, ...extra })).rejects.toMatchObject({
-          code: 'invalid_argument',
-          message: expect.stringContaining('could not be resolved to a git worktree Orca manages')
-        })
-        expect(createWorktree).not.toHaveBeenCalled()
-        expect(db.getDispatchContext(db.listTasks()[0]!.id)).toBeUndefined()
+      path: '/repo',
+      displayName: 'repo',
+      badgeColor: 'gray',
+      addedAt: 1,
+      kind: 'git',
+      hookSettings: {
+        mode: 'auto',
+        setupRunPolicy: 'skip-by-default',
+        scripts: { setup: '', archive: '' }
       }
-    )
-  })
-
-  it('records a later setup failure without gating a start-immediately worker', async () => {
-    mockCreatedWorktree({
-      terminals: [
-        { handle: 'term_worker', title: 'Codex' },
-        { handle: 'term_setup', title: 'Setup' }
-      ]
     })
-    let finishSetup: ((result: { exitCode: number | null }) => void) | undefined
-    vi.mocked(runtime.waitForSetupTerminalCompletion).mockImplementation(
-      async () =>
-        await new Promise((resolve) => {
-          finishSetup = resolve
-        })
-    )
+    mockCreatedWorktree({ state: 'skipped' })
 
-    const { result, task } = await startWorker()
-    const dispatchId = (result as { dispatchId: string }).dispatchId
+    await startWorker()
 
-    expect(result).toMatchObject({ state: 'ready', setup: { state: 'running' } })
-    expect(
-      db.settleWorkerReport({
-        taskId: task.id,
-        dispatchId,
-        outcome: 'succeeded',
-        result: '{}'
-      })
-    ).toMatchObject({ action: 'settled' })
-    finishSetup?.({ exitCode: 1 })
-    await vi.waitFor(() => expect(db.getWorkerDispatch(dispatchId)?.setup_state).toBe('failed'))
-    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
-      state: 'succeeded',
-      stage: 'settled',
-      setup_state: 'failed'
-    })
-    expect(JSON.parse(db.getWorkerDispatch(dispatchId)?.effects ?? '[]')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
-      ])
-    )
-    expect(db.getInbox(10).filter((message) => message.run_id === runId)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: 'status', priority: 'high' })])
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ setupDecision: 'skip' })
     )
   })
 
@@ -286,66 +200,6 @@ describe('orchestration new-worktree workers', () => {
       failedStage: 'worktree_create'
     })
     expect(db.getTask(task.id)?.status).toBe('blocked')
-  })
-
-  it('persists the retry request with the starting Dispatch before worktree effects', async () => {
-    const task = db.createTask({ spec: 'atomic worker acceptance', runId })
-    let finishCreate: ((value: CreateWorktreeResult) => void) | undefined
-    vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(
-      async () =>
-        await new Promise((resolve) => {
-          finishCreate = resolve
-        })
-    )
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-    const request: RpcRequest = {
-      id: 'rpc_worker_start',
-      authToken: 'caller-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'worker_start_request',
-      method: 'orchestration.workerStart',
-      params: {
-        task: task.id,
-        from: 'term_coord',
-        worktree: 'new-child',
-        name: 'atomic-worker',
-        agent: 'codex'
-      }
-    }
-
-    const pending = dispatcher.dispatch(request)
-    await vi.waitFor(() => expect(db.getDispatchContext(task.id)).toBeDefined())
-    const acceptedDispatch = db.getDispatchContext(task.id)!
-    const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
-    const receipt = db.getMutationReceipt(callerFingerprint, 'worker_start_request')
-
-    expect(receipt).toMatchObject({
-      request_id: 'worker_start_request',
-      method: 'orchestration.workerStart',
-      state: 'pending'
-    })
-    expect(db.getWorkerDispatch(acceptedDispatch.id)).toMatchObject({
-      state: 'starting',
-      stage: 'worktree_creating'
-    })
-
-    finishCreate?.({
-      worktree: { id: 'repo::created', repoId: 'repo' },
-      startupTerminal: { spawned: true, handle: 'term_worker' },
-      setupReceipt: {
-        requested: 'run',
-        hookFound: false,
-        startupPolicy: 'start-immediately',
-        state: 'not_configured'
-      }
-    } as CreateWorktreeResult)
-    await expect(pending).resolves.toMatchObject({
-      ok: true,
-      result: { state: 'ready', mutation: { requestId: 'worker_start_request' } }
-    })
-    expect(db.getMutationReceipt(callerFingerprint, 'worker_start_request')).toMatchObject({
-      state: 'completed'
-    })
   })
 
   it('replays a dispatch-input failure after restart without creating another worker', async () => {

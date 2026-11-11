@@ -20,7 +20,7 @@ import {
 import {
   rewriteOrcadMigrationPathValue,
   type OrcadMigrationPathRewriter
-} from '../../ssh/orcad-migration-path-rewrite'
+} from '../../persistence/migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 
 export type WslDriveUncRewriteScope = {

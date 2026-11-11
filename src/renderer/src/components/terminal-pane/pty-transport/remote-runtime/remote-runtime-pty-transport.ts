@@ -1,13 +1,13 @@
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
-import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
+import { pairedAgentLaunchInputs } from '@/lib/agent-session/launch/routing/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
   agentSessionCreateRequest,
   createAgentSessionTrustWorktreeOptions
 } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
-import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import {
   planHostedAgentPrompt,
   hostedAgentPromptHostFacts,
@@ -20,10 +20,13 @@ import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
-import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
+import {
+  agentProviderSessionForHostEnsure,
+  restoreSourcePaneOptions
+} from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
 import { createRemoteRuntimeDisconnectedInputGrace } from './input/remote-runtime-disconnected-input-grace'
 import {
   createRemoteRuntimeRecoveryInputHold,
@@ -76,7 +79,7 @@ import type {
   PtyTransportRecoveryState
 } from '../pty-transport-types'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
-import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
+import { localizeWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import {
   RuntimeRpcCallError,
@@ -249,6 +252,7 @@ export function createRemoteRuntimePtyTransport(
     launchConfig,
     resumeProviderSession,
     resumeOrigin,
+    resumeSourcePaneKey,
     launchToken,
     launchAgent,
     terminalColorQueryReplies,
@@ -3773,6 +3777,10 @@ export function createRemoteRuntimePtyTransport(
               resumeProviderSessionToSend
             )
           : undefined
+        const sourcePaneOptions =
+          ensureProviderSession && originOptions.resumeOrigin && resumeSourcePaneKey
+            ? await restoreSourcePaneOptions(createEnvironmentId, resumeSourcePaneKey)
+            : {}
         const result = await createWithUnknownOutcomeRecovery(
           'agent-session',
           (timeoutMs) =>
@@ -3784,6 +3792,7 @@ export function createRemoteRuntimePtyTransport(
                     kind: 'explicit',
                     ...keyboardOptions,
                     ...originOptions,
+                    ...sourcePaneOptions,
                     worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                     agent: launchAgentToSend!,
                     providerSession: ensureProviderSession,
@@ -3933,7 +3942,7 @@ export function createRemoteRuntimePtyTransport(
             .catch(() => false)
             .then(async (promptDelivered) => {
               const { completeWebHostAgentLaunch } =
-                await import('@/lib/web-host-agent-launch-completion')
+                await import('@/lib/agent-session/launch/new-tab/web-host-agent-launch-completion')
               completeWebHostAgentLaunch({
                 agent: launchAgentToSend,
                 worktreeId,
@@ -4141,6 +4150,8 @@ export function createRemoteRuntimePtyTransport(
     ownsRecovery() {
       return !destroyed && !terminalEnded && recoveryBlocksIo()
     },
+
+    isHoldingInput: shouldHoldInput,
 
     hasUndeliveredInput() {
       return (

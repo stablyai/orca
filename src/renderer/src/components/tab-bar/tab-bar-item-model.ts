@@ -2,7 +2,7 @@ import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
@@ -37,7 +37,7 @@ export type TabBarItem =
       id: string
       unifiedTabId: string
       isPinned: boolean
-      data: BrowserTabState & { tabId?: string }
+      data: BrowserWorkspace & { tabId?: string }
     }
   | {
       type: 'simulator'
@@ -158,7 +158,7 @@ export function buildOrderedTabItems({
   agentSessionTabIds: string[]
   terminalMap: Map<string, TerminalTab & { unifiedTabId?: string }>
   editorMap: Map<string, OpenFile & { tabId?: string }>
-  browserMap: Map<string, BrowserTabState & { tabId?: string }>
+  browserMap: Map<string, BrowserWorkspace & { tabId?: string }>
   agentSessionMap: Map<string, Tab & { contentType: 'agent-session' }>
   unifiedTabByVisibleId: Map<string, Tab>
 }): TabBarItem[] {

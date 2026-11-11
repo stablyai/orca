@@ -10,6 +10,7 @@ import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
 import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
 import type { GitAvailability } from '../create/create-project-defaults'
+import type { CloneFolderOverride } from '../clone-folder/use-clone-folder-override'
 
 type AddRepoDialogStepContentProps = {
   step: AddRepoDialogStep
@@ -27,6 +28,7 @@ type AddRepoDialogStepContentProps = {
   cloneUrl: string
   cloneDestination: string
   cloneError: string | null
+  cloneFolder: CloneFolderOverride | null
   cloneProgress: { phase: string; percent: number } | null
   isCloning: boolean
   sshTargets: (SshTarget & { state?: SshConnectionState })[]
@@ -65,6 +67,7 @@ type AddRepoDialogStepContentProps = {
   onConnectTarget: (id: string) => Promise<void>
   onCloneUrlChange: (url: string) => void
   onCloneDestinationChange: (destination: string) => void
+  onCloneFolderNameChange: (name: string) => void
   onPickCloneDestination: () => void
   onClone: () => void
   onNestedGroupNameChange: (name: string) => void
@@ -92,6 +95,7 @@ export function AddRepoDialogStepContent({
   cloneUrl,
   cloneDestination,
   cloneError,
+  cloneFolder,
   cloneProgress,
   isCloning,
   sshTargets,
@@ -129,6 +133,7 @@ export function AddRepoDialogStepContent({
   onConnectTarget,
   onCloneUrlChange,
   onCloneDestinationChange,
+  onCloneFolderNameChange,
   onPickCloneDestination,
   onClone,
   onNestedGroupNameChange,
@@ -210,6 +215,7 @@ export function AddRepoDialogStepContent({
         cloneUrl={cloneUrl}
         cloneDestination={cloneDestination}
         cloneError={cloneError}
+        cloneFolder={cloneFolder}
         cloneProgress={cloneProgress}
         isCloning={isCloning}
         disableDestinationPicker={isRuntimeEnvironmentActive}
@@ -217,6 +223,7 @@ export function AddRepoDialogStepContent({
         cloneTargetLabel={isRuntimeEnvironmentActive ? selectedHostLabel : null}
         onUrlChange={onCloneUrlChange}
         onDestChange={onCloneDestinationChange}
+        onFolderNameChange={onCloneFolderNameChange}
         onPickDestination={onPickCloneDestination}
         onClone={onClone}
         submitDisabled={actionsDisabled}

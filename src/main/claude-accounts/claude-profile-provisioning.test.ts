@@ -2,13 +2,13 @@ import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as FsUtils from '../codex-accounts/fs-utils'
+import type * as FsUtils from '../filesystem/atomic-file-publication'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
   const actual = await original<typeof fs>()
   return { ...actual, symlinkSync: vi.fn(actual.symlinkSync) }
 })
-vi.mock('../codex-accounts/fs-utils', async (original) => {
+vi.mock('../filesystem/atomic-file-publication', async (original) => {
   const actual = await original<typeof FsUtils>()
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
 })
@@ -131,18 +131,37 @@ describe('Claude profile refresh from the default home', () => {
     expect((await provision(f)).surfaces['settings.json']).toBe('user-owned')
     expect(f.read(elsewhere)).toEqual({ mine: true })
   })
-  it('copies state except the login, caches and install ids, and never copies credentials', async () => {
+  it('shares configuration while keeping profile runtime state and API authorizations private', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.source, '.credentials.json'), 'SOURCE_CREDENTIAL_BYTES')
     const shared = {
       mcpServers: { local: { command: 'example' } },
       theme: 'dark',
       hasCompletedOnboarding: true,
-      autoModeAccepted: true,
+      bypassPermissionsModeAccepted: true,
+      favoritePlugins: ['favorite@example'],
+      preferTmuxOverIterm2: true,
+      codeReviewLastEffort: 'high',
+      codeReviewLastMaxFindings: 3,
+      installMethod: 'global',
+      autoUpdates: false,
+      autoUpdatesProtectedForNative: false,
+      customApiKeyResponses: { rejected: ['PERSONAL_REJECTED_SUFFIX'] },
       projects: { '/work': { hasTrustDialogAccepted: true } }
     }
-    f.json(join(f.userHome, '.claude.json'), {
+    const personal = {
       ...shared,
+      customApiKeyResponses: {
+        approved: ['PERSONAL_APPROVED_SUFFIX'],
+        rejected: ['PERSONAL_REJECTED_SUFFIX']
+      },
+      groveChoiceSeenAt: { personal: 1 },
+      numStartups: 2,
+      tipsHistory: { tip: 1 },
+      seenNotifications: { notice: 1 },
+      penguinModeOrgEnabled: false,
+      futureRuntimeState: { personal: true },
+      autoModeAccepted: true,
       oauthAccount: { emailAddress: 'source@example.com' },
       primaryApiKey: 'sk-source',
       userID: 'source-id',
@@ -161,14 +180,29 @@ describe('Claude profile refresh from the default home', () => {
       lastSeenOrgDefaultUpdatedAt: 1,
       hasAvailableSubscription: true,
       subscriptionNoticeCount: 2
-    })
+    }
+    f.json(join(f.userHome, '.claude.json'), personal)
     expect((await provision(f)).surfaces['.claude.json']).toBe('synced')
     expect(f.read(join(f.profileHome, '.claude.json'))).toEqual(shared)
     expect(fs.readdirSync(f.profileHome).filter((name) => name.endsWith('.tmp'))).toEqual([])
     expect(fs.existsSync(join(f.profileHome, '.credentials.json'))).toBe(false)
 
     fs.writeFileSync(join(f.profileHome, '.credentials.json'), 'PROFILE_CREDENTIAL_BYTES')
+    const profileRuntime = {
+      groveChoiceSeenAt: { profile: 20 },
+      numStartups: 30,
+      tipsHistory: { tip: 8 },
+      seenNotifications: { profileNotice: 9 },
+      penguinModeOrgEnabled: true,
+      futureRuntimeState: { profile: true },
+      customApiKeyResponses: {
+        approved: ['PROFILE_APPROVED_SUFFIX', 'PERSONAL_REJECTED_SUFFIX'],
+        rejected: ['PROFILE_REJECTED_SUFFIX', 'PERSONAL_APPROVED_SUFFIX'],
+        profileOnly: true
+      }
+    }
     f.json(join(f.profileHome, '.claude.json'), {
+      ...profileRuntime,
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
@@ -181,9 +215,29 @@ describe('Claude profile refresh from the default home', () => {
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
       onlyHere: true,
-      ...shared
+      ...shared,
+      ...profileRuntime,
+      hasCompletedOnboarding: true,
+      customApiKeyResponses: {
+        approved: ['PROFILE_APPROVED_SUFFIX', 'PERSONAL_REJECTED_SUFFIX'],
+        rejected: [
+          'PROFILE_REJECTED_SUFFIX',
+          'PERSONAL_APPROVED_SUFFIX',
+          'PERSONAL_REJECTED_SUFFIX'
+        ],
+        profileOnly: true
+      }
+    })
+    const reset = { ...f.read(join(f.profileHome, '.claude.json')), hasCompletedOnboarding: false }
+    f.json(join(f.profileHome, '.claude.json'), reset)
+    f.json(join(f.userHome, '.claude.json'), {
+      ...personal,
+      numStartups: 1000,
+      groveChoiceSeenAt: { personal: 1000 },
+      futureRuntimeState: { changed: true }
     })
     expect((await provision(f)).surfaces['.claude.json']).toBe('unchanged')
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual(reset)
     expect(fs.readFileSync(join(f.source, '.credentials.json'), 'utf8')).toBe(
       'SOURCE_CREDENTIAL_BYTES'
     )
@@ -196,7 +250,13 @@ describe('Claude profile refresh from the default home', () => {
     const f = fixture()
     f.json(join(f.userHome, '.claude.json'), {
       projects: {
-        '/shared': { hasTrustDialogAccepted: false, allowedTools: ['Read'] },
+        '/shared': {
+          hasTrustDialogAccepted: false,
+          allowedTools: ['Read'],
+          lastSessionId: 'personal'
+        },
+        '/runtime-only': { lastSessionId: 'personal' },
+        '/malformed': 'invalid',
         '/default-only': { hasTrustDialogAccepted: true }
       },
       mcpServers: { shared: { command: 'default' } }
@@ -204,7 +264,15 @@ describe('Claude profile refresh from the default home', () => {
     f.json(join(f.profileHome, '.claude.json'), {
       oauthAccount: LOGIN,
       projects: {
-        '/shared': { hasTrustDialogAccepted: true },
+        '/shared': {
+          hasTrustDialogAccepted: true,
+          hasCompletedProjectOnboarding: true,
+          projectOnboardingSeenCount: 4,
+          lastSessionId: 'profile',
+          exampleFiles: ['profile.ts'],
+          futureProjectState: true
+        },
+        '/malformed': { lastSessionId: 'keep' },
         '/account-only': { hasTrustDialogAccepted: true, allowedTools: ['Bash'] }
       },
       mcpServers: { shared: { command: 'account' }, mine: { command: 'mine' } }
@@ -213,7 +281,16 @@ describe('Claude profile refresh from the default home', () => {
     expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
       oauthAccount: LOGIN,
       projects: {
-        '/shared': { hasTrustDialogAccepted: true, allowedTools: ['Read'] },
+        '/shared': {
+          hasTrustDialogAccepted: true,
+          allowedTools: ['Read'],
+          hasCompletedProjectOnboarding: true,
+          projectOnboardingSeenCount: 4,
+          lastSessionId: 'profile',
+          exampleFiles: ['profile.ts'],
+          futureProjectState: true
+        },
+        '/malformed': { lastSessionId: 'keep' },
         '/account-only': { hasTrustDialogAccepted: true, allowedTools: ['Bash'] },
         '/default-only': { hasTrustDialogAccepted: true }
       },

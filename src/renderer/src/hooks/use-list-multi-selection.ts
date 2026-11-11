@@ -5,7 +5,7 @@ import {
   getSelectionIntent,
   pruneSelection,
   updateSelection
-} from '@/lib/list-multi-selection'
+} from '@/lib/list-interaction/list-multi-selection'
 import { useReusedArrayIdentity } from '@/components/sidebar/worktree-list/listing/use-reused-array-identity'
 
 export type ListMultiSelection<T> = {

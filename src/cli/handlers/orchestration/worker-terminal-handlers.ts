@@ -7,7 +7,7 @@ import {
   WORKER_RELEASE_VIEW,
   workerStopFailure
 } from './worker-release-agent-view'
-import type { WorkerStopReceipt } from '../../../shared/orchestration-worker-stop-receipt'
+import type { WorkerStopReceipt } from '../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -173,7 +173,10 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const autoRelease = projection?.autoReleaseAt
                   ? ` auto-release=${projection.autoReleaseAt}`
                   : ''
-                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}`
+                const coordinatedFrom = worker.coordinatedFrom
+                  ? ` coordinated from ${worker.coordinatedFrom}`
+                  : ''
+                return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${autoRelease}${next}${coordinatedFrom}`
               })
               .join('\n')
       const counts = Object.entries(value.counts)

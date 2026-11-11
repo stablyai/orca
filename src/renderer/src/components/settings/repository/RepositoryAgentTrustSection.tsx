@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { AgentWorkspaceTrustDecision } from '../../../../../shared/agent-workspace-trust-decision'
+import type { AgentWorkspaceTrustDecision } from '../../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { agentWorkspaceTrustDecisionCopy as copy } from '../../agent-workspace-trust/agent-workspace-trust-decision-copy'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
@@ -30,7 +30,7 @@ export function RepositoryAgentTrustSection({
     (state) => state.settings?.agentWorkspaceTrustEnabled !== false
   )
   const entry = getRepositoryAgentTrustSearchEntry()
-  const value = repo.agentWorkspaceTrust ?? 'undecided'
+  const value = repo.agentWorkspaceTrust ?? 'pre-trust'
   return (
     <SearchableSetting
       title={entry.title}
@@ -43,10 +43,10 @@ export function RepositoryAgentTrustSection({
         <div className="text-sm font-semibold">{entry.title}</div>
         <p className="text-xs text-muted-foreground">{entry.description}</p>
       </div>
-      <SettingsSegmentedControl<AgentWorkspaceTrustDecision | 'undecided'>
+      <SettingsSegmentedControl<AgentWorkspaceTrustDecision>
         value={value}
         onChange={(next) => {
-          if (next !== 'undecided' && next !== value) {
+          if (next !== value) {
             void updateRepo(repo.id, { agentWorkspaceTrust: next })
           }
         }}
@@ -59,8 +59,6 @@ export function RepositoryAgentTrustSection({
       />
       {!globalTrustEnabled ? (
         <p className="text-xs text-muted-foreground">{copy.settingGlobalOff()}</p>
-      ) : value === 'undecided' ? (
-        <p className="text-xs text-muted-foreground">{copy.settingUndecided()}</p>
       ) : null}
     </SearchableSetting>
   )

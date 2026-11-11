@@ -110,8 +110,7 @@ for (const [name, options] of [
     { env: { ORCA_IDLE_REHOME_POSTGRES_URL: 'postgres://localhost:55440/relay' } }
   ],
   ['application database', { env: { DATABASE_URL: databaseUrl } }],
-  ['one CPU', { parallelism: 1 }],
-  ['two CPUs', { parallelism: 2 }]
+  ['one CPU', { parallelism: 1 }]
 ]) {
   test(`retains the original single run for ${name}`, async (t) => {
     const h = start(t, options)

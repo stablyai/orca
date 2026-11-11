@@ -1,4 +1,5 @@
-import type { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
+import type { EditorDiscardGeneration } from '../flush/editor-discard-epoch'
+import type { acquireEditorFileOperation } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import type { LocalFileAccess } from '../../../../../../shared/file-access/local-file-access'
 import type { EditorSaveResult, EditorSaveTrigger } from './editor-save-disk-precondition'
 
@@ -19,10 +20,10 @@ export type EditorSaveRequest = {
   requestedDirty: boolean
   /** Preserve the saving view's kind if a different view takes over. */
   requestedFromCodeView: boolean
-  /** The record the request was queued under; `discardEpoch` is its epoch then. */
+  /** The record the request was queued under; `discardGeneration` fences its pending work. */
   recordId: string
   /** A discard since the request voids it, whatever the trigger. */
-  discardEpoch: number
+  discardGeneration: EditorDiscardGeneration
 }
 
 type SaveSlot = {
@@ -56,8 +57,8 @@ export function createEditorSaveSlots(
     if (slot?.queued) {
       // Queued saves read live text, so subsequent requests can join the same write.
       const { request } = slot.queued
-      if (request.discardEpoch !== incoming.discardEpoch) {
-        // A discard invalidates the old request; retain the new request’s epoch and intent.
+      if (request.discardGeneration !== incoming.discardGeneration) {
+        // A discard invalidates the old request; retain the new request’s generation and intent.
         Object.assign(request, incoming)
         return slot.queued.promise
       }

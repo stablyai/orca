@@ -21,14 +21,12 @@ import {
   useActivityTerminalPortalStatus
 } from './activity-terminal-portal-status'
 import type { ActivityTerminalPortalSlotId } from './activity-thread-types'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-
-export * from './activity-prototype-page-exports'
 
 export default function ActivityPrototypePage(): React.JSX.Element {
   const [query, setQuery] = useState('')

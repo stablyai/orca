@@ -1,7 +1,8 @@
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { resolveTuiAgentLaunchEnv } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { acpLaunchSpecFor } from '../../../acp/acp-launch-specs'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { acpLaunchSpecFor } from '../../../acp/launch/acp-launch-registry'
 import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
 import {
   claudeConfigDirEnvPatch,
@@ -30,10 +31,11 @@ export async function chatNamingAgentTarget(
   }
   const home = requireLegacyAgentSessionAccountHome(record.accountHome)
   if (record.provider === 'claude') {
-    env = {
-      ...withoutInheritedClaudeConfigDir(env),
-      ...resolveTuiAgentLaunchEnv('claude', settings)
-    }
+    env = overlayEnvironmentVariables(
+      withoutInheritedClaudeConfigDir(env),
+      resolveTuiAgentLaunchEnv('claude', settings),
+      process.platform
+    )
     const path = await resolveClaudeStructuredLaunchHome(getClaudeProfileRouter(), env, home.path)
     const patch = claudeConfigDirEnvPatch(path, { env })
     return { kind: 'local', cwd, env: { CLAUDE_CONFIG_DIR: undefined, ...env, ...patch } }

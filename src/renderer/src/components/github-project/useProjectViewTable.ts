@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { projectViewCacheKey, projectViewSourceScope } from '@/store/github/cache/cache-identity'
 import type {
   GitHubProjectSettings,
@@ -28,7 +28,7 @@ import {
   getVisibleProjectTable,
   type CachedVisibleProjectTable
 } from './project-visible-table-cache'
-import { useRepoSlugIndex } from '@/lib/repo-slug-index'
+import { useRepoSlugIndex } from '@/lib/workspace/catalog/repo-slug-index'
 
 export function useProjectViewTable(
   selectedRepoIds: ReadonlySet<string>,

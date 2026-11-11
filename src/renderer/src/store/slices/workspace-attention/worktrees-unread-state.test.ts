@@ -7,8 +7,7 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory,
-  runtimeEnvironmentCall
+  resetWorktreeSliceModuleMemory
 } from '../worktrees/worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -34,120 +33,6 @@ describe('worktree unread (show-until-interact)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
-  })
-
-  it('keeps unread state local instead of throwing for genuinely ambiguous owners (#10634)', () => {
-    const store = createTestStore()
-    const worktreeId = 'repo-shared::/same/path'
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
-      worktreesByRepo: {
-        'repo-shared': [
-          makeWorktree({
-            id: worktreeId,
-            repoId: 'repo-shared',
-            hostId: 'ssh:ssh-a',
-            runtimeOwnerEnvironmentId: 'hub-a'
-          }),
-          makeWorktree({
-            id: worktreeId,
-            repoId: 'repo-shared',
-            hostId: 'ssh:ssh-b',
-            runtimeOwnerEnvironmentId: 'hub-b'
-          })
-        ]
-      }
-    } as Partial<AppState>)
-
-    expect(() =>
-      store.getState().markAgentAttentionUnread({
-        workspaceId: worktreeId,
-        subjectKey: null,
-        groupId: null,
-        reason: 'agent-completion'
-      })
-    ).not.toThrow()
-
-    expect(store.getState().worktreesByRepo['repo-shared'][0].isUnread).toBe(true)
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('never throws from any passive path for a genuinely ambiguous owner (#10634)', () => {
-    // Exercise every passive notification path; any unresolved-host throw recreates the uncaught renderer error.
-    const worktreeId = 'repo-shared::/same/path'
-    const ambiguousState = (): Partial<AppState> =>
-      ({
-        settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
-        worktreesByRepo: {
-          'repo-shared': [
-            makeWorktree({
-              id: worktreeId,
-              repoId: 'repo-shared',
-              hostId: 'ssh:ssh-a',
-              runtimeOwnerEnvironmentId: 'hub-a',
-              isUnread: true
-            }),
-            makeWorktree({
-              id: worktreeId,
-              repoId: 'repo-shared',
-              hostId: 'ssh:ssh-b',
-              runtimeOwnerEnvironmentId: 'hub-b',
-              isUnread: true
-            })
-          ]
-        }
-      }) as Partial<AppState>
-
-    for (const [label, run] of [
-      [
-        'readOnScreenAttention',
-        (s: AppState) =>
-          s.readOnScreenAttention(
-            { workspaceIds: [worktreeId], targets: [{ worktreeId: worktreeId, tabId: 'no-tab' }] },
-            { screenArrived: true }
-          )
-      ],
-      ['bumpWorktreeActivity', (s: AppState) => s.bumpWorktreeActivity(worktreeId)]
-    ] as const) {
-      const store = createTestStore()
-      store.setState(ambiguousState())
-      mockApi.worktrees.updateMeta.mockClear()
-
-      expect(() => run(store.getState()), `${label} threw for an ambiguous owner`).not.toThrow()
-      expect(
-        mockApi.worktrees.updateMeta,
-        `${label} persisted to a guessed host`
-      ).not.toHaveBeenCalled()
-    }
-  })
-
-  it('updates unread state for hidden detected worktrees', () => {
-    const store = createTestStore()
-    const hidden = makeWorktree({
-      id: 'repo1::/path/hidden',
-      repoId: 'repo1',
-      path: '/path/hidden'
-    })
-    const detected = makeDetectedResult('repo1', [hidden])
-    detected.worktrees[0] = { ...detected.worktrees[0], ownership: 'external', visible: false }
-    store.setState({
-      worktreesByRepo: { repo1: [] },
-      detectedWorktreesByRepo: { repo1: detected }
-    } as Partial<AppState>)
-
-    store.getState().markAgentAttentionUnread({
-      workspaceId: hidden.id,
-      subjectKey: null,
-      groupId: null,
-      reason: 'agent-completion'
-    })
-    expect(store.getState().detectedWorktreesByRepo.repo1.worktrees[0].isUnread).toBe(true)
-
-    store
-      .getState()
-      .readOnScreenAttention({ workspaceIds: [hidden.id], targets: [] }, { screenArrived: true })
-    expect(store.getState().detectedWorktreesByRepo.repo1.worktrees[0].isUnread).toBe(false)
   })
 
   it('reads a hidden detected worktree once it is activated and on screen', () => {

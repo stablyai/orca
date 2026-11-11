@@ -13,6 +13,7 @@ import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-r
 import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from '../claude-prompt-registry'
+import { ClaudeJournalBoundDelivery } from '../claude-journal-bound-delivery'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
@@ -134,6 +135,10 @@ export type ClaudeSession = {
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
+  /** A saved model pick no turn of this process has carried; its reports predate the pick. */
+  modelPickAwaitingTurn?: string
+  /** `dispatchSequence` at the last model write; that turn's replies predate the pick. */
+  modelMutationDispatch?: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */
@@ -172,6 +177,7 @@ export type ClaudeSession = {
   closeEnded?: boolean
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
+  delivery: ClaudeJournalBoundDelivery
   unbindReadingControl?: () => void
   /** Provider identity and initialize proof retained for the host-awaited open. */
   link: AgentSessionProviderHandleLink
@@ -207,7 +213,7 @@ export type ClaudeSessionExit = {
 export type ClaudeAcquisitionAttempt = {
   connection: ClaudeStreamJsonConnection | null
   prompts: ClaudePromptRegistry
-  buffered: (() => void)[]
+  delivery: ClaudeJournalBoundDelivery
   published: boolean
   cancelled: boolean
   exitProven: boolean
@@ -224,16 +230,17 @@ export function createClaudeAcquisitionAttempt(
   const finished = new Promise<void>((resolve) => {
     finish = resolve
   })
-  return {
+  const attempt: ClaudeAcquisitionAttempt = {
     connection: null,
     prompts,
-    buffered: [],
+    delivery: new ClaudeJournalBoundDelivery(undefined, () => attempt.published),
     published: false,
     cancelled: false,
     exitProven: false,
     finished,
     finish
   }
+  return attempt
 }
 
 export class ClaudeAcquisitionRegistry {
@@ -304,6 +311,7 @@ export async function cancelClaudeAcquisitionAttempt(
   return cancelProcessAcquisition({
     cancel: () => {
       attempt.cancelled = true
+      attempt.delivery.dispose()
     },
     connection: () => attempt.connection,
     exitProven: () => attempt.exitProven,
@@ -314,7 +322,12 @@ export async function cancelClaudeAcquisitionAttempt(
 export type ClaudeAcquireCallbacks = {
   /** Publishes the session, its start ending admitted first so its exit is never missed. */
   publish: (session: ClaudeSession) => void
-  deliver: (attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void) => void
+  deliver: (
+    attempt: ClaudeAcquisitionAttempt,
+    sessionId: string,
+    event: () => void,
+    payload?: unknown
+  ) => void
   emit: (
     session: ClaudeSession | null,
     events: StructuredAgentSessionEventSink | undefined,

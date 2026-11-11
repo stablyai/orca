@@ -17,7 +17,7 @@ import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
 } from '../../../../shared/worktree/lineage-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorktreeStartupDraftPaste } from '../startup/runtime-worktree-agent-startup'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { RuntimeRepoSelector } from '../catalog/runtime-repo-selector'

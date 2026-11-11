@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
-import { useHostClient } from '../transport/host-client-hooks'
+import { useHostClient } from '../transport/connection/host-client-hooks'
 import {
   createDownloadProgressFeed,
   downloadFraction,
   type DownloadProgressFeed
 } from './download-progress-feed'
-import type { GenerationStore } from './generation-store'
-import { deriveHostCacheKey } from './host-cache-key'
+import type { GenerationStore } from './generations/generation-store'
+import { deriveHostCacheKey } from './generations/host-cache-key'
 import { runShellEffect, type FlowManifest } from './mobile-web-shell-session-effects'
 import { documentMayTalk } from './mobile-web-shell-gates'
 import { readMobileWebShellReachability } from './mobile-web-shell-reachability'

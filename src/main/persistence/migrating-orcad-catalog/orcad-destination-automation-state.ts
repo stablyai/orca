@@ -1,10 +1,10 @@
-import { automationCanonicalDefinition } from '../../../shared/automation-launch-setup'
-import { MAX_AUTOMATION_RUNS_PER_AUTOMATION } from '../../../shared/automation-run-retention'
+import { automationCanonicalDefinition } from '../../../shared/automations/launch/automation-launch-setup'
+import { MAX_AUTOMATION_RUNS_PER_AUTOMATION } from '../../../shared/automations/history/automation-run-retention'
 import {
   isFinalAutomationRunStatus,
-  type Automation,
   type AutomationRun
-} from '../../../shared/automations-types'
+} from '../../../shared/automations/history/automation-run'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { selectNewRows } from './orcad-catalog-row-identity'
 

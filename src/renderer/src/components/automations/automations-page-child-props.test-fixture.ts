@@ -1,12 +1,12 @@
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
-import type { Automation } from '../../../../shared/automations-types'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { AutomationHostCatalogView } from './use-automation-host-catalog'
-import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
-import type { ExternalAutomationListEntry } from './external-automation-list-entries'
-import type { AutomationListRow } from './automation-list-row-identity'
-import type { AutomationListViewItem } from './automation-list-view'
-import type { AutomationTemplate } from './automation-templates'
+import type { AutomationHostCatalogView } from './hosts/use-automation-host-catalog'
+import type { AutomationCreateDestinationControl } from './authoring/use-automation-create-destination'
+import type { ExternalAutomationListEntry } from './external/external-automation-list-entries'
+import type { AutomationListRow } from './listing/automation-list-row-identity'
+import type { AutomationListViewItem } from './listing/automation-list-view'
+import type { AutomationTemplate } from './authoring/automation-templates'
 
 export type ListPanelProps = {
   sortedListItems: readonly AutomationListViewItem[]

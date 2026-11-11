@@ -1,6 +1,6 @@
 import type { BrowserHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
-import type { BrowserClientPageNetworkRoute } from '../../client-pages/lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from './browser-client-page-network-route'
 import {
   assertBrowserClientNetworkRouteAddress,
   sameBrowserClientNetworkRouteAddress
@@ -12,7 +12,8 @@ import {
 } from '../../routing/identity/browser-execution-host-storage-identity'
 import { createRouteRetirement, waitForRoute } from './browser-client-network-route-settlement'
 import { resolveBrowserHostReconnectDelay } from '../../client-hosts/leases/browser-host-lease-reconnect-delay'
-import { parseBrowserNetworkExecutionHostKey } from '../execution-routes/browser-network-execution-route'
+import '../execution-routes/browser-network-execution-route'
+import { parseBrowserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 
 type BrowserClientNetworkRoute = {
   start(): Promise<{ host: string; port: number }>

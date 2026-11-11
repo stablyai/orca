@@ -107,7 +107,7 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.hostRpc
 }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('sonner', () => ({
   toast: { message: vi.fn(), error: mocks.toastError, success: mocks.toastSuccess }
 }))
@@ -115,11 +115,10 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.reveal
 }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
-vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: mockLaunchAgentKind
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
+  pasteDraftWhenAgentReady: vi.fn()
 }))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
 vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),

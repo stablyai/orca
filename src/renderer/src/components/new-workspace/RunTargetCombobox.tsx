@@ -1,13 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
@@ -82,7 +82,7 @@ export default function RunTargetCombobox({
     readyHostOptions.find(isSelected) ??
     // Why: a selection on a merged machine's other id still belongs to that machine's one row.
     readyHostOptions.find((option) => option.aliasSetups?.some(isSelected)) ??
-    readyHostOptions[0] ??
+    // An unlisted target (e.g. a per-workspace VM) shows "Choose target", never another host's name (#38669).
     null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null

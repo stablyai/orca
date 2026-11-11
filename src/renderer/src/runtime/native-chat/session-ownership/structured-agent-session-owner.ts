@@ -12,7 +12,11 @@ import {
 import type { Tab } from '../../../../../shared/tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import { isTwinWorkspace, namedHostForOwnerRef, resolveOwner } from '@/lib/resolve-owner'
+import {
+  isTwinWorkspace,
+  namedHostForOwnerRef,
+  resolveOwner
+} from '@/lib/workspace/ownership/resolve-owner'
 import { authorityKey } from '../../../../../shared/host-authority'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-sessions/local-structured-session-owner'
 import { runtimeRpcTargetForAuthorityKey } from '../../rpc/targets/runtime-client-target'

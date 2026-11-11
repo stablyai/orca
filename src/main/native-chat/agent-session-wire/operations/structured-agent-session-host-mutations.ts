@@ -1,6 +1,10 @@
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
+import {
+  forgetNativeChatPrompt,
+  rememberNativeChatPrompt
+} from '../../../telemetry/native-chat-prompt-submissions'
 import { latestNativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
@@ -51,7 +55,10 @@ import { openWithReadyStructuredAgentSessionChild } from './structured-agent-ses
 
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import '../options/structured-agent-session-options-read'
-import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
+import {
+  noteStructuredAgentSessionOptionPick,
+  recordStructuredAgentSessionOptionIntent
+} from '../options/structured-agent-session-option-intent'
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
 
 export function sendStructuredAgentSessionTurn(
@@ -110,7 +117,30 @@ export function sendStructuredAgentSessionTurn(
             }
           }
           params.beforeRun?.()
-          return runQueueableStructuredAgentSessionSend(context, ctx, params, () => plan.run(ctx))
+          if (params.userSend && !params.body.command) {
+            rememberNativeChatPrompt(
+              ctx.journal,
+              params.envelope.clientOperationId,
+              ctx.agent,
+              caller.userClient,
+              caller.telemetryOwnerKey
+            )
+          }
+          try {
+            const sent = await runQueueableStructuredAgentSessionSend(context, ctx, params, () =>
+              plan.run(ctx)
+            )
+            if (!sent.ok) {
+              forgetNativeChatPrompt(ctx.journal, params.envelope.clientOperationId)
+            }
+            return sent
+          } catch (error) {
+            const id = params.envelope.clientOperationId
+            if (!ctx.journal.submission(id) && !ctx.journal.queuedMessages.get(id)) {
+              forgetNativeChatPrompt(ctx.journal, id)
+            }
+            throw error
+          }
         }
       },
       sendPreparation(context, params.envelope, arrival, selection)
@@ -238,6 +268,7 @@ export async function setStructuredAgentSessionOption(
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
         if (picked.ok) {
+          noteStructuredAgentSessionOptionPick(context, ctx, params, !noChoice)
           confirmIdleStructuredAgentSessionOption(context, ctx, params)
         }
         return picked

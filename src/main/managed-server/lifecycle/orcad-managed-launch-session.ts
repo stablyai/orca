@@ -10,8 +10,8 @@ import {
   parseOrcadLaunchSshSession,
   recordsOrcadLaunchSshSession,
   type OrcadLaunchSshSession
-} from '../../ssh/orcad-launch-ssh-session'
-import { withManagedOrcadLifecycle } from '../../ssh/orcad-runtime-maintenance'
+} from '../install/orcad-launch-ssh-session'
+import { withManagedOrcadLifecycle } from './orcad-managed-lifecycle'
 import {
   managedOrcadInstallDir,
   managedOrcadSlot,
@@ -20,15 +20,15 @@ import {
   resolveLinkedOrcadContext
 } from './orcad-managed-runtime-context'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
-import { sshOrcadHostTransport } from '../../ssh/orcad-ssh-host-transport'
+
 import { rebuildOrcadManagedTunnel } from './orcad-managed-tunnel'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { readRemoteOrcadManagedStopTarget } from './orcad-managed-remote-stop'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import { orcadSlotDir, type OrcadSlotOptions } from '../activation/orcad-recovery-slot'
 import { stopIncumbentBehindTerminalBarrier } from './orcad-rollback-terminal-barrier'
 import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
-import { collectManagedTerminalCensus } from '../../ssh/orcad-terminal-census-client'
-import { runFencedStop, updateTerminalCounts } from '../../ssh/orcad-fenced-stop'
+import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
+import { runFencedStop, updateTerminalCounts } from '../activation/orcad-fenced-stop'
 
 export async function readManagedOrcadLaunchSshSession(
   userDataPath: string,
@@ -45,7 +45,7 @@ export async function readManagedOrcadLaunchSshSession(
   if (!target || !connection) {
     return 'unverifiable'
   }
-  const context = await resolveOrcadRemoteContext(target, sshOrcadHostTransport(connection))
+  const context = await resolveOrcadRemoteContext(target, connection)
   if (!recordsOrcadLaunchSshSession(context.host)) {
     return 'not-applicable'
   }

@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { AUTOMATIC_WORK_RESUME_UNSUPPORTED } from '../../../../../shared/host-spawn-admission'
+import { AUTOMATIC_WORK_RESUME_UNSUPPORTED } from '../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 // `automaticWork: null` means no gate to report or resume, unless `terminalHostPredatesResume`.
 export const AUTOMATIC_WORK_METHODS = [

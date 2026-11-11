@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   buildMobileNativeChatTransientData,
   type MobileNativeChatPendingItem
-} from '../mobile-native-chat-render-data'
+} from './mobile-native-chat-render-data'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { orderNativeChatDisplayMessages } from '../../../../../src/shared/native-chat/transcript/native-chat-message-order'
 

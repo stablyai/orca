@@ -13,7 +13,7 @@ import type {
 } from '../../../../shared/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
-import { indexAgentStatusRowsByPaneKey } from '../../../agent-hooks/agent-status-pane-index'
+import { indexAgentStatusRowsByPaneKey } from '../../../agent-hooks/runtime/agent-status-pane-index'
 import {
   demoteRuntimeMobileAgentStatus,
   renewRuntimeMobileAgentStatusFromPtyTitle,
@@ -270,7 +270,8 @@ export function projectRuntimeMobileSessionTabs(
       )
     const { projectedTurnCompletedAt, ...clientAgentStatus } = frameAgentStatus(
       projectedAgentStatus.agentStatus,
-      snapshot.worktree
+      snapshot.worktree,
+      terminalPty
     )
     const rawTurnCompletedAt =
       hookAgentStatus?.live?.payload.turnCompletedAt ??

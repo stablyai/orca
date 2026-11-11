@@ -1,7 +1,7 @@
 import {
   BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES,
   decodeBrowserNetworkTunnelWindowUpdate
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelConnectionCredit } from './browser-network-tunnel-connection-credit'
 import {
   browserNetworkTunnelMaxPendingChunks,

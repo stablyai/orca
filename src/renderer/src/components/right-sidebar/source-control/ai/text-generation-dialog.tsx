@@ -1,4 +1,4 @@
-import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
+import { textGenerationErrorText } from '@/lib/text-generation/text-generation-error-copy'
 import React, { useMemo } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import {

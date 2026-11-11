@@ -1,8 +1,6 @@
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 
-import type { RuntimeRepositoryCommandSurface } from '../repositories/runtime-repository-command-surface'
-
 import type { LegacyWorkerRecoveryCandidate } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
@@ -46,8 +44,6 @@ import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-worksp
 import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
 
 export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
-  declare addRepo: RuntimeRepositoryCommandSurface['addRepo']
-  declare cloneRepo: RuntimeRepositoryCommandSurface['cloneRepo']
   declare acquireFileWatcherRemoval: ConstructorParameters<
     typeof RuntimeProjectGroupController
   >[0]['acquireFileWatcherRemoval']
@@ -279,8 +275,11 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   protected readonly projectHostSetups = new RuntimeProjectHostSetupController({
     getStore: () => this.store,
     listRepos: () => this.listRepos(),
-    addRepo: (path, kind, hostId) => this.addRepo(path, kind, hostId),
-    cloneRepo: (url, destination, hostId) => this.cloneRepo(url, destination, hostId),
+    addRepo: (path, kind, hostId) => this.repositoryRegistrations.add(path, kind, hostId),
+    cloneRepo: (args) =>
+      this.repositoryClones.clone(args.url, args.destination, args.hostId, args.folderName),
+    resolveRepositoryMetadata: (repo) => this.repositoryForkBackfill.resolve(repo),
+    enqueueRepositoryMetadata: (repos) => void this.repositoryForkBackfill.enqueue(repos),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
     notifyReposChanged: () => this.notifyReposChanged(),
@@ -353,7 +352,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly serverEnvironment = new RuntimeServerEnvironmentCommands()
 
-  protected readonly repositoryForkBackfill = new RuntimeRepositoryForkBackfill(
+  readonly repositoryForkBackfill = new RuntimeRepositoryForkBackfill(
     () => this.store,
     () => this.notifyReposChanged()
   )

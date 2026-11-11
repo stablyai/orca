@@ -6,7 +6,7 @@ import {
   getFederationAckedThrough,
   recordFederationAckCheckpoint,
   type FederationAckIdentity
-} from './federation-ack-checkpoints'
+} from '../../legacy-remote-home/federation-ack-checkpoints'
 
 describe('federation acknowledgment checkpoints', () => {
   it('matches checkpoints only to their exact remote identity and never moves backward', () => {

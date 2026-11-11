@@ -1,4 +1,4 @@
-import { measureClipboardTextByteLength } from '../clipboard-text'
+import { measureUtf8ByteLength } from '../utf8-byte-limits'
 
 export const ORCA_INTERNAL_FILE_DRAG_TYPE = 'text/x-orca-file-path'
 
@@ -86,7 +86,7 @@ export function validateNativeFileDropPaths(
   const maxPathBytes = options.maxPathBytes ?? NATIVE_FILE_DROP_MAX_PATH_BYTES
   let byteLength = 0
   for (const path of paths) {
-    const measurement = measureClipboardTextByteLength(path, {
+    const measurement = measureUtf8ByteLength(path, {
       stopAfterBytes: maxPathBytes - byteLength
     })
     byteLength += measurement.byteLength

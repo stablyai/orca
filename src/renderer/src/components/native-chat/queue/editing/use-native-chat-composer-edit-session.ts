@@ -14,6 +14,7 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
 import { translate } from '@/i18n/i18n'
 import { registerDictationComposerTarget } from '../../../dictation/dictation-insertion-target'
+import { useSendAfterDictation } from '../../../dictation/use-dictation-queued-send'
 import { insertNativeChatComposerDraftText } from '../../drafts/native-chat-composer-draft-insertion'
 import { registerNativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
 import type { NativeChatComposerSendIntent } from '../../composer/submit/native-chat-composer-send-intent'
@@ -108,17 +109,18 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
+  const sendOrQueue = useSendAfterDictation(root, sendMessage)
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       if (!editSession) {
-        sendMessage(intent)
+        sendOrQueue(intent)
         return
       }
       if (!disabled && !sendHeld && editSession.canSave) {
         editSession.save()
       }
     },
-    [disabled, editSession, sendHeld, sendMessage]
+    [disabled, editSession, sendHeld, sendOrQueue]
   )
   const submit = useLatestHandler(() => send())
   // The pane's own handle object, so its identity changes only when that handle does.

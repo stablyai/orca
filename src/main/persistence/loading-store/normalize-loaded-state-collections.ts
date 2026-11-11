@@ -8,7 +8,7 @@ import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-sessio
 import {
   backfillAutomationRunNumbers,
   pruneAutomationRuns
-} from '../../../shared/automation-run-retention'
+} from '../../../shared/automations/history/automation-run-retention'
 import {
   parseWorkspaceSessionsByHostId,
   workspaceSessionSalvageLogDetails

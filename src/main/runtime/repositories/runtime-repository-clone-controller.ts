@@ -16,9 +16,14 @@ import {
 import { gitSpawnAfterWindowsEnvironmentReady } from '../../git/command-runner/git-spawn'
 import { promptGuardGitEnv } from '../../git/command-runner/git-process-env'
 import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
+import { checkCloneTarget } from '../../git/clone-target-check'
+import type {
+  CloneTargetArgs,
+  CloneTargetCheck
+} from '../../../shared/git/clone/clone-target-check'
 import { runWithGitReadCacheInvalidation } from '../../git/source-control/git-read-cache-invalidation'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { getRepoName } from '../../git/repo'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repo-detection'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
@@ -34,15 +39,46 @@ type RuntimeRepositoryCloneDependencies = {
   notifyReposChanged: () => void
 }
 
+// Git runs here; an SSH row with the same path refers to another machine.
+function findRegistrationCandidateAt(
+  store: RuntimeStore,
+  pathKeys: string[],
+  executionHostId?: ExecutionHostId | null
+): Repo | undefined {
+  return store
+    .getRepos()
+    .find(
+      (repo) =>
+        pathKeys.includes(getClonePathComparisonKey(repo.path)) &&
+        runtimeRepoIsRegistrationCandidate(repo, executionHostId)
+    )
+}
+
 export class RuntimeRepositoryCloneController {
   private readonly inFlightByPath = new Map<string, Promise<void>>()
 
   constructor(private readonly deps: RuntimeRepositoryCloneDependencies) {}
 
+  async checkTarget(
+    args: CloneTargetArgs,
+    executionHostId?: ExecutionHostId | null
+  ): Promise<CloneTargetCheck> {
+    const store = this.deps.getStore()
+    if (!store) {
+      throw new Error('runtime_unavailable')
+    }
+    return checkCloneTarget(
+      { ...args, url: args.url.trim(), destination: args.destination.trim() },
+      (pathKeys) => findRegistrationCandidateAt(store, pathKeys, executionHostId),
+      LOCAL_EXECUTION_HOST_ID
+    )
+  }
+
   async clone(
     url: string,
     destination: string,
-    executionHostId?: ExecutionHostId | null
+    executionHostId?: ExecutionHostId | null,
+    folderName?: string
   ): Promise<Repo> {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
@@ -52,7 +88,11 @@ export class RuntimeRepositoryCloneController {
     if (!trimmedDestination) {
       throw new Error('Clone destination is required')
     }
-    const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
+    const clonePath = deriveValidatedClonePath({
+      url: trimmedUrl,
+      destination: trimmedDestination,
+      folderName
+    })
     await refuseWslHostWindowsDrivePath(trimmedDestination)
     const clonePathKey = getClonePathComparisonKey(clonePath)
     const previous = this.inFlightByPath.get(clonePathKey) ?? Promise.resolve()
@@ -89,14 +129,8 @@ export class RuntimeRepositoryCloneController {
       throw new Error('runtime_unavailable')
     }
     let savedPathKeys = await getSavedProjectPathKeys(clonePath)
-    // Git runs here; an SSH row with the same path refers to another machine.
     const findSaved = (): Repo | undefined =>
-      store.getRepos().find((repo) => {
-        return (
-          savedPathKeys.includes(getClonePathComparisonKey(repo.path)) &&
-          runtimeRepoIsRegistrationCandidate(repo, executionHostId)
-        )
-      })
+      findRegistrationCandidateAt(store, savedPathKeys, executionHostId)
     const reused = await reuseSavedCloneTarget(findSaved, trimmedUrl, LOCAL_EXECUTION_HOST_ID)
     if (reused) {
       return reused
@@ -182,7 +216,7 @@ export class RuntimeRepositoryCloneController {
     // cloneRepo validated and cloned locally; runtime row stamps do not change where files live.
     // Register Git's checkout path so the clone stays its own selected checkout.
     const repoPath = (await inspectGitRepoForRegistrationAsync(clonePath)).rootPath
-    const detected = await detectRepoIconAndUpstream({
+    const detected = await detectRepoLocalMetadata({
       repoPath,
       kind: 'git',
       executionHostId: LOCAL_EXECUTION_HOST_ID
