@@ -5504,6 +5504,8 @@
           "0ae45b8238": "my-project",
           "a8149a3a5a": "名称",
           "11fd2a7db8": "Git 存储库",
+          "038729c107": "文件夹",
+          "180e9b5e48": "项目类型",
           "5e97f0c4b9": "项目已创建",
           "2c12db1511": "项目已添加",
           "875dda0995": "输入服务器父路径",
@@ -6277,7 +6279,7 @@
                   "5f9ffac036": "克隆远程 Git 存储库",
                   "7edb8ebe24": "从 URL 克隆",
                   "serverSshTitle": "此服务器 SSH 主机上的项目",
-                  "serverSshAddOnThisComputer": "无法从服务器使用，请在此电脑上添加该 SSH 主机以打开其项目",
+                  "serverSshAddOnThisComputer": "此服务器无法直接打开其 SSH 主机上的项目。请在“主机”中选择该主机对应的托管 Orca 服务器，或打开此服务器上的文件夹。",
                   "fb4fc5380e": "本地项目、Git 仓库或包含多个仓库的文件夹",
                   "2281fdc8c7": "浏览文件夹",
                   "runtimeBrowseDescription": "此主机上的现有 Git 仓库或文件夹"

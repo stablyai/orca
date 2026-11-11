@@ -5777,6 +5777,8 @@
           "0ae45b8238": "my-project",
           "a8149a3a5a": "Nom",
           "11fd2a7db8": "Dépôt Git",
+          "038729c107": "Dossier",
+          "180e9b5e48": "Type de projet",
           "c7b9f94456": "Créer un nouveau projet",
           "b100311784": "Nommez-le et Orca créera un vrai projet avec des valeurs par défaut sensées.",
           "685b5eefe1": "{{kind}} dans {{parent}}",
@@ -6597,7 +6599,7 @@
                   "5f9ffac036": "Cloner un dépôt Git distant",
                   "7edb8ebe24": "Cloner depuis une URL",
                   "serverSshTitle": "Projet sur un hôte SSH de ce serveur",
-                  "serverSshAddOnThisComputer": "Indisponible depuis un serveur. Ajoutez l’hôte SSH sur cet ordinateur pour ouvrir ses projets.",
+                  "serverSshAddOnThisComputer": "Ce serveur ne peut pas ouvrir directement les projets de ses hôtes SSH. Sélectionnez dans « Hôte » le serveur Orca géré par cet hôte, ou ouvrez un dossier sur ce serveur.",
                   "fb4fc5380e": "Projet local, dépôt Git ou dossier contenant plusieurs dépôts",
                   "2281fdc8c7": "Parcourir le dossier",
                   "runtimeBrowseDescription": "Dépôt Git existant ou dossier sur cette machine"

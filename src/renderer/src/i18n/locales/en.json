@@ -6513,6 +6513,8 @@
           "0ae45b8238": "my-project",
           "a8149a3a5a": "Name",
           "11fd2a7db8": "Git repository",
+          "038729c107": "Folder",
+          "180e9b5e48": "Project kind",
           "c7b9f94456": "Create a new project",
           "b100311784": "Name it and Orca will create a real project with sensible defaults.",
           "685b5eefe1": "{{kind}} in {{parent}}",
@@ -7333,7 +7335,7 @@
                   "5f9ffac036": "Clone a remote Git repository",
                   "7edb8ebe24": "Clone from URL",
                   "serverSshTitle": "Project on this server's SSH host",
-                  "serverSshAddOnThisComputer": "Not available from a server. Add the SSH host on this computer to open its projects.",
+                  "serverSshAddOnThisComputer": "This server can't open projects from its SSH hosts. Select that host's managed Orca server from Host, or open a folder on this server.",
                   "fb4fc5380e": "Local project, Git repo, or folder with many repos",
                   "2281fdc8c7": "Browse folder",
                   "runtimeBrowseDescription": "Existing Git repository or folder on this host"

@@ -1,8 +1,9 @@
 import React, { useMemo, useState, type ReactNode } from 'react'
-import { ChevronDown, GitBranch, Loader2 } from 'lucide-react'
+import { ChevronDown, Folder, GitBranch, Loader2 } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/class-names'
 import {
   CreateProjectLocationField,
@@ -14,12 +15,14 @@ import {
   joinCreateProjectPath,
   type GitAvailability
 } from '../create/create-project-defaults'
+import type { RepoKind } from '../../../../../../shared/repo-types'
 
 const CREATE_PROJECT_NAME_PLACEHOLDER = 'project-name'
 
 type CreateStepProps = {
   createName: string
   createParent: string
+  createKind: RepoKind
   createError: string | null
   isCreating: boolean
   defaultParent?: string
@@ -34,6 +37,7 @@ type CreateStepProps = {
   notice?: ReactNode
   onNameChange: (value: string) => void
   onParentChange: (value: string) => void
+  onKindChange: (kind: RepoKind) => void
   onPickParent: () => void
   onCreate: () => void
 }
@@ -41,6 +45,7 @@ type CreateStepProps = {
 export function CreateStep({
   createName,
   createParent,
+  createKind,
   createError,
   isCreating,
   defaultParent = '',
@@ -53,6 +58,7 @@ export function CreateStep({
   notice,
   onNameChange,
   onParentChange,
+  onKindChange,
   onPickParent,
   onCreate
 }: CreateStepProps): React.JSX.Element {
@@ -61,12 +67,12 @@ export function CreateStep({
   // Remote hosts need typed paths; expose Location so creation does not appear blocked.
   const [advancedOpen, setAdvancedOpen] = useState(manualParentEntry)
 
-  // Unknown probe results must not block creation; require a confirmed Git miss.
+  // Folder projects do not need Git; only a Git create waits for its availability probe.
   const canSubmit =
     createName.trim().length > 0 &&
     createParent.trim().length > 0 &&
-    gitAvailability !== 'checking' &&
-    gitAvailability !== 'unavailable' &&
+    (createKind === 'folder' ||
+      (gitAvailability !== 'checking' && gitAvailability !== 'unavailable')) &&
     !parentDefaultPending &&
     !isCreating &&
     !submitDisabled
@@ -103,9 +109,13 @@ export function CreateStep({
     const name = createName.trim() || CREATE_PROJECT_NAME_PLACEHOLDER
     return createParent.trim() ? joinCreateProjectPath(createParent, name) : ''
   }, [createName, createParent])
-  const kindLabel = t('auto.components.sidebar.AddRepoCreateStep.11fd2a7db8', 'Git repository')
-  const showGitFallback = gitAvailability === 'unavailable'
-  const showGitChecking = gitAvailability === 'checking'
+  const kindLabel =
+    createKind === 'git'
+      ? t('auto.components.sidebar.AddRepoCreateStep.11fd2a7db8', 'Git repository')
+      : t('auto.components.sidebar.AddRepoCreateStep.038729c107', 'Folder')
+  const KindIcon = createKind === 'git' ? GitBranch : Folder
+  const showGitFallback = createKind === 'git' && gitAvailability === 'unavailable'
+  const showGitChecking = createKind === 'git' && gitAvailability === 'checking'
   const showRuntimeMissingParent =
     runtimeEnvironmentId && !createParent.trim() && runtimeParentStatus !== 'checking'
 
@@ -163,7 +173,7 @@ export function CreateStep({
             className="flex w-full min-w-0 items-start gap-2.5 rounded-md px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-background/60 text-muted-foreground">
-              <GitBranch className="size-3.5" />
+              <KindIcon className="size-3.5" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">
@@ -217,6 +227,50 @@ export function CreateStep({
 
           {advancedOpen && (
             <div className="space-y-3 border-t border-border px-3 py-3">
+              <div className="space-y-1.5">
+                <span className="block text-2xs font-medium text-muted-foreground">
+                  {t('auto.components.sidebar.AddRepoCreateStep.180e9b5e48', 'Project kind')}
+                </span>
+                <RadioGroup
+                  layout="inline"
+                  value={createKind}
+                  onValueChange={(kind) => {
+                    if (kind === 'git' || kind === 'folder') {
+                      onKindChange(kind)
+                    }
+                  }}
+                  disabled={isCreating}
+                  aria-label={t(
+                    'auto.components.sidebar.AddRepoCreateStep.180e9b5e48',
+                    'Project kind'
+                  )}
+                >
+                  {(['git', 'folder'] as const).map((kind) => {
+                    const label =
+                      kind === 'git'
+                        ? t(
+                            'auto.components.sidebar.AddRepoCreateStep.11fd2a7db8',
+                            'Git repository'
+                          )
+                        : t('auto.components.sidebar.AddRepoCreateStep.038729c107', 'Folder')
+                    const Icon = kind === 'git' ? GitBranch : Folder
+                    return (
+                      <RadioGroupItem key={kind} value={kind} variant="pill">
+                        <Icon className="size-3.5 shrink-0" />
+                        <span className="truncate">{label}</span>
+                      </RadioGroupItem>
+                    )
+                  })}
+                </RadioGroup>
+                {showGitFallback ? (
+                  <p className="text-2xs text-destructive">
+                    {t(
+                      'auto.components.sidebar.AddRepoCreateStep.fe1e616c5b',
+                      'Git is required to create a project.'
+                    )}
+                  </p>
+                ) : null}
+              </div>
               {/* The local picker returns client paths; runtime servers browse host paths via RPC. */}
               <CreateProjectLocationField
                 createParent={createParent}

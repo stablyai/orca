@@ -105,13 +105,16 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
     (repoId, executionHostId) => completeGitRepoAdd(repoId, 'ssh_remote_path', executionHostId),
     selectedRuntimeEnvironmentId
   )
+
   const {
     createName,
     createParent,
+    createKind,
     createError,
     isCreating,
     setCreateName,
     setCreateParent,
+    setCreateKind,
     setCreateError,
     resetCreateState,
     handlePickParent,
@@ -331,6 +334,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
         nestedGroupName={nestedGroupName}
         createName={createName}
         createParent={createParent}
+        createKind={createKind}
         createError={createError}
         isCreating={isCreating}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
@@ -389,15 +393,13 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
         onNestedSelectedPathsChange={setNestedSelectedPaths}
         onImportNestedRepos={(mode) => void handleImportNestedRepos(mode)}
         onOpenNestedRootFolder={() => void handleOpenNestedRootFolder()}
-        onCreateNameChange={(value) => {
-          setCreateName(value)
-          setCreateError(null)
-        }}
+        onCreateNameChange={setCreateName}
         onCreateParentChange={(value) => {
           markCreateParentTouched(value)
           setCreateParent(value)
           setCreateError(null)
         }}
+        onCreateKindChange={setCreateKind}
         onPickCreateParent={() => {
           void handlePickParent().then((dir) => {
             if (dir) {

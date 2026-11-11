@@ -5802,6 +5802,8 @@
           "0ae45b8238": "my-project",
           "a8149a3a5a": "名稱",
           "11fd2a7db8": "Git 存放庫",
+          "038729c107": "資料夾",
+          "180e9b5e48": "專案類型",
           "c7b9f94456": "建立新專案",
           "b100311784": "為它命名，Orca 會使用合理的預設設定建立一個真實專案。",
           "685b5eefe1": "{{parent}} 中的 {{kind}}",
@@ -6568,7 +6570,7 @@
                   "5f9ffac036": "複製遠端 Git 存放庫",
                   "7edb8ebe24": "從 URL 複製",
                   "serverSshTitle": "此伺服器 SSH 主機上的專案",
-                  "serverSshAddOnThisComputer": "無法從伺服器使用。請在此電腦上新增 SSH 主機，以開啟其專案。",
+                  "serverSshAddOnThisComputer": "此伺服器無法直接開啟其 SSH 主機上的專案。請在「主機」中選取該主機對應的託管 Orca 伺服器，或開啟此伺服器上的資料夾。",
                   "fb4fc5380e": "本機專案、Git 存放庫或包含多個存放庫的資料夾",
                   "2281fdc8c7": "瀏覽資料夾",
                   "runtimeBrowseDescription": "此主機上的現有 Git 存放庫或資料夾"

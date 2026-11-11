@@ -5294,6 +5294,8 @@
           "0ae45b8238": "my-project",
           "a8149a3a5a": "이름",
           "11fd2a7db8": "Git 리포지토리",
+          "038729c107": "폴더",
+          "180e9b5e48": "프로젝트 유형",
           "5e97f0c4b9": "프로젝트가 생성되었습니다.",
           "2c12db1511": "프로젝트가 이미 추가되었습니다.",
           "875dda0995": "서버 상위 경로를 입력하세요.",
@@ -6067,7 +6069,7 @@
                   "5f9ffac036": "원격 Git repos 복제",
                   "7edb8ebe24": "URL에서 복제",
                   "serverSshTitle": "이 서버의 SSH 호스트에 있는 프로젝트",
-                  "serverSshAddOnThisComputer": "서버에서는 사용할 수 없습니다. 프로젝트를 열려면 이 컴퓨터에 SSH 호스트를 추가하세요.",
+                  "serverSshAddOnThisComputer": "이 서버에서는 SSH 호스트의 프로젝트를 직접 열 수 없습니다. 호스트에서 해당 호스트의 관리되는 Orca 서버를 선택하거나 이 서버의 폴더를 여세요.",
                   "fb4fc5380e": "로컬 프로젝트, Git repo 또는 repos가 많은 폴더",
                   "2281fdc8c7": "폴더 찾아보기",
                   "runtimeBrowseDescription": "이 호스트의 기존 Git 리포지토리 또는 폴더"

@@ -5507,6 +5507,8 @@
           "0ae45b8238": "my-project",
           "a8149a3a5a": "Nombre",
           "11fd2a7db8": "Repositorio Git",
+          "038729c107": "Carpeta",
+          "180e9b5e48": "Tipo de proyecto",
           "5e97f0c4b9": "Proyecto creado",
           "2c12db1511": "Proyecto ya agregado",
           "875dda0995": "Introduce una ruta padre del host.",
@@ -6331,7 +6333,7 @@
                   "5f9ffac036": "Clonar un repositorio Git remoto",
                   "7edb8ebe24": "Clonar desde URL",
                   "serverSshTitle": "Proyecto en un host SSH de este servidor",
-                  "serverSshAddOnThisComputer": "No disponible desde un servidor. Añade el host SSH en este ordenador para abrir sus proyectos.",
+                  "serverSshAddOnThisComputer": "Este servidor no puede abrir directamente proyectos de sus hosts SSH. Selecciona en «Host» el servidor Orca administrado de ese host o abre una carpeta en este servidor.",
                   "fb4fc5380e": "Proyecto local, repositorio de Git o carpeta con muchos repositorios",
                   "2281fdc8c7": "Explorar carpeta",
                   "runtimeBrowseDescription": "Repositorio Git o carpeta existente en este host"

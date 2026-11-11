@@ -12259,6 +12259,8 @@
           "0ae45b8238": "meu-projeto",
           "a8149a3a5a": "Nome",
           "11fd2a7db8": "Repositório Git",
+          "038729c107": "Pasta",
+          "180e9b5e48": "Tipo de projeto",
           "c7b9f94456": "Criar um novo projeto",
           "b100311784": "Dê um nome e o Orca vai criar um projeto real com padrões sensatos.",
           "685b5eefe1": "{{kind}} em {{parent}}",
@@ -12446,7 +12448,7 @@
                   "2281fdc8c7": "Navegar pela pasta",
                   "runtimeBrowseDescription": "Repositório Git ou pasta existente neste host",
                   "serverSshTitle": "Projeto no host SSH deste servidor",
-                  "serverSshAddOnThisComputer": "Indisponível a partir de um servidor. Adicione o host SSH neste computador para abrir os projetos dele."
+                  "serverSshAddOnThisComputer": "Este servidor não pode abrir diretamente projetos nos próprios hosts SSH. Selecione em “Host” o servidor Orca gerenciado desse host ou abra uma pasta neste servidor."
                 }
               }
             }

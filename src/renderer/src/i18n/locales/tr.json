@@ -5924,6 +5924,8 @@
           "0ae45b8238": "my-project",
           "a8149a3a5a": "Ad",
           "11fd2a7db8": "Git reposu",
+          "038729c107": "Klasör",
+          "180e9b5e48": "Proje türü",
           "c7b9f94456": "Yeni proje oluştur",
           "b100311784": "Bir ad verin, Orca makul varsayılanlarla gerçek bir proje oluştursun.",
           "685b5eefe1": "{{parent}} içinde {{kind}}",
@@ -6715,7 +6717,7 @@
                   "5f9ffac036": "Uzak bir Git reposunu klonla",
                   "7edb8ebe24": "URL'den clone'la",
                   "serverSshTitle": "Bu sunucunun SSH sunucusundaki proje",
-                  "serverSshAddOnThisComputer": "Sunucudan kullanılamaz. Projelerini açmak için SSH sunucusunu bu bilgisayara ekleyin.",
+                  "serverSshAddOnThisComputer": "Bu sunucu, SSH sunucularındaki projeleri doğrudan açamaz. Host bölümünden bu sunucunun yönetilen Orca sunucusunu seçin veya bu sunucuda bir klasör açın.",
                   "fb4fc5380e": "Yerel proje, Git reposu veya birçok repo içeren klasör",
                   "2281fdc8c7": "Klasöre göz at",
                   "runtimeBrowseDescription": "Bu ana makinedeki mevcut Git reposu veya klasör"
