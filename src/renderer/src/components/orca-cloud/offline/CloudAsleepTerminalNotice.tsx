@@ -2,35 +2,71 @@ import React from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { getIntlLocale } from '@/i18n/i18n'
 import { wakeCloudWorkspace } from '../cloud-workspace-actions'
+
+export function formatAsleepSince(at: number): string {
+  return new Intl.DateTimeFormat(getIntlLocale(), { hour: 'numeric', minute: '2-digit' }).format(
+    new Date(at)
+  )
+}
 
 /**
  * A terminal pane of an Orca Cloud workspace that is asleep (RA-12): nothing dropped and nothing to
- * retry, so a calm line and Wake instead of a reconnect toast with a "Down for" counter, or a red
- * error. The pane keeps its scrollback underneath.
+ * retry, so a calm line and Wake instead of a reconnect toast. The pane keeps its scrollback
+ * underneath, greyed out behind an "Asleep since" divider so old output (a dev server's "Serving
+ * on port 8000") doesn't read as live (JA-15).
  */
 export function CloudAsleepTerminalNotice({
-  workspaceId
+  workspaceId,
+  asleepSince
 }: {
   workspaceId: string
+  asleepSince: number | null
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <div
       data-cloud-asleep-terminal-notice=""
-      role="status"
-      className="absolute inset-x-3 bottom-3 z-50 flex items-center justify-between gap-3 rounded-md border border-border bg-popover px-3.5 py-2.5 text-xs text-muted-foreground"
+      className="pointer-events-none absolute inset-0 z-50 flex flex-col justify-end"
     >
-      <span>
-        {t(
-          'orcaCloudWorkspace.terminal.asleepHistoryKept',
-          'This workspace is asleep. Your terminal history is kept.'
-        )}
-      </span>
-      <Button size="xs" variant="outline" onClick={() => void wakeCloudWorkspace(workspaceId)}>
-        <Play />
-        {t('orcaCloudWorkspace.wake', 'Wake')}
-      </Button>
+      {/* Greys out the stale scrollback; the pane's text stays selectable through it. */}
+      <div
+        data-cloud-asleep-scrim=""
+        aria-hidden="true"
+        className="absolute inset-0 bg-background/55"
+      />
+      <div className="relative flex flex-col gap-2 px-3 pb-3">
+        {asleepSince !== null ? (
+          <div
+            data-cloud-asleep-divider=""
+            className="flex items-center gap-2 text-[11px] text-muted-foreground"
+          >
+            <span className="h-px flex-1 bg-border" />
+            <span>
+              {t('orcaCloudWorkspace.terminal.asleepSince', 'Asleep since {{time}}', {
+                time: formatAsleepSince(asleepSince)
+              })}
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        ) : null}
+        <div
+          role="status"
+          className="pointer-events-auto flex items-center justify-between gap-3 rounded-md border border-border bg-popover px-3.5 py-2.5 text-xs text-muted-foreground"
+        >
+          <span>
+            {t(
+              'orcaCloudWorkspace.terminal.asleepHistoryKept',
+              'This workspace is asleep. Your terminal history is kept.'
+            )}
+          </span>
+          <Button size="xs" variant="outline" onClick={() => void wakeCloudWorkspace(workspaceId)}>
+            <Play />
+            {t('orcaCloudWorkspace.wake', 'Wake')}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

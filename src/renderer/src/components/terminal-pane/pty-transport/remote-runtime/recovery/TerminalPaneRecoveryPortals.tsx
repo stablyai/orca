@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PtyTransport } from '../../pty-transport-types'
 import { useWslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
@@ -20,6 +20,15 @@ import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import { useAppStore } from '@/store/index'
 import { useCloudRecoveryContext } from '@/lib/orca-cloud/use-cloud-recovery-context'
 import { CloudAsleepTerminalNotice } from '@/components/orca-cloud/offline/CloudAsleepTerminalNotice'
+import { CloudWokeProcessesNotice } from '@/components/orca-cloud/offline/CloudWokeProcessesNotice'
+import {
+  captureWakeProcessHint,
+  dismissWakeProcessHint,
+  getWakeProcessHint,
+  readTerminalTail,
+  resetWakeProcessCapture,
+  useWakeProcessHintsVersion
+} from '@/lib/orca-cloud/cloud-wake-process-hints'
 import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
@@ -112,6 +121,23 @@ export function TerminalPaneRecoveryPortals({
   const cloud = useCloudRecoveryContext(controller.worktreeId)
   const cloudWaking = cloud?.waking === true
   const cloudAsleep = cloud?.asleep === true
+  const cloudAwake = cloud !== null && !cloudWaking && !cloudAsleep
+  useWakeProcessHintsVersion()
+  // While asleep (or waking) the pane still holds the pre-sleep scrollback: note what was running,
+  // so after the wake the pane can say it stopped and offer it back (JA-15).
+  const isCloud = cloud !== null
+  useEffect(() => {
+    if (!isCloud) {
+      return
+    }
+    if (cloudAsleep || cloudWaking) {
+      for (const pane of managedPanes) {
+        captureWakeProcessHint(pane.leafId, readTerminalTail(pane.terminal))
+      }
+    } else {
+      resetWakeProcessCapture(managedPanes.map((pane) => pane.leafId))
+    }
+  }, [isCloud, cloudAsleep, cloudWaking, managedPanes])
   const isolated = controller.isolatedPaneKey !== null
   // Why: a pane waiting for SSH sign-in says so itself; "reconnecting" over it would be false.
   const awaitingSignInHere = managedPanes.some(
@@ -198,9 +224,30 @@ export function TerminalPaneRecoveryPortals({
         // Asleep: nothing to reconnect to; one calm line with Wake instead of a reconnect card (RA-12).
         if (cloudAsleep) {
           return createPortal(
-            <CloudAsleepTerminalNotice workspaceId={controller.worktreeId} />,
+            <CloudAsleepTerminalNotice
+              workspaceId={controller.worktreeId}
+              asleepSince={cloud?.asleepSince ?? null}
+            />,
             pane.container,
             `cloud-asleep-${pane.id}`
+          )
+        }
+        // Up again after a sleep: the process that was running is gone; say so once, never rerun it.
+        const wokeHint = cloudAwake ? getWakeProcessHint(pane.leafId) : null
+        if (wokeHint) {
+          return createPortal(
+            <CloudWokeProcessesNotice
+              command={wokeHint.command}
+              onRerun={() => {
+                dismissWakeProcessHint(pane.leafId)
+                paneTransportsRef.current
+                  .get(pane.id)
+                  ?.sendInput(`${wokeHint.command}\r`, 'driving')
+              }}
+              onDismiss={() => dismissWakeProcessHint(pane.leafId)}
+            />,
+            pane.container,
+            `cloud-woke-${pane.id}`
           )
         }
         // Why mounted with no recovery: the banner's minimum time and hold outlive the recovery itself.
