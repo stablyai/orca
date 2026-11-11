@@ -4,7 +4,10 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
 import type { ClaudeToolResult } from './claude-tool-result-close'
-import type { WorkerApprovalOutcome, WorkerApprovalPayload } from './worker-approval'
+import type {
+  WorkerApprovalOutcome,
+  WorkerApprovalPayload
+} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'notify'> & {
   /** This pane's worker and its active local Dispatch, as the turn-stop report resolves it. */

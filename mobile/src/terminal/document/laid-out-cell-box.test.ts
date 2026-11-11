@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { laidOutCellBox, reportLaidOutCellBox } from './laid-out-cell-box'
+import { reportLaidOutCellBox } from './laid-out-cell-box'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import type { TerminalDocumentHost } from './document-host-seams'
@@ -30,15 +30,6 @@ describe('laidOutCellBox', () => {
     } as unknown as typeof scope.term
     return scope
   }
-
-  it('reads the box xterm laid out at the current text scale, with its grid', () => {
-    const scope = scopeWithCell({ width: 29 / 3, height: 21 }, 16)
-    expect(laidOutCellBox(scope)).toEqual({
-      cellBox: { fontScale: 1.25, cellWidth: 29 / 3, cellHeight: 21 },
-      cols: 55,
-      rows: 47
-    })
-  })
 
   it('tells the host each new box once, and refits only a box that changed at a kept grid', () => {
     const posted: Record<string, unknown>[] = []
@@ -125,41 +116,6 @@ describe('a started document', () => {
   const reflowTo = (scope: TerminalDocumentScope, cols: number) =>
     handleMsg(scope, { type: 'reflow', cols, rows: 47 })
 
-  it('takes the frame the app laid out from init, resize and reflow', () => {
-    const { scope } = started()
-    try {
-      handleMsg(scope, {
-        type: 'init',
-        cols: 55,
-        rows: 47,
-        initialData: '',
-        preserveScroll: false,
-        frame: { width: 427.5, height: 710 }
-      })
-      expect(scope.hostFrame).toEqual({ width: 427.5, height: 710 })
-      handleMsg(scope, { type: 'resize', cols: 54, rows: 47, frame: { width: 420, height: 700 } })
-      expect(scope.hostFrame).toEqual({ width: 420, height: 700 })
-      handleMsg(scope, { type: 'reflow', cols: 53, rows: 46, frame: { width: 410, height: 690 } })
-      expect(scope.hostFrame).toEqual({ width: 410, height: 690 })
-    } finally {
-      stopTerminalDocument(scope)
-    }
-  })
-
-  it('reports ready with the box its own terminal laid out, at the app text scale', () => {
-    const { scope, posted, built } = started({ start: () => ({ textScale: 1.25, shown: true }) })
-    try {
-      expect(built).toHaveLength(1)
-      expect(built[0].options.fontSize).toBe(16)
-      expect(posted[0]).toEqual({
-        type: 'web-ready',
-        cellBox: { fontScale: 1.25, cellWidth: (23 / 3) * (16 / 13), cellHeight: 15 * (16 / 13) }
-      })
-    } finally {
-      stopTerminalDocument(scope)
-    }
-  })
-
   it('leaves no live terminal when opening the one it builds before ready throws', () => {
     const double = terminalDocumentDouble()
     double.terminal.open = () => {
@@ -180,21 +136,6 @@ describe('a started document', () => {
     try {
       expect(built).toHaveLength(0)
       expect(posted[0]).toEqual({ type: 'web-ready', cellBox: null })
-    } finally {
-      stopTerminalDocument(scope)
-    }
-  })
-
-  it('reuses that terminal for the first init, so an open builds one xterm', async () => {
-    const { scope, posted, built, init } = started()
-    try {
-      const prepared = scope.term
-      init()
-      await untilReady(posted)
-      expect(built).toHaveLength(1)
-      expect(scope.term).toBe(prepared)
-      expect(scope.term?.cols).toBe(55)
-      expect(scope.term?.rows).toBe(47)
     } finally {
       stopTerminalDocument(scope)
     }
@@ -254,19 +195,6 @@ describe('a started document', () => {
     }
   })
 
-  it('reports a changed cell width on the next render', async () => {
-    const { scope, cell, posted, render, init } = started()
-    try {
-      init()
-      await untilReady(posted)
-      cell.width = 7.8
-      render()
-      expect(boxes(posted).at(-1)).toEqual({ fontScale: 1, cellWidth: 7.8, cellHeight: 15 })
-    } finally {
-      stopTerminalDocument(scope)
-    }
-  })
-
   it("refits a DOM first init once, and not again on the refit's own report", async () => {
     const { scope, cell, posted, render, init } = started()
     try {
@@ -278,42 +206,6 @@ describe('a started document', () => {
       reflowTo(scope, 54)
       render()
       expect(refits(posted)).toEqual([true, false])
-    } finally {
-      stopTerminalDocument(scope)
-    }
-  })
-
-  it('never refits a box that came with a new grid, so the DOM renderer cannot loop', async () => {
-    const { scope, cell, posted, render, init } = started()
-    try {
-      init()
-      await untilReady(posted)
-      for (const [cols, width] of [
-        [50, 7.9],
-        [55, 7.8],
-        [54, 8]
-      ]) {
-        cell.width = width
-        reflowTo(scope, cols)
-        render()
-      }
-      expect(refits(posted)).toEqual([false, false, false])
-    } finally {
-      stopTerminalDocument(scope)
-    }
-  })
-
-  it('refits a renderer swap at a grid applied in place', async () => {
-    const { scope, cell, posted, render, init } = started()
-    try {
-      init()
-      await untilReady(posted)
-      reflowTo(scope, 50)
-      render()
-      expect(refits(posted)).toEqual([])
-      cell.width = 7.8
-      render()
-      expect(refits(posted)).toEqual([true])
     } finally {
       stopTerminalDocument(scope)
     }

@@ -1,6 +1,8 @@
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { Repo } from '../../../../shared/repo-types'
 import { isAgentScratchRepoRootPath } from '../../../../shared/agent-scratch-worktrees'
 import {
+  getRepoExecutionHostId,
   getRepoRoutingConnectionId,
   getRepoSshConnectionId
 } from '../../../../shared/execution-host'
@@ -59,4 +61,20 @@ export function readFreshWorktreeScan(
     cached.scannedAt + WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS > Date.now()
     ? cached.result.worktrees
     : undefined
+}
+
+export function pruneUnregisteredWorktreeScans(
+  store: Pick<RuntimeStore, 'getRepos'> | null,
+  caches: () => readonly Pick<Map<string, unknown>, 'keys' | 'delete'>[]
+): void {
+  const registered = new Set(
+    (store?.getRepos() ?? []).map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
+  )
+  for (const cache of caches()) {
+    for (const key of cache.keys()) {
+      if (!registered.has(key)) {
+        cache.delete(key)
+      }
+    }
+  }
 }

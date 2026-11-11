@@ -3,7 +3,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import {
   listClaudeProfileHomes,
   listClaudeProfileHomesAsync
-} from '../claude-accounts/claude-profile-homes'
+} from '../claude-accounts/profiles/claude-profile-homes'
 import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
 import type {

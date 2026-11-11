@@ -3,7 +3,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { z } from 'zod'
 import type { RpcContext } from '../../../core'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-start'
 import { startLocalWorker } from './local-worker-start'
 import type { WorkerFollowUp } from './worker-follow-up-placement'
 import { withWorkerStartNext } from '../receipt-next'

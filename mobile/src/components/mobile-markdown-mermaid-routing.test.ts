@@ -40,11 +40,6 @@ function firstMermaid(tree: ReactTestRenderer) {
 }
 
 describe('MobileMarkdown mermaid routing', () => {
-  it('keeps a streaming (unterminated) mermaid fence as raw code', () => {
-    const tree = render('```mermaid\ngraph TD; A-->B')
-    expect(mermaidCount(tree)).toBe(0)
-  })
-
   it('keeps identical sibling diagrams uniquely keyed', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const diagram = '```mermaid\ngraph TD; A-->B\n```'

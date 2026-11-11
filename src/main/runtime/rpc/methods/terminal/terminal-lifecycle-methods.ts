@@ -194,6 +194,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               initialSize: params.initialSize,
               telemetrySource: params.telemetrySource,
               retrySplit: params.retrySplit,
+              ...(caller?.kind === 'local-cli' ? { activate: false } : {}),
               wslUserAct: true
             })
     })

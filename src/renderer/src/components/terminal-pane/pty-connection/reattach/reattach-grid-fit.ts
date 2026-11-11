@@ -17,6 +17,23 @@ export function noteReattachAltFrameSkip(
   return skip
 }
 
+export function readColdRestoreDestinationRows(session: ReattachPayloadSession): number {
+  let destinationRows = session.pane.terminal.rows
+  try {
+    const proposedDestination = session.pane.fitAddon.proposeDimensions()
+    if (
+      proposedDestination &&
+      Number.isFinite(proposedDestination.rows) &&
+      proposedDestination.rows > 0
+    ) {
+      destinationRows = Math.max(destinationRows, proposedDestination.rows)
+    }
+  } catch {
+    // The current xterm grid remains a safe lower bound for blanking.
+  }
+  return destinationRows
+}
+
 /** Fits a reattached pane and pushes the resulting grid to its PTY. */
 export async function fitReattachedPaneToGrid(
   session: ReattachPayloadSession,

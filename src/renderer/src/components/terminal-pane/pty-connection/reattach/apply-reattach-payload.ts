@@ -19,7 +19,11 @@ import {
 import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
 import { ackPaintedColdRestore } from './painted-cold-restore-ack'
 import { mainStartsPane } from '../spawn/main-starts-pane'
-import { fitReattachedPaneToGrid, noteReattachAltFrameSkip } from './reattach-grid-fit'
+import {
+  fitReattachedPaneToGrid,
+  noteReattachAltFrameSkip,
+  readColdRestoreDestinationRows
+} from './reattach-grid-fit'
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
@@ -119,7 +123,11 @@ export function createReattachPayloadHandlers(
       )
       session.recordRendererOrderedSeq({ seq: ctx.connectResult.snapshotSeq })
       if (typeof ctx.connectResult.snapshotSeq === 'number') {
-        session.streamPosition.anchor(ctx.ptyId, ctx.connectResult.snapshotSeq)
+        session.streamPosition.anchor(
+          ctx.ptyId,
+          ctx.connectResult.snapshotSeq,
+          ctx.connectResult.pendingEscapeTailAnsi ?? ''
+        )
       }
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
@@ -192,7 +200,11 @@ export function createReattachPayloadHandlers(
         )
         session.recordRendererOrderedSeq(modelSnapshot)
         if (typeof modelSnapshot.seq === 'number') {
-          session.streamPosition.anchor(ctx.ptyId, modelSnapshot.seq)
+          session.streamPosition.anchor(
+            ctx.ptyId,
+            modelSnapshot.seq,
+            modelSnapshot.pendingEscapeTailAnsi ?? ''
+          )
         }
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult?.coldRestore) {
@@ -224,19 +236,7 @@ export function createReattachPayloadHandlers(
         }
       }
     } else if (ctx.connectResult?.coldRestore) {
-      let destinationRows = session.pane.terminal.rows
-      try {
-        const proposedDestination = session.pane.fitAddon.proposeDimensions()
-        if (
-          proposedDestination &&
-          Number.isFinite(proposedDestination.rows) &&
-          proposedDestination.rows > 0
-        ) {
-          destinationRows = Math.max(destinationRows, proposedDestination.rows)
-        }
-      } catch {
-        // The current xterm grid remains a safe lower bound for blanking.
-      }
+      const destinationRows = readColdRestoreDestinationRows(session)
       // Why: shrinking first would promote clipped stale viewport rows into scrollback, beyond the reach of a later viewport-only clear.
       session.writeReplayData(
         `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J${heldImage ? '\x1b[3J' : ''}\x1b[H`

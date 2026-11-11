@@ -1,7 +1,7 @@
 import type { RestoredPane } from './restored-pane-start'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
-import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
 import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'

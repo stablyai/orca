@@ -147,6 +147,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         ptyId: result.id,
         title: null,
         activate: opts.activate !== false,
+        ...(opts.activate === false ? { presentation: 'background' } : {}),
         ...ownerSurfacing(opts.surfaceOwner !== false),
         tabId: parentTabId,
         leafId,

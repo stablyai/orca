@@ -8,6 +8,7 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 
 import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
@@ -72,11 +73,12 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     worktreeIds.add(targetWorktreeId)
 
     const resolved: ResolvedWorktree[] = []
+    const repos = createRepoRowExecutionHostLookup(this.store.getRepos())
     for (const worktreeId of worktreeIds) {
       const worktree =
         worktreeId === targetWorktreeId
           ? targetWorktree
-          : this.buildResolvedWorktreeFromId(worktreeId)
+          : this.buildResolvedWorktreeFromId(worktreeId, repos)
       if (worktree) {
         resolved.push(worktree)
       }
@@ -110,12 +112,20 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     }
     const metaById = this.store.getAllWorktreeMeta() ?? {}
     const repos = this.store.getRepos()
+    const repoOwners = createRepoRowExecutionHostLookup(repos)
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
     const platformByRepoId = platformsByRepoId(repos, projectRuntimeByRepoId)
     const deps = this.repoWorktreeRowDeps()
     const perRepoWorktrees = await Promise.all(
       repos.map(
-        async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
+        async (repo) =>
+          await resolveRepoWorktreeRows(
+            deps,
+            repo,
+            metaById,
+            projectRuntimeByRepoId,
+            repoOwners.rowsFor(repo.id).length
+          )
       )
     )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
@@ -130,20 +140,11 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   }
 
   protected pruneUnregisteredWorktreeScans(): void {
-    const registered = new Set(
-      (this.store?.getRepos() ?? []).map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
-    )
-    for (const cache of [
+    ScanCache.pruneUnregisteredWorktreeScans(this.store, () => [
       this.worktreeScanCache,
       this.worktreeScanGenerations,
       this.worktreeScanInFlight
-    ]) {
-      for (const key of cache.keys()) {
-        if (!registered.has(key)) {
-          cache.delete(key)
-        }
-      }
-    }
+    ])
   }
 
   /** The fleet listing from cached scans and the store as it is now, synchronously. */

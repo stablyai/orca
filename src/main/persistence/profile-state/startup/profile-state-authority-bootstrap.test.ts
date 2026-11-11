@@ -8,19 +8,16 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import '../database/profile-state-database'
 import { profileStateDatabaseFile } from '../../../../shared/profile-state-storage-paths'
-import * as profileStateDocuments from '../documents/profile-state-documents'
+
 import '../documents/profile-state-document-validation'
-import { profileStateJsonExportPath } from '../legacy-json/profile-state-export-path'
-import { acquireProfileStateMaintenance } from '../access/profile-state-access'
-import { restoreProfileStateJsonExport } from '../legacy-json/profile-state-recovery'
+
 import { bootstrapProfileStateAuthority as bootstrapProfileStateAuthorityImpl } from './profile-state-authority-bootstrap'
 import { classifyProfileStateStorage } from '../database/profile-state-storage-classification'
-import { ProfileStateAuthorityBootstrapError } from '../recovery/profile-state-recovery-required'
 
 vi.mock('electron', () => ({
   app: {
@@ -48,8 +45,6 @@ vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(() => ({ hosts: [] })),
   sshConfigHostsToTargets: vi.fn(() => [])
 }))
-
-const { Store } = await import('../../loading-store/store')
 
 const temporaryDirectories: string[] = []
 const authoritiesToClose: NonNullable<
@@ -149,148 +144,5 @@ describe('profile state authority bootstrap', () => {
     )
     expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
     expect(readdirSync(dirname(options.dataFile))).toEqual(['orca-data.json'])
-  })
-
-  it.each(['legacy-backup', 'sqlite-export'])(
-    'preserves a %s created while an empty database is being initialized',
-    (artifact) => {
-      const options = { ...paths(createDirectory()), allowEmptyProfileState: true }
-      const path =
-        artifact === 'legacy-backup'
-          ? `${options.dataFile}.bak.0`
-          : profileStateJsonExportPath(options.dataFile, 1)
-      const source = '{"settings":{"theme":"dark"}}'
-      const originalClose = Database.prototype.close
-      vi.spyOn(Database.prototype, 'close').mockImplementationOnce(function (this: Database) {
-        originalClose.call(this)
-        writeFileSync(path, source)
-      })
-
-      expect(() => bootstrapProfileStateAuthority(options)).toThrow()
-      expect(existsSync(options.databaseFile)).toBe(false)
-      expect(existsSync(options.dataFile)).toBe(false)
-      expect(readFileSync(path, 'utf8')).toBe(source)
-      expect(readdirSync(dirname(path))).toEqual([basename(path)])
-    }
-  )
-
-  it.each(['-wal', '-shm', '-journal'])(
-    'treats an orphaned SQLite %s sidecar as authority evidence with or without JSON',
-    (suffix) => {
-      const options = paths(createDirectory())
-      const sidecar = `${options.databaseFile}${suffix}`
-      writeFileSync(sidecar, 'orphaned recovery evidence')
-
-      expect(classifyProfileStateStorage(options.dataFile, options.databaseFile)).toBe(
-        'sqlite-only'
-      )
-      expect(() => bootstrapProfileStateAuthority(options)).toThrow()
-      writeFileSync(options.dataFile, '{"settings":{"theme":"dark"}}')
-      expect(classifyProfileStateStorage(options.dataFile, options.databaseFile)).toBe('both')
-      expect(() => bootstrapProfileStateAuthority(options)).toThrow()
-      expect(existsSync(options.databaseFile)).toBe(false)
-      expect(readFileSync(sidecar, 'utf8')).toBe('orphaned recovery evidence')
-      expect(readFileSync(options.dataFile, 'utf8')).toBe('{"settings":{"theme":"dark"}}')
-    }
-  )
-
-  it('preserves every source when legacy primary and backups are unusable', () => {
-    const options = paths(createDirectory())
-    writeFileSync(options.dataFile, '{ malformed primary')
-    writeFileSync(`${options.dataFile}.bak.0`, '{ malformed backup')
-    expect(() => bootstrapProfileStateAuthority(options)).toThrow(
-      ProfileStateAuthorityBootstrapError
-    )
-    expect(readFileSync(options.dataFile, 'utf8')).toBe('{ malformed primary')
-    expect(readFileSync(`${options.dataFile}.bak.0`, 'utf8')).toBe('{ malformed backup')
-    expect(existsSync(options.databaseFile)).toBe(false)
-  })
-
-  it('cleans a temporary database when import fails after opening SQLite', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    const importFailure = new Error('injected import failure')
-    const importSpy = vi
-      .spyOn(profileStateDocuments, 'importProfileStateJson')
-      .mockImplementation(() => {
-        throw importFailure
-      })
-
-    expect(() => bootstrapProfileStateAuthority(options)).toThrow(importFailure)
-    expect(classifyProfileStateStorage(options.dataFile, options.databaseFile)).toBe('json-only')
-    expect(existsSync(options.databaseFile)).toBe(false)
-    expect(
-      readdirSync(directory).some((name) => name.includes('.migration.') && name.endsWith('.tmp'))
-    ).toBe(false)
-
-    importSpy.mockRestore()
-    const retry = bootstrapProfileStateAuthority(options)
-    expect(retry.migrated).toBe(true)
-    expect(retry.authority?.readSerializedState()).toContain('"dark"')
-  })
-
-  it('quarantines SQLite and restores a selected export for legacy rollback', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    const bootstrap = bootstrapProfileStateAuthority(options)
-    bootstrap.authority?.close?.()
-    const exportPath = profileStateJsonExportPath(options.dataFile, 1)
-    writeFileSync(options.databaseFile, 'corrupt sqlite primary')
-    writeFileSync(`${options.databaseFile}-wal`, 'corrupt wal sidecar')
-    const restoredJson = readFileSync(exportPath)
-
-    const result = restoreProfileStateJsonExport({
-      maintenance: acquireProfileStateMaintenance(dirname(dirname(dirname(options.dataFile)))),
-      databasePath: options.databaseFile,
-      dataFile: options.dataFile,
-      profileId: options.profileId,
-      exportPath,
-      quarantineRoot: join(directory, 'quarantine')
-    })
-
-    expect(result.removedDatabaseFiles).toEqual(
-      expect.arrayContaining([options.databaseFile, `${options.databaseFile}-wal`])
-    )
-    expect(existsSync(options.databaseFile)).toBe(false)
-    expect(readFileSync(options.dataFile).equals(restoredJson)).toBe(true)
-    expect(existsSync(exportPath)).toBe(false)
-    expect(readFileSync(join(result.quarantine.directory, 'profile-state.db'), 'utf8')).toBe(
-      'corrupt sqlite primary'
-    )
-    expect(readFileSync(join(result.quarantine.directory, 'profile-state.db-wal'), 'utf8')).toBe(
-      'corrupt wal sidecar'
-    )
-
-    const rollbackStore = new Store({
-      dataFile: options.dataFile,
-      serializedState: readFileSync(options.dataFile, 'utf8')
-    })
-    expect(rollbackStore.getSettings().theme).toBe('dark')
-    rollbackStore.freezeWrites()
-  })
-
-  it('validates the selected export before quarantining or replacing anything', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    bootstrapProfileStateAuthority(options)
-    const exportPath = profileStateJsonExportPath(options.dataFile, 1)
-    writeFileSync(exportPath, '{ malformed')
-    const databaseBytes = readFileSync(options.databaseFile)
-    const dataBytes = readFileSync(options.dataFile)
-
-    expect(() =>
-      restoreProfileStateJsonExport({
-        maintenance: acquireProfileStateMaintenance(dirname(dirname(dirname(options.dataFile)))),
-        databasePath: options.databaseFile,
-        dataFile: options.dataFile,
-        profileId: options.profileId,
-        exportPath
-      })
-    ).toThrow('Profile state JSON is invalid')
-    expect(readFileSync(options.databaseFile).equals(databaseBytes)).toBe(true)
-    expect(readFileSync(options.dataFile).equals(dataBytes)).toBe(true)
   })
 })

@@ -2485,6 +2485,8 @@
         "folderWorkspaceCreateFailedTitle": "Folder workspace creation failed",
         "folderWorkspaceCreateFailedMessage": "The folder workspace could not be created. Check the error details above, then try again.",
         "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
+        "githubLinkUnresolvedForProject": "Could not load {{repository}}#{{number}}. Check that it exists, that you can access it, and that it belongs to the origin or upstream repository of the selected project.",
+        "githubItemUnresolved": "Could not resolve the GitHub item before creating the workspace.",
         "5f3d2c8a1b": "Failed to resolve MR base.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached.",
@@ -3737,7 +3739,7 @@
       "Terminal": {
         "73768427cf": "Close",
         "f82e9f02df": "Cancel",
-        "7958465754": "There are terminals with running processes. Close the window anyway?",
+        "93c2e9d845": "There is running work in chats or terminals. Close the window anyway?",
         "b7c1f0a934": "A remote host could not be reached, so Orca cannot tell whether work is still running there. Close the window anyway?",
         "2fa9c69ff3": "Close Window?",
         "cd51e28d8b": "Save",

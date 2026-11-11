@@ -71,6 +71,7 @@ Never:
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
+  `exited` or `lost` means it is gone: retry it or tell the user.
 - An `escalation` with an `approval` is a worker's permission prompt that only a
   person can allow: carry on with other work until its closing message arrives,
   and deny it with a reason only if it is holding up the task.

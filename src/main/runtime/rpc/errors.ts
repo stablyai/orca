@@ -126,6 +126,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'recipient_ambiguous',
   'recipient_run_mismatch',
   'dispatch_inactive',
+  // Its start failed before an agent ran, so there is no output to read.
+  'worker_never_started',
   'worker_identity_changed',
   'cursor_invalid',
   'cursor_dispatch_mismatch',
