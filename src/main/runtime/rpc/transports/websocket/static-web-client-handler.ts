@@ -179,7 +179,7 @@ function buildWebManifest(icon: StaticWebIcon): unknown {
     name: 'Orca',
     short_name: 'Orca',
     // Relative URLs resolve against the manifest URL so prefix proxies keep working.
-    start_url: '.',
+    start_url: 'web-index.html',
     display: 'standalone',
     icons: [
       {
@@ -314,8 +314,9 @@ function resolveStaticWebIcon(
 ): StaticWebIcon | undefined {
   const override = envPath?.trim()
   if (override) {
-    const contentType = STATIC_WEB_CONTENT_TYPES.get(extname(override))
-    if (!isAbsolute(override) || !contentType || !WEB_ICON_EXTENSIONS.has(extname(override))) {
+    const overrideExt = extname(override).toLowerCase()
+    const contentType = STATIC_WEB_CONTENT_TYPES.get(overrideExt)
+    if (!isAbsolute(override) || !contentType || !WEB_ICON_EXTENSIONS.has(overrideExt)) {
       console.warn(
         `[ws-transport] ${WEB_ICON_ENV_VAR} ignored: ${override} is not an absolute path to ${[...WEB_ICON_EXTENSIONS].join('/')}`
       )
