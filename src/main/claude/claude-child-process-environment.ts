@@ -1,4 +1,7 @@
-import { CLAUDE_AUTH_ENV_VARS, applyClaudeEnvPatch } from '../claude-accounts/environment'
+import {
+  CLAUDE_AUTH_ENV_VARS,
+  applyClaudeEnvPatch
+} from '../claude-accounts/runtime-auth/environment'
 import { stripInheritedAgentSessionEnv } from '../../shared/agent-launch/startup/parent-agent-session-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,

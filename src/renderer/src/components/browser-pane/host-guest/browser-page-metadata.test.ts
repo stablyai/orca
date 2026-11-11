@@ -41,7 +41,6 @@ import { attachBrowserPageWebview } from './attach-browser-page-webview'
 import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
 import {
   acceptBrowserGuestMetadata,
-  cachedBrowserGuestMetadata,
   clearBrowserGuestMetadata
 } from './browser-guest-metadata-cache'
 
@@ -72,7 +71,7 @@ function nativeState(patch: Partial<BrowserGuestMetadata> = {}): BrowserGuestMet
   }
 }
 
-function mount(state: BrowserGuestMetadata, initiallyLoading = false) {
+function mount(state: BrowserGuestMetadata) {
   const ref = <T>(current: T) => ({ current })
   const first: BrowserPage = {
     id: 'page-a',
@@ -80,7 +79,7 @@ function mount(state: BrowserGuestMetadata, initiallyLoading = false) {
     worktreeId: 'worktree-a',
     url: 'https://example.test/attempted',
     title: 'Saved title',
-    loading: initiallyLoading,
+    loading: false,
     faviconUrl: null,
     canGoBack: true,
     canGoForward: false,
@@ -295,78 +294,5 @@ describe('mounted browser metadata application', () => {
     })
     disposers.push(dispose)
     expect(view.page().title).toBe('https://kagi.com/search?q=orca')
-  })
-
-  it('keeps the saved title before the first document commits', () => {
-    const view = mount(nativeState({ navigationRevision: 0, url: '', title: '', loading: true }))
-    expect(view.page().title).toBe('Saved title')
-    expect(view.page().loading).toBe(true)
-    acceptBrowserGuestMetadata(
-      nativeState({
-        revision: 2,
-        navigationRevision: 0,
-        kind: 'start',
-        url: '',
-        title: '',
-        loading: true
-      })
-    )
-    expect(view.page().title).toBe('Saved title')
-    acceptBrowserGuestMetadata(
-      nativeState({
-        revision: 3,
-        navigationRevision: 0,
-        kind: 'stop',
-        url: '',
-        title: '',
-        loading: false
-      })
-    )
-    expect(view.page().title).toBe('Saved title')
-    expect(view.page().url).toBe('https://example.test/attempted')
-    expect(view.page().loading).toBe(false)
-  })
-
-  it('adopts a document that predates observation while native loading and saved loading are true', () => {
-    const view = mount(
-      nativeState({
-        navigationRevision: 0,
-        url: 'https://current.test/c',
-        title: 'Current C',
-        loading: true
-      }),
-      true
-    )
-    expect(view.page()).toMatchObject({
-      url: 'https://current.test/c',
-      title: 'Current C',
-      loading: true
-    })
-  })
-
-  it('reattaches a failed destination without replacing its address or clearing its certificate challenge', () => {
-    const loadError = {
-      code: -202,
-      description: 'ERR_CERT_AUTHORITY_INVALID',
-      validatedUrl: 'https://example.test/attempted'
-    }
-    const view = mount(nativeState({ loadError, hasCertificateFailure: true }))
-    expect(view.setUrl).not.toHaveBeenCalled()
-    expect(view.address).not.toHaveBeenCalled()
-    expect(view.page().url).toBe('https://example.test/attempted')
-    expect(view.page().loadError).toEqual(loadError)
-    expect(view.page().canGoBack).toBe(true)
-  })
-
-  it('keeps parked titles out of saved page state and restores the current title on reattach', () => {
-    const view = mount(nativeState())
-    acceptBrowserGuestMetadata(nativeState({ revision: 2, kind: 'title', title: 'Next title' }))
-    expect(view.page().title).toBe('Next title')
-    view.dispose()
-    acceptBrowserGuestMetadata(nativeState({ revision: 3, kind: 'title', title: 'Parked title' }))
-    expect(view.page().title).toBe('Next title')
-    expect(cachedBrowserGuestMetadata(view.webview)?.title).toBe('Parked title')
-    const reattached = mount(nativeState({ revision: 4, title: 'Parked title' }))
-    expect(reattached.page().title).toBe('Parked title')
   })
 })

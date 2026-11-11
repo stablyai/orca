@@ -1,8 +1,8 @@
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
-import { claudeRoutedHomeAsync } from '../../../claude-accounts/claude-profile-routed-home'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { claudeRoutedHomeAsync } from '../../../claude-accounts/profiles/routing/claude-profile-routed-home'
 import { normalizeCodexRuntimeSelection } from '../../../codex-accounts/runtime-selection'
 import {
   resolveOrcaManagedCodexHomePath,

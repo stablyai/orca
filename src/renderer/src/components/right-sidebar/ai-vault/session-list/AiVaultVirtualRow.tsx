@@ -260,6 +260,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
                 }
               : undefined
           }
+          originalPaneTarget={originalPaneTarget}
           onJumpToOriginalPane={
             canJumpToOriginalPane ? () => onJumpToOriginalPane(row.session) : undefined
           }
