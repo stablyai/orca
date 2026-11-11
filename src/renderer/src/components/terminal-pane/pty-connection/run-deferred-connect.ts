@@ -2,7 +2,7 @@ import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remot
 import { createTerminalZeroDimensionsMessage } from '../../../../../shared/terminal/viewport/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/removal-fence-error'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
-import '@/lib/pane-manager/pane-webgl-renderer'
+import '@/lib/pane-manager/terminal-rendering/pane-webgl-renderer'
 import {
   getWindowParkVisible,
   subscribeWindowParkVisibility

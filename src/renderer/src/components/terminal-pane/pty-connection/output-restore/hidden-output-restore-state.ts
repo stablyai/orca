@@ -5,7 +5,7 @@ import {
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS,
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX
 } from './hidden-output-restore-limits'
-import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
+import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 
 export function initializeHiddenOutputRestoreState(session: ConnectPanePtySession): void {
   session.hiddenOutputRestoreNeeded = false

@@ -1,6 +1,7 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { reattachWebglIfNeeded } from './pane-webgl-reattach'
-import { presentPaneViewport } from './pane-webgl-renderer'
+import { reattachWebglIfNeeded } from './terminal-rendering/pane-webgl-reattach'
+import './terminal-rendering/pane-webgl-renderer'
+import { presentPaneViewport } from './terminal-rendering/pane-viewport-present'
 import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
 
 type PaneGetter = () => Iterable<ManagedPaneInternal>
