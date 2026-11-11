@@ -28,8 +28,7 @@ const store = vi.hoisted(() => {
     reset: () => {
       state = { terminalPaneResumeOutcomesByPaneKey: {}, terminalLayoutsByTabId: {} }
       listeners.clear()
-    },
-    listenerCount: () => listeners.size
+    }
   }
 })
 
@@ -54,7 +53,15 @@ function attachedView() {
 /** A fresh module, as a renderer reload loads it; session storage survives the reload. */
 async function loadBannerModule(): Promise<typeof ShowOutcome> {
   vi.resetModules()
-  return (await import('../spawn/main-pane-resume-banner')).showMainPaneResumeOutcome
+  const { showMainPaneResumeOutcome, acceptMainPaneResumeStart } =
+    await import('../spawn/main-pane-resume-banner')
+  const { admitTerminalNoticeLifetime } =
+    await import('../../provider-notices/terminal-notice-lifetime')
+  return (session, ptyId) => {
+    admitTerminalNoticeLifetime(ptyId)
+    acceptMainPaneResumeStart(session, ptyId)
+    showMainPaneResumeOutcome(session, ptyId)
+  }
 }
 
 describe("the window's banner for main's start of a pane", () => {
@@ -109,5 +116,84 @@ describe("the window's banner for main's start of a pane", () => {
     const reloaded = attachedView()
     ;(await loadBannerModule())(reloaded.session, 'pty-1')
     expect(reloaded.view.showSessionRestoredBanner).not.toHaveBeenCalled()
+  })
+
+  it('retains a shown start across a publication gap', async () => {
+    const attach = await loadBannerModule()
+    const publish = (ptyId: string, ptyGeneration: number) =>
+      store.publish({
+        terminalPaneResumeOutcomesByPaneKey: {
+          [PANE_KEY]: { ptyId, ptyGeneration, outcome: 'restored' }
+        }
+      })
+    publish('pty-a', 3)
+    const first = attachedView()
+    attach(first.session, 'pty-a')
+    expect(first.view.showSessionRestoredBanner).toHaveBeenCalledExactlyOnceWith('restored')
+    store.publish({ terminalPaneResumeOutcomesByPaneKey: {} })
+    publish('pty-b', 4)
+    attach(attachedView().session, 'pty-b')
+    publish('pty-a', 3)
+    const remounted = attachedView()
+    attach(remounted.session, 'pty-a')
+    expect(remounted.view.showSessionRestoredBanner).not.toHaveBeenCalled()
+    // A late older fact cannot replace the accepted start or reset suppression.
+    publish('pty-a', 2)
+    attach(remounted.session, 'pty-a')
+    publish('pty-a', 3)
+    attach(remounted.session, 'pty-a')
+    expect(remounted.view.showSessionRestoredBanner).not.toHaveBeenCalled()
+  })
+
+  it('retains a shown start across a publication gap without session storage', async () => {
+    vi.stubGlobal('sessionStorage', {
+      getItem: () => {
+        throw new Error('storage unavailable')
+      },
+      setItem: () => {
+        throw new Error('storage unavailable')
+      }
+    })
+    const attach = await loadBannerModule()
+    const publish = (ptyId: string, ptyGeneration: number) =>
+      store.publish({
+        terminalPaneResumeOutcomesByPaneKey: {
+          [PANE_KEY]: { ptyId, ptyGeneration, outcome: 'restored' }
+        }
+      })
+    publish('pty-a', 3)
+    const first = attachedView()
+    attach(first.session, 'pty-a')
+    expect(first.view.showSessionRestoredBanner).toHaveBeenCalledExactlyOnceWith('restored')
+    store.publish({ terminalPaneResumeOutcomesByPaneKey: {} })
+    publish('pty-b', 4)
+    attach(attachedView().session, 'pty-b')
+    publish('pty-a', 3)
+    const remounted = attachedView()
+    attach(remounted.session, 'pty-a')
+    expect(remounted.view.showSessionRestoredBanner).not.toHaveBeenCalled()
+    // A late older fact cannot replace the accepted start or reset suppression.
+    publish('pty-a', 2)
+    attach(remounted.session, 'pty-a')
+    publish('pty-a', 3)
+    attach(remounted.session, 'pty-a')
+    expect(remounted.view.showSessionRestoredBanner).not.toHaveBeenCalled()
+  })
+
+  it('shows nothing for an outcome naming another terminal', async () => {
+    const showMainPaneResumeOutcome = await loadBannerModule()
+    store.publish({
+      terminalPaneResumeOutcomesByPaneKey: {
+        [PANE_KEY]: { ptyId: 'pty-old', ptyGeneration: 1, outcome: 'restored' }
+      }
+    })
+    const { view, session } = attachedView()
+    showMainPaneResumeOutcome(session, 'pty-1')
+    store.publish({
+      terminalPaneResumeOutcomesByPaneKey: {
+        [PANE_KEY]: { ptyId: 'pty-old', ptyGeneration: 2, outcome: 'resume-unavailable' }
+      }
+    })
+    expect(view.showSessionRestoredBanner).not.toHaveBeenCalled()
   })
 })

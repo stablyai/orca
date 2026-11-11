@@ -17,6 +17,8 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { awakeNow, createAwakeClock } from '../../power/awake-clock'
+import type * as AwakeClockModule from '../../power/awake-clock'
 import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
 import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
@@ -26,16 +28,27 @@ vi.mock('../../observability/agent-session-instrumentation', async (importOrigin
   recordAgentSessionStartup: vi.fn()
 }))
 
+// The startup ceiling runs on the process-wide awake clock, which outlives a test: its heartbeat
+// is a fake timer that useRealTimers drops, after which a jump reads as a sleep and never counts.
+// Each test gets its own production awake clock, built on that test's fake time.
+vi.mock('../../power/awake-clock', async (importOriginal) => ({
+  ...(await importOriginal<typeof AwakeClockModule>()),
+  awakeNow: vi.fn()
+}))
+
 let root: string | undefined
 const caller = { callerKey: 'codex-start-deadline-test' }
 let operation = 0
 
 beforeEach(() => {
-  // Real time still passes, so file and database work settles; the test jumps the clock.
+  // Real time still passes, so file and database work settles; the test jumps the clock. The
+  // awake clock reads performance as well as Date, so both move together.
   vi.useFakeTimers({
     shouldAdvanceTime: true,
-    toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']
+    toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'performance']
   })
+  const clock = createAwakeClock()
+  vi.mocked(awakeNow).mockImplementation(() => clock.now())
   vi.mocked(recordAgentSessionStartup).mockClear()
 })
 

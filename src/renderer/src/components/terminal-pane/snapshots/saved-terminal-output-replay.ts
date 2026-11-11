@@ -6,7 +6,7 @@ import {
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from '../viewport/terminal-restored-viewport'
-import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
+import { isXtermInstanceDisposed } from '@/lib/pane-manager/terminal-output/xterm-instance-disposed'
 import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 /** Restore saved output; leave captured alt-screen mode unless its TUI is still live on the host. */

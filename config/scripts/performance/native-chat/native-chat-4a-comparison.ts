@@ -10,6 +10,7 @@ import type { Arm } from './native-chat-4a-arm'
 import { assertOneRun, parseArmSpec, seededBy } from './native-chat-4a-arm-provenance'
 import { FAMILIES, runArm, type Family } from './native-chat-4a-comparison-arm'
 import * as memory from './native-chat-4a-ops-memory'
+import { seedMemoryProfile } from './native-chat-4a-memory-profile'
 import { armMarkdown, writeComparison, type ArmResult } from './native-chat-4a-report'
 import {
   conversionToolOutputBytes,
@@ -104,7 +105,7 @@ async function main(): Promise<void> {
     ? seededBy(seedArm, await seed(workload.history.toolOutputBytes, workload))
     : null
   const { memoryProfile, memorySeedFailure } = families.has('memory')
-    ? await memory.seedMemoryProfile(
+    ? await seedMemoryProfile(
         out,
         workload,
         async (seeded, runDir) =>

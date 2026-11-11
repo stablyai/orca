@@ -141,9 +141,8 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
   it('retains dirty state when a SQL commit fails and persists an explicit retry', async () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(authority, 'writeCompleteSerializedDomains').mockRejectedValueOnce(
-      new Error('disk refused')
-    )
+    // A UI change saves only the ui domain.
+    vi.spyOn(authority, 'writeSerializedDomains').mockRejectedValueOnce(new Error('disk refused'))
     const original = readState().ui.sidebarWidth
     store.updateUI({ sidebarWidth: 511 })
     await store.flushPendingAsync()

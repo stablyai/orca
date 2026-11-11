@@ -8,6 +8,7 @@ import {
 } from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { formatCliUserFacingDetail } from '@/lib/cli-emulator-user-facing-copy'
 
 // Why: Orca terminals already provide the `orca` command, so agent control only needs the skill.
 export function useMobileEmulatorAgentSetupState(enabled = true): {
@@ -77,7 +78,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message) || error.message
             : translate(
                 'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.c94ff11e91',
                 'Could not re-check setup status.'

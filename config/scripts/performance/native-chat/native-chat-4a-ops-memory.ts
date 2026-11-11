@@ -284,5 +284,3 @@ export async function memoryRows(ctx: RunContext): Promise<void> {
     delta('before activation post-GC', 'after activation post-GC', 'activation delta post-GC')
   }
 }
-
-export { seedMemoryProfile, convertedMemoryRows } from './native-chat-4a-memory-profile'

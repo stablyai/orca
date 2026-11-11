@@ -3,6 +3,7 @@ import type { Arm } from './native-chat-4a-arm'
 import type { Manifest } from './native-chat-4a-fixture'
 import { profileRunner } from './native-chat-4a-run-context'
 import * as memory from './native-chat-4a-ops-memory'
+import { convertedMemoryRows } from './native-chat-4a-memory-profile'
 import type { ArmResult, Row } from './native-chat-4a-report'
 import { seededDbFiles } from './native-chat-4a-sqlite-observer'
 import type { Workload } from './native-chat-4a-workloads'
@@ -146,7 +147,7 @@ export async function runArm(input: {
       source.seedDir,
       source.manifest,
       'memory',
-      memory.convertedMemoryRows,
+      convertedMemoryRows,
       memory.memoryWorkload(workload)
     )
   })

@@ -18,6 +18,10 @@ import {
   structuredAgentSessionPickReply
 } from './structured-agent-session-pick-reply'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChild
+} from '../host/structured-agent-session-host-types'
 
 function acceptsOptionPick(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
@@ -100,4 +104,35 @@ export async function recordStructuredAgentSessionOptionIntent(
         structuredAgentSessionPickReply(options, undefined)
     }
   }
+}
+
+const modelPicks = new WeakMap<StructuredAgentSessionProviderChild, number>()
+
+/** Counts saved model picks per child, so a read can tell its captured report predates one. */
+export function structuredAgentSessionModelPicks(
+  child: StructuredAgentSessionProviderChild
+): number {
+  return modelPicks.get(child) ?? 0
+}
+
+/** A saved pick retires the current child's earlier reports, including ones a read already captured. */
+export function noteStructuredAgentSessionOptionPick(
+  context: {
+    deps: { adapter: Pick<StructuredAgentSessionAdapter, 'noteOptionPick'> }
+    sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
+  },
+  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence'>,
+  input: { key: string; value: string },
+  saved: boolean
+): void {
+  const { sessionId, fence } = ctx
+  // An old client's empty model clears nothing, so it retires no report.
+  if (!saved) {
+    return
+  }
+  const child = context.sessions.get(sessionId)?.child
+  if (input.key === 'model' && child?.fence === fence) {
+    modelPicks.set(child, structuredAgentSessionModelPicks(child) + 1)
+  }
+  context.deps.adapter.noteOptionPick?.({ sessionId, fence, ...input })
 }

@@ -3,7 +3,7 @@ import { wipeHostStore } from '../device-store/device-store'
 import {
   deleteHostPageCache,
   forgetHostUpdateFailures
-} from '../mobile-web-shell/removed-host-shell-cache'
+} from '../mobile-web-shell/generations/removed-host-shell-cache'
 import { unregisterPushForRemovedHost } from '../notifications/push-registration'
 import { forgetNativeHostQueries } from '../query/native-query-persistence'
 import { forgetHostDescriptor } from '../host-descriptors/host-descriptor-store'

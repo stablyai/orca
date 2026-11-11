@@ -15,6 +15,7 @@ import {
   rememberCurrentRunCoordinatorHandles
 } from './runs/run-coordinator-mail-routing'
 import { createTables } from './schema/create-tables'
+import { createPeerRunQueueTriggers } from './peer-runs/peer-run-queue-sql'
 import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
@@ -63,6 +64,7 @@ class OrchestrationDbCore {
       }
     }
     createRunCoordinatorAddressTriggers(this.db)
+    createPeerRunQueueTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
     // After every open step that creates Runs, before any step that deletes work.
     installRemovedWorkCapture(this.db, removedWorkCaptureWasIntact)

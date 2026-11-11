@@ -3,7 +3,7 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   formatRateLimitWindowChipLabel,
   formatWindowLabel
-} from '../../../../shared/rate-limit-window-label'
+} from './rate-limit-window-localized-label'
 import type {
   ProviderRateLimits,
   RateLimitBucket,

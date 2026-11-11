@@ -13,7 +13,7 @@ import {
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,
   retireStructuredAgentLaunchCancellation
-} from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+} from './structured-agent-session-launch-cancellation'
 import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
 import {
   clearStructuredLaunchStateStoreForTests,
@@ -22,18 +22,6 @@ import {
   notifyStructuredLaunchListeners,
   structuredLaunchSessionIds,
   subscribeStructuredAgentLaunchStatus
-} from './structured-agent-session-launch-state-store'
-
-export {
-  deleteStructuredLaunchStateIfCurrent,
-  getPersistedStructuredAgentLaunchRecord,
-  getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners,
-  publishStructuredLaunchChange,
-  setStructuredLaunchState,
-  structuredLaunchStates,
-  subscribeStructuredAgentLaunchStatus,
-  type StructuredLaunchState
 } from './structured-agent-session-launch-state-store'
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
@@ -86,12 +74,6 @@ export function getStructuredAgentSessionLaunchLifecycle(
   }
   return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
 }
-
-export {
-  getStructuredAgentSessionLaunchResumes,
-  structuredAgentSessionLaunchHasRetainedInput,
-  settleStructuredLaunchFirstMessageFromJournal
-} from './structured-agent-session-launch-input'
 
 /** The host a launch still owed an outcome was sent to, in memory or persisted across a reload. */
 export function getStructuredAgentSessionLaunchOwner(

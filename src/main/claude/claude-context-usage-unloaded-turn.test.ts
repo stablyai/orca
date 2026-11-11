@@ -111,7 +111,8 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
     },
     serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => running,
-    conversation: async () => running
+    conversation: async () => running,
+    sessions: new Map([[SESSION, running]])
   } as unknown as StructuredAgentSessionMutationContext
   return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
 }

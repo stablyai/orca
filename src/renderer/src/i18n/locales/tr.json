@@ -240,23 +240,19 @@
     }
   },
   "browser": {
-    "passwords": {
-      "savePrompt": {
-        "open": "Parola kaydetme önerisi",
-        "updateTitle": "Parola güncellensin mi?",
-        "saveTitle": "Parola kaydedilsin mi?",
-        "username": "Kullanıcı adı",
-        "password": "Parola",
-        "never": "Bu site için asla",
-        "notNow": "Şimdi değil",
-        "update": "Güncelle",
-        "save": "Kaydet"
-      },
-      "fill": {
-        "noUsername": "(kullanıcı adı yok)",
-        "title": "Kaydedilmiş girişler",
-        "otherLogins": "Bu sitedeki diğer girişler"
-      }
+    "googleCookieClear": {
+      "signInKeyword": "oturum açma",
+      "unavailable": "Seçili ana bilgisayarda bu profil kullanılamıyor.",
+      "explanation": "Google oturum açma bilgilerini, girişin yapıldığı tarayıcıya bağlar; bu nedenle Orca diğer tarayıcılardan Google çerezlerini içe aktarmaz. Google yanlış hesapta takılı kalıyorsa veya sizi sürekli oturumdan çıkarıyorsa, etkin profilden Google çerezlerini temizleyin ve ardından Orca’da Google’a yeniden giriş yapın. Diğer siteler oturum açmış durumda kalır.",
+      "action": "Google çerezlerini temizle…",
+      "confirmTitle": "{{profile}} profilinden Google çerezleri temizlensin mi?",
+      "confirmDescription": "Bu profilde Orca tarayıcısında Google oturumunuz kapatılacak. Diğer siteler oturum açmış durumda kalır.",
+      "clear": "Temizle",
+      "cancel": "İptal",
+      "cleared": "{{profile}} profilinden Google çerezleri temizlendi.",
+      "empty": "{{profile}} profilinde temizlenecek Google çerezi yok.",
+      "remaining": "{{profile}} profilinden bazı Google çerezleri kaldırılamadı. Yeniden deneyin.",
+      "unverified": "{{profile}} profilinin Google çerezleri denetlenemedi. Yeniden deneyin."
     },
     "loadFailure": {
       "connectionNotSecure": "Bağlantı güvenli değil",
@@ -473,6 +469,24 @@
         "imported_other": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "failed": "Çerezler içe aktarılamadı: {{reason}}"
       }
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "Parola kaydetme önerisi",
+        "updateTitle": "Parola güncellensin mi?",
+        "saveTitle": "Parola kaydedilsin mi?",
+        "username": "Kullanıcı adı",
+        "password": "Parola",
+        "never": "Bu site için asla",
+        "notNow": "Şimdi değil",
+        "update": "Güncelle",
+        "save": "Kaydet"
+      },
+      "fill": {
+        "noUsername": "(kullanıcı adı yok)",
+        "title": "Kaydedilmiş girişler",
+        "otherLogins": "Bu sitedeki diğer girişler"
+      }
     }
   },
   "editor": {
@@ -660,6 +674,21 @@
         "sharper": "Daha keskin",
         "terminalControlledHint": "Terminal arayüzü tarafından belirlenir.",
         "terminalControlledTooltip": "Terminal arayüzünüzle eşleşiyor. Değiştirmek için Terminal arayüzüyle eşleştir seçeneğini kapatın."
+      },
+      "editorTheme": {
+        "light": "Açık düzenleyici teması",
+        "lightDescription": "Uygulama açık temadayken kod düzenleyicinin, fark görünümünün ve not defterlerinin renkleri.",
+        "dark": "Koyu düzenleyici teması",
+        "darkDescription": "Uygulama koyu temadayken kod düzenleyicinin, fark görünümünün ve not defterlerinin renkleri.",
+        "followApp": "Uygulama temasıyla aynı",
+        "title": "Düzenleyici teması",
+        "description": "Uygulama temasından bağımsız olarak kod düzenleyicinin, fark görünümünün ve not defterlerinin renkleri.",
+        "keyword": {
+          "editor": "düzenleyici",
+          "code": "kod",
+          "monaco": "monaco",
+          "syntax": "sözdizimi"
+        }
       }
     },
     "browser": {
@@ -860,6 +889,7 @@
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
       "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
+      "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı.",
       "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder.",
       "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin."
     },
@@ -1885,6 +1915,39 @@
         "title": "Windows sürücüsündeki klasörleri bu bilgisayarda ekleyin",
         "descriptionWithPath": "{{value0}} bir Windows sürücüsünde bulunuyor. WSL'deki Git burada gerçekte olmayan satır sonu değişiklikleri bildirir, Windows üzerinden yapılan düzenlemeleri algılamaz ve yavaş arama yapar.",
         "description": "Bu klasör bir Windows sürücüsünde bulunuyor. WSL'deki Git burada gerçekte olmayan satır sonu değişiklikleri bildirir, Windows üzerinden yapılan düzenlemeleri algılamaz ve yavaş arama yapar."
+      },
+      "cli": {
+        "detail": {
+          "registerForWsl": "Orca’yı WSL’den kullanmak için {{path}} kaydedin.",
+          "registerForTerminal": "Orca’yı terminalden kullanmak için {{path}} kaydedin.",
+          "registerForWindowsShell": "Orca’yı Komut İstemi veya PowerShell’den kullanmak için {{path}} kaydedin.",
+          "devLauncherOnly": "Geliştirme modu yalnızca doğrulama için oluşturulmuş bir başlatıcı kullanır.",
+          "differentLauncher": "{{path}} farklı bir başlatıcıyı gösteriyor.",
+          "launcherMissing": "Bu Orca derlemesinde paketlenmiş CLI başlatıcısı eksik.",
+          "noWslDistro": "Kullanılabilir WSL dağıtımı yok.",
+          "notOrcaLauncherScript": "{{path}} mevcut ancak bir Orca başlatıcı betiği değil.",
+          "notOrcaSymlink": "{{path}} mevcut ancak bir Orca sembolik bağlantısı değil.",
+          "olderLauncher": "{{path}} eski bir Orca başlatıcısı içeriyor.",
+          "platformUnsupported": "CLI kaydı bu platformda uygulanmamış.",
+          "readlinkPermissionDenied": "Orca’nın {{path}} öğesini denetleme izni yok. Yolun ve üst dizininin izinlerini kontrol edip yeniden deneyin.",
+          "registeredAt": "{{path}} konumuna kaydedildi.",
+          "registeredInDistroAt": "{{distro}} içinde {{path}} konumuna kaydedildi.",
+          "registrationUnavailable": "CLI kaydı bu derlemede kullanılamıyor.",
+          "unreadableSymlink": "{{path}} okunamıyor. Onarmak için yeniden kaydedin.",
+          "windowsLauncherMissing": "Windows Orca CLI başlatıcısı eksik.",
+          "windowsPathCheckFailed": "Orca başlatıcısı mevcut ancak Orca Windows kullanıcı PATH’inizi denetleyemedi.",
+          "windowsPathTimedOut": "Windows PATH komutu {{ms}} ms sonra zaman aşımına uğradı.",
+          "wslCommandTimedOut": "WSL komutu {{ms}} ms sonra zaman aşımına uğradı.",
+          "wslDistroUnreachable": "WSL dağıtımına ulaşılamadı. Yeniden deneyin.",
+          "wslHomeUnresolved": "WSL ana dizini çözümlenemedi.",
+          "wslInteropUnavailable": "WSL Windows birlikte çalışabilirliği kullanılamıyor; Orca, Windows CLI’yi WSL’den başlatamıyor.",
+          "wslRegistrationUnavailable": "WSL CLI kaydı kullanılamıyor.",
+          "wslWindowsOnly": "WSL CLI kaydı yalnızca Windows’ta kullanılabilir."
+        }
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "Sistem tarayıcısında açmak için {{shortcut}}+tıklayın",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "hooks": {
@@ -2465,7 +2528,6 @@
         "23886c7eec": "Etiket ekle",
         "7f7b89b631": "Etiketler: {{value0}}",
         "b2376d0179": "Üyeler yükleniyor",
-        "866316f22c": "Atanmamış",
         "b5675b0694": "Kaydet",
         "ceeb8c6153": "Temizle",
         "fbb90300e2": "Özel tahmin",
@@ -3645,7 +3707,6 @@
               "f4c79cff5f": "Aşağıdaki çalışma alanı hatasını inceleyin, ardından yenileyin.",
               "ef90b21366": "Görünüm bulunamadı",
               "c0a50f96a4": "Görünümler yüklenemedi",
-              "df4bd63c1d": "Atanmamış",
               "30402d2c6e": "Arayın veya yenilemeyi deneyin.",
               "a2f31c4cd6": "Linear projesi bulunamadı",
               "c9b6e9f90d": "Linear projeleri yüklenemedi",
@@ -7293,6 +7354,19 @@
           "needsInput": "Girdi gerekiyor",
           "running": "Çalışıyor",
           "idle": "Boşta"
+        },
+        "hostSection": {
+          "localWindows": "Yerel Windows",
+          "localMac": "Yerel Mac",
+          "localLinux": "Yerel Linux",
+          "thisComputer": "Bu bilgisayar",
+          "host": "Sunucu"
+        },
+        "workspaceBoardStatus": {
+          "todo": "Yapılacak",
+          "inProgress": "Devam ediyor",
+          "inReview": "İncelemede",
+          "done": "Tamamlandı"
         }
       },
       "shared": {
@@ -7359,6 +7433,21 @@
         }
       },
       "settings": {
+        "keep": {
+          "local": {
+            "main": {
+              "up": {
+                "to": {
+                  "date": {
+                    "setting": {
+                      "f4c23aee76": "Yerel Main'i Güncel Tut"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "AccountsPane": {
           "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "dbb9626ed1": "İptal",
@@ -7584,7 +7673,6 @@
           "5f5142a62a": "Önceki simge"
         },
         "AppearancePane": {
-          "3057983501": "Atanmamış",
           "b707773a0d": "Etkinleştirildiğinde, pencereyi kapatmak Orca'dan çıkmak yerine onu sistem tepsisinde çalışır durumda tutar.",
           "0cd9b8228f": "Dock ve pencere değiştiricide gösterilen uygulama simgesini seçin.",
           "61d842eca0": "Orca Mobile kısayolunu kenar çubuğunda gösterin. Araç kutusundan erişilebilir olmaya devam eder.",
@@ -7711,6 +7799,9 @@
           "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Orca Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
           "333984cf90": "Mevcut bir tarayıcı oturumunu kullan",
           "9895ed44de": "Computer Use'u Aç"
+        },
+        "BrowserUseEnableSwitch": {
+          "ce4d6f80d8": "Ajan Tarayıcı Kullanımını Etkinleştir"
         },
         "BrowserUseExamples": {
           "1199258ace": "Kopyala",
@@ -7952,10 +8043,6 @@
             "modeAriaLabel": "Ajan Panosu açılış modu",
             "modeInWindow": "Pencere içi",
             "modePopout": "Ayrı pencere"
-          },
-          "browserExtensions": {
-            "copy": "Yerel tarayıcı profilleri için Ayarlar › Tarayıcı › Uzantılar bölümünü ekler.",
-            "toggleLabel": "Tarayıcı uzantılarını aç/kapat"
           }
         },
         "FloatingWorkspacePane": {
@@ -8715,6 +8802,9 @@
           "14f1eb99d0": "PR Oluştur açıldığında ayrıntıları üret",
           "d32b87e754": "Mevcutsa inceleme şablonunu kullan",
           "981eae7e14": "Varsayılan olarak taslak"
+        },
+        "RepositorySourceControlAiSection": {
+          "112f3b934f": "Kaynak Kontrolü AI"
         },
         "RuntimeAccessGrantList": {
           "sshAccessCaveat": "Buradan erişimi iptal etmek, bu bilgisayara SSH erişimi olan birinin yeniden eşleştirme yapmasını engellemez. Bağlantısını kesmek için SSH erişimini kaldırın.",
@@ -10118,13 +10208,6 @@
               "inWindow": "pencere içinde",
               "worktrees": "worktree'ler",
               "eaf17a7214": "Ajan Panosu"
-            },
-            "browserExtensions": {
-              "title": "Tarayıcı eklentileri",
-              "description": "Orca tarayıcı sekmelerinde parola yöneticileri gibi Chrome eklentilerini çalıştırın.",
-              "extension": "eklenti",
-              "chrome": "chrome",
-              "password": "parola yöneticisi"
             }
           }
         },
@@ -11291,7 +11374,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca bir ajan başlattığında klasöre güven",
-          "description": "Orca'nın başlattığı ajanlar \"Bu klasöre güveniyor musunuz?\" sorusunu atlayabilir; böylece projenin ajan kancaları ve ayarları hemen çalışır. Orca her repository için orada ilk kez bir ajan başlattığınızda bir kez sorar; yanıtı o repository'nin ayarlarından değiştirebilirsiniz. Ajanların her zaman sorması için bunu kapatın. Orkestrasyon çalışanı, otomasyon veya telefonunuzdan başlatılan bir ajan gibi gözetiminiz dışında çalışırken soru soran bir ajan, terminalinde yanıt verene kadar bekler. Zaten güvenilen klasörlere güvenilmeye devam edilir."
+          "description": "Orca'nın başlattığı ajanlar \"Bu klasöre güveniyor musunuz?\" sorusunu atlayabilir; böylece projenin ajan kancaları ve ayarları hemen çalışır. Bunu bir repository için o repository'nin ayarlarından kapatabilirsiniz. Ajanların her zaman sorması için bunu kapatın. Orkestrasyon çalışanı, otomasyon veya telefonunuzdan başlatılan bir ajan gibi gözetiminiz dışında çalışırken soru soran bir ajan, terminalinde yanıt verene kadar bekler. Zaten güvenilen klasörlere güvenilmeye devam edilir."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Sekme başlıklarını otomatik oluştur",
@@ -11883,11 +11966,11 @@
             "secrets": "Eklentinin kendi şifreli kasasında gizli bilgileri saklar ve okur",
             "settingsOwn": "Eklentinin kendi ayarlarını okur ve değiştirir",
             "agentsRead": "Ajan durumu değiştiğinde bildirim al",
-            "terminalRun": "Terminallerinizde komut çalıştırma (SSH dahil)"
+            "terminalRun": "SSH dahil terminalinizde komut çalıştır"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
           "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
-          "uiWarning": "Görünümünü çizmek için yayımcının kodunu Orca içinde çalıştırır. Orca neye erişebildiğini gösterir ve etkinleştirmeden önce sorar."
+          "uiWarning": "Görünümünü çizmek için yayıncının kodunu Orca içinde çalıştırır. Orca nelerin erişebileceğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {
           "official": "Resmi",
@@ -13050,9 +13133,9 @@
         "PluginCardAction": {
           "installed": "Yüklendi",
           "installing": "Yükleniyor…",
-          "reviewLabel": "{{value0}} eklentisini incele ve yükle",
+          "reviewLabel": "{{value0}} öğesini incele ve yükle",
           "review": "İncele ve yükle",
-          "retry": "Tekrar dene"
+          "retry": "Yeniden dene"
         },
         "PluginContributionActionLanguage": {
           "switch": "Dili değiştir",
@@ -13139,7 +13222,7 @@
           "commands": "Komutlar ve paneller",
           "catalogLabel": "Kataloğa göre filtrele",
           "editors": "Düzenleyiciler",
-          "remoteVms": "Uzak/VM",
+          "remoteVms": "Uzak/VM'ler",
           "games": "Oyunlar",
           "agents": "Ajanlar",
           "integrations": "Entegrasyonlar"
@@ -13154,9 +13237,9 @@
         "PluginInstallConsent": {
           "noOtherAccess": "Başka erişim yok",
           "replacesShortcut": "{{value0}} ({{value1}}), {{value2}} için kısayolunuzun yerini alır.",
-          "updatesKeepApproval": "Güncellemeler yalnızca yeni erişim için tekrar sorar",
-          "fullAccessUpdates": "Güncellemeler kodunu sormadan değiştirebilir",
-          "editsFileTypes": "Orca'da {{value0}} dosyalarını açar ve düzenler. Açtığı dosyaları okuyabilir.",
+          "updatesKeepApproval": "Güncellemeler yalnızca yeni erişim için yeniden sorar",
+          "fullAccessUpdates": "Güncellemeler kodu sormadan değiştirebilir",
+          "editsFileTypes": "Orca’da {{value0}} dosyalarını açar ve düzenler. Açtığı dosyaları okuyabilir.",
           "install": "Yükle ve etkinleştir",
           "keepOff": "Kapalı tut"
         },
@@ -13239,7 +13322,7 @@
           "fullAccess": "Tam erişim",
           "addsVmRecipes": "VM tarifleri ekler",
           "opensAndEditsFiles": "Dosyaları açar ve düzenler",
-          "runsPluginCode": "Eklenti kodu çalıştırır"
+          "runsPluginCode": "Eklenti kodunu çalıştırır"
         },
         "pluginTryAction": {
           "incompleteLanguage": "Bu dil paketi geçiş yapılamayacak kadar eksik."
@@ -13382,27 +13465,6 @@
           "shownPluginCount_one": "Bu dahil eşleşen {{count}} eklenti gösteriliyor",
           "shownPluginCount_other": "Bu dahil eşleşen {{count}} eklenti gösteriliyor",
           "samePublisher": "{{value0}} olarak listelenen diğerleri"
-        },
-        "RepositorySourceControlAiSection": {
-          "112f3b934f": "Kaynak Kontrolü AI"
-        },
-        "keep": {
-          "local": {
-            "main": {
-              "up": {
-                "to": {
-                  "date": {
-                    "setting": {
-                      "f4c23aee76": "Yerel Main'i Güncel Tut"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "BrowserUseEnableSwitch": {
-          "ce4d6f80d8": "Ajan Tarayıcı Kullanımını Etkinleştir"
         }
       },
       "right": {
@@ -18448,7 +18510,6 @@
         "status": "Durum",
         "priority": "Öncelik",
         "assignee": "Atanan kişi",
-        "unassigned": "Atanmamış",
         "labels": "Etiketler",
         "countSelected": "{{count}} seçili",
         "partialCoverageMarker": "· kısmi",
@@ -18543,7 +18604,9 @@
         "failingChip": "{{value0}} başarısız",
         "pendingChip": "{{value0}} bekleyen",
         "needsActionChip": "{{value0}} işlem gerekiyor",
-        "unresolvedChip": "{{value0}} çözülmemiş"
+        "unresolvedChip": "{{value0}} çözülmemiş",
+        "noChecks": "Kontrol bulunamadı",
+        "passingSummary": "{{value0}}/{{value1}} kontrol başarılı"
       },
       "BrowserPane": {
         "streamConnectionLost": "Uzak sunucuyla bağlantı kesildi.",
@@ -18971,14 +19034,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "{{repo}} ajanlar için güvenilir olsun mu?",
-        "prompt-description": "Claude Code ve Codex gibi ajanlar, projenin komut çalıştırabilen kendi ajan ayarlarını ve kancalarını yüklemeden önce \"Bu klasöre güveniyor musunuz?\" diye sorar. Orca, bu repository'nin tüm worktree'lerinde sizin yerinize evet diyebilir.",
-        "prompt-remembered": "Orca bu repository için verdiğiniz yanıtı hatırlar. Yanıtı repository ayarlarından değiştirebilirsiniz.",
         "trust-repository": "Repository'ye güven",
         "let-agents-ask": "Ajanlar sorsun",
         "setting-title": "Ajan Klasör Güveni",
         "setting-description": "Orca'nın bu repository'nin worktree'lerinde başlattığı ajanların \"Bu klasöre güveniyor musunuz?\" sorusunu atlayıp projenin ajan ayarlarını ve kancalarını hemen yükleyip yüklemeyeceği.",
-        "setting-undecided": "Henüz karar verilmedi. Burada bir sonraki ajan başlatışınızda Orca soracak.",
         "setting-global-off": "Klasör güveni Ajanlar ayarlarında kapalı olduğundan ajanlar her zaman sorar.",
         "keyword-trust": "güven",
         "keyword-hooks": "kancalar"

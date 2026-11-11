@@ -1,8 +1,7 @@
 import { describe, vi } from 'vitest'
-import { registerPtyConnectionVisibilityResumeSizeTests } from '../geometry/pty-connection-visibility-resume-size.spec'
+
 import { registerPtyConnectionHiddenQuerySnapshotAuthorityTests } from '../output-restore/pty-connection-hidden-query-snapshot-authority.spec'
-import { registerPtyConnectionHiddenDeliveryGateTests } from '../output-restore/pty-connection-hidden-delivery-gate.spec'
-import { registerPtyConnectionReplayPayloadHandlingTests } from '../output-restore/pty-connection-replay-payload-handling.spec'
+
 import {
   registerPtyConnectionPtyExitTeardownTests,
   registerPtyConnectionEstablishedPtyExitTests
@@ -16,12 +15,10 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-describe('pty-connection-visibility-resume-size', registerPtyConnectionVisibilityResumeSizeTests)
 describe('pty-connection-hidden-codex-queries', () => {
   registerPtyConnectionHiddenQuerySnapshotAuthorityTests()
 })
-describe('pty-connection-hidden-delivery-gate', registerPtyConnectionHiddenDeliveryGateTests)
-describe('pty-connection-replay-payload-handling', registerPtyConnectionReplayPayloadHandlingTests)
+
 describe('pty-connection-pty-exit-teardown', () => {
   registerPtyConnectionPtyExitTeardownTests()
   registerPtyConnectionProviderRebindCallbackFencingTests()

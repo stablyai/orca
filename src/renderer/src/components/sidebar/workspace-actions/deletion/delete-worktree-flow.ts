@@ -1,5 +1,5 @@
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import { toWorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
@@ -11,7 +11,7 @@ import {
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import {

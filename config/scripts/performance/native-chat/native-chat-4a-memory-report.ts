@@ -120,15 +120,15 @@ export function memoryMarkdown(base: ArmResult, next?: ArmResult): string[] {
       const heaps = workers
         .map((worker) => {
           const memory = object(worker.memory)
-          return `${memory.threadId ?? worker.sessionId}: ${memory.heapUsed ?? 'unavailable'}`
+          return `${String(memory.threadId ?? worker.sessionId)}: ${String(memory.heapUsed ?? 'unavailable')}`
         })
         .join(', ')
       const status =
         inventory.complete === true
           ? JSON.stringify(inventory.roleCounts)
-          : `unexercised: ${sample?.evidence?.workerError ?? JSON.stringify(inventory.errors) ?? 'inventory unavailable'}`
+          : `unexercised: ${String(sample?.evidence?.workerError ?? JSON.stringify(inventory.errors) ?? 'inventory unavailable')}`
       lines.push(
-        `| ${result.arm} | ${row.variant} | ${status} | ${heaps} | ${inventory.processRssBytes ?? 'unavailable'} |`
+        `| ${result.arm} | ${row.variant} | ${status} | ${heaps} | ${String(inventory.processRssBytes ?? 'unavailable')} |`
       )
     }
   }

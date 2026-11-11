@@ -17,6 +17,7 @@ import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-j
 import { OrcaRuntimeService } from '../orca-runtime'
 import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
+import { observeStructuredSession } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 
 let root: string
 
@@ -42,8 +43,11 @@ async function seedChat(options: { newer?: boolean } = {}) {
   return { path: journalDomainDatabasePath(root), sessionId: record.sessionId }
 }
 
-function startupRuntime(log = recordingStructuredAgentSessionLogger()) {
-  const runtime = new OrcaRuntimeService()
+function startupRuntime(
+  log = recordingStructuredAgentSessionLogger(),
+  deps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
+) {
+  const runtime = new OrcaRuntimeService(undefined, undefined, deps)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these are the runtime's own protected members; the test roots the host at `root` and stubs the PTY daemon.
   const internal = runtime as unknown as {
     hasPersistedStructuredAgentSessionStore(): boolean
@@ -146,4 +150,14 @@ it('closes a chat tab over records a newer Orca wrote, reporting the index it ca
     }
   })
   expect(close).toHaveBeenCalledWith(sessionId, 'user-close')
+})
+
+it('settles a chat worker that died with the last run when orchestration restores its workers', async () => {
+  const { sessionId } = await seedChat()
+  // A host without recoverable PTYs restores no terminal workers, only chats.
+  const runtime = startupRuntime(undefined, { canRecoverPersistentLocalPtys: () => false })
+
+  await runtime.refreshRestoredOrchestrationAuthority()
+
+  expect(observeStructuredSession(sessionId).status).toBe('exited')
 })

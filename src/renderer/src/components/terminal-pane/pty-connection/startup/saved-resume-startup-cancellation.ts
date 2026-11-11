@@ -1,10 +1,10 @@
-import { forgetRefusedPaneResume } from '@/lib/forget-refused-pane-resume'
+import { forgetRefusedPaneResume } from '@/lib/agent-session/resume/forget-refused-pane-resume'
 import { useAppStore } from '@/store/index'
+import { clearStaleAgentTabTitleOnConfirmedShell } from '../agent-identity/confirmed-shell-agent-title'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { PtyPaneStartup } from './pty-pane-startup'
 import type { PtyConnectResult } from '../../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
-import { clearStaleAgentTabTitleOnConfirmedShell } from '../agent-identity/confirmed-shell-agent-title'
 
 export function installSavedResumeStartupCancellation(session: ConnectPanePtySession): void {
   session.cancelSavedResumeStartup = (
