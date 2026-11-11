@@ -259,7 +259,6 @@
 4 test-no-real-time-wait:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
-4 test-no-real-time-wait:src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-store.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-connect-failure-recovery.test.ts
@@ -376,7 +375,6 @@
 2 test-no-real-time-wait:tests/e2e/sidebar-sort-stamps.spec.ts
 1 test-no-real-time-wait:tests/e2e/sidebar-unread-older-paired-host.spec.ts
 2 test-no-real-time-wait:tests/e2e/slept-workspace-remount-wake.spec.ts
-1 test-no-real-time-wait:tests/e2e/sparse-preset-proof.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-explorer-selected-host.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-idle-exit.spec.ts
 1 test-no-real-time-wait:tests/e2e/ssh-orcad-pairing-repair.spec.ts
