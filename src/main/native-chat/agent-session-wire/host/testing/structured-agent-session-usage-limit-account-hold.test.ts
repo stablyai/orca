@@ -126,7 +126,7 @@ it('holds again on spending inside the grace, and leaves an unknown reset once r
   const cutReset = refused.cut.resetsAt
   expect(await refused.pass(cutReset + 15_000, (now) => weekly(100, null, now))).toEqual([])
   expect(await refused.pass(cutReset + 20 * HOUR, (now) => weekly(100, null, now))).toEqual([])
-  expect(refused.state()).toMatchObject({ state: 'failed' })
+  expect(refused.state()).toBeUndefined()
   // Room over a day after the cut's reset, while the refusal still stood: scheduled again.
   const room = cutReset + 30 * HOUR
   expect(await refused.pass(room, (now) => weekly(0, null, now))).toEqual([])
@@ -248,7 +248,7 @@ it('rebuilds a covering hold beside a spent window of unknown reset, then settle
       weekly(100, weeklyReset, now, sessionUnknown)
     )
   ).toEqual([])
-  expect(chat.state()).toMatchObject({ state: 'failed', continueAt: weeklyReset })
+  expect(chat.state()).toBeUndefined()
   // A fresh reading with room releases the refusal; the send counts from that reading.
   const room = weeklyReset + 15_000
   expect(await chat.pass(room, (now) => weekly(0, null, now))).toEqual([])
@@ -267,8 +267,8 @@ it('asks for readings while a reset is unknown, and releases an expired hold fro
   for (const at of [reset + 12 * HOUR, reset + 22 * HOUR]) {
     expect(await chat.quietPass(at)).toEqual([])
   }
-  // The row names the last known reset, never the time of the reading that showed it unknown.
-  expect(chat.state()).toMatchObject({ state: 'failed', continueAt: reset + 3 * HOUR })
+  // Fresh room can still release it, so the row shows no automatic continue either way.
+  expect(chat.state()).toBeUndefined()
   chat.answerRefresh((now) => weekly(0, null, now))
   const room = reset + 30 * HOUR
   expect(await chat.quietPass(room)).toEqual([])

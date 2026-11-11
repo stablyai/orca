@@ -39,8 +39,6 @@ export type UsageLimitAccountScope = {
 export type UsageLimitAccountVerdict = {
   /** The latest reset the send waits for: the cut's, or a later one the account still shows spent. */
   resetsAt: number
-  /** `resetsAt` without the reading time an unknown reset holds from: the latest known reset. */
-  knownResetsAt: number
   /** The account shows a spent window with no known reset; nothing is sent automatically. */
   unknownReset: boolean
   /** Due, but no reading taken since that reset has arrived yet. */
@@ -175,12 +173,7 @@ export class UsageLimitAccountHolds {
     let hold = this.holds.get(id)
     // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.
     if (!hold && !scope) {
-      return {
-        resetsAt: cut.resetsAt,
-        knownResetsAt: cut.resetsAt,
-        unknownReset: false,
-        awaitingReading: false
-      }
+      return { resetsAt: cut.resetsAt, unknownReset: false, awaitingReading: false }
     }
     const account = scope?.account
     if (
@@ -250,7 +243,6 @@ export class UsageLimitAccountHolds {
     }
     return {
       resetsAt,
-      knownResetsAt: Math.max(cut.resetsAt, hold.heldUntil ?? cut.resetsAt),
       unknownReset: hold.unknownReset === true,
       awaitingReading:
         (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&

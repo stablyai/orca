@@ -55,7 +55,8 @@ it('asks one account for at most one reading per 10 minutes however many unknown
       await fleet.pass(at)
       await settleFetches()
     }
-    expect(fleet.state(`chat-${count - 1}`)).toMatchObject({ state: 'failed' })
+    // Held on the unknown reset: the row offers no automatic continue.
+    expect(fleet.state(`chat-${count - 1}`)).toBeUndefined()
     expect(vi.mocked(fetchCodexRateLimits)).toHaveBeenCalledTimes(2)
     service.stop()
   }

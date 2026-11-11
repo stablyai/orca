@@ -112,23 +112,26 @@ export class StructuredAgentSessionUsageLimitContinue {
     if (!cut || !this.holds.schedulable(id, cut, this.deps.now())) {
       return undefined
     }
+    const hold = this.holds.verdict(id, cut, this.deps.now())
     const cancel = this.deps.host.store.getRecord(id)?.usageLimitContinueCancel
     const attempt = this.attempts.get(id)
-    const hold = this.holds.verdict(id, cut, this.deps.now())
     const state =
       cancel?.turnItemId === cut.turnItemId && cancel.resetsAt === cut.resetsAt
         ? 'cancelled'
         : cut.chain >= USAGE_LIMIT_CONTINUE_CHAIN_LIMIT ||
-            hold.unknownReset ||
             (attempt?.identity === identity(cut) && (attempt.count >= 5 || attempt.unconfirmed))
           ? 'failed'
           : this.eligible(id, cut)
             ? 'scheduled'
             : 'off'
+    // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
+    if (hold.unknownReset && state === 'scheduled') {
+      return undefined
+    }
     return {
       turnItemId: cut.turnItemId,
       resetsAt: cut.resetsAt,
-      ...(hold.knownResetsAt > cut.resetsAt ? { continueAt: hold.knownResetsAt } : {}),
+      ...(hold.resetsAt > cut.resetsAt ? { continueAt: hold.resetsAt } : {}),
       state
     }
   }
