@@ -8,9 +8,21 @@ const OFF: HomeSwitches = { running: false, archived: false, routines: false }
 function read(storage: Storage | undefined): Record<string, Partial<HomeSwitches>> {
   try {
     const parsed: unknown = JSON.parse(storage?.getItem(KEY) ?? '{}')
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, Partial<HomeSwitches>>)
-      : {}
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {}
+    }
+    const out: Record<string, Partial<HomeSwitches>> = {}
+    for (const [account, saved] of Object.entries(parsed)) {
+      if (saved && typeof saved === 'object') {
+        const flags: Record<string, unknown> = { ...saved }
+        out[account] = {
+          running: flags.running === true,
+          archived: flags.archived === true,
+          routines: flags.routines === true
+        }
+      }
+    }
+    return out
   } catch {
     return {}
   }

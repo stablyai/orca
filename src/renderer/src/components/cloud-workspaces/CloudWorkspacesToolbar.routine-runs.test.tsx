@@ -80,10 +80,16 @@ describe('Home toolbar: Routine runs switch', () => {
 describe('Home switch preferences', () => {
   it('remembers Running, Archived and Routine runs per account', () => {
     const store = new Map<string, string>()
-    const storage = {
+    const storage: Storage = {
       getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => void store.set(k, v)
-    } as unknown as Storage
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+      key: () => null,
+      get length() {
+        return store.size
+      }
+    }
     const off = { running: false, archived: false, routines: false }
     expect(readHomeSwitches('u1:org', storage)).toEqual(off)
     writeHomeSwitches('u1:org', { routines: true }, storage)
