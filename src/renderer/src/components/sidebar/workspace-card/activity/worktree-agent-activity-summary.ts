@@ -18,7 +18,7 @@ import {
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { applyAgentPaneActivityFlags } from '../../../../../../shared/worktree-status-rollup'
-import { getTabIdToWorktreeId } from './worktree-agent-row-selectors'
+import { getTabIdToWorktreeId } from '@/lib/workspace/tabs/tab-worktree-index'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
