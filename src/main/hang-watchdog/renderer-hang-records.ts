@@ -8,6 +8,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import { open, readFile, rename, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseHangStacks, type HangStacks } from './hang-stacks'
 import { resolveObservabilityConsent } from '../observability'
@@ -28,6 +29,7 @@ export type RendererHangRecord = HangStacks & {
     | 'policy-missing'
     | 'failed'
     | 'process-capture-pending'
+    | 'request-pending'
     | 'stopped'
 }
 const validStatus = [
@@ -37,9 +39,17 @@ const validStatus = [
   'policy-missing',
   'failed',
   'process-capture-pending',
+  'request-pending',
   'stopped'
 ]
-let current: RendererHangRecord[] = []
+type RendererHangWriter = {
+  path: string
+  records: RendererHangRecord[]
+  initialized: boolean
+  revision: number
+  running?: Promise<void>
+}
+let writer: RendererHangWriter | undefined
 
 function pathFor(userDataPath: string, previous = false): string {
   return join(userDataPath, `renderer-hang.json${previous ? '.previous' : ''}`)
@@ -83,24 +93,27 @@ function parseRecord(value: unknown): RendererHangRecord | null {
       : {})
   }
 }
+function parseRecords(data: unknown): RendererHangRecord[] {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !('version' in data) ||
+    data.version !== 1 ||
+    !('records' in data) ||
+    !Array.isArray(data.records) ||
+    data.records.length > 4
+  ) {
+    return []
+  }
+  return data.records.map(parseRecord).filter((item): item is RendererHangRecord => item !== null)
+}
 function read(path: string): RendererHangRecord[] | undefined {
   try {
     if (statSync(path).size > 16 * 1024) {
       return []
     }
     const data: unknown = JSON.parse(readFileSync(path, 'utf8'))
-    if (
-      !data ||
-      typeof data !== 'object' ||
-      !('version' in data) ||
-      data.version !== 1 ||
-      !('records' in data) ||
-      !Array.isArray(data.records) ||
-      data.records.length > 4
-    ) {
-      return []
-    }
-    return data.records.map(parseRecord).filter((item): item is RendererHangRecord => item !== null)
+    return parseRecords(data)
   } catch (error) {
     return error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
       ? []
@@ -153,24 +166,82 @@ function write(path: string, records: RendererHangRecord[]): void {
   renameSync(`${path}.tmp`, path)
 }
 
-export function publishRendererHang(userDataPath: string, record: RendererHangRecord): void {
-  if (!resolveObservabilityConsent().localFileEnabled) {
-    return
-  }
+async function persist(owner: RendererHangWriter): Promise<void> {
   try {
-    const normalized = parseRecord(record)
-    if (!normalized) {
-      return
+    if (!owner.initialized) {
+      let disk: RendererHangRecord[] = []
+      try {
+        if ((await stat(owner.path)).size <= 16 * 1024) {
+          disk = parseRecords(JSON.parse(await readFile(owner.path, 'utf8')))
+        }
+      } catch (error) {
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') {
+          return
+        }
+      }
+      owner.records = merge(disk, owner.records)
+      owner.initialized = true
     }
-    const disk = read(pathFor(userDataPath))
-    if (!disk) {
-      return
+    let committed = -1
+    while (committed !== owner.revision) {
+      const revision = owner.revision
+      const text = JSON.stringify({ version: 1, records: owner.records })
+      if (Buffer.byteLength(text) > 16 * 1024) {
+        return
+      }
+      const file = await open(`${owner.path}.tmp`, 'w', 0o600)
+      try {
+        await file.chmod(0o600)
+        await file.writeFile(text)
+      } finally {
+        await file.close()
+      }
+      await rename(`${owner.path}.tmp`, owner.path)
+      committed = revision
     }
-    current = merge(merge(disk, current), [normalized])
-    write(pathFor(userDataPath), current)
   } catch {
-    /* Optional diagnostics never block a window lifecycle event. */
+    // Keep the admitted snapshot for a later incident publication to retry.
+  } finally {
+    owner.running = undefined
   }
+}
+function recordCapture(record: RendererHangRecord): void {
+  recordDurableCrashBreadcrumb('renderer_hang_capture', {
+    previousPid: record.parentPid,
+    windowId: record.windowId,
+    detectedAt: record.detectedAt,
+    completedAt: record.completedAt ?? null,
+    ...hangCaptureDetails('rendererJs', record)
+  })
+}
+export function publishRendererHang(
+  userDataPath: string,
+  record: RendererHangRecord
+): Promise<void> {
+  if (!resolveObservabilityConsent().localFileEnabled) {
+    return Promise.resolve()
+  }
+  const normalized = parseRecord(record)
+  if (!normalized) {
+    return Promise.resolve()
+  }
+  const path = pathFor(userDataPath)
+  if (!writer || writer.path !== path) {
+    writer = { path, records: [], initialized: false, revision: 0 }
+  }
+  const admitted = admit(normalized)
+  writer.records = merge(writer.records, [admitted])
+  writer.revision++
+  if (admitted.completedAt !== undefined) {
+    try {
+      recordCapture(admitted)
+    } catch {
+      // A failed trace flush must not prevent the independent pending-file write.
+    }
+  }
+  const owner = writer
+  owner.running ??= Promise.resolve().then(() => persist(owner))
+  return owner.running
 }
 
 export function preservePreviousRendererHangs(userDataPath: string): void {
@@ -188,7 +259,7 @@ export function preservePreviousRendererHangs(userDataPath: string): void {
     }
     write(pathFor(userDataPath, true), merge(previous, records))
     rmSync(pathFor(userDataPath), { force: true })
-    current = []
+    writer = undefined
   } catch {
     /* Keep the original pending file if preservation failed. */
   }
@@ -204,13 +275,7 @@ export function reportPreviousRendererHangs(userDataPath: string): void {
       return
     }
     for (const record of records) {
-      recordDurableCrashBreadcrumb('renderer_hang_capture', {
-        previousPid: record.parentPid,
-        windowId: record.windowId,
-        detectedAt: record.detectedAt,
-        completedAt: record.completedAt ?? null,
-        ...hangCaptureDetails('rendererJs', record)
-      })
+      recordCapture(record)
     }
     // Each breadcrumb synchronously requests a trace flush before pending data is consumed.
     rmSync(pathFor(userDataPath, true), { force: true })

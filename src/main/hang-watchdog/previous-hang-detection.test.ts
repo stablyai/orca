@@ -44,6 +44,7 @@ beforeEach(() => {
 afterEach(() => {
   setActiveSink(null)
   vi.unstubAllEnvs()
+  vi.useRealTimers()
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -224,9 +225,11 @@ describe('previous hang detection', () => {
   })
 })
 
-it('replays an old renderer capture into the current trace before consuming it so the default bundle includes it', () => {
-  const detectedAt = Date.now() - 2 * 60 * 60 * 1000
-  publishRendererHang(dir, {
+it('replays an old renderer capture into the current trace before consuming it so the default bundle includes it', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-11-11T12:00:00Z'))
+  const detectedAt = 1794391200000
+  await publishRendererHang(dir, {
     id: `456:${detectedAt}:3`,
     parentPid: 456,
     windowId: 3,
@@ -273,6 +276,59 @@ it('replays an old renderer capture into the current trace before consuming it s
       previousPid: 456,
       rendererJs0_frame0: 'busyCaller [app.js:7:3]',
       rendererJs0_count: 1
+    })
+  } finally {
+    setActiveSink(null)
+    sink.close()
+  }
+})
+
+it('puts renderer completion into the current bundle while retaining next-launch evidence', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-11-11T12:00:00Z'))
+  const traceFilePath = join(dir, 'logs', 'main.trace.ndjson')
+  const sink = createLocalFileSink({ filePath: traceFilePath, maxFiles: 1 })
+  try {
+    setActiveSink(sink)
+    await publishRendererHang(dir, {
+      id: '123:1000:3',
+      parentPid: 123,
+      windowId: 3,
+      detectedAt: 1000,
+      completedAt: 2000,
+      status: 'captured',
+      samples: 1,
+      validSamples: 1,
+      truncated: false,
+      stacks: [
+        {
+          count: 1,
+          hot: true,
+          frames: [{ name: 'rendererBusy', module: 'app.js', line: 9, column: 2 }]
+        }
+      ]
+    })
+    const bundle = collectBundle({
+      traceFilePath,
+      maxFiles: 1,
+      appVersion: 'test',
+      platform: 'darwin',
+      arch: 'arm64',
+      osRelease: 'test',
+      orcaChannel: 'dev'
+    })
+    const capture = bundle.payload
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+      .find((record) => record.attributes?.['breadcrumb.name'] === 'renderer_hang_capture')
+    expect(capture?.attributes['breadcrumb.data']).toMatchObject({
+      detectedAt: 1000,
+      completedAt: 2000,
+      rendererJs0_frame0: 'rendererBusy [app.js:9:2]'
+    })
+    expect(JSON.parse(readFileSync(join(dir, 'renderer-hang.json'), 'utf8'))).toMatchObject({
+      records: [expect.objectContaining({ completedAt: 2000 })]
     })
   } finally {
     setActiveSink(null)

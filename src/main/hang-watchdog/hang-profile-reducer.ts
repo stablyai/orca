@@ -39,11 +39,17 @@ export function reduceHangProfile(profile: Profiler.Profile): HangStacks {
     counts.set(id, (counts.get(id) ?? 0) + 1)
     validSamples++
   }
-  const top: HangStack[] = []
+  const selected: { id: number; count: number }[] = []
   for (const [id, count] of counts) {
-    if (top.length === 3 && count <= top[2].count) {
+    if (selected.length === 3 && count <= selected[2].count) {
       continue
     }
+    selected.push({ id, count })
+    selected.sort((a, b) => b.count - a.count)
+    selected.splice(3)
+  }
+  const top: HangStack[] = []
+  for (const { id, count } of selected) {
     const frames: HangFrame[] = []
     const seen = new Set<number>()
     let current: number | undefined = id

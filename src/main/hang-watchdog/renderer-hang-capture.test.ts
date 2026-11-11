@@ -126,3 +126,12 @@ it('drops a cut input field before redaction while preserving complete frames', 
     truncated: true
   })
 })
+
+it('records an unanswered renderer request explicitly while retaining its physical owner', () => {
+  const blocked = window(6)
+  blocked.start()?.stop()
+  expect(state.records.at(-1)).toMatchObject({ windowId: 6, status: 'request-pending', samples: 0 })
+  const shared = window(7)
+  shared.start()
+  expect(state.records.at(-1)).toMatchObject({ windowId: 7, status: 'process-capture-pending' })
+})

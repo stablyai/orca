@@ -5,7 +5,7 @@ const owners = new WeakMap<Session, Map<number, string>>()
 
 export function installRendererHangStackPolicy(contents: WebContents, documentUrl: string): void {
   try {
-    installPolicy(contents, documentUrl)
+    installPolicy(contents, new URL(documentUrl).href)
   } catch {
     // A rejected diagnostic policy must not prevent the main document from loading.
   }

@@ -265,6 +265,7 @@
 4 src/main/hang-watchdog/hang-incident-snapshot.ts
 1 src/main/hang-watchdog/hang-watchdog-worker-path.ts
 1 src/main/hang-watchdog/previous-hang-detection.ts
+9 src/main/hang-watchdog/renderer-hang-records.ts
 1 src/main/hermes/hermes-default-home.ts
 10 src/main/hermes/hermes-home-filesystem.ts
 2 src/main/hermes/hook-service.ts

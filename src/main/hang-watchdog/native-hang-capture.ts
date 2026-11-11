@@ -119,6 +119,10 @@ export function captureNativeHang(options: {
 }): { stop: () => void; done: Promise<void> } {
   const abort = new AbortController()
   let terminated = false
+  let release: () => void = () => {}
+  const termination = new Promise<void>((resolve) => {
+    release = resolve
+  })
   const baseline: NativeHangCapture = {
     ...emptyHangStacks(),
     state: 'collecting',
@@ -130,6 +134,11 @@ export function captureNativeHang(options: {
     cleanup: 'pending'
   }
   options.publish(baseline)
+  let latest = baseline
+  const publish = (capture: NativeHangCapture): void => {
+    latest = capture
+    options.publish(capture)
+  }
   const done = (async (): Promise<void> => {
     try {
       const { runProcess } = await import('@orca/process-host')
@@ -142,9 +151,10 @@ export function captureNativeHang(options: {
         signal: abort.signal,
         onChildTerminated: () => {
           terminated = true
+          release()
         }
       })
-      options.publish({
+      publish({
         ...baseline,
         ...reduceNativeHangSample(result.stdout),
         state: 'completed',
@@ -155,7 +165,7 @@ export function captureNativeHang(options: {
         ...(result.code !== null ? { exitCode: result.code } : {})
       })
     } catch {
-      options.publish({
+      publish({
         ...baseline,
         state: 'failed',
         completedAt: Date.now(),
@@ -163,7 +173,8 @@ export function captureNativeHang(options: {
       })
     }
     if (!terminated) {
-      await new Promise<void>(() => {})
+      await termination
+      publish({ ...latest, cleanup: 'terminated' })
     }
   })()
   return { stop: () => abort.abort(), done }

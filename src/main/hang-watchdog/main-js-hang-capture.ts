@@ -2,10 +2,11 @@ import { reduceHangProfile } from './hang-profile-reducer'
 import type { Profiler, Session } from 'node:inspector'
 import { emptyHangStacks, type MainJsCapture } from './hang-stacks'
 
+type ProfilerCommandParameters = { interval?: number }
 type CaptureSession = Pick<Session, 'connectToMainThread' | 'disconnect'> & {
   post: (
     method: string,
-    params: object,
+    params: ProfilerCommandParameters,
     callback: (error: Error | null, result?: unknown) => void
   ) => void
 }
@@ -66,7 +67,10 @@ export function captureMainJsHang(options: {
   }
   const deadline = setTimeout(() => stop('deadline'), Math.max(0, 5_000 - elapsed()))
   publish({})
-  const post = (method: string, params: object = {}): Promise<{ ok: boolean; result?: unknown }> =>
+  const post = (
+    method: string,
+    params: ProfilerCommandParameters = {}
+  ): Promise<{ ok: boolean; result?: unknown }> =>
     new Promise((resolve) => {
       // Exactly one caller awaits each response before the next command or disconnect.
       try {

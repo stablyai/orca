@@ -73,9 +73,11 @@ function stopEpisode(contentsId: number, id: string): void {
     episode,
     episode.record.stacks.length
       ? 'captured'
-      : episode.record.status === 'collecting'
-        ? 'stopped'
-        : episode.record.status
+      : [...pending.values()].some((owner) => owner.episodeId === id)
+        ? 'request-pending'
+        : episode.record.status === 'collecting'
+          ? 'stopped'
+          : episode.record.status
   )
   episodes.delete(contentsId)
 }

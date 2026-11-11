@@ -80,11 +80,10 @@ export function runWatchdog(
     observations = retainHangObservation(observations, { ...record, ...change })
     save()
   }
-  const capture = (record: HangObservation): void => {
+  const capture = (record: HangObservation, detectedAt: number): void => {
     if (isMainThread || captureOwner || stopped || record.kind !== 'heartbeat-stall') {
       return
     }
-    const detectedAt = performance.now()
     const owner: CaptureOwner = { id: record.id }
     captureOwner = owner
     owner.done = (async () => {
@@ -166,6 +165,7 @@ export function runWatchdog(
       })
   }
   const observe = (kind: HangObservation['kind'], durationMs: number, startedAt: number): void => {
+    const detectedAt = performance.now()
     const snapshot = captureHangSnapshot()
     const now = snapshot.wallMs ?? Date.now()
     const suspend = sleepPeriod?.suspend
@@ -204,7 +204,7 @@ export function runWatchdog(
     }
     openReceiptWindow(record.id)
     save()
-    capture(record)
+    capture(record, detectedAt)
     enrich(record)
   }
   const loop = createHangWatchdogDetectionLoop({

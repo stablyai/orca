@@ -42,3 +42,34 @@ it('opts in only the owned main document and preserves unrelated response policy
   listener({ url: 'file:///app/index.html', resourceType: 'mainFrame', webContentsId: 4 }, answer)
   expect(answer).toHaveBeenLastCalledWith({})
 })
+
+it('normalizes the development document URL for both the filter and response identity', () => {
+  let listener: (details: unknown, callback: (value: unknown) => void) => void = () => {}
+  const onHeadersReceived = vi.fn((_filter, callback) => {
+    listener = callback
+  })
+  const contents = Object.assign(new EventEmitter(), {
+    id: 8,
+    session: { webRequest: { onHeadersReceived } }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this Electron test double supplies the members used by the policy; unused native members are never accessed.
+  installRendererHangStackPolicy(contents as unknown as WebContents, 'http://localhost:5173')
+  expect(onHeadersReceived).toHaveBeenCalledWith(
+    { urls: ['http://localhost:5173/'], types: ['mainFrame'] },
+    expect.any(Function)
+  )
+  const answer = vi.fn()
+  listener(
+    {
+      url: 'http://localhost:5173/',
+      resourceType: 'mainFrame',
+      webContentsId: 8,
+      responseHeaders: {}
+    },
+    answer
+  )
+  expect(answer).toHaveBeenLastCalledWith({
+    responseHeaders: { 'Document-Policy': ['include-js-call-stacks-in-crash-reports'] }
+  })
+  contents.emit('destroyed')
+})
