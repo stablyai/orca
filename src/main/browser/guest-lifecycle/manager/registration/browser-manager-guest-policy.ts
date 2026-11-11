@@ -79,22 +79,30 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     })
 
     this.policyCleanupByGuestId.set(guest.id, () => {
-      disposeDetachTracking()
-      disposePopupPolicy()
-      disposeNavigationPolicy()
-      disposeDiscardProtection()
-      guest.off('did-stop-loading', invalidate)
-      guest.off('did-navigate', invalidate)
-      guest.off('did-navigate-in-page', inPageNavigation)
-      guest.off('devtools-closed', invalidate)
-      guest.off('devtools-opened', invalidate)
-      disposeDevToolsCloseShortcut()
-      disposeEscapeForwarding()
-      if (!guest.isDestroyed()) {
-        guest.off('audio-state-changed', forwardAudioState)
+      for (const dispose of [
+        disposeDetachTracking,
+        disposePopupPolicy,
+        disposeNavigationPolicy,
+        disposeDiscardProtection,
+        () => guest.off('did-stop-loading', invalidate),
+        () => guest.off('did-navigate', invalidate),
+        () => guest.off('did-navigate-in-page', inPageNavigation),
+        () => guest.off('devtools-closed', invalidate),
+        () => guest.off('devtools-opened', invalidate),
+        disposeDevToolsCloseShortcut,
+        disposeEscapeForwarding,
+        () => {
+          if (!guest.isDestroyed()) {
+            guest.off('audio-state-changed', forwardAudioState)
+          }
+        }
+      ]) {
+        this.completeGuestCleanup('policy listener', dispose)
       }
       // A docked host outliving its guest would stay painted over the pane.
-      void this.devToolsDock.close(guest.id)
+      void this.devToolsDock.close(guest.id).catch(() => {
+        console.warn('[BrowserManager] Retired guest developer tools close failed')
+      })
     })
   }
 

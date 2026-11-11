@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
-import { ipcMain } from 'electron'
+import { invokeGuestDiscard } from './browser-guest-sync-reply-test-fixture'
 import { DestroyedGuestTestContents } from './browser-manager-destroyed-guest-test-fixture'
 import { browserManager } from '../browser-manager'
 import {
@@ -123,7 +123,8 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
 export function createEligibilityFleet(
   native: Map<number, Electron.WebContents>,
   size = 33,
-  allMainOwned = false
+  allMainOwned = false,
+  discard?: (id: string, webview: Electron.WebviewTag, guestId: number) => boolean
 ) {
   const manager = browserManager
   registerBrowserGuestDiscardHandlers()
@@ -138,8 +139,13 @@ export function createEligibilityFleet(
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main publication needs only this renderer's identity, liveness and send method.
-  native.set(99, { id: 99, isDestroyed: () => false, send } as unknown as Electron.WebContents)
-  const attach = (id: number, attachedPageId = pageId): EligibilityGuest => {
+  const renderer = { id: 99, isDestroyed: () => false, send } as unknown as Electron.WebContents
+  native.set(99, renderer)
+  const attach = (
+    id: number,
+    attachedPageId = pageId,
+    rendererActivity = true
+  ): EligibilityGuest => {
     const guest = new EligibilityGuest(id)
     guests.push(guest)
     pageIds.add(attachedPageId)
@@ -152,10 +158,12 @@ export function createEligibilityFleet(
     )
     admitBrowserPageAttach(marker, 99, 'persist:eligibility')
     associateBrowserPageAttach(guest.asWebContents())
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the production pool reads only the fixture's native guest ID.
-    registerBrowserGuestActivity(attachedPageId, {
-      getWebContentsId: () => id
-    } as Electron.WebviewTag)
+    if (rendererActivity) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the production pool reads only the fixture's native guest ID.
+      registerBrowserGuestActivity(attachedPageId, {
+        getWebContentsId: () => id
+      } as Electron.WebviewTag)
+    }
     manager.attachGuestPolicies(guest.asWebContents())
     manager.registerGuest({
       browserPageId: attachedPageId,
@@ -179,14 +187,15 @@ export function createEligibilityFleet(
   const stop = installBrowserGuestPageRetention({
     isBlocked: (id) =>
       browserGuestActivity.get(id)?.protection === undefined || browserPageVetoesGuestEviction(id),
-    discard: (id, _webview, guestId) => {
+    discard: (id, webview, guestId) => {
       attempts.push(id)
-      const event = { sender: native.get(99), returnValue: false }
-      ipcMain.emit('browser:reserveGuestDiscard', event, {
-        browserPageId: id,
-        webContentsId: guestId
-      })
-      if (!event.returnValue) {
+      const accepted = discard
+        ? discard(id, webview, guestId)
+        : invokeGuestDiscard(renderer, {
+            browserPageId: id,
+            webContentsId: guestId
+          })
+      if (!accepted) {
         return false
       }
       freed.push(id)

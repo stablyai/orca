@@ -124,68 +124,64 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     if (reason === 'page-closed') {
       closeBrowserMemoryPage(browserTabId)
     }
-    // Resolve pending grabs before removing their registration.
-    this.cancelGrabOp(browserTabId, 'evicted')
-    cancelBrowserPagePrompts(browserTabId)
-    this.notifyAudioStateChanged(browserTabId, false)
-    this.agentActivity.end(browserTabId)
-
-    const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
-    if (guestWebContentsId !== undefined) {
-      this.cleanupGuestPolicyAttachment(guestWebContentsId)
-    }
-
-    const cleanup = this.contextMenuCleanupByTabId.get(browserTabId)
-    if (cleanup) {
-      cleanup()
-      this.contextMenuCleanupByTabId.delete(browserTabId)
-    }
-    const shortcutCleanup = this.grabShortcutCleanupByTabId.get(browserTabId)
-    if (shortcutCleanup) {
-      shortcutCleanup()
-      this.grabShortcutCleanupByTabId.delete(browserTabId)
-    }
-    const fwdCleanup = this.shortcutForwardingCleanupByTabId.get(browserTabId)
-    if (fwdCleanup) {
-      fwdCleanup()
-      this.shortcutForwardingCleanupByTabId.delete(browserTabId)
-    }
-    const mouseWheelZoomCleanup = this.mouseWheelZoomCleanupByTabId.get(browserTabId)
-    if (mouseWheelZoomCleanup) {
-      mouseWheelZoomCleanup()
-      this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
-    }
-    this.targetUrlCleanupByTabId.get(browserTabId)?.()
-    this.targetUrlCleanupByTabId.delete(browserTabId)
-    let hasActiveDownloads = false
-    for (const [downloadId, download] of this.downloadsById.entries()) {
+    const wcId = this.webContentsIdByTabId.get(browserTabId)
+    const disposers = [
+      this.contextMenuCleanupByTabId,
+      this.grabShortcutCleanupByTabId,
+      this.shortcutForwardingCleanupByTabId,
+      this.mouseWheelZoomCleanupByTabId,
+      this.targetUrlCleanupByTabId
+    ].map((owners) => ({ owners, dispose: owners.get(browserTabId) }))
+    const downloads: string[] = []
+    for (const [downloadId, download] of this.downloadsById) {
       if (download.browserTabId === browserTabId && !download.terminalEvent) {
-        if (reason === 'page-closed') {
-          this.cancelDownloadInternal(downloadId, 'Tab closed before download completed.')
-        } else {
-          hasActiveDownloads = true
-        }
+        downloads.push(downloadId)
       }
     }
-    const wcId = this.webContentsIdByTabId.get(browserTabId)
-    if (wcId !== undefined) {
-      this.tabIdByWebContentsId.delete(wcId)
+    try {
+      this.completeGuestCleanup('grab', () => this.cancelGrabOp(browserTabId, 'evicted'))
+      this.completeGuestCleanup('prompts', () => cancelBrowserPagePrompts(browserTabId))
+      this.completeGuestCleanup('audio', () => this.notifyAudioStateChanged(browserTabId, false))
+      this.completeGuestCleanup('agent activity', () => this.agentActivity.end(browserTabId))
+      if (wcId !== undefined) {
+        this.completeGuestCleanup('guest attachment', () => this.cleanupGuestPolicyAttachment(wcId))
+      }
+      for (const { owners, dispose } of disposers) {
+        if (owners.get(browserTabId) === dispose) {
+          owners.delete(browserTabId)
+        }
+        this.completeGuestCleanup('page listener', () => dispose?.())
+      }
+      if (reason === 'page-closed') {
+        for (const downloadId of downloads) {
+          this.completeGuestCleanup('download', () =>
+            this.cancelDownloadInternal(downloadId, 'Tab closed before download completed.')
+          )
+        }
+      }
+    } finally {
+      if (wcId !== undefined && this.tabIdByWebContentsId.get(wcId) === browserTabId) {
+        this.tabIdByWebContentsId.delete(wcId)
+      }
+      const current = this.webContentsIdByTabId.get(browserTabId)
+      // A disposer may synchronously install a replacement under this logical page.
+      if (current === undefined || current === wcId) {
+        this.webContentsIdByTabId.delete(browserTabId)
+        if (reason === 'page-closed' || !downloads.length) {
+          this.rendererWebContentsIdByTabId.delete(browserTabId)
+        }
+        this.workspaceIdByPageId.delete(browserTabId)
+        this.sessionProfileIdByPageId.delete(browserTabId)
+        this.worktreeIdByTabId.delete(browserTabId)
+        this.viewportOpsByTabId.delete(browserTabId)
+        this.viewportPresetByTabId.delete(browserTabId)
+        this.viewportScrollStateByTabId.delete(browserTabId)
+        this.annotationViewportBridgeOpsByTabId.delete(browserTabId)
+      }
+      if (wcId !== undefined) {
+        this.pendingNavigationByGuestId.delete(wcId)
+      }
     }
-    this.webContentsIdByTabId.delete(browserTabId)
-    // A destroyed guest can recover in an open page while its downloads still report progress.
-    if (!hasActiveDownloads) {
-      this.rendererWebContentsIdByTabId.delete(browserTabId)
-    }
-    this.workspaceIdByPageId.delete(browserTabId)
-    this.sessionProfileIdByPageId.delete(browserTabId)
-    this.worktreeIdByTabId.delete(browserTabId)
-    this.viewportOpsByTabId.delete(browserTabId)
-    this.viewportPresetByTabId.delete(browserTabId)
-    this.viewportScrollStateByTabId.delete(browserTabId)
-    if (wcId !== undefined) {
-      this.pendingNavigationByGuestId.delete(wcId)
-    }
-    this.annotationViewportBridgeOpsByTabId.delete(browserTabId)
   }
 
   // Headless serve uses offscreen contents without renderer webview bindings.

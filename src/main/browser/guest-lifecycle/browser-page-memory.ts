@@ -203,8 +203,13 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
   retiredGuests.set(guest.id, { pageId, guest, rendererId: page.rendererId })
   page.guest = null
   delete page.invalidation
-  page.releaseThrottle?.()
+  const releaseThrottle = page.releaseThrottle
   page.releaseThrottle = null
+  try {
+    releaseThrottle?.()
+  } catch {
+    console.warn('[BrowserManager] Retired guest throttle release failed')
+  }
   return true
 }
 

@@ -32,29 +32,35 @@ export function registerBrowserGuestDiscardHandlers(): void {
   ipcMain.on(
     'browser:reserveGuestDiscard',
     (event, args: { browserPageId?: unknown; webContentsId?: unknown }) => {
-      event.returnValue = false
-      if (
-        !isTrustedBrowserRenderer(event.sender) ||
-        typeof args?.browserPageId !== 'string' ||
-        typeof args.webContentsId !== 'number'
-      ) {
-        return
-      }
-      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (!guest || guest.id !== args.webContentsId) {
-        return
-      }
-      if (
-        !browserManager.isGuestMemoryProtected(args.browserPageId) &&
-        reserveBrowserPageDiscard(args.browserPageId, guest)
-      ) {
-        browserManager.unregisterGuest(args.browserPageId, 'guest-destroyed')
-        event.returnValue = true
-      } else if (
-        browserManager.readGuestDiscardProtection(args.browserPageId, guest).protection !==
-        'discardable'
-      ) {
-        browserManager.invalidateGuestMemoryProtection(guest)
+      let committed = false
+      try {
+        if (
+          !isTrustedBrowserRenderer(event.sender) ||
+          typeof args?.browserPageId !== 'string' ||
+          typeof args.webContentsId !== 'number'
+        ) {
+          return
+        }
+        const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+        if (!guest || guest.id !== args.webContentsId) {
+          return
+        }
+        if (
+          !browserManager.isGuestMemoryProtected(args.browserPageId) &&
+          reserveBrowserPageDiscard(args.browserPageId, guest)
+        ) {
+          committed = true
+          browserManager.unregisterGuest(args.browserPageId, 'guest-destroyed')
+        } else if (
+          browserManager.readGuestDiscardProtection(args.browserPageId, guest).protection !==
+          'discardable'
+        ) {
+          browserManager.invalidateGuestMemoryProtection(guest)
+        }
+      } catch {
+        console.warn('[BrowserManager] Guest discard admission failed')
+      } finally {
+        event.returnValue = committed
       }
     }
   )

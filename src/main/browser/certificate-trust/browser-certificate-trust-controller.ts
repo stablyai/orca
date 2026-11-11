@@ -125,9 +125,12 @@ export class BrowserCertificateTrustController {
   }
 
   onGuestRetired(webContentsId: number): void {
-    this.clearPending(webContentsId, true)
-    this.requestGuard.revokeGuest(webContentsId)
-    this.navigationSequenceByGuestId.delete(webContentsId)
+    try {
+      this.clearPending(webContentsId, true)
+    } finally {
+      this.requestGuard.revokeGuest(webContentsId)
+      this.navigationSequenceByGuestId.delete(webContentsId)
+    }
   }
 
   onMainFrameNavigationStarted(webContentsId: number): void {

@@ -116,10 +116,10 @@ export class BrowserSiteDisplayController {
   onGuestRetired(guestId: number): void {
     this.releaseColorScheme(guestId)
     const tracked = this.guests.get(guestId)
+    this.guests.delete(guestId)
     if (tracked && !tracked.guest.isDestroyed()) {
       tracked.stopWatchingDomReady()
     }
-    this.guests.delete(guestId)
   }
 
   // Apply the committed site's scheme before document scripts read prefers-color-scheme.
@@ -270,9 +270,14 @@ export class BrowserSiteDisplayController {
     tracked.colorScheme = null
     try {
       state.stopWatchingDetach()
-      state.lease.release()
     } catch {
       // The guest may already be destroyed.
+    } finally {
+      try {
+        state.lease.release()
+      } catch {
+        // The guest may already be destroyed.
+      }
     }
   }
 }
