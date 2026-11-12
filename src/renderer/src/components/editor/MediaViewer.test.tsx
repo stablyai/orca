@@ -3,7 +3,10 @@
 import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mediaPlaybackPositionCache } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
+import {
+  mediaPlaybackStateCache,
+  mediaVolumePreference
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import MediaViewer from './MediaViewer'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -11,7 +14,9 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 describe('MediaViewer', () => {
   afterEach(() => {
     vi.restoreAllMocks()
-    mediaPlaybackPositionCache.clear()
+    mediaPlaybackStateCache.clear()
+    mediaVolumePreference.volume = 1
+    mediaVolumePreference.muted = false
   })
 
   const renderPlaybackViewer = async (
@@ -85,5 +90,46 @@ describe('MediaViewer', () => {
     await act(async () => otherRestored.video.dispatchEvent(new Event('loadedmetadata')))
     expect(otherRestored.video.currentTime).toBe(27)
     await act(async () => otherRestored.root.unmount())
+  })
+
+  it('shares volume and mute across previews and keeps each clip at its own speed', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    // Unfinalized WebM recordings report an Infinity duration.
+    const first = await renderPlaybackViewer('clip.mp4:pdf', Number.POSITIVE_INFINITY)
+    await act(async () => first.video.dispatchEvent(new Event('loadedmetadata')))
+    first.video.volume = 0.25
+    first.video.muted = true
+    first.video.playbackRate = 1.5
+    await act(async () => first.video.dispatchEvent(new Event('volumechange')))
+    Object.defineProperty(first.video, 'ended', { configurable: true, value: true })
+    await act(async () => first.root.unmount())
+
+    const other = await renderPlaybackViewer('other.mp4:pdf')
+    await act(async () => other.video.dispatchEvent(new Event('loadedmetadata')))
+    expect(other.video.volume).toBe(0.25)
+    expect(other.video.muted).toBe(true)
+    expect(other.video.playbackRate).toBe(1)
+    await act(async () => other.root.unmount())
+
+    const restored = await renderPlaybackViewer('clip.mp4:pdf', Number.POSITIVE_INFINITY)
+    await act(async () => restored.video.dispatchEvent(new Event('loadedmetadata')))
+    expect(restored.video.playbackRate).toBe(1.5)
+    await act(async () => restored.root.unmount())
+  })
+
+  it('saves a volume change still queued at teardown without overwriting a newer choice', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    const idle = await renderPlaybackViewer('idle.mp4:left')
+    const active = await renderPlaybackViewer('active.mp4:right')
+    active.video.volume = 0.5
+    await act(async () => active.video.dispatchEvent(new Event('volumechange')))
+    await act(async () => idle.root.unmount())
+    expect(mediaVolumePreference).toEqual({ volume: 0.5, muted: false })
+
+    active.video.muted = true
+    await act(async () => active.root.unmount())
+    expect(mediaVolumePreference).toEqual({ volume: 0.5, muted: true })
   })
 })
