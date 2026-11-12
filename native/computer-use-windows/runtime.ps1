@@ -1266,10 +1266,10 @@ function Invoke-OrcaNamedAction($Element, [string]$Action) {
 }
 
 function Test-OrcaRangeValueMatches([string]$Actual, [double]$Expected) {
-    # Why: compare numerically so "50.0" matches a control that reads back 50; snapping controls still show a mismatch.
+    # Why: allow float32 rounding (0.1 reads back 0.100000001), but cap it so a snapped neighbour never verifies at any size.
     $actualNumber = 0.0
     [double]::TryParse($Actual, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$actualNumber) -and
-        [Math]::Abs($actualNumber - $Expected) -le 1e-12 * [Math]::Max(1.0, [Math]::Abs($Expected))
+        [Math]::Abs($actualNumber - $Expected) -le [Math]::Min(1e-6 * [Math]::Max(1.0, [Math]::Abs($Expected)), 1e-3)
 }
 
 function Set-OrcaElementValue($Element, [string]$Value) {
