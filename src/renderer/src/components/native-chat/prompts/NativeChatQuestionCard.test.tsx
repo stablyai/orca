@@ -126,4 +126,44 @@ describe('NativeChatQuestionCard', () => {
     pressKey({ key: 'Enter' }, rows[1]!)
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
+  it('opens with focus on option 1 without picking it, and Skip turns into Submit once picked', () => {
+    vi.useFakeTimers()
+    container.setAttribute('data-native-chat-root', 'true')
+    act(() => {
+      root.render(
+        <NativeChatQuestionCard
+          prompt={tabsOrSpaces}
+          onAnswer={() => {}}
+          onCancel={() => {}}
+          shouldFocus
+        />
+      )
+    })
+    act(() => vi.runAllTimers())
+    const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    const confirmButton = (): HTMLButtonElement =>
+      [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+        /^(Skip|Submit)/.test(button.textContent ?? '')
+      )!
+    expect(document.activeElement).toBe(rows[0])
+    // Focus is a ring only; the picked look (primary border, fill) is reserved for aria-pressed rows.
+    expect(rows[0]!.getAttribute('aria-pressed')).toBe('false')
+    expect(rows[0]!.className).not.toMatch(/(^|\s)(focus:)?bg-accent(\s|$)/)
+    expect(rows[0]!.className).not.toContain('border-primary')
+    expect(confirmButton().textContent).toBe('Skip')
+
+    act(() => rows[1]!.click())
+    expect(rows[1]!.getAttribute('aria-pressed')).toBe('true')
+    expect(rows[1]!.className).toContain('border-primary')
+    expect(rows[0]!.className).not.toContain('border-primary')
+    // The Enter hint is decoration; the button's name stays "Submit".
+    const submit = confirmButton()
+    expect(submit.querySelector('[aria-hidden]')?.textContent).toBe('↵')
+    expect(
+      [...submit.childNodes]
+        .filter((node) => !(node instanceof Element && node.hasAttribute('aria-hidden')))
+        .map((node) => node.textContent)
+        .join('')
+    ).toBe('Submit')
+  })
 })
