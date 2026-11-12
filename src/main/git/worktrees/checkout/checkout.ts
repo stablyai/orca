@@ -7,7 +7,7 @@ import {
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/git-no-prompt-env'
-import { translateWorktreePath } from '../catalog/worktree-path-comparison'
+import { gitResultPathTranslator } from '../../command-runner/host-routing/wsl-path-translation'
 import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 
@@ -49,7 +49,7 @@ export async function listLocalBranches(
 ): Promise<RuntimeGitLocalBranches> {
   const execution = gitOptionsForWorktree(worktreePath, options)
   let extended = true
-  const { stdout } = await gitExecFileAsync(
+  const result = await gitExecFileAsync(
     [
       'for-each-ref',
       '--format=%(HEAD)%09%(refname:lstrip=2)%09%(committerdate:unix)%09%(worktreepath)',
@@ -66,11 +66,12 @@ export async function listLocalBranches(
       execution
     )
   })
+  const toHostPath = await gitResultPathTranslator(result, worktreePath, options)
   let current: string | null = null
   const branches: string[] = []
   const committedAt: Record<string, number> = Object.create(null)
   const worktreePaths: Record<string, string> = Object.create(null)
-  for (const line of stdout.split('\n')) {
+  for (const line of result.stdout.split('\n')) {
     if (line.length === 0) {
       continue
     }
@@ -86,7 +87,7 @@ export async function listLocalBranches(
       committedAt[name] = Number(timestamp) * 1000
     }
     if (occupiedPath) {
-      worktreePaths[name] = translateWorktreePath(occupiedPath, worktreePath, options)
+      worktreePaths[name] = toHostPath(occupiedPath)
     }
   }
   branches.sort((a, b) => {

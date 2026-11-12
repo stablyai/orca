@@ -14,6 +14,7 @@ import {
 import { usesHostGitForWslLinkedWorktree } from './wsl-linked-worktree-git-routing'
 import { withWslWindowsCheckoutGitConfig } from './wsl-windows-checkout-git-config'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
+import { captureGitExecutionContext } from './wsl-git-path-preparation'
 import type { GitExecOptions } from '../git-exec-options'
 
 // Linux Git needs Windows-checkout settings; classify original args and inject only at spawn.
@@ -27,19 +28,33 @@ export function resolveGitCommand(
   forceLoginShell = false,
   captureLoginShellOutput = false
 ): ResolvedCommand {
-  if (usesHostGitForWslLinkedWorktree(options.cwd, options.wslDistro)) {
+  if (
+    options.executionContext?.kind === 'host' ||
+    (!options.executionContext && usesHostGitForWslLinkedWorktree(options.cwd, options.wslDistro))
+  ) {
     // Why: WSL Git resolves a Windows-authored linked-worktree pointer relative to cwd.
-    return { binary: 'git', args, cwd: options.cwd, wsl: null, wslMode: null }
+    return {
+      binary: 'git',
+      args,
+      cwd: options.cwd,
+      wsl: null,
+      wslMode: null,
+      executionContext: { kind: 'host' }
+    }
   }
   const distro = directWslGitReadDistro(args, options, forceLoginShell)
   if (distro) {
     const environment = peekWslGitReadEnvironment(distro)
     if (environment) {
-      return resolveCommand('git', wslGitArgs(args, options), options.cwd, distro, {
+      const resolved = resolveCommand('git', wslGitArgs(args, options), options.cwd, distro, {
         wslGitReadEnvironment: environment,
+        wslPaths:
+          options.executionContext?.kind === 'wsl' ? options.executionContext.paths : undefined,
         env: options.env,
         terminationBarrier: options.terminationBarrier
       })
+      resolved.executionContext = options.executionContext ?? captureGitExecutionContext(options)
+      return resolved
     }
     void getWslGitReadEnvironment(distro)
   }
@@ -52,7 +67,11 @@ function directWslGitReadDistro(
   options: GitExecOptions,
   forceLoginShell: boolean
 ): string | null {
-  if (forceLoginShell || !shouldAttemptWslDirectGit(args, options)) {
+  if (
+    options.executionContext?.kind === 'host' ||
+    forceLoginShell ||
+    !shouldAttemptWslDirectGit(args, options)
+  ) {
     return null
   }
   return wslDistroForCommand(options.cwd, options.wslDistro)
@@ -92,14 +111,39 @@ export function pendingWslDirectGitReadEnvironment(
 export function resolveGitCommandWithoutProbe(
   args: string[],
   options: GitExecOptions,
-  captureLoginShellOutput = false
+  captureLoginShellOutput = false,
+  noteWslLaunch = true
 ): ResolvedCommand {
-  return resolveCommand('git', wslGitArgs(args, options), options.cwd, options.wslDistro, {
-    useWslLoginShell: Boolean(options.wslDistro),
-    captureLoginShellOutput,
-    env: options.env,
-    terminationBarrier: options.terminationBarrier
-  })
+  if (
+    options.executionContext?.kind === 'host' ||
+    (!options.executionContext && usesHostGitForWslLinkedWorktree(options.cwd, options.wslDistro))
+  ) {
+    return {
+      binary: 'git',
+      args,
+      cwd: options.cwd,
+      wsl: null,
+      wslMode: null,
+      executionContext: { kind: 'host' }
+    }
+  }
+  const resolved = resolveCommand(
+    'git',
+    wslGitArgs(args, options),
+    options.cwd,
+    options.wslDistro,
+    {
+      useWslLoginShell: Boolean(options.wslDistro),
+      captureLoginShellOutput,
+      noteWslLaunch,
+      wslPaths:
+        options.executionContext?.kind === 'wsl' ? options.executionContext.paths : undefined,
+      env: options.env,
+      terminationBarrier: options.terminationBarrier
+    }
+  )
+  resolved.executionContext = options.executionContext ?? captureGitExecutionContext(options)
+  return resolved
 }
 
 function isDirectWslGitNotFound(error: unknown, resolved: ResolvedCommand): boolean {

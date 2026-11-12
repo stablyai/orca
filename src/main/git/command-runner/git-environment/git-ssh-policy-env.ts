@@ -10,6 +10,7 @@ import { execFileCapture } from '../process-capture/exec-file-capture'
 import { resolveGitCommand } from '../host-routing/git-command-resolution'
 import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from '../git-exec-options'
 import { promptGuardGitEnv } from './git-process-env'
+import { assertPreparedGitCommand } from '../host-routing/wsl-git-path-preparation'
 import { acquireGitAdmission } from '../admission/git-subprocess-admission'
 
 const CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 2500
@@ -39,6 +40,12 @@ export async function buildNetworkSshPolicyEnv(
     tier: options.admissionTier,
     signal: options.signal
   })
+  try {
+    assertPreparedGitCommand(resolved, probeArgs, options)
+  } catch (error) {
+    grant.release()
+    throw error
+  }
   let reportTerminated: () => void = () => {}
   const terminated = new Promise<void>((resolve) => {
     reportTerminated = resolve

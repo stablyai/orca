@@ -1,3 +1,5 @@
+import { settleWslAutomountRoot } from '../../../wsl/filesystem/__fixtures__/wsl-automount-root-fixture'
+import { resetWslAutomountRootsForTests } from '../../../wsl/filesystem/wsl-automount-root'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
@@ -39,6 +41,11 @@ vi.mock('fs/promises', async () => {
 
 import { resetWorktreeRemovalState } from '../removal/remove-worktree-test-harness'
 import { listWorktreesStrict } from './worktree-listing'
+import { readRepoCommonDirFromGit, readRepoLocation } from './worktree-list-reader'
+import {
+  _resetCanonicalRepoKeyCacheForTests,
+  getCanonicalRepoKey
+} from '../../repositories/canonical-repo-key'
 
 const REPO_ID = 'repo-1'
 const UNC_REPO = String.raw`\\wsl.localhost\Ubuntu\mnt\c\src\app`
@@ -55,8 +62,11 @@ function eperm(path: unknown): Error {
 
 const originalPlatform = process.platform
 
-beforeEach(() => {
+beforeEach(async () => {
+  resetWslAutomountRootsForTests()
+  await settleWslAutomountRoot()
   resetWorktreeRemovalState()
+  _resetCanonicalRepoKeyCacheForTests()
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   gitExecFileAsyncMock.mockReset()
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
@@ -76,6 +86,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  resetWslAutomountRootsForTests()
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
 })
 
@@ -100,5 +111,32 @@ describe('listing a UNC drive-folder repo through WSL Git', () => {
       String.raw`C:\src\app`,
       String.raw`C:\src\app-feature`
     ])
+  })
+
+  it('resolves old-Git relative metadata against the host identity on a custom automount', async () => {
+    resetWslAutomountRootsForTests()
+    await settleWslAutomountRoot('Ubuntu', '/qamnt/')
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
+      stdout: args.includes('--show-toplevel')
+        ? '--path-format=absolute\n/qamnt/c/src/app\n.git\n.git\n'
+        : '--path-format=absolute\n.git\n',
+      stderr: ''
+    }))
+    const cwd = String.raw`C:\src\app`
+    await expect(readRepoCommonDirFromGit(cwd, { wslDistro: 'Ubuntu' })).resolves.toBe(
+      String.raw`C:\src\app\.git`
+    )
+    await expect(readRepoLocation(cwd, cwd, { wslDistro: 'Ubuntu' })).resolves.toEqual({
+      topLevel: String.raw`C:\src\app`,
+      commonDir: String.raw`C:\src\app\.git`,
+      gitDir: String.raw`C:\src\app\.git`
+    })
+    await expect(getCanonicalRepoKey(cwd, { wslDistro: 'Ubuntu' })).resolves.toBe(
+      String.raw`wsl:Ubuntu::C:\src\app\.git`
+    )
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '/qamnt/c/src/app/.git\n', stderr: '' })
+    await expect(
+      getCanonicalRepoKey(String.raw`C:\src\app\linked`, { wslDistro: 'Ubuntu' })
+    ).resolves.toBe(String.raw`wsl:Ubuntu::C:\src\app\.git`)
   })
 })

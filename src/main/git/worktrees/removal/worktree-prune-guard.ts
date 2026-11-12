@@ -9,7 +9,11 @@ import {
 } from '../../../../shared/wsl-paths'
 import type { GitExecOptions } from '../../command-runner/git-exec-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { pendingWslDriveCheckoutGitRouting } from '../../command-runner/host-routing/wsl-drive-checkout-git-routing'
+import { pendingWslGitPathPreparation } from '../../command-runner/host-routing/wsl-git-path-preparation'
+import {
+  routeLocalGitOptions,
+  runAdmittedWslGit
+} from '../../command-runner/host-routing/local-git-runtime-route'
 import { usesHostGitForWslLinkedWorktree } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 /** Marks only the locks this module writes, so it never removes a user's own lock. */
@@ -28,7 +32,13 @@ export async function pruneGitWorktrees(
     return
   }
   // Decide which Git runs only once its routing is settled, as the prune itself will.
-  await pendingWslDriveCheckoutGitRouting(['worktree', 'prune'], options)
+  options = routeLocalGitOptions(options)
+  await runAdmittedWslGit(options, async () => {
+    const preparation = pendingWslGitPathPreparation(['worktree', 'prune'], options)
+    if (preparation) {
+      await preparation
+    }
+  })
   const distro = usesHostGitForWslLinkedWorktree(options.cwd, options.wslDistro)
     ? null
     : wslDistroForCommand(options.cwd, options.wslDistro)

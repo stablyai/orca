@@ -144,11 +144,11 @@ async function readTargetedStatus(
   options: GetStatusOptions
 ): Promise<GitStatusEntry[]> {
   const parser = new StatusPorcelainParser()
-  const commands = bulkPathspecCommands(
+  const commands = await bulkPathspecCommands(
     TARGETED_STATUS_ARGS,
     relativePaths,
     worktreePath,
-    options.wslDistro ? { wslDistro: options.wslDistro } : {}
+    options
   )
   // Why sequential: chunks exist only past the command-line cap, and each one already walks drvfs.
   for (const args of commands) {

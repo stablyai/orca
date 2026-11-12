@@ -1,5 +1,6 @@
 import { createAbortError } from '../process-capture/abort-error'
-import { resolveGitCommand } from './git-command-resolution'
+import { wslDistroForCommand } from '../../../../shared/wsl-paths'
+import { usesHostGitForWslLinkedWorktree } from './wsl-linked-worktree-git-routing'
 import type { ResolvedCommand } from './wsl-command-resolution'
 
 let waitForWindowsHostGitEnvironment: (() => Promise<void>) | null = null
@@ -15,8 +16,17 @@ export async function awaitWindowsHostGitEnvironmentReady(options: {
   wslDistro?: string
   signal?: AbortSignal
 }): Promise<void> {
-  const resolved = resolveGitCommand(['--version'], options)
-  await prepareWindowsHostGitEnvironment(resolved, undefined, options.signal)
+  if (
+    wslDistroForCommand(options.cwd, options.wslDistro) &&
+    !usesHostGitForWslLinkedWorktree(options.cwd, options.wslDistro)
+  ) {
+    return
+  }
+  await prepareWindowsHostGitEnvironment(
+    { binary: 'git', args: ['--version'], cwd: options.cwd, wsl: null, wslMode: null },
+    undefined,
+    options.signal
+  )
 }
 
 function refreshWindowsHostPath(env: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv | undefined {

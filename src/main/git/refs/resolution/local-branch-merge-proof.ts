@@ -1,3 +1,4 @@
+import type { GitExecutionContext } from '../../command-runner/host-routing/wsl-git-path-preparation'
 import {
   branchHasNoUnmergedChangesOnAnyTarget,
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
@@ -28,11 +29,20 @@ export async function localBranchHasNoUnmergedChanges(args: {
   const options = routeLocalGitOptions({ ...args.options, cwd })
   const quarantine = createLocalGitObjectQuarantine(cwd, options)
   const runGit = (argv: string[], execOptions?: GitBranchCleanupExecOptions) => {
-    const run = (env: NodeJS.ProcessEnv | undefined) =>
+    const run = (
+      env: NodeJS.ProcessEnv | undefined,
+      quarantineCanStart?: (context?: GitExecutionContext) => boolean
+    ) =>
       gitExecFileAsync(argv, {
         ...gitExecOptions(cwd, options),
         ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {}),
-        ...(env ? { env } : {})
+        ...(env ? { env } : {}),
+        canStart: (context) => {
+          if (gitExecOptions(cwd, options).canStart?.() === false) {
+            return false
+          }
+          return quarantineCanStart?.(context) ?? true
+        }
       })
     return execOptions?.discardWrittenObjects ? quarantine.run(run) : run(undefined)
   }

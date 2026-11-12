@@ -1,10 +1,12 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
+import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
-import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { createAbortError } from './process-capture/abort-error'
 import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-kill'
-import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
+import {
+  captureGitExecutionContext,
+  pendingWslGitPathPreparation
+} from './host-routing/wsl-git-path-preparation'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from './git-exec-options'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
@@ -18,8 +20,8 @@ import {
   resolveGitCommandWithoutProbe
 } from './host-routing/git-command-resolution'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
-import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
-import { gitSpawn } from './git-spawn'
+import { nonInteractiveGitEnv } from './git-environment/git-process-env'
+import { spawnPreparedGitCommand } from './git-spawn'
 import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
@@ -68,11 +70,12 @@ function streamInSpan(
   timeoutMs: number | undefined
 ): Promise<GitStreamResult> {
   return withGitSpan({ args, cwd: options.cwd }, async (span) => {
-    const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
-    if (checkoutRoutingReady) {
-      await checkoutRoutingReady
-    }
+    const checkoutRoutingReady = pendingWslGitPathPreparation(args, options)
+    const executionContext = checkoutRoutingReady
+      ? await checkoutRoutingReady
+      : captureGitExecutionContext(options)
     const gitOptions: GitExecOptions = {
+      executionContext,
       cwd: options.cwd,
       ...(options.env ? { env: options.env } : {}),
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
@@ -119,18 +122,10 @@ function streamInSpan(
           windowsHide: true
         }
         let child: ChildProcess
-        if (command.wslMode === 'direct-git') {
-          const spawnStartedAt = performance.now()
-          child = spawn(command.binary, command.args, {
-            cwd: command.cwd,
-            env: untranslatedGitOutputEnv(spawnOptions.env),
-            stdio: spawnOptions.stdio,
-            windowsHide: true
-          })
-          recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
-        } else {
-          child = gitSpawn(args, spawnOptions)
-        }
+        child = spawnPreparedGitCommand(args, command, {
+          ...spawnOptions,
+          executionContext: command.executionContext
+        })
         let terminationReported = false
         terminationState.current = new Promise<void>((resolveTermination) => {
           const reportTermination = (): void => {

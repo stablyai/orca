@@ -4,6 +4,12 @@ import { runProcess } from '@orca/process-host'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import { runWslProcess, type WslResult, type WslSpec } from '../../../wsl/execution/wsl-runner'
 import { translateArgForWsl } from './wsl-path-translation'
+import {
+  captureWslAutomountSnapshot,
+  assertWslAutomountSnapshotCurrent,
+  ensureWslAutomountRoot,
+  peekWslAutomountRoot
+} from '../../../wsl/filesystem/wsl-automount-root'
 import { acquireGitAdmission } from '../admission/git-subprocess-admission'
 import { nonInteractiveGitEnv } from '../git-environment/git-process-env'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
@@ -156,12 +162,17 @@ async function probeSample(
       wslDistro: options.wslDistro,
       tier: options.tier
     },
-    () =>
-      (deps.runWsl ?? runWslProcess)({
+    async () => {
+      if (peekWslAutomountRoot(options.wslDistro) === null) {
+        await ensureWslAutomountRoot(options.wslDistro)
+      }
+      const paths = captureWslAutomountSnapshot(options.wslDistro)
+      return (deps.runWsl ?? runWslProcess)({
+        beforeStart: () => assertWslAutomountSnapshotCurrent(paths),
         distro: options.wslDistro,
         script: SAMPLE_SCRIPT,
         args: [
-          translateArgForWsl(options.cwd),
+          translateArgForWsl(options.cwd, options.wslDistro, paths),
           String(LINE_ENDING_SAMPLE_LIMIT),
           String(LINE_ENDING_SCAN_LIMIT)
         ],
@@ -169,6 +180,7 @@ async function probeSample(
         timeoutMs: SAMPLE_PROBE_TIMEOUT_MS,
         maxOutputBytes: 1024 * 1024
       })
+    }
   ).catch(() => null)
   let answer: LineEndingSampleAnswer | null = null
   if (result && !result.timedOut) {

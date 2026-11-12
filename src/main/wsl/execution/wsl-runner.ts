@@ -50,6 +50,8 @@ export type WslSpec = WslCommand & {
   signal?: AbortSignal
   /** Guest stdin, so secrets stay off the command line; the command must fit argv delivery. */
   input?: string
+  /** Validate caller-owned actual operands after the optional environment wait. */
+  beforeStart?: () => void
 }
 
 export type WslResult = {
@@ -172,6 +174,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
 
   // Probe and command share one deadline; never add an independent probe timeout.
   const remainingMs = Math.max(1, deadline - Date.now())
+  spec.beforeStart?.()
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(spec.distro, argv, { user: spec.user }),

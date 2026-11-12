@@ -13,7 +13,7 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
+import { gitResultPathTranslator } from '../../command-runner/host-routing/wsl-path-translation'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
 
@@ -117,11 +117,12 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
     listWorktrees: async (repoPath) => {
-      const { stdout } = await gitExecFileAsync(
+      const result = await gitExecFileAsync(
         ['worktree', 'list', '--porcelain'],
         execOptions(repoPath)
       )
-      return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, options))
+      const toHostPath = await gitResultPathTranslator(result, repoPath, options)
+      return parseWorktreeList(result.stdout).map((row) => ({ ...row, path: toHostPath(row.path) }))
     }
   }
 }

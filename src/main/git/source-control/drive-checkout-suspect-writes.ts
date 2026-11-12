@@ -18,7 +18,7 @@ async function listMergedTrackedPaths(
   options: GitRuntimeOptions
 ): Promise<string[]> {
   const tracked = new Set<string>()
-  for (const args of bulkPathspecCommands(
+  for (const args of await bulkPathspecCommands(
     ['ls-files', '-z', '--stage', '--'],
     paths,
     worktreePath,
@@ -49,7 +49,7 @@ export async function redoWriteForDriveCheckoutSuspects(
   // Why tracked only: an untracked or ignored suspect fails the pathspec, and minimal stat never misses one.
   const tracked = await listMergedTrackedPaths(worktreePath, suspects, options)
   // Why argv over --pathspec-from-file: `add`/`restore` only gained it in Git 2.26; suspects are capped.
-  const commands = bulkPathspecCommands(
+  const commands = await bulkPathspecCommands(
     ['-c', 'core.checkStat=default', ...write, '--'],
     tracked,
     worktreePath,

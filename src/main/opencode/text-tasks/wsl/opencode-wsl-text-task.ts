@@ -9,6 +9,12 @@ import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths
 import { ensureWslPinnedRuntime } from '../../../wsl/execution/wsl-pinned-runtime'
 import { runWslProcess, type WslSpec } from '../../../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../../../wsl/execution/wsl-process-failure'
+import {
+  ensureWslAutomountRoot,
+  isWindowsDrivePath,
+  peekWslAutomountRoot
+} from '../../../wsl/filesystem/wsl-automount-root'
+import { noteWslDistroLaunched } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { translateArgsForWsl } from '../../../git/command-runner/host-routing/wsl-path-translation'
 import { spawnSourceControlAgent } from '../../../text-generation/source-control-agent-launch'
 import { killSourceControlAgentProcess } from '../../../text-generation/source-control-agent-termination'
@@ -113,17 +119,39 @@ function preparedGuestRuntime(distro: string): Promise<OpenCodeWslGuestRuntime> 
 
 /** Waits within the task's own deadline; the shared install keeps its separate bound. */
 async function prepareOpenCodeWslTextTask(
-  distro: string,
-  signal: AbortSignal,
+  input: OpenCodeWslTextTask,
   deps: OpenCodeWslTextTaskDeps = {}
 ): Promise<OpenCodeWslGuestRuntime> {
+  const { distro, signal } = input
   try {
-    return await waitForPromiseWithSignal((deps.prepare ?? preparedGuestRuntime)(distro), signal)
+    const runtime = await waitForPromiseWithSignal(
+      (deps.prepare ?? preparedGuestRuntime)(distro),
+      signal
+    )
+    assertCurrentTextTask(input)
+    noteWslDistroLaunched(distro)
+    if ([input.cwd, ...input.prefixArgs, ...input.runArgs].some(isWindowsDrivePath)) {
+      if (peekWslAutomountRoot(distro) === null) {
+        await ensureWslAutomountRoot(distro, signal)
+      }
+      assertCurrentTextTask(input)
+    }
+    return runtime
   } catch (error) {
     if (signal.aborted) {
       throw signal.reason
     }
+    if (error instanceof OpenCodeTextTaskError) {
+      throw error
+    }
     throw new OpenCodeTextTaskError('startup', { cause: error })
+  }
+}
+
+function assertCurrentTextTask(input: OpenCodeWslTextTask): void {
+  input.signal.throwIfAborted()
+  if (input.shouldExecute?.() === false) {
+    throw new OpenCodeTextTaskError('superseded')
   }
 }
 
@@ -133,14 +161,16 @@ export async function runOpenCodeWslTextTask(
 ): Promise<string> {
   const startedAt = Date.now()
   const { signal } = input
-  const runtime = await prepareOpenCodeWslTextTask(input.distro, signal, deps)
-  signal.throwIfAborted()
-  if (input.shouldExecute?.() === false) {
-    throw new OpenCodeTextTaskError('superseded')
-  }
+  assertCurrentTextTask(input)
+  const runtime = await prepareOpenCodeWslTextTask(input, deps)
+  assertCurrentTextTask(input)
   const nonce = randomBytes(16).toString('hex')
   let child: SpawnedSourceControlAgentProcess
+  let prefixArgs: string[]
+  let runArgs: string[]
   try {
+    prefixArgs = translateArgsForWsl([...input.prefixArgs], input.distro)
+    runArgs = translateArgsForWsl([...input.runArgs], input.distro)
     child = (deps.spawnAgent ?? spawnSourceControlAgent)({
       // The helper Node starts without the user's startup options; OpenCode's login shell restores them.
       binary: '/usr/bin/env',
@@ -189,10 +219,10 @@ export async function runOpenCodeWslTextTask(
       `${JSON.stringify({
         nonce,
         binary: input.binary,
-        prefixArgs: translateArgsForWsl([...input.prefixArgs]),
+        prefixArgs,
         prompt: input.prompt,
         // Existing WSL launches translate Windows paths in every argument, e.g. `--file C:\x`.
-        runArgs: translateArgsForWsl([...input.runArgs]),
+        runArgs,
         legacyVariantFlag: input.legacyVariantFlag,
         operation: input.operation,
         commandEnv: input.commandEnv,

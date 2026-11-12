@@ -5,7 +5,17 @@ import {
 import { resolveGitCommandWithoutProbe } from '../command-runner/host-routing/git-command-resolution'
 import { wslDistroForCommand } from '../../../shared/wsl-paths'
 import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../command-runner/host-routing/wsl-windows-checkout-git-config'
-import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
+import {
+  gitOptionsForWorktree,
+  type GitRuntimeOptions
+} from '../command-runner/git-runtime-options'
+import {
+  routeLocalGitOptions,
+  runAdmittedWslGit
+} from '../command-runner/host-routing/local-git-runtime-route'
+import { peekWslAutomountRoot } from '../../wsl/filesystem/wsl-automount-root'
+import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
+import { pendingWslGitPathPreparation } from '../command-runner/host-routing/wsl-git-path-preparation'
 
 /** Ceiling on argv entries per invocation; under WSL the byte budget bites first. */
 const BULK_CHUNK_SIZE = 100
@@ -50,7 +60,8 @@ function finishedCommandLineLength(
       cwd: worktreePath,
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
     },
-    true
+    true,
+    false
   )
   return commandLineLength([resolved.binary, ...resolved.args])
 }
@@ -59,13 +70,31 @@ function finishedCommandLineLength(
  * Split at whole pathspecs using the resolved command-line budget; oversized single paths still ship alone.
  * Earlier chunks remain applied on failure; per-path operations are idempotent, so retrying converges.
  */
-export function bulkPathspecCommands(
+export async function bulkPathspecCommands(
   leadingArgs: readonly string[],
   filePaths: readonly string[],
   worktreePath: string,
   options: GitRuntimeOptions,
   pathSource: 'host' | 'git' = 'host'
-): string[][] {
+): Promise<string[][]> {
+  if (filePaths.length === 0) {
+    return []
+  }
+  const routed = routeLocalGitOptions(gitOptionsForWorktree(worktreePath, options))
+  const distro = wslDistroForCommand(worktreePath, routed.wslDistro)
+  if (
+    distro &&
+    peekWslAutomountRoot(distro) === null &&
+    !usesHostGitForWslLinkedWorktree(worktreePath, routed.wslDistro)
+  ) {
+    await runAdmittedWslGit(routed, async () => {
+      const preparation = pendingWslGitPathPreparation(leadingArgs, routed)
+      if (preparation) {
+        await preparation
+      }
+    })
+  }
+  options = routed
   // Budget belongs to the host that spawns; the overhead measured above belongs to the transport.
   const budget = process.platform === 'win32' ? MAX_COMMAND_LINE_CHARS : POSIX_COMMAND_LINE_BUDGET
   const baseLength = finishedCommandLineLength(leadingArgs, worktreePath, options)

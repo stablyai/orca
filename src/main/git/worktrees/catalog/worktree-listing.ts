@@ -8,7 +8,6 @@ import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-ab
 import { resolveGitMetadataPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
 import { isWorktreeCreatePreparation } from '../../../../shared/worktree/create-preparation'
-import { toWslExecutionSpace } from '../../../../shared/wsl-paths'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   readCheckedOutBranchRef,
@@ -25,7 +24,7 @@ import {
   isNotGitRepositoryError,
   normalizeLocalBranchRef
 } from '../worktree-operation-options'
-import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
+import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { detectSparseCheckoutCached } from '../sparse-checkout/worktree-sparse-checkout-cache'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
@@ -86,10 +85,7 @@ export async function listWorktreesStrict(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
-  const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
-    const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
-    return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
-  })
+  const worktrees = await readWorktreeList(repoPath, options)
   const visibleWorktrees = options.includeCreatePreparations
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
@@ -138,7 +134,7 @@ async function readRepoCommonDirFromDisk(
   const dotGit = join(repoPath, '.git')
   try {
     const commonDir = await withDeadline(resolveRepoCommonDirFromDisk(repoPath, dotGit), timeoutMs)
-    return commonDir ? toWslExecutionSpace(commonDir) : undefined
+    return commonDir
   } catch (error) {
     // A bare repo has no `.git`; do not fabricate a candidate for it.
     if (isDefinitiveAbsence(error)) {
@@ -248,7 +244,7 @@ export async function describeCreatedWorktree(
     timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   }
   const [created, repoGitCommonDir, checkedOutRef, head] = await Promise.all([
-    readRepoLocation(worktreePath, toWslExecutionSpace(worktreePath), deadlined),
+    readRepoLocation(worktreePath, worktreePath, deadlined),
     readRepoCommonDirFromGit(repoPath, deadlined),
     readCheckedOutBranchRef(worktreePath, deadlined),
     readWorktreeHeadOid(worktreePath, deadlined)
@@ -270,7 +266,7 @@ export async function describeCreatedWorktree(
     repoPath,
     [
       {
-        path: translateWorktreePath(created.topLevel, repoPath, options),
+        path: created.topLevel,
         head,
         branch: expectedRef,
         isBare: false,

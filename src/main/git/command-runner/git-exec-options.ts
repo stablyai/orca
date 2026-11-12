@@ -1,3 +1,4 @@
+import type { GitExecutionContext } from './host-routing/wsl-git-path-preparation'
 // Bound output to avoid V8 string overflow; match the relay's MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
@@ -16,7 +17,9 @@ export type GitExecOptions = {
   /** Cancels admission only; a running child still finishes. */
   admissionSignal?: AbortSignal
   /** Rechecks owner eligibility after admission, before starting the child. */
-  canStart?: () => boolean
+  canStart?: (context?: GitExecutionContext) => boolean
+  /** Internal prepared execution host and path provenance; never serialized. */
+  executionContext?: GitExecutionContext
   wslDistro?: string
   /** Runs the host's Git even in a WSL-runtime project (local-git-runtime-route.ts); say why. */
   hostGit?: true

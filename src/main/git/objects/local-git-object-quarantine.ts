@@ -1,3 +1,4 @@
+import type { GitExecutionContext } from '../command-runner/host-routing/wsl-git-path-preparation'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 import {
@@ -6,27 +7,48 @@ import {
   pathApiForGitPath,
   type GitObjectsDirectory
 } from '../../../shared/git/objects/git-object-quarantine'
-import { toLinuxPath, toWindowsWslPath } from '../../../shared/wsl-paths'
+import { toWindowsWslUncPath } from '../../../shared/wsl-paths'
+import {
+  type WslAutomountSnapshot,
+  isWslAutomountSnapshotCurrent,
+  isWindowsDrivePath,
+  peekWslAutomountRoot,
+  windowsDrivePathForDistro,
+  wslDrivePathForDistro
+} from '../../wsl/filesystem/wsl-automount-root'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
-import { readRepoCommonDirFromGit } from '../worktrees/catalog/worktree-list-reader'
+import { readRepoCommonDirWithContext } from '../worktrees/catalog/worktree-list-reader'
 
 export type LocalGitObjectQuarantine = {
   /** `env` is a full process env for `gitExecFileAsync`, or undefined to run unquarantined. */
-  run: <T>(command: (env: NodeJS.ProcessEnv | undefined) => Promise<T>) => Promise<T>
+  run: <T>(
+    command: (
+      env: NodeJS.ProcessEnv | undefined,
+      canStart?: (context?: GitExecutionContext) => boolean
+    ) => Promise<T>
+  ) => Promise<T>
 }
 
 /** `objects/` in Git's spelling and, for WSL Git, translated to one the main process can open. */
 export function localGitObjectsDirectory(
   commonDir: string,
-  wslDistro: string | undefined
+  wslDistro: string | undefined,
+  snapshot?: WslAutomountSnapshot
 ): GitObjectsDirectory {
   const hostCommonDir =
     wslDistro && !isWindowsAbsolutePathLike(commonDir)
-      ? toWindowsWslPath(commonDir, wslDistro)
+      ? (((snapshot ? snapshot.root : peekWslAutomountRoot(wslDistro)) === null
+          ? null
+          : windowsDrivePathForDistro(commonDir, wslDistro, snapshot)) ??
+        toWindowsWslUncPath(commonDir, wslDistro))
       : commonDir
-  // Why: Git < 2.31 prints a relative common dir, resolved against a `C:\` repo path; WSL Git needs `/mnt/c`.
-  const gitCommonDir = wslDistro ? toLinuxPath(commonDir) : commonDir
+  // Older Git returns a relative common dir resolved against the host's repo path.
+  const gitCommonDir = wslDistro
+    ? (parseWslPath(commonDir)?.linuxPath ??
+      wslDrivePathForDistro(commonDir, wslDistro, snapshot) ??
+      commonDir)
+    : commonDir
   return {
     hostPath: pathApiForGitPath(hostCommonDir).join(hostCommonDir, 'objects'),
     gitPath: pathApiForGitPath(gitCommonDir).join(gitCommonDir, 'objects')
@@ -61,27 +83,74 @@ export function createLocalGitObjectQuarantine(
     spawnOnWorkerThread?: boolean
   } = {}
 ): LocalGitObjectQuarantine {
-  const wslDistro = parseWslPath(repoPath)?.distro ?? options.wslDistro
-  const quarantine = createGitObjectQuarantine(async () => {
-    const inherited = inheritedLocalObjectStore(wslDistro)
-    if (!inherited) {
-      return undefined
+  let authority: GitExecutionContext | undefined
+  const invalidQuarantine = new Error(
+    'The temporary Git object store belongs to an obsolete execution context.'
+  )
+  const current = (): boolean =>
+    authority?.kind !== 'wsl' || isWslAutomountSnapshotCurrent(authority.paths)
+  const validate = (context?: GitExecutionContext): boolean => {
+    options.signal?.throwIfAborted()
+    if (
+      !current() ||
+      !authority ||
+      !context ||
+      authority.kind !== context.kind ||
+      (authority.kind === 'wsl' &&
+        context.kind === 'wsl' &&
+        authority.paths.distro.toLowerCase() !== context.paths.distro.toLowerCase())
+    ) {
+      throw invalidQuarantine
     }
-    const commonDir = await readRepoCommonDirFromGit(repoPath, {
+    return true
+  }
+  const quarantine = createGitObjectQuarantine(async () => {
+    const result = await readRepoCommonDirWithContext(repoPath, {
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {}),
       ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
     })
     // Probe first to settle linked-worktree routing; host Git may need a different object-store spelling.
-    if (!commonDir || usesHostGitForWslLinkedWorktree(repoPath, options.wslDistro)) {
+    if (
+      !result?.executionContext ||
+      (result.executionContext.kind === 'host' &&
+        usesHostGitForWslLinkedWorktree(repoPath, options.wslDistro))
+    ) {
       return undefined
     }
-    return { ...localGitObjectsDirectory(commonDir, wslDistro), ...inherited }
+    authority = result.executionContext
+    const paths = authority?.kind === 'wsl' ? authority.paths : undefined
+    const wslDistro = paths?.distro
+    const inherited = inheritedLocalObjectStore(wslDistro)
+    if (!inherited || !current()) {
+      return undefined
+    }
+    if (wslDistro && isWindowsDrivePath(result.path) && !paths?.root) {
+      return undefined
+    }
+    return { ...localGitObjectsDirectory(result.path, wslDistro, paths), ...inherited }
   })
   return {
-    run: (command) =>
-      // The WSL runner injects these variables in the command, without WSLENV.
-      quarantine.run((env) => command(env ? { ...process.env, ...env } : undefined))
+    async run(command) {
+      if (authority && !current()) {
+        return command(undefined)
+      }
+      try {
+        return await quarantine.run((env) => {
+          options.signal?.throwIfAborted()
+          if (env && !current()) {
+            throw invalidQuarantine
+          }
+          return command(env ? { ...process.env, ...env } : undefined, env ? validate : undefined)
+        })
+      } catch (error) {
+        if (error !== invalidQuarantine) {
+          throw error
+        }
+        options.signal?.throwIfAborted()
+        return command(undefined)
+      }
+    }
   }
 }

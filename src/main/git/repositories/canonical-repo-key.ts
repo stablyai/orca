@@ -1,6 +1,6 @@
 import type { LocalGitExecOptions } from '../refs/resolution/repo-default-base-ref'
 import type { GitExecOptions } from '../command-runner/git-exec-options'
-import { toWslExecutionSpace } from '../../../shared/wsl-paths'
+import { gitResultPathTranslator } from '../command-runner/host-routing/wsl-path-translation'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { resolveRevParsePath } from '../worktrees/catalog/worktree-path-comparison'
 
@@ -18,7 +18,7 @@ export function readGitCommonDir(stdout: string, repoPath: string): string | und
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
     .findLast((line) => line.length > 0 && !line.startsWith('-'))
-  return commonDir ? resolveRevParsePath(toWslExecutionSpace(repoPath), commonDir) : undefined
+  return commonDir ? resolveRevParsePath(repoPath, commonDir) : undefined
 }
 
 function remember(cacheKey: string, value: string): string {
@@ -46,13 +46,14 @@ export async function getCanonicalRepoKey(
     return remember(cacheKey, cached)
   }
   try {
-    const { stdout } = await gitExecFileAsync(
+    const result = await gitExecFileAsync(
       ['rev-parse', '--path-format=absolute', '--git-common-dir'],
       { cwd: repoPath, ...options }
     )
-    const commonDir = readGitCommonDir(stdout, repoPath)
+    const commonDir = readGitCommonDir(result.stdout, repoPath)
     if (commonDir) {
-      return remember(cacheKey, `${runtimeKey}::${commonDir}`)
+      const toHostPath = await gitResultPathTranslator(result, repoPath, options)
+      return remember(cacheKey, `${runtimeKey}::${toHostPath(commonDir)}`)
     }
   } catch (error) {
     // Cancellation is unavailable identity, not a caller-path identity to cache.

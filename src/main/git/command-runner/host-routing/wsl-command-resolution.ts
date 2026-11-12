@@ -1,3 +1,4 @@
+import type { GitExecutionContext } from './wsl-git-path-preparation'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
@@ -18,6 +19,13 @@ import {
 import { translateArgForWsl, translateArgsForWsl } from './wsl-path-translation'
 import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
 import { noteWslDistroLaunched } from '../../../wsl/discovery/wsl-background-distro-gate'
+import {
+  type WslAutomountSnapshot,
+  isWindowsDrivePath,
+  peekWslAutomountRoot,
+  quoteWslDrivePathForShell,
+  wslAutomountRootShellSetup
+} from '../../../wsl/filesystem/wsl-automount-root'
 
 // Carry Git locale pins in the WSL command; these assignment values are shell-safe.
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
@@ -53,6 +61,7 @@ export type ResolvedCommand = {
   wslMode: 'direct-git' | 'login-shell' | 'non-login-shell' | null
   /** Present only for a fenced (buffered) login-shell read. */
   captured?: WslCapturedLoginShellCommand
+  executionContext?: GitExecutionContext
   termination?: WslProcessGroupTermination
 }
 
@@ -87,6 +96,9 @@ export function resolveCommand(
     wslGitReadEnvironment?: WslGitReadEnvironment
     env?: NodeJS.ProcessEnv
     terminationBarrier?: boolean
+    /** Pure command-line sizing must not publish a distro wake. */
+    noteWslLaunch?: boolean
+    wslPaths?: WslAutomountSnapshot
     /** Pre-quoted shell expression that names the program inside WSL, replacing `command`. */
     wslShellCommand?: string
     /** Distinguish failed cd from rg's no-match exit 1. */
@@ -107,9 +119,18 @@ export function resolveCommand(
   // Every Git/gh/glab path into a distro resolves here, whichever spawn API then runs it.
   assertWslDistroAllowed('wsl.exe', ['-d', wsl.distro])
   // Every WSL Git/CLI run is about to start the distro; gated polls stop trusting a 'stopped' read.
-  noteWslDistroLaunched(wsl.distro)
+  if (options.noteWslLaunch !== false) {
+    noteWslDistroLaunched(wsl.distro)
+  }
 
-  const translatedArgs = translateArgsForWsl(args)
+  const coldDrivePaths =
+    (options.wslPaths ? options.wslPaths.root : peekWslAutomountRoot(wsl.distro)) === null &&
+    (args.some(isWindowsDrivePath) || Boolean(cwd && !cwdWsl && isWindowsDrivePath(cwd)))
+  // Git's awaited preparation must settle real paths for its output identity conversion too.
+  const translatedArgs =
+    coldDrivePaths && command !== 'git'
+      ? args
+      : translateArgsForWsl(args, wsl.distro, options.wslPaths)
   // WSL does not inherit unlisted Windows env vars; carry locale pins in the command.
   const localePrefix =
     command === 'git'
@@ -121,17 +142,33 @@ export function resolveCommand(
       : ''
   const escapedCommand = options.wslShellCommand ?? quotePosixShell(command)
   // Quote each argument against shell splitting and expansion.
-  const escapedArgs = translatedArgs.map(quotePosixShell)
-  const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
+  const quoteArg = (arg: string): string =>
+    coldDrivePaths && command !== 'git'
+      ? (quoteWslDrivePathForShell(arg, wsl.distro) ??
+        quotePosixShell(translateArgForWsl(arg, wsl.distro, options.wslPaths)))
+      : quotePosixShell(arg)
+  const escapedArgs = translatedArgs.map(quoteArg)
+  const quotedCwd = cwdWsl
+    ? quotePosixShell(cwdWsl.linuxPath)
+    : cwd && wslDistroOverride
+      ? coldDrivePaths && command !== 'git'
+        ? quoteArg(cwd)
+        : quotePosixShell(translateArgForWsl(cwd, wsl.distro, options.wslPaths))
+      : null
+  const linuxCwd =
+    cwdWsl?.linuxPath ??
+    (cwd && wslDistroOverride && !coldDrivePaths
+      ? translateArgForWsl(cwd, wsl.distro, options.wslPaths)
+      : null)
   const invocation = `${localePrefix}${editorPrefix}${escapedCommand} ${escapedArgs.join(' ')}`
-  const enterCwd = linuxCwd
+  const enterCwd = quotedCwd
     ? options.cwdFailureExitCode === undefined
-      ? `cd ${quotePosixShell(linuxCwd)} && `
-      : `cd ${quotePosixShell(linuxCwd)} || exit ${Math.trunc(options.cwdFailureExitCode)}; `
+      ? `cd ${quotedCwd} && `
+      : `cd ${quotedCwd} || exit ${Math.trunc(options.cwdFailureExitCode)}; `
     : ''
-  const shellCmd = `${enterCwd}${invocation}`
+  const shellCmd = `${coldDrivePaths && command !== 'git' ? wslAutomountRootShellSetup(options.cwdFailureExitCode) : ''}${enterCwd}${invocation}`
 
-  if (command === 'git' && options.wslGitReadEnvironment) {
+  if (command === 'git' && options.wslGitReadEnvironment && !coldDrivePaths) {
     const optionalLocks = options.env?.GIT_OPTIONAL_LOCKS
     return withWslProcessGroupTermination(
       {

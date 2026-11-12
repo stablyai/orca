@@ -1,3 +1,5 @@
+import { settleWslAutomountRoot } from '../../../wsl/filesystem/__fixtures__/wsl-automount-root-fixture'
+import { resetWslAutomountRootsForTests } from '../../../wsl/filesystem/wsl-automount-root'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeSpawnedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
 
@@ -67,7 +69,9 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 }
 
 describe('WSL direct Git reads', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    resetWslAutomountRootsForTests()
+    await settleWslAutomountRoot()
     execFileMock.mockReset()
     execFileSyncMock.mockReset()
     spawnMock.mockReset()
@@ -78,6 +82,7 @@ describe('WSL direct Git reads', () => {
   })
 
   afterEach(() => {
+    resetWslAutomountRootsForTests()
     resetWslGitReadEnvironmentForTests()
     resetWslLinkedWorktreeGitRoutingForTests()
     resetWslWindowsCheckoutGitConfigForTests()

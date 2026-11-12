@@ -1,3 +1,4 @@
+import type { GitExecutionContext } from '../../../git/command-runner/host-routing/wsl-git-path-preparation'
 import type { PRConflictSummary } from '../../../../shared/github/pull-requests/pull-request-types'
 import {
   isUnsupportedMergeTreeMergeBaseError,
@@ -246,10 +247,14 @@ async function loadConflictingFiles(
     { cwd: repoPath, wslDistro: localGitOptions.wslDistro },
     (capabilities) => {
       const runMergeTree = (args: string[]): Promise<{ stdout: string }> => {
-        const run = (env: NodeJS.ProcessEnv | undefined) =>
+        const run = (
+          env: NodeJS.ProcessEnv | undefined,
+          quarantineCanStart?: (context?: GitExecutionContext) => boolean
+        ) =>
           gitExecFileAsync(args, {
             ...gitOptionsForWorktree(repoPath, localGitOptions),
-            ...(env ? { env } : {})
+            ...(env ? { env } : {}),
+            canStart: quarantineCanStart
           })
         // Probe support before creating a quarantine that older Git cannot prune.
         return capabilities.isKnownSupported('merge-tree-write-tree')
