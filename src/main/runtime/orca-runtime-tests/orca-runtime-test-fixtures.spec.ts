@@ -79,16 +79,6 @@ function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve }
 }
 
-function makeStatusFrame(index: number, first: boolean): string {
-  const pad = '·'.repeat(60)
-  const rows = [
-    `✻ 执行任务中… (esc to interrupt) [${index}] ${pad}`,
-    `  ⎿ 正在分析代码库结构与依赖关系，请稍候… ${pad}`,
-    `  ⎿ tokens: ${1000 + index * 137} · elapsed: ${index}s ${pad}`
-  ]
-  return `${first ? '' : '\x1b[2A'}\r${rows.map((row) => `\x1b[K${row}`).join('\r\n')}\r`
-}
-
 async function writeHeadless(emulator: HeadlessTerminal, data: string): Promise<void> {
   await emulator.write(data)
 }
@@ -109,23 +99,6 @@ async function parseHeadlessSnapshotLines(
     return visibleNonEmptyLines(restored)
   } finally {
     restored.dispose()
-  }
-}
-
-async function referenceStatusFrameLines(
-  spawn: { cols: number; rows: number },
-  resized: { cols: number; rows: number }
-): Promise<string[]> {
-  const truth = new HeadlessEmulator({ cols: spawn.cols, rows: spawn.rows })
-  try {
-    await writeHeadless(truth, 'user@host % claude\r\n')
-    truth.resize(resized.cols, resized.rows)
-    for (let index = 0; index < 5; index += 1) {
-      await writeHeadless(truth, makeStatusFrame(index, index === 0))
-    }
-    return visibleNonEmptyLines(truth)
-  } finally {
-    truth.dispose()
   }
 }
 
@@ -730,8 +703,8 @@ export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyS
 export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
 export { isLocalBranchCatalogQuery }
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
-export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
+export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
-export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
+export { parseHeadlessSnapshotLines, pendingMailPointerRepoints }
 export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
 export { visibleNonEmptyLines, withPlatform, writeHeadless }
