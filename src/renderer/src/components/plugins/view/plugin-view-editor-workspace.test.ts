@@ -16,6 +16,7 @@ it('refuses a retired file owner without registering its deleting directory as a
   const addRepoPath = vi.fn()
   const row = makeWorktree({
     id: 'r::/work/feature',
+    repoId: 'r',
     path: '/work/feature',
     hostId: 'local',
     removing: true,
@@ -45,7 +46,12 @@ it('refuses a retired file owner without registering its deleting directory as a
 })
 
 it('still registers a genuinely unowned file folder and opens it', async () => {
-  const row = makeWorktree({ id: 'added::/new/folder', path: '/new/folder', hostId: 'local' })
+  const row = makeWorktree({
+    id: 'added::/new/folder',
+    repoId: 'added',
+    path: '/new/folder',
+    hostId: 'local'
+  })
   const addRepoPath = vi.fn(async () => {
     useAppStore.setState({ worktreesByRepo: { added: [row] } })
     return { id: 'added' }

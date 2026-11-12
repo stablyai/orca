@@ -82,7 +82,7 @@ export function findWorkspaceShowingFile(
 
 /**
  * The workspace to open `paths[0]` in, made active: one that shows the file, else its folder added
- * as a folder workspace on this machine. Null when Orca could not add the folder.
+ * as a folder workspace on this machine. Null when it is being deleted or could not be added.
  */
 export async function showWorkspaceForFile(
   paths: readonly string[],
