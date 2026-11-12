@@ -1,4 +1,6 @@
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
+import type { AgentSessionAdvisoryPolicy } from '../../../../shared/agent-session/agent-session-advisory-policy'
+import { claudeAdvisoryLaunchPolicy } from '../claude-advisory-controls'
 import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
@@ -112,6 +114,7 @@ export type ClaudeStructuredLaunch = {
   prefixArgs?: readonly string[]
   account?: ClaudeStructuredInvocation['account']
   options: ClaudeStructuredSdkOptions
+  advisoryPolicy?: AgentSessionAdvisoryPolicy
   cwd: string
   env?: Record<string, string>
   envToDelete?: readonly string[]
@@ -181,6 +184,7 @@ export function claudeStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<ClaudeStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
+    const advisoryPolicy = claudeAdvisoryLaunchPolicy(record)
     const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const router = getClaudeProfileRouter()
     const active = activeProviderContext(record)
@@ -280,6 +284,7 @@ export function claudeStructuredLaunchPart(
     }
     return {
       launch: {
+        ...(advisoryPolicy ? { advisoryPolicy } : {}),
         pathToClaudeCodeExecutable: command,
         prefixArgs,
         account: accountRecipe.route === 'managed' ? 'managed' : 'system',

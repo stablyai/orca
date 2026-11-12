@@ -1,8 +1,26 @@
 import type * as ClaudeSdk from '@anthropic-ai/claude-agent-sdk'
 import { agentSessionAdvisoryPolicySchema } from '../../../shared/agent-session/agent-session-advisory-policy'
 import { createClaudeAdvisoryArtifactServer } from './claude-advisory-artifacts'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 const TOOLS = new Set(['mcp__orca_advisor__read_artifact', 'mcp__orca_advisor__search_artifacts'])
+
+export function claudeAdvisoryLaunchPolicy(record: AgentSessionRecord) {
+  if (!record.advisoryPolicy) {
+    return undefined
+  }
+  if (
+    record.location.workspaceKind !== 'folder' ||
+    record.providerHandleChain.length ||
+    record.forkedFrom ||
+    record.rewind ||
+    record.providerContextBoundary ||
+    record.conversationCommand
+  ) {
+    throw new Error('Advisor requires a fresh folder conversation.')
+  }
+  return structuredClone(record.advisoryPolicy)
+}
 
 export function createClaudeAdvisoryControls(
   input: unknown,

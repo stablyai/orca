@@ -26,7 +26,7 @@ import { claudeStartupError, claudeStartupExit } from './claude-structured-sessi
 import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
 import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
-import { resolveClaudeAcquisitionLaunch } from './launch/claude-structured-acquisition-launch'
+import * as acquisitionLaunch from './launch/claude-structured-acquisition-launch'
 import * as journal from './journal/claude-structured-session-journal-control'
 import { isRootClaudeFrame } from '../claude-turn-opening'
 import { createClaudeStartupOutcome, endsClaudeStartup } from './claude-structured-startup-outcome'
@@ -44,10 +44,7 @@ export async function acquireClaudeSession({
   exits,
   naming,
   callbacks
-}: Omit<
-  Parameters<typeof resolveClaudeAcquisitionLaunch>[0],
-  'previous' | 'attempt'
->): Promise<AgentSessionAcquisition> {
+}: acquisitionLaunch.ClaudeSessionAcquisitionInput): Promise<AgentSessionAcquisition> {
   const sessionId = input.identity.sessionId
   const prompts = new ClaudePromptRegistry()
   const { previous, attempt } = acquisitions.start(sessionId, prompts)
@@ -177,7 +174,7 @@ export async function acquireClaudeSession({
     deliver(event, () => callbacks.emit(liveSession, input.events, event))
 
   try {
-    const launch = await resolveClaudeAcquisitionLaunch({
+    const launch = await acquisitionLaunch.resolveClaudeAcquisitionLaunch({
       input,
       deps,
       sessions,
@@ -199,6 +196,7 @@ export async function acquireClaudeSession({
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
           prefixArgs: launch.prefixArgs,
           options: launch.options,
+          ...(launch.advisoryPolicy ? { advisoryPolicy: launch.advisoryPolicy } : {}),
           cwd: launch.cwd,
           env: {
             ...launch.env,
