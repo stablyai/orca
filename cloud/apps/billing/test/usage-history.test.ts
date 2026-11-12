@@ -53,10 +53,11 @@ describe('GET /v1/billing/usage', () => {
     expect(body.totalSeconds).toBe(9.25 * HOUR)
     expect(body.yourSeconds).toBe(5 * HOUR)
     expect(body.members.top.map((m: { userId: string }) => m.userId).slice(0, 2)).toEqual(['alice', 'bob'])
-    expect(body.members.top).toHaveLength(5)
-    expect(body.members.otherCount).toBe(3)
-    // Three members past the top five (1.5 hours) plus the unattributed quarter hour.
-    expect(body.members.otherSeconds).toBe(1.75 * HOUR)
+    // Up to USAGE_HISTORY_TOP (20) named rows, so all 8 members fit; the desktop shows 5 (V3-06).
+    expect(body.members.top).toHaveLength(8)
+    expect(body.members.otherCount).toBe(0)
+    // Only the unattributed quarter hour is left over.
+    expect(body.members.otherSeconds).toBe(0.25 * HOUR)
     expect(body.sandboxes.top[0]).toEqual({ sandboxId: 'sbx_a', seconds: 5 * HOUR })
   })
 

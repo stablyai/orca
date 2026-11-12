@@ -21424,8 +21424,8 @@
           "dayLine": "{{date}} · {{hours}}",
           "formerMembers_one": "Former member",
           "formerMembers_other": "{{count}} former members",
-          "deletedWorkspaces_one": "Deleted workspace",
-          "deletedWorkspaces_other": "{{count}} deleted workspaces"
+          "deletedWorkspaces2_one": "{{count}} deleted workspace",
+          "deletedWorkspaces2_other": "{{count}} deleted workspaces"
         },
         "usageAlertsNoteLevels": "Owners and admins are alerted in Orca at {{levels}} of your team’s sandbox hours.",
         "usageAlertsNoteGeneric": "Owners and admins are alerted in Orca as your team’s sandbox hours run low.",

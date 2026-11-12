@@ -47,6 +47,9 @@ export type UsageNames = {
   selfId: string | null
 }
 
+/** V3-06: at most this many named rows; billing sends more so deleted ones don't crowd out live ones. */
+export const USAGE_NAMED_ROWS = 5
+
 function share(seconds: number, total: number): number {
   return total > 0 ? Math.min(100, (seconds / total) * 100) : 0
 }
@@ -80,8 +83,12 @@ function rows(
       })
     }
   }
-  // Named rows lead (they're what someone acts on); the merged unknowns always come after them.
+  // Named rows lead (they're what someone acts on), the busiest few by name; the rest join the
+  // others line. The merged unknowns and the others line are buckets: always after the names.
   list.sort((a, b) => b.seconds - a.seconds)
+  for (const extra of list.splice(USAGE_NAMED_ROWS)) {
+    others = { count: others.count + 1, seconds: others.seconds + extra.seconds }
+  }
   if (unknown.count > 0) {
     list.push({
       key: 'unknown',
@@ -146,9 +153,9 @@ export function topWorkspaceRows(
     history.totalSeconds,
     (id) => names.workspaces.get(id) ?? null,
     (count) =>
-      t('auto.components.billing.usage.deletedWorkspaces', '{{count}} deleted workspaces', {
+      t('auto.components.billing.usage.deletedWorkspaces2', '{{count}} deleted workspaces', {
         count,
-        defaultValue_one: 'Deleted workspace'
+        defaultValue_one: '{{count}} deleted workspace'
       }),
     (count) =>
       t('auto.components.billing.usage.otherWorkspaces', '{{count}} other workspaces', {

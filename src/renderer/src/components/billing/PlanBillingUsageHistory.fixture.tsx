@@ -99,3 +99,77 @@ export const usageFailed = defineFixture({
     />
   )
 })
+
+// V3-06: a staging-like team: a few live workspaces among hundreds of short-lived, deleted ones.
+// Up to 5 live ones by name, then one deleted line, then the other live ones.
+const stagingLike = {
+  ...sampleUsageHistory,
+  totalSeconds: 34.6 * HOUR,
+  sandboxes: {
+    top: [
+      { id: 'sbx_gone_1', seconds: 1.2 * HOUR },
+      { id: 'sbx_orca', seconds: 0.9 * HOUR },
+      { id: 'sbx_gone_2', seconds: 0.8 * HOUR },
+      { id: 'sbx_hello', seconds: 0.6 * HOUR },
+      { id: 'sbx_push', seconds: 0.5 * HOUR },
+      { id: 'sbx_ja3', seconds: 0.4 * HOUR },
+      { id: 'sbx_ikzw', seconds: 0.35 * HOUR },
+      { id: 'sbx_gone_3', seconds: 0.3 * HOUR },
+      { id: 'sbx_w312', seconds: 0.3 * HOUR }
+    ],
+    otherCount: 578,
+    otherSeconds: 29.75 * HOUR
+  }
+}
+const stagingNames = {
+  ...sampleUsageNames,
+  workspaces: new Map([
+    ['sbx_orca', 'orca'],
+    ['sbx_hello', 'Hello-World · ik-sheet'],
+    ['sbx_push', 'orca-sandbox-push-test'],
+    ['sbx_ja3', 'ja3-claude'],
+    ['sbx_ikzw', 'ik-zw'],
+    ['sbx_w312', 'W-312']
+  ])
+}
+export const usageStagingLike = defineFixture({
+  width: 680,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      teamName="Orca Staging Eval Team"
+      usage={{ status: 'ok', history: stagingLike, names: stagingNames }}
+      result={{ status: 'ok', entitlement: sampleTeam }}
+    />
+  )
+})
+
+// V3-06: a small team: every live workspace by name, nothing summed.
+export const usageSmallTeam = defineFixture({
+  width: 680,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      teamName="Acme"
+      usage={{
+        status: 'ok',
+        history: {
+          ...sampleUsageHistory,
+          totalSeconds: 26 * HOUR,
+          sandboxes: {
+            top: [
+              { id: 'sbx_checkout', seconds: 11 * HOUR },
+              { id: 'sbx_ledger', seconds: 8 * HOUR },
+              { id: 'sbx_docs', seconds: 5 * HOUR },
+              { id: 'sbx_flaky', seconds: 2 * HOUR }
+            ],
+            otherCount: 0,
+            otherSeconds: 0
+          }
+        },
+        names: sampleUsageNames
+      }}
+      result={{ status: 'ok', entitlement: sampleTeam }}
+    />
+  )
+})
