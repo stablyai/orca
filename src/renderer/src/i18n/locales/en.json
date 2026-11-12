@@ -28123,7 +28123,8 @@
     "groupAccount": "{{agents}} from your Orca account",
     "groupKey": "{{agents}} with {{key}}",
     "notOffered": "Signs in for each cloud workspace for now",
-    "expiredDetailRenew": "Renew once. Every cloud workspace picks it up."
+    "expiredDetailRenew": "Renew once. Every cloud workspace picks it up.",
+    "finishInBrowserPaste": "Finish in your browser, then paste the code in Settings → Agent accounts."
   },
   "agentAccountsOverview": {
     "action": {
@@ -28247,7 +28248,15 @@
     "preparing": "Getting sign-in ready",
     "pasteTokenTitle": "Paste the token from claude setup-token",
     "pasteTokenDetail": "It’s saved to your Orca account, never to a sandbox.",
-    "setupTokenLabel": "Claude setup-token"
+    "setupTokenLabel": "Claude setup-token",
+    "setupCodeRejected": "That code didn’t work. Paste the newest code from the sign-in page, or open it again.",
+    "setupCodeLabel": "Code from {{agent}}’s sign-in page",
+    "setupCodePlaceholder": "Paste code",
+    "setupCodeChecking": "Checking the code…",
+    "finishSetup": "Finish setup",
+    "finishInBrowserPaste": "Finish in your browser, then paste the code here.",
+    "setupCodeRejectedTitle": "Code didn’t work",
+    "setupCodeRejectedDetail": "Paste the newest code from the sign-in page, or open it again."
   },
   "cloudSetupPage": {
     "back": "Back",

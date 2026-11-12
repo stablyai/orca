@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { CloudStripPasteForm } from './CloudStripPasteForm'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,6 +88,8 @@ export function CloudStripLayer({ children }: { children: React.ReactNode }): Re
 export type CloudStripActions = {
   primary: (action: CloudStripPrimary) => void
   submitCode: (code: string) => void
+  /** The code from Claude's sign-in page, for the waiting setup-token (Set up once). */
+  submitSetupCode?: (code: string) => void
   useCode: () => void
   /** From a device code to pasting a code (the gate's code fallback). */
   pasteCode: () => void
@@ -150,13 +152,20 @@ export function CloudAgentSignInStrip({
   // The detail leaves the line when there's no room for it beside the title: below 360 px, and on the
   // paste step under ~560 px (its input takes the space). It stays the region's description and the
   // title's tooltip.
-  const quietDetail = !wrap && (compact || (model.paste !== null && width === 'tiny'))
-  const lineFit = wrap ? 'line-clamp-3 break-words' : 'truncate'
+  // SETUP-PASTE: the code field needs the room; a refusal always stays readable (design-squad).
+  const setupCode = model.paste?.setupCode ? model.paste : null
+  // Narrow (<560 px) with the code field: stack, never truncate (design-squad): text wraps on row 1,
+  // [Paste code ……] [Finish setup] [Open again] fill row 2.
+  const stacked = setupCode !== null && (width === 'tiny' || compact)
+  const wraps = wrap || stacked
+  const quietDetail =
+    !wraps && !setupCode?.refusal && (compact || (model.paste !== null && width === 'tiny'))
+  const lineFit = wraps ? 'line-clamp-3 break-words' : 'truncate'
   const t = useTranslate()
   const titleId = React.useId()
   const detailId = React.useId()
-  const [code, setCode] = useState('')
-  const primary = model.primary
+  // Narrow panes keep just [Paste code] [Finish setup]; "Open again" returns with the room for it.
+  const primary = setupCode && (width === 'tiny' || compact) ? null : model.primary
   return (
     <section
       ref={sectionRef}
@@ -174,8 +183,8 @@ export function CloudAgentSignInStrip({
       }}
       className={cn(
         'grid gap-2.5 border-b border-border bg-card px-3 text-foreground outline-none',
-        wrap ? 'min-h-14 items-start py-2.5 [&>svg]:mt-0.5' : 'h-14 items-center',
-        GRID[width]
+        wraps ? 'min-h-14 items-start py-2.5 [&>svg]:mt-0.5' : 'h-14 items-center',
+        setupCode ? 'grid-cols-[16px_minmax(0,1fr)_auto]' : GRID[width]
       )}
     >
       <StatusSlot status={model.status} />
@@ -205,7 +214,7 @@ export function CloudAgentSignInStrip({
           {model.description ? <TooltipContent>{model.description}</TooltipContent> : null}
         </Tooltip>
       </div>
-      {width === 'wide' ? (
+      {width === 'wide' && !setupCode ? (
         prompt ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -228,44 +237,19 @@ export function CloudAgentSignInStrip({
       ) : null}
       <div
         data-strip-actions
-        className={cn('flex h-8 min-w-0 items-center justify-end gap-1.5', wrap && '-my-0.5')}
+        className={cn('flex h-8 min-w-0 items-center justify-end gap-1.5', wraps && '-my-0.5')}
       >
         {model.code ? (
           <code className="shrink-0 select-all rounded bg-muted px-1.5 font-mono text-xs tracking-wider">
             {model.code}
           </code>
         ) : null}
-        {model.paste ? (
-          <form
-            className="flex min-w-0 items-center gap-1.5"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (code.trim()) {
-                actions.submitCode(code.trim())
-              }
-            }}
-          >
-            <Input
-              aria-label={
-                model.paste.secretLabel ?? t('agentSignInStrip.pasteLabel', 'Code from claude.ai')
-              }
-              type={model.paste.secretLabel ? 'password' : undefined}
-              autoComplete={model.paste.secretLabel ? 'off' : undefined}
-              aria-invalid={model.paste.refusal ? true : undefined}
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              variant="code"
-              className="h-7 min-w-0"
-            />
-            <Button
-              type="submit"
-              size="xs"
-              aria-busy={model.paste.submitting || undefined}
-              aria-disabled={model.paste.submitting || undefined}
-            >
-              {t('agentSignInStrip.continue', 'Continue')}
-            </Button>
-          </form>
+        {model.paste && !stacked ? (
+          <CloudStripPasteForm
+            paste={model.paste}
+            onSubmitCode={actions.submitCode}
+            onSubmitSetupCode={actions.submitSetupCode}
+          />
         ) : null}
         {primary ? (
           <Button
@@ -335,6 +319,29 @@ export function CloudAgentSignInStrip({
           </Button>
         )}
       </div>
+      {stacked && setupCode ? (
+        // Row 2, under the text: [Paste code ……] [Finish setup] then "Open again" as a quiet button.
+        <div data-strip-code-row className="col-span-2 col-start-2 flex min-w-0 flex-wrap items-center gap-1.5">
+          <div className="min-w-0 flex-1 basis-56">
+            <CloudStripPasteForm
+              fill
+              paste={setupCode}
+              onSubmitCode={actions.submitCode}
+              onSubmitSetupCode={actions.submitSetupCode}
+            />
+          </div>
+          {model.primary ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => (model.primary ? actions.primary(model.primary.action) : undefined)}
+            >
+              {model.primary.label}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <span role="status" className="sr-only">
         {model.announcement}
       </span>

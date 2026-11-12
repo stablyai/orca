@@ -41,6 +41,7 @@ export function OrcaCloudAccountsSection({
       start: (agent) => void api?.start({ agent }),
       cancel: (agent) => void api?.cancel({ agent }),
       reopen: (agent) => void api?.reopen({ agent }),
+      submitSetupCode: (code) => void api?.submitClaudeCode({ code }).catch(() => undefined),
       usePaste: () => void api?.usePaste(),
       pasteToken: async (token) => {
         if (!api) {

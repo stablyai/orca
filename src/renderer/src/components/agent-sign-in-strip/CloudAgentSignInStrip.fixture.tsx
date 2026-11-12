@@ -222,3 +222,18 @@ export const notSetUpPasteTiny = fixture({
 export const notSetUpFailed = fixture({ setUp: { setup: { phase: 'failed', error: 'denied' } } })
 /** Set up finished: Start {{agent}} releases the held launch. */
 export const notSetUpDone = fixture({ setUp: { setup: { phase: 'saved' }, ready: true } })
+/** SETUP-PASTE: Claude's sign-in page shows a code; [Paste code] [Finish setup] [Open again]. */
+export const notSetUpBrowserCode = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true } },
+  width: 800
+})
+export const notSetUpBrowserCodeNarrow = fixture({
+  setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true } },
+  width: 420
+})
+export const notSetUpBrowserCodeRejectedNarrow = fixture({
+  setUp: {
+    setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true, code: 'rejected' }
+  },
+  width: 420
+})

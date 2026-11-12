@@ -11,6 +11,8 @@ export type OrcaCloudAccountsActions = {
   cancel: (agent: OrcaCloudAccountAgent) => void
   reopen: (agent: OrcaCloudAccountAgent) => void
   usePaste: () => void
+  /** The code from Claude's sign-in page, for the waiting setup-token; the answer is a setup update. */
+  submitSetupCode?: (code: string) => void
   /** Resolves with a code when the token wasn't stored; the value is never echoed back. */
   pasteToken: (token: string) => Promise<OrcaCloudAgentsErrorCode | null>
   remove: (agent: OrcaCloudAccountAgent) => Promise<OrcaCloudAgentsErrorCode | null>

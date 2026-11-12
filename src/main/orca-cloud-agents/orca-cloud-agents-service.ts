@@ -17,7 +17,9 @@ import {
   agentCredentialsFailureCode,
   type AgentCredentialsClient
 } from './agent-credentials-client'
-import { runClaudeSetupToken, type SpawnSetupToken } from './claude-setup-token-runner'
+import type { SpawnSetupToken } from './claude-setup-token-runner'
+import { normalizeClaudeSetupCode } from './claude-setup-code'
+import { startClaudeSetupRun, type ClaudeSetupRun } from './claude-setup-run'
 import {
   isCodexSignInUrl,
   startCodexBrokerSession,
@@ -64,8 +66,7 @@ export function isProviderSignInUrl(agent: OrcaCloudAccountAgent, value: string)
 export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
   const now = deps.now ?? Date.now
   let setups: OrcaCloudAgentSetups = { ...IDLE_ORCA_CLOUD_AGENT_SETUPS }
-  let claudeRun: AbortController | null = null
-  let claudeUrl: string | null = null
+  let claudeRun: ClaudeSetupRun | null = null
   let codexSession: CodexBrokerSession | null = null
   let codexRun: { live: boolean } | null = null
   // A captured or pasted token is being stored: it can't be cancelled or raced by another one.
@@ -83,9 +84,8 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
   }
 
   function stopClaudeRun(): void {
-    claudeRun?.abort()
+    claudeRun?.stop()
     claudeRun = null
-    claudeUrl = null
   }
 
   function stopCodexRun(): CodexBrokerSession | null {
@@ -155,43 +155,21 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       return
     }
     const owner = identity()
-    const controller = new AbortController()
-    claudeRun = controller
-    claudeUrl = null
-    const startedAt = now()
-    update('claude', { phase: 'browser', startedAt, canReopen: false })
-    void runClaudeSetupToken({
+    const run: ClaudeSetupRun = startClaudeSetupRun({
       spawn: deps.spawnSetupToken,
-      signal: controller.signal,
-      onAuthorizeUrl: (url) => {
-        if (claudeRun === controller && isProviderSignInUrl('claude', url)) {
-          claudeUrl = url
-          update('claude', { phase: 'browser', startedAt, canReopen: true })
+      now,
+      isSignInUrl: (url) => isProviderSignInUrl('claude', url),
+      onSetup: (setup) => update('claude', setup),
+      onToken: async (token) => {
+        await storeClaude(token, deps.readClaudeEmail(), owner)
+      },
+      onDone: () => {
+        if (claudeRun === run) {
+          claudeRun = null
         }
       }
-    }).then(async (outcome) => {
-      if (claudeRun !== controller) {
-        return
-      }
-      claudeRun = null
-      claudeUrl = null
-      if (outcome.ok) {
-        await storeClaude(outcome.token, deps.readClaudeEmail(), owner)
-        return
-      }
-      switch (outcome.error) {
-        case 'cancelled':
-          update('claude', { phase: 'idle' })
-          return
-        case 'no_cli':
-        case 'capture_failed':
-          update('claude', { phase: 'paste', reason: outcome.error })
-          return
-        case 'denied':
-        case 'timed_out':
-          update('claude', { phase: 'failed', error: outcome.error })
-      }
     })
+    claudeRun = run
   }
 
   function startCodex(): void {
@@ -271,13 +249,41 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
     /** "Open again" (Claude) / "Open page" (Codex): the provider's page, never anything else. */
     reopen: async (agent: OrcaCloudAccountAgent): Promise<boolean> => {
       const current = setups[agent]
+      if (agent === 'claude' && !claudeRun && !claudeSaving && current.phase === 'failed') {
+        // Expired (timed out, or the CLI went away): a fresh setup-token run with a new link.
+        followIdentity()
+        startClaude()
+        return true
+      }
       const url =
-        agent === 'claude' ? claudeUrl : current.phase === 'device' ? current.verificationUrl : null
+        agent === 'claude'
+          ? (claudeRun?.url() ?? null)
+          : current.phase === 'device'
+            ? current.verificationUrl
+            : null
       if (!url || !isProviderSignInUrl(agent, url)) {
         return false
       }
+      if (agent === 'claude') {
+        claudeRun?.clearRefusal()
+      }
       await deps.openExternal(url)
       return true
+    },
+
+    /**
+     * The code from Claude's sign-in page, typed into the waiting setup-token. The reply is a code
+     * only; the value is never logged, stored or echoed. The CLI's answer arrives as a setup update.
+     */
+    submitClaudeCode: (raw: string): OrcaCloudAgentsResult<true> => {
+      const code = normalizeClaudeSetupCode(raw)
+      if (!code) {
+        claudeRun?.refuse()
+        return { ok: false, error: 'invalid_code' }
+      }
+      return claudeRun?.submit(code)
+        ? { ok: true, value: true }
+        : { ok: false, error: 'unavailable' }
     },
 
     /** "Paste the token instead": stop setup-token and show the masked field. */

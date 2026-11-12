@@ -42,6 +42,10 @@ export function cloudSetupStripActions(args: {
         .then(() => reloadOrcaCloudAgentAccounts())
         .catch(() => undefined)
     },
+    submitSetupCode: (code) => {
+      // The CLI's answer comes back as a setup update (checking, then saved or rejected).
+      void api?.submitClaudeCode({ code }).catch(() => undefined)
+    },
     useCode: () => undefined,
     pasteCode: () => void api?.usePaste(),
     useApiKey: args.useApiKey,
