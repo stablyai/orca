@@ -108,9 +108,10 @@ export function MobileNativeChatQueuedMessages({
   const [seen, setSeen] = useState({ key: liveKey, ids: liveIds, attentionIds })
   const largeText = useLargeSystemText()
   // The card a failure opened the list for, scrolled into view once its row lays out.
-  const { showRow, measureRow } = useQueuedRowShow(
-    cards?.slice(1).find((card) => card.needsAttention)?.messageId ?? null
+  const [showRowId, setShowRowId] = useState(
+    () => cards?.slice(1).find((card) => card.needsAttention)?.messageId ?? null
   )
+  const measureRow = useQueuedRowShow(showRowId, setShowRowId)
   if (liveKey !== seen.key) {
     setSeen({ key: liveKey, ids: liveIds, attentionIds })
     const newest = cards?.at(-1)
@@ -131,7 +132,7 @@ export function MobileNativeChatQueuedMessages({
     )
     if (failedBehindFold !== undefined) {
       setOpenChoice({ open: true, abovePrompt })
-      showRow(failedBehindFold)
+      setShowRowId(failedBehindFold)
     }
     // Forget expanded ids of cards that left the queue.
     if ([...expandedIds].some((messageId) => !liveIds.includes(messageId))) {
@@ -330,7 +331,7 @@ export function MobileNativeChatQueuedMessages({
             accessibilityState={{ expanded: showAll }}
             style={({ pressed }) => [styles.foldToggle, pressed && styles.pressed]}
             onPress={() => {
-              showRow(null)
+              setShowRowId(null)
               setOpenChoice({ open: !showAll, abovePrompt })
             }}
           >

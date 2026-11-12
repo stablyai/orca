@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { LayoutRectangle } from 'react-native'
 
 /** Where a row sits in the queue's scroll content: rows stack in order, so it starts below those before it. */
@@ -35,8 +35,7 @@ type ShowRow = (row: LayoutRectangle) => void
  * Scrolls the queue to one row (a failure that opened the list) once that row has laid out again.
  * A row whose height never changes reports no layout, so the request settles shortly after either way.
  */
-export function useQueuedRowShow(initialId: string | null) {
-  const [showId, setShowId] = useState(initialId)
+export function useQueuedRowShow(showId: string | null, setShowId: (messageId: null) => void) {
   const heights = useRef(new Map<string, number>())
   // Rows that reported since the current request, so an old height never places the row asked for.
   const fresh = useRef(new Set<string>())
@@ -61,7 +60,7 @@ export function useQueuedRowShow(initialId: string | null) {
       }
     }, QUEUED_ROW_SHOW_SETTLE_MS)
     return () => clearTimeout(timer)
-  }, [showId])
+  }, [showId, setShowId])
   const measureRow = (
     list: { messageIds: readonly string[]; showAll: boolean },
     messageId: string,
@@ -82,5 +81,5 @@ export function useQueuedRowShow(initialId: string | null) {
       show(frame)
     }
   }
-  return { showRow: setShowId, measureRow }
+  return measureRow
 }
