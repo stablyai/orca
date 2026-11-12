@@ -54,6 +54,7 @@ const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
 function approvalAnswerHandler(decision: 'allow' | 'deny'): CommandHandler {
   return async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const reason = getRequiredStringFlag(flags, 'reason')
     const result = await callOrchestrationMutation<WorkerApprovalAnswerView>(
       client,
       flags,
@@ -62,7 +63,7 @@ function approvalAnswerHandler(decision: 'allow' | 'deny'): CommandHandler {
         dispatch: getRequiredStringFlag(flags, 'dispatch'),
         prompt: getRequiredStringFlag(flags, 'prompt'),
         decision,
-        reason: getRequiredStringFlag(flags, 'reason'),
+        reason,
         from
       }
     )
@@ -70,9 +71,12 @@ function approvalAnswerHandler(decision: 'allow' | 'deny'): CommandHandler {
       fields: (value) => ({
         approvalId: value.approvalId,
         [decision === 'allow' ? 'allowed' : 'denied']: value.option,
-        reason: value.reasonMessageId
-          ? `sent to the worker as message ${value.reasonMessageId}`
-          : undefined
+        reason:
+          decision === 'allow'
+            ? reason
+            : value.reasonMessageId
+              ? `sent to the worker as message ${value.reasonMessageId}`
+              : undefined
       })
     })
   }

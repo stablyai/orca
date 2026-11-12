@@ -246,6 +246,24 @@ describe('terminal worker approval holds', () => {
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: true })
   })
 
+  it('refuses an allow on a person-only check whose warning painted only after the escalation', async () => {
+    const ctx = setup()
+    const asked = hook('tool-1')
+    const approvalId = await opened(ctx, asked)
+    ctx.screen.lines = [
+      ' Bash command',
+      ' │ rm -rf build',
+      ' ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+      " │ Bash may act on this session's desktop, so each call is reviewed; allow rules, hooks and plugins cannot approve it.",
+      ...DIALOG.slice(3)
+    ]
+
+    expect(await answer(ctx, approvalId, 'allow')).toMatchObject({
+      code: 'approval_requires_person'
+    })
+    expect(asked.replies).toEqual([])
+  })
+
   it('refuses an allow Claude drops while its dialog stays, and leaves the prompt with the person', async () => {
     const ctx = setup()
     // A check only a person may approve: Claude ignores a hook's allow and keeps asking.

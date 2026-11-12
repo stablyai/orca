@@ -5,7 +5,7 @@ import type {
   WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import type { Translate } from '@/i18n/use-translate'
-import { toolInputCommand } from '../../../../../shared/native-chat/tools/native-chat-tool-summary'
+import { normalizeToolInput } from '../../../../../shared/native-chat/tools/native-chat-tool-summary'
 
 /** The card a worker's open approval shows: its own words, and only the answers Orca can give. */
 export function workerApprovalCard(approval: WorkerApprovalPayload, t: Translate): ChatApproval {
@@ -28,8 +28,14 @@ export function isWorkerApprovalDecision(value: string): value is WorkerApproval
   return value === 'allow' || value === 'deny'
 }
 
+/** The whole command when the detail is a tool call's input; any other detail as it is. */
 function approvalDetailCommand(detail: string | null): string | null {
-  return detail === null ? null : (toolInputCommand(detail) ?? detail)
+  const input = detail === null ? null : normalizeToolInput(detail)
+  const command =
+    input && typeof input === 'object' && !Array.isArray(input)
+      ? (Reflect.get(input, 'command') ?? Reflect.get(input, 'cmd'))
+      : null
+  return typeof command === 'string' && command.trim() ? command : detail
 }
 
 /** A closed approval as the answered-prompt row reads it. */

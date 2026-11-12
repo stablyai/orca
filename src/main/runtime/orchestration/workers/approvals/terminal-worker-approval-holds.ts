@@ -188,6 +188,8 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     if (hold.state !== 'open' || !before || !showsClaudeDialog(before)) {
       return notOpen
     }
+    // The escalation can go out before Claude paints its warning: read it from this screen too.
+    this.readDialog(hold, before)
     const personOnly = droppedAllowRefusal(hold, input)
     if (personOnly) {
       return personOnly

@@ -96,7 +96,9 @@ export async function answerChatWorkerApproval(input: {
   if (!prompt) {
     return notOpen
   }
-  if (decision === 'allow' && input.byAgent && prompt.body.personOnly) {
+  // A prompt answered meanwhile is not open, whoever may answer it.
+  const open = prompt.body.resolution.state === 'pending'
+  if (open && decision === 'allow' && input.byAgent && prompt.body.personOnly) {
     return { ok: false, code: 'approval_requires_person', message: personOnlyMessage(approvalId) }
   }
   const option = workerApprovalOption(prompt.body.options, decision)
