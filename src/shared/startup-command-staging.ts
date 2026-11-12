@@ -81,6 +81,45 @@ function stagedScriptLine(shellName: string | null, quotedPath: string): string 
     : `/bin/sh ${quotedPath}`
 }
 
+/** Shells whose prompt and history the cloud quiet prelude knows how to handle (CR-cmd-quiet). */
+const QUIET_SHELLS = new Set(['bash', 'zsh'])
+
+/**
+ * CR-cmd-quiet (design-squad): on an Orca Cloud host the staged line is Orca's, not the user's, so it
+ * leaves no trace. Runs first in the sourced script, before the agent draws:
+ * - erases the rows the shell echoed for the prompt and the typed line, so the pane's first visible
+ *   row is the agent's own output; nothing below them is touched;
+ * - drops the line from bash's history (zsh skips it with the image's zshaddhistory hook, since zsh
+ *   records a line before running it; the leading space also covers HISTCONTROL=ignorespace).
+ * Errors from the launch still print: only the echo of the command is cleared.
+ */
+export function cloudQuietPrelude(typedLine: string): string {
+  // Display width of the typed line (ASCII: a quoted /tmp path).
+  const typedWidth = [...typedLine].length
+  // String.raw: this is shell, so its backslashes and ${...} must reach the script as written.
+  return String.raw`__orca_q_esc=$(printf '\033'); __orca_q_bel=$(printf '\007')
+__orca_q_cols=${'$'}{COLUMNS:-0}
+case $__orca_q_cols in '' | *[!0-9]* | 0) __orca_q_cols=$(tput cols 2>/dev/null || echo 80) ;; esac
+__orca_q_prompt=
+if [ -n "${'$'}{BASH_VERSION-}" ]; then
+  eval '__orca_q_prompt=${'$'}{PS1@P}' 2>/dev/null
+  __orca_q_h=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null)
+  case $__orca_q_h in
+    *${STAGED_STARTUP_COMMAND_PREFIX}*)
+      __orca_q_h=${'$'}{__orca_q_h#"${'$'}{__orca_q_h%%[0-9]*}"}
+      builtin history -d "${'$'}{__orca_q_h%%[!0-9]*}" 2>/dev/null
+      ;;
+  esac
+elif [ -n "${'$'}{ZSH_VERSION-}" ]; then
+  eval '__orca_q_prompt=${'$'}{(%)PS1}' 2>/dev/null
+fi
+__orca_q_prompt=$(printf '%s' "$__orca_q_prompt" | LC_ALL=C sed -e "s/${'$'}{__orca_q_esc}\[[0-9;?]*[ -\/]*[@-~]//g" -e "s/${'$'}{__orca_q_esc}\][^${'$'}{__orca_q_bel}]*${'$'}{__orca_q_bel}//g" | tr -d '\001\002' | tail -n 1)
+__orca_q_rows=$(( (${'$'}{#__orca_q_prompt} + ${typedWidth} + __orca_q_cols - 1) / __orca_q_cols ))
+[ "$__orca_q_rows" -ge 1 ] 2>/dev/null || __orca_q_rows=1
+printf '\r\033[%dA\033[J' "$__orca_q_rows"
+unset __orca_q_esc __orca_q_bel __orca_q_cols __orca_q_prompt __orca_q_h __orca_q_rows`
+}
+
 let staleSweepStarted = false
 
 export function stageStartupCommand(args: {
@@ -109,11 +148,16 @@ export function stageStartupCommand(args: {
     `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
   )
   const quotedPath = quoteStartupArg(scriptPath, 'posix')
+  // CR-cmd-quiet: Orca's own agent line on a cloud host leaves no echo and no history entry.
+  const quiet =
+    cloudHost && args.orcaBuiltLine === true && shellName !== null && QUIET_SHELLS.has(shellName)
+  // The leading space keeps it out of history wherever HISTCONTROL/HIST_IGNORE_SPACE is set.
+  const typedLine = `${quiet ? ' ' : ''}${stagedScriptLine(shellName, quotedPath)}`
   try {
     // Unlink before the agent starts; the shell continues reading its open file.
     writeFileSync(
       scriptPath,
-      `command rm -f -- ${quotedPath}\n${stripSubmitTerminator(args.command)}\n`,
+      `command rm -f -- ${quotedPath}\n${quiet ? `${cloudQuietPrelude(typedLine)}\n` : ''}${stripSubmitTerminator(args.command)}\n`,
       { mode: 0o600, flag: 'wx' }
     )
   } catch (error) {
@@ -123,11 +167,7 @@ export function stageStartupCommand(args: {
       failure: error instanceof Error ? error.message : String(error)
     }
   }
-  return {
-    command: stagedScriptLine(shellName, quotedPath),
-    delivery: 'staged',
-    scriptPath
-  }
+  return { command: typedLine, delivery: 'staged', scriptPath }
 }
 
 /** Explain fallback because the full typed line may leave the shell awaiting more input. */
