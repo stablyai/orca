@@ -130,7 +130,8 @@ export function OverageControls({
   }, [overage.optedIn])
   // One field: the cap while overage is on, $0 while it's off.
   const savedDollars = overage.optedIn ? String(Math.round(overage.spendCapCents / 100)) : '0'
-  const defaultCapCents = entitlement.offers?.team.defaultSpendCapCents ?? 2500
+  // Billing's default cap; unknown (no catalog) sends none and billing applies its own.
+  const defaultCapCents = entitlement.offers?.team.defaultSpendCapCents ?? null
   const [capDollars, setCapDollars] = useState(savedDollars)
   // Shows "Saved" after a successful change until the field is edited again (review M13).
   const [savedFlash, setSavedFlash] = useState(false)
@@ -206,8 +207,14 @@ export function OverageControls({
     )
   }
 
-  const save = (enabled: boolean, cents: number): void => {
-    onSetOverage(enabled ? { enabled: true, spendCapCents: cents } : { enabled: false })
+  const save = (enabled: boolean, cents: number | null): void => {
+    onSetOverage(
+      !enabled
+        ? { enabled: false }
+        : cents === null
+          ? { enabled: true }
+          : { enabled: true, spendCapCents: cents }
+    )
     setSavedFlash(true)
     // The action turns into "Saving…" in place; move focus onto it.
     window.requestAnimationFrame(() => savedRef.current?.focus())
@@ -218,19 +225,28 @@ export function OverageControls({
         'Update the payment method before changing overage.'
       )
     : undefined
+  const alertLevels = entitlement.offers?.team.warnAtPercent ?? null
   const alertsNote = (
     <p className="text-xs text-muted-foreground">
-      {t(
-        'auto.components.billing.usageAlertsNote',
-        'Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.'
-      )}
+      {alertLevels && alertLevels.length > 0
+        ? t(
+            'auto.components.billing.usageAlertsNoteLevels',
+            'Owners and admins are alerted in Orca at {{levels}} of your team’s sandbox hours.',
+            { levels: formatPercentList(alertLevels, locale) }
+          )
+        : t(
+            'auto.components.billing.usageAlertsNoteGeneric',
+            'Owners and admins are alerted in Orca as your team’s sandbox hours run low.'
+          )}
     </p>
   )
   const turnOn = (): void => {
     if (busy) {
       return
     }
-    setCapDollars(String(Math.round(defaultCapCents / 100)))
+    if (defaultCapCents !== null) {
+      setCapDollars(String(Math.round(defaultCapCents / 100)))
+    }
     focusCapOnOpen.current = true
     save(true, defaultCapCents)
   }
@@ -268,9 +284,11 @@ export function OverageControls({
                 aria-disabled={busy || paymentFailed || undefined}
                 onClick={paymentFailed ? undefined : turnOn}
               >
-                {t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
-                  cap: formatCents(defaultCapCents, locale)
-                })}
+                {defaultCapCents === null
+                  ? t('auto.components.billing.overage.turnOnNoCap', 'Turn on overage')
+                  : t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
+                      cap: formatCents(defaultCapCents, locale)
+                    })}
               </Button>
             </SettingsDisabledControlTooltip>
           )}
@@ -329,10 +347,7 @@ export function OverageControls({
           {capValid ? null : (
             <p id={capErrorId} className="text-xs text-destructive">
               {capZero
-                ? t(
-                    'components.billing.capZero2',
-                    'Set a spend cap above $0, or turn overage off.'
-                  )
+                ? t('components.billing.capZero2', 'Set a spend cap above $0, or turn overage off.')
                 : capTooHigh && maxCapCents !== null
                   ? capTooHighCopy(maxCapCents, locale, t)
                   : t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
@@ -389,5 +404,13 @@ export function OverageControls({
       </SettingsDisabledControlTooltip>
       {alertsNote}
     </div>
+  )
+}
+
+/** "75%, 90% and 100%" in the UI locale (billing's alert levels). */
+function formatPercentList(levels: readonly number[], locale: string): string {
+  const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 })
+  return new Intl.ListFormat(locale, { type: 'conjunction' }).format(
+    levels.map((level) => percent.format(level / 100))
   )
 }

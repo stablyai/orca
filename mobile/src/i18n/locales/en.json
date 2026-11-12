@@ -5142,7 +5142,7 @@
     "denied": {
       "payment": "Payment failed, so new sandboxes can’t start.",
       "plan": "Orca Cloud needs a Team plan.",
-      "teamLimit": "Your team is at its limit of running sandboxes (3 per seat).",
+      "teamLimit2": "Your team is at its limit of running sandboxes.",
       "memberLimit": "You’re at your limit of running sandboxes.",
       "ownerSeatLimit2": "This workspace’s owner is at their limit of running sandboxes.",
       "teammateSeatLimit": "{{name}} is at their limit of running sandboxes, and this workspace runs on their seat.",

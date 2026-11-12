@@ -86,6 +86,8 @@ export type OrcaBillingOffers = {
     defaultSpendCapCents: number
     /** Highest monthly spend cap billing accepts; null from older services. */
     maxSpendCapCents: number | null
+    /** Included-hours levels owners and admins are alerted at; null from older services. */
+    warnAtPercent?: number[] | null
   }
   enterprise: { label: string; priceLabel: string; contactUrl: string }
   /** The one-time trial this caller could still start for the team; null when none is on offer. */
@@ -101,8 +103,15 @@ export type OrcaBillingTrial = {
   grantedAt: number
 }
 
+/** The running-sandbox caps billing enforces for this account (its plan or trial). */
+export type OrcaBillingLimits = {
+  maxConcurrentSandboxes: number
+  maxConcurrentSandboxesPerMember: number
+}
+
 export type OrcaBillingEntitlement = {
-  plan: OrcaBillingPlanId | null
+  /** A plan id this desktop may not know yet (a newer service's plan) stays a plan, never "none". */
+  plan: OrcaBillingPlanId | (string & {}) | null
   planLabel: string | null
   /** Stripe subscription status, or 'none'. */
   status: string
@@ -132,6 +141,8 @@ export type OrcaBillingEntitlement = {
     spentCents: number
     centsPerHour: number
   }
+  /** Billing's running caps; null from older services (then derived from `offers`). */
+  limits?: OrcaBillingLimits | null
   /** Failed payment: new starts stop at once; running sandboxes suspend after `graceEndsAt`. */
   payment: {
     pastDueSince: number | null

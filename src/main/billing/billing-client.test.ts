@@ -201,8 +201,35 @@ describe('billing client', () => {
       })
     )
     expect(unsafe.offers).toBeNull()
+    // A plan this desktop doesn't know (a newer service) is still a plan, never "no plan".
     expect(
       (await fetchEntitlement(endpoints, 'bt', response({ plan: 'pro', offers: undefined }))).plan
+    ).toBe('pro')
+    // Billing's running caps when sent; older services omit them, malformed ones are dropped.
+    expect(
+      (
+        await fetchEntitlement(
+          endpoints,
+          'bt',
+          response({
+            limits: {
+              maxConcurrentSandboxes: 1,
+              maxConcurrentSandboxesPerMember: 1,
+              machineSizes: ['standard']
+            }
+          })
+        )
+      ).limits
+    ).toEqual({ maxConcurrentSandboxes: 1, maxConcurrentSandboxesPerMember: 1 })
+    expect(entitlement.limits).toBeNull()
+    expect(
+      (
+        await fetchEntitlement(
+          endpoints,
+          'bt',
+          response({ limits: { maxConcurrentSandboxes: 'x' } })
+        )
+      ).limits
     ).toBeNull()
   })
 

@@ -153,6 +153,12 @@ export const seatsDropAtRenewal = defineFixture({
   )
 })
 
+// Billing sent no catalog (an older service or a failed read): no price is shown, never "$0".
+export const noPriceKnown = defineFixture({
+  width,
+  render: () => <Page billing={{ status: 'ok', entitlement: { ...team, offers: null } }} />
+})
+
 export const paymentFailed = defineFixture({
   width,
   render: () => (

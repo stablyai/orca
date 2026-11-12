@@ -282,8 +282,12 @@
         "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
         "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
+        "errorTeamSandboxLimitNoSeat_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
         "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
+        "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
+        "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
         "listMetaCount_one": "{{count}} workspace",
         "listMetaCount_other": "{{count}} workspaces",
         "rowSandboxHours_one": "{{hours}} sandbox hour",
@@ -1370,7 +1374,11 @@
             "memberLimitBodyCount_one": "You can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "memberLimitBodyCount_other": "You can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "teamLimitBodyCount_one": "Your team can run {{count}} sandbox at once ({{value1}} per seat). Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
-            "teamLimitBodyCount_other": "Your team can run {{count}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged."
+            "teamLimitBodyCount_other": "Your team can run {{count}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyNoSeatCount_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyNoSeatCount_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "trialLimitBodyCount_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "trialLimitBodyCount_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged."
           },
           "VmBuildLog": {
             "hiddenTechnicalLines_one": "{{count}} technical line hidden. Copy log includes it.",

@@ -4,7 +4,7 @@ import { SLEEP_COOLDOWN_MS } from './cloud-predictive-wake'
 import { predictiveWakeServerVerdict } from './cloud-predictive-wake-preflight'
 
 const NOW = 1_800_000_000_000
-const limit = { perSeat: 3, team: 9 }
+const limit = { perMember: 3, team: 9, perSeat: 3, trial: false }
 
 function status(over: Partial<HostedWorkspaceStatus> = {}): HostedWorkspaceStatus {
   return {

@@ -1,40 +1,10 @@
 import type { Translate } from '@/i18n/use-translate'
-import type {
-  OrcaBillingEntitlement,
-  OrcaBillingOffers,
-  OrcaBillingStatusResult
-} from '../../../../shared/orca-billing'
+import type { SandboxLimit } from './vm-build-sandbox-limit'
 import type { VmBuildFailure } from './vm-build-failure'
 import { sandboxLimitBody } from './vm-build-limit-copy'
+
 import { cloneFailedBody, repoOwner } from './vm-build-clone-failure-copy'
 import { localRecipeFailureCopy } from './vm-build-recipe-failure-copy'
-
-/** The running-sandbox caps billing enforces: per member, and per team (per seat × seats). */
-export type SandboxLimit = { perSeat: number; team: number }
-
-/** The billing fields the caps derive from (any OrcaBillingStatusResult fits). */
-export type SandboxLimitBillingStatus =
-  | {
-      status: 'ok'
-      entitlement: Pick<OrcaBillingEntitlement, 'seats'> & {
-        offers: { team: Pick<OrcaBillingOffers['team'], 'concurrentSandboxesPerSeat'> } | null
-      }
-    }
-  | { status: Exclude<OrcaBillingStatusResult['status'], 'ok'> }
-
-/** Mirrors billing's checkStart limits; null until the plan has loaded. */
-export function sandboxLimitFromBilling(
-  status: SandboxLimitBillingStatus | null
-): SandboxLimit | null {
-  if (status?.status !== 'ok') {
-    return null
-  }
-  const perSeat = status.entitlement.offers?.team.concurrentSandboxesPerSeat
-  if (!perSeat) {
-    return null
-  }
-  return { perSeat, team: perSeat * Math.max(1, status.entitlement.seats) }
-}
 
 export type VmBuildFailureCopyContext = {
   cloud: boolean

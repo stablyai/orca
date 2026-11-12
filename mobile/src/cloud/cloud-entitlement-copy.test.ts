@@ -53,7 +53,7 @@ describe('entitlementDeniedMessage', () => {
       'Ask an owner or admin to choose a plan.'
     )
     expect(entitlementDeniedMessage(denied('concurrency_limit'), 'admin', 'create', t)).toBe(
-      'Your team is at its limit of running sandboxes (3 per seat). Nothing was created, and you weren’t charged. Put one to sleep or delete it, then try again.'
+      'Your team is at its limit of running sandboxes. Nothing was created, and you weren’t charged. Put one to sleep or delete it, then try again.'
     )
     expect(
       entitlementDeniedMessage(denied('member_concurrency_limit'), 'member', 'existing', t)
