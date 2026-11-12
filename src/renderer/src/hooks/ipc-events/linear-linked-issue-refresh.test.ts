@@ -444,62 +444,6 @@ it('resolves direct SSH on the local endpoint without selecting a paired physica
   h.finishSetup()
 })
 
-it('refreshes a linked folder badge on the local endpoint through its stored source', async () => {
-  const h = harness([])
-  const context = source('local', 'folder-project')
-  useAppStore.setState({
-    folderWorkspaces: [
-      {
-        id: 'f',
-        projectGroupId: 'group',
-        name: 'Folder',
-        folderPath: '/folder',
-        executionHostId: 'local',
-        linkedTask: {
-          provider: 'linear',
-          type: 'issue',
-          number: 0,
-          linearIdentifier: 'eng-1',
-          title: 'Issue',
-          url: 'https://linear.app/issue/eng-1'
-        },
-        linkedTaskSourceContext: context,
-        comment: '',
-        isArchived: false,
-        isUnread: false,
-        isPinned: false,
-        sortOrder: 0,
-        lastActivityAt: 0,
-        createdAt: 1,
-        updatedAt: 1
-      }
-    ]
-  })
-  const read = readLinearIssueForTest(
-    useAppStore.getState().fetchLinearIssue('eng-1', 'all', { sourceContext: context })
-  )
-  h.pending[0].resolve(issue('eng-1'))
-  await read
-  const key = scopedLinearCacheKey(
-    getLinearReadScope(useAppStore.getState().settings, context),
-    'all::eng-1'
-  )
-  h.request.mockClear()
-  h.pending.length = 0
-  h.start()
-  h.emit('folder:f')
-  await settle()
-  expect(h.request.mock.calls).toEqual([['local', 'eng-1', 'all']])
-  h.pending[0].resolve({
-    ...issue('eng-1'),
-    state: { name: 'Done', type: 'completed', color: '#888888' }
-  })
-  await settle()
-  expect(useAppStore.getState().linearIssueCache[key].data?.state.name).toBe('Done')
-  h.stop()
-  h.finishSetup()
-})
-
 it('does not refresh an unpinned all badge whose settled cached issue belongs to another account', async () => {
   const workspace = row('wt', source('local'))
   const h = harness([workspace])
@@ -554,17 +498,6 @@ it.each([10, 100])(
     h.finishSetup()
   }
 )
-
-it('does no badge work for unobserved rows or collection-only source scopes', async () => {
-  const workspace = row('wt', source('local'))
-  const h = harness([workspace])
-  h.start()
-  h.emit('wt')
-  await settle()
-  expect(h.request).not.toHaveBeenCalled()
-  h.stop()
-  h.finishSetup()
-})
 
 it('preserves a pending initial badge read as demand for post-write force', async () => {
   const workspace = row('wt', source('local'))

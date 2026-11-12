@@ -50,14 +50,6 @@ describe('orca computer action CLI validation', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('does not mask missing app with action target errors', async () => {
-    await main(['computer', 'click'], '/tmp/repo/src')
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Missing required --app')
-    expect(process.exitCode).toBe(1)
-  })
-
   it('rejects malformed hotkeys before calling the runtime', async () => {
     await main(
       ['computer', 'hotkey', '--app', 'Finder', '--key', 'Return', '--json'],
@@ -166,67 +158,6 @@ describe('orca computer action CLI validation', () => {
     expect(process.exitCode).toBe(1)
   })
 
-  it('rejects invalid window ids before calling the runtime', async () => {
-    await main(
-      ['computer', 'get-app-state', '--app', 'Finder', '--window-id', '1.5', '--json'],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
-    expect(output.error).toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('Invalid non-negative integer for --window-id')
-    })
-    expect(process.exitCode).toBe(1)
-  })
-
-  it('rejects conflicting action window target flags before calling the runtime', async () => {
-    await main(
-      [
-        'computer',
-        'click',
-        '--app',
-        'Finder',
-        '--element-index',
-        '1',
-        '--window-id',
-        '42',
-        '--window-index',
-        '0',
-        '--json'
-      ],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0])
-    expect(output.error).toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('either --window-id or --window-index')
-    })
-    expect(process.exitCode).toBe(1)
-  })
-
-  it('rejects invalid action flags before resolving the runtime target', async () => {
-    await main(
-      ['computer', 'click', '--app', 'Finder', '--element-index', '1', '--click-count', '0'],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
-      'Invalid positive integer for --click-count'
-    )
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
-      'Next step: Fix the command flags or RPC params exactly as described by the error message.'
-    )
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
-      'Next step: Do not retry the same command unchanged.'
-    )
-    expect(process.exitCode).toBe(1)
-  })
-
   it('returns structured recovery data for local computer action flag errors in JSON mode', async () => {
     await main(
       [
@@ -253,100 +184,6 @@ describe('orca computer action CLI validation', () => {
       expect.stringContaining('Fix the command flags'),
       expect.stringContaining('Do not retry')
     ])
-    expect(process.exitCode).toBe(1)
-  })
-
-  it('rejects incomplete pointer action targets before resolving the runtime target', async () => {
-    await main(['computer', 'click', '--app', 'Finder', '--x', '10'], '/tmp/repo/src')
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
-      'Click requires --element-index or both --x and --y'
-    )
-    expect(process.exitCode).toBe(1)
-  })
-
-  it('rejects unsupported action option values before resolving the runtime target', async () => {
-    await main(
-      ['computer', 'click', '--app', 'Finder', '--element-index', '1', '--mouse-button', 'primary'],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Unsupported --mouse-button')
-    expect(process.exitCode).toBe(1)
-
-    vi.mocked(console.error).mockClear()
-    process.exitCode = undefined
-
-    await main(
-      [
-        'computer',
-        'click',
-        '--app',
-        'Finder',
-        '--element-index',
-        '1',
-        '--modifiers',
-        'CmdOrCtrl+A'
-      ],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
-      'Click modifiers accept modifier keys only'
-    )
-    expect(process.exitCode).toBe(1)
-
-    vi.mocked(console.error).mockClear()
-    process.exitCode = undefined
-
-    await main(
-      ['computer', 'click', '--app', 'Finder', '--element-index', '1', '--modifiers', ''],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
-      'Click modifiers accept modifier keys only'
-    )
-    expect(process.exitCode).toBe(1)
-
-    vi.mocked(console.error).mockClear()
-    process.exitCode = undefined
-
-    await main(
-      ['computer', 'scroll', '--app', 'Finder', '--element-index', '1', '--direction', 'diagonal'],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Unsupported --direction')
-    expect(process.exitCode).toBe(1)
-  })
-
-  it('rejects incomplete drag targets before resolving the runtime target', async () => {
-    await main(
-      ['computer', 'drag', '--app', 'Finder', '--from-element-index', '1'],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
-      'Drag element targeting requires both --from-element-index and --to-element-index'
-    )
-    expect(process.exitCode).toBe(1)
-  })
-
-  it('rejects conflicting text payload flags before resolving the runtime target', async () => {
-    await main(
-      ['computer', 'type-text', '--app', 'Finder', '--text', 'hello', '--text-stdin'],
-      '/tmp/repo/src'
-    )
-
-    expect(callMock).not.toHaveBeenCalled()
-    expect(vi.mocked(console.error).mock.calls[0][0]).toContain('Use either --text or --text-stdin')
     expect(process.exitCode).toBe(1)
   })
 

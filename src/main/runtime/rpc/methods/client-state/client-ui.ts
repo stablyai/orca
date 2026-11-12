@@ -12,7 +12,7 @@ import {
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import { isWorkspaceHostScope } from '../../../../../shared/orcad-migration/orcad-migration-client-state-value-validation'
 import { defineMethod, type RpcContext } from '../../core'
-import { isHostOwnPhone } from '../../host-own-phone'
+import { isHostOwnPhone } from '../../callers/host-own-phone'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,

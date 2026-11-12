@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import { BrowserPageInputCredit } from './browser-page-input-credit'
-import { LOCAL_CLI_RPC_CALLER } from '../../../runtime/rpc/rpc-caller-identity'
+import { LOCAL_CLI_RPC_CALLER } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
 const desktop = { kind: 'paired-device', deviceId: 'desk-1' } as const
 

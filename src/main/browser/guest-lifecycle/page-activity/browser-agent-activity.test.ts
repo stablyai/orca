@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
 }))
 
 import { BrowserAgentActivity } from './browser-agent-activity'
-import { runWithActiveRpcCaller } from '../../../runtime/rpc/rpc-active-caller'
+import { runWithActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
 import { runInRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
