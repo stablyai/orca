@@ -13,7 +13,7 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { translateWslOutputPaths } from '../../command-runner/wsl-path-translation'
+import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
 

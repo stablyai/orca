@@ -289,7 +289,8 @@ export async function resolvePRForBranchOutcome(input: {
     localGitOptions,
     ghOptions,
     executionScope,
-    usedExactNumberLookup
+    usedExactNumberLookup,
+    includeDerivedData: options.includeDerivedData
   })
 
   return assemblePRRefreshFoundOutcome({

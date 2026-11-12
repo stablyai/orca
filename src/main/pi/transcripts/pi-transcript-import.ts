@@ -1,8 +1,8 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { sessionIdFromFileName } from '../../ai-vault/session-scanner-accumulator'
-import { walkSessionFiles } from '../../ai-vault/session-scanner-discovery'
-import { piSessionHistorySessionsDir } from '../../ai-vault/session-scanner-agent-sources'
+import { sessionIdFromFileName } from '../../ai-vault/parsing/session-scanner-accumulator'
+import { walkSessionFiles } from '../../ai-vault/discovery/session-scanner-discovery'
+import { piSessionHistorySessionsDir } from '../../ai-vault/discovery/session-scanner-agent-sources'
 import { directoryTranscriptImport } from '../../native-chat/structured-agent-cli-conversations'
 import { readPiSessionHeader } from '../rpc/launch/rpc-launch-resolution'
 

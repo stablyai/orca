@@ -1,8 +1,6 @@
 import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
-import {
-  ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
-  AGENT_PANE_HOOK_ENV_KEYS as STRUCTURED_CHILD_ENV_TO_DELETE
-} from '../../../ipc/pty/host-env/spawn-env-keys'
+import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
+import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
@@ -34,8 +32,6 @@ const CALLER_ENV_TO_DELETE = [
 
 /** Structured Pi has no scratch folder; an inherited one belongs to another chat. */
 export const PI_RPC_SESSION_ENV_TO_DELETE: readonly string[] = [
-  ...STRUCTURED_CHILD_ENV_TO_DELETE,
-  'ORCA_TERMINAL_HANDLE',
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
 ]
@@ -56,7 +52,7 @@ export function piRpcSessionlessEnvironment(env: Readonly<Record<string, string>
 } {
   return {
     env: withoutPiCallerEnv(env),
-    envToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...CALLER_ENV_TO_DELETE]
+    envToDelete: [...new Set([...STRUCTURED_CHILD_ENV_TO_DELETE, ...CALLER_ENV_TO_DELETE])]
   }
 }
 

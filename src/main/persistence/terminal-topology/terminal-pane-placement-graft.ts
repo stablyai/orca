@@ -1,4 +1,4 @@
-import type { TerminalPanePlacement } from '../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   collectLayoutLeafIdsInOrder,
@@ -6,7 +6,7 @@ import {
   layoutContainsLeafId,
   removeLayoutLeaf,
   samePanesIgnoringRatios
-} from '../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { cloneLayoutNode } from '../restoring-sessions/terminal-layout-normalization'
 
 /** Accept a proposed tree only if it adds this leaf alone; otherwise split beside the parent or return null. */

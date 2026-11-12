@@ -74,7 +74,7 @@ export default function PairScanScreen() {
     return () => subscription.remove()
   }, [getPermission])
 
-  const setPairScanRootRef = useCallback((node: View | null): void => {
+  const setPairScanRootRef = useCallback((node: unknown): void => {
     if (node !== null) {
       mountedRef.current = true
       return

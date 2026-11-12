@@ -368,8 +368,6 @@
       "customPermissions": "Argumentos personalizados",
       "replaceWithPermissionMode": "Reemplazar con {{mode}}",
       "rowPermissionsLabel": "Permisos de {{agent}}",
-      "expandAgentSettings": "Expandir la configuración del agente",
-      "collapseAgentSettings": "Contraer la configuración del agente",
       "permissionsTitle": "Permisos",
       "permissionsChoiceExplanation": "Lo que cualquier agente puede hacer sin preguntar. Puedes configurar un agente de forma distinta abajo.",
       "permissionEachOwn": "Configuración propia de cada agente",
@@ -3356,7 +3354,6 @@
             "runningTerminalBlocker": "Proceso de terminal en ejecución",
             "terminalLivenessUnknownBlocker": "Estado del terminal desconocido",
             "dirtyEditorBufferBlocker": "Búfer del editor sin guardar",
-            "volatileLocalContextBlocker": "Contexto local volátil",
             "recentVisibleContextBlocker": "Pestañas visitadas recientemente",
             "liveAgentBlocker": "Agente activo",
             "sshDisconnectedBlocker": "Remoto no disponible",
@@ -7271,14 +7268,11 @@
           "e8da2af684": "Disponible para instalar",
           "ed3e110e61": "detectado",
           "02e0143be5": "Instalado",
-          "92033495ff": "Auto",
           "f9f127d664": "Override de la ruta o nombre del binario, y edición de argumentos de lanzamiento o entorno predeterminados para este agent.",
           "f95b5c79b8": "Instalar",
           "fe4d630c94": "Documentación",
-          "8dc0192e48": "Desactivado",
           "5200dac9da": "Reiniciar",
           "2e45ca29b6": "Comando",
-          "d4d2a45d63": "Activado",
           "1c9a9679ec": "{{value0}} disponibilidad",
           "0d9e293a02": "Refrescar",
           "c9b33eb5c0": "Actualizando…",
@@ -7297,10 +7291,8 @@
           "25a41a9aad": "Volver a detectar los agentes instalados en este servidor",
           "remoteDetectionFailed": "No se pudieron detectar los agentes instalados. Verifique la conexión del host e inténtelo nuevamente.",
           "retryDetection": "Retry",
-          "storedDefaultUndetected": "Guardado como predeterminado, pero no detectado en este momento",
           "noAgentsDetected": "No se detectaron agentes. Si hay uno instalado, es posible que la sonda haya agotado su tiempo de espera.",
-          "9f30095d49": "Permisos de Agents",
-          "3bddd54c9e": "Agent predeterminado"
+          "9f30095d49": "Permisos de Agents"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -23537,11 +23529,10 @@
     "setByArguments": "Definido por tus argumentos",
     "searchModels": "Buscar modelos",
     "noModels": "Ningún modelo coincide con tu búsqueda.",
-    "legacyModels": "Modelos antiguos",
     "toggleArguments": "Mostrar u ocultar argumentos",
     "argumentsTerminalHint": "Solo se aplica a los lanzamientos en terminal (CLI)",
     "searchAgentModels": "Buscar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos",
+    "moreModelsWithCount": "Más modelos ({{total}})",
     "use": "Usar",
     "select": "Seleccionar agente",
     "promptPlaceholder": "Agregar un prompt (opcional): / para skills, @ para archivos",
@@ -24206,6 +24197,15 @@
       "deleteFailed": "No se pudo eliminar {{model}}.",
       "dismiss": "Descartar",
       "cancelDownload": "Cancelar descarga"
+    }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "El uso no está disponible. Pulsa Actualizar para reconectar.",
+      "setting": "No se pudo confirmar el cambio de seguimiento. Intenta cambiarlo de nuevo.",
+      "refresh": "No se pudo completar la actualización anterior. Pulsa Actualizar de nuevo.",
+      "read": "No se pudo cargar el uso. Pulsa Actualizar de nuevo.",
+      "retry": "Actualizar"
     }
   }
 }

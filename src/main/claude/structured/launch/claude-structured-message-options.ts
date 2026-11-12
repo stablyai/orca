@@ -1,5 +1,5 @@
-import { claudeBuildPermissionMode } from '../../claude-plan-approval-mode'
-import { claudeStartedUnechoedSend } from '../../claude-command-lifecycle'
+import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
+import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
 import { claudeExecutionObservations } from '../claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../claude-structured-dispatch'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'

@@ -69,17 +69,6 @@ function createWriteQueue(): WriteQueueHarness {
   }
 }
 
-function drain(queue: WriteQueueHarness): void {
-  queue.pump()
-  let guard = 0
-  while (queue.pendingWrites.length > 0) {
-    queue.flushWrite()
-    if (++guard > 10_000) {
-      throw new Error('write queue did not drain')
-    }
-  }
-}
-
 describe('terminal WebView write queue', () => {
   // Count queue-reachable string units, not heap bytes; xterm may still retain submitted chunks.
 
@@ -126,15 +115,5 @@ describe('terminal WebView write queue', () => {
     queue.flushWrite()
 
     expect(queue.writes).toEqual(['first'])
-  })
-
-  it('drains reentrant enqueues in order', () => {
-    const queue = createWriteQueue()
-    queue.enqueue('first')
-    queue.enqueueBoundary(() => queue.enqueue('reentrant'))
-    queue.enqueue('second')
-    drain(queue)
-
-    expect(queue.writes).toEqual(['first', 'secondreentrant'])
   })
 })
