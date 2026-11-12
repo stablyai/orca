@@ -74,7 +74,7 @@ export function LandingFirstRunWelcome({
         </Button>
         <button
           type="button"
-          className="cursor-pointer text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:cursor-default disabled:opacity-60"
+          className="cursor-pointer rounded-sm text-xs text-muted-foreground underline decoration-muted-foreground/50 underline-offset-4 transition-colors outline-none hover:text-foreground hover:decoration-foreground focus-visible:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-60"
           onClick={() => void openHome()}
           disabled={openingHome}
         >

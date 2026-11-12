@@ -21,6 +21,24 @@ export function canShowRightSidebarForView(activeView: ActiveView): boolean {
   return !RIGHT_SIDEBAR_SUPPRESSED_VIEWS.has(activeView)
 }
 
+/**
+ * Home's first-run welcome (no project yet, nothing selected) has nothing to browse, so the right
+ * sidebar stays out of it; it returns as before once a project exists.
+ */
+export function isFirstRunWelcomeShown(layout: {
+  activeView: ActiveView
+  hasActiveWorktree: boolean
+  creationLayoutActive: boolean
+  projectCount: number
+}): boolean {
+  return (
+    layout.activeView === 'terminal' &&
+    !layout.hasActiveWorktree &&
+    !layout.creationLayoutActive &&
+    layout.projectCount === 0
+  )
+}
+
 /** Workspace and creation surfaces have no titlebar strip, so the closed sidebar needs its own toggle there. */
 export function showsFloatingRightSidebarToggle(layout: {
   activeView: ActiveView
