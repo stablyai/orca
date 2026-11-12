@@ -84,9 +84,9 @@ export function registerWorkerReleaseArchiveTests(): void {
         expect(h.db.getWorkerTerminalArchive(dispatchId)?.content).not.toContain('frozen')
 
         // Like a live read, the first page is the newest messages; a cursor then follows the file.
-        const page = (await h.call('orchestration.workerRead', { dispatch: dispatchId })) as {
-          cursor: string
-        }
+        const page = await h.call('orchestration.workerRead', { dispatch: dispatchId })
+        const cursor =
+          typeof page === 'object' && page !== null && 'cursor' in page ? page.cursor : null
         expect(page).toMatchObject({
           archived: true,
           source: 'transcript',
@@ -99,7 +99,7 @@ export function registerWorkerReleaseArchiveTests(): void {
         })
         await appendFile(transcriptPath, `${codexMessage('resumed', 'after a resume')}\n`)
         await expect(
-          h.call('orchestration.workerRead', { dispatch: dispatchId, cursor: page.cursor })
+          h.call('orchestration.workerRead', { dispatch: dispatchId, cursor })
         ).resolves.toMatchObject({
           transcript: {
             messages: [{ id: 'resumed', blocks: [{ type: 'text', text: 'after a resume' }] }]
