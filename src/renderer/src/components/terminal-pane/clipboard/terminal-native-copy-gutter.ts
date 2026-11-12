@@ -5,7 +5,7 @@ type NativeCopyTerminal = Pick<Terminal, 'getSelection' | 'hasSelection'> & {
   element?: HTMLElement
 }
 
-/** Capture native copy before xterm writes raw cells; unbound browser accelerators such as Windows/Linux Ctrl+Insert otherwise retain the agent gutter (#19770). */
+/** Capture native copy before xterm writes raw cells; Wayland user copies and unbound accelerators such as Windows/Linux Ctrl+Insert otherwise retain the agent gutter (#19770). */
 export function installTerminalNativeCopyGutterTrim(terminal: NativeCopyTerminal): IDisposable {
   const element = terminal.element
   if (!element) {
