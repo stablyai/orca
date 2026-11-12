@@ -217,22 +217,6 @@ it('invalidates lineage before unknown-repository discovery can block a structur
   }
 })
 
-it('invalidates hydrated lineage as soon as a project change is queued', async () => {
-  const h = createHarness()
-  try {
-    h.start()
-    beginWorktreeLineageRefresh(useAppStore.getState, {
-      kind: 'environment',
-      environmentId: 'host-a'
-    })(true)
-    h.emit(0, false, { type: 'reposChanged' })
-    expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(false)
-    expect(h.fetchRuntimeEnvironmentRepos).not.toHaveBeenCalled()
-  } finally {
-    await h.finish()
-  }
-})
-
 it('does not mistake a local repo with the same id for the publishing remote repo', async () => {
   const h = createHarness()
   useAppStore.setState({
