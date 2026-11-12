@@ -1,3 +1,4 @@
+import { legacyBaseRefSearchResult } from '../../../src/shared/base-ref-search-result'
 import type { WorkspaceCreateProjectionModel } from './use-mobile-tasks-workspace-create-projection'
 import { type SparsePreset, useEffect } from './mobile-tasks-dependencies'
 import { repoSparsePresetListRead } from './mobile-workspace-source-operations'
@@ -145,8 +146,7 @@ export function useMobileTasksWorkspaceSourceEffects<Model extends WorkspaceSour
         }
         const result = repoBaseRefSearchRead.interpret(reply)
         setWorkspaceBaseBranchResults(
-          result.refDetails ??
-            (result.refs ?? []).map((refName) => ({ refName, localBranchName: refName }))
+          result.refDetails ?? (result.refs ?? []).map(legacyBaseRefSearchResult)
         )
       })
       .catch((err) => {

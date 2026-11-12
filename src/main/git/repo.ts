@@ -9,6 +9,7 @@ import {
   type LocalGitExecOptions
 } from './repo-default-base-ref'
 import { gitExecFileAsync } from './command-runner/git-exec-file'
+import { snapshotRemoteNames } from './branch-ref-snapshot'
 
 export {
   isGitRepo,
@@ -22,14 +23,7 @@ export {
 } from './repo-detection'
 export { getBaseRefDefault, resolveDefaultBaseRefWithLocalGit } from './repo-default-base-ref'
 
-export {
-  buildSearchBaseRefsArgv,
-  mergeBaseRefSearchResultGroups,
-  searchBaseRefs,
-  searchBaseRefDetails,
-  parseAndFilterSearchRefDetails,
-  normalizeRefSearchQuery
-} from './repo-base-ref-search'
+export { searchBaseRefs, searchBaseRefDetails } from './repo-base-ref-search'
 export { getBranchConflictKind, getBranchConflictKindStrict } from './repo-branch-conflict'
 export type { BranchConflictKind } from './repo-branch-conflict'
 
@@ -101,18 +95,13 @@ export async function getRecentDriftSubjects(
   }
 }
 
-function parseRemoteCount(stdout: string): number {
-  return stdout.split('\n').filter((line) => line.trim().length > 0).length
-}
-
 /** Count configured remotes; zero means either none or unavailable. */
 export async function getRemoteCount(
   path: string,
   options: LocalGitExecOptions = {}
 ): Promise<number> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
-    return parseRemoteCount(stdout)
+    return (await snapshotRemoteNames(path, options)).length
   } catch (err) {
     console.warn('[getRemoteCount] git remote failed', { path, err })
     return 0
@@ -147,11 +136,7 @@ export async function getDefaultRemote(
   try {
     let remotes = knownRemoteNames
     if (remotes === undefined) {
-      const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
-      remotes = stdout
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
+      remotes = await snapshotRemoteNames(path, options)
     }
     if (remotes.includes('origin')) {
       return 'origin'

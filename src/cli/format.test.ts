@@ -4,8 +4,21 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { printResult } from './format'
+import { formatRepoRefs } from './workspace-format'
 
 let testScreenshotDir: string | null = null
+
+it('prints readable branches while distinguishing colliding action identities', () => {
+  expect(
+    formatRepoRefs({
+      refs: ['refs/heads/topic', 'refs/heads/origin/main', 'refs/remotes/origin/main'],
+      truncated: false
+    })
+  ).toBe('topic\nrefs/heads/origin/main\nrefs/remotes/origin/main')
+  expect(
+    formatRepoRefs({ refs: ['origin/main', 'refs/remotes/origin/main'], truncated: false })
+  ).toBe('origin/main\norigin/main')
+})
 
 afterEach(() => {
   vi.restoreAllMocks()

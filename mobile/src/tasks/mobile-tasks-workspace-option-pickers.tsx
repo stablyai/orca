@@ -15,6 +15,7 @@ import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { translate } from '../i18n/mobile-i18n'
 import { pressedStyle } from '../theme/mobile-theme'
+import { branchRefLabels, branchRefLabel } from '../../../src/shared/git/refs/branch-ref-label'
 
 export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPresentationModel) {
   const {
@@ -31,6 +32,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
     workspaceBaseBranchResults,
     workspaceCreateDraft
   } = model
+  const labels = branchRefLabels(workspaceBaseBranchResults.map((branch) => branch.refName))
   return (
     <BottomDrawer
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceBaseBranchPicker}
@@ -77,9 +79,9 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
             {workspaceBaseBranchResults.map((branch) => (
               <ListRow
                 key={`${branch.refName}:${branch.localBranchName}`}
-                title={branch.refName}
+                title={labels.get(branch.refName) ?? branchRefLabel(branch.refName)}
                 subtitle={
-                  branch.localBranchName !== branch.refName
+                  branch.localBranchName !== branchRefLabel(branch.refName)
                     ? translate(
                         'tasks.workspaceOptionPickers.branchName',
                         'Branch name: {{name}}',

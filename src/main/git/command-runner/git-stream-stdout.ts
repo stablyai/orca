@@ -41,6 +41,8 @@ export type GitStreamOptions = {
   signal?: AbortSignal
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
+  /** Independent stderr cap for parsers that stream an arbitrarily large population. */
+  maxStderrBuffer?: number
   /** Explicit wall-clock deadline; read commands default to the production backstop. */
   timeoutMs?: number
   /** Overrides only the default read deadline in tests. */
@@ -212,7 +214,7 @@ function streamInSpan(
         }
         function onStderrData(chunk: Buffer): void {
           stderrBytes += chunk.byteLength
-          if (stderrBytes > maxBuffer) {
+          if (stderrBytes > (options.maxStderrBuffer ?? maxBuffer)) {
             void killSpawnedCommandTree(child)
             finish(new Error('git stderr exceeded maxBuffer.'))
             return

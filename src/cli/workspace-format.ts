@@ -1,3 +1,4 @@
+import { branchRefLabels } from '../shared/git/refs/branch-ref-label'
 import { formatAddressLines, formatParentLine, type WorkspaceAnnotation } from './workspace-address'
 import type { PublicKnownRuntimeEnvironment } from '../shared/remote-runtime/host-catalog/runtime-environments'
 import type {
@@ -197,7 +198,9 @@ export function formatRepoRefs(result: RuntimeRepoSearchRefs): string {
   if (result.refs.length === 0) {
     return 'No refs found.'
   }
-  return result.truncated ? `${result.refs.join('\n')}\n\ntruncated: yes` : result.refs.join('\n')
+  const labels = branchRefLabels(result.refs)
+  const text = result.refs.map((ref) => labels.get(ref) ?? ref).join('\n')
+  return result.truncated ? `${text}\n\ntruncated: yes` : text
 }
 
 export function formatWorktreeList(

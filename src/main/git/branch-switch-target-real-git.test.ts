@@ -233,7 +233,9 @@ it('reads live worktree occupancy and discovers remotes despite 50 local matches
   })
   expect(transaction.code).toBe(0)
   const page = await searchRemoteRefPage(directory, 'topic', 50)
-  expect(page.refDetails).toEqual([{ refName: 'origin/topic', localBranchName: 'topic' }])
+  expect(page.refDetails).toEqual([
+    { refName: 'refs/remotes/origin/topic', localBranchName: 'topic' }
+  ])
   const occupied = join(directory, '.git', 'checkout-test')
   await git('worktree', 'add', '-q', occupied, 'topic-0')
   expect((await listLocalBranches(directory)).worktreePaths?.['topic-0']).toBe(occupied)
