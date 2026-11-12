@@ -177,9 +177,9 @@ export class TerminalSessionJournalReads {
   /** The writer's backlog and a reader's frozen-only backing, counted once, within limits. */
   protected withinSessionLimits(
     plan: TerminalJournalPush | null = null,
-    tailReplaced = this.frozen?.tailReplaced === true
+    replacesTail = false
   ): boolean {
-    const frozen = this.frozenCharge(tailReplaced)
+    const frozen = this.frozenCharge(this.frozen?.tailReplaced === true || replacesTail)
     const records = this.queue.length + (plan && plan.coalesceIndex === null ? 1 : 0)
     return (
       this.queue.bytes + (plan?.bytes ?? 0) + frozen.bytes <= JOURNAL_SESSION_BACKLOG_BYTES &&

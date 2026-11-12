@@ -76,13 +76,14 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
    * backlog can exhaust the session. A first replacement of the read's tail is charged here.
    */
   private admitWrite(plan: TerminalJournalPush, record: PendingOutputRecord): boolean {
-    const replacing = this.replacesFrozenTail(plan, record)
+    let replacing = this.replacesFrozenTail(plan, record)
     const frozenDelta = replacing ? this.frozenTailCharge : 0
     this.host.makeRoom(plan.bytes + frozenDelta)
+    replacing = this.replacesFrozenTail(plan, record)
     if (this.frozen && !this.withinSessionLimits(plan, replacing)) {
       this.frozen.sever()
     }
-    if (!this.withinSessionLimits(plan)) {
+    if (!this.withinSessionLimits(plan, replacing)) {
       return false
     }
     if (replacing && this.frozen) {

@@ -96,4 +96,54 @@ describe('frozen read backing', () => {
     expect(later.split('TAIL_B_ROW')).toHaveLength(2)
     expect(later.split('TAIL_C_ROW')).toHaveLength(2)
   })
+
+  it('revokes an already-replaced tail before later writes exhaust the reader and writer together', async () => {
+    const { reads, openJournal, record, prime } = openReads()
+    const journal = openJournal('backing-replaced-tail-pressure')
+    await prime(journal)
+    const appends = gateAppends()
+    record(journal, 'HEAD_ROW\r\n')
+    for (let index = 0; index < 9_996; index += 1) {
+      journal.record({ kind: 'resize', cols: 80, rows: 24 })
+    }
+    record(journal, 'TAIL_A_ROW\r\n')
+    const reconstruction = gateReconstruction(journal)
+    const atCut = readDeep(reads, journal)
+    await vi.waitFor(() => expect(reconstruction.calls).toHaveBeenCalledTimes(1))
+    expect(reads.readSourceBytes).toBe(0)
+
+    record(journal, 'TAIL_B_ROW\r\n')
+    expect(reads.readSourceBytes).toBe(frameCharge('TAIL_A_ROW\r\n'))
+    journal.record({ kind: 'resize', cols: 81, rows: 24 })
+    expect(reads.readSourceBytes).toBe(frameCharge('TAIL_A_ROW\r\n'))
+    journal.record({ kind: 'resize', cols: 82, rows: 25 })
+    expect(journal.gapped).toBe(false)
+    expect(reads.readSourceBytes).toBe(0)
+    reconstruction.open()
+    expect(await atCut).toBeNull()
+    appends.open()
+    await journal.flush()
+
+    record(journal, 'AFTER_PRESSURE_ROW\r\n')
+    await journal.flush()
+    const consumer = reads.admit(new AbortController().signal)!
+    try {
+      const found = await consumer.acquire(journal, 5000, async () => {})
+      expect(found).not.toBeNull()
+      if (found && found !== 'image') {
+        expect(found.capture()).toBe(true)
+        expect(await consumer.awaitFlight(found)).toBe(true)
+      }
+      const snapshot = consumer.image!.snapshot
+      expect(snapshot.cols).toBe(82)
+      expect(snapshot.rows).toBe(25)
+      const later = snapshot.scrollbackAnsi + snapshot.snapshotAnsi
+      expect(later.split('TAIL_A_ROW')).toHaveLength(2)
+      expect(later.split('TAIL_B_ROW')).toHaveLength(2)
+      expect(later.split('AFTER_PRESSURE_ROW')).toHaveLength(2)
+    } finally {
+      consumer.release()
+    }
+    expect(journal.gapped).toBe(false)
+  }, 60_000)
 })
