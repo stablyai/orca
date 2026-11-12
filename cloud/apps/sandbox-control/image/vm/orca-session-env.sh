@@ -24,11 +24,4 @@ if [ -n "${ORCA_WORKSPACE_PATH-}" ] && [ -z "${ORCA_DEFAULT_BRANCH-}" ]; then
     export ORCA_DEFAULT_BRANCH="${__orca_branch#origin/}" CONDUCTOR_DEFAULT_BRANCH="${__orca_branch#origin/}"
   fi
 fi
-# CR-cmd-quiet: Orca's staged agent launch (` . '/tmp/orca-launch-….sh'`) stays out of zsh history.
-# zsh records a line before running it, so the hook must exist first; the staged script itself
-# drops the line from bash's history. eval: bash parses this file too.
-if [ -n "${ZSH_VERSION-}" ]; then
-  eval '__orca_skip_launch_history() { [[ $1 == *orca-launch-* ]] && return 1; return 0 }
-  (( ${zshaddhistory_functions[(Ie)__orca_skip_launch_history]} )) || zshaddhistory_functions+=(__orca_skip_launch_history)'
-fi
 unset __orca_env_file __orca_line __orca_n __orca_names __orca_branch
