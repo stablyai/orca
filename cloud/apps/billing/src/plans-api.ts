@@ -84,7 +84,9 @@ export function plansView(catalog: Catalog) {
         name: plan.name,
         version: plan.currentVersion,
         entitlements: version.entitlements,
-        features: version.features
+        features: version.features,
+        // "Contact us" for this plan (https: or mailto:); clients fall back to Enterprise's contact.
+        supportUrl: plan.config.supportUrl ?? null
       }
       if (plan.kind === 'contact_sales') {
         return { ...base, contactUrl: plan.config.contactUrl ?? null, priceLabel: plan.config.priceLabel ?? null }

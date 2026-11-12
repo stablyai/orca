@@ -8,7 +8,8 @@
       "name": "Team",
       "sort": 10,
       "public": true,
-      "currentVersion": 1,
+      "currentVersion": 2,
+      "supportUrl": "https://orca.dev/enterprise",
       "stripe": {
         "seatLookupKeys": { "month": "orca_team_seat_monthly", "year": "orca_team_seat_annual" },
         "overageLookupKey": "orca_sandbox_overage_per_minute"
@@ -37,6 +38,32 @@
             { "id": "idle_sleep", "params": {}, "text": "Sandboxes sleep when idle, so you only use hours while they work" },
             { "id": "overage_optional", "params": {}, "text": "Optional overage up to a monthly spend cap you set" }
           ]
+        },
+        {
+          "version": 2,
+          "note": "Same terms as v1; the plan card also lists the sandbox size and ready-in-seconds.",
+          "entitlements": {
+            "sandbox_hours_monthly": { "value": 60, "perSeat": true },
+            "max_concurrent_sandboxes": { "value": 3, "perSeat": true },
+            "max_concurrent_sandboxes_per_member": { "value": 3 },
+            "machine_sizes": { "value": ["standard", "large"] },
+            "overage_allowed": { "value": true }
+          },
+          "policy": {
+            "paymentGraceHours": 96,
+            "seatTrueDownHours": 6,
+            "warnAtPercent": [75, 90, 100],
+            "overage": { "defaultSpendCapCents": 2500, "maxSpendCapCents": 500000 },
+            "seats": { "min": 1, "max": 500 }
+          },
+          "features": [
+            { "id": "included_hours_per_seat", "params": { "hours": 60 }, "text": "60 sandbox hours per seat each month, pooled across your team" },
+            { "id": "sandbox_spec", "params": {}, "text": "Every sandbox gets 8 vCPU and 16 GB" },
+            { "id": "ready_in_seconds", "params": {}, "text": "Ready in seconds, nothing to set up or host" },
+            { "id": "agents_keep_running", "params": {}, "text": "Agents keep running when you close your laptop" },
+            { "id": "idle_sleep", "params": {}, "text": "Sandboxes sleep when idle, so you only use hours while they work" },
+            { "id": "overage_optional", "params": {}, "text": "Optional overage up to a monthly spend cap you set" }
+          ]
         }
       ]
     },
@@ -47,7 +74,7 @@
       "sort": 20,
       "public": true,
       "currentVersion": 1,
-      "contactUrl": "https://onorca.dev/contact-sales",
+      "contactUrl": "https://orca.dev/enterprise",
       "priceLabel": "Custom",
       "versions": [
         {
