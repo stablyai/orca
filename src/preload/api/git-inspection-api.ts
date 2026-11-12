@@ -1,3 +1,4 @@
+import type { TerminalModelDiscoveryParams } from '../../shared/rpc-contract/agent-model-discovery-params'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -124,6 +125,9 @@ export type GitInspectionApi = {
     connectionId?: string
     wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
+  discoverTerminalModels: (
+    args: TerminalModelDiscoveryParams
+  ) => ReturnType<GitInspectionApi['discoverCommitMessageModels']>
   discoverCommitMessageModels: (args: {
     agentId: string
     worktreePath?: string

@@ -1,3 +1,4 @@
+import { antigravityModelSelection } from '../../../../shared/agent-session/options/antigravity-model-efforts'
 import {
   agentPickerModelMenu,
   agentPickerUsesComposerModelMenu
@@ -105,18 +106,30 @@ export function agentLaunchSetupOptionRows(
       const effortInArguments =
         entry.textGeneration?.effortInArguments &&
         (!draft.textChanges?.includes('effort') || entry.textGeneration.effortArgumentsUnrecognized)
-      const liveModel = models.find((model) => model.id === currentModel)
-      const current =
+      const selected =
+        entry.agent === 'antigravity' && draft.surface === 'terminal'
+          ? antigravityModelSelection(models, currentModel)
+          : undefined
+      const liveModel = selected?.row ?? models.find((model) => model.id === currentModel)
+      const savedCurrent =
         argumentsView.choices.options?.[option.id] ??
         (currentModel && !defaultsPending && !draft.delegated?.includes(option.id)
           ? option.kind.type === 'boolean'
             ? String(option.kind.defaultValue)
             : option.id === 'effort'
-              ? liveModel?.defaultEffort
+              ? (selected?.effort ?? liveModel?.defaultEffort)
               : option.kind.defaultIsCliDefault
                 ? option.kind.defaultValue
                 : undefined
           : undefined)
+      const current =
+        entry.agent === 'antigravity' &&
+        draft.surface === 'terminal' &&
+        option.id === 'effort' &&
+        option.kind.type === 'select' &&
+        !option.kind.choices.some(({ value }) => value === savedCurrent)
+          ? undefined
+          : savedCurrent
       if (argumentsView.context.analysis.opaqueKeys.has(option.id)) {
         return argumentsOwnedRow(option.id, option.label, option.category, t)
       }
@@ -154,11 +167,21 @@ export function agentLaunchSetupOptionRows(
                         : []),
                       ...option.kind.choices
                     ]
-                  : option.id !== 'serviceTier' &&
-                      current &&
-                      !option.kind.choices.some((choice) => choice.value === current)
-                    ? [...option.kind.choices, { value: current, label: current }]
-                    : option.kind.choices,
+                  : entry.agent === 'antigravity' &&
+                      draft.surface === 'terminal' &&
+                      option.id === 'effort'
+                    ? [
+                        {
+                          value: '',
+                          label: t('settings.sourceControl.actionModel.effortDefault', 'Default')
+                        },
+                        ...option.kind.choices
+                      ]
+                    : option.id !== 'serviceTier' &&
+                        current &&
+                        !option.kind.choices.some((choice) => choice.value === current)
+                      ? [...option.kind.choices, { value: current, label: current }]
+                      : option.kind.choices,
                 currentValue: effortInArguments ? 'arguments' : current
               },
         valueSource: valueKnown ? 'default' : 'unknown',

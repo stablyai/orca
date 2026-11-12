@@ -168,7 +168,7 @@ it('matches Antigravity and its model setups via the AGY acronym', async () => {
     agent: 'antigravity',
     label: 'Antigravity',
     rows: [{ agent: 'antigravity', kind: 'cli' }],
-    catalog: {
+    terminalCatalog: {
       origin: 'probe',
       fetchedAt: 1,
       models: [{ id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', isDefault: false, efforts: [] }]

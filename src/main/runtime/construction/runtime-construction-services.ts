@@ -282,6 +282,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   abstract notifyMessageArrived(handle: string, messageType?: string): void
+  protected abstract resolveGitWorktreeReadSelector(selector: string): Promise<ResolvedWorktree>
   protected abstract resolveGitWorktreeSelector(
     selector: string,
     requiredHostId?: ExecutionHostId

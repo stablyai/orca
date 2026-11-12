@@ -21,10 +21,7 @@ import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
-import {
-  createRepoRowExecutionHostLookup,
-  type RepoRowExecutionHostLookup
-} from '../../../shared/execution-host/worktree-execution-host-resolution'
+import { createRepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 import { RuntimeProjectLaunchContext } from './startup/runtime-project-launch-context'
 import { folderIdOfSelector } from '../../../shared/workspace-scope'
@@ -49,6 +46,17 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
   protected abstract listResolvedWorktrees(
     ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
   ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
+
+  protected abstract listReadOnlyResolvedWorktrees(worktreeId?: string): Promise<ResolvedWorktree[]>
+
+  protected async resolveGitWorktreeReadSelector(selector: string): Promise<ResolvedWorktree> {
+    const explicit = this.getValidatedExplicitWorktreeIdSelector(selector)
+    return this.matchWorktreeSelector(
+      selector,
+      await this.listReadOnlyResolvedWorktrees(explicit ?? undefined),
+      explicit
+    )
+  }
 
   /** The repo-backed catalog only: project-group folder workspaces never match. Resolve a workspace with resolveWorkspaceSelector. */
   protected async resolveGitWorktreeSelector(
@@ -275,9 +283,7 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
 
   protected buildResolvedWorktreeFromId(
     worktreeId: string,
-    repos: RepoRowExecutionHostLookup<Repo> = createRepoRowExecutionHostLookup(
-      this.store?.getRepos() ?? []
-    )
+    repos = createRepoRowExecutionHostLookup(this.store?.getRepos() ?? [])
   ): ResolvedWorktree | null {
     const parsed = splitWorktreeIdForFilesystem(worktreeId)
     if (!parsed?.repoId || !parsed.worktreePath) {

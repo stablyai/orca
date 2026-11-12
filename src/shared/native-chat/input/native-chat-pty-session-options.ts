@@ -1,4 +1,7 @@
-import { getAgentSessionOptionCatalog } from '../../agent-session/options/agent-session-option-catalog'
+import {
+  getAgentSessionOptionCatalog,
+  getAgentSessionOptionLaunchCatalog
+} from '../../agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../agent-session/options/agent-session-option-catalog-types'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
@@ -61,7 +64,10 @@ export type CreateNativeChatPtySessionOptionsArgs = {
 export function createNativeChatPtySessionOptions(
   args: CreateNativeChatPtySessionOptionsArgs
 ): NativeChatPtySessionOptionsSurface | null {
-  const baseCatalog = getAgentSessionOptionCatalog(args.agent)
+  const baseCatalog =
+    args.agent === 'antigravity'
+      ? getAgentSessionOptionLaunchCatalog(args.agent)
+      : getAgentSessionOptionCatalog(args.agent)
   if (!baseCatalog) {
     return null
   }
@@ -193,7 +199,7 @@ export function createNativeChatPtySessionOptions(
       }
     },
     replaceModels: (nextModels) => {
-      models = [...nextModels]
+      models = nextModels
       modelsAreDiscovered = true
       publish()
     },

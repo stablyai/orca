@@ -60,7 +60,7 @@ export function checkAgentLaunchModelPreferences(args: {
     )
   }
 
-  if (args.effort) {
+  if (args.effort && args.agent !== 'antigravity') {
     const model = findCatalogModel(catalog, args.model)
     const option =
       findCatalogOption(model, 'effort') ??

@@ -25291,5 +25291,11 @@
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
     }
+  },
+  "agents": {
+    "terminalModels": {
+      "connectionUnavailable": "Terminal model discovery is unavailable on this connection.",
+      "workspaceRequired": "Terminal model discovery requires a workspace on this host."
+    }
   }
 }

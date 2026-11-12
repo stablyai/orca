@@ -1,7 +1,10 @@
 import { OPENCODE_LAUNCH_OPTION_CATALOG } from './agent-session-option-catalog-opencode'
 import { CODEBUDDY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-codebuddy'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
-import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
+import {
+  ANTIGRAVITY_LAUNCH_OPTION_CATALOG,
+  ANTIGRAVITY_SESSION_OPTION_CATALOG
+} from './agent-session-option-catalog-antigravity'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
@@ -92,6 +95,9 @@ export function sessionOptionValueIsValid(value: unknown): value is SessionOptio
 export function getAgentSessionOptionLaunchCatalog(
   agent: AgentType
 ): AgentSessionOptionCatalog | null {
+  if (agent === 'antigravity') {
+    return ANTIGRAVITY_LAUNCH_OPTION_CATALOG
+  }
   return agent === 'opencode'
     ? OPENCODE_LAUNCH_OPTION_CATALOG
     : agent === 'pi'

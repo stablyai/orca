@@ -206,3 +206,71 @@ it('keeps an unflagged saved catalog provisional when its read fails', async () 
     stop()
   }
 })
+
+it('reprobes a terminal listing for new demand while a peer remains, sharing only pending work', async () => {
+  const first = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  const second = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  const catalog = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+  const agy = { ...codex, agent: 'antigravity' as const, label: 'Antigravity' }
+  let published: AgentPickerEntry[] = []
+  const observe = () =>
+    observeAgentPickerAcquisition(
+      'agy-peers',
+      [agy],
+      {
+        catalog,
+        support: async () => undefined
+      },
+      {
+        selected: () => undefined,
+        publish: (entries) => {
+          published = entries
+        }
+      }
+    )
+  const stopFirst = observe()
+  const stopSecond = observe()
+  expect(catalog).toHaveBeenCalledTimes(1)
+  first.resolve({ origin: 'probe', fetchedAt: 1, models: [model('old')] })
+  await expect.poll(() => published[0].terminalCatalogRead).toBe('settled')
+  stopSecond()
+  const stopReopened = observe()
+  expect(catalog).toHaveBeenCalledTimes(2)
+  expect(published[0].terminalCatalogRead).toBe('pending')
+  second.reject(new Error('account unavailable'))
+  await expect.poll(() => published[0].terminalCatalogRead).toBe('failed')
+  expect(published[0].terminalCatalog).toEqual({ origin: 'unknown' })
+  stopFirst()
+  stopReopened()
+  expect(currentAgentPickerAcquisition('agy-peers')).toBeUndefined()
+})
+
+it('shares physical terminal discovery across a close and immediate reopen', async () => {
+  const result = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  const catalog = vi.fn(() => result.promise)
+  const agy = { ...codex, agent: 'antigravity' as const }
+  let published: AgentPickerEntry[] = []
+  const observe = () =>
+    observeAgentPickerAcquisition(
+      'agy-pending-reopen',
+      [agy],
+      {
+        catalog,
+        support: async () => undefined
+      },
+      {
+        selected: () => undefined,
+        publish: (entries) => {
+          published = entries
+        }
+      }
+    )
+  observe()()
+  const stop = observe()
+  expect(catalog).toHaveBeenCalledTimes(1)
+  result.resolve({ origin: 'probe', fetchedAt: 1, models: [model('fresh')] })
+  await expect.poll(() => published[0].terminalCatalogRead).toBe('settled')
+  expect(published[0].terminalCatalog).toMatchObject({ models: [{ id: 'fresh' }] })
+  stop()
+  expect(currentAgentPickerAcquisition('agy-pending-reopen')).toBeUndefined()
+})

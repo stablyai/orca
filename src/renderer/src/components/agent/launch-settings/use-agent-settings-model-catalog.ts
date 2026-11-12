@@ -17,6 +17,7 @@ import { subscribeHostAgentLaunchSettings } from '@/runtime/agent-launch-setting
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useAppStore } from '@/store'
+import { readAntigravityHostTerminalCatalog } from '@/runtime/terminal/terminal-model-discovery-client'
 import {
   agentPickerListsCliModels,
   readAgentPickerCliModelCatalog
@@ -28,12 +29,20 @@ const SETTINGS_LAUNCH = { newLaunch: true, seedsModel: true }
 /** The host's account models for a Settings default. `usesSeedModels` says the release's list stands in. */
 export function useAgentSettingsModelCatalog(
   agent: TuiAgent,
-  target: RuntimeClientTarget | null
+  target: RuntimeClientTarget | null,
+  surface: 'chat' | 'terminal'
 ): { catalog: AgentSessionModelCatalogResult | undefined; usesSeedModels: boolean } {
-  const key = target ? `${structuredAgentSessionHostKey(target)}\u0000${agent}` : null
+  const key = target
+    ? `${structuredAgentSessionHostKey(target)}\u0000${agent}\u0000${surface}`
+    : null
   // Same array until one changes: a new account or command lists different models.
   const accountSettings = useAppStore(
-    useShallow((state) => HOST_MODEL_CATALOG_ACCOUNT_SETTINGS.map((name) => state.settings?.[name]))
+    useShallow((state) => [
+      ...HOST_MODEL_CATALOG_ACCOUNT_SETTINGS.map((name) => state.settings?.[name]),
+      ...(agent === 'antigravity' && surface === 'terminal'
+        ? [state.settings?.terminalWindowsShell, state.settings?.terminalWindowsWslDistro]
+        : [])
+    ])
   )
   // A host can change account with no setting changing here, such as a paired host reconnecting.
   const readGeneration = (): number => (target ? hostModelCatalogGeneration(target) : 0)
@@ -70,24 +79,25 @@ export function useAgentSettingsModelCatalog(
       return
     }
     let stale = false
-    // Like the launch picker, an agent with no structured chat lists through this machine's CLI;
-    // a workspace-less read can't route that to another host, so other hosts keep the seed.
+    // Workspace-less CLI discovery can only use this machine; remote hosts retain the seed.
     const cliRuntime =
       isLocal && agentPickerListsCliModels({ agent })
         ? resolveWorktreeModelDiscoveryRuntime(useAppStore.getState(), null)
         : null
     // Not recorded in the new-chat snapshot: an account answer there would drop newer workspace answers.
     // Old hosts refuse waitForListing, so wait only once the host says a listing is running.
-    const fetchCatalog = (wait: boolean): Promise<AgentSessionModelCatalogResult> =>
-      cliRuntime
-        ? readAgentPickerCliModelCatalog(agent, cliRuntime)
-        : callStructuredAgentSession<AgentSessionModelCatalogResult>(
-            readTarget,
-            'agentSession.modelCatalog',
-            wait ? { agent, waitForListing: true } : { agent }
-          )
     const read = (wait: boolean): void => {
-      void fetchCatalog(wait)
+      const listing =
+        agent === 'antigravity' && surface === 'terminal'
+          ? readAntigravityHostTerminalCatalog(readTarget)
+          : cliRuntime
+            ? readAgentPickerCliModelCatalog(agent, cliRuntime)
+            : callStructuredAgentSession<AgentSessionModelCatalogResult>(
+                readTarget,
+                'agentSession.modelCatalog',
+                wait ? { agent, waitForListing: true } : { agent }
+              )
+      void listing
         .then((catalog) => {
           if (stale) {
             return
@@ -109,7 +119,7 @@ export function useAgentSettingsModelCatalog(
     return () => {
       stale = true
     }
-  }, [agent, key, environmentId, isLocal, accountSettings, generation, hostRevision])
+  }, [agent, surface, key, environmentId, isLocal, accountSettings, generation, hostRevision])
   const settled =
     answer?.key === key &&
     answer.accountSettings === accountSettings &&
@@ -119,7 +129,7 @@ export function useAgentSettingsModelCatalog(
   // Why not the snapshot once answered: it serves new chats, so it refuses workspace-scoped lists.
   const catalog = settled
     ? settled.catalog && withoutUnprovenNewLaunchDefault(settled.catalog)
-    : target
+    : target && (agent !== 'antigravity' || surface === 'chat')
       ? readHostModelCatalogSnapshot(target, agent, SETTINGS_LAUNCH)
       : undefined
   const listed = catalog && catalog.origin !== 'unknown' && catalog.models.length > 0

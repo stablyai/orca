@@ -115,17 +115,37 @@ export async function resolveFloatingTerminalCwd(
   store: { getSettings(): FloatingTerminalSettings },
   args?: FloatingTerminalCwdRequest
 ): Promise<string> {
+  return floatingTerminalCwd(store, args, ensureDefaultFloatingWorkspacePath)
+}
+
+/** Discovery must not create a fallback directory merely to list models. */
+export async function readFloatingTerminalCwd(
+  store: { getSettings(): FloatingTerminalSettings },
+  args?: FloatingTerminalCwdRequest
+): Promise<string> {
+  return floatingTerminalCwd(store, args, async () => {
+    const cwd = await canonicalizeAccessibleDirectory(getDefaultFloatingWorkspacePath())
+    if (!cwd) {
+      throw new Error('floating_workspace_path_unavailable')
+    }
+    return cwd
+  })
+}
+
+async function floatingTerminalCwd(
+  store: { getSettings(): FloatingTerminalSettings },
+  args: FloatingTerminalCwdRequest | undefined,
+  defaultPath: () => Promise<string>
+): Promise<string> {
   const configuredPath = typeof args?.path === 'string' ? args.path.trim() : ''
   if (!configuredPath) {
-    return args?.requireTrusted === true
-      ? ensureDefaultFloatingWorkspacePath()
-      : resolveFloatingWorkspaceInput('~')
+    return args?.requireTrusted === true ? defaultPath() : resolveFloatingWorkspaceInput('~')
   }
 
   const cwd = resolveFloatingWorkspaceInput(configuredPath)
   const canonicalCwd = await canonicalizeAccessibleDirectory(cwd)
   if (!canonicalCwd) {
-    return ensureDefaultFloatingWorkspacePath()
+    return defaultPath()
   }
 
   // Only picker-approved directories may become terminal cwd.
@@ -133,7 +153,7 @@ export async function resolveFloatingTerminalCwd(
     return canonicalCwd
   }
 
-  return args?.requireTrusted === true ? ensureDefaultFloatingWorkspacePath() : cwd
+  return args?.requireTrusted === true ? defaultPath() : cwd
 }
 
 export async function trustFloatingWorkspaceDirectory(

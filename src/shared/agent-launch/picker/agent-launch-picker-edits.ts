@@ -1,3 +1,4 @@
+import { antigravityTerminalChoicePatch } from '../../agent-session/options/antigravity-model-efforts'
 import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
 import { reconcileAgentChoiceArgsDetailed } from '../choices/agent-choice-reconciliation'
 import { projectAgentLaunchProfile } from '../choices/agent-launch-profile'
@@ -171,7 +172,7 @@ export function applyAgentPickerEdit(
   if (edit.kind === 'accept-arguments') {
     return draft
   }
-  const patch: AgentChoicePatch =
+  let patch: AgentChoicePatch =
     edit.kind === 'choice'
       ? edit.patch
       : edit.kind === 'permission'
@@ -192,6 +193,18 @@ export function applyAgentPickerEdit(
                           : null
                   }
                 }
+  if (entry.agent === 'antigravity' && draft.surface === 'terminal' && edit.kind === 'choice') {
+    const rows =
+      entry.terminalCatalog?.origin !== 'unknown' ? (entry.terminalCatalog?.models ?? []) : []
+    patch = antigravityTerminalChoicePatch(
+      rows,
+      {
+        model: agentPickerEffectiveChoices(entry, draft).model,
+        options: { effort: visibleEffort(entry, draft) }
+      },
+      patch
+    )
+  }
   const keys = new Set(patchKeys(patch))
   const source = agentPickerArgumentsText(entry, draft) ?? ''
   const visible = agentPickerPanelArguments(entry, draft)
@@ -241,4 +254,8 @@ export function applyAgentPickerEdit(
     false,
     domain ? domain.arguments : draft.arguments !== undefined ? result.userArgs || null : undefined
   )
+}
+
+function visibleEffort(entry: AgentPickerEntry, draft: AgentPickerDraft) {
+  return agentPickerPanelArguments(entry, draft).choices.options?.effort
 }

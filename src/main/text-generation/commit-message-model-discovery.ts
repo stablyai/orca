@@ -38,8 +38,11 @@ import type {
 } from './source-control-text-generation-types'
 
 export type CommitMessageModelDiscoveryLocalOptions = {
+  uncached?: boolean
   cwd?: string
   wslDistro?: string
+  agentEnv?: Record<string, string>
+  useCwdForNative?: boolean
 }
 
 type DiscoverModelsLocalInput = {
@@ -69,7 +72,11 @@ export async function discoverModelsLocal(
     return { success: false, error: planned.error }
   }
   const env = mergeCommandEnvironment(
-    input.env,
+    mergeCommandEnvironment(
+      input.env,
+      input.options.agentEnv,
+      input.options.wslDistro ? 'linux' : process.platform
+    ),
     planned.plan.env,
     input.options.wslDistro ? 'linux' : process.platform
   )
@@ -121,10 +128,12 @@ async function discoverModelsOnce(
           args: plan.args,
           cwd: input.options.cwd,
           env: input.options.wslDistro ? input.env : env,
-          commandEnv: plan.env,
+          commandEnv: input.options.agentEnv
+            ? { ...input.options.agentEnv, ...plan.env }
+            : plan.env,
           wslDistro: input.options.wslDistro,
           stdinMode: plan.stdinPayload === null && !appServer ? 'ignore' : 'pipe',
-          useCwdForNative: false
+          useCwdForNative: input.options.useCwdForNative === true
         })
         if (appServer && child.stdin) {
           const stdin = child.stdin

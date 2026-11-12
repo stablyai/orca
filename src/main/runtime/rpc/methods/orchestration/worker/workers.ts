@@ -75,16 +75,19 @@ export async function startWorker(
   })
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
-    const receipt = await startFederatedWorker({
-      params,
-      runtime,
-      db,
-      bindRunId: () => bindRun().run.id,
-      task: existingTask,
-      taskDeps,
-      orchestrationMutation,
-      callerSession: orchestrationCaller
-    })
+    const receipt = await startFederatedWorker(
+      {
+        params,
+        runtime,
+        db,
+        bindRunId: () => bindRun().run.id,
+        task: existingTask,
+        taskDeps,
+        orchestrationMutation,
+        callerSession: orchestrationCaller
+      },
+      !followUp
+    )
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
     return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
   }

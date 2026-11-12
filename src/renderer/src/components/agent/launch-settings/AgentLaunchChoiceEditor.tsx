@@ -39,9 +39,11 @@ export function AgentLaunchChoiceEditor({
   save: (patch: AgentChoicePatch | undefined, userArgs: string) => Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
+  const surface = showArguments ? 'terminal' : 'chat'
   const { catalog: liveCatalog, usesSeedModels } = useAgentSettingsModelCatalog(
     agent,
-    catalogTarget
+    catalogTarget,
+    surface
   )
   const menu = useRef({ open: false, committed: false })
   const editorRef = useRef<HTMLDivElement>(null)
@@ -107,6 +109,7 @@ export function AgentLaunchChoiceEditor({
       <div className="space-y-2">
         <AgentChoiceFields
           agent={agent}
+          surface={surface}
           value={choices}
           disabled={pending}
           layout="rows"

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 
 const EARLIER_WORK_CLIP = 2_000
@@ -32,7 +33,7 @@ function parseJson(raw: string | null): unknown {
 
 /** The agent and launch choices the worker first started with, for a fresh start of the same kind. */
 export function parseStartOptions(raw: string): {
-  agent?: string
+  agent?: TuiAgent
   model?: string
   effort?: string
 } {

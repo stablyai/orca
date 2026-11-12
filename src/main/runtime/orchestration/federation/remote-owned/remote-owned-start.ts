@@ -8,6 +8,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../../rpc/core'
 import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/workers'
 import { resolveFederatedWorkerStartBudgets } from '../../../rpc/methods/orchestration/worker/worker-start-budgets'
+import { assertRemoteAntigravityEffort } from '../../../terminal/catalog/antigravity-remote-terminal-effort'
 import { OrchestrationError } from '../../orchestration-error'
 import { prepareWorkerStartCard } from '../../workers/launch/worker-start-card'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
@@ -17,8 +18,16 @@ import {
   releaseRemotePlacement,
   reserveRemotePlacement
 } from '../../db/remote-owned/remote-placements'
-import { refuseTaskOfClosedPairing } from '../../db/remote-owned/remote-placement-hold'
-import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
+import {
+  getLiveRemotePlacement,
+  refuseTaskOfClosedPairing
+} from '../../db/remote-owned/remote-placement-hold'
+import {
+  getOpenRemoteRunLink,
+  openRemoteRunLink,
+  remoteRunLinkPinMatches,
+  remoteServerPin
+} from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey } from './remote-forward-caller'
 import { errorData, inServerTerms, serverNeverAnswered } from './remote-owned-answers'
@@ -87,13 +96,22 @@ export async function startRemoteOwnedWorker(
   )
   const db = runtime.getOrchestrationDb()
   const server = runtime.resolveOrchestrationWorkerServer(params.on!)
-  const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
   const taskId = existingTask?.id ?? adoptedTaskId(forward.key)
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
   // Before any link is written: a Task an earlier pairing with this server placed is not reused there.
   refuseTaskOfClosedPairing(db, taskId, server)
+  const placement = getLiveRemotePlacement(db, taskId)
+  const previousLink = placement && getOpenRemoteRunLink(db, placement.conversation_id)
+  const replay =
+    placement?.request_key === forward.key &&
+    previousLink &&
+    remoteRunLinkPinMatches(previousLink, remoteServerPin(server))
+  if (!replay) {
+    await assertRemoteAntigravityEffort(runtime, params, server, budgets.preflightTimeoutMs, true)
+  }
+  const { run } = bindRun()
   const link = openRemoteRunLink(db, run.id, server, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )

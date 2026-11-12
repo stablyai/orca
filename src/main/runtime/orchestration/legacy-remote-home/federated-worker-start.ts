@@ -1,15 +1,8 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
+import { assertRemoteAntigravityEffort } from '../../terminal/catalog/antigravity-remote-terminal-effort'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
-} from '../../../../shared/orchestration/orchestration-runtime-capabilities'
+import * as Caps from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { orchestrationMigrationData } from '../../../../shared/orchestration/orchestration-rpc-contract'
 import { OrchestrationError } from '../orchestration-error'
 import {
@@ -42,7 +35,10 @@ import {
   workerLaunchAgent
 } from '../workers/launch/worker-launch-observation'
 
-export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
+export async function startFederatedWorker(
+  args: FederatedWorkerStartRequest,
+  validateNewEffort = false
+): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
@@ -83,14 +79,15 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     undefined,
     pairingFence
   )) as RuntimeStatus
-  if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
+  const capabilities = status.capabilities
+  if (!capabilities?.includes(Caps.ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
     throw new OrchestrationError(
       'orchestration_migration_required',
       `Connected server ${server.name} does not support the current orchestration contract. No effects were applied.`,
       orchestrationMigrationData('runtime_capability_missing')
     )
   }
-  if (!status.capabilities?.includes(ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY)) {
+  if (!capabilities?.includes(Caps.ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY)) {
     throw new OrchestrationError(
       'capability_unsupported',
       `Connected server ${server.name} does not support orchestration federation.`
@@ -99,7 +96,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   assertWorkerLaunchPreferencesRuntimeSupported({
     model: params.model,
     effort: params.effort,
-    capabilities: status.capabilities,
+    capabilities,
     serverName: server.name
   })
   const childParent =
@@ -108,19 +105,23 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           runtime,
           from: params.from,
           callerSession: args.callerSession,
-          serverCapabilities: status.capabilities,
+          serverCapabilities: capabilities,
           serverName: server.name
         })
       : undefined
-  const supportsControlMail = status.capabilities?.includes(
-    ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
+  if (validateNewEffort && !params.terminal) {
+    await assertRemoteAntigravityEffort(runtime, params, server, budgets.preflightTimeoutMs)
+  }
+
+  const supportsControlMail = capabilities?.includes(
+    Caps.ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
   const federationProtocolVersion =
     supportsControlMail &&
-    status.capabilities?.includes(ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
-      ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+    capabilities?.includes(Caps.ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
+      ? Caps.ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
       : supportsControlMail
-        ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+        ? Caps.ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
         : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
@@ -230,8 +231,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       recordReadyFederatedDispatch(db, started.dispatch.id, remote)
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)
-      const reportsTurnStops = status.capabilities?.includes(
-        ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
+      const reportsTurnStops = capabilities?.includes(
+        Caps.ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
       )
       readyResult = withWorkerStartNext(
         {

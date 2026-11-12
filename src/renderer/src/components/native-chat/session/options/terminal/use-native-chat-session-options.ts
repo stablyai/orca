@@ -22,6 +22,8 @@ import {
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
 
 import { enqueueSessionOptionSettingsWrite } from '../native-chat-session-option-settings-write'
+import { createAntigravityTerminalModelDemand } from './antigravity-terminal-model-observation'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -65,15 +67,25 @@ export function useNativeChatSessionOptions(args: {
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
   )
+  const dispatchLatest = useLatestHandler(dispatchCommand)
+  const terminalDemand = useMemo(
+    () =>
+      agent === 'antigravity' && targetPtyId
+        ? createAntigravityTerminalModelDemand(terminalTabId)
+        : null,
+    [agent, terminalTabId, targetPtyId]
+  )
+  const dispatch = agent === 'antigravity' ? dispatchLatest : dispatchCommand
   const surface = useMemo(() => {
     // Chat attaches after startup is queued, so a draft picker could no longer change its command.
     if (!targetPtyId) {
       return null
     }
     const scopeKey = targetPtyId ?? terminalTabId
-    const discoveredModels = discoveryContext
-      ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
-      : null
+    const discoveredModels =
+      discoveryContext && agent !== 'antigravity'
+        ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
+        : null
     const reportedValues =
       agent === 'claude'
         ? readClaudeSessionOptionsFromTerminalScreen(
@@ -81,7 +93,7 @@ export function useNativeChatSessionOptions(args: {
             discoveredModels ?? undefined
           )
         : null
-    return createNativeChatPtySessionOptions({
+    const options = createNativeChatPtySessionOptions({
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
@@ -90,26 +102,33 @@ export function useNativeChatSessionOptions(args: {
       mode: targetPtyId ? 'live' : 'draft',
       modelLabel: sayNativeChatSessionOptionTranslated('model'),
       reportedValues,
-      dispatchCommand,
+      dispatchCommand: dispatch,
       canSwitchOmpModel,
       onAgentPicker,
-      persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
-        // Paired PTY launches still assemble their launch preferences from client settings.
-        enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, {
-          type: 'apply-picks',
-          agent,
-          picks: [{ modelId, optionId, value, adoptModelAsLaunchDefault }]
-        })
+      persistSelection:
+        agent === 'antigravity'
+          ? undefined
+          : ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
+              // Paired PTY launches still assemble their launch preferences from client settings.
+              enqueueSessionOptionSettingsWrite(CLIENT_SETTINGS_TARGET, {
+                type: 'apply-picks',
+                agent,
+                picks: [{ modelId, optionId, value, adoptModelAsLaunchDefault }]
+              })
     })
+    return options && terminalDemand
+      ? { ...options, demandModelCatalog: () => terminalDemand.demand(options.replaceModels) }
+      : options
   }, [
     agent,
     canSwitchOmpModel,
-    dispatchCommand,
+    dispatch,
     discoveryContext,
     onAgentPicker,
     readTerminalScreen,
     targetPtyId,
-    terminalTabId
+    terminalTabId,
+    terminalDemand
   ])
 
   useEffect(() => {
@@ -179,7 +198,7 @@ export function useNativeChatSessionOptions(args: {
       agent === 'omp'
         ? reportedModel.trim()
         : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel, {
-            allowUnlisted: agent === 'codex'
+            allowUnlisted: agent === 'codex' || agent === 'antigravity'
           })
     if (!matched || appliedReportedModelRef.current === matched) {
       return
@@ -188,8 +207,10 @@ export function useNativeChatSessionOptions(args: {
     surface.reportSessionOptions({ model: matched })
   }, [agent, discoveryContext, reportedModel, surface])
 
+  useEffect(() => () => terminalDemand?.dispose(), [terminalDemand])
+
   useEffect(() => {
-    if (!surface || !discoveryContext) {
+    if (!surface || !discoveryContext || agent === 'antigravity') {
       return
     }
     const unsubscribe = subscribeNativeChatEnrichedModels(

@@ -50,3 +50,13 @@ export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   },
   unknownModelOptions: [ANTIGRAVITY_EFFORT]
 }
+
+// Terminal effort choices come from the CLI listing; saved pairs still compile literally.
+export const ANTIGRAVITY_LAUNCH_OPTION_CATALOG: AgentSessionOptionCatalog = {
+  supportsWorkerLaunchPreferences: true,
+  models: [],
+  modelApply: ANTIGRAVITY_SESSION_OPTION_CATALOG.modelApply,
+  unknownModelOptions: [
+    { ...ANTIGRAVITY_EFFORT, kind: { type: 'select', choices: [], defaultValue: '' } }
+  ]
+}

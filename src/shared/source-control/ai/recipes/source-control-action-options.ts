@@ -4,6 +4,7 @@ import { isAgentSessionHandleProvider } from '../../../agent-session/lifecycle/a
 import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../../native-chat/input/native-chat-session-option-defaults'
 import {
   findCatalogModel,
+  getAgentSessionOptionCatalog,
   getAgentSessionOptionLaunchCatalog
 } from '../../../agent-session/options/agent-session-option-catalog'
 import type { CatalogOption } from '../../../agent-session/options/agent-session-option-catalog-types'
@@ -45,17 +46,31 @@ type SourceControlActionOption = { option: CatalogOption; route: SourceControlAc
 /** The picked model's options that a chat seeds or a terminal flag carries. */
 export function sourceControlActionOptions(
   agent: TuiAgent,
-  modelId: string
+  modelId: string,
+  surface?: 'chat' | 'terminal'
 ): SourceControlActionOption[] {
-  const catalog = getAgentSessionOptionLaunchCatalog(agent)
+  const catalog =
+    agent === 'antigravity' && surface !== 'terminal'
+      ? getAgentSessionOptionCatalog(agent)
+      : getAgentSessionOptionLaunchCatalog(agent)
   const model = findCatalogModel(catalog ?? { models: [], modelApply: {} }, modelId)
   const options = model?.options ?? catalog?.unknownModelOptions ?? []
+  const launchCatalog = getAgentSessionOptionLaunchCatalog(agent)
+  const launchModel = findCatalogModel(launchCatalog ?? { models: [], modelApply: {} }, modelId)
+  // Terminals offer only what the launch catalog offers; Chat may offer more.
+  const launchOptions = launchModel?.options ?? launchCatalog?.unknownModelOptions ?? []
   return options.flatMap((option): SourceControlActionOption[] => {
     const chats = optionReachesChats(agent, option)
-    const terminals = Boolean(option.apply.launchArgs || option.apply.composedIntoModel)
+    const terminals = launchOptions.some(
+      (launch) =>
+        launch.id === option.id &&
+        Boolean(launch.apply.launchArgs || launch.apply.composedIntoModel)
+    )
     if (
       (!chats && !terminals) ||
-      (option.kind.type === 'select' && option.kind.choices.length === 0)
+      (option.kind.type === 'select' &&
+        option.kind.choices.length === 0 &&
+        !(agent === 'antigravity' && surface === 'terminal'))
     ) {
       return []
     }

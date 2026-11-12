@@ -55,7 +55,7 @@ export function discoverModelsWithHostCache(
   probe: () => Promise<DiscoverCommitMessageModelsResult>
 ): Promise<DiscoverCommitMessageModelsResult> {
   const accountDirVar = ACCOUNT_DIR_VAR[input.agentId]
-  if (!accountDirVar) {
+  if (!accountDirVar || input.options.uncached) {
     return probe()
   }
   const { cwd, wslDistro } = input.options

@@ -1,3 +1,7 @@
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { AgentPickerDefaultSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
+import { resolveWorktreeModelDiscoveryRuntime } from '../native-chat/session/options/catalog/native-chat-session-option-discovery'
+import { readAntigravityTerminalCatalog } from '@/runtime/terminal/terminal-model-discovery-client'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
@@ -13,36 +17,55 @@ import { subscribeModelMenuInvalidation } from '@/runtime/native-chat/model-cata
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { TerminalModelDiscoveryParams } from '../../../../shared/rpc-contract/agent-model-discovery-params'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export function agentPickerModelCatalogReads(
   input: Omit<ModelMenuReadScope, 'agent' | 'target'> & {
     target: RuntimeClientTarget | null
     cliDiscoveryRuntime?: RuntimeGitContext | null
+    terminalDiscovery?: {
+      runtime: RuntimeGitContext
+      launch: Omit<TerminalModelDiscoveryParams, 'agentId'>
+    } | null
   }
 ) {
   const { target, cliDiscoveryRuntime } = input
   return {
-    catalog: async (entry: AgentPickerEntry, waitForListing: boolean, signal: AbortSignal) =>
-      cliDiscoveryRuntime && agentPickerListsCliModels(entry)
-        ? readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
-        : !target
-          ? undefined
-          : entry.agent === 'antigravity'
-            ? callStructuredAgentSession<AgentSessionModelCatalogResult>(
-                target,
-                'agentSession.modelCatalog',
-                {
-                  ...(input.worktree ? { worktree: input.worktree } : {}),
-                  agent: entry.agent,
-                  ...(waitForListing ? { waitForListing } : {})
-                }
-              )
-            : readModelMenuCatalog(
-                { ...input, target, agent: entry.agent },
-                waitForListing,
-                signal
-              ),
+    catalog: async (
+      entry: AgentPickerEntry,
+      waitForListing: boolean,
+      signal: AbortSignal,
+      surface?: 'terminal'
+    ) =>
+      surface === 'terminal' && entry.agent === 'antigravity'
+        ? !input.terminalDiscovery
+          ? { origin: 'unknown' as const }
+          : readAntigravityTerminalCatalog(
+              input.terminalDiscovery.runtime,
+              input.terminalDiscovery.launch
+            )
+        : cliDiscoveryRuntime && agentPickerListsCliModels(entry)
+          ? readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
+          : !target
+            ? undefined
+            : entry.agent === 'antigravity'
+              ? callStructuredAgentSession<AgentSessionModelCatalogResult>(
+                  target,
+                  'agentSession.modelCatalog',
+                  {
+                    ...(input.worktree ? { worktree: input.worktree } : {}),
+                    agent: entry.agent,
+                    ...(waitForListing ? { waitForListing } : {})
+                  }
+                )
+              : readModelMenuCatalog(
+                  { ...input, target, agent: entry.agent },
+                  waitForListing,
+                  signal
+                ),
     refreshOnInvalidation: (entry: Pick<AgentPickerEntry, 'agent'>) =>
       !!target &&
       !(cliDiscoveryRuntime && agentPickerListsCliModels(entry)) &&
@@ -76,4 +99,69 @@ export async function readAgentPickerLaunchSupport(
     options,
     ...(isAgentChatPermissionChoice(permissionMode) ? { permissionMode } : {})
   }
+}
+
+export function agentPickerTerminalDiscovery(input: {
+  target: RuntimeClientTarget | null
+  concreteWorkspace: boolean
+  workspaceId?: string
+  repo?: { id: string; executionHostId?: string | null }
+  cwd?: string | null
+}): { runtime: RuntimeGitContext; launch: Omit<TerminalModelDiscoveryParams, 'agentId'> } | null {
+  const { target, workspaceId, repo, cwd } = input
+  const concreteWorkspace = input.concreteWorkspace || workspaceId === FLOATING_TERMINAL_WORKTREE_ID
+  if (!target || (!concreteWorkspace && !repo)) {
+    return null
+  }
+  return {
+    runtime: {
+      target,
+      worktreeId: concreteWorkspace ? (workspaceId ?? null) : null,
+      worktreePath: ''
+    },
+    launch: {
+      ...(concreteWorkspace && workspaceId ? { worktree: `id:${workspaceId}` } : {}),
+      ...(!concreteWorkspace && repo
+        ? { repo: repo.id, repoHostId: getRepoExecutionHostId(repo) }
+        : {}),
+      ...(cwd ? { cwd } : {})
+    }
+  }
+}
+
+export function agentPickerCliDiscoveryRuntime(
+  state: Parameters<typeof resolveWorktreeModelDiscoveryRuntime>[0],
+  worktreeId: string | null,
+  target: RuntimeClientTarget | null,
+  repoPath?: string
+): RuntimeGitContext | null {
+  const owner =
+    worktreeId || target?.kind === 'local'
+      ? resolveWorktreeModelDiscoveryRuntime(state, worktreeId)
+      : null
+  return !owner || owner.connectionId
+    ? null
+    : worktreeId
+      ? owner
+      : { ...owner, worktreePath: repoPath ?? '' }
+}
+
+export function agentPickerCatalogSettingsKey(
+  defaults: AgentPickerDefaultSettings | null | undefined,
+  settings: GlobalSettings | null
+) {
+  return [
+    defaults && {
+      agentDefaultArgs: defaults.agentDefaultArgs,
+      agentLaunchChoices: defaults.agentLaunchChoices,
+      agentPermissionDefault: defaults.agentPermissionDefault,
+      agentPermissionOverrides: defaults.agentPermissionOverrides,
+      nativeChatSessionOptions: defaults.nativeChatSessionOptions,
+      nativeChatPermissionMode: defaults.nativeChatPermissionMode
+    },
+    settings?.agentCmdOverrides?.antigravity,
+    settings?.agentDefaultEnv?.antigravity,
+    settings?.terminalWindowsShell,
+    settings?.terminalWindowsWslDistro
+  ]
 }

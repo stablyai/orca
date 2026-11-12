@@ -35,6 +35,8 @@ export type AgentPickerEntry = {
   structured: AgentDedicatedChoices
   arguments?: string | null
   catalog: AgentSessionModelCatalogResult
+  terminalCatalog?: AgentSessionModelCatalogResult
+  terminalCatalogRead?: AgentPickerEntry['catalogRead']
   coherentCatalog?: boolean
   catalogRead?: 'pending' | 'settled' | 'failed' | 'unsupported'
   ownerKey?: string
