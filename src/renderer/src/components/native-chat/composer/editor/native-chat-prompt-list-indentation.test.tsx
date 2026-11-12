@@ -81,7 +81,7 @@ describe('native chat list indentation', () => {
     const { input, editor } = setup('• parent')
     act(() => {
       editor.commands.setHardBreak()
-      input.insertText!('+')
+      input.insertText!('*')
     })
     typeText(editor, ' ')
     expect(input.value).toBe('• parent\n• ')
@@ -97,6 +97,25 @@ describe('native chat list indentation', () => {
     })
     typeText(editor, ' ')
     expect(input.value).toBe('cost * ')
+  })
+
+  it('leaves plus-prefixed input literal while protecting code fenced inside a plus list', () => {
+    const { input, editor, tab } = setup('- parent\n+')
+    typeText(editor, ' ')
+    expect(input.value).toBe('- parent\n+ ')
+    expect(tab().defaultPrevented).toBe(false)
+    act(() => {
+      input.value = '+ parent\n- child'
+      input.setSelectionRange(16, 16)
+    })
+    expect(tab().defaultPrevented).toBe(false)
+    act(() => {
+      input.value = '+ ```\n    - parent\n    -'
+      input.setSelectionRange(24, 24)
+    })
+    typeText(editor, ' ')
+    expect(input.value).toBe('+ ```\n    - parent\n    - ')
+    expect(tab().defaultPrevented).toBe(false)
   })
 
   it('nests an item, keeps its caret, and supports undo, redo and outdent', () => {
@@ -136,9 +155,9 @@ describe('native chat list indentation', () => {
   })
 
   it('finds a sibling before its nested children', () => {
-    const { input, tab } = setup('* parent\n    + nested\n* sibling')
+    const { input, tab } = setup('* parent\n    - nested\n* sibling')
     tab()
-    expect(input.value).toBe('* parent\n    + nested\n    • sibling')
+    expect(input.value).toBe('* parent\n    - nested\n    • sibling')
   })
 
   it('nests after a continued item while leaving unrelated prose as a boundary', () => {
@@ -176,6 +195,12 @@ describe('native chat list indentation', () => {
     const { input, tab } = setup('```\n• code\n  ```\n• first')
     expect(tab().defaultPrevented).toBe(false)
     expect(input.value).toBe('```\n• code\n  ```\n• first')
+  })
+
+  it('nests after an inline backtick continuation', () => {
+    const { input, tab } = setup('- parent\n  ```inline```\n- child')
+    tab()
+    expect(input.value).toBe('- parent\n  ```inline```\n    • child')
   })
 
   it('leaves a fenced list literal until the fence closes, then resumes list editing', () => {

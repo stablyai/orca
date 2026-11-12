@@ -3,18 +3,25 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { closeHistory } from '@tiptap/pm/history'
 import { Plugin } from '@tiptap/pm/state'
 
-const LIST_ITEM = /^([ \t]*)(?:[-+*•]|\d{1,9}[.)])[ \t]+/
+const LIST_ITEM = /^([ \t]*)(?:[-*•]|\d{1,9}[.)])[ \t]+/
+// Code stays literal even inside a Markdown '+' list that these shortcuts do not edit.
+const FENCE_LIST_ITEM = /^[ \t]*(?:[-+*•]|\d{1,9}[.)])[ \t]+/
 
 function positionLeafText(node: ProseMirrorNode): string {
   // Chips occupy one document position; their serialized tokens would shift the calculated line start.
   return node.type.name === 'hardBreak' ? '\n' : '\ufffc'
 }
 
+function matchCodeFence(line: string): RegExpExecArray | null {
+  const match = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(line)
+  return match && (match[1][0] !== '`' || !match[2].includes('`')) ? match : null
+}
+
 function isInsideCodeFence(lines: readonly string[]): boolean {
   let fence = ''
   for (const line of lines) {
-    const content = fence ? line : line.replace(LIST_ITEM, '')
-    const match = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(content)
+    const content = fence ? line : line.replace(FENCE_LIST_ITEM, '')
+    const match = matchCodeFence(content)
     if (!match) {
       continue
     }
@@ -22,7 +29,7 @@ function isInsideCodeFence(lines: readonly string[]): boolean {
       if (match[1][0] === fence[0] && match[1].length >= fence.length && !match[2].trim()) {
         fence = ''
       }
-    } else if (match[1][0] !== '`' || !match[2].includes('`')) {
+    } else {
       fence = match[1]
     }
   }
@@ -35,7 +42,7 @@ function previousListItem(lines: readonly string[], indent: number): RegExpExecA
     if (lines[index].trim() === '') {
       continue
     }
-    if (/^[ \t]*(?:`{3,}|~{3,})/.test(lines[index])) {
+    if (matchCodeFence(lines[index])) {
       return null
     }
     const match = LIST_ITEM.exec(lines[index])
@@ -71,7 +78,7 @@ export const NativeChatListIndentation = Extension.create({
             const $from = view.state.doc.resolve(from)
             const before = $from.parent.textBetween(0, $from.parentOffset, '\n', positionLeafText)
             const prefix = before.slice(before.lastIndexOf('\n') + 1)
-            if (!/^ *[-+*]$/.test(prefix)) {
+            if (!/^ *[-*]$/.test(prefix)) {
               return false
             }
             const previousLines = view.state.doc
@@ -136,7 +143,7 @@ export const NativeChatListIndentation = Extension.create({
               }
               tr.insertText(' '.repeat(Math.max(4, previous[0].length - indent)), lineStart)
             }
-            if (/[-+*]/.test(line[indent])) {
+            if (/[-*]/.test(line[indent])) {
               const marker = tr.mapping.map(lineStart + indent)
               tr.insertText('•', marker, marker + 1)
             }
