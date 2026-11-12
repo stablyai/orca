@@ -259,8 +259,6 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     offered: ephemeralVmsEnabled,
     orcaCloud: orcaCloudAvailability
   } = useEphemeralVmRecipeOptions({
-    // Always load: Orca Cloud is gated by the account's sandbox capability in main, not this flag.
-    enabled: true,
     // Only probe enabled experiments or hidden features can raise setup errors.
     customRecipesEnabled: settings?.experimentalEphemeralVms === true,
     repoId: selectedRecipeRepoId,

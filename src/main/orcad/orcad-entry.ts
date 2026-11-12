@@ -31,8 +31,7 @@ import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readi
 import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
 import { activateBackendServices } from '../backend/service-composition'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { installOrcadWorkProbes } from './orcad-work-verdict'
-import { startOrcadWorkVerdictBeacon } from './orcad-work-verdict-beacon'
+import { installOrcadWorkProbes, startOrcadWorkVerdictBeacon } from './orcad-work-verdict-beacon'
 import { orcadPostReadyDeps, startOrcadPostReadyWork } from './orcad-post-ready-work'
 
 let closeOrcadObservability = (): Promise<void> => Promise.resolve()
@@ -352,20 +351,19 @@ async function activateOrcadRuntime(
   managedAgentHooks.readinessPublished()
   void startOrcadPostReadyWork(orcadPostReadyDeps(runtime, profileStore, rpc))
 
-  installOrcadWorkProbes({
+  // The idle exit and the control plane's work verdict read the same busy signals.
+  const workProbes = {
     agentStates: () => agentHookServer.getStatusSnapshot(),
     automationsBusy: () => orcadAutomationsKeepHostBusy(profileStore),
     emulatorsBusy: async () =>
       (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false
-  })
+  }
+  installOrcadWorkProbes(workProbes)
   registerCleanup(startOrcadWorkVerdictBeacon(() => runtime.terminalRunFacts.readLatestInputAt()))
   await idleExitStartup.start({
     rpc,
-    agentStates: () => agentHookServer.getStatusSnapshot(),
+    ...workProbes,
     hasStagedMigration: () => profileStore.hasStagedOrcadMigrationCatalog(),
-    automationsBusy: () => orcadAutomationsKeepHostBusy(profileStore),
-    emulatorsBusy: async () =>
-      (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false,
     registerCleanup
   })
   return { readiness }

@@ -48,6 +48,16 @@ export class RpcRegistrySource {
     return this.loading
   }
 
+  /** Runs with the registry: synchronously once built; calls that arrive while methods load
+   *  resume in arrival order once they land, and a failed load goes to onError. */
+  withRegistry<T>(
+    run: (registry: RpcRegistry) => T,
+    onError: (error: unknown) => T
+  ): T | Promise<T> {
+    const registry = this.get()
+    return registry instanceof Promise ? registry.then(run, onError) : run(registry)
+  }
+
   /** Loads now so the first call does not wait on it. Never rejects; a later call retries. */
   async preload(): Promise<void> {
     try {

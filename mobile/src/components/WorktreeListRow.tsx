@@ -17,7 +17,7 @@ import { projectGroupRowIndent } from '../worktree/project-group-indent'
 import { getWorktreeMetaGlyphPresence } from '../worktree/worktree-meta-glyph-presence'
 import { AgentSpinner } from './AgentSpinner'
 import { HostKindIcon } from './HostKindIcon'
-import { WorktreeCloudGlyph, cloudWorktreeRowStatus } from './WorktreeCloudGlyph'
+import { WorktreeRowHostGlyph, cloudWorktreeRowStatus } from './WorktreeCloudGlyph'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
@@ -127,16 +127,14 @@ function WorktreeListRowComponent({
 
       <View style={styles.worktreeMain}>
         <View style={styles.worktreeNameRow}>
-          {cloud && <WorktreeCloudGlyph status={cloud.status} />}
-          {showHostGlyph && !cloud && (
-            <View
-              accessibilityLabel={
-                hostAccessibilityLabel || t('components.worktreeListRow.remoteHost', 'Remote host')
-              }
-            >
-              <HostKindIcon hostId={hostId} size={11} />
-            </View>
-          )}
+          <WorktreeRowHostGlyph
+            cloud={cloud}
+            remote={showHostGlyph}
+            hostId={hostId}
+            label={
+              hostAccessibilityLabel || t('components.worktreeListRow.remoteHost', 'Remote host')
+            }
+          />
           {showRepoChip && (
             <View
               style={styles.repoChip}

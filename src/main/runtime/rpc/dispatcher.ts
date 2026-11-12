@@ -193,21 +193,16 @@ export class RpcDispatcher {
     meta: RpcEnvelopeMeta,
     isTransportSupported: (method: RpcMethod | RpcStreamingMethod) => method is M
   ) {
-    const admitWith = (registry: RpcRegistry) =>
-      admitRpcRequest(
-        { runtime: this.runtime, registry, meta, pinnedCallerScope: this.pinnedCallerScope },
-        request,
-        options,
-        isTransportSupported
-      )
-    const registry = this.registry.get()
-    if (!(registry instanceof Promise)) {
-      return admitWith(registry)
-    }
-    // Calls that arrive while methods load resume in arrival order once they land.
-    return registry.then(admitWith, (error: unknown) => ({
-      rejected: mapDispatcherError(request, meta, error)
-    }))
+    return this.registry.withRegistry(
+      (registry: RpcRegistry) =>
+        admitRpcRequest(
+          { runtime: this.runtime, registry, meta, pinnedCallerScope: this.pinnedCallerScope },
+          request,
+          options,
+          isTransportSupported
+        ),
+      (error: unknown) => ({ rejected: mapDispatcherError(request, meta, error) })
+    )
   }
 
   private async invokeUnary(

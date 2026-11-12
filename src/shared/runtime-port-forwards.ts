@@ -85,3 +85,8 @@ export function normalizeRuntimePortForwardSettings(
 export const RUNTIME_PORT_FORWARD_AUTO_EXCLUDED_PORTS: ReadonlySet<number> = new Set([
   2222, 6080, 6768
 ])
+
+export type RuntimePortForwardGlobalSettings = {
+  /** Settings → Ports: forwarding remote hosts' listeners to this computer; absent means defaults. */
+  runtimePortForwarding?: Partial<RuntimePortForwardSettings>
+}

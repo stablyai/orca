@@ -78,3 +78,11 @@ export function resetCloudWorkspaceStatusCache(): void {
   unsubscribe?.()
   unsubscribe = null
 }
+
+/** Marks this desktop's Orca Cloud workspaces among worktree.ps rows, read from the profile's runtime store. */
+export function markCloudWorkspaceSummaries(
+  rows: Iterable<Pick<RuntimeWorktreePsSummary, 'worktreeId' | 'orcaCloud'>>,
+  userDataPath: string
+): void {
+  markCloudWorkspaceRows(rows, cloudWorkspaceStatusById(userDataPath))
+}

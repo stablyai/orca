@@ -1,6 +1,7 @@
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
 import {
   createMockTransport,
   createPane,
@@ -50,7 +51,8 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     afterEach(async () => {
-      const { clearWorktreeSleepIntent } = await import('@/lib/workspace/sleep/worktree-sleep-intent')
+      const { clearWorktreeSleepIntent } =
+        await import('@/lib/workspace/sleep/worktree-sleep-intent')
       clearWorktreeSleepIntent('wt-1')
       await restoreTerminalTestGlobals()
     })
@@ -77,9 +79,11 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
         isVisibleRef: { current: false }
       })
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks4)
+        )
       )
       await flushAsyncTicks()
 
@@ -116,9 +120,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'wt-1@@slept' }
       })
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, titles)
+        ...mockPanePtyArgs(createPane(1), createManager(1), bindPaneAgentTitleMocks(deps, titles))
       )
       await flushAsyncTicks()
       expect(transport.connect).not.toHaveBeenCalled()
@@ -140,9 +142,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       expect(holdRestoredAsleepCloudSelection([cloudVmRecord('wt-1', 'running')])).toBeNull()
       const deps = createDeps({ tabId: 'tab-running', isVisibleRef: { current: false } })
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, titles)
+        ...mockPanePtyArgs(createPane(1), createManager(1), bindPaneAgentTitleMocks(deps, titles))
       )
       await flushAsyncTicks()
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -169,9 +169,11 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       })
 
       connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks6)
+        )
       )
       await flushAsyncTicks()
       // Wake: the pane leaves the sleep gate and parks on the cwd gate.
@@ -211,9 +213,11 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
         const deps = createDeps({ tabId: 'tab-disposed', isVisibleRef: { current: false } })
 
         const binding = connectPanePty(
-          createPane(1) as never,
-          createManager(1) as never,
-          bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+          ...mockPanePtyArgs(
+            createPane(1),
+            createManager(1),
+            bindPaneAgentTitleMocks(deps, agentTitleMocks7)
+          )
         )
         await flushAsyncTicks()
         expect(subscribeSpy).toHaveBeenCalledTimes(1)

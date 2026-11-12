@@ -10,7 +10,8 @@ import { takeOrcaCloudSelectionAfterSignIn } from '@/lib/orca-cloud-select-after
 import { onOrcaCloudCheckoutReturn } from '@/lib/orca-cloud-after-checkout'
 
 type EphemeralVmRecipeOptionsArgs = {
-  enabled: boolean
+  /** Defaults on: Orca Cloud is gated by the account's sandbox capability in main. */
+  enabled?: boolean
   /** Off: only built-in Orca Cloud is offered, and orca.yaml recipe diagnostics stay hidden. */
   customRecipesEnabled: boolean
   repoId: string | null
@@ -73,7 +74,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   // A plain folder still loads: it offers Orca Cloud only, and the setup panel then says the
   // project needs a GitHub repository (D3/D4) instead of the option vanishing.
   const canLoad =
-    args.enabled &&
+    args.enabled !== false &&
     Boolean(args.repoId) &&
     !args.repoConnectionId &&
     args.repoExecutionHostId === LOCAL_EXECUTION_HOST_ID &&

@@ -390,14 +390,13 @@ export function ClientHostedBrowserPagePane({
             guestGeneration={pageHostGeneration}
           />
           <BrowserLinkStatusBubble browserPageId={browserTab.id} />
-          {showFailureOverlay ? (
-            <ClientHostedBrowserLoadFailure
-              browserTab={browserTab}
-              isActive={isActive}
-              onRetry={() => reload.runReloadTrigger('reload')}
-              runtimeEnvironmentId={runtimeEnvironmentId}
-            />
-          ) : null}
+          <ClientHostedBrowserLoadFailure
+            shown={showFailureOverlay}
+            browserTab={browserTab}
+            isActive={isActive}
+            onRetry={() => reload.runReloadTrigger('reload')}
+            runtimeEnvironmentId={runtimeEnvironmentId}
+          />
           {unavailable ? (
             <ClientHostedBrowserUnavailableNotice
               runtimeEnvironmentId={runtimeEnvironmentId}

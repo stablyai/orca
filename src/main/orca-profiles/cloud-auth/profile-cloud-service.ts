@@ -1,8 +1,9 @@
-import { resetCloudOfflineData } from '../../hosted-sandbox/cloud-offline-reset'
 import {
-  clearCloudReadState,
-  revokeCloudReaderKeyBestEffort
-} from '../../cloud-workspaces/cloud-read-state'
+  clearSignedOutCloudData,
+  ORCA_CLOUD_AUTH_STOPPED_ERRORS,
+  revokeCloudReaderKeyBestEffort,
+  type OrcaCloudSetupSignIn
+} from './profile-cloud-sign-in-session-data'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
@@ -60,15 +61,6 @@ function invalidateOutstandingCloudConnectAttempts(): void {
 
 export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfileAuthStatus {
   return getOrcaProfileAuthStatusFromProfile(ensureActiveOrcaProfile(userDataPath), userDataPath)
-}
-
-/**
- * Cloud setup sign-in: the authorize page shows the setup account step (A2), and once signed in
- * the same browser tab continues to whatever `afterSignIn` returns (the setup session's URL).
- */
-export type OrcaCloudSetupSignIn = {
-  authorizeParams: Record<string, string>
-  afterSignIn: () => Promise<string | null>
 }
 
 export async function connectCurrentOrcaProfile(
@@ -148,12 +140,7 @@ export async function connectCurrentOrcaProfile(
       end = 'timed-out'
       return { status: 'timed-out', auth: getCurrentOrcaProfileAuthStatus(userDataPath) }
     }
-    const stopped = [
-      'orca_cloud_auth_timeout',
-      'orca_cloud_auth_denied',
-      'orca_cloud_auth_cancelled'
-    ]
-    if (attemptAbort.signal.aborted || stopped.includes(message)) {
+    if (attemptAbort.signal.aborted || ORCA_CLOUD_AUTH_STOPPED_ERRORS.has(message)) {
       return cancelled()
     }
     return {
@@ -197,10 +184,7 @@ export async function signOutCurrentOrcaProfile(
   }
   signOutCloudSession(active.profile.id, userDataPath)
   const list = unlinkOrcaProfileFromCloud(active.profile.id, userDataPath)
-  // Cached Orca Cloud transcripts and queued prompts belong to the signed-out account.
-  resetCloudOfflineData()
-  // The next account signed in on this profile gets its own reader key and pins.
-  await clearCloudReadState(active.profile.id, userDataPath)
+  await clearSignedOutCloudData(active.profile.id, userDataPath)
   try {
     clearRelayRegionPreferenceCache(userDataPath)
   } catch {

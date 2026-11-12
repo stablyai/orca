@@ -24,6 +24,7 @@ import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from './agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from './keybindings/global-settings'
 import type { PredictiveWakeSettings } from './hosted-sandbox/predictive-wake-settings'
+import type { RuntimePortForwardGlobalSettings } from './runtime-port-forwards'
 import type { WorkspaceCleanupPolicySettings } from './workspace-cleanup/workspace-cleanup-policy'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
@@ -53,4 +54,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   AgentWorkspaceTrustSettings &
   KeybindingGlobalSettings &
   PredictiveWakeSettings &
+  RuntimePortForwardGlobalSettings &
   WorkspaceCleanupPolicySettings
