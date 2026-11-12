@@ -237,7 +237,7 @@ A host API the plugin may call once the user consents.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` | yes | 1.4.160 | Capability granted on user consent. |
+| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` \| `"workspace:create"` \| `"automation:read"` \| `"automation:write"` | yes | 1.4.160 | Capability granted on user consent. |
 
 ## Screenshot
 

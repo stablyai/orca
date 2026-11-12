@@ -73,7 +73,7 @@ const agentResumeResult = z.object({
 export const PLUGIN_WORKSPACE_CREATE_API = {
   'workspace.create': spec({
     summary:
-      "Creates a workspace (a new branch and worktree) in a Git project, local or SSH, and returns its id; with `agent` (which also needs `agent:launch`) starts that agent there after setup, in the background unless `open`. Orca's `workspace.create.before`, `agent.launch.before` and `agent.prompt.before` hooks run as for any create.",
+      "Creates a workspace (a new branch and worktree) in a Git project, local or SSH, and returns its id; with `agent`, starts that agent there once setup has run, in the background unless `open`. Orca's workspace-create and agent hooks run as for any create.",
     since: 8,
     scope: 'any-workspace',
     capability: 'workspace:create',

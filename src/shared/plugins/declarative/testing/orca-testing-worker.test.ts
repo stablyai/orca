@@ -104,7 +104,7 @@ describe('mountWorker', () => {
   })
 
   it('records calls Orca would refuse even when the worker catches them', async () => {
-    const host = mockHost({ capabilities: [] })
+    const host = mockHost({ capabilities: ['workspace:create'] })
     const mounted = await mountWorker(
       {
         default: async (orca: Orca) => {
@@ -112,13 +112,18 @@ describe('mountWorker', () => {
           await orca.host
             .call('shell.openExternal', { url: 'https://x.dev' })
             .catch(() => undefined)
+          // Starting an agent in the new workspace also needs agent:launch.
+          await orca.host
+            .call('workspace.create', { projectId: 'r1', agent: 'claude' })
+            .catch(() => undefined)
         }
       },
       { host, events: [], commands: [] }
     )
     expect(mounted.refusals.map(({ method, code }) => `${method} ${code}`)).toEqual([
       'notifications.show capability_denied',
-      'shell.openExternal not_permitted'
+      'shell.openExternal not_permitted',
+      'workspace.create capability_denied'
     ])
   })
 
