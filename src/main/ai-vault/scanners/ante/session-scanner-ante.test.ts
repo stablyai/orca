@@ -69,6 +69,10 @@ describe('scanAiVaultSessions ante', () => {
     expect(result.sessions).toHaveLength(1)
     expect(result.sessions[0]?.title).toBe('Ante vault title')
     expect(result.sessions[0]?.totalTokens).toBe(10)
+    // With no transcript to fold, `meta.json`'s last-active stamp is the only thing that can date
+    // the row; real stores hold sessions whose transcript is absent after 66 turns.
+    expect(result.sessions[0]?.createdAt).toBe('2026-05-01T10:11:00.000Z')
+    expect(result.sessions[0]?.updatedAt).toBe('2026-05-01T10:11:02.000Z')
   })
 
   it('publishes turns past the old preview window and dates the row from the transcript tail', async () => {

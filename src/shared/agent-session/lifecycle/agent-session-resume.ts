@@ -1,10 +1,7 @@
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
 import { readClaudePermissionMode } from './provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
-import type {
-  AgentStatusCacheIdentity,
-  RefusedPaneResume
-} from '../../agent-status/contracts/agent-status-ipc-payload'
+import type { RefusedPaneResume } from '../../agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusState } from '../../agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
@@ -35,7 +32,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'dsh',
   'jcode',
   'kiro',
-  'hermes'
+  'hermes',
+  'ante'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -326,13 +324,6 @@ export type TerminalLaunchResult = {
   launchAgent?: TuiAgent
   launchToken?: string
   resumeProviderSession?: AgentProviderSessionMetadata
-}
-
-/** Runtime-only source shared by copies of one saved startup. Never persisted or sent to a host. */
-export type SavedResumeStartupSource = {
-  cancelled: boolean
-  record?: SleepingAgentSessionRecord
-  expectedStatus?: AgentStatusCacheIdentity
 }
 
 /** Forward only effective launch facts through each existing terminal envelope. */

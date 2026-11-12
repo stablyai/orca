@@ -87,6 +87,9 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
     case 'hermes':
       return providerSession.key === 'session_id' ? ['hermes', '--resume', id] : null
+    // Ante resumes by its session folder id, which `meta.json` and the folder name both carry.
+    case 'ante':
+      return providerSession.key === 'session_id' ? ['ante', '--resume', id] : null
   }
 }
 

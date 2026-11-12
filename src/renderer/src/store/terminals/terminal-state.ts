@@ -10,10 +10,10 @@ import type {
 } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
-  SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SavedResumeStartupSource } from '../../../../shared/agent-session/lifecycle/saved-resume-startup-source'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'

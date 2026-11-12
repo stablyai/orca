@@ -12,7 +12,8 @@ import {
   AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY,
-  AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY
+  AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ANTE_RESUME_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume-runtime-capabilities'
 import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeCapability } from '../../../../../../shared/protocol-version'
@@ -48,7 +49,10 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   // Why: jcode resumed by id (--resume <id>) through the same host-authority session enum the generic probe covers.
   jcode: undefined,
   kiro: AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY,
-  hermes: AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY
+  hermes: AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY,
+  // Why: `ante` joined the resume enum after released hosts froze it, so its host-authority resume
+  // needs its own probe; an older host would reject the enum instead of falling back to legacy.
+  ante: AGENT_SESSION_ANTE_RESUME_RUNTIME_CAPABILITY
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>
 
 export function agentResumeHostAuthorityCapability(

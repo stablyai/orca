@@ -81,7 +81,7 @@ function anteMetadata(content: string): AnteMetadata {
     totalTokens: numberValue(usage?.input_tokens) + numberValue(usage?.output_tokens),
     messageCount: numberValue(record.message_count),
     startedAt: extractString(record.started_time),
-    lastActiveAt: extractString(record.last_active_at)
+    lastActiveAt: extractString(record.last_active_time)
   }
 }
 
