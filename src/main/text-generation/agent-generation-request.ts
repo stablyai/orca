@@ -1,10 +1,7 @@
 import { conversationNameTaskPrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
 import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
-import {
-  cleanGeneratedCommitMessage,
-  stripPrefilledReasoningPreamble
-} from '../../shared/source-control/ai/generation/commit-message-agent-output'
+import { stripPrefilledReasoningPreamble } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import { isCustomAgentId } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
@@ -16,7 +13,7 @@ import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-comma
 import { copilotUnavailableModelRetryPlan } from './copilot-unavailable-model-retry'
 import { runLocalPlanForAgent } from './source-control-local-generation'
 import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
-import { emptyResultFailure } from './source-control-agent-failure'
+import { cleanAgentAnswer, emptyResultFailure } from './source-control-agent-failure'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
 import type {
   CommitMessageGenerationTarget,
@@ -44,7 +41,8 @@ export async function runGenerationRequest(input: {
 }): Promise<InternalTextGenerationResult> {
   const params = {
     ...input.params,
-    backslash: commandBackslashMode(input.target)
+    backslash: commandBackslashMode(input.target),
+    toolFree: input.operation === 'dictation-cleanup'
   }
   const prompt =
     input.operation === 'conversation-name'
@@ -126,7 +124,7 @@ export async function runGenerationRequest(input: {
   if (answer === result.rawOutput) {
     return result
   }
-  const rawOutput = cleanGeneratedCommitMessage(answer)
+  const rawOutput = cleanAgentAnswer(answer, input.operation)
   return rawOutput
     ? { ...result, rawOutput }
     : { success: false, ...emptyResultFailure(input.operation, plan.label) }

@@ -3933,7 +3933,10 @@
       "planAgentUnsupported": "Agent \"{{agent}}\" does not support AI commit messages.",
       "planModelUnavailable": "Model \"{{model}}\" is not available for {{label}}.",
       "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
-      "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}."
+      "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "Command template is empty for dictation cleanup.",
+      "dictationCleanupAgentUnsupported": "Choose a supported agent for AI cleanup in Settings -> Voice -> Cleanup. Supported agents: {{agents}}, or Custom command.",
+      "agentCannotGenerateDictationCleanup": "Agent \"{{agent}}\" does not support dictation cleanup. Supported agents: {{agents}}, or Custom command."
     },
     "conflictActions": {
       "resolveFile": "{{action}}: {{path}}",

@@ -22,6 +22,8 @@ import { loadSpeechCatalog } from './speech-model-update-check'
 import type { SpeechModelUpdateTarget } from './speech-model-update-target'
 import type { DictationFailureKind } from './dictation-toasts'
 import type { DictationQueuedSendKind } from './use-dictation-queued-send'
+import type { DictationCleanupNotice } from './use-dictation-cleanup'
+import { DictationCleanupNoticePill } from './DictationCleanupNoticePill'
 
 // The finish button turns into a spinner only when finishing is slow enough to notice.
 const FINISH_SPINNER_DELAY_MS = 200
@@ -36,6 +38,12 @@ type DictationIndicatorProps = {
   failure: DictationFailureKind | null
   /** A send waiting for this dictation's words to land. */
   queued: DictationQueuedSendKind | null
+  cleanup: {
+    /** AI cleanup is running on the finished dictation's words. */
+    cleaning: boolean
+    notice: DictationCleanupNotice | null
+    dismissNotice: () => void
+  }
 }
 
 type DictationSetupProps = {
@@ -53,9 +61,11 @@ export function DictationIndicator({
   if (isDictationPillShown(dictationState)) {
     return <DictationPill {...props} />
   }
-  return setup ? (
-    <DictationSetupPill target={setup} anchor={props.anchor} onClose={onSetupClose} />
-  ) : null
+  if (setup) {
+    return <DictationSetupPill target={setup} anchor={props.anchor} onClose={onSetupClose} />
+  }
+  const { notice, dismissNotice } = props.cleanup
+  return notice ? <DictationCleanupNoticePill notice={notice} onClose={dismissNotice} /> : null
 }
 
 function formatElapsed(seconds: number): string {
@@ -150,7 +160,7 @@ function DictationPendingDots() {
   )
 }
 
-function DictationPill({ captureLive, anchor, failure, queued }: DictationIndicatorProps) {
+function DictationPill({ captureLive, anchor, failure, queued, cleanup }: DictationIndicatorProps) {
   const t = useTranslate()
   const dictationState = useAppStore((state) => state.dictationState)
   const liveText = useAppStore((state) => state.liveText)
@@ -179,13 +189,18 @@ function DictationPill({ captureLive, anchor, failure, queued }: DictationIndica
             'Presses Enter when the text lands'
           )
         : null
-  const status = finishing
-    ? t('auto.components.dictation.DictationIndicator.finishing', 'Finishing…')
-    : t('auto.components.dictation.DictationIndicator.listening', 'Listening…')
+  const { cleaning } = cleanup
+  const status = cleaning
+    ? t('components.dictation.DictationIndicator.cleaningUp', 'Cleaning up…')
+    : finishing
+      ? t('auto.components.dictation.DictationIndicator.finishing', 'Finishing…')
+      : t('auto.components.dictation.DictationIndicator.listening', 'Listening…')
   const announced = nearCloudLimit
     ? `${status} ${t('auto.components.dictation.DictationIndicator.oneMinuteLeft', 'One minute left.')}`
     : (queuedStatus ?? status)
-  const cancelLabel = t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
+  const cancelLabel = cleaning
+    ? t('components.dictation.DictationIndicator.skipCleanup', 'Skip cleanup and insert as heard')
+    : t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
   const finishLabel = t('auto.components.dictation.DictationIndicator.finish', 'Finish')
 
   return (
@@ -212,7 +227,7 @@ function DictationPill({ captureLive, anchor, failure, queued }: DictationIndica
               )}
               <span className="truncate">{queuedStatus}</span>
             </span>
-          ) : committed || tentative || speechPending ? (
+          ) : !cleaning && (committed || tentative || speechPending) ? (
             // Right-aligned so the newest words stay in view; older ones fade off the left edge.
             <span
               aria-hidden
