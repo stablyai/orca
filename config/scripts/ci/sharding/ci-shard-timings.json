@@ -1269,7 +1269,6 @@
       "src/main/codex/hooks/definitions/codex-real-home-hook-key-spellings.test.ts": 408,
       "src/main/codex/hooks/reconciliation/codex-real-home-hook-removal.test.ts": 388,
       "src/main/codex/configuration/homes/codex-real-home-path.test.ts": 76,
-      "src/main/codex/hooks/reconciliation/codex-real-home-shared-entry.test.ts": 641,
       "src/main/codex/history/backfill/codex-session-backfill.test.ts": 310,
       "src/main/codex/history/bridges/codex-session-bridge.test.ts": 118,
       "src/main/codex/history/index/codex-session-index-heal-state.test.ts": 363,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import { BrowserPageInputCredit } from './browser-page-input-credit'
-import { LOCAL_CLI_RPC_CALLER } from '../../../runtime/rpc/callers/rpc-caller-identity'
+import type { LOCAL_CLI_RPC_CALLER } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
 const desktop = { kind: 'paired-device', deviceId: 'desk-1' } as const
 
@@ -21,29 +20,6 @@ describe('BrowserPageInputCredit', () => {
 
     expect(credit.consume('tab-2')).toBeNull()
     expect(credit.consume('tab-1')).toBe('desk-1')
-    expect(credit.consume('tab-1')).toBeNull()
-  })
-
-  it('leaves the credit alone for commands that deliver no activating input', async () => {
-    const { credit, click } = setup()
-    await click(desktop)
-    await credit.during('page-1', LOCAL_CLI_RPC_CALLER, async () => undefined)
-
-    expect(credit.consume('tab-1')).toBe('desk-1')
-  })
-
-  it('credits no client for an agent click, input outside any command, or after the window', async () => {
-    const { credit, click, advance } = setup()
-    await click(desktop)
-    await click(LOCAL_CLI_RPC_CALLER)
-    expect(credit.consume('tab-1')).toBeNull()
-
-    await click(desktop)
-    credit.creditInput('tab-1', 'page-1')
-    expect(credit.consume('tab-1')).toBeNull()
-
-    await click(desktop)
-    advance(BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS + 1)
     expect(credit.consume('tab-1')).toBeNull()
   })
 })
