@@ -207,4 +207,15 @@ describe('workspace linked work editor', () => {
     expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false)
     expect(screen.getByRole('textbox', { name: 'Notes' }).textContent).toBe('Remote draft')
   })
+  it('saves a retyped branch name as the display name', async () => {
+    const original = openDialog({ displayName: 'release/rc-11', branch: 'release/rc-11' })
+    const field = screen.getByRole('textbox', { name: 'Display Name' })
+    fireEvent.change(field, { target: { value: 'release/rc-1' } })
+    fireEvent.change(field, { target: { value: 'release/rc-11' } })
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]).toEqual([
+      original.id,
+      { displayName: 'release/rc-11' }
+    ])
+  })
 })
