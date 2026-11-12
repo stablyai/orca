@@ -12,9 +12,7 @@ export const modal = defineFixture({
         <SheetContent>
           <SheetHeader>
             <SheetTitle>Sheet preview</SheetTitle>
-            <SheetDescription>
-              The sheet text stays sharp above the blurred workspace.
-            </SheetDescription>
+            <SheetDescription>The sheet stays solid above the dimmed workspace.</SheetDescription>
           </SheetHeader>
         </SheetContent>
       </Sheet>
