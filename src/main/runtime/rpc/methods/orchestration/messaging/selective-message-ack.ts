@@ -11,14 +11,15 @@ export function acknowledgeSelectedMessages(
   db: OrchestrationDb,
   mailbox: string,
   ids: string[],
-  recordReceipt?: (receipt: unknown) => void
+  recordReceipt?: (receipt: unknown) => void,
+  residualMailbox?: string
 ) {
   return runLifecycleWriteTransaction(db.db, 'selective_message_ack', () => {
     const selectedIds = [...new Set(ids)]
     const rows = getMessagesByIds(db, selectedIds)
     const messages = selectedIds.map((id) => {
       const message = rows.get(id)
-      if (!message || message.to_handle !== mailbox) {
+      if (!message || (message.to_handle !== mailbox && message.to_handle !== residualMailbox)) {
         throw new OrchestrationError(
           'invalid_argument',
           'Every --ack-ids ID must exist and be addressed to the current mailbox. No messages were acknowledged.',

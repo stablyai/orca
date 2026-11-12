@@ -14,7 +14,6 @@ import type { z } from 'zod'
 import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { checkRunPendingMail } from './check-run-pending-mail'
 import { FEDERATION_RELAY_WAIT_REARM_MS } from '../../../../orchestration/federation/relay/federation-relay-scheduler'
-import { acknowledgeSelectedMessages } from './selective-message-ack'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 
@@ -95,14 +94,11 @@ export async function checkRunMailbox(args: {
     }
   }
   revalidateConsumer()
-  if (params.ackIds) {
-    return {
-      ...acknowledgeSelectedMessages(db, address, params.ackIds, args.recordMutationReceipt),
-      runId: run.id
-    }
-  }
 
   const pending = await checkRunPendingMail({ ...args, run, revalidateConsumer })
+  if (params.ackIds) {
+    return pending.result
+  }
   if (handsOverBatch(pending.result)) {
     return pending.result
   }
