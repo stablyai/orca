@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { signInAgainMessage } from '@/lib/orca-cloud/orca-sign-in-again'
 import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
-import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-failure-copy'
+import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-sandbox-limit'
 import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
 
 /**
@@ -45,6 +45,28 @@ export function describeError(
     const denial = classifyEntitlementDenial(reason)
     if (denial === 'teamLimit') {
       const limit = sandboxLimitFromBilling(getLastBillingStatus())
+      if (limit?.trial) {
+        return t(
+          'auto.components.cloudWorkspaces.errorTrialSandboxLimit',
+          'Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.',
+          {
+            count: limit.team,
+            defaultValue_one:
+              'Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.'
+          }
+        )
+      }
+      if (limit && limit.perSeat === null) {
+        return t(
+          'auto.components.cloudWorkspaces.errorTeamSandboxLimitNoSeat',
+          'Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.',
+          {
+            count: limit.team,
+            defaultValue_one:
+              'Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.'
+          }
+        )
+      }
       return limit
         ? t(
             'auto.components.cloudWorkspaces.errorTeamSandboxLimit',
@@ -141,7 +163,19 @@ export function describeInlineError(
 }
 
 function describeSeatLimit(owner: CloudWorkspaceSeatOwner | undefined, t: Translate): string {
-  const perSeat = sandboxLimitFromBilling(getLastBillingStatus())?.perSeat
+  const limit = sandboxLimitFromBilling(getLastBillingStatus())
+  if (limit?.trial) {
+    return t(
+      'auto.components.cloudWorkspaces.errorTrialSandboxLimit',
+      'Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.',
+      {
+        count: limit.team,
+        defaultValue_one:
+          'Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.'
+      }
+    )
+  }
+  const perSeat = limit?.perMember
   if (!owner || owner.self) {
     return perSeat
       ? t(

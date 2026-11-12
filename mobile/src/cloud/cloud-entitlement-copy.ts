@@ -107,10 +107,8 @@ function problem(
     case 'trialUnavailable':
       return t('cloud.denied.trialUnavailable', 'This account or team already used its trial.')
     case 'teamLimit':
-      return t(
-        'cloud.denied.teamLimit',
-        'Your team is at its limit of running sandboxes (3 per seat).'
-      )
+      // The phone has no plan numbers (and a trial has no seats): no count here.
+      return t('cloud.denied.teamLimit2', 'Your team is at its limit of running sandboxes.')
     case 'memberLimit':
       // The per-seat cap counts the workspace owner's seat, not the seat of whoever wakes it, and
       // the phone can't always tell whose workspace this is, so an existing one names the owner.

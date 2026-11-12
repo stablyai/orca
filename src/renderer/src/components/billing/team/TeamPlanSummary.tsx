@@ -123,6 +123,10 @@ export function TeamSeatsCard({
   const date = (ms: number): string =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(ms)
   const invoice = nextInvoiceEstimate(entitlement)
+  // Only a price billing actually sent; never "$0 per seat".
+  const seatMonthlyCents = entitlement.offers
+    ? perSeatMonthlyCents(entitlement.offers.team, entitlement.interval ?? 'month')
+    : null
   const seatsDetail = entitlement.seatChange
     ? t('auto.components.billing.team.seatsDropOn', 'Drops to {{value0}} on {{value1}}', {
         value0: String(entitlement.seatChange.seatsAtRenewal),
@@ -174,15 +178,11 @@ export function TeamSeatsCard({
               : t('auto.components.billing.monthly', 'Monthly')
           }
           detail={
-            entitlement.offers
-              ? t('auto.components.billing.team.perSeatPerMonth', '{{value0}} per seat per month', {
-                  value0: formatCents(
-                    perSeatMonthlyCents(entitlement.offers.team, entitlement.interval ?? 'month') ??
-                      0,
-                    locale
-                  )
+            seatMonthlyCents === null
+              ? null
+              : t('auto.components.billing.team.perSeatPerMonth', '{{value0}} per seat per month', {
+                  value0: formatCents(seatMonthlyCents, locale)
                 })
-              : null
           }
         />
         {invoice ? (

@@ -19,7 +19,7 @@
   },
   {
     "path": "src/renderer/src/components/worktree-creation/VmBuildFailureCard.tsx",
-    "line": 137,
+    "line": 138,
     "term": "VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
@@ -43,19 +43,19 @@
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-failure-copy.ts",
-    "line": 85,
+    "line": 55,
     "term": "VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-failure-copy.ts",
-    "line": 89,
+    "line": 59,
     "term": "VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
     "path": "src/renderer/src/components/worktree-creation/vm-build-failure-copy.ts",
-    "line": 92,
+    "line": 62,
     "term": "VM",
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },

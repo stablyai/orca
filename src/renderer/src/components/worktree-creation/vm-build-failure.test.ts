@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { classifyVmBuildFailure, isAccountGate, type VmBuildFailure } from './vm-build-failure'
+import { vmBuildFailureCopy } from './vm-build-failure-copy'
 import {
   sandboxLimitFromBilling,
-  vmBuildFailureCopy,
+  type SandboxLimit,
   type SandboxLimitBillingStatus
-} from './vm-build-failure-copy'
+} from './vm-build-sandbox-limit'
 import { orcaCloudRepoName } from './vm-build-repo-actions'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -109,34 +110,83 @@ describe('vmBuildFailureCopy', () => {
   })
 
   it('states the running-sandbox cap on the limit cards once the plan is known', () => {
-    const copy = (kind: VmBuildFailure, sandboxLimit: { perSeat: number; team: number } | null) =>
+    const team12 = { perMember: 3, team: 12, perSeat: 3, trial: false }
+    const copy = (kind: VmBuildFailure, sandboxLimit: SandboxLimit | null) =>
       vmBuildFailureCopy(
         kind,
         { cloud: true, canManageBilling: true, repoName: 'acme/web', sandboxLimit },
         t
       ).body
-    expect(copy({ kind: 'concurrency' }, { perSeat: 3, team: 12 })).toContain(
+    expect(copy({ kind: 'concurrency' }, team12)).toContain(
       'Your team can run 12 sandboxes at once (3 per seat). Put one to sleep or delete it'
     )
-    expect(copy({ kind: 'memberConcurrency' }, { perSeat: 3, team: 12 })).toContain(
+    expect(copy({ kind: 'memberConcurrency' }, team12)).toContain(
       'You can run 3 sandboxes at once. Put one to sleep or delete it'
     )
+    // The trial has no seats: never "per seat".
+    const trialCopy = copy(
+      { kind: 'concurrency' },
+      { perMember: 1, team: 1, perSeat: null, trial: true }
+    )
+    expect(trialCopy).toMatch(/^Your trial can run 1 /)
+    expect(trialCopy).not.toContain('per seat')
     expect(copy({ kind: 'concurrency' }, null)).toMatch(/^Put one to sleep or delete it/)
   })
 
   it('derives the caps the way billing enforces them', () => {
-    const status = (seats: number, perSeat: number | null): SandboxLimitBillingStatus => ({
+    const status = (
+      seats: number,
+      perSeat: number | null,
+      extra: Partial<Extract<SandboxLimitBillingStatus, { status: 'ok' }>['entitlement']> = {}
+    ): SandboxLimitBillingStatus => ({
       status: 'ok',
       entitlement: {
         seats,
-        offers: perSeat === null ? null : { team: { concurrentSandboxesPerSeat: perSeat } }
+        status: 'active',
+        offers: perSeat === null ? null : { team: { concurrentSandboxesPerSeat: perSeat } },
+        ...extra
       }
     })
-    expect(sandboxLimitFromBilling(status(4, 3))).toEqual({ perSeat: 3, team: 12 })
-    // Billing counts at least one seat.
-    expect(sandboxLimitFromBilling(status(0, 3))).toEqual({ perSeat: 3, team: 3 })
+    // Older services (no limits): from the Team offer. Billing counts at least one seat.
+    expect(sandboxLimitFromBilling(status(4, 3))).toEqual({
+      perMember: 3,
+      team: 12,
+      perSeat: 3,
+      trial: false
+    })
+    expect(sandboxLimitFromBilling(status(0, 3))).toEqual({
+      perMember: 3,
+      team: 3,
+      perSeat: 3,
+      trial: false
+    })
     expect(sandboxLimitFromBilling(status(4, null))).toBeNull()
     expect(sandboxLimitFromBilling(null)).toBeNull()
+    // Billing's own limits win over the offer.
+    expect(
+      sandboxLimitFromBilling(
+        status(2, 3, { limits: { maxConcurrentSandboxes: 10, maxConcurrentSandboxesPerMember: 4 } })
+      )
+    ).toEqual({ perMember: 4, team: 10, perSeat: 5, trial: false })
+    // The trial runs 1 at a time whatever the Team offer says, and has no seats.
+    const trial = {
+      includedSeconds: 7200,
+      usedSeconds: 0,
+      remainingSeconds: 7200,
+      exhausted: false,
+      grantedAt: 1
+    }
+    expect(
+      sandboxLimitFromBilling(
+        status(0, 3, {
+          status: 'trial',
+          trial,
+          limits: { maxConcurrentSandboxes: 1, maxConcurrentSandboxesPerMember: 1 }
+        })
+      )
+    ).toEqual({ perMember: 1, team: 1, perSeat: null, trial: true })
+    // An older service on a trial: the offer's per-seat cap would be wrong, so no numbers.
+    expect(sandboxLimitFromBilling(status(0, 3, { status: 'trial', trial }))).toBeNull()
   })
 
   it('names the repository GitHub needs to reach', () => {

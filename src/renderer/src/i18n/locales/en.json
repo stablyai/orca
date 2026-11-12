@@ -4329,7 +4329,12 @@
             "cloudUnusableTitle": "This sandbox can’t open your workspace",
             "cloudUnusableDeletedBody": "The sandbox was deleted. Start again to try a new one.",
             "cloudUnusableBody": "Start again on a new sandbox, or delete this one.",
-            "stillRunningLocal2": "The VM is running until you choose."
+            "stillRunningLocal2": "The VM is running until you choose.",
+            "trialLimitBodyCount_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "trialLimitBodyCount_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyNoSeatCount_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBodyNoSeatCount_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "trialLimitTitle": "You’re at your trial’s limit of running sandboxes"
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -20908,7 +20913,6 @@
         "teamUsedAllOverageOff": "Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.",
         "teamUsedAllOverageOn": "Your team has used all of this month’s sandbox hours. Overage is on, up to your {{cap}} spend cap.",
         "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours.",
-        "usageAlertsNote": "Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.",
         "choosePlan": "Choose plan",
         "reasonTrialUnavailable": "This account or team already used its trial. Choose a plan to use Orca Cloud.",
         "reasonTrialUnavailableMember": "This account or team already used its trial. Ask an owner or admin to choose a plan.",
@@ -20927,7 +20931,8 @@
         "teamPlanTitle": "{{team}} · {{plan}} plan",
         "planTitle": "{{plan}} plan",
         "overage": {
-          "turnOn": "Turn on with a {{cap}} cap"
+          "turnOn": "Turn on with a {{cap}} cap",
+          "turnOnNoCap": "Turn on overage"
         },
         "usage": {
           "title": "Last 30 days",
@@ -20956,7 +20961,9 @@
           "formerMembers_other": "{{count}} former members",
           "deletedWorkspaces_one": "Deleted workspace",
           "deletedWorkspaces_other": "{{count}} deleted workspaces"
-        }
+        },
+        "usageAlertsNoteLevels": "Owners and admins are alerted in Orca at {{levels}} of your team’s sandbox hours.",
+        "usageAlertsNoteGeneric": "Owners and admins are alerted in Orca as your team’s sandbox hours run low."
       },
       "ports": {
         "RuntimePortAutoForwarder": {
@@ -21128,7 +21135,11 @@
         "copyLinkToChat": "Copy link to this chat",
         "linkToNumber": "Link to {{number}}",
         "archiveConfirmStops": "{{owner}}'s agents in this workspace will stop.",
-        "archivedCount": "Archived ({{count}})"
+        "archivedCount": "Archived ({{count}})",
+        "errorTrialSandboxLimit_one": "Your trial can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
+        "errorTrialSandboxLimit_other": "Your trial can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again.",
+        "errorTeamSandboxLimitNoSeat_one": "Your team can run {{count}} sandbox at once. Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimitNoSeat_other": "Your team can run {{count}} sandboxes at once. Put one to sleep or delete it, then try again."
       },
       "orcaCloud": {
         "QueuedPrompt": {

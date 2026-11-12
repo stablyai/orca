@@ -1,7 +1,7 @@
 // The server half of predictive wake's guard: read just before waking, so sleeps chosen from the
 // CLI, the phone or another window count, and a guess never takes a seat's last running slot.
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
-import type { SandboxLimit } from '@/components/worktree-creation/vm-build-failure-copy'
+import type { SandboxLimit } from '@/components/worktree-creation/vm-build-sandbox-limit'
 import { SLEEP_COOLDOWN_MS } from './cloud-predictive-wake'
 
 export type PredictiveWakeServerVerdict =
@@ -12,7 +12,7 @@ export type PredictiveWakeServerVerdict =
   | 'team-near-cap'
 
 /**
- * `limit` is billing's running caps (per member seat, per team), null when unknown. Older control
+ * `limit` is billing's running caps (per member, per team), null when unknown. Older control
  * planes omit the hints; then only the local checks apply and a refusal stays silent.
  */
 export function predictiveWakeServerVerdict(
@@ -30,7 +30,7 @@ export function predictiveWakeServerVerdict(
   const running = status.running
   if (running && limit) {
     // At or one below the cap: the last slot is kept for a workspace someone actually opens.
-    if (running.owner >= limit.perSeat - 1) {
+    if (running.owner >= limit.perMember - 1) {
       return 'seat-near-cap'
     }
     if (running.account >= limit.team - 1) {

@@ -35,6 +35,20 @@ export const activeTeam = defineFixture({
   )
 })
 
+// Billing sent no catalog (an older service or a failed read): "Turn on overage" with no amount,
+// alert copy without levels. Billing applies its own default cap.
+export const overageOffNoOffers = defineFixture({
+  width: 680,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      teamName="Orca Staging Eval Team"
+      usage={usage}
+      result={{ status: 'ok', entitlement: { ...sampleTeam, offers: null } }}
+    />
+  )
+})
+
 export const noPlan = defineFixture({
   width: 680,
   render: () => (

@@ -1,4 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { recordBillingStatus } from '../billing/billing-summary-store'
 import {
   CLOUD_FAILED_LOG,
   CLOUD_LOG,
@@ -13,17 +14,21 @@ import {
 
 // Orca Cloud refusals and failures, one card each.
 
-function stubBillingRole(canManageBilling: boolean): void {
-  window.api.orcaProfiles.billingStatus = () =>
-    Promise.resolve({
-      status: 'ok',
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the card reads only canManageBilling.
-      entitlement: { canManageBilling } as never
-    })
+function stubBillingRole(canManageBilling: boolean, plan: Record<string, unknown> = {}): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the card reads only the role and the running caps.
+  const result = { status: 'ok', entitlement: { canManageBilling, offers: null, ...plan } } as never
+  window.api.orcaProfiles.billingStatus = () => Promise.resolve(result)
+  // The caps come from the last billing read the app made.
+  recordBillingStatus(result)
 }
 
 // An owner unless stated: the card's billing fix depends on the role billing reports.
-function cloudFailure(errorCode: string | undefined, error: string, log = CLOUD_LOG) {
+function cloudFailure(
+  errorCode: string | undefined,
+  error: string,
+  log = CLOUD_LOG,
+  plan: Record<string, unknown> = {}
+) {
   const fixture = frame(
     entry({ status: 'error', errorCode, provisioningLog: log, errorAt: T0 + 2_000 }, CLOUD_RECIPE),
     error,
@@ -33,7 +38,7 @@ function cloudFailure(errorCode: string | undefined, error: string, log = CLOUD_
     ...fixture,
     setup: () => {
       seedFixtureRepo()
-      stubBillingRole(true)
+      stubBillingRole(true, plan)
     }
   })
 }
@@ -48,6 +53,37 @@ export const cloudConcurrencyLimit = cloudFailure(
   'cloudConcurrencyLimit',
   'You already have as many Orca Cloud workspaces running as your plan allows.',
   ''
+)
+
+// A 4-seat Team: billing's caps are 12 running for the team, 3 per member.
+export const cloudConcurrencyLimitTeam = cloudFailure(
+  'cloudConcurrencyLimit',
+  'You already have as many Orca Cloud workspaces running as your plan allows.',
+  `${CLOUD_LOG}\nOrca Cloud: concurrency_limit`,
+  {
+    status: 'active',
+    seats: 4,
+    limits: { maxConcurrentSandboxes: 12, maxConcurrentSandboxesPerMember: 3 }
+  }
+)
+
+// The one-time trial runs one sandbox at a time and has no seats.
+export const cloudConcurrencyLimitTrial = cloudFailure(
+  'cloudConcurrencyLimit',
+  'You already have as many Orca Cloud workspaces running as your plan allows.',
+  `${CLOUD_LOG}\nOrca Cloud: concurrency_limit`,
+  {
+    status: 'trial',
+    seats: 0,
+    trial: {
+      includedSeconds: 7200,
+      usedSeconds: 2160,
+      remainingSeconds: 5040,
+      exhausted: false,
+      grantedAt: T0
+    },
+    limits: { maxConcurrentSandboxes: 1, maxConcurrentSandboxesPerMember: 1 }
+  }
 )
 
 export const cloudUnavailable = cloudFailure(

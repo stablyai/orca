@@ -7,8 +7,10 @@ import type {
   OrcaBillingOverageArgs,
   OrcaBillingTeamPlan
 } from '../../shared/orca-billing'
-import { ORCA_BILLING_INTERVALS, ORCA_BILLING_PLAN_IDS } from '../../shared/orca-billing'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+import { normalizeEntitlement } from './billing-entitlement-schema'
+
+export { normalizeEntitlement }
 
 const REQUEST_TIMEOUT_MS = 20_000
 const MAX_TOKEN_LENGTH = 8 * 1024
@@ -94,121 +96,6 @@ export async function billingRequest(
     throw new Error('invalid_billing_response')
   }
   return json.data
-}
-
-const seconds = z.number().catch(0)
-const window = z.object({ start: z.number(), end: z.number() }).nullable().catch(null)
-
-const OffersSchema = z
-  .object({
-    team: z.object({
-      label: z.string().max(40),
-      monthlyPriceLabel: z.string().max(40),
-      annualPriceLabel: z.string().max(40),
-      monthlyPriceCentsPerSeat: z.number().int().nonnegative().nullable().catch(null),
-      annualPriceCentsPerSeat: z.number().int().nonnegative().nullable().catch(null),
-      largeMachineWeight: z.number().positive().catch(1),
-      includedHoursPerSeat: z.number().nonnegative(),
-      concurrentSandboxesPerSeat: z.number().int().nonnegative(),
-      idleSleepMinutes: z.number().int().positive(),
-      overageCentsPerHour: z.number().int().positive(),
-      defaultSpendCapCents: z.number().int().nonnegative(),
-      maxSpendCapCents: z.number().int().positive().nullable().catch(null)
-    }),
-    enterprise: z.object({
-      label: z.string().max(40),
-      priceLabel: z.string().max(40),
-      // Opened in the browser: https only.
-      contactUrl: z.string().url().startsWith('https://')
-    }),
-    // Absent from older services: no trial on offer.
-    trial: z
-      .object({ includedSeconds: z.number().nonnegative() })
-      .nullable()
-      .optional()
-      .catch(null)
-      .transform((value) => value ?? null)
-  })
-  .nullable()
-  .catch(null)
-
-// Lenient by design: an unknown plan/reason or a missing field degrades to "none"/0, never an error,
-// so a newer billing service cannot break an older desktop.
-const EntitlementSchema = z.object({
-  plan: z.enum(ORCA_BILLING_PLAN_IDS).nullable().catch(null),
-  planLabel: z.string().nullable().catch(null),
-  status: z.string().catch('none'),
-  interval: z.enum(ORCA_BILLING_INTERVALS).nullable().catch(null),
-  seats: seconds,
-  seatChange: z
-    .object({
-      seatsAtRenewal: z.number().int().min(1),
-      effectiveAt: z.number()
-    })
-    .nullable()
-    .catch(null),
-  period: window,
-  usageWindow: window,
-  cancelAtPeriodEnd: z.boolean().catch(false),
-  trial: z
-    .object({
-      includedSeconds: z.number().nonnegative(),
-      usedSeconds: z.number().nonnegative(),
-      remainingSeconds: z.number().nonnegative(),
-      exhausted: z.boolean(),
-      grantedAt: z.number()
-    })
-    .nullable()
-    .optional()
-    .catch(null)
-    .transform((value) => value ?? null),
-  includedSeconds: seconds,
-  usedSeconds: seconds,
-  remainingIncludedSeconds: seconds,
-  usageWarningPercent: z.number().nullable().catch(null),
-  overageSeconds: seconds,
-  overage: z
-    .object({
-      optedIn: z.boolean().catch(false),
-      active: z.boolean().catch(false),
-      spendCapCents: seconds,
-      spentCents: seconds,
-      centsPerHour: seconds
-    })
-    .catch({
-      optedIn: false,
-      active: false,
-      spendCapCents: 0,
-      spentCents: 0,
-      centsPerHour: 0
-    }),
-  payment: z
-    .object({
-      pastDueSince: z.number().nullable().catch(null),
-      graceEndsAt: z.number().nullable().catch(null),
-      suspendRunning: z.boolean().catch(false)
-    })
-    .catch({ pastDueSince: null, graceEndsAt: null, suspendRunning: false }),
-  canStartSandbox: z.boolean().catch(false),
-  reason: z
-    .enum([
-      'no_subscription',
-      'subscription_inactive',
-      'payment_past_due',
-      'payment_grace_expired',
-      'included_hours_exhausted',
-      'overage_cap_reached',
-      'trial_used_up',
-      'trial_unavailable'
-    ])
-    .nullable()
-    .catch(null),
-  canManageBilling: z.boolean().catch(false),
-  offers: OffersSchema.optional().transform((value) => value ?? null)
-})
-
-export function normalizeEntitlement(value: Record<string, unknown>): OrcaBillingEntitlement {
-  return EntitlementSchema.parse(value)
 }
 
 // Only Stripe's hosted pages may be opened from a billing response.

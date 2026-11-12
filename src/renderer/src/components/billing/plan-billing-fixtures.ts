@@ -22,6 +22,7 @@ export const sampleOffers: OrcaBillingOffers = {
     idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
     overageCentsPerHour: 100,
     defaultSpendCapCents: 2500,
+    warnAtPercent: [75, 90, 100],
     maxSpendCapCents: 500_000
   },
   enterprise: {

@@ -4,7 +4,10 @@ import { getIntlLocale } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import type { HostedVmMetrics } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
-import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import {
+  ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+  ORCA_CLOUD_SANDBOX_SPEC
+} from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { CloudSyncView } from '../../../../shared/cloud-sync/cloud-sync-contract'
 import { cloudStateDetail } from './cloud-state-copy'
 import type { CloudAgentRowSignIn } from '@/lib/orca-cloud/cloud-agent-row-sign-in'
@@ -25,9 +28,9 @@ export function cloudCardStateDetail(
     return t('orcaCloudWorkspace.detail.restarting', 'Orca resumes your agents after the restart.')
   }
   if (args.state === 'running') {
-    // The control plane's idle timer; older control planes omit it (their timer is 15 min).
+    // The control plane's idle timer; older control planes omit it (they run the shared default).
     return t('orcaCloudWorkspace.card.sleepsIn', 'Sleeps in {{count}} min if idle', {
-      count: args.idleSleepMinutes ?? 15,
+      count: args.idleSleepMinutes ?? ORCA_CLOUD_IDLE_SLEEP_MINUTES,
       defaultValue_one: 'Sleeps in {{count}} min if idle'
     })
   }
