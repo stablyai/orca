@@ -16,6 +16,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/workspace/creation/new-workspace-project-options'
 import { resolveComposerAddProjectDefaultHostId } from './composer-add-project-default-host'
+import { cloudAddProjectExtraItems } from './ProjectComboboxCloudAddProjectEntry'
 import type {
   EphemeralVmRecipeOption,
   NeedsProjectHostOption,
@@ -165,6 +166,9 @@ export function NewWorkspaceComposerProjectSection({
                   defaultHostId={defaultAddProjectHostId}
                   onOpenEntryRequest={onAddProjectEntryRequest}
                   onOpenRemoteHostDialog={handleOpenRemoteHostDialog}
+                  // PROJ-MENU: the button beside "Project" gets the same "Orca Cloud" group as the
+                  // list's Add project row while Run on is Orca Cloud.
+                  extraItems={cloudAddProjectExtraItems(cloudOnly?.moreAccess)}
                 >
                   <Button
                     type="button"
