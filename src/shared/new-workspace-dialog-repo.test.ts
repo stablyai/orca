@@ -77,6 +77,12 @@ describe('new workspace dialog repo selection', () => {
     expect(resolveNewWorkspaceDialogRepoId({ eligibleRepos, activeRepoId: 'hidden' })).toBe(
       'listed'
     )
+    // Every project hidden: no implicit default, though a named one still resolves.
+    const allHidden = getNewWorkspaceDialogEligibleRepos([makeRepo('hidden', { hiddenAt: 1 })])
+    expect(resolveNewWorkspaceDialogRepoId({ eligibleRepos: allHidden })).toBe('')
+    expect(
+      resolveNewWorkspaceDialogRepoId({ eligibleRepos: allHidden, draftRepoId: 'hidden' })
+    ).toBe('hidden')
     expect(pickerRepos(eligibleRepos).map((repo) => repo.id)).toEqual(['listed'])
     expect(pickerRepos(eligibleRepos, 'hidden').map((repo) => repo.id)).toEqual([
       'hidden',

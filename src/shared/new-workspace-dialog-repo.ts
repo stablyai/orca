@@ -46,8 +46,7 @@ export function resolveNewWorkspaceDialogRepoId({
     (initialRepoId && eligibleRepos.find((repo) => repo.id === initialRepoId)) ||
     (activeRepoId && listedRepos.find((repo) => repo.id === activeRepoId)) ||
     focusedHostRepo ||
-    listedRepos[0] ||
-    eligibleRepos[0]
+    listedRepos[0]
 
   return resolvedRepo?.id ?? ''
 }
