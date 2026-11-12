@@ -1,3 +1,4 @@
+import { ORCHESTRATION_SESSION_CHILDREN_METHODS } from './session-children'
 import { requiringOrcadFeature } from '../../startup/orcad-readiness'
 import { ORCHESTRATION_CREW_METHODS } from './crew-methods'
 import { ORCHESTRATION_RUN_METHODS } from './runs/runs'
@@ -28,5 +29,6 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_ASK_METHODS,
   ...ORCHESTRATION_GATE_METHODS,
   ...ORCHESTRATION_RESET_METHODS,
-  ...ORCHESTRATION_CALLER_METHODS
+  ...ORCHESTRATION_CALLER_METHODS,
+  ...ORCHESTRATION_SESSION_CHILDREN_METHODS
 ] satisfies readonly { readonly orchestrationAccess: OrchestrationMethodAccessDeclaration }[])
