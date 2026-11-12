@@ -1,17 +1,18 @@
 import { useEffect } from 'react'
-import type { TerminalPaneStoreController } from '../../controller/use-terminal-pane-store-bindings'
+import type { TerminalPaneMountedController } from '../../mounting/use-terminal-pane-lifecycle-stage'
 
 export function useIssueCommandSplitSettlement({
   consumeTabIssueCommandSplit,
   issueCommandSplit,
-  tabId
+  tabId,
+  terminalManager
 }: Pick<
-  TerminalPaneStoreController,
-  'consumeTabIssueCommandSplit' | 'issueCommandSplit' | 'tabId'
+  TerminalPaneMountedController,
+  'consumeTabIssueCommandSplit' | 'issueCommandSplit' | 'tabId' | 'terminalManager'
 >) {
   useEffect(() => {
-    if (issueCommandSplit) {
+    if (terminalManager && issueCommandSplit) {
       consumeTabIssueCommandSplit(tabId)
     }
-  }, [issueCommandSplit, tabId, consumeTabIssueCommandSplit])
+  }, [terminalManager, issueCommandSplit, tabId, consumeTabIssueCommandSplit])
 }

@@ -7,13 +7,14 @@ import {
   trackRetiredLeafIds
 } from './terminal-live-layout-reconciliation'
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
-import type { TerminalPaneCloseController } from '../close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../../mounting/use-terminal-pane-lifecycle-stage'
 
 export function useHostTerminalLayoutReconciliation({
   executeClosePane,
   hostRetiredLeafIdsRef,
   isActive,
   managerRef,
+  terminalManager,
   paneCount,
   paneTransportsRef,
   persistLayoutSnapshot,
@@ -21,11 +22,12 @@ export function useHostTerminalLayoutReconciliation({
   restoredLayout,
   hostLayoutLeafIdsRef
 }: Pick<
-  TerminalPaneCloseController,
+  TerminalPaneMountedController,
   | 'executeClosePane'
   | 'hostRetiredLeafIdsRef'
   | 'isActive'
   | 'managerRef'
+  | 'terminalManager'
   | 'paneCount'
   | 'paneTransportsRef'
   | 'persistLayoutSnapshot'
@@ -34,7 +36,7 @@ export function useHostTerminalLayoutReconciliation({
 > & { hostLayoutLeafIdsRef: React.RefObject<ReadonlySet<string>> }): void {
   useEffect(() => {
     const manager = managerRef.current
-    if (!manager || !restoredLayout.root) {
+    if (!terminalManager || manager !== terminalManager || !restoredLayout.root) {
       return
     }
     // Why the retired check: dropping a retired leaf can drop the layout's only remote PTY id.
@@ -128,6 +130,7 @@ export function useHostTerminalLayoutReconciliation({
     restoredLayout,
     hostRetiredLeafIdsRef,
     managerRef,
+    terminalManager,
     paneTransportsRef
   ])
 }

@@ -13,9 +13,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspac
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 import { withoutRedundantGlobalFields } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { readTerminalScrollbackSnapshotSync } from '../../../pty/scrollback/terminal-scrollback-snapshots'
 import {
-  hasTerminalScrollbackSnapshotSync,
   readTerminalScrollbackSnapshot,
   statTerminalScrollbackSnapshotSize
 } from '../../../pty/scrollback/terminal-scrollback-snapshot-nonblocking-reads'
@@ -111,20 +109,6 @@ export class SessionHostPartitionOperations {
       this[sessionHostPartitionOperationsContext].scheduling,
       ['workspaceSessionsByHostId'],
       hostId
-    )
-  }
-
-  readTerminalScrollbackSnapshot(ref: string): string | null {
-    return readTerminalScrollbackSnapshotSync(
-      ref,
-      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
-    )
-  }
-
-  hasTerminalScrollbackSnapshot(ref: string): boolean {
-    return hasTerminalScrollbackSnapshotSync(
-      ref,
-      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
     )
   }
 

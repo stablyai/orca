@@ -21,9 +21,7 @@ export type WorkspaceSessionApi = {
       reason?: 'user' | 'cleanup'
     }) => Promise<void>
     flush: () => Promise<void>
-    readTerminalScrollback: (args: { ref: string }) => string | null
-    /** Stat-only: whether this machine's snapshot store holds `ref`. */
-    hasTerminalScrollback: (args: { ref: string }) => boolean
+    readTerminalScrollback: (args: { ref: string }) => Promise<string | null>
   }
   cache: {
     getGitHub: () => Promise<{

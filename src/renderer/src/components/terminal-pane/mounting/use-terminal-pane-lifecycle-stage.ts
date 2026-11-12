@@ -1,13 +1,16 @@
+import { useIssueCommandSplitSettlement } from '../layout/split/use-issue-command-split-settlement'
 import { useTerminalPaneStoreActions } from '../controller/use-terminal-pane-store-actions'
 import { useTerminalPaneLifecycle } from '../controller/use-terminal-pane-lifecycle'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 
-export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseController): void {
+export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseController) {
   const {
+    consumeTabIssueCommandSplit,
     clearExitedPanePtyLayoutBinding,
     clearExitedPanePtyLayoutBindingForLeaf,
     clearRuntimePaneTitle,
     clearTabPtyId,
+    clearedScrollbackLeafIdsRef,
     containerRef,
     cwd,
     dispatchNotification,
@@ -70,7 +73,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
   } = controller
   const { consumeSuppressedPtyExit, isPtyShutdownPending } = useTerminalPaneStoreActions()
 
-  useTerminalPaneLifecycle({
+  const mount = useTerminalPaneLifecycle({
     tabId,
     worktreeId,
     cwd,
@@ -86,6 +89,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     effectiveMacOptionAsAlt,
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
+    clearedScrollbackLeafIdsRef,
     managerRef,
     getTabWideAgentHintLeafId: () => getTabWideAgentHintLeafIdRef.current(),
     containerRef,
@@ -137,4 +141,14 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     onExternalPaneDrop: handleExternalPaneDrop,
     detachPaneToNewTab
   })
+  useIssueCommandSplitSettlement({
+    consumeTabIssueCommandSplit,
+    issueCommandSplit,
+    tabId,
+    terminalManager: mount.manager
+  })
+  return { terminalMountPhase: mount.phase, terminalManager: mount.manager }
 }
+
+export type TerminalPaneMountedController = TerminalPaneCloseController &
+  ReturnType<typeof useTerminalPaneLifecycleStage>

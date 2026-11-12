@@ -40,6 +40,7 @@ export type PtyConnectionDeps = {
   restoredPtyIdByLeafId?: Record<string, string>
   /** Render-time park intent survives watcher disposal and is consumed once after layout replay. */
   mountFollowsTerminalPark: boolean
+  invalidateRetainedInlineScrollback: (leafId: string) => void
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   /** Mirror xterm’s negotiated Kitty flags for keyboard policy. */

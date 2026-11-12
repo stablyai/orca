@@ -48,6 +48,7 @@ export type UseTerminalPaneLifecycleDeps = {
   effectiveMacOptionAsAlt: EffectiveMacOptionAsAlt
   effectiveMacOptionAsAltRef: React.RefObject<EffectiveMacOptionAsAlt>
   initialLayoutRef: React.RefObject<TerminalLayoutSnapshot>
+  clearedScrollbackLeafIdsRef?: React.RefObject<Set<string>>
   managerRef: React.RefObject<PaneManager | null>
   getTabWideAgentHintLeafId: () => string | null
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -120,4 +121,8 @@ export type UseTerminalPaneLifecycleDeps = {
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
   detachPaneToNewTab?: DetachTerminalPaneToNewTab
+}
+
+export type MountedTerminalPaneLifecycleDeps = UseTerminalPaneLifecycleDeps & {
+  mountedManager: PaneManager | null
 }
