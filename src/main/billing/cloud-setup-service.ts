@@ -3,6 +3,7 @@
 //   the session is created and the same tab continues to the setup pages;
 // - signed in: the session is created and its start URL is opened.
 // The composer then polls getCloudSetupSession until every step is done.
+import { detectRuntimeMachineName } from '../runtime/hosts/platform-probe/runtime-machine-name'
 import { appendFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { app, shell } from 'electron'
@@ -58,6 +59,25 @@ const SessionBody = z.object({
 })
 
 /** What this Mac is called on the setup page ("Orca on MacBook Pro is waiting for you"). */
+/**
+ * The name the web setup page shows ("Orca on <name> is waiting for you"). On macOS that's the
+ * Computer Name exactly as System Settings shows it ("Neil's MacBook Air"), not the hostname,
+ * which drops the apostrophe ("Neils-MacBook-Air"). Elsewhere, or if scutil can't answer, the
+ * cleaned-up hostname.
+ */
+export async function cloudSetupDeviceLabel(
+  args: { platform?: NodeJS.Platform; detect?: typeof detectRuntimeMachineName } = {}
+): Promise<string> {
+  if ((args.platform ?? process.platform) === 'darwin') {
+    const detected = await (args.detect ?? detectRuntimeMachineName)().catch(() => null)
+    const name = detected?.final ? detected.name.trim() : ''
+    if (name) {
+      return name.slice(0, 80)
+    }
+  }
+  return setupDeviceLabel()
+}
+
 export function setupDeviceLabel(name = hostname()): string {
   return (
     name
@@ -119,7 +139,7 @@ export async function startCloudSetup(
   userDataPath: string,
   args: CloudSetupStartArgs
 ): Promise<CloudSetupStartResult> {
-  const device = setupDeviceLabel()
+  const device = await cloudSetupDeviceLabel()
   const body = {
     ...(args.repo ? { repo: args.repo } : {}),
     needs: args.needs,
