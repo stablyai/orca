@@ -40,7 +40,9 @@ function openSettings(pane: 'cloud-secrets', sectionId?: string): void {
  */
 export function useCloudHeldStrip(
   paneKey: string,
-  tabHoldKey: string | null
+  tabHoldKey: string | null,
+  /** A structured chat's hold: Cancel never gives it up (closing the chat does). */
+  { chat = false }: { chat?: boolean } = {}
 ): { key: string; active: boolean; strip: CloudHeldStrip | null } {
   const t = useTranslate()
   const paneHold = useCloudAgentHold(paneKey)
@@ -88,14 +90,16 @@ export function useCloudHeldStrip(
           hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
           t
         })
+  const setupRunning = setup.phase !== 'idle' && setup.phase !== 'saved' && setup.phase !== 'failed'
   const holdActions: CloudStripActions | null = setupHold
     ? cloudSetupStripActions({
         agent,
         holdKey: key,
-        setupRunning: setup.phase !== 'idle' && setup.phase !== 'saved' && setup.phase !== 'failed',
+        setupRunning,
         copyText: gateActions.copyText,
         openLink: gateActions.openLink,
-        useApiKey: () => openSettings('cloud-secrets')
+        useApiKey: () => openSettings('cloud-secrets'),
+        keepHoldOnCancel: chat
       })
     : null
   const actions: CloudStripActions = holdActions ?? {
@@ -135,11 +139,20 @@ export function useCloudHeldStrip(
     pasteCode: gateActions.useCode,
     useCode: gateActions.useCode,
     useApiKey: () => openSettings('cloud-secrets'),
-    cancel: () => (hold ? releaseCloudAgentHold(key, 'cancel') : gateActions.cancel())
+    cancel: () => {
+      if (!hold) {
+        gateActions.cancel()
+      } else if (!chat) {
+        releaseCloudAgentHold(key, 'cancel')
+      }
+    }
   }
+  // A held chat's strip has nothing to cancel unless a setup is running: no × (Escape is a no-op).
+  const shownModel =
+    chat && hold && !(setupHold && setupRunning) ? { ...model, noClose: true } : model
   return {
     key,
     active,
-    strip: { model, prompt: hold?.prompt ?? cloudGate?.prompt ?? null, actions }
+    strip: { model: shownModel, prompt: hold?.prompt ?? cloudGate?.prompt ?? null, actions }
   }
 }

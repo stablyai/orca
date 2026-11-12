@@ -30,7 +30,7 @@ export function CloudStructuredChatBanners({
   /** The agent-status key (tab and session): the running strip (B2) reads the agent through it. */
   statusKey: string
 }): React.JSX.Element {
-  const { key, active, strip } = useCloudHeldStrip(paneKey, null)
+  const { key, active, strip } = useCloudHeldStrip(paneKey, null, { chat: true })
   const running = useCloudChatRunningStrip({ tabId, statusKey, holdKey: paneKey })
   const shown = strip ?? running
   useEffect(() => {

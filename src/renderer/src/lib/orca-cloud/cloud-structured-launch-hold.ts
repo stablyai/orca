@@ -100,3 +100,12 @@ export function useCloudHeldChatUnavailable<T extends { reason: string }>(
   // Only the sign-in verdict is the strip's; a missing agent CLI and the rest still say so.
   return held && unavailable?.reason === 'notSignedIn' ? null : (unavailable ?? null)
 }
+
+/**
+ * CHAT-CANCEL-ERROR / CHAT-RESTORE-RECONFIRM: a structured chat waiting on its Orca Cloud hold has
+ * created nothing yet, so it has no start to report as failed or unconfirmed. Its strip says what
+ * to do; launch and session error cards only appear once the agent has actually started.
+ */
+export function useIsCloudHeldChat(sessionId: string): boolean {
+  return useCloudAgentHold(structuredCloudHoldKey(sessionId)) !== null
+}
