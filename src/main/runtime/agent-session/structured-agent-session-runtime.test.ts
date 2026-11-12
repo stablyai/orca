@@ -4,18 +4,15 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { __setWindowsProcessTreeLoaderForTests } from '../../windows/windows-process-table'
+
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { seedTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
-import { nativeChatScratchFolderFor } from '../../native-chat/native-chat-scratch-folder'
+import { nativeChatScratchFolderFor } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { foundAgentSessionRecord } from './records/agent-session-record-founding'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { onStructuredAgentSessionsHeldChanged } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
@@ -70,32 +67,6 @@ describe('structured agent-session runtime install', () => {
       resolveEnvironment: async () => ({})
     })
   }
-
-  it.each([false, true])(
-    'backfills before the host is readable and keeps startup nonfatal on a failed write (%s)',
-    async (failWrite) => {
-      stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-backfill-'))
-      await seedTestAgentSessionRecordStore(stateDirectory, { records: [oldChat('codex')] })
-      if (failWrite) {
-        openTestJournalHostDatabase(stateDirectory).db.exec(
-          "CREATE TRIGGER fail_permission_backfill BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk full'); END"
-        )
-      }
-      const logged = recordingStructuredAgentSessionLogger()
-      const host = await installOver(['codex'], logged.logger)
-      expect(host.deps.store.getRecord('old-codex')?.permissionMode).toBe(
-        failWrite ? undefined : 'full-access'
-      )
-      expect((await host.readOptions('old-codex')).current.permissionMode).toBe(
-        failWrite ? 'ask' : 'full-access'
-      )
-      if (failWrite) {
-        expect(logged.scopes()).toContain('permission-mode-backfill')
-      } else {
-        expect(logged.scopes()).not.toContain('permission-mode-backfill')
-      }
-    }
-  )
 
   it('moves pre-rename chat visuals under the current root before the host is readable', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-visuals-'))

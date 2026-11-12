@@ -10,7 +10,7 @@ type ChunkSource = {
 }
 
 const source = vi.hoisted((): ChunkSource => ({ chunks: [], closed: false, opens: 0 }))
-vi.mock('../../native-chat/wsl-transcript-fs-access', () => ({
+vi.mock('../../native-chat/transcript-filesystem/wsl-transcript-fs-access', () => ({
   openTranscriptReadStream: async function* () {
     source.opens += 1
     source.closed = false

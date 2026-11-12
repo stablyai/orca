@@ -4,7 +4,7 @@ import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../../runtime/agent-session/e
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
 
 import type { PiBackgroundWorkLaunch } from '../background-work/rpc-background-work-bridge'
