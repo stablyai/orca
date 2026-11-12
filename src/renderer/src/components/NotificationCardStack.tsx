@@ -39,11 +39,25 @@ export function NotificationCardStack({ children }: { children: ReactNode }): Re
         height > 0 ? `calc(${height}px + 0.5rem)` : null
       )
     }
-    publish()
+    // Why each card too: once the box hits max-height, a growing card no longer resizes the box.
     const observer = new ResizeObserver(publish)
-    observer.observe(stack)
+    const observeCards = (): void => {
+      observer.disconnect()
+      observer.observe(stack)
+      for (const card of stack.children) {
+        observer.observe(card)
+      }
+    }
+    const cardList = new MutationObserver(() => {
+      observeCards()
+      publish()
+    })
+    publish()
+    observeCards()
+    cardList.observe(stack, { childList: true })
     window.addEventListener('resize', publish)
     return () => {
+      cardList.disconnect()
       observer.disconnect()
       window.removeEventListener('resize', publish)
       setNotificationCardLayoutVar(NOTIFICATION_CARD_STACK_HEIGHT_VAR, null)

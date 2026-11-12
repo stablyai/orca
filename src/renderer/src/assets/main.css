@@ -551,29 +551,39 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
-/* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app. */
+/* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
+   Plugin themes override the lift, secondary mix and muted text (notice-surface-tokens.ts) to keep text readable. */
 :root {
+  --notice-secondary-mix: 6%;
+  --notice-muted-foreground: var(--muted-foreground);
   --notice-surface: var(--popover);
   --notice-border: color-mix(in srgb, var(--foreground) 14%, transparent);
-  --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
+  --notice-secondary: color-mix(
+    in srgb,
+    var(--foreground) var(--notice-secondary-mix),
+    var(--notice-surface)
+  );
   --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
 }
 
 .dark {
-  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --notice-lift: 7%;
+  --notice-secondary-mix: 10%;
+  --notice-surface: color-mix(in srgb, var(--foreground) var(--notice-lift), var(--popover));
   --notice-border: color-mix(in srgb, var(--foreground) 15%, transparent);
-  --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
   --notice-shadow:
     0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
     inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
 
-/* Why: buttons and inner panels paint from these; foregrounds pair with the popover the surface lifts. */
+/* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts. */
 [data-sonner-toaster],
 .notification-card-stack {
   --popover: var(--notice-surface);
   --card: var(--notice-surface);
+  --foreground: var(--popover-foreground);
   --card-foreground: var(--popover-foreground);
+  --muted-foreground: var(--notice-muted-foreground);
   --secondary: var(--notice-secondary);
   --secondary-foreground: var(--popover-foreground);
 }
