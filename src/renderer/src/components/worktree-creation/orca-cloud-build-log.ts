@@ -185,6 +185,18 @@ export function humanizeOrcaCloudLogLine(line: string, t: Translate): string | n
   return null
 }
 
+/** No sandbox phase yet, or the last one is the plan check: the server hasn't taken the create. */
+function awaitingPlanCheck(log: string): boolean {
+  const lines = log.split('\n')
+  for (let index = lines.length - 1; index >= 0; index--) {
+    const phase = PHASE_LINE.exec(lines[index].trim())?.[1]
+    if (phase) {
+      return phase === 'checking-entitlement'
+    }
+  }
+  return true
+}
+
 /** Past this, a still-running "Start sandbox" names what it is waiting on (N-01: no silent 30 s). */
 export const PROVISION_STAGE_AFTER_MS = 5_000
 
@@ -198,6 +210,11 @@ export function provisionStageLabel(
   elapsedMs: number | null,
   t: Translate
 ): string | null {
+  // JA-21 (design-squad): until the server takes the create, the step says it is checking the
+  // plan, at once rather than after the quiet period; a refusal turns into the blocker card.
+  if (entry.phase !== 'preparing' && awaitingPlanCheck(entry.provisioningLog ?? '')) {
+    return phaseLabel('checking-entitlement', t)
+  }
   if (elapsedMs === null || elapsedMs < PROVISION_STAGE_AFTER_MS) {
     return null
   }
