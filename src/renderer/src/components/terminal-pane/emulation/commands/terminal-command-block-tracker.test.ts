@@ -40,7 +40,9 @@ function trackedTerminal(options?: ConstructorParameters<typeof Terminal>[0]): {
 
 function stubReader(rows: { text: string; wrapped: boolean }[]): TerminalBlockLineReader {
   return {
-    getLine: (row: number) => rows[row] ?? null
+    getLine: (row: number) => rows[row] ?? null,
+    // Narrow fixtures only: one cell per unit.
+    sliceLineFromCol: (row: number, col: number) => (rows[row] ? rows[row].text.slice(col) : null)
   }
 }
 
@@ -243,5 +245,130 @@ describe('terminal-command-block-tracker', () => {
       outputEndRowSnapshot: null
     }
     expect(readTerminalCommandBlockText(reader, lines, 'command')).toBe('make all')
+  })
+
+  it('slices the command at a cell column past a wide prompt glyph', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal()
+    try {
+      // `界 ` occupies 3 cells but 2 string units; B sits at column 3.
+      await write(
+        terminal,
+        `${OSC}A${BEL}界 ${OSC}B${BEL}echo hi\r\n${OSC}C${BEL}hi\r\n${OSC}D;0${BEL}`
+      )
+      const block = tracker.resolveBlockAtRow(0)
+      expect(block).not.toBeNull()
+      if (!block) {
+        return
+      }
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'command', { trimGutter: false })
+      ).toBe('echo hi')
+    } finally {
+      dispose()
+    }
+  })
+
+  it('slices the command past an emoji prompt glyph', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal()
+    try {
+      // xterm's default provider renders this emoji one cell wide; the slice
+      // measures the live line, so it stays exact either way.
+      await write(
+        terminal,
+        `${OSC}A${BEL}🚀 ${OSC}B${BEL}echo hi\r\n${OSC}C${BEL}hi\r\n${OSC}D;0${BEL}`
+      )
+      const block = tracker.resolveBlockAtRow(0)
+      expect(block).not.toBeNull()
+      if (!block) {
+        return
+      }
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'command', { trimGutter: false })
+      ).toBe('echo hi')
+    } finally {
+      dispose()
+    }
+  })
+
+  it('keeps a joined mark on the prompt side of the slice', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal()
+    try {
+      // e + combining acute share one cell; B sits at column 2.
+      await write(
+        terminal,
+        `${OSC}A${BEL}e\u0301 ${OSC}B${BEL}echo hi\r\n${OSC}C${BEL}hi\r\n${OSC}D;0${BEL}`
+      )
+      const block = tracker.resolveBlockAtRow(0)
+      expect(block).not.toBeNull()
+      if (!block) {
+        return
+      }
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'command', { trimGutter: false })
+      ).toBe('echo hi')
+    } finally {
+      dispose()
+    }
+  })
+
+  it('joins the snapshot row when it wrapped from the previous row', () => {
+    const reader = stubReader([
+      { text: 'out-part1', wrapped: false },
+      { text: '$ repainted', wrapped: false }
+    ])
+    const lines = {
+      promptLine: 0,
+      outputStartLine: 0,
+      outputEndLine: 2,
+      inputStart: null,
+      outputEndRowSnapshot: { text: 'part2', wrapped: true }
+    }
+    expect(readTerminalCommandBlockText(reader, lines, 'output')).toBe('out-part1part2')
+  })
+
+  it('completes the block when output moves the cursor before a stale D', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal()
+    try {
+      await write(
+        terminal,
+        `${OSC}A${BEL}$ ${OSC}B${BEL}echo hi\r\n${OSC}C${BEL}` +
+          `${OSC}B${BEL}${OSC}C${BEL}late-output${OSC}D;0${BEL}`
+      )
+      // B C arrived with no cursor movement, but output moved the cursor
+      // before D;0, so this D closes the real command instead of an app zone.
+      const block = tracker.resolveBlockAtRow(1)
+      expect(block).not.toBeNull()
+      if (!block) {
+        return
+      }
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'command', { trimGutter: false })
+      ).toBe('echo hi')
+    } finally {
+      dispose()
+    }
+  })
+
+  it('hands the D row to a prompt repainted on it', async () => {
+    const { terminal, tracker, dispose } = trackedTerminal()
+    try {
+      await write(
+        terminal,
+        `${OSC}A${BEL}$ ${OSC}B${BEL}printf hi\r\n${OSC}C${BEL}hi${OSC}D;0${BEL}${OSC}A${BEL}$ `
+      )
+      // The new prompt owns row 1 now; the old block keeps row 0 and its
+      // snapshotted output text.
+      expect(tracker.resolveBlockAtRow(1)).toBeNull()
+      const block = tracker.resolveBlockAtRow(0)
+      expect(block).not.toBeNull()
+      if (!block) {
+        return
+      }
+      expect(
+        readTerminalBlockTextFromTerminal(terminal, block, 'output', { trimGutter: false })
+      ).toBe('hi')
+    } finally {
+      dispose()
+    }
   })
 })

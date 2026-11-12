@@ -3,9 +3,9 @@ import { expect, test } from './helpers/orca-app'
 import {
   sendToTerminal,
   waitForActivePanePtyId,
-  waitForActiveTerminalManager,
-  waitForTerminalOutput
+  waitForActiveTerminalManager
 } from './helpers/terminal'
+import { getTerminalContent } from './helpers/terminal-pane-identity'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 test.beforeEach(async ({ orcaPage }, testInfo) => {
@@ -70,7 +70,15 @@ test('terminal context menu copies a shell command block output', async ({ orcaP
     ptyId,
     `printf '\\x1b]133;A\\x1b\\\\$ \\x1b]133;B\\x1b\\\\echo ${marker}\\r\\n\\x1b]133;C\\x1b\\\\${marker}\\r\\n\\x1b]133;D;0\\x1b\\\\'\r`
   )
-  await waitForTerminalOutput(orcaPage, marker, 10_000)
+  // The typed printf echoes the marker, so a substring wait can pass before
+  // the OSC-marked output row exists; wait for the marker as its own line.
+  await expect
+    .poll(
+      async () =>
+        (await getTerminalContent(orcaPage)).split(/\r?\n/).some((line) => line.trim() === marker),
+      { timeout: 10_000, message: `Output row "${marker}" did not appear` }
+    )
+    .toBe(true)
 
   await rightClickBufferText(orcaPage, marker)
   const copyOutput = orcaPage.getByRole('menuitem', { name: 'Copy Output', exact: true })

@@ -68,6 +68,8 @@ function MenuHarness(props: {
         onCopyPaneId={() => {}}
         canCopyAgentSessionId={false}
         onCopyAgentSessionId={() => {}}
+        canCopyCommandBlock={false}
+        onCopyCommandBlock={() => {}}
       />
     </div>
   )

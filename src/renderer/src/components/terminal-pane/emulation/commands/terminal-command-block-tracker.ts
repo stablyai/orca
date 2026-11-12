@@ -41,7 +41,9 @@ export type TrackedCommandBlock = {
    */
   outputEndExtraRow: boolean
   /** D-row text snapshotted at D time; the next prompt may repaint that row. */
-  outputEndRowSnapshot: string | null
+  outputEndRowSnapshot: { text: string; wrapped: boolean } | null
+  /** True once a later prompt repainted the D row; the block no longer owns it. */
+  outputEndRowRepainted: boolean
   exitCode: number | null
 }
 
@@ -166,7 +168,10 @@ export function createTerminalCommandBlockTracker(
         lastPayloadCursor !== null &&
         lastPayloadCursor.x === cursor.x &&
         lastPayloadCursor.row === cursor.row
-      const closesAppZone = closesAppOsc133Zone(adjacentMarkers, payload)
+      // The markers are read before this payload updates them, so a stale BC
+      // plus cursor-moving output would still match; the current adjacency
+      // proves no output landed between C and D, like the byte-path scanner.
+      const closesAppZone = adjacent && closesAppOsc133Zone(adjacentMarkers, payload)
       adjacentMarkers = adjacent ? (adjacentMarkers + letter).slice(-2) : letter
       lastPayloadCursor = cursor
       if (closesAppZone) {
@@ -189,6 +194,13 @@ export function createTerminalCommandBlockTracker(
       // foreign SSH shells emit no 133, so no blocks.
       if (letter === 'A') {
         clearPending()
+        // A prompt starting on a no-trailing-newline D row takes that row
+        // over; the old block keeps its snapshotted output but loses the row.
+        for (const block of blocks) {
+          if (block.outputEndExtraRow && block.outputEndMarker.line === cursor.row) {
+            block.outputEndRowRepainted = true
+          }
+        }
         pendingPrompt = registerCurrentLine()
       } else if (letter === 'B') {
         if (pendingPrompt && !pendingInputStart) {
@@ -221,7 +233,8 @@ export function createTerminalCommandBlockTracker(
         }
         // Without a trailing newline the D row itself holds output text; the
         // next prompt will repaint it, so snapshot now.
-        const endRowText = buffer.getLine(absoluteCursorRow(buffer))?.translateToString(true) ?? ''
+        const endRow = buffer.getLine(absoluteCursorRow(buffer))
+        const endRowText = endRow?.translateToString(true) ?? ''
         const hasTrailingOutput = endRowText.trim() !== ''
         blocks.push({
           promptMarker: pendingPrompt,
@@ -230,7 +243,10 @@ export function createTerminalCommandBlockTracker(
           inputStartMarker: pendingInputStart?.marker ?? null,
           inputStartCol: pendingInputStart?.col ?? 0,
           outputEndExtraRow: hasTrailingOutput,
-          outputEndRowSnapshot: hasTrailingOutput ? endRowText : null,
+          outputEndRowSnapshot: hasTrailingOutput
+            ? { text: endRowText, wrapped: endRow?.isWrapped ?? false }
+            : null,
+          outputEndRowRepainted: false,
           exitCode
         })
         pendingPrompt = null
@@ -247,7 +263,11 @@ export function createTerminalCommandBlockTracker(
       prune()
       for (let index = blocks.length - 1; index >= 0; index -= 1) {
         const lines = blockLines(blocks[index])
-        if (lines && lines.promptLine <= row && row < lines.outputEndLine) {
+        if (!lines) {
+          continue
+        }
+        const endLine = lines.outputEndLine - (blocks[index].outputEndRowRepainted ? 1 : 0)
+        if (lines.promptLine <= row && row < endLine) {
           return blocks[index]
         }
       }
@@ -286,6 +306,26 @@ export function readTerminalBlockTextFromTerminal(
         return null
       }
       return { text: line.translateToString(true), wrapped: line.isWrapped }
+    },
+    sliceLineFromCol: (row: number, col: number) => {
+      const line = terminal.buffer.active.getLine(row)
+      if (!line) {
+        return null
+      }
+      // Walk cells, not string units: wide glyphs span two cells and joined
+      // marks share one. Measuring the live line keeps this exact under any
+      // Unicode provider version instead of mirroring a width table.
+      let index = 0
+      for (let x = 0; x < col; x += 1) {
+        const cell = line.getCell(x)
+        if (!cell) {
+          break
+        }
+        if (cell.getWidth() !== 0) {
+          index += cell.getChars().length
+        }
+      }
+      return line.translateToString(true).slice(index)
     }
   }
   // The gutter strip applies to output rows only: command rows start with the
