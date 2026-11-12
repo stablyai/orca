@@ -70,6 +70,7 @@ const REASON_WORDS = {
     requestMalformed: codeWords('hostFinding'),
     advisoryAlreadyStarted: codeWords('goElsewhere'),
     advisoryDeadlinePassed: codeWords('goElsewhere'),
+    advisoryOperationUnsupported: codeWords('goElsewhere'),
     advisoryPolicyMismatch: codeWords('goElsewhere'),
     operationIdInvalid: codeWords('hostFinding'),
     messageIdReused: codeWords('hostFinding'),

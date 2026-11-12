@@ -34,6 +34,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'advisoryAlreadyStarted',
     'advisoryDeadlinePassed',
     'advisoryPolicyMismatch',
+    'advisoryOperationUnsupported',
     'operationIdInvalid',
     'messageIdReused',
     'operationRefusedEarlier',
