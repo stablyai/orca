@@ -24,6 +24,8 @@ export type TerminalMultiplexConnectionBase = {
   connectionId: string
   // The authenticated device, whose departure ends this connection's views.
   viewerDeviceId: string | undefined
+  /** The paired device this connection authenticated as (a person); undefined for local windows. */
+  typingDeviceId: string | undefined
   sendBinary: NonNullable<RpcContext['sendBinary']>
   registerBinaryStreamHandler: NonNullable<RpcContext['registerBinaryStreamHandler']>
   signal: RpcContext['signal']

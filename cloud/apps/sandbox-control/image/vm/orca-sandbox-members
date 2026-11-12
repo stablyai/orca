@@ -54,7 +54,7 @@ user_home="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 # Commits outside a teammate's turn still need an author (images older than orca-sandbox-start's default).
 if [ -n "$user_home" ]; then
   sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.email >/dev/null 2>&1 \
-    || sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.email 'cloud@users.noreply.onorca.dev'
+    || sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.email 'cloud@users.noreply.orca.dev'
   sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.name >/dev/null 2>&1 \
     || sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.name 'Orca Cloud'
 fi
