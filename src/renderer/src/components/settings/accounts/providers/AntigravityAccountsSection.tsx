@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Info, Loader2, RefreshCw } from 'lucide-react'
-import { cn } from '@/lib/class-names'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
@@ -18,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { AntigravityChatSignInRow } from '../../../provider-accounts/AntigravityChatSignInRow'
+import { AntigravityInfoTooltip } from '../../../provider-accounts/AntigravityInfoTooltip'
 import {
   antigravityChatSignInBlocked,
   antigravityProviderSignInShown
@@ -25,7 +25,7 @@ import {
 import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
-import { SettingsGroup, SettingsGroupHeader } from '../../section-layout/SettingsGroup'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import {
   AntigravityTerminalAccountRows,
   type AntigravityAccountAction
@@ -205,17 +205,14 @@ export function AntigravityAccountsSection({
 
   return (
     <div id="accounts-antigravity" className="scroll-mt-6 space-y-3">
-      <SettingsGroupHeader
+      <SettingsGroup
         title={
           <span className="flex items-center gap-2">
             <AgentIcon agent="antigravity" size={16} />
             {t('accounts.antigravity.title', 'Antigravity')}
+            <AntigravityInfoTooltip info={terminalInfo} />
           </span>
         }
-      />
-      <AntigravitySubsectionHeader
-        title={t('accounts.antigravity.terminalTitle', 'agy terminal')}
-        info={terminalInfo}
         action={
           <Tooltip>
             <TooltipTrigger asChild>
@@ -238,8 +235,7 @@ export function AntigravityAccountsSection({
             </TooltipContent>
           </Tooltip>
         }
-      />
-      <SettingsGroup>
+      >
         <AntigravityTerminalAccountRows
           state={state}
           usage={usage}
@@ -248,64 +244,24 @@ export function AntigravityAccountsSection({
           windowsHost={windowsHost}
           run={(action, accountId) => void run(action, accountId)}
         />
+        {chats && chatRuntime.kind === 'active' ? (
+          antigravityProviderSignInShown(chatRuntime) ? (
+            <AntigravityChatSignInRow
+              owner={owner}
+              label={label}
+              disabled={antigravityChatSignInBlocked(chatRuntime)}
+              runtime={runtimeRow}
+            />
+          ) : (
+            runtimeRow
+          )
+        ) : null}
       </SettingsGroup>
-      {chats && chatRuntime.kind === 'active' ? (
-        <>
-          <AntigravitySubsectionHeader
-            className="pt-3"
-            title={t('accounts.antigravity.chatsTitle', 'Chats')}
-            info={t(
-              'accounts.antigravity.chatSeparate',
-              'Separate from your agy terminal account.'
-            )}
-          />
-          <SettingsGroup>
-            {antigravityProviderSignInShown(chatRuntime) ? (
-              <AntigravityChatSignInRow
-                owner={owner}
-                label={label}
-                disabled={antigravityChatSignInBlocked(chatRuntime)}
-                runtime={runtimeRow}
-              />
-            ) : (
-              runtimeRow
-            )}
-          </SettingsGroup>
-        </>
-      ) : chats && structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
+      {chats &&
+      chatRuntime.kind !== 'active' &&
+      structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
         <ChatUnavailableOnWindowsNote label={t('accounts.antigravity.title', 'Antigravity')} />
       ) : null}
-    </div>
-  )
-}
-
-function AntigravitySubsectionHeader({
-  title,
-  info,
-  action,
-  className
-}: {
-  title: string
-  info: string
-  action?: React.ReactNode
-  className?: string
-}): React.JSX.Element {
-  return (
-    <div className={cn('flex min-h-6 items-center justify-between gap-3 px-1', className)}>
-      <div className="flex min-w-0 items-center gap-1">
-        <h4 className="text-sm font-medium">{title}</h4>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-xs" aria-label={info}>
-              <Info className="size-3.5 text-muted-foreground" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4} className="max-w-xs">
-            {info}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-      {action}
     </div>
   )
 }
