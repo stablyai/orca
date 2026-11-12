@@ -261,8 +261,8 @@
         "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
         "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used",
         "usage": {
-          "deletedWorkspaces_one": "Deleted workspace",
-          "deletedWorkspaces_other": "{{count}} deleted workspaces",
+          "deletedWorkspaces2_one": "{{count}} deleted workspace",
+          "deletedWorkspaces2_other": "{{count}} deleted workspaces",
           "formerMembers_one": "Former member",
           "formerMembers_other": "{{count}} former members",
           "otherMembers_one": "{{count}} other",
