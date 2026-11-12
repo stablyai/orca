@@ -289,8 +289,8 @@ it.each([false, true])(
       id: 'root',
       hostId,
       instanceId: 'root',
-      removing: retiredRoot,
-      removalRecorded: retiredRoot
+      removing: retiredRoot ? true : undefined,
+      removalRecorded: retiredRoot ? true : undefined
     })
     const bridge = makeWorktree({
       id: 'bridge',
@@ -342,8 +342,8 @@ it('traverses retired chains with at most two visits per vertex and edge at N an
       makeWorktree({
         id: `node-${index}`,
         instanceId: `instance-${index}`,
-        removing: index < size - 1,
-        removalRecorded: index < size - 1
+        removing: index < size - 1 ? true : undefined,
+        removalRecorded: index < size - 1 ? true : undefined
       })
     )
     const rows = new Map(nodes.map((row) => [row.id, row]))
@@ -358,9 +358,9 @@ it('traverses retired chains with at most two visits per vertex and edge at N an
           catalogEnumerations++
           return Reflect.ownKeys(target)
         },
-        get: (target, key, receiver) => {
+        get: (target, key) => {
           catalogReads++
-          return Reflect.get(target, key, receiver)
+          return typeof key === 'string' ? target[key] : undefined
         }
       }
     )
