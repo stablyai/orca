@@ -1929,7 +1929,7 @@
       "src/main/host/secret-protection-report.test.ts": 59,
       "src/main/i18n/main-i18n-lazy-locale.test.ts": 518,
       "src/main/i18n/system-language.test.ts": 358,
-      "src/main/media/image-file-signature.test.ts": 47,
+      "src/shared/image-file-signature.test.ts": 47,
       "src/main/credentials/integration-state-file-cache.test.ts": 47,
       "src/main/credentials/integration-token-file-cache.test.ts": 152,
       "src/main/ipc/account-sign-in-link-opener.test.ts": 128,
