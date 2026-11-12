@@ -1,5 +1,5 @@
 import { win32 } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceCopyListResult } from '../../shared/perforce/workspace-copy/workspace-copy-types'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
@@ -7,6 +7,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
   adoptCopyAtPath,
   copyWorktreePath,
+  resolveWithCopyAdoption,
   syncCopyWorktrees,
   type CopyWorktreeStore
 } from './perforce-copy-worktrees'
@@ -128,26 +129,88 @@ describe('syncCopyWorktrees', () => {
 })
 
 describe('adoptCopyAtPath', () => {
-  const PERFORCE = { ...REPO, vcs: 'perforce' } as const
-  const GAME = { ...PERFORCE, id: 'repo-2', path: join(ROOT, 'Game') }
+  const GAME = { ...REPO, id: 'repo-2', path: join(ROOT, 'Game'), vcs: 'perforce' } as const
   const GIT_GAME = { ...GAME, id: 'repo-3', kind: 'git' } as const
+  const COPY = join(COPIES, 'copy-9', 'Game')
 
-  it('syncs only the folder project the copy folder mirrors', async () => {
+  function host(copies: Parameters<typeof listing>[0], overrides = {}) {
     const synced: string[] = []
-    const sync = async (repo: Repo): Promise<void> => void synced.push(repo.id)
+    const syncCopies = vi.fn(async (repo: Repo) => {
+      synced.push(repo.id)
+      return listing(copies)
+    })
+    return { synced, syncCopies, host: { folderExists: () => true, syncCopies, ...overrides } }
+  }
+
+  it('syncs only the folder project the copy mirrors and adopts the copy it lists', async () => {
+    const { synced, host: h } = host([{ name: 'copy-9', folderExists: true, clientExists: true }])
     await expect(
-      adoptCopyAtPath(join(COPIES, 'copy-9', 'game'), [REPO, PERFORCE, GAME, GIT_GAME], sync)
+      adoptCopyAtPath(join(COPIES, 'copy-9', 'game'), [REPO, GAME, GIT_GAME], h)
     ).resolves.toBe(true)
     expect(synced).toEqual(['repo-2'])
   })
 
-  it('adopts nothing for a path outside the copy layout or a failed sync', async () => {
-    const failing = async (): Promise<void> => {
-      throw new Error('p4 unreachable')
-    }
-    await expect(adoptCopyAtPath(join(ROOT, 'Game'), [GAME], async () => {})).resolves.toBe(false)
-    await expect(adoptCopyAtPath(join(COPIES, 'copy-9', 'Game'), [GAME], failing)).resolves.toBe(
-      false
+  it('adopts nothing when the listing has no usable copy at that folder', async () => {
+    const clientGone = host([{ name: 'copy-9', folderExists: true, clientExists: false }])
+    await expect(adoptCopyAtPath(COPY, [GAME], clientGone.host)).resolves.toBe(false)
+    const other = host([{ name: 'copy-8', folderExists: true, clientExists: true }])
+    await expect(adoptCopyAtPath(COPY, [GAME], other.host)).resolves.toBe(false)
+  })
+
+  it('runs no p4 for a missing folder, a path outside the copy layout or another host', async () => {
+    const missing = host([], { folderExists: () => false })
+    await expect(adoptCopyAtPath(COPY, [GAME], missing.host)).resolves.toBe(false)
+    const outside = host([])
+    await expect(adoptCopyAtPath(join(ROOT, 'Game'), [GAME], outside.host)).resolves.toBe(false)
+    const remote = host([], { requiredHostId: 'ssh:build-box' })
+    await expect(adoptCopyAtPath(COPY, [GAME], remote.host)).resolves.toBe(false)
+    expect([missing, outside, remote].map((h) => h.syncCopies.mock.calls.length)).toEqual([0, 0, 0])
+  })
+
+  it('logs a failed sync and adopts nothing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const failing = host([], {
+      syncCopies: async () => {
+        throw new Error('p4 login expired')
+      }
+    })
+    await expect(adoptCopyAtPath(COPY, [GAME], failing.host)).resolves.toBe(false)
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+})
+
+describe('resolveWithCopyAdoption', () => {
+  const notFound = (): never => {
+    throw new Error('selector_not_found')
+  }
+
+  it('adopts on a path: miss and resolves once more', async () => {
+    const resolve = vi.fn<() => Promise<string>>().mockImplementationOnce(async () => notFound())
+    resolve.mockResolvedValueOnce('copy row')
+    const adopt = vi.fn(async () => true)
+    await expect(resolveWithCopyAdoption('path:D:\\ws.wt\\c', resolve, adopt)).resolves.toBe(
+      'copy row'
     )
+    expect(adopt).toHaveBeenCalledWith('D:\\ws.wt\\c')
+  })
+
+  it('leaves other selectors, other errors and unadopted misses as they were', async () => {
+    const adopt = vi.fn(async () => false)
+    await expect(resolveWithCopyAdoption('name:c', async () => notFound(), adopt)).rejects.toThrow(
+      'selector_not_found'
+    )
+    const ambiguous = async (): Promise<never> => {
+      throw new Error('selector_ambiguous')
+    }
+    await expect(resolveWithCopyAdoption('path:D:\\c', ambiguous, adopt)).rejects.toThrow(
+      'selector_ambiguous'
+    )
+    expect(adopt).not.toHaveBeenCalled()
+    const resolve = vi.fn(async () => notFound())
+    await expect(resolveWithCopyAdoption('path:D:\\c', resolve, adopt)).rejects.toThrow(
+      'selector_not_found'
+    )
+    expect(resolve).toHaveBeenCalledTimes(1)
   })
 })

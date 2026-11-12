@@ -1,41 +1,40 @@
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { adoptCopyAtPath } from '../../perforce/perforce-copy-worktrees'
-import type {
-  WorkspaceSelectorCandidate,
-  WorkspaceSelectorOptions
-} from './catalog/workspace-selector-candidates'
+import { existsSync } from 'node:fs'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { WorkspaceCopyListResult } from '../../../shared/perforce/workspace-copy/workspace-copy-types'
+import { adoptCopyAtPath, resolveWithCopyAdoption } from '../../perforce/perforce-copy-worktrees'
+import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
 import { RuntimeWorkspaceSelectors } from './workspace-selectors'
 
-/** Lets a path: selector name a Perforce copy that Orca has not listed yet. */
+/**
+ * Lets a path: selector name a Perforce copy that Orca has not listed yet: the sidebar syncs a
+ * project's copies once per session, so a copy made after that is adopted when first named.
+ */
 export abstract class RuntimeWorkspaceSelectorsWithCopyAdoption extends RuntimeWorkspaceSelectors {
-  protected override async resolveWorkspaceCandidate(
+  // Why this resolver: agent launches and workspace lookups both reach it, so every caller adopts.
+  protected override resolveGitWorktreeSelector(
     selector: string,
-    options: WorkspaceSelectorOptions = {}
-  ): Promise<WorkspaceSelectorCandidate> {
-    try {
-      return await super.resolveWorkspaceCandidate(selector, options)
-    } catch (error) {
-      if (
-        !(error instanceof Error) ||
-        error.message !== 'selector_not_found' ||
-        !selector.startsWith('path:')
-      ) {
-        throw error
+    requiredHostId?: ExecutionHostId
+  ): Promise<ResolvedWorktree> {
+    return resolveWithCopyAdoption(
+      selector,
+      () => super.resolveGitWorktreeSelector(selector, requiredHostId),
+      async (path) => {
+        const adopted = await adoptCopyAtPath(path, this.store?.getRepos() ?? [], {
+          requiredHostId,
+          folderExists: existsSync,
+          syncCopies: async (repo) =>
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: syncCopies answers with the copy listing it adopted from.
+            (await this.runPerforceCopyOperationOnRepo(
+              repo,
+              'syncCopies',
+              {}
+            )) as WorkspaceCopyListResult
+        })
+        if (adopted) {
+          this.invalidateResolvedWorktreeCache()
+        }
+        return adopted
       }
-      const { requiredHostId } = options
-      const repos = (this.store?.getRepos() ?? []).filter(
-        (repo) => requiredHostId === undefined || getRepoExecutionHostId(repo) === requiredHostId
-      )
-      // Why: a copy made outside Orca joins only when its project's copies are synced, which the
-      // sidebar does once per session, so a selector naming its folder syncs on the spot.
-      const adopted = await adoptCopyAtPath(selector.slice(5), repos, (repo) =>
-        this.runPerforceCopyOperationOnRepo(repo, 'syncCopies', {})
-      )
-      if (!adopted) {
-        throw error
-      }
-      this.invalidateResolvedWorktreeCache()
-      return super.resolveWorkspaceCandidate(selector, options)
-    }
+    )
   }
 }

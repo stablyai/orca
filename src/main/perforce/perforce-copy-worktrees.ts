@@ -1,6 +1,13 @@
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import { getRepoSshConnectionId } from '../../shared/execution-host'
+import {
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison
+} from '../../shared/cross-platform-path'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
 import type {
@@ -58,6 +65,11 @@ function createdAtOf(copy: WorkspaceCopyListEntry): number {
   return Number.isFinite(parsed) ? parsed : Date.now()
 }
 
+/** A copy the sidebar shows: its folder exists, and so does its client when the server answered. */
+function isUsableCopy(copy: WorkspaceCopyListEntry, listing: WorkspaceCopyListResult): boolean {
+  return copy.folderExists && (copy.clientExists || !listing.serverChecked)
+}
+
 /**
  * Makes the sidebar match the copies on disk: adopts copies made outside Orca in the same layout
  * and forgets ones whose folder is gone. A folder whose client the server no longer has stays out of
@@ -72,8 +84,7 @@ export function syncCopyWorktrees(
   let changed = false
   const live = new Set<string>()
   for (const copy of listing.copies) {
-    const usable = copy.folderExists && (copy.clientExists || !listing.serverChecked)
-    if (!usable) {
+    if (!isUsableCopy(copy, listing)) {
       continue
     }
     const path = copyWorktreePath(repo, listing.source.root, copy.copyRoot)
@@ -110,35 +121,61 @@ export function syncCopyWorktrees(
   return changed
 }
 
-/**
- * Syncs the copies of each folder project whose Perforce copy layout holds `path`, so a copy another
- * tool made since the last sync can be addressed by its folder at once. A folder that is not a
- * Perforce workspace fails its sync, and a failed sync counts as nothing adopted, which leaves the
- * caller's not-found answer standing.
- */
+/** Syncs the folder project whose copy layout holds `path`; true when that adopted a copy there. */
 export async function adoptCopyAtPath(
   path: string,
   repos: readonly Repo[],
-  syncCopies: (repo: Repo) => Promise<unknown>
+  host: {
+    requiredHostId?: ExecutionHostId
+    folderExists: (path: string) => boolean
+    syncCopies: (repo: Repo) => Promise<WorkspaceCopyListResult>
+  }
 ): Promise<boolean> {
   const source = getPerforceCopySourcePath(path)
-  if (!source) {
+  // Why: a mistyped or deleted copy would otherwise pay a full p4 listing on every lookup.
+  if (!source || !host.folderExists(path)) {
     return false
   }
-  const owners = repos.filter(
-    (repo) =>
-      isFolderRepo(repo) &&
-      win32.normalize(repo.path).toLowerCase() === win32.normalize(source).toLowerCase()
-  )
+  const key = normalizeRuntimePathForComparison
   let adopted = false
-  for (const repo of owners) {
-    const synced = await syncCopies(repo).then(
-      () => true,
-      () => false
-    )
-    adopted ||= synced
+  for (const repo of repos) {
+    const onHost =
+      host.requiredHostId === undefined || getRepoExecutionHostId(repo) === host.requiredHostId
+    if (!onHost || !isFolderRepo(repo) || key(repo.path) !== key(source)) {
+      continue
+    }
+    try {
+      const listing = await host.syncCopies(repo)
+      adopted ||= listing.copies.some(
+        (copy) =>
+          isUsableCopy(copy, listing) &&
+          key(copyWorktreePath(repo, listing.source.root, copy.copyRoot)) === key(path)
+      )
+    } catch (error) {
+      console.warn('[perforce-copies] Copy sync for a path selector failed:', error)
+    }
   }
   return adopted
+}
+
+/** Resolves `selector`; on a `path:` miss that `adopt` turns into a copy, resolves once more. */
+export async function resolveWithCopyAdoption<T>(
+  selector: string,
+  resolve: () => Promise<T>,
+  adopt: (path: string) => Promise<boolean>
+): Promise<T> {
+  try {
+    return await resolve()
+  } catch (error) {
+    const missedPath =
+      error instanceof Error &&
+      error.message === 'selector_not_found' &&
+      selector.startsWith('path:')
+    if (!missedPath || !(await adopt(selector.slice(5)))) {
+      throw error
+    }
+    return resolve()
+  }
 }
 
 export function copyWorktreeIdForName(
