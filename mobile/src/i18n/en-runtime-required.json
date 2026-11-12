@@ -205,6 +205,10 @@
     }
   },
   "hostScreen": {
+    "activity": {
+      "sessionCount_one": "{{count}} session",
+      "sessionCount_other": "{{count}} sessions"
+    },
     "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)"

@@ -1,4 +1,4 @@
-import { Plus, SlidersHorizontal } from 'lucide-react-native'
+import { Bell, Plus, SlidersHorizontal } from 'lucide-react-native'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -37,14 +37,26 @@ export function HostBottomBar({
     <BottomSearchBar
       value={state.search}
       onChangeText={state.setSearch}
-      placeholder={t('hostScreen.hostBottomBar.searchWorkspaces', 'Search workspaces')}
+      placeholder={
+        controller.activityView.active
+          ? t('hostScreen.activity.search', 'Search sessions')
+          : t('hostScreen.hostBottomBar.searchWorkspaces', 'Search workspaces')
+      }
       bottomInset={insets.bottom}
-      leading={{
-        icon: SlidersHorizontal,
-        accessibilityLabel: workspaceOptionsAccessibilityLabel(t, activeFilterCount),
-        onPress: () => state.setShowWorkspaceOptions(true),
-        badge: activeFilterCount
-      }}
+      leading={
+        controller.activityView.active
+          ? {
+              icon: Bell,
+              accessibilityLabel: t('hostScreen.activity.showWorkspaces', 'Show workspaces'),
+              onPress: controller.activityView.toggle
+            }
+          : {
+              icon: SlidersHorizontal,
+              accessibilityLabel: workspaceOptionsAccessibilityLabel(t, activeFilterCount),
+              onPress: () => state.setShowWorkspaceOptions(true),
+              badge: activeFilterCount
+            }
+      }
       primary={{
         icon: Plus,
         accessibilityLabel: t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),

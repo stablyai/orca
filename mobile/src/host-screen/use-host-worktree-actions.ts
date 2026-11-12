@@ -239,22 +239,23 @@ export function useHostWorktreeActions(args: {
       if (!embedded) {
         beforeNavigate?.()
         router.push(target)
-        return
+        return true
       }
       // In the page every replace remounts the open session, even a pane tap, so only a no-op is not a leave.
       const noop = !selectPane && pathname === (target.split('?')[0] ?? target)
       if (!noop && holdSessionLeave()) {
-        return
+        return false
       }
       beforeNavigate?.()
       if (noop) {
-        return
+        return true
       }
       if (pathname === `/h/${hostId}`) {
         router.push(target)
-        return
+        return true
       }
       router.replace(target)
+      return true
     },
     [embedded, hostId, pathname, router]
   )
@@ -264,17 +265,17 @@ export function useHostWorktreeActions(args: {
       const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
       if (server?.relay === 'update-needed') {
         setServerNotice(serverUpdateNeededNotice(server.label))
-        return
+        return false
       }
       const routeHost = workspaceRouteExecutionHost(client, hostCapabilities, item.hostId)
       if (routeHost === null) {
-        return
+        return false
       }
       // Use an empty missing hostId: the shell refuses /h//session, whereas the string undefined would name an accepted host.
       const executionHost = routeHost ? `&executionHost=${encodeURIComponent(routeHost)}` : ''
       const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
       const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}${pane}`
-      navigateFromHostList(target, Boolean(paneKey), () => {
+      return navigateFromHostList(target, Boolean(paneKey), () => {
         // Record this phone’s visit before navigation; a session opened in another page cannot publish its stored write back here.
         if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
           setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))

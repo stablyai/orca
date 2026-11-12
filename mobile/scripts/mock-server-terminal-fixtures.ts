@@ -1,3 +1,5 @@
+import { MOCK_ACTIVITY_VIEW, activityScenarioAgents } from './mock-server-activity-scenario'
+
 export const FAKE_SCROLLBACK = [
   '$ claude "refactor the auth module to use JWT tokens"',
   '',
@@ -22,6 +24,15 @@ export const STREAMING_CHUNKS = [
 
 export function createMockTerminals(worktreeId?: string) {
   const resolvedWorktreeId = worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca'
+  if (MOCK_ACTIVITY_VIEW) {
+    return activityScenarioAgents().map((agent, i) => ({
+      handle: `activity-terminal-${i}`,
+      worktreeId: resolvedWorktreeId,
+      title: agent.conversationName ?? 'Agent',
+      isActive: i === 0,
+      hasRunningProcess: i < 8
+    }))
+  }
   return [
     {
       handle: 'term-1',

@@ -39,6 +39,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'diagnostics.memory',
   'stats.summary',
   'ui.get',
+  'ui.getAgentActivityReadState',
+  'ui.setAgentActivityReadState',
   'ui.recordFeatureInteraction',
   'ui.set',
   // The desktop's accounts pane, Linear and project pickers target its active runtime, not a workspace's host.

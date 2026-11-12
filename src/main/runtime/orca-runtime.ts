@@ -5,6 +5,7 @@ import { installRuntimeLinearCommandSurface } from './integrations/linear/runtim
 import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
 import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
 import { publishWorkspaceViewChanges } from './sidebar-inputs/runtime-workspace-view-change-events'
+import { publishAgentActivityReadChanges } from './runtime-agent-activity-read-events'
 import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
@@ -204,6 +205,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     registerWorktreeCatalogRoutes(this.store)
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
+    publishAgentActivityReadChanges(this.store, (event) => this.emitClientEvent(event))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
   }

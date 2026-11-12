@@ -16,6 +16,9 @@ import { handleMockSessionTabsRequest } from './mock-server-session-tabs-fixture
 import { handleMockTerminalRequest } from './mock-server-terminal-stream'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
+import { MOCK_ACTIVITY_VIEW, withActivityScenario } from './mock-server-activity-scenario'
+import { handleMockActivityRead } from './mock-server-activity-read'
+
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
 const MOCK_WORKTREE_COUNT = readScenarioNumber('MOCK_WORKTREE_COUNT', 2)
 const MOCK_RPC_DELAY_MS = readScenarioNumber('MOCK_RPC_DELAY_MS', 0)
@@ -124,6 +127,14 @@ export function handleRequest(
 
   // Each returns false for methods it does not own; first owner wins.
   if (
+    handleMockActivityRead(
+      request,
+      respond,
+      success,
+      error,
+      ws,
+      fakeWorktrees[0]?.worktreeId ?? ''
+    ) ||
     handleMockGitRequest(request, respond, success) ||
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||
@@ -141,7 +152,10 @@ export function handleRequest(
           runtimeId: 'mock-runtime',
           protocolVersion: DESKTOP_PROTOCOL_VERSION,
           minCompatibleMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION,
-          capabilities: ['accounts.codex-reset-credit.v1'],
+          capabilities: [
+            'accounts.codex-reset-credit.v1',
+            ...(MOCK_ACTIVITY_VIEW ? ['mobileWeb.bundle.v1'] : [])
+          ],
           graphStatus: 'ready',
           windowCount: 1,
           tabCount: 2,
@@ -153,8 +167,8 @@ export function handleRequest(
     case 'worktree.ps':
       respond(
         success(request.id, {
-          worktrees: fakeWorktrees,
-          totalCount: fakeWorktrees.length,
+          worktrees: MOCK_ACTIVITY_VIEW ? withActivityScenario(fakeWorktrees) : fakeWorktrees,
+          totalCount: MOCK_ACTIVITY_VIEW ? 1 : fakeWorktrees.length,
           truncated: false
         })
       )

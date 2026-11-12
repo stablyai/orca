@@ -8,7 +8,10 @@ import type {
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
+import { isDeepStrictEqual } from 'node:util'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { AgentActivitySubject } from '../../../shared/agent-activity-read-state'
+import { AgentActivitySubjectSchema } from '../../../shared/rpc-contract/agent-activity-read-params'
 
 type Graph = RuntimeSyncWindowGraph
 
@@ -24,6 +27,11 @@ function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void
 }
 
 export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmitWindowPublisher {
+  private agentActivitySubjects: AgentActivitySubject[] | null = null
+
+  getAgentActivitySubjects(): readonly AgentActivitySubject[] | null {
+    return this.graphStatus === 'ready' ? this.agentActivitySubjects : null
+  }
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
   protected abstract withMainSurfaces(windowId: number, graph: Graph): Graph
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
@@ -52,7 +60,17 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
   ): RuntimeSyncWindowGraphResult {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
+    const activitySubjects =
+      graph.agentActivitySubjects === undefined
+        ? undefined
+        : AgentActivitySubjectSchema.array().parse(graph.agentActivitySubjects)
     const rendererGeneration = this.admitWindowPublisher(windowId, graph)
+    const activityChanged =
+      activitySubjects !== undefined &&
+      !isDeepStrictEqual(this.agentActivitySubjects, activitySubjects)
+    if (activitySubjects !== undefined) {
+      this.agentActivitySubjects = activitySubjects
+    }
     const previousTitleAuthority = this.captureSessionTitleAuthority()
     const publishedMobileSessionTabs = graph.mobileSessionTabs
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
@@ -254,6 +272,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     }
     const isAuthoritativeGraphPublisher = windowId === this.authoritativeWindowId
     this.markGraphReady(windowId)
+    if (activityChanged) {
+      this.emitClientEvent({ type: 'agentActivityReadStateChanged' })
+    }
     if (
       isAuthoritativeGraphPublisher &&
       (windowId === HEADLESS_RUNTIME_WINDOW_ID || graph.mobileSessionTabs !== undefined)

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Pressable, Text, type HostInstance } from 'react-native'
 import {
+  Bell,
   CalendarClock,
   ChevronLeft,
   List,
@@ -101,7 +102,17 @@ export function HostScreenHeader({
   const disconnected = connState !== 'connected'
   const hostPath = `/h/${encodeURIComponent(hostId)}`
 
+  const activityLabel = controller.activityView.active
+    ? t('hostScreen.activity.showWorkspaces', 'Show workspaces')
+    : t('hostScreen.activity.showActivity', 'View activity')
   const navigationGroup: ActionSheetAction[] = [
+    {
+      id: 'activity',
+      label: activityLabel,
+      icon: Bell,
+      closeBeforePress: true,
+      onPress: controller.activityView.toggle
+    },
     {
       id: 'tasks',
       label: t('hostScreen.hostScreenHeader.tasks', 'Tasks'),
@@ -169,13 +180,21 @@ export function HostScreenHeader({
         titleOpacity={collapsingTitle?.barTitleOpacity}
         dividerOpacity={collapsingTitle?.barDividerOpacity}
         trailing={
-          <NavBarButton
-            ref={moreRef}
-            icon={MoreHorizontal}
-            accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
-            onPress={() => setMenuOpen(true)}
-            active={menuOpen}
-          />
+          <>
+            <NavBarButton
+              icon={Bell}
+              accessibilityLabel={activityLabel}
+              active={controller.activityView.active}
+              onPress={controller.activityView.toggle}
+            />
+            <NavBarButton
+              ref={moreRef}
+              icon={MoreHorizontal}
+              accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
+              onPress={() => setMenuOpen(true)}
+              active={menuOpen}
+            />
+          </>
         }
       />
       <PullDownMenu

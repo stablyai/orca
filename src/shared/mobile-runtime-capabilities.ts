@@ -1,10 +1,12 @@
 import { NOTIFICATIONS_DESKTOP_PRESENCE_RUNTIME_CAPABILITY } from './desktop-client-presence'
 import { MOBILE_RELAY_RUNTIME_CAPABILITIES } from './mobile-desktop-relay-contract'
+import { AGENT_ACTIVITY_READ_STATE_CAPABILITY } from './agent-activity-read-state'
 
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
 export const MOBILE_RUNTIME_CAPABILITIES = [
+  AGENT_ACTIVITY_READ_STATE_CAPABILITY,
   'mobile.tasks.v1',
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
   NOTIFICATIONS_DESKTOP_PRESENCE_RUNTIME_CAPABILITY,

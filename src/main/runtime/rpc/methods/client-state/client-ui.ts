@@ -1,4 +1,5 @@
 import { normalizeJiraQuickFilterState } from '../../../../../shared/jira/jira-quick-filters'
+import { AGENT_ACTIVITY_READ_METHODS } from './agent-activity-read-state'
 import { JiraQuickFilterStateParam } from '../../../../../shared/rpc-contract/jira-quick-filter-params'
 import {
   normalizeJiraSavedFilterState,
@@ -43,6 +44,7 @@ function uiForCaller(
 }
 
 export const CLIENT_UI_METHODS = [
+  ...AGENT_ACTIVITY_READ_METHODS,
   defineMethod({
     name: 'ui.getJiraQuickFilters',
     permission: 'workspace',

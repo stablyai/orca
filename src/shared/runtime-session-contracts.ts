@@ -1,3 +1,4 @@
+import type { AgentActivitySubject } from './agent-activity-read-state'
 import type { AgentSenderPublication, AgentSenderRevision } from './agent-sender-associations'
 import type { MobileProjectSectionCatalog } from './mobile-project-sections-contract'
 import type { AgentStatusOrchestrationContext } from './agent-status/contracts/agent-status-types'
@@ -162,6 +163,7 @@ export type RuntimeMountedLeaf = {
 }
 
 export type RuntimeSyncWindowGraph = {
+  agentActivitySubjects?: AgentActivitySubject[]
   tabs: RuntimeSyncedTab[]
   leaves: RuntimeSyncedLeaf[]
   /** Layout-owner windows report main-owned panes here; tabs/leaves then cover other workspaces. Window-to-main only. */
