@@ -8,6 +8,7 @@ import {
   getRequiredStringFlag
 } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
+import { escapeTerminalControlCharacters } from '../../../shared/terminal/output/terminal-control-character-escape'
 import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
@@ -66,9 +67,12 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       }
       if (value.settings) {
         lines.push(
-          value.settings.kind === 'unknown'
-            ? `Settings: unknown (${value.settings.reason})`
-            : `Settings (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.current)}`
+          escapeTerminalControlCharacters(
+            value.settings.kind === 'unknown'
+              ? `Settings: unknown (${value.settings.reason})`
+              : `Settings (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.current)}`,
+            true
+          )
         )
       }
       return lines.join('\n')
