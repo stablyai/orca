@@ -9,18 +9,18 @@ import {
 } from '../../modules/orca-proxied-browser/src'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileLocalBrowserNetwork } from '../storage/preferences'
-import type { MobileBrowserViewMode } from './browser-screencast-request'
+import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
-import { buttonColor } from './mobile-browser-frame-state'
-import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
-import { MobileBrowserAddressField } from './MobileBrowserAddressField'
+import { displayBrowserUrl, normalizeBrowserUrl } from './pane-view/browser-url'
+import { buttonColor } from './screencast/mobile-browser-frame-state'
+import { mobileBrowserPaneStyles as styles } from './pane-view/mobile-browser-pane-styles'
+import { MobileBrowserAddressField } from './pane-view/MobileBrowserAddressField'
 import {
   MobileBrowserDrawingButtons,
   type MobileBrowserFullScreenToggle
 } from './MobileBrowserDrawingButtons'
-import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
-import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
+import { MobileBrowserToolbarIconButton } from './pane-view/MobileBrowserToolbarIconButton'
+import { MobileBrowserViewModeSwitch } from './pane-view/MobileBrowserViewModeSwitch'
 
 type Props = {
   network: MobileLocalBrowserNetwork

@@ -1,40 +1,41 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AppState, type View } from 'react-native'
+import { AppState, type HostInstance } from 'react-native'
 import type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { BrowserScreencastFrameMetadata } from './browser-screencast-protocol'
-import type { MobileBrowserViewMode } from './browser-screencast-request'
-import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
+import type { BrowserScreencastFrameMetadata } from './screencast/browser-screencast-protocol'
+import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'
+import type { BrowserPointerModifier } from './pane-view/MobileBrowserPointerModifiers'
 import {
   getInitialMobileBrowserViewMode,
   saveMobileBrowserViewMode
-} from './mobile-browser-view-mode-state'
-import type { BrowserTouchLayout, BrowserZoomState } from './browser-touch-geometry'
+} from './pane-view/mobile-browser-view-mode-state'
+import type {
+  BrowserTouchLayout,
+  BrowserZoomState
+} from './page-interaction/browser-touch-geometry'
 import {
   clearCachedBrowserFramesForWorktree,
   makeBrowserFrameCacheKey,
   peekCachedBrowserFrame,
   type PinchGesture
-} from './mobile-browser-frame-state'
-import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
-import type { BrowserDialogState } from './mobile-browser-stream-events'
+} from './screencast/mobile-browser-frame-state'
+import { displayBrowserUrl, normalizeBrowserUrl } from './pane-view/browser-url'
+import type { BrowserDialogState } from './screencast/mobile-browser-stream-events'
 import {
   browserGoBack,
   browserGoForward,
   browserNavigate,
   browserReload
-} from './mobile-browser-command-operations'
-import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
+} from './page-interaction/mobile-browser-command-operations'
+import { resolveMobileBrowserAddressSync } from './pane-view/mobile-browser-address-sync'
 import type { MobileBrowserStreamedDrawing } from './MobileBrowserDrawingButtons'
-import { MobileBrowserPaneView } from './MobileBrowserPaneView'
-import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
-import { useMobileBrowserStream } from './use-mobile-browser-stream'
-import { useBrowserBinaryScreencastGrant } from './use-browser-binary-screencast-grant'
-
-export type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
+import { MobileBrowserPaneView } from './pane-view/MobileBrowserPaneView'
+import { useMobileBrowserInteractions } from './page-interaction/use-mobile-browser-interactions'
+import { useMobileBrowserStream } from './screencast/use-mobile-browser-stream'
+import { useBrowserBinaryScreencastGrant } from './screencast/use-browser-binary-screencast-grant'
 
 type MobileBrowserPaneProps = {
   client: RpcClient | null
@@ -118,7 +119,7 @@ export function MobileBrowserPane({
   }, [])
 
   const setRootViewRef = useCallback(
-    (node: View | null) => {
+    (node: HostInstance | null) => {
       // Clear surface-owned long-press timers at ref cleanup to preserve unmount boundary.
       if (node === null) {
         clearLongPressTimer()

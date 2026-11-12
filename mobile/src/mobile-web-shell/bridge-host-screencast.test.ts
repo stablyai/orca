@@ -1,30 +1,10 @@
-// Decode through the page’s real reader to prove the binary frame the host emits is one the page reconstructs; literals alone could agree on the wrong shape.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
-} from '../browser/browser-screencast-protocol'
-// Wrap the real encoder to count full-image passes while preserving decoder interoperability.
-const encodes = vi.hoisted(() => ({ count: 0 }))
-vi.mock('./bridge/bridge-screencast-encoder', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./bridge/bridge-screencast-encoder')>()
-  return {
-    ...actual,
-    encodeBridgeScreencastFrame: (
-      frame: Parameters<typeof actual.encodeBridgeScreencastFrame>[0]
-    ) => {
-      encodes.count += 1
-      return actual.encodeBridgeScreencastFrame(frame)
-    }
-  }
-})
-
+} from '../browser/screencast/browser-screencast-protocol'
 import { clientFrame } from './bridge-host-test-fakes'
 import { harness, ID } from './bridge-host-test-harness'
-
-beforeEach(() => {
-  encodes.count = 0
-})
 
 const SCREENCAST = 'browser.screencast'
 
@@ -103,8 +83,6 @@ describe('an over-cap frame drops on the binary lane and ends the stream on the 
         .map((message) => message.seq)
     ).toEqual([1, 2])
   })
-
-  // Keep diagnostics per-stream but dev-facts loss cumulative across resubscriptions.
 })
 
 // Without the binary grant, keep serving JSON and report locally; never silently grant a lane the route did not request.
@@ -140,5 +118,3 @@ describe('the binary lane is served only to a route granted it', () => {
     expect(bridge.diagnostics).toEqual([])
   })
 })
-
-// Check the window before a full-image base64 pass; encoded size is exact from the ASCII base64 length plus envelope, so refused frames need no encoding.

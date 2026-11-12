@@ -174,7 +174,7 @@ export function renderMobileTasksProviderItemList(
               )}
             </Pressable>
           </View>
-        ) : null
+        ) : undefined
       }
       renderItem={({ item: entry }) => {
         if (entry.type === 'section') {

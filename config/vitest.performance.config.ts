@@ -15,7 +15,7 @@ const contracts = [
   'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts',
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
   'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs',
-  'src/main/claude-usage/scanner-incremental-append.test.ts'
+  'src/main/runtime/agent-session/structured-agent-session-chat-wait-work-state.test.ts'
 ]
 for (const contract of contracts) {
   if (!existsSync(resolve(contract))) {

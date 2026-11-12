@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, type LayoutChangeEvent } from 'react-native'
-import { isBlankBrowserUrl } from '../browser/browser-url'
+import { isBlankBrowserUrl } from '../browser/pane-view/browser-url'
 import { MobileLocalBrowser } from '../browser/MobileLocalBrowser'
 import { MobileLocalBrowserFullScreen } from '../browser/MobileLocalBrowserFullScreen'
 import { MobileLocalBrowserToast } from '../browser/MobileLocalBrowserToast'
-import type { MobileBrowserViewMode } from '../browser/browser-screencast-request'
+import type { MobileBrowserViewMode } from '../browser/screencast/browser-screencast-request-parameters'
 import {
   canRenderBrowserLocally,
   useMobileBrowserLocalTunnel

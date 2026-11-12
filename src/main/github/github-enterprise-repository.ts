@@ -1,5 +1,5 @@
 import { githubReadExecutionScope } from './github-read-execution-scope'
-import { ghExecFileAsync } from '../git/runner'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import {
   getHostedReviewLocalGitOptions,

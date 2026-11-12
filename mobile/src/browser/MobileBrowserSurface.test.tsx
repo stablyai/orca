@@ -11,8 +11,8 @@ const saved = vi.hoisted(() => vi.fn())
 vi.mock('react-native', () => ({ View: 'View' }))
 vi.mock('../i18n/mobile-i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('../storage/preferences', () => ({ loadBrowserDrawing: vi.fn() }))
-vi.mock('./mobile-browser-pane-styles', () => ({ mobileBrowserPaneStyles: { root: {} } }))
-vi.mock('./mobile-browser-view-mode-state', () => ({
+vi.mock('./pane-view/mobile-browser-pane-styles', () => ({ mobileBrowserPaneStyles: { root: {} } }))
+vi.mock('./pane-view/mobile-browser-view-mode-state', () => ({
   getInitialMobileBrowserViewMode: () => 'mobile',
   saveMobileBrowserViewMode: (...args: unknown[]) => saved(...args)
 }))

@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { View } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import type {
   BridgeBrowserViewEnding,
   BridgeBrowserViewFrame
 } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import type { ShellLocalBrowser } from '../platform/shell-local-browser-types'
 import type { MobileLocalBrowserNetwork } from '../storage/preferences'
-import type { MobileBrowserViewMode } from './browser-screencast-request'
-import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
+import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'
+import { mobileBrowserPaneStyles } from './pane-view/mobile-browser-pane-styles'
 
 type Props = {
   placed: NonNullable<ShellLocalBrowser['placed']>
@@ -65,7 +65,7 @@ export function MobileBrowserPlacedLocal({
   onEnded,
   onRefused
 }: Props): React.JSX.Element {
-  const ref = useRef<View>(null)
+  const ref = useRef<HostInstance>(null)
   const placementId = useRef<string | null>(null)
   const callbacks = useRef({ onEnded, onRefused })
   callbacks.current = { onEnded, onRefused }

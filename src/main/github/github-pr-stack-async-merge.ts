@@ -1,5 +1,5 @@
 import type { GitHubPRMergeMethod } from '../../shared/github/pull-request-types'
-import { ghExecFileAsync } from '../git/runner'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import { acquire, release } from './gh-utils'
 import {
   githubHostExecOptions,

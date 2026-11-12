@@ -100,68 +100,65 @@ function getCommandSourcePolicyOptions(
   ]
 }
 
-export function RepositorySetupPolicySetting({
+export function RepositorySetupRunPolicySetting({
   isFolder = false,
   setupRunPolicy,
-  setupAgentStartupPolicy,
-  onRunPolicyChange,
-  onStartupPolicyChange
+  onRunPolicyChange
 }: {
   isFolder?: boolean
   setupRunPolicy: SetupRunPolicy
-  setupAgentStartupPolicy: SetupAgentStartupPolicy
   onRunPolicyChange: (policy: SetupRunPolicy) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h5 className="text-sm font-semibold">
+          {t('auto.components.settings.RepositoryHooksSection.793dcee97d', 'When to run')}
+        </h5>
+        <p className="text-xs text-muted-foreground">
+          {isFolder
+            ? t(
+                'components.settings.RepositoryHooksSection.folderRunPolicyDescription',
+                'Default behavior when a new workspace is created.'
+              )
+            : t(
+                'auto.components.settings.RepositoryHooksSection.21fb607a87',
+                'Default behavior when a new worktree is created.'
+              )}
+        </p>
+      </div>
+      <SegmentedPolicyToggle
+        options={getSetupRunPolicyOptions(t)}
+        selected={setupRunPolicy}
+        onSelect={onRunPolicyChange}
+      />
+    </div>
+  )
+}
+
+export function RepositorySetupAgentStartupSetting({
+  setupAgentStartupPolicy,
+  onStartupPolicyChange
+}: {
+  setupAgentStartupPolicy: SetupAgentStartupPolicy
   onStartupPolicyChange: (policy: SetupAgentStartupPolicy) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const options = getSetupRunPolicyOptions(t)
+  const label = t(
+    'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+    'Wait for setup to complete before starting agent'
+  )
   return (
-    <div className="space-y-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h5 className="text-sm font-semibold">
-            {t('auto.components.settings.RepositoryHooksSection.793dcee97d', 'When to run')}
-          </h5>
-          <p className="text-xs text-muted-foreground">
-            {isFolder
-              ? t(
-                  'components.settings.RepositoryHooksSection.folderRunPolicyDescription',
-                  'Default behavior when a new workspace is created.'
-                )
-              : t(
-                  'auto.components.settings.RepositoryHooksSection.21fb607a87',
-                  'Default behavior when a new worktree is created.'
-                )}
-          </p>
-        </div>
-        <SegmentedPolicyToggle
-          options={options}
-          selected={setupRunPolicy}
-          onSelect={onRunPolicyChange}
-        />
-      </div>
-      <div className="flex items-start justify-between gap-4 border-t border-border/60 pt-4">
-        <div className="min-w-0">
-          <h5 className="text-sm font-semibold">
-            {t(
-              'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
-              'Wait for setup to complete before starting agent'
-            )}
-          </h5>
-        </div>
-        <Switch
-          checked={setupAgentStartupPolicy === 'wait-for-setup'}
-          onCheckedChange={() =>
-            onStartupPolicyChange(
-              setupAgentStartupPolicy === 'wait-for-setup' ? 'start-immediately' : 'wait-for-setup'
-            )
-          }
-          aria-label={t(
-            'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
-            'Wait for setup to complete before starting agent'
-          )}
-        />
-      </div>
+    <div className="flex items-center justify-between gap-4">
+      <h5 className="min-w-0 text-sm font-semibold">{label}</h5>
+      <Switch
+        checked={setupAgentStartupPolicy === 'wait-for-setup'}
+        onCheckedChange={(checked) =>
+          onStartupPolicyChange(checked ? 'wait-for-setup' : 'start-immediately')
+        }
+        aria-label={label}
+      />
     </div>
   )
 }
@@ -219,7 +216,7 @@ export function RepositoryHookCommandSourceSetting({
   const options = getCommandSourcePolicyOptions(t)
   return (
     <details
-      className="group rounded-2xl border border-border/50 bg-background/80 shadow-sm"
+      className="group"
       open={advancedMatchesSearch || isAdvancedOpen}
       onToggle={(event) => {
         if (advancedMatchesSearch) {
@@ -230,7 +227,7 @@ export function RepositoryHookCommandSourceSetting({
       }}
     >
       <summary
-        className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden"
+        className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
         onClick={(event) => {
           if (advancedMatchesSearch) {
             event.preventDefault()
@@ -253,8 +250,8 @@ export function RepositoryHookCommandSourceSetting({
           {getCommandSourceLabel(selectedPolicy, t)}
         </span>
       </summary>
-      <div className="space-y-5 border-t border-border/50 px-4 py-4">
-        <div className="space-y-3">
+      <div className="space-y-5 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <p className="text-sm font-medium">
               {t('auto.components.settings.RepositoryHooksSection.88c6d1e54a', 'Command source')}
@@ -270,26 +267,15 @@ export function RepositoryHookCommandSourceSetting({
               />
             </p>
           </div>
-          <div className="grid gap-2 md:grid-cols-3">
-            {options.map(({ policy, label, description }) => (
-              <button
-                type="button"
-                key={policy}
-                onClick={() => onSelectPolicy(policy)}
-                className={`rounded-xl border px-3 py-2.5 text-center transition-colors ${selectedPolicy === policy ? 'border-foreground/15 bg-accent text-accent-foreground' : 'border-border/60 bg-background text-foreground hover:border-border hover:bg-muted/40'}`}
-              >
-                <span
-                  className={`block text-sm ${selectedPolicy === policy ? 'font-semibold' : 'font-medium'}`}
-                >
-                  {label}
-                </span>
-                <p
-                  className={`mt-1 text-[11px] leading-4 ${selectedPolicy === policy ? 'text-accent-foreground/80' : 'text-muted-foreground'}`}
-                >
-                  {description}
-                </p>
-              </button>
-            ))}
+          <div className="space-y-1.5">
+            <SegmentedPolicyToggle
+              options={options}
+              selected={selectedPolicy}
+              onSelect={onSelectPolicy}
+            />
+            <p className="text-right text-[11px] text-muted-foreground">
+              {options.find((option) => option.policy === selectedPolicy)?.description}
+            </p>
           </div>
         </div>
         <RepositoryHooksYamlStatus

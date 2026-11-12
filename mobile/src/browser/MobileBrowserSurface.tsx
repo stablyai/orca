@@ -4,13 +4,13 @@ import { translate } from '../i18n/mobile-i18n'
 import type { BridgeBrowserViewEnding } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import { useShellLocalBrowser } from '../platform/shell-local-browser'
 import { loadBrowserDrawing, type MobileBrowserDrawing } from '../storage/preferences'
-import type { MobileBrowserViewMode } from './browser-screencast-request'
-import { isBlankBrowserUrl } from './browser-url'
-import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
+import type { MobileBrowserViewMode } from './screencast/browser-screencast-request-parameters'
+import { isBlankBrowserUrl } from './pane-view/browser-url'
+import { mobileBrowserPaneStyles } from './pane-view/mobile-browser-pane-styles'
 import {
   getInitialMobileBrowserViewMode,
   saveMobileBrowserViewMode
-} from './mobile-browser-view-mode-state'
+} from './pane-view/mobile-browser-view-mode-state'
 import type { MobileBrowserFullScreenToggle } from './MobileBrowserDrawingButtons'
 import { MobileBrowserFullScreenFrame } from './MobileBrowserFullScreenFrame'
 import { MobileBrowserPane } from './MobileBrowserPane'

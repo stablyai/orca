@@ -10,7 +10,7 @@ import {
   getRepoDefaultBranchName,
   shouldHideNonOpenReviewOnDefaultBranch
 } from '../../source-control/repo-default-branch'
-import { extractExecError } from '../../git/exec-error'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { classifyGlabError } from '../requests/glab-error-classification'
 import type { MRInfo } from '../../../shared/gitlab-types'
 import { derivePipelineStatus, mapMRInfo } from '../requests/gitlab-response-mapping'
@@ -21,7 +21,7 @@ import {
   glabHostnameArgs,
   glabRepoExecOptions
 } from '../projects/gitlab-project-ref-resolution'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
 import {

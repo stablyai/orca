@@ -3,8 +3,8 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileBrowserDrawing } from '../storage/preferences'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { buttonColor } from './mobile-browser-frame-state'
-import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
+import { buttonColor } from './screencast/mobile-browser-frame-state'
+import { MobileBrowserToolbarIconButton } from './pane-view/MobileBrowserToolbarIconButton'
 
 export type MobileBrowserFullScreenToggle = { active: boolean; onToggle: () => void }
 

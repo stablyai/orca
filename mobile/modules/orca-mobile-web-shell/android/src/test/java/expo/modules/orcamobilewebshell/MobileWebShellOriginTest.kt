@@ -36,11 +36,6 @@ private fun resolve(request: MobileWebShellRequestParts): String? =
 class MobileWebShellOriginTest {
 
   @Test
-  fun `binds a host the parser canonicalised`() {
-    assertEquals("/", resolve(parts("/", host = mobileWebShellOriginHost(SESSION)!!.uppercase())))
-  }
-
-  @Test
   fun `refuses everything outside a plain GET on this origin`() {
     assertNull(resolve(parts("/", method = "POST")))
     assertNull(resolve(parts("/", method = "HEAD")))

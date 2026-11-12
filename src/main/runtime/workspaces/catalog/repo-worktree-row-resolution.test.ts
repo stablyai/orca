@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
@@ -10,9 +11,11 @@ import { buildDetectedGitWorktrees } from '../../../ipc/worktrees/listing/ssh-wo
 import {
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
+  scanRepoWorktreeRows,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { bumpLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 
 function repo(
   id: string,
@@ -157,6 +160,39 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
     await expect(
       resolveScopedWorktreeIdRow(deps, 'shared::D:\\Agentic\\game2\\battle-core', 'runtime:windows')
     ).resolves.toMatchObject({ id: `shared::${path}`, path })
+  })
+})
+
+describe('scanRepoWorktreeRows lineage pruning', () => {
+  // #16654: lineage written by a create that overtook the scan must survive its stale rows.
+  it('keeps lineage recorded by a worktree change that overtook the scan', async () => {
+    const owner = repo('repo-1', '/repo')
+    const deps = createDeps([owner])
+    const childId = 'repo-1::/repo-child'
+    const lineageById: Record<string, WorktreeLineage> = {}
+    const removeWorktreeLineage = vi.fn()
+    Object.assign(deps.store, {
+      getAllWorktreeLineage: () => lineageById,
+      getWorktreeMeta: () => undefined,
+      removeWorktreeLineage
+    })
+    deps.scanRepo.mockImplementationOnce(async () => {
+      bumpLocalWorktreeScanGeneration(owner.id)
+      lineageById[childId] = {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: 'repo-1::/repo',
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+        createdAt: 1
+      }
+      return { ok: true, worktrees: [gitWorktree('/repo')] }
+    })
+
+    await scanRepoWorktreeRows(deps, owner, new Map())
+
+    expect(removeWorktreeLineage).not.toHaveBeenCalled()
   })
 })
 

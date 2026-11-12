@@ -46,7 +46,7 @@ export function useMobileNativeChatPromptCards({
     // A card's X stops its turn; a Pi dialog can open with no turn running, and then nothing can.
     handleNativeChatCancelPrompt: structured?.turnId ? cancel : undefined,
     collapseNativeChatPrompt:
-      structured || presentation.permission?.holdsComposer
+      structured || presentation.permission?.startupDialog
         ? undefined
         : presentation.collapsePrompt,
     nativeChatCollapsedPrompt: structured ? null : presentation.collapsed

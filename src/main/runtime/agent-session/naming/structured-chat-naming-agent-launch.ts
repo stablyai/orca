@@ -3,7 +3,7 @@ import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-s
 import { resolveTuiAgentLaunchEnv } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 import { acpLaunchSpecFor } from '../../../acp/launch/acp-launch-registry'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import {
   claudeConfigDirEnvPatch,
   withoutInheritedClaudeConfigDir
