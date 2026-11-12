@@ -1,9 +1,5 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import {
-  hiddenProjectRowFacts,
-  NO_HIDDEN_PROJECTS,
-  type HiddenProjects
-} from '../../../src/shared/hidden-projects'
+import { NO_HIDDEN_PROJECTS, type HiddenProjects } from '../../../src/shared/hidden-projects'
 import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader
@@ -37,7 +33,13 @@ function phoneRowFacts(
 ): WorkspaceRowFactReader<Worktree> {
   return {
     isArchived: (w) => w.isArchived === true,
-    ...hiddenProjectRowFacts(hiddenProjects),
+    // The same host the phone resolves for the row; unknown hosts fall to the shared check's own rule.
+    isInHiddenProject: (w) =>
+      hiddenProjects.isRowHidden({
+        repoId: w.repoId,
+        hostId: w.hostId ?? repoHostIdByRepoId.get(w.repoId)
+      }),
+    isProjectHidden: hiddenProjects.isProjectHidden,
     isFolderWorkspace: (w) => w.workspaceKind === 'folder-workspace',
     repoId: (w) => w.repoId,
     hostId: (w) => resolveWorktreeHostId(w, repoHostIdByRepoId),

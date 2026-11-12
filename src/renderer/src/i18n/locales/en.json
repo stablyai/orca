@@ -248,7 +248,10 @@
       "sectionTitle": "Hidden projects ({{count}})",
       "allHidden": "Every project is hidden. Show one from Hidden projects below.",
       "undoGone": "{{name}} was removed from Orca.",
-      "settingsGroup": "Sidebar"
+      "settingsGroup": "Sidebar",
+      "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
+      "keywordShow": "show",
+      "keywordUnhide": "unhide"
     }
   },
   "app": {

@@ -13,7 +13,7 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../shared/execution-host'
 import { isRepoHidden } from '../../../../../shared/hidden-projects'
-import { getRepoHostIdentityForParts } from '../../../../../shared/repo-host-identity'
+import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
 import type { Repo } from '../../../../../shared/repo-types'
 import { setProjectHidden } from './set-project-hidden'
 
@@ -88,7 +88,8 @@ const HiddenProjectsSection = React.memo(function HiddenProjectsSection() {
         aria-label={t('sidebar.hiddenProjects.listLabel', 'Hidden projects')}
       >
         {hiddenRepos.map((repo, index) => {
-          const key = getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
+          // The full row identity: paired-server twins share id and host, differing by SSH target.
+          const key = getRepoRowIdentity(repo)
           const hostLabel = hostLabels?.[index]
           return (
             <li
@@ -117,11 +118,17 @@ const HiddenProjectsSection = React.memo(function HiddenProjectsSection() {
                   variant="ghost"
                   size="xs"
                   disabled={pendingKeys.has(key)}
-                  aria-label={t(
-                    'sidebar.hiddenProjects.showAriaLabel',
-                    'Show {{name}} in the sidebar',
-                    { name: repo.displayName }
-                  )}
+                  aria-label={
+                    hostLabel
+                      ? t(
+                          'sidebar.hiddenProjects.showOnHostAriaLabel',
+                          'Show {{name}} on {{host}} in the sidebar',
+                          { name: repo.displayName, host: hostLabel }
+                        )
+                      : t('sidebar.hiddenProjects.showAriaLabel', 'Show {{name}} in the sidebar', {
+                          name: repo.displayName
+                        })
+                  }
                   onClick={() => void show(repo, key)}
                   className="shrink-0"
                 >

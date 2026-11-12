@@ -60,9 +60,19 @@ export function resolveComposerSeedRepoId(
   activeRepoId: string | null | undefined,
   runtimeEnvironments: readonly RuntimeEnvironmentSource[]
 ): string | null {
-  const activeRows = repos.filter((repo) => repo.id === activeRepoId)
-  if (activeRows.length > 0 && activeRows.every(isRepoHidden)) {
+  const everyLoadedCopyHidden = (id: string | null | undefined): boolean => {
+    const rows = repos.filter((repo) => repo.id === id)
+    return rows.length > 0 && rows.every(isRepoHidden)
+  }
+  if (everyLoadedCopyHidden(activeRepoId)) {
     return null
   }
-  return resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments)
+  // A per-workspace runtime repo remaps to a sibling checkout; that sibling must be listed too.
+  const seed = resolveComposerActiveRepoId(
+    repos,
+    eligibleRepos.filter((repo) => !isRepoHidden(repo)),
+    activeRepoId,
+    runtimeEnvironments
+  )
+  return everyLoadedCopyHidden(seed) ? null : seed
 }

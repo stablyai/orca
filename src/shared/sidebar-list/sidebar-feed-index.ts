@@ -144,7 +144,7 @@ function repoOfWorktree(
 }
 
 /** Each row's own host's registration, for lists whose repoMap keeps one registration per id. */
-/** A feed workspace's host: its own stamp, else its registration's, else the focused host. */
+/** A registered feed workspace's host (its stamp, else its registration's, else the focused host); null when its project is not registered. */
 export function feedWorktreeHostId(
   index: Pick<SidebarFeedIndex, 'repoOf'>,
   worktree: Worktree,

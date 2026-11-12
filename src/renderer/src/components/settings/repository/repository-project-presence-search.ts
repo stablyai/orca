@@ -36,7 +36,10 @@ export function getRepositoryPresenceSearchEntries(
       repo.displayName,
       ...translateSearchKeyword('sidebar.hiddenProjects.keywordHide', 'hide'),
       ...translateSearchKeyword('sidebar.hiddenProjects.keywordHidden', 'hidden'),
-      ...translateSearchKeyword('sidebar.hiddenProjects.keywordSidebar', 'sidebar')
+      ...translateSearchKeyword('sidebar.hiddenProjects.keywordSidebar', 'sidebar'),
+      // Restoring is the same switch, so "show" and "unhide" must find it too.
+      ...translateSearchKeyword('sidebar.hiddenProjects.keywordShow', 'show'),
+      ...translateSearchKeyword('sidebar.hiddenProjects.keywordUnhide', 'unhide')
     ]
   }
   return { sidebarVisibility, removeProject }

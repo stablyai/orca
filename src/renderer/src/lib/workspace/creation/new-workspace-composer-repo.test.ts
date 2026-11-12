@@ -21,4 +21,16 @@ describe('resolveComposerSeedRepoId', () => {
       )
     ).toBe('a')
   })
+
+  it('never remaps a runtime checkout to a hidden sibling of the same project', () => {
+    const upstream = { owner: 'o', repo: 'r' }
+    const vm = repo('vm', { connectionId: 'runtime-ssh-orca-1', upstream })
+    const hiddenSibling = repo('main', { upstream, hiddenAt: 1 })
+    expect(resolveComposerSeedRepoId([vm, hiddenSibling], [vm, hiddenSibling], 'vm', [])).toBe('vm')
+    // A listed sibling is still preferred over the per-workspace runtime checkout.
+    const listedSibling = repo('main', { upstream })
+    expect(resolveComposerSeedRepoId([vm, listedSibling], [vm, listedSibling], 'vm', [])).toBe(
+      'main'
+    )
+  })
 })
