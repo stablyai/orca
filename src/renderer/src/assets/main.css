@@ -568,7 +568,7 @@
     inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
 
-/* Why: buttons and inner panels paint from these; dark --secondary equals the lifted surface. */
+/* Why: buttons and inner panels paint from these; the default dark --secondary equals the lifted surface. */
 [data-sonner-toaster],
 .notification-card-stack {
   --popover: var(--notice-surface);
@@ -692,7 +692,9 @@ body[data-modal-overlay-open]
   border-color: var(--notice-border);
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-close-button]:hover {
   color: var(--accent-foreground);
   background: var(--accent);
 }
