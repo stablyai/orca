@@ -1,6 +1,11 @@
 // What a subagent roster entry says under its name, shared by desktop and mobile.
 
 import { formatAgentToolPreviewLine } from '../../agent-status/presentation/agent-tool-preview'
+import { claudeListedModelLabel } from '../../claude-model-list-probe'
+import {
+  nativeChatSessionChoiceShortLabel,
+  type NativeChatSessionOptionSay
+} from '../input/native-chat-session-option-labels'
 import type { NativeChatSubagentEntry } from '../native-chat-types'
 import { normalizeSubagentState } from './native-chat-subagent-summary'
 
@@ -18,8 +23,28 @@ export function subagentEntryDetail(entry: NativeChatSubagentEntry): string | nu
   return text || null
 }
 
-/** `model · effort`, from whichever the provider reported. */
-export function subagentEntryRunsOn(entry: NativeChatSubagentEntry): string | null {
-  const parts = [entry.model, entry.effort].filter((part): part is string => !!part?.trim())
+/** `claude-opus-5-5` reads as `Opus 5.5`, `gpt-5.5` as `GPT-5.5`: the chat already names the provider. */
+export function subagentModelLabel(model: string): string {
+  return claudeListedModelLabel(model.trim())
+    .replace(/^Claude /, '')
+    .replace(/^GPT (\d)/, 'GPT-$1')
+}
+
+/** `general-purpose` reads as `General purpose`; Codex's bare `default` role says nothing. */
+export function subagentRoleLabel(agentType: string | undefined): string | null {
+  const words = agentType?.replace(/[-_]+/g, ' ').trim()
+  return words && words !== 'default' ? words.charAt(0).toUpperCase() + words.slice(1) : null
+}
+
+/** `Opus 5.5 · High`, from whichever the provider reported. */
+export function subagentEntryRunsOn(
+  entry: NativeChatSubagentEntry,
+  say: NativeChatSessionOptionSay
+): string | null {
+  const model = entry.model?.trim() ? subagentModelLabel(entry.model) : null
+  const effort = entry.effort?.trim()
+    ? nativeChatSessionChoiceShortLabel({ value: entry.effort, label: entry.effort }, say, 'effort')
+    : null
+  const parts = [model, effort].filter((part): part is string => part !== null)
   return parts.length > 0 ? parts.join(' · ') : null
 }

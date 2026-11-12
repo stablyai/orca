@@ -14,8 +14,9 @@ const block: NativeChatSubagentGroupBlock = {
       state: 'working',
       tokens: 31_200,
       startedAt: now - 42_000,
-      agentType: 'Explore',
+      agentType: 'general-purpose',
       model: 'claude-opus-5-5',
+      effort: 'high',
       operation: { toolName: 'Read', input: 'src/auth/session.ts' }
     },
     {
@@ -25,7 +26,7 @@ const block: NativeChatSubagentGroupBlock = {
       tokens: 48_900,
       startedAt: now - 63_000,
       model: 'gpt-5.5',
-      effort: 'medium',
+      effort: 'xhigh',
       operation: { toolName: 'Bash', input: 'pnpm test login.spec.ts' }
     },
     {
@@ -35,7 +36,7 @@ const block: NativeChatSubagentGroupBlock = {
       tokens: 8_100,
       startedAt: now - 80_000,
       settledAt: now - 62_000,
-      model: 'claude-haiku-5-5',
+      model: 'claude-haiku-4-5-20251001',
       lastMessage:
         'Refresh happens in two places: the middleware retries once on 401, and the client refreshes on a timer 60 s before expiry.'
     }
@@ -60,7 +61,7 @@ export const hovered = defineFixture({
   render: () => <Roster />,
   interact: async (frame) => {
     frame
-      .querySelector('[data-native-chat-subagent-entry="a3"] > div')
+      .querySelector('[data-native-chat-subagent-entry="a1"] > div')
       ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
     await new Promise((resolve) => setTimeout(resolve, 500))
   }

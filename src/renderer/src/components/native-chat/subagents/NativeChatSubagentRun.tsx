@@ -11,7 +11,8 @@ import {
 import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import {
   subagentEntryDetail,
-  subagentEntryRunsOn
+  subagentEntryRunsOn,
+  subagentRoleLabel
 } from '../../../../../shared/native-chat/transcript/native-chat-subagent-entry-detail'
 import type {
   NativeChatSubagentEntry,
@@ -21,6 +22,7 @@ import type {
 import { formatNativeChatDuration } from '../../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { nativeChatSubagentEntryRuns } from './native-chat-subagent-sections'
 import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
+import { sayNativeChatSessionOptionTranslated as sayOption } from '../session/options/controls/native-chat-session-option-labels-text'
 
 const STATE_DOT_CLASS: Record<NativeChatSubagentState, string> = {
   working: 'bg-foreground/70',
@@ -93,7 +95,7 @@ export function NativeChatSubagentEntries({
         const state = normalizeSubagentState(agent.state)
         const sectionOpen = sections?.get(agent.id)
         const detail = subagentEntryDetail(agent)
-        const runsOn = subagentEntryRunsOn(agent)
+        const runsOn = subagentEntryRunsOn(agent, sayOption)
         const entry = (
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="flex min-w-0 items-center gap-1.5">
@@ -107,7 +109,7 @@ export function NativeChatSubagentEntries({
                 {agent.label}
               </span>
               {runsOn ? (
-                <span className="min-w-0 shrink truncate rounded-full border border-border px-1.5 font-mono text-3xs text-chat-foreground-faint">
+                <span className="min-w-0 shrink truncate rounded-full border border-border px-1.5 font-sans text-3xs text-chat-foreground-faint">
                   {runsOn}
                 </span>
               ) : null}
@@ -172,7 +174,7 @@ function SubagentEntryPreview({
   runsOn: string | null
   children: React.ReactElement
 }): React.JSX.Element {
-  const role = [agent.agentType, runsOn].filter(Boolean).join(' · ')
+  const role = [subagentRoleLabel(agent.agentType), runsOn].filter(Boolean).join(' · ')
   const text = state === 'working' && agent.operation ? detail : (agent.lastMessage?.trim() ?? null)
   return (
     <HoverCard openDelay={300} closeDelay={100}>

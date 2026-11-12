@@ -6,6 +6,7 @@ import {
   subagentStateLabel
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-group-header'
 import { sayMobileNativeChatSubagentGroup as say } from './native-chat-subagent-group-copy'
+import { sayMobileNativeChatSessionOption as sayOption } from '../input/native-chat-session-option-copy'
 import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
 import {
   subagentEntryDetail,
@@ -117,7 +118,7 @@ export function MobileNativeChatSubagentGroup({
       {open
         ? block.agents.map((agent) => {
             const state = normalizeSubagentState(agent.state)
-            const detail = [subagentEntryRunsOn(agent), subagentEntryDetail(agent)]
+            const detail = [subagentEntryRunsOn(agent, sayOption), subagentEntryDetail(agent)]
               .filter((part): part is string => part !== null)
               .join(' · ')
             return (
