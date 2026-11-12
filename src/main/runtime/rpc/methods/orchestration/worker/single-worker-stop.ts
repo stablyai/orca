@@ -8,7 +8,8 @@ import {
   ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { inspectWorkerTerminal, resolvePinnedFederatedServer } from './worker-observation'
+import { inspectWorkerTerminal } from './worker-observation'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { refuseFederatedStopWhileKeptOpen } from './worker-keep-open'
 import { archiveWorkerOutputBeforeStop } from './worker-stop-archive'
 import {
@@ -197,7 +198,7 @@ export async function stopSingleWorker(
       'none'
     )
   }
-  await archiveWorkerOutputBeforeStop({
+  archiveWorkerOutputBeforeStop({
     runtime,
     db,
     dispatchId,

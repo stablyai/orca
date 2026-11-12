@@ -48,13 +48,6 @@ function expectRoundTrip(wrapper: Element, markdown: string, codes: string[]) {
   return editor
 }
 
-it('retains native first-line PRE and trailing soft-line text without mutating the live paragraph', () => {
-  const paragraph = document.createElement('p')
-  paragraph.append(codeBlock('First'), 'Second', document.createElement('br'), 'Third')
-
-  expectRoundTrip(paragraph, '```\nFirst\n```\n\nSecond\nThird', ['First'])
-})
-
 it('retains literal code and surrounding marked prose through transparent paragraph wrappers', () => {
   const wrapper = document.createElement('div')
   const before = document.createElement('p')

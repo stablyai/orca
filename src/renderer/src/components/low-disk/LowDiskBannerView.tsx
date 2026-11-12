@@ -1,5 +1,5 @@
 import { HardDrive, TriangleAlert } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 

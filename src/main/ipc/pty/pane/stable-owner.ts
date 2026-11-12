@@ -14,7 +14,7 @@ import type {
 import { getPtySshConnectionId } from '../provider/registry'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
-import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/terminal-bindings/pty-binding-span'
 
 export type StablePaneOwner = {
   handle?: string

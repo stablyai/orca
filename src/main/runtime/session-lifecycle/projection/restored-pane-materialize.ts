@@ -30,7 +30,7 @@ import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-lay
 import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
-import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'

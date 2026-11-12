@@ -44,6 +44,7 @@ export function buildClaudeStatusPayload(
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),
     agentType: 'claude',
+    model: mainAgentRecord?.model,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,

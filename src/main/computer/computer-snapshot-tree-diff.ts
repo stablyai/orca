@@ -1,4 +1,4 @@
-import type { ComputerSnapshotResult } from '../../shared/runtime-types'
+import type { ComputerSnapshotResult } from '../../shared/computer-use-runtime-types'
 import {
   joinComputerTreeText,
   parseComputerTreeText,

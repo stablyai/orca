@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLeafMoveResult } from '../../shared/workspace-layout/terminal-leaf-move'
+import type { TerminalLeafMoveResult } from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 
 const ipcEmitter = new EventEmitter()
 const ipcMainMock = {
@@ -49,15 +49,6 @@ async function requestMove() {
   return { relay, pending, sender, webContents, reply }
 }
 
-function deferredCommit() {
-  let finish: (result: TerminalLeafMoveResult) => void = () => {}
-  const commit = (): Promise<TerminalLeafMoveResult> =>
-    new Promise((resolve) => {
-      finish = resolve
-    })
-  return { commit, finish: (result: TerminalLeafMoveResult) => finish(result) }
-}
-
 describe('requestTerminalPaneMoveFromRenderer', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -81,27 +72,5 @@ describe('requestTerminalPaneMoveFromRenderer', () => {
     expect(commit).not.toHaveBeenCalled()
     reply({ status: 'refused', reason: 'pane_unavailable' })
     expect(ipcEmitter.listenerCount('ui:terminalPaneMoveToNewTabReply')).toBe(0)
-  })
-
-  it('answers moved once the window commits, even when its reply comes after the deadline', async () => {
-    const { relay, pending, sender } = await requestMove()
-    const { commit, finish } = deferredCommit()
-    const committing = relay.commitRelayedPaneMove(sender, move.targetTabId, commit)
-    await vi.advanceTimersByTimeAsync(10_000)
-    finish({ status: 'moved', ptyId: 'pty-1' })
-
-    await expect(committing).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
-    await expect(pending).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
-  })
-
-  it('answers with the commit when the window goes away while it commits', async () => {
-    const { relay, pending, sender, webContents } = await requestMove()
-    const { commit, finish } = deferredCommit()
-    const committing = relay.commitRelayedPaneMove(sender, move.targetTabId, commit)
-    webContents.emit('render-process-gone')
-    finish({ status: 'moved', ptyId: 'pty-1' })
-
-    await expect(committing).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
-    await expect(pending).resolves.toEqual({ status: 'moved', ptyId: 'pty-1' })
   })
 })

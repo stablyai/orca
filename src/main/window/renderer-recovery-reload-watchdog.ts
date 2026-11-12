@@ -1,7 +1,7 @@
-import { app } from 'electron'
-import type { BrowserWindow } from 'electron'
-import { isSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
-import type { LowCommitOomVerdict } from '../crash-reporting/low-commit-oom-recovery-gate'
+import { app, type BrowserWindow } from 'electron'
+
+import { isSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
+import type { LowCommitOomVerdict } from '../crash-reporting/recovery/low-commit-oom-recovery-gate'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 

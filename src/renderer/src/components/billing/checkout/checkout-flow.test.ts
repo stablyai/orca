@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sampleTeam } from '../plan-billing-fixtures'
 import { checkoutPollVerdict, nextPhaseAfterOpen } from './checkout-flow'
 
-const order = { interval: 'month' as const, seats: 2 }
+const order = { planId: 'team', interval: 'month' as const, seats: 2 }
 
 describe('checkoutPollVerdict', () => {
   it('waits until a subscription exists', () => {

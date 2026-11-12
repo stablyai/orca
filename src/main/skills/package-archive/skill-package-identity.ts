@@ -193,7 +193,6 @@ export async function observeSkillPackage(
     } finally {
       await directoryHandle.close().catch(() => undefined)
     }
-    // Use code-unit ordering so runtime/build ICU differences cannot change identity.
     entries.sort((left, right) => compareCodeUnits(left.name, right.name))
     for (const entry of entries) {
       if (signal?.aborted) {
@@ -258,5 +257,7 @@ export async function observeSkillPackage(
   }
 
   await visit(packageRoot, 0)
+  // Identity hashes complete paths in code-unit order (ICU-independent), the order manifest validators require.
+  files.sort((left, right) => compareCodeUnits(left.path, right.path))
   return { files, observedDigest: skillPackageDigest(files) }
 }

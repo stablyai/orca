@@ -8,7 +8,10 @@ import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishBut
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
 import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
-import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
+import {
+  fileArtifactSourceKey,
+  type FileArtifactOwner
+} from '@/lib/files/artifacts/file-artifact-source-key'
 import { basename } from '@/lib/path'
 import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

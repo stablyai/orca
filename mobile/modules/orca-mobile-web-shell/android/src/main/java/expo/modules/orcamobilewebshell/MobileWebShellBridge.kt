@@ -38,7 +38,7 @@ internal enum class MobileWebShellBridgeInstall {
   /** The prop is false, so nothing is registered and Phase B behaviour is byte-identical. */
   SKIP,
   INSTALL,
-  /** The WebView provider is older than `WEB_MESSAGE_LISTENER` (Chromium 88). Terminal. */
+  /** The WebView provider is older than `WEB_MESSAGE_LISTENER` (Chromium 83). Terminal. */
   UNAVAILABLE
 }
 

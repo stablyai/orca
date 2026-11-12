@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
-import { confirmCreatedWorktreeSetupContent } from '@/lib/ensure-hooks-confirmed'
+import { confirmCreatedWorktreeSetupContent } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'

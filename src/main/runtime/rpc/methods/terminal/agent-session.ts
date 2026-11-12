@@ -1,4 +1,4 @@
-import { ensureAgentSessionFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { ensureAgentSessionFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import {
   type RuntimeAgentSessionRpcCaller,

@@ -1,3 +1,4 @@
+import { guestNavigationMethods } from '../../guest-lifecycle/manager/browser-manager-test-harness'
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import { mkdtempSync } from 'node:fs'
@@ -201,6 +202,7 @@ function createMockGuest(
   const debuggerListeners = new Map<string, ((...args: unknown[]) => void)[]>()
 
   const guest = {
+    ...guestNavigationMethods(),
     id,
     isDestroyed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),

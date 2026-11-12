@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { displayIpcErrorMessage } from '@/lib/ipc-error'
+import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   DIAGNOSTICS_BUNDLE_FAILURE_COPY as EN,
   type DiagnosticsBundleFailureCode

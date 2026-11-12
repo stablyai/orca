@@ -90,7 +90,6 @@ async function collectPackageFiles(packageRoot) {
 
   async function visit(directory) {
     const entries = await readdir(directory, { withFileTypes: true })
-    // Build Node and packaged Electron may differ in ICU; use locale-independent identity ordering.
     entries.sort((left, right) => compareCodeUnits(left.name, right.name))
     for (const entry of entries) {
       const absolutePath = path.join(directory, entry.name)
@@ -130,22 +129,9 @@ async function collectPackageFiles(packageRoot) {
   return sortManifestFiles(files)
 }
 
-// Digest hashes array order; match runtime’s sorted depth-first filesystem walk.
-function compareManifestPaths(left, right) {
-  const leftParts = left.split('/')
-  const rightParts = right.split('/')
-  const shared = Math.min(leftParts.length, rightParts.length)
-  for (let index = 0; index < shared; index += 1) {
-    const order = compareCodeUnits(leftParts[index], rightParts[index])
-    if (order !== 0) {
-      return order
-    }
-  }
-  return leftParts.length - rightParts.length
-}
-
+// Build Node and packaged Electron may differ in ICU; identity hashes complete paths in code-unit order.
 function sortManifestFiles(files) {
-  return [...files].sort((left, right) => compareManifestPaths(left.path, right.path))
+  return [...files].sort((left, right) => compareCodeUnits(left.path, right.path))
 }
 
 function packageDigest(files) {

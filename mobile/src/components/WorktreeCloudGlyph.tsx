@@ -7,6 +7,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { HostKindIcon } from './HostKindIcon'
 
 // Rows ask whether they're cloud from here, next to the glyph that draws the answer.
 export { cloudWorktreeRowStatus } from '../cloud/cloud-worktree-row'
@@ -33,6 +34,29 @@ export function WorktreeCloudGlyph({ status }: { status: CloudWorkspaceStatus | 
       ) : null}
     </View>
   )
+}
+
+/** A row's leading host glyph: the Cloud glyph for an Orca Cloud workspace, else (when asked) the
+ *  remote-host glyph, which an Orca Cloud workspace never also shows. */
+export function WorktreeRowHostGlyph({
+  cloud,
+  remote,
+  hostId,
+  label
+}: {
+  cloud: { status: CloudWorkspaceStatus | null } | null
+  remote: boolean
+  hostId: string | undefined
+  label: string
+}) {
+  if (cloud) {
+    return <WorktreeCloudGlyph status={cloud.status} />
+  }
+  return remote ? (
+    <View accessibilityLabel={label}>
+      <HostKindIcon hostId={hostId} size={11} />
+    </View>
+  ) : null
 }
 
 const styles = themedStyleSheet(() => ({

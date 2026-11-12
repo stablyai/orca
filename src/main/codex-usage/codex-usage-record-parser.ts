@@ -1,4 +1,4 @@
-import { extractString } from '../usage/usage-record-coercion'
+import { extractString } from '../usage/source-input/usage-record-coercion'
 import {
   buildCodexUsageEventKey,
   normalizeRawUsage,

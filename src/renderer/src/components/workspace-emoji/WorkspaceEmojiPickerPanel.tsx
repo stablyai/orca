@@ -8,11 +8,9 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
-import { getWorkspaceEmojiPickerDefaults } from '@/lib/workspace-emoji-picker-defaults'
-import {
-  searchWorkspaceEmojiShortcodes,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+import { getWorkspaceEmojiPickerDefaults } from '@/lib/workspace/display/workspace-emoji-picker-defaults'
+import { searchWorkspaceEmojiShortcodes } from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 
 const SEARCH_LIMIT = 50
 
@@ -26,7 +24,7 @@ export function WorkspaceEmojiPickerPanel({
 }: WorkspaceEmojiPickerPanelProps): React.JSX.Element {
   const t = useTranslate()
   const [query, setQuery] = useState('')
-  const items = useMemo<readonly WorkspaceEmojiSuggestion[]>(
+  const items = useMemo<readonly StandardEmojiShortcodeEntry[]>(
     () =>
       query.trim()
         ? searchWorkspaceEmojiShortcodes(query, SEARCH_LIMIT)

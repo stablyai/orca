@@ -1,4 +1,4 @@
-import { isValidHostTerminalTabId } from '../../workspace-layout/terminal-tab-id'
+import { isValidHostTerminalTabId } from '../../workspace-layout/terminal-surfaces/terminal-tab-id'
 
 const MAX_SURFACE_TAB_ID_LENGTH = 512
 

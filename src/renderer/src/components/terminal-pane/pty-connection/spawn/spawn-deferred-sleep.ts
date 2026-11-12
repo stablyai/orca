@@ -2,7 +2,7 @@ import { isColdRestoreStartup, paneResumeRecord } from '../startup/pane-resume-r
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { isMainResumedSleepPaneCurrent, mainResumedSleepPane } from './main-resumed-sleep-pane'
 import { useAppStore } from '@/store/index'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import {
   agentProviderSessionsEqual,
@@ -15,11 +15,11 @@ import {
   clearPaneSpawnDeferral,
   getPaneSpawnDeferral,
   setPaneSpawnDeferral
-} from '@/lib/pane-spawn-deferral-registry'
+} from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import {
   cancelDeferredRestoreRetry,
   queueDeferredRestoreRetry
-} from '@/lib/pane-spawn-deferral-drain'
+} from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-drain'
 import {
   canResumeHostAutomaticRestores,
   resumeHostAutomaticRestores

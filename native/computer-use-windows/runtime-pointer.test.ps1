@@ -26,6 +26,9 @@ public static class OrcaDesktopWin32 {
         FocusReads = 0;
         WindowX = 100;
     }
+    public static bool IsIconic(IntPtr hwnd) {
+        return false;
+    }
     public static bool ShowWindow(IntPtr hwnd, int command) {
         Calls.Add("restore");
         return true;
@@ -81,7 +84,6 @@ function New-OrcaSnapshot { [pscustomobject]@{} }
 
 foreach ($case in @(
     @{ tool = "click"; x = 5; y = 6 },
-    @{ tool = "click"; x = 5; y = 6; modifiers = "ctrl" },
     @{ tool = "scroll"; x = 5; y = 6; direction = "down"; pages = 1 },
     @{ tool = "drag"; from_x = 5; from_y = 6; to_x = 25; to_y = 26 }
 )) {

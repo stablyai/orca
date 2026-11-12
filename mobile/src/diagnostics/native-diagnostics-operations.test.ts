@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { createNativeDiagnosticsOperations } from './native-diagnostics-operations'
 
 const logStore = vi.hoisted(() => ({

@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ImeInput, ImeTextarea } from './ime-text-field'
 
@@ -14,7 +12,7 @@ afterEach(() => {
 
 const enter = { key: 'Enter', keyCode: 13 }
 
-describe.each([Input, Textarea, ImeInput, ImeTextarea])('IME text field %s', (Field) => {
+describe.each([ImeInput, ImeTextarea])('IME text field %s', (Field) => {
   it('guards active composition, preserves lifecycle callbacks, and releases on blur', () => {
     const action = vi.fn()
     const start = vi.fn(),

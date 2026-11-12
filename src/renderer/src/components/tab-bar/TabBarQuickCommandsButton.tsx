@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
-import { useAppStore } from '@/store'
-import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal-quick-command-host-prompt-limit'
+import { useAppStore } from '@/store/index'
+import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   createTerminalQuickCommandDraft,
@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
+import { runQuickCommandInNewTab } from '@/lib/terminal/quick-commands/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
@@ -29,7 +29,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
-import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
+import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal/quick-commands/terminal-quick-command-project-scope'
 import { useCloudSuggestedRunCommands } from '@/hooks/use-cloud-suggested-run-commands'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 

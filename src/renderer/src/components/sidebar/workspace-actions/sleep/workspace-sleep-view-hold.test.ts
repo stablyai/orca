@@ -32,7 +32,7 @@ vi.mock('@/lib/orca-cloud/orca-cloud-workspace-store', () => ({
 
 import { holdRestoredAsleepCloudSelection } from './workspace-sleep-view-hold'
 import { cloudVmRecord } from './cloud-vm-record.test-fixture'
-import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { isWorktreeSleepViewHeld, resetWorktreeSleepViewForTests } from '@/lib/worktree-sleep-view'
 
 describe('restoring an asleep Orca Cloud selection at startup (RA-13b)', () => {

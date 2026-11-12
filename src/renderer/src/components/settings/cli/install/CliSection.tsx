@@ -8,7 +8,7 @@ import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-ski
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
@@ -19,13 +19,14 @@ import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
-} from '../../../../lib/skill-runtime-command'
+} from '../../../../lib/skills/runtime/skill-runtime-command'
 import { WslCliRegistration } from './WslCliRegistration'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
-import { useLocalCliSkillFreshnessName } from '../../../../hooks/use-local-cli-skill-freshness-name'
+import { useLocalCliSkillFreshnessName } from '../../../../hooks/skills/freshness/use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -126,7 +127,7 @@ export function CliSection({
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message) || error.message
             : translate(
                 'auto.components.settings.CliSection.7baec27029',
                 'Failed to load CLI status.'
@@ -182,7 +183,8 @@ export function CliSection({
                       'Checking CLI registration…'
                     )
                   : showDiagnostics
-                    ? (status?.detail ?? getInstallDescription(currentPlatform))
+                    ? formatCliUserFacingDetail(status?.detail) ||
+                      getInstallDescription(currentPlatform)
                     : t(
                         'settings.general.cli.description',
                         'Orca’s own terminals already have it.'
@@ -250,7 +252,9 @@ export function CliSection({
           ) : null}
 
           {!loading && !isSupported && !isBrowserManaged && status?.detail ? (
-            <p className="text-xs text-muted-foreground">{status.detail}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatCliUserFacingDetail(status.detail)}
+            </p>
           ) : null}
 
           {installFailure ? (

@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
 import { getIntlLocale } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { parseDevBuildStamp, type ReleaseBuild } from '../../../../../shared/release-channel'
 
 function formatBuildLabel(build: ReleaseBuild, intlLocale: string = getIntlLocale()): string {

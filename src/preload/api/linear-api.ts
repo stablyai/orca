@@ -1,3 +1,4 @@
+import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { LinearIssueAttributeFilter } from '../../shared/linear/issue-attribute-filter'
 import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'
 import type { LinearComment, LinearIssue } from '../../shared/linear/issue-types'
@@ -18,7 +19,13 @@ import type {
   LinearWorkspaceSelection
 } from '../../shared/linear/workspace-types'
 
+export type LinearLinkedIssueUpdated = Extract<
+  RuntimeClientEvent,
+  { type: 'linearLinkedIssueUpdated' }
+>
+
 export type LinearApi = {
+  onLinkedIssueUpdated?: (callback: (event: LinearLinkedIssueUpdated) => void) => () => void
   connect: (args: {
     apiKey: string
   }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>

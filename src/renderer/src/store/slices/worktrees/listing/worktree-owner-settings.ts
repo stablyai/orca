@@ -1,5 +1,5 @@
 import { tryRuntimeTargetForWorktreeOwner } from './worktree-owner-target'
-import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
+import { warnAmbiguousOwnerOnce } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '../../../types'

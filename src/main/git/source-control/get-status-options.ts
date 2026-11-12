@@ -1,4 +1,4 @@
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 export type GetStatusOptions = GitRuntimeOptions & {
   includeIgnored?: boolean

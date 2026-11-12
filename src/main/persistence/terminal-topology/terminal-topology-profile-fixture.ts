@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { DelayedAuthority } from '../loading-store/profile-state-delayed-authority-fixture'
+import { DelayedAuthority } from '../loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { Store } from '../loading-store/store'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'

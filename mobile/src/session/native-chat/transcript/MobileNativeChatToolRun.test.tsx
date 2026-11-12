@@ -165,50 +165,6 @@ describe('ToolRun', () => {
     })
   })
 
-  it('follows new work at the end of a live run, but holds still when the reader opens a row', () => {
-    const live = (blocks: NativeChatBlock[]) =>
-      createElement(ToolRun, {
-        blocks,
-        activeTurnIsWorking: true,
-        trailing: true
-      })
-    const first: NativeChatBlock[] = [
-      { type: 'tool-call', name: 'Bash', input: { command: 'ls' }, state: 'completed' },
-      { type: 'tool-result', output: 'a.ts' }
-    ]
-    act(() => {
-      renderer = create(live(first))
-    })
-    openRun(renderer!)
-    const box = () => renderer!.root.findAll((node) => String(node.type) === 'ScrollView')[0]!
-    act(() => {
-      box().props.onContentSizeChange()
-    })
-    scrolls.toEnd.mockClear()
-    act(() => {
-      renderer!.root
-        .findAll((node) => String(node.type) === 'Pressable')
-        .findLast((node) => textIn(node).includes('ls'))!
-        .props.onPress()
-    })
-    act(() => {
-      box().props.onContentSizeChange()
-    })
-    expect(scrolls.toEnd).not.toHaveBeenCalled()
-    act(() => {
-      renderer!.update(
-        live([
-          ...first,
-          { type: 'tool-call', name: 'Bash', input: { command: 'pwd' }, state: 'running' }
-        ])
-      )
-    })
-    act(() => {
-      box().props.onContentSizeChange()
-    })
-    expect(scrolls.toEnd).toHaveBeenCalledTimes(1)
-  })
-
   it('does not save a follow for a later row opening when new work left the height unchanged', () => {
     const live = (blocks: NativeChatBlock[]) =>
       createElement(ToolRun, {

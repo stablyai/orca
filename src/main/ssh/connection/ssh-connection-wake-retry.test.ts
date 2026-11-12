@@ -17,7 +17,7 @@ import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
 
 import { RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
-import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from './ssh-user-disconnect'
+import { recordSshUserDisconnected } from './ssh-user-disconnect'
 
 vi.mock('../authentication/ssh2-module-load', async () =>
   (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
@@ -86,7 +86,6 @@ async function spendLadderWhileAsleep(conn: SshConnection): Promise<void> {
 describe('SshConnection retry after wake or network return', () => {
   beforeEach(() => {
     resetSshConnectionMocks()
-    resetSshUserDisconnectsForTests()
     vi.useFakeTimers()
   })
   afterEach(() => {

@@ -1,3 +1,4 @@
+import { issueBrowserGuestNavigation } from './browser-guest-metadata-cache'
 export const BROWSER_GUEST_RECOVERY_ERROR_CODE = -10_000
 export const BROWSER_GUEST_RECOVERY_TIMEOUT_MS = 8_000
 export const BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS = 1_000
@@ -142,7 +143,7 @@ export function createBrowserPageGuestRecovery(
     watchRecovery()
     try {
       // Why: reload keeps Chromium history and guest identity while starting a fresh renderer.
-      options.webview.reload()
+      issueBrowserGuestNavigation(options.webview, () => options.webview.reload())
     } catch {
       replaceGuest()
     }

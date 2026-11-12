@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeDurableSecureJsonFile } from '../../../../shared/secure-storage/secure-file'
 import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import type { NetworkSourceClass } from '../network-source-class'
+import type { NetworkSourceClass } from '../transports/websocket/source-admission/network-source-class'
 
 export const NETWORK_SOURCE_POLICY_FILE = 'runtime-network-source-policy.json'
 

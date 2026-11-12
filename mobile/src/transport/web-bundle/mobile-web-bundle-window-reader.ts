@@ -7,9 +7,10 @@ import {
   mobileWebBundleRangeRead
 } from './mobile-web-bundle-operations'
 import { decodeMobileWebBundleRange } from './mobile-web-bundle-range-decode'
-import type {
-  MobileWebBundleAssetRead,
-  MobileWebBundleManifestReply
+import {
+  shellDownloadedAssets,
+  type MobileWebBundleAssetRead,
+  type MobileWebBundleManifestReply
 } from './mobile-web-bundle-reply-schemas'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import type { RpcClient } from '../rpc/rpc-client-contract'
@@ -66,16 +67,7 @@ export function mobileWebBundleWindowReader(
     }
   }
   const native = pairedE2EENativeCodec()
-  // Hermes has no brotli, so without the native codec every asset stays on gzip ranges.
-  const brotliLengths = new Map(
-    native === null
-      ? []
-      : opened.manifest.assets.flatMap((asset) =>
-          asset.brotliByteLength !== undefined && asset.brotliByteLength < asset.byteLength
-            ? [[asset.path, asset.brotliByteLength] as const]
-            : []
-        )
-  )
+  const brotliLengths = brotliStreamLengths(opened)
   return {
     windowBytes: rangeBytes,
     streamLength: (asset) => brotliLengths.get(asset.path) ?? asset.byteLength,
@@ -106,6 +98,34 @@ export function mobileWebBundleWindowReader(
         ? stream
         : inflateBrotli(native.brotliDecompress, asset, stream)
   }
+}
+
+// The assets a reader fetches as their brotli copy, by path, with that copy's length. Hermes has no brotli,
+// so without the native codec, and on a host with no range grid, every asset stays on gzip ranges or chunks.
+function brotliStreamLengths(
+  opened: Pick<MobileWebBundleManifestReply, 'rangeBytes' | 'manifest'>
+): ReadonlyMap<string, number> {
+  if (opened.rangeBytes === undefined || pairedE2EENativeCodec() === null) {
+    return new Map()
+  }
+  return new Map(
+    opened.manifest.assets.flatMap((asset) =>
+      asset.brotliByteLength !== undefined && asset.brotliByteLength < asset.byteLength
+        ? [[asset.path, asset.brotliByteLength] as const]
+        : []
+    )
+  )
+}
+
+// Bytes a whole download moves, in the unit of fetch progress: each brotli copy's length where one is read.
+export function mobileWebBundleStreamBytes(
+  opened: Pick<MobileWebBundleManifestReply, 'rangeBytes' | 'manifest'>
+): number {
+  const brotliLengths = brotliStreamLengths(opened)
+  return shellDownloadedAssets(opened.manifest).reduce(
+    (sum, asset) => sum + (brotliLengths.get(asset.path) ?? asset.byteLength),
+    0
+  )
 }
 
 // Chunks and brotli windows carry their bytes as they are.

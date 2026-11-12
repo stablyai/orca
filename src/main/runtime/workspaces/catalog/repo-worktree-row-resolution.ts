@@ -23,10 +23,12 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
+import { getLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
@@ -116,6 +118,7 @@ export async function scanRepoWorktreeRows(
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): Promise<RepoWorktreeRowsScan> {
   const { store } = deps
+  const scanGeneration = getLocalWorktreeScanGeneration(repo.id)
   // Absorb rejection before withTimeout: rejection preserves shipped empty results, but timeout restores last-known rows.
   const scan: RuntimeWorktreeScanResult = (await withTimeout<RuntimeWorktreeScanResult | null>(
     deps
@@ -131,7 +134,7 @@ export async function scanRepoWorktreeRows(
   }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
   if (scan.ok) {
-    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, { scanGeneration })
   }
   return { ok: scan.ok, worktrees: gitWorktrees }
 }
@@ -241,8 +244,9 @@ export async function resolveScopedWorktreeIdRow(
   if (!parsed?.repoId || !parsed.worktreePath) {
     return null
   }
-  const owners = store
-    .getRepos()
+  const repoOwners = createRepoRowExecutionHostLookup(store.getRepos())
+  const owners = repoOwners
+    .rowsFor(parsed.repoId)
     .filter(
       (repo) =>
         repo.id === parsed.repoId &&
@@ -257,7 +261,8 @@ export async function resolveScopedWorktreeIdRow(
     deps,
     repo,
     store.getAllWorktreeMeta() ?? {},
-    resolveLocalProjectRuntimesForRepos(store, [repo])
+    resolveLocalProjectRuntimesForRepos(store, [repo]),
+    repoOwners.rowsFor(repo.id).length
   )
   // Accept one normalized equivalent id; multiple path matches remain ambiguous (#16243).
   const comparisonKey = worktreeIdentityKey(worktreeId)
@@ -278,12 +283,11 @@ export async function resolveScopedWorktreeIdRow(
   )
   relatedRepoIds.delete(repo.id)
   const hostId = getRepoExecutionHostId(repo)
-  const relatedRepos = store
-    .getRepos()
-    .filter(
-      (candidate) =>
-        relatedRepoIds.has(candidate.id) && getRepoExecutionHostId(candidate) === hostId
-    )
+  const registered = store.getRepos()
+  const relatedOwners = createRepoRowExecutionHostLookup(registered)
+  const relatedRepos = registered.filter(
+    (candidate) => relatedRepoIds.has(candidate.id) && getRepoExecutionHostId(candidate) === hostId
+  )
   if (new Set(relatedRepos.map((candidate) => candidate.id)).size !== relatedRepos.length) {
     return null
   }
@@ -291,7 +295,13 @@ export async function resolveScopedWorktreeIdRow(
   const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(store, relatedRepos)
   const otherRows = await Promise.all(
     relatedRepos.map((relatedRepo) =>
-      resolveRepoWorktreeRows(deps, relatedRepo, metaById, projectRuntimeByRepoId)
+      resolveRepoWorktreeRows(
+        deps,
+        relatedRepo,
+        metaById,
+        projectRuntimeByRepoId,
+        relatedOwners.rowsFor(relatedRepo.id).length
+      )
     )
   )
   const projected = projectResolvedWorktreeLineage([...ownerRows, ...otherRows.flat()], lineageById)

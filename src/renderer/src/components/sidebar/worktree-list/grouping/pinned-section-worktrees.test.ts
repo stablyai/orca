@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import {
-  getPinnedSectionWorktrees,
-  isPinnedSectionWorktree
-} from '../../../../../../shared/sidebar-list/pinned-section-worktrees'
+import { getPinnedSectionWorktrees } from '../../../../../../shared/sidebar-list/pinned-section-worktrees'
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
 import { buildRows } from './build-rows.test-fixture'
 
@@ -122,26 +119,5 @@ describe('getPinnedSectionWorktrees', () => {
     )
 
     expect(rows.filter((row) => row.type === 'item')).toHaveLength(depth)
-  })
-})
-
-describe('isPinnedSectionWorktree', () => {
-  const parent = makeWorktree('parent', { isPinned: true })
-  const child = makeWorktree('child')
-  const lineageById = { [child.id]: makeLineage(child, parent) }
-  const worktreeMap = new Map([
-    [parent.id, parent],
-    [child.id, child]
-  ])
-
-  it('treats an unpinned child of a visible pinned parent as pinned-section membership', () => {
-    expect(isPinnedSectionWorktree(child, [parent, child], lineageById, worktreeMap)).toBe(true)
-  })
-
-  it('does not treat an unrelated unpinned workspace as pinned-section membership', () => {
-    const other = makeWorktree('other')
-    expect(isPinnedSectionWorktree(other, [parent, child, other], lineageById, worktreeMap)).toBe(
-      false
-    )
   })
 })

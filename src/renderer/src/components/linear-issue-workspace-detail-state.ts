@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import { translate } from '@/i18n/i18n'
 import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'

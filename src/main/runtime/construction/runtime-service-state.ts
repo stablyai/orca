@@ -38,6 +38,9 @@ import {
   type RuntimeMessageWaiter
 } from '../orchestration/mailbox/runtime-message-waiters'
 import type { WorkerTurnStopReportDeps } from '../orchestration/workers/turn-stops/worker-turn-stop-report'
+import type { LostWorkerReport } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
+import { terminalLastOutput } from '../terminal/output/tail/terminal-tail-read'
+import { terminalHistoryLastOutput } from '../terminal/output/tail/terminal-history-last-output'
 import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../terminal/output/recent-pty-output-buffer'
@@ -45,6 +48,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../terminal/wait/terminal-idle-policy'
 import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-screen-clear'
+import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
   protected readonly stopRequestedPtyIds = new Set<string>()
@@ -308,7 +312,21 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected readonly workerTurnStopReportDeps: WorkerTurnStopReportDeps = {
     getDb: () => this._orchestrationDb,
     isWaitingForMail: (mailbox) => (this.messageWaiters.get(mailbox)?.size ?? 0) > 0,
-    notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType)
+    notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
+    isChatMailbox: (mailbox) =>
+      typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object',
+    coordinatorApprovals: () => this.coordinatorApprovalsEnabled()
+  }
+
+  /** This machine's own setting: it runs the worker, so it decides whether an agent may allow its prompts. */
+  coordinatorApprovalsEnabled(): boolean {
+    return this.store?.getSettings?.()?.orchestrationCoordinatorApprovalsEnabled === true
+  }
+
+  protected readonly lostWorkerReport: LostWorkerReport = {
+    reportDeps: this.workerTurnStopReportDeps,
+    lastOutput: async (ptyId) =>
+      terminalLastOutput(this.ptysById.get(ptyId)) ?? (await terminalHistoryLastOutput(ptyId))
   }
 
   protected readonly skillCommands!: RuntimeSkillCommands

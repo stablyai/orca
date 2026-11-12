@@ -8,7 +8,7 @@ import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-mo
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import {
   NO_DISPATCH_HOST,
   WSL_MOVE_IN_PROGRESS,

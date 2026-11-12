@@ -6,15 +6,15 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   collectLayoutLeafIdsInOrder,
   layoutContainsLeafId
-} from '../../../shared/workspace-layout/terminal-pane-tree'
-import { findTerminal } from '../../../shared/workspace-layout/workspace-layout-command-steps'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { findTerminal } from '../../../shared/workspace-layout/commands/workspace-layout-command-steps'
 import type {
   CommandOf,
   LayoutRefusalCode,
   WindowPaneDetach
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { loadWorkspaceLayout } from '../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { leafHeldByOtherTab } from './terminal-leaf-move'
 import {
   isTerminalOwnerPartition,

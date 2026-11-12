@@ -4,7 +4,7 @@ import { seededPermissionMode } from '../../../../../../shared/native-chat/input
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
 import { assertAgentPromptRequestActive } from '../../../../terminal/input/agent-prompt-signals'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 import {
   refuse,
   agentSessionRefusalError,

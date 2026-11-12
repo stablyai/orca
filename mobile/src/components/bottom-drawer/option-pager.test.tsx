@@ -8,7 +8,7 @@ vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   Text: 'Text',
   View: 'View',
-  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: {} }
+  StyleSheet: { create: <T,>(styles: T) => styles, absoluteFill: {} }
 }))
 vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
 vi.mock('./mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'MountedBottomDrawer' }))

@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import { CLAUDE_STOP_GRACE_MS } from '../../../../claude/claude-request-end-wait'
+import { CLAUDE_STOP_GRACE_MS } from '../../../../claude/structured/turns/claude-request-end-wait'
 import type { ClaudeStructuredSessionAdapter } from '../../../../claude/structured/claude-structured-session-adapter'
 import type {
   fakeClaude,

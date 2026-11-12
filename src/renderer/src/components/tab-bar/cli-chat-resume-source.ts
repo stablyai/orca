@@ -1,8 +1,9 @@
 import type { AppState } from '@/store/types'
+
 import {
   collectAgentPaneConversations,
   resolvePaneLastAgentConversation
-} from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-requests'
+} from '../../lib/agent-session/identity/pane-agent-conversations'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   adoptsCliConversations,

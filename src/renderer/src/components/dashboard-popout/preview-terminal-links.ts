@@ -1,6 +1,6 @@
 import type { IBufferRange, ILinkHandler, Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-link-provider-guard'
+import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-input/terminal-link-provider-guard'
 import { isTerminalLinkDirectActivation as isTerminalHttpLinkActivation } from '@/components/terminal-pane/links/gestures/terminal-link-activation'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal/links/terminal-http-url-extraction'
 

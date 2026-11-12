@@ -8,8 +8,8 @@ import {
   isAgentStatusHooksEnabledForAgent
 } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
-import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
-import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
+import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
+import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences/profile-preferences'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import type { AgentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { installLocalHookRootEvidence } from '../agent-hooks/observations/local-hook-root-evidence'

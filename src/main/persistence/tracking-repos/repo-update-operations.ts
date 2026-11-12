@@ -5,6 +5,7 @@ import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
+import { normalizeRepoWorkspaceCleanupPolicy } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
@@ -119,6 +120,7 @@ export class RepoUpdatePersistenceOperations {
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
+      workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
     }
@@ -245,6 +247,23 @@ export class RepoUpdatePersistenceOperations {
         delete sanitizedUpdates.sourceControlAi
       } else {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
+      }
+    }
+    if (
+      'workspaceCleanupPolicy' in sanitizedUpdates &&
+      (sanitizedUpdates.workspaceCleanupPolicy === undefined ||
+        sanitizedUpdates.workspaceCleanupPolicy === null)
+    ) {
+      delete repo.workspaceCleanupPolicy
+      delete sanitizedUpdates.workspaceCleanupPolicy
+    } else if ('workspaceCleanupPolicy' in sanitizedUpdates) {
+      const workspaceCleanupPolicy = normalizeRepoWorkspaceCleanupPolicy(
+        sanitizedUpdates.workspaceCleanupPolicy
+      )
+      if (workspaceCleanupPolicy === undefined) {
+        delete sanitizedUpdates.workspaceCleanupPolicy
+      } else {
+        sanitizedUpdates.workspaceCleanupPolicy = workspaceCleanupPolicy
       }
     }
     if ('ghAccount' in updates) {

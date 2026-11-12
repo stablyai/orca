@@ -4,7 +4,7 @@
 // what was worth saying once is not re-raised.
 import { useSyncExternalStore } from 'react'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { CloudSetupNotice } from '../ephemeral-vm-environment-check-triage'
+import type { CloudSetupNotice } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-triage'
 
 export type CloudSetupNoticesRecord = {
   environmentId: string

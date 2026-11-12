@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('./environment-setup-agent-launch', () => ({
+vi.mock('./agent-session/launch/environment-setup-agent-launch', () => ({
   launchSetupAgentWithPrompt: vi.fn(),
   pickEnvironmentSetupRepo: (repos: { id: string }[], activeRepoId: string | null) =>
     repos.find((repo) => repo.id === activeRepoId) ?? repos[0] ?? null

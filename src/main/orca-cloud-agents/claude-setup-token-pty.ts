@@ -4,9 +4,9 @@ import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute } from 'node:path'
 import { resolveClaudeCommand, withCliRuntimeOnPath } from '../codex-cli/command'
-import { buildClaudeChildProcessEnv } from '../claude/claude-child-process-environment'
-import { buildWindowsCommandInvocation } from '../claude-accounts/windows-command-invocation'
-import { stripInheritedClaudeSessionEnv } from '../../shared/agent-launch/startup/claude-parent-session-env'
+import { buildClaudeChildProcessEnv } from '../claude/child-process/claude-child-process-environment'
+import { buildWindowsCommandInvocation } from '../claude-accounts/sign-in/windows-command-invocation'
+import { stripInheritedAgentSessionEnv } from '../../shared/agent-launch/startup/parent-agent-session-env'
 import type { SetupTokenProcess, SpawnSetupToken } from './claude-setup-token-runner'
 
 const COLUMNS = 1000
@@ -37,7 +37,7 @@ export const spawnClaudeSetupTokenPty: SpawnSetupToken = async () => {
   }
   // Like Orca's other Claude children: no inherited auth overrides, no parent session stamps.
   const env: NodeJS.ProcessEnv = buildClaudeChildProcessEnv()
-  stripInheritedClaudeSessionEnv(env)
+  stripInheritedAgentSessionEnv(env)
   const childEnv: Record<string, string> = {}
   for (const [key, value] of Object.entries(
     withCliRuntimeOnPath(command, { ...env, TERM: 'xterm-256color' })

@@ -55,7 +55,7 @@ vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsyncBuffer: vi.fn()
 }))
 
-vi.mock('../command-runner/git-process-env', async (importOriginal) => ({
+vi.mock('../command-runner/git-environment/git-process-env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => env
 }))

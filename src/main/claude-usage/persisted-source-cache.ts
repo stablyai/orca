@@ -1,24 +1,22 @@
-import { readFile } from 'node:fs/promises'
 import type { ClaudeUsagePersistedFile, ClaudeUsagePersistedState } from './types'
 import { encodeClaudeUsagePersistedFiles } from './persisted-token-columns'
-import {
-  compressClaudeUsageSourceText,
-  decodeClaudeUsageSourceText
-} from './source-cache-compression'
+import { writeClaudeUsageJson, readClaudeUsageJson } from './source-cache-compression'
 import {
   hasClaudeUsageProtectedCheckpoint,
   normalizeClaudeUsageSourceFiles,
   type ClaudeUsageVerifiedSources
 } from './persisted-projection-validation'
-import { parseClaudeUsageReport, serializeClaudeUsageReport } from './persisted-usage-report'
-import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/usage-cache-json-integrity'
+import {
+  parseClaudeUsageReport,
+  readClaudeUsageReportFile,
+  serializeClaudeUsageReport
+} from './persisted-usage-report'
 import {
   usageSourceCachePath,
-  writeUsageSourceCacheData,
   type UsageCacheSplitRequest,
   type UsageCacheSplitResult,
   type UsageSourceCacheRef
-} from '../usage/usage-source-cache-file'
+} from '../usage/cache/usage-source-cache-file'
 
 const SOURCE_DOMAIN = 'claude-usage-sources-v1'
 
@@ -39,9 +37,12 @@ export async function readClaudeUsageSourceCache(
     return { sources: [] }
   }
   try {
-    const text = await decodeClaudeUsageSourceText(await readFile(cacheRef.path))
-    const parsed = JSON.parse(text)
-    const verified = verifyUsageCacheJson(text, parsed?.usageIntegrity, SOURCE_DOMAIN)
+    const { parsed, verified } = await readClaudeUsageJson<{
+      usageIntegrity?: string
+      schemaVersion: number
+      worktreeFingerprint: string | null
+      sources: ClaudeUsagePersistedFile[]
+    }>(cacheRef.path, SOURCE_DOMAIN)
     if (
       (parsed?.schemaVersion !== cacheRef.schemaVersion &&
         !(cacheRef.schemaVersion === 7 && parsed?.schemaVersion === 6)) ||
@@ -100,41 +101,40 @@ export async function writeClaudeUsageSourceCache(
   sources: readonly ClaudeUsagePersistedFile[]
 ): Promise<void> {
   const cacheRef = { ...ref }
-  const material = JSON.stringify({
-    schemaVersion: cacheRef.schemaVersion,
-    worktreeFingerprint: cacheRef.worktreeFingerprint,
-    sources: encodeClaudeUsagePersistedFiles(sources)
-  })
-  await writeUsageSourceCacheData(
+  await writeClaudeUsageJson(
     cacheRef,
-    await compressClaudeUsageSourceText(
-      cacheRef.schemaVersion === 6 ? material : sealUsageCacheJson(material, SOURCE_DOMAIN)
-    )
+    {
+      schemaVersion: cacheRef.schemaVersion,
+      worktreeFingerprint: cacheRef.worktreeFingerprint,
+      sources: encodeClaudeUsagePersistedFiles(sources)
+    },
+    SOURCE_DOMAIN,
+    cacheRef.schemaVersion !== 6
   )
 }
 
 export async function splitClaudeUsageCacheFile(
   request: UsageCacheSplitRequest
 ): Promise<UsageCacheSplitResult> {
-  let text: string
+  let loaded: Awaited<ReturnType<typeof readClaudeUsageReportFile>>
   try {
-    text = await readFile(request.cacheFile, 'utf8')
+    loaded = await readClaudeUsageReportFile(request.cacheFile)
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return { reportText: null, migrated: false }
     }
     throw error
   }
-  const parsed: ClaudeUsagePersistedState = JSON.parse(text)
+  const parsed: ClaudeUsagePersistedState = loaded.state
   if (!Array.isArray(parsed.processedFiles) || parsed.processedFiles.length === 0) {
-    const validated = await parseClaudeUsageReport(text, parsed)
+    const validated = await parseClaudeUsageReport('', parsed, loaded.integrityVerified)
     return {
-      reportText: validated === parsed ? text : serializeClaudeUsageReport(validated),
+      reportText: serializeClaudeUsageReport(validated),
       migrated: false,
       reportIntegrityVerified: validated.schemaVersion === 7
     }
   }
-  const validated = await parseClaudeUsageReport(text, parsed)
+  const validated = await parseClaudeUsageReport('', parsed, loaded.integrityVerified)
   const protectedInline = parsed.processedFiles.some(hasClaudeUsageProtectedCheckpoint)
   const state = protectedInline ? { ...validated, schemaVersion: 7 } : validated
   const ref = {

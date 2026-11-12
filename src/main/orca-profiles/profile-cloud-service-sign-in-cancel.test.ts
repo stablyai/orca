@@ -23,24 +23,24 @@ vi.mock('electron', () => ({
   safeStorage: safeStorageMock
 }))
 
-vi.mock('./profile-cloud-pkce', () => ({
+vi.mock('./cloud-auth/profile-cloud-pkce', () => ({
   beginOrcaCloudPkceFlow: beginOrcaCloudPkceFlowMock
 }))
 
-vi.mock('./profile-cloud-client', () => ({
+vi.mock('./cloud-auth/profile-cloud-client', () => ({
   createOrcaCloudProfile: vi.fn(),
   exchangeOrcaCloudAuthCode: exchangeOrcaCloudAuthCodeMock,
   revokeOrcaCloudSession: vi.fn(async () => undefined),
   selectOrcaCloudOrg: vi.fn()
 }))
 
-import { connectCurrentOrcaProfile, getCurrentOrcaProfileAuthStatus } from './profile-cloud-service'
+import { connectCurrentOrcaProfile, getCurrentOrcaProfileAuthStatus } from './cloud-auth/profile-cloud-service'
 import {
   cancelOrcaCloudSignIn,
   getOrcaCloudSignInProgress,
   onOrcaCloudSignInProgressChanged,
   resetOrcaCloudSignInProgressForTests
-} from './profile-cloud-sign-in-progress'
+} from './cloud-auth/profile-cloud-sign-in-progress'
 
 const cloud: OrcaProfileCloudSummary = {
   cloudProfileId: 'cloud-profile-1',

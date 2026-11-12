@@ -1,0 +1,315 @@
+import { withGitHubTargetOperation } from '../../source-control/review/github-work-item-operation'
+import { githubTaskKey, requireGitHubTaskTarget } from './github-task-identity'
+import {
+  matchesGitHubWorkItemTarget,
+  GitHubWorkItemTargetError
+} from '../../../../src/shared/github/work-item-target'
+import type { ProviderCheckSummary } from '../../../../src/shared/github/pull-request-types'
+import type { GitLabWorkItem } from '../mobile-tasks-provider-detail-types'
+import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
+import { fetchJiraIssueDetail } from '../providers/jira/mobile-jira-task-source'
+import { createJiraTask, createLinearTask } from './mobile-tasks-item-mapping'
+import type { HostedReviewDecision } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
+import { buildGitLabCheckSummary } from '../hosted-review/gitlab-check-summary'
+import { useEffect } from 'react'
+import type { TaskItem } from '../mobile-tasks-project-workspace-types'
+
+import {
+  githubItemDetailRead,
+  gitlabItemDetailRead,
+  linearIssueCommentsRead,
+  linearIssueRead
+} from './mobile-task-item-detail-operations'
+
+type GitLabHydratedStatus = Pick<GitLabWorkItem, 'mergeable' | 'reviewDecision' | 'reviewerCount'>
+
+function gitLabHydrationUnchanged(
+  source: GitLabWorkItem,
+  summary: ProviderCheckSummary,
+  status: GitLabHydratedStatus
+): boolean {
+  const current = source.checksSummary
+  return (
+    current?.state === summary.state &&
+    current.total === summary.total &&
+    current.passed === summary.passed &&
+    current.failed === summary.failed &&
+    current.cancelled === summary.cancelled &&
+    current.pending === summary.pending &&
+    current.neutral === summary.neutral &&
+    current.scope === summary.scope &&
+    (status.mergeable === undefined || source.mergeable === status.mergeable) &&
+    (status.reviewDecision === undefined || source.reviewDecision === status.reviewDecision) &&
+    (status.reviewerCount === undefined || source.reviewerCount === status.reviewerCount)
+  )
+}
+
+export type ItemDetailLoadingInput = Pick<
+  ItemDetailMetadataEffectsModel,
+  | 'detailRequestItem'
+  | 'client'
+  | 'detailRefreshSeq'
+  | 'detailRefreshRequested'
+  | 'hydrateActionItem'
+  | 'setDetailError'
+  | 'setDetailLoading'
+  | 'setDetailPayload'
+  | 'setItems'
+  | 'tasksSupported'
+>
+
+export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingInput>(
+  model: Model
+) {
+  const {
+    detailRequestItem: actionItem,
+    client,
+    detailRefreshSeq,
+    detailRefreshRequested,
+    hydrateActionItem,
+    setDetailError,
+    setDetailLoading,
+    setDetailPayload,
+    setItems,
+    tasksSupported
+  } = model
+  useEffect(() => {
+    if (!tasksSupported || !actionItem || !client) {
+      setDetailPayload(null)
+      setDetailLoading(false)
+      setDetailError('')
+      return
+    }
+
+    let stale = false
+    const canonical = detailRefreshRequested.current
+    detailRefreshRequested.current = false
+    setDetailPayload(null)
+    setDetailError('')
+    setDetailLoading(true)
+
+    const loadDetails = async (): Promise<void> => {
+      if (actionItem.provider === 'github') {
+        const target = requireGitHubTaskTarget(actionItem.source)
+        const params = {
+          repo: `id:${actionItem.source.repoId}`,
+          number: target.number,
+          type: target.type
+        }
+        const reply = await withGitHubTargetOperation({
+          client,
+          params,
+          ownerRepo: target.repository,
+          read: true,
+          canonical,
+          send: (selected, exact, options) =>
+            githubItemDetailRead.request(selected, { ...params, ...exact }, options)
+        })
+        const details = githubItemDetailRead.interpret(reply)
+        if (!details?.item || !matchesGitHubWorkItemTarget(details.item, target)) {
+          throw new GitHubWorkItemTargetError(target)
+        }
+        if (!stale) {
+          setDetailPayload({
+            provider: 'github',
+            targetKey: githubTaskKey(actionItem.source),
+            body: details.body ?? '',
+            comments: details.comments ?? [],
+            labels: details.item?.labels ?? actionItem.source.labels,
+            assignees: details.assignees ?? [],
+            reviewDecision: details.item?.reviewDecision ?? actionItem.source.reviewDecision,
+            reviewRequests: details.item?.reviewRequests ?? actionItem.source.reviewRequests ?? [],
+            latestReviews: details.item?.latestReviews ?? actionItem.source.latestReviews ?? [],
+            headSha: details.headSha,
+            baseSha: details.baseSha,
+            pullRequestId: details.pullRequestId,
+            checks: details.checks ?? [],
+            files: details.files ?? []
+          })
+        }
+        return
+      }
+
+      if (actionItem.provider === 'gitlab') {
+        const reply = await gitlabItemDetailRead.request(
+          client,
+          {
+            repo: `id:${actionItem.source.repoId}`,
+            iid: actionItem.source.number,
+            type: actionItem.source.type,
+            projectRef: actionItem.source.projectRef,
+            // A lost comment settles on any later read (refresh, Retry, reopen); desktop reads never ask.
+            markViewerComments: true
+          },
+          { timeoutMs: 30_000 }
+        )
+        const details = gitlabItemDetailRead.interpret(reply)
+        if (!details) {
+          throw new Error('Details not found')
+        }
+        if (!stale) {
+          setDetailPayload({
+            provider: 'gitlab',
+            body: details.body ?? '',
+            comments: details.comments ?? [],
+            labels: details.item?.labels ?? actionItem.source.labels,
+            assignees: details.assignees ?? [],
+            pipelineJobs: details.pipelineJobs ?? []
+          })
+          const checksSummary = buildGitLabCheckSummary(
+            details.pipelineJobs ?? [],
+            details.pipeline
+          )
+          const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
+            details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
+              ? 'approved'
+              : details.approvalState?.approvalsLeft && details.approvalState.approvalsLeft > 0
+                ? 'review_required'
+                : undefined
+          const hydratedStatus = {
+            ...(details.item?.mergeable !== undefined ? { mergeable: details.item.mergeable } : {}),
+            ...(reviewDecision !== undefined ? { reviewDecision } : {}),
+            ...(details.reviewers !== undefined ? { reviewerCount: details.reviewers.length } : {})
+          }
+          hydrateActionItem((current) =>
+            current?.provider === 'gitlab' &&
+            current.source.id === actionItem.source.id &&
+            !gitLabHydrationUnchanged(current.source, checksSummary, hydratedStatus)
+              ? {
+                  ...current,
+                  source: {
+                    ...current.source,
+                    checksSummary,
+                    ...hydratedStatus
+                  }
+                }
+              : current
+          )
+          setItems((current) => {
+            let changed = false
+            const next = current.map((candidate) => {
+              if (
+                candidate.provider !== 'gitlab' ||
+                candidate.source.id !== actionItem.source.id ||
+                gitLabHydrationUnchanged(candidate.source, checksSummary, hydratedStatus)
+              ) {
+                return candidate
+              }
+              changed = true
+              return {
+                ...candidate,
+                source: { ...candidate.source, checksSummary, ...hydratedStatus }
+              }
+            })
+            return changed ? next : current
+          })
+        }
+        return
+      }
+
+      if (actionItem.provider === 'jira') {
+        const { issue, comments } = await fetchJiraIssueDetail(client, {
+          key: actionItem.source.key,
+          siteId: actionItem.source.siteId
+        })
+        if (!stale) {
+          setDetailPayload({
+            provider: 'jira',
+            description: issue.description ?? '',
+            comments,
+            labels: issue.labels ?? [],
+            assignee: issue.assignee?.displayName,
+            projectName: issue.project.name || issue.project.key,
+            issueTypeName: issue.issueType.name,
+            priorityName: issue.priority?.name
+          })
+          hydrateActionItem((current) => {
+            if (
+              current?.provider !== 'jira' ||
+              current.source.key !== issue.key ||
+              current.source.siteId !== issue.siteId
+            ) {
+              return current
+            }
+            const alreadyHydrated =
+              current.title === issue.title &&
+              current.status === issue.status.name &&
+              current.source.description === issue.description &&
+              (current.source.labels ?? []).length === (issue.labels ?? []).length &&
+              current.source.assignee?.accountId === issue.assignee?.accountId
+            return alreadyHydrated ? current : createJiraTask(issue)
+          })
+        }
+        return
+      }
+
+      // Interpret after Promise.all to preserve fail-fast transport and issue-before-comment policy precedence; startRpcOperation would await slower peers.
+      const [issueReply, commentsReply] = await Promise.all([
+        linearIssueRead.request(
+          client,
+          {
+            id: actionItem.source.id,
+            workspaceId: actionItem.source.workspaceId
+          },
+          { timeoutMs: 30_000 }
+        ),
+        linearIssueCommentsRead.request(
+          client,
+          {
+            issueId: actionItem.source.id,
+            workspaceId: actionItem.source.workspaceId
+          },
+          { timeoutMs: 30_000 }
+        )
+      ])
+      const issue = linearIssueRead.interpret(issueReply)
+      const accepted = linearIssueCommentsRead.interpret(commentsReply)
+      const comments = accepted.accepted ? (accepted.value ?? []) : []
+      if (!issue) {
+        throw new Error('Details not found')
+      }
+      if (!stale) {
+        setDetailPayload({
+          provider: 'linear',
+          description: issue.description ?? '',
+          comments,
+          labels: issue.labels ?? [],
+          assignee: issue.assignee?.displayName,
+          project: issue.project,
+          children: issue.subIssues ?? []
+        })
+        hydrateActionItem((current) => {
+          if (current?.provider !== 'linear' || current.source.id !== issue.id) {
+            return current
+          }
+          const currentChildren = current.source.subIssues ?? []
+          const nextChildren = issue.subIssues ?? []
+          const alreadyHydrated =
+            current.source.project?.id === issue.project?.id &&
+            currentChildren.length === nextChildren.length &&
+            currentChildren.every((child, index) => child.id === nextChildren[index]?.id)
+          return alreadyHydrated
+            ? current
+            : (createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>)
+        })
+      }
+    }
+
+    void loadDetails()
+      .catch((err) => {
+        if (!stale) {
+          setDetailError(err instanceof Error ? err.message : 'Failed to load details')
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setDetailLoading(false)
+        }
+      })
+
+    return () => {
+      stale = true
+    }
+  }, [actionItem, client, detailRefreshSeq, tasksSupported])
+  return model
+}

@@ -5,7 +5,7 @@ import {
   worktreeHostMatchOptions,
   worktreeMatchesHost
 } from '../store/slices/worktrees/listing/worktree-host-ownership'
-import { getResolvedExecutionHostIdForWorktree } from '../lib/resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '../lib/workspace/ownership/resolved-worktree-execution-host'
 import { getActiveWorkspaceExecutionHostId } from '../lib/workspace/ownership/active-workspace-host'
 import {
   findIndexedFolderWorkspaceOwner,

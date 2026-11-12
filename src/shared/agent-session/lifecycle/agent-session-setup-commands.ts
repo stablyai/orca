@@ -32,6 +32,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
   { agent: 'opencode2', loginCommand: ['opencode2', 'auth', 'login'] },
   { agent: 'pi', loginCommand: ['pi'], slashCommand: '/login' },
   { agent: 'omp', loginCommand: ['omp'], slashCommand: '/login' },
+  {
+    agent: 'copilot',
+    loginCommand: ['copilot', 'login'],
+    remoteLoginCommand: ['copilot', 'login', '--device-code'],
+    installCommand: 'curl -fsSL https://gh.io/copilot-install | bash'
+  },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
   { agent: 'antigravity', loginCommand: [] }
 ] as const

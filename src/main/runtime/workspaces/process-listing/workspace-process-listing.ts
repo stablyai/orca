@@ -9,10 +9,7 @@ import { RuntimeChatWorkerEvents } from '../../orchestration/workers/turn-stops/
 import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
-import {
-  cloudWorkspaceStatusById,
-  markCloudWorkspaceRows
-} from '../../../hosted-sandbox/cloud-workspace-ps-status'
+import { markCloudWorkspaceSummaries } from '../../../hosted-sandbox/cloud-workspace-ps-status'
 import {
   buildRuntimeWorktreeSummaryPathIndex,
   createRuntimeWorktreePsSummaryLookup
@@ -52,7 +49,7 @@ import {
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { claudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
+import { claudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
   runtimeHiddenRepos,
@@ -90,7 +87,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       resolvedWorktrees,
       platformByRepoId
     })
-    markCloudWorkspaceRows(summaries.values(), cloudWorkspaceStatusById(getProfileUserDataPath()))
+    markCloudWorkspaceSummaries(summaries.values(), getProfileUserDataPath())
 
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,
@@ -181,7 +178,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
             ? sourceMatchersByRepoId.get(getRepoHostIdentityForParts(worktree.repoId, owner.hostId))
             : undefined,
           sourceDefaultsSupported,
-          visibilitySettings
+          visibilitySettings,
+          repoOwners
         )
       })
     }
@@ -303,13 +301,16 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
           readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
         isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
         // The same contexts the session's chat row carries.
-        readOrchestration: (paneKey) =>
-          this.agentOrchestrationProjection.buildByPaneKey()?.[paneKey],
+        readOrchestration: (paneKey) => this.agentOrchestrationProjection.getForPaneKey(paneKey),
         dispatch: (event) => this.mobileNotifications.dispatch(event),
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
-      onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
+      createTurnAttention: () =>
+        chatWorkerTurnStopReporter({
+          ...this.workerTurnStopReportDeps,
+          openExistingDb: () => this.getExistingOrchestrationDb()
+        }),
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)

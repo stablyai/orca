@@ -34,6 +34,7 @@ function folderWorkspaceStore() {
     getRepos: () => [],
     getRepo: () => undefined,
     getFolderWorkspaces: () => [folder],
+    getFolderWorkspace: (id: string) => (id === folder.id ? folder : undefined),
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
     getWorkspaceSession: () => getDefaultWorkspaceSession(),

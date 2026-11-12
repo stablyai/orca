@@ -11,7 +11,7 @@ import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection
 import { MobileNativeChatNoticePill } from './MobileNativeChatNoticePill'
 import { scaledType } from './mobile-native-chat-message-styles'
 import { nativeChatUsageLimitStatusText } from './native-chat-usage-limit-copy'
-import { MobileNativeChatNoticeContext } from '../../mobile-native-chat-notice-context'
+import { MobileNativeChatNoticeContext } from './mobile-native-chat-notice-context'
 
 /** True from the reset on; re-renders once when it passes. */
 function useResetPassed(resetsAt: number | undefined): boolean {
@@ -44,20 +44,24 @@ export function MobileNativeChatUsageLimitStatus({
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const resetsAt = failure?.kind === 'usageLimitReached' ? failure.usageLimit?.resetsAt : undefined
   const resetPassed = useResetPassed(resetsAt)
-  if (failure?.kind !== 'usageLimitReached') {
-    return null
-  }
   const actions =
+    failure?.kind === 'usageLimitReached' &&
     notice.usageLimitTurnItemId !== undefined &&
     usageLimit?.turnItemId === notice.usageLimitTurnItemId
       ? usageLimit
       : null
+  // The line names the reset Orca waits for; Continue still keys off the cut's own reset.
+  const shownAt = actions?.autoContinue ? (actions.continueAt ?? resetsAt) : resetsAt
+  const shownPassed = useResetPassed(shownAt)
+  if (failure?.kind !== 'usageLimitReached') {
+    return null
+  }
   // Draw the row's actions once, with the host's answer for this cut, rather than adding them late.
   if (actions && actions.canSwitchAccount === undefined) {
     return null
   }
   const status = nativeChatUsageLimitStatusText(
-    { resetsAt, resetPassed, autoContinue: actions?.autoContinue ?? null },
+    { resetsAt: shownAt, resetPassed: shownPassed, autoContinue: actions?.autoContinue ?? null },
     t
   )
   const switchAccount = actions?.canSwitchAccount ? (openAccounts ?? null) : null

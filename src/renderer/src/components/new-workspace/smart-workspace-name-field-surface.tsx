@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Command } from '@/components/ui/command'
 import { Popover, PopoverAnchor } from '@/components/ui/popover'
 import { SmartWorkspaceSourceTabs } from './SmartWorkspaceSourceTabs'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
@@ -12,8 +12,6 @@ import { renderSmartWorkspaceNameInput } from './smart-workspace-name-input-surf
 import { renderSmartWorkspaceSourceResults } from './smart-workspace-source-results-surface'
 import { getJiraSourceStatusMessage } from './jira-source-status-message'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
-import { JiraProjectPicker } from '../jira-project-picker'
-import { LinearWorkspacePicker } from '../linear-workspace-picker'
 
 export function renderSmartWorkspaceNameField(
   controller: SmartWorkspaceNameFieldController,
@@ -52,24 +50,6 @@ export function renderSmartWorkspaceNameField(
           tabsListRef={controller.tabsListRef}
         />
       )}
-      {mode === 'jira' && selectedSource === null ? (
-        <JiraProjectPicker
-          projects={controller.jiraProjectInventory.projects}
-          value={controller.jiraProject}
-          onChange={controller.setJiraProject}
-          label={t('components.jiraProjectPicker.label', 'Jira project')}
-          emptyLabel={t('components.jiraProjectPicker.all', 'All Jira projects')}
-          disabled={disabled || controller.jiraProjectInventory.loading}
-        />
-      ) : null}
-      {mode === 'linear' && selectedSource === null ? (
-        <LinearWorkspacePicker
-          workspaces={controller.linearStatus.workspaces ?? []}
-          value={controller.linearWorkspaceIdOverride}
-          onChange={controller.setLinearWorkspaceId}
-          disabled={disabled || !controller.linearStatusChecked}
-        />
-      ) : null}
       <Popover
         open={!disabled && open && mode !== 'text' && selectedSource === null}
         onOpenChange={handleSourcePopoverOpenChange}
@@ -89,7 +69,7 @@ export function renderSmartWorkspaceNameField(
           <PopoverAnchor asChild>
             <div className="relative min-w-0">{renderSmartWorkspaceNameInput(controller, t)}</div>
           </PopoverAnchor>
-          {renderSmartWorkspaceSourceResults(controller)}
+          {renderSmartWorkspaceSourceResults(controller, t)}
         </Command>
       </Popover>
       {jiraSource.intent ? (

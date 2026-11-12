@@ -1,3 +1,4 @@
+import { issueBrowserGuestNavigation } from './browser-guest-metadata-cache'
 import { useEffect, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -56,9 +57,9 @@ export function useBrowserPageWebviewShortcuts({
       // Why: stop other window capture listeners (workspace, embedded editors) from also acting.
       e.stopImmediatePropagation()
       if (direction === 'back') {
-        webviewRef.current?.goBack()
+        issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack())
       } else {
-        webviewRef.current?.goForward()
+        issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward())
       }
     }
     addAppKeyListener('keydown', handleKeyDown)
@@ -74,9 +75,9 @@ export function useBrowserPageWebviewShortcuts({
         return
       }
       if (direction === 'back') {
-        webviewRef.current?.goBack()
+        issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack())
       } else {
-        webviewRef.current?.goForward()
+        issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward())
       }
     })
   }, [browserTabId, isActive, webviewRef])

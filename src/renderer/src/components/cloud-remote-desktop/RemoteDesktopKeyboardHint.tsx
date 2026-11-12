@@ -2,8 +2,8 @@ import { useEffect, useState, type MutableRefObject } from 'react'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { isMacUserAgent } from '@/lib/user-agent-platform'
-import { cn } from '@/lib/utils'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { cn } from '@/lib/class-names'
 
 /** Main's release chord (remote-desktop-keyboard.ts), as the person presses it. */
 export function remoteDesktopReleaseChordLabel(mac: boolean = isMacUserAgent()): string {

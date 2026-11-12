@@ -2,7 +2,7 @@ import { useEffect, useId, useState, type ReactElement } from 'react'
 import { Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import type { FitHoldMode } from '@/lib/pane-manager/mobile-fit-overrides'
+import type { FitHoldMode } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 
 type Grid = { cols: number; rows: number }

@@ -19,6 +19,22 @@ describe('nativeChatCardDismissKey', () => {
     expect(card('Old second', 'A')).not.toBe(card('Old second', 'B'))
   })
 
+  it('distinguishes approvals that share a title but describe different dialogs', () => {
+    const card = (description: string, send: string) =>
+      nativeChatCardDismissKey({
+        kind: 'approval',
+        approval: {
+          title: 'Claude is waiting for a choice in the terminal',
+          description,
+          options: [{ label: 'Yes', send }]
+        }
+      })
+
+    expect(card('New MCP server found', '\r')).not.toBe(card('Detected a custom API key', '\r'))
+    // A re-aimed card is the same occurrence, so an answered one stays dismissed.
+    expect(card('New MCP server found', '\r')).toBe(card('New MCP server found', '\x1b[A\r'))
+  })
+
   it('includes full normalized async content when the contributing rows are unchanged', () => {
     const text = 'x'.repeat(210)
     const first = {

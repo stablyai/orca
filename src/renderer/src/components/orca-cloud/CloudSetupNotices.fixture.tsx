@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { CloudSetupNotice } from '@/lib/ephemeral-vm-environment-check-triage'
+import type { CloudSetupNotice } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-triage'
 import { translate } from '@/i18n/i18n'
 import { cloudSetupNoticesView } from './CloudSetupNotices'
 import { CloudToastCard, type CloudToastView } from './cloud-toast-stack'

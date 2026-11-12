@@ -48,6 +48,20 @@ export function readableOn(
   return extreme
 }
 
+export function hexToRgb(hex: string): Rgba {
+  let clean = hex.replace('#', '')
+  if (clean.length === 3) {
+    clean = clean
+      .split('')
+      .map((c) => c + c)
+      .join('')
+  }
+  const r = Number.parseInt(clean.slice(0, 2), 16)
+  const g = Number.parseInt(clean.slice(2, 4), 16)
+  const b = Number.parseInt(clean.slice(4, 6), 16)
+  return [r, g, b, 1]
+}
+
 export function rgbaToHex([r, g, b]: Rgba): string {
   return `#${[r, g, b]
     .map((channel) =>

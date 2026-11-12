@@ -70,6 +70,7 @@ async function startOversizedStream(guest: ReturnType<typeof createGuest>, onFra
     deviceScaleFactor: 2,
     everyNthFrame: 1,
     minFrameIntervalMs: 0,
+    holdPaint: () => () => {},
     onFrame
   })
 }

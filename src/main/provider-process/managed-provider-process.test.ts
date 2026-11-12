@@ -112,6 +112,22 @@ describe('managed provider process', () => {
     }
   )
 
+  it('keeps the agent session that launched Orca out of a provider child', () => {
+    vi.stubEnv('CODEX_THREAD_ID', 'parent-thread')
+    vi.stubEnv('CODEX_WINDOWS_REGISTERED_CORE', '1')
+    vi.stubEnv('CODEX_HOME', '/home/user/.codex')
+    try {
+      const fixture = fakeChild()
+      launch(fixture)
+      const env = fixture.spawn.mock.calls[0][0].env
+      expect(env?.CODEX_THREAD_ID).toBeUndefined()
+      expect(env?.CODEX_WINDOWS_REGISTERED_CORE).toBeUndefined()
+      expect(env?.CODEX_HOME).toBe('/home/user/.codex')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('does not turn a transport close with an existing pid into Claude exit proof', () => {
     const fixture = fakeChild()
     const managed = launch(fixture)

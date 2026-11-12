@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const recordCoalescedDurableCrashBreadcrumb = vi.fn()
-vi.mock('../crash-reporting/durable-crash-breadcrumb', () => ({
+vi.mock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
   recordCoalescedDurableCrashBreadcrumb: (...args: unknown[]) =>
     recordCoalescedDurableCrashBreadcrumb(...args)
 }))

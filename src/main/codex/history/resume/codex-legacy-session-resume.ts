@@ -21,7 +21,7 @@ import {
 } from '../backfill/codex-session-backfill-copy'
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'

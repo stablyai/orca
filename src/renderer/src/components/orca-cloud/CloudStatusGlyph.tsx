@@ -1,5 +1,5 @@
 import React, { useId } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 
 /** A cloud workspace's state as the glyph shows it: the dot's vocabulary plus two transitions. */

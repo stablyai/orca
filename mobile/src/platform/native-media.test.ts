@@ -32,7 +32,7 @@ function fakeFile(bytes: Uint8Array): NativeMediaFile {
         set offset(next: number | null) {
           cursor = next ?? 0
         },
-        readBytes: (length: number) => {
+        readBytesSync: (length: number) => {
           const slice = bytes.subarray(cursor, cursor + length)
           cursor += slice.byteLength
           return slice
@@ -410,7 +410,7 @@ describe('reading chunks', () => {
           handles.push(ledger)
           return {
             offset: 0,
-            readBytes: (): Uint8Array => {
+            readBytesSync: (): Uint8Array => {
               throw new Error('the device stopped reading')
             },
             close: () => {
@@ -432,34 +432,6 @@ describe('reading chunks', () => {
       })
     ).rejects.toThrow(/stopped reading/)
     expect(handles.at(-1)?.closed).toBe(true)
-  })
-
-  it('refuses a read for a handle the page released', async () => {
-    const { probe, handle } = await staged(64)
-    await expect(probe.serve('native.media.release', { handle })).resolves.toEqual({
-      released: true
-    })
-    await expect(
-      probe.serve('native.media.read', { handle, offset: 0, length: 16 })
-    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_unknown')
-  })
-})
-
-describe('releasing', () => {
-  it('deletes the staged file and answers false the second time', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/lib.png`, bytesOf(8))
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'library', multiple: false })
-    )
-    const handle = result.items[0]?.handle ?? ''
-    await expect(probe.serve('native.media.release', { handle })).resolves.toEqual({
-      released: true
-    })
-    expect(probe.discarded).toEqual([`${CACHE}/lib.png`])
-    await expect(probe.serve('native.media.release', { handle })).resolves.toEqual({
-      released: false
-    })
   })
 })
 

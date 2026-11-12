@@ -5,7 +5,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { classifyRejectedWindowsPath } from '../../../../../../shared/windows-path-access'
 import { windowsPathOfWslDrvfsUncPath } from '../../../../../../shared/wsl-host-windows-drive-refusal'
-import type { WslHostWindowsPathAccess } from '@/lib/windows-path-access'
+import type { WslHostWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

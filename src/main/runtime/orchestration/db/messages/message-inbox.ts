@@ -2,6 +2,7 @@ import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
+import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
@@ -151,9 +152,10 @@ export function getAllMessages(this: OrchestrationDb, toHandle: string, limit = 
 }
 
 export function getMessageById(this: OrchestrationDb, id: string): MessageRow | undefined {
-  const message = this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as
-    | MessageRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  const message = this.db
+    .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
+    .get(id) as MessageRow | undefined
   return message ? exposeMessageTimestamps(message) : undefined
 }
 
@@ -226,11 +228,14 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
   )
 }
 
-export function getInbox(this: OrchestrationDb, limit = 20): MessageRow[] {
+export function getInbox(this: OrchestrationDb, limit = 20, runId?: string): MessageRow[] {
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     this.db
-      .prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?')
-      .all(limit) as MessageRow[]
+      .prepare(
+        'SELECT * FROM messages WHERE (?1 IS NULL OR run_id = ?1) ORDER BY sequence DESC LIMIT ?2'
+      )
+      .all(runId ?? null, limit) as MessageRow[]
   )
 }
 
@@ -239,22 +244,19 @@ export function getAllMessagesForHandle(
   this: OrchestrationDb,
   toHandle: string,
   limit = 100,
-  types?: MessageType[]
+  types?: MessageType[],
+  runId?: string
 ): MessageRow[] {
-  if (types && types.length > 0) {
-    const placeholders = types.map(() => '?').join(',')
-    return exposeMessageListTimestamps(
-      this.db
-        .prepare(
-          `SELECT * FROM messages WHERE to_handle = ? AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
-        )
-        .all(toHandle, ...types, limit) as MessageRow[]
-    )
-  }
+  const typed = types && types.length > 0
+  const typeFilter = typed ? `AND type IN (${types.map(() => '?').join(',')})` : ''
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     this.db
-      .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
-      .all(toHandle, limit) as MessageRow[]
+      .prepare(
+        `SELECT * FROM messages WHERE to_handle = ? AND (? IS NULL OR run_id = ?) ${typeFilter}
+         ORDER BY sequence DESC LIMIT ?`
+      )
+      .all(toHandle, runId ?? null, runId ?? null, ...(typed ? types : []), limit) as MessageRow[]
   )
 }
 

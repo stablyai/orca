@@ -19,7 +19,7 @@ import {
   listOrcadMigrationCutoverChainForTarget,
   removeOrcadMigrationSourceCutover,
   writeOrcadMigrationSourceCutover
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   committedOrcadMigrationChain,
   orcadDeltaSourceStore,
@@ -28,7 +28,7 @@ import {
   type OrcadDeltaMovePlan
 } from './orcad-migration-delta-plan'
 import { assertOrcadMigrationRequestFits } from '../catalog/orcad-migration-request-budget'
-import { retainOrcadMigrationSource } from '../../../persistence/migrating-orcad-catalog/orcad-migration-source-retention'
+import { retainOrcadMigrationSource } from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
 import {
   assessOrcadMigrationTerminals,
   type OrcadMigrationTerminalVerdict,
@@ -40,8 +40,8 @@ import {
   orcadCatalogFingerprint,
   unmovedOrcadSourceRows,
   withKeptOrcadSourceRows
-} from '../../../persistence/migrating-orcad-catalog/orcad-retained-source'
-import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/orcad-source-catalog'
+} from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
+import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-catalog'
 import type { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
 import { errorMessage } from '../../../../shared/error-message'

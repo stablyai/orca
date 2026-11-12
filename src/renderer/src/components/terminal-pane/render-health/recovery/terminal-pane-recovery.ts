@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { locateTerminalTab } from '@/store/terminals/terminal-tab-location'
 import {
   admitTerminalRecoveryRemount,

@@ -16,7 +16,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
   getCodexStatusRuntimeKey,
   getStatusBarPreferredWslDistro,

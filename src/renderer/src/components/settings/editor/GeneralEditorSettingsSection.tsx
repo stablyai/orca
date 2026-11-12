@@ -1,13 +1,12 @@
 import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
-import type React from 'react'
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type React from 'react'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
 } from '../../../../../shared/constants'
-import { clampNumber } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -28,6 +27,7 @@ import {
   updateAutoSaveDelayDraftState
 } from './auto-save-delay-draft'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
 type GeneralEditorSettingsSectionProps = {
   settings: GlobalSettings

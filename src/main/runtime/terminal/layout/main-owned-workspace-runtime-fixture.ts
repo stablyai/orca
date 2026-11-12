@@ -5,7 +5,7 @@ import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
 import { applyCommandToSession } from '../../../persistence/terminal-topology/terminal-pane-admission'
-import { resolveHostId } from '../../../persistence/loading-store/session-host-partitions'
+import { resolveHostId } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import {
   withDurableRuntimeStore,
   withRuntimePaneAdmission

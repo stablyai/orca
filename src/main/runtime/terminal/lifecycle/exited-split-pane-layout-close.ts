@@ -1,4 +1,4 @@
-import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RetiredTerminalSurface } from '../surface/mobile-session-terminal-retirement'
 import { exitedSplitPaneOutcome, type ExitedSplitPaneFacts } from './exited-split-pane-rule'

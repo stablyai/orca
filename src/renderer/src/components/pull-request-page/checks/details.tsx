@@ -2,7 +2,7 @@ import React from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import {
   formatCheckTimestamp,

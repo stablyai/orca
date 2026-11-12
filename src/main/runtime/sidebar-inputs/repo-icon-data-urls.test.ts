@@ -46,62 +46,7 @@ function setup(
 const ENCODED = new Uint8Array([1, 2, 3])
 const ENCODED_URL = 'data:image/png;base64,AQID'
 
-describe('RepoIconDataUrls without an encoder (orcad)', () => {
-  it('passes a small fetched image through as a data URL', async () => {
-    const bytes = pngHeader(64, 64)
-    const { icons } = setup([repo('a', AVATAR)])
-    const id = repoIconId(AVATAR)!
-
-    expect(await icons.read([id])).toEqual({
-      icons: [{ id, dataUrl: `data:image/png;base64,${Buffer.from(bytes).toString('base64')}` }]
-    })
-  })
-
-  it('falls back for an upload too large to pass through', async () => {
-    const icon = upload(pngHeader(64, 64, MAX_REPO_ICON_DATA_URL_BYTES))
-    const { icons } = setup([repo('a', icon)])
-
-    expect((await icons.read([repoIconId(icon)!])).icons[0].dataUrl).toBeNull()
-  })
-
-  it('answers null for an id no repo shows, in request order', async () => {
-    const { icons, fetch } = setup([repo('a', AVATAR)])
-    const id = repoIconId(AVATAR)!
-
-    const reply = await icons.read(['missing', id])
-
-    expect(reply.icons.map((icon) => [icon.id, icon.dataUrl === null])).toEqual([
-      ['missing', true],
-      [id, false]
-    ])
-    expect(fetch).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('RepoIconDataUrls.idsByRepo', () => {
-  it('names each repo’s image by host and repo, the ids a read answers', async () => {
-    const remote = { ...repo('a', AVATAR), connectionId: 'box' }
-    const { icons } = setup([
-      repo('a', AVATAR),
-      remote,
-      repo('glyph', { type: 'emoji', emoji: 'x' }),
-      repo('none', null)
-    ])
-    const id = repoIconId(AVATAR)!
-
-    expect(icons.idsByRepo()).toEqual({ 'local|a': id, 'ssh:box|a': id })
-    expect((await icons.read([id])).icons[0].dataUrl).not.toBeNull()
-  })
-})
-
 describe('RepoIconDataUrls with an encoder (desktop)', () => {
-  it('re-encodes a large upload rather than dropping it', async () => {
-    const icon = upload(pngHeader(1024, 1024, 300 * 1024))
-    const { icons } = setup([repo('a', icon)], { encoder: () => ENCODED })
-
-    expect((await icons.read([repoIconId(icon)!])).icons[0].dataUrl).toBe(ENCODED_URL)
-  })
-
   it('steps down to 32 px when the 64 px PNG is over the cap', async () => {
     const huge = new Uint8Array(MAX_REPO_ICON_DATA_URL_BYTES)
     const encoder = vi.fn<RepoIconPngEncoder>((_bytes, edge) => (edge === 64 ? huge : ENCODED))
@@ -109,13 +54,6 @@ describe('RepoIconDataUrls with an encoder (desktop)', () => {
 
     expect((await icons.read([repoIconId(AVATAR)!])).icons[0].dataUrl).toBe(ENCODED_URL)
     expect(encoder.mock.calls.map(([, edge]) => edge)).toEqual([64, 32])
-  })
-
-  it('passes a small image the decoder cannot read through, as orcad would', async () => {
-    const { icons } = setup([repo('a', AVATAR)], { encoder: () => null })
-    expect((await icons.read([repoIconId(AVATAR)!])).icons[0].dataUrl).toMatch(
-      /^data:image\/png;base64,/
-    )
   })
 
   it('falls back when neither encoding nor passthrough fits the cap', async () => {

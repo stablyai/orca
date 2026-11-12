@@ -5,7 +5,10 @@ import {
 } from '../pr-refresh-error-classification'
 import { classifyGhError } from '../gh-utils'
 // Keep real error parsing available when tests mock gh-utils.
-import { extractExecError, parseRetryAfterMs } from '../../git/exec-error'
+import {
+  extractExecError,
+  parseRetryAfterMs
+} from '../../git/command-runner/process-capture/exec-error'
 export function isNoPullRequestError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
   return /no pull requests? found|could not find.*pull request/i.test(message)

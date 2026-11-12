@@ -9,7 +9,7 @@ import {
   getDefaultSetupDecision,
   type SetupConfig
 } from '../../../../../../shared/orca-hook-setup-config'
-import { settleComposerSubmit } from '../../../composer-submit-cancellation'
+import { settleComposerSubmit } from '../composer-submit-cancellation'
 
 type SetupRepo = { hookSettings?: RepoHookSettings }
 type SetupReadOutcome =

@@ -15,7 +15,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../shared/sourc
 import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
 import { copilotUnavailableModelRetryPlan } from './copilot-unavailable-model-retry'
 import { runLocalPlanForAgent } from './source-control-local-generation'
-import { runOpenCodeTextTask } from '../opencode/opencode-text-task'
+import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
 import { emptyResultFailure } from './source-control-agent-failure'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
 import type {

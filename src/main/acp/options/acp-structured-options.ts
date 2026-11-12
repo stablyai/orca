@@ -250,10 +250,7 @@ export class AcpStructuredOptions {
         model.id === currentModel
           ? { efforts: sessionEfforts }
           : (modelOption || effortOption) && !advertised
-            ? {
-                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
-                effortsKnown: false as const
-              }
+            ? { efforts: [], effortsKnown: false as const }
             : { efforts: [] }
       return {
         ...model,

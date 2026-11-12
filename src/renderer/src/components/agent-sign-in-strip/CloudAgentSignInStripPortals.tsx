@@ -40,6 +40,24 @@ import { CloudRunningStripPortal } from './CloudRunningStripPortal'
 
 const ABANDON_CHECK_MS = 1_000
 
+/**
+ * NOACCT-MISLABEL: a held launch is given up only when its tab is really gone (closed). A pane that
+ * unmounts because its workspace is off screen (parked, another workspace, Settings) keeps waiting:
+ * its strip and the sidebar mark come back with it. Cancelling it there showed "The agent didn't
+ * start" for a create whose agent simply isn't set up.
+ */
+export function shouldAbandonCloudHold(args: {
+  paneConnected: boolean
+  tabOpen: boolean
+}): boolean {
+  return !args.paneConnected && !args.tabOpen
+}
+
+function isTabOpen(tabId: string): boolean {
+  const tabsByWorktree = useAppStore.getState().tabsByWorktree
+  return Object.values(tabsByWorktree).some((tabs) => tabs?.some((tab) => tab.id === tabId))
+}
+
 export { isOrcaCloudEnvironmentId }
 
 /** Pane keys whose #40228 gate is on an Orca Cloud host; those panes show the strip instead. */
@@ -93,7 +111,10 @@ function CloudStripPortal({
     return () => {
       setTimeout(() => {
         if (!pane.container.isConnected) {
-          if (readCloudAgentHold(key)) {
+          if (
+            readCloudAgentHold(key) &&
+            shouldAbandonCloudHold({ paneConnected: false, tabOpen: isTabOpen(tabId) })
+          ) {
             releaseCloudAgentHold(key, 'cancel')
           }
           if (readAgentSignInGate(paneKey)) {
@@ -102,7 +123,7 @@ function CloudStripPortal({
         }
       }, ABANDON_CHECK_MS)
     }
-  }, [active, key, paneKey, pane.container])
+  }, [active, key, paneKey, pane.container, tabId])
   if (!hold && !cloudGate) {
     return null
   }

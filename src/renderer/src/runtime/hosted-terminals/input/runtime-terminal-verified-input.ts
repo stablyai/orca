@@ -17,7 +17,7 @@ export async function sendRuntimePtyInputVerified(
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind,
-  options?: { requireWriteSettlement?: true }
+  options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
 ): Promise<boolean> {
   const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
   if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
@@ -53,7 +53,10 @@ export async function sendRuntimePtyInputVerified(
         terminal,
         text: data,
         client: DESKTOP_RUNTIME_CLIENT,
-        ...(options?.requireWriteSettlement ? { requireWriteSettlement: true } : {})
+        ...(options?.requireWriteSettlement ? { requireWriteSettlement: true } : {}),
+        ...(options?.requireStartupDialog !== undefined
+          ? { requireStartupDialog: options.requireStartupDialog }
+          : {})
       },
       { timeoutMs: 15_000 }
     )

@@ -14,7 +14,7 @@ import { TriangleAlert, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
 import { useAppStore } from '@/store'
 

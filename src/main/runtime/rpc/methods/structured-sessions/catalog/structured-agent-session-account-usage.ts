@@ -9,7 +9,7 @@ import type { RateLimitState } from '../../../../../../shared/rate-limit-types'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
 import { buildCodexResetCreditExpectedScope } from '../../../../../../shared/codex-reset-credit-scope'
 import { getSystemCodexHomePath } from '../../../../../codex/configuration/homes/codex-home-paths'
-import { getSelectedCodexAccountIdForTarget } from '../../../../../codex-accounts/runtime-selection'
+import { getSelectedCodexAccountIdForTarget } from '../../../../../codex-accounts/account-management/runtime-selection'
 import {
   isCodexMethodNotFoundError,
   isCodexAppServerUnsupportedError

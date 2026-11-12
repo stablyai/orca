@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
 import { PROFILE_STATE_DATABASE_FILE_NAME } from '../../shared/profile-state-storage-paths'
-import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
-import { readProfileStateDomain } from '../persistence/profile-state/profile-state-domain-reader'
-import { classifyProfileStateStorage } from '../persistence/profile-state/profile-state-storage-classification'
+import { getActiveProfileStateLocation } from '../persistence/profile-state/offline-access/profile-state-active-location'
+import { readProfileStateDomain } from '../persistence/profile-state/documents/profile-state-domain-reader'
+import { classifyProfileStateStorage } from '../persistence/profile-state/database/profile-state-storage-classification'
 
 /** Inspect SSH targets without creating, locking or migrating state owned by the next serve host. */
 export function serveProfileHasSshTargets(userDataPath: string): boolean {

@@ -1,5 +1,5 @@
 import { app, powerMonitor } from 'electron'
-import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
+import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { recordQuickOpenFileVisit } from '@/lib/quick-open-file-history'
+import { recordQuickOpenFileVisit } from '@/lib/files/search/quick-open-file-history'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from './editor-panel-content-types'
 

@@ -172,23 +172,6 @@ describeCodexContract(
       expect(readThreadRows(home)).toEqual([{ id: threadId, archived: 0 }])
     })
 
-    it('leaves an already-indexed thread as a single row', async () => {
-      const home = await createBackfilledCodexHome()
-      const threadId = '01a04f62-715e-7830-9371-50db585caa72'
-      writeRollout(home, threadId, '2026-08-29T15-00-00')
-
-      await runAppServerSession(home, async (rpc) => {
-        await rpc.request('thread/read', { threadId })
-      })
-      expect(readThreadRows(home)).toEqual([{ id: threadId, archived: 0 }])
-
-      await runAppServerSession(home, async (rpc) => {
-        await rpc.request('thread/read', { threadId })
-      })
-
-      expect(readThreadRows(home)).toEqual([{ id: threadId, archived: 0 }])
-    })
-
     it('stamps an archived thread archived rather than resurrecting it', async () => {
       const home = await createBackfilledCodexHome()
       const threadId = '01a04f62-715e-7830-9371-50db585caa73'

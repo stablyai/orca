@@ -13,7 +13,7 @@ import { SettingsSegmentedControl } from '@/components/settings/form-controls/Se
 import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { repoLabel, type MemberDirectory } from './cloud-workspace-format'
 import type { CloudWorkspaceRoutineRuns } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { OrcaCloudTrialUsedUpBanner } from '../new-workspace/run-on/OrcaCloudTrialUsedUpNotice'

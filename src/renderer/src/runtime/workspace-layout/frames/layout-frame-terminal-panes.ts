@@ -1,6 +1,6 @@
 // Expose main-framed terminal ownership without importing frame sync into window-owned builds.
 
-import type { PublishedTab } from '../../../../../shared/workspace-layout/workspace-layout-published'
+import type { PublishedTab } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 type TerminalPane = { tabId: string; leafId: string; ptyId: string }
 

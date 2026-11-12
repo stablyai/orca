@@ -3,7 +3,7 @@ import { GitPullRequestArrow, Loader2, Play } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { environmentCheckCopy } from '@/components/worktree-creation/environment-check-copy'
-import type { CloudSetupNotice } from '@/lib/ephemeral-vm-environment-check-triage'
+import type { CloudSetupNotice } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-triage'
 import {
   dismissCloudSetupNotice,
   useCloudSetupNoticesSnapshot,

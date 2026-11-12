@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { returnFocusToWorkspace } from './cloud-focus-return'
 import {
   MENU_FOCUS_RETURN_MS,

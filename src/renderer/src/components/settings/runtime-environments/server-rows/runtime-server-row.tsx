@@ -10,7 +10,7 @@ import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-ser
 import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
 import { getRuntimeServerProblemLine, getRuntimeServerRoute } from './runtime-server-row-meta'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { LoadingSpinner } from '../../../LoadingSpinner'
 import { Button } from '../../../ui/button'
 import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-details'

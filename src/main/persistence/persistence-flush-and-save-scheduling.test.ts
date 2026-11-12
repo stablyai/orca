@@ -16,7 +16,7 @@ import { makeTerminalTab, TEST_LEAF_1 } from './persistence-session-fixtures'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { _resetTracerForTests } from '../observability/tracer'
-import { _resetPtyBindingSpanSamplingForTests } from './loading-store/pty-binding-span'
+import { _resetPtyBindingSpanSamplingForTests } from './loading-store/terminal-bindings/pty-binding-span'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

@@ -11,6 +11,8 @@ export type BrowserAgentActivityEvent = {
   active: boolean
   /** Set while an SSH host's orca CLI drives the page through the desktop browser bridge. */
   controllerHostLabel?: string
+  /** The chat whose agent sent the command; absent for older CLIs, remote hosts and terminal agents. */
+  agentSessionId?: string
 }
 
 /** Where the agent is about to act, in the page's CSS px. */

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 /**
  * Loading placeholder shaped like the content it stands in for. Uses the --skeleton token so it

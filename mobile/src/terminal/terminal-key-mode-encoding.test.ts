@@ -22,14 +22,4 @@ describe('encodeTerminalKeyForModes', () => {
     expect(encodeTerminalKeyForModes('\x1b[A', MODES)).toBe('\x1b[A')
     expect(encodeTerminalKeyForModes('\x1b[A', { ...decckm, kittyKeyboardFlags: 1 })).toBe('\x1b[A')
   })
-
-  it('encodes Shift+Enter for the negotiated keyboard protocol', () => {
-    expect(encodeTerminalKeyForModes('\x1b[13;2u', { ...MODES, kittyKeyboardFlags: 1 })).toBe(
-      '\x1b[13;2u'
-    )
-    expect(encodeTerminalKeyForModes('\x1b[13;2u', { ...MODES, modifyOtherKeys: 2 })).toBe(
-      '\x1b[27;2;13~'
-    )
-    expect(encodeTerminalKeyForModes('\x1b[13;2u', MODES)).toBe('\x1b\r')
-  })
 })

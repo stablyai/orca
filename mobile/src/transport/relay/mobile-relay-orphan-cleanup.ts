@@ -1,5 +1,5 @@
-import { scheduleHostCredentialCleanup } from '../hosts/host-credential-cleanup'
-import { removeMobileRelayHostRouting } from '../hosts/mobile-relay-host-overlay-store'
+import { scheduleHostCredentialCleanup } from '../../host-credentials/host-credential-cleanup'
+import { removeMobileRelayHostRouting } from '../../host-catalog/mobile-relay-host-overlay-store'
 
 export async function scheduleOrphanedMobileRelayCleanup(args: {
   hostIds: string[]

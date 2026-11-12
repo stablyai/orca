@@ -33,7 +33,7 @@ import {
   StepHeaderRow
 } from './BuildLogRows'
 import { FOCUS_RING } from '../orca-cloud/cloud-focus'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { BuildStatusIcon, stepStatusFromBuild, useNow } from './BuildStatusIcon'
 import { buildStatusLabel, isBuildInProgress } from './cloud-environment-copy'
 import type { EnvironmentBuildStep, EnvironmentBuildView } from './cloud-environment-types'

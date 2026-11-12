@@ -4,8 +4,8 @@ import { CircleDot, GitPullRequest, GitPullRequestClosed, LoaderCircle } from 'l
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRepoRoutingTarget,

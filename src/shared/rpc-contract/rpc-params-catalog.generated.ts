@@ -44,6 +44,7 @@ import {
   LocalCommandSettleParamsSchema
 } from '../local-commands/local-command-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
+import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
 import { OrcaCloudEnrollDeviceParamsSchema } from '../orca-cloud-device-enrollment-contract'
 import { OrcadDiskUsageParamsSchema } from '../orcad-disk-usage'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
@@ -53,7 +54,11 @@ import {
   OrcadPeerDesktopsParamsSchema
 } from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
-import { CrewSubscribeParams } from '../orchestration/orchestration-crew'
+import {
+  CrewSubscribeParams,
+  WorkerApprovalsSubscribeParams
+} from '../orchestration/orchestration-crew'
+import { PeerRunCancelParams } from '../orchestration/remote-owned-wire'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
 import { PairingRevokeDeviceParamsSchema } from '../remote-runtime/pairing/pairing-revoke-device-contract'
@@ -104,6 +109,7 @@ import { ReadVisualParams } from './agent-session-visual-params'
 import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
+  AiVaultPrepareSessionHandoffParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from './ai-vault-params'
@@ -502,6 +508,7 @@ import {
   OrcadMigrationCatalogReferenceParams,
   OrcadMigrationCommitCatalogParams
 } from './orcad-migration-params'
+import { ApprovalAnswerParams } from './orchestration-approval-answer-params'
 import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
@@ -706,6 +713,7 @@ import {
 import { RenameParams } from './structured-agent-session-rename-params'
 import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
 import { SubscribeParams } from './structured-agent-session-subscribe-params'
+import { TerminalInferCodexQuestionSkip } from './terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
@@ -754,6 +762,7 @@ import {
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
 import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
+import { WorkspaceCleanupScanParams } from './workspace-cleanup-scan-params'
 import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
 import {
   LayoutApplyParams,
@@ -927,6 +936,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
   'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
+  'aiVault.prepareSessionHandoff': AiVaultPrepareSessionHandoffParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
   'aiVault.searchSessions': AiVaultSearchRequestSchema,
@@ -1029,6 +1039,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.storage.session.clear': ExpectUrlBrowserTarget,
   'browser.storage.session.get': StorageKey,
   'browser.storage.session.set': StorageKeyValue,
+  'browser.tabAnnotations': BrowserTarget,
   'browser.tabClose': TabClose,
   'browser.tabCreate': BrowserTabCreateParams,
   'browser.tabCurrent': TabCurrent,
@@ -1152,6 +1163,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'folderWorkspace.update': FolderWorkspaceUpdate,
   'git.abortMerge': WorktreeSelectorOfGitParams,
   'git.abortRebase': WorktreeSelectorOfGitParams,
+  'git.atRiskLocalFiles': WorktreeSelectorOfGitParams,
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,
@@ -1383,6 +1395,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileRelay.projectSections': null,
   'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
+  'mobileWeb.bundle.localeCatalog': MobileWebBundleLocaleCatalogParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
   'nativeChat.readSession': NativeChatSession,
@@ -1409,6 +1422,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orcad.migration.stageSnapshotChunk': OrcadMigrationSnapshotChunkRequestSchema,
   'orcad.terminalCensus': OrcadTerminalCensusParamsSchema,
   'orcad.workVerdict': OrcadWorkVerdictParamsSchema,
+  'orchestration.approvalAnswer': ApprovalAnswerParams,
   'orchestration.ask': AskParams,
   'orchestration.callerShow': null,
   'orchestration.check': CheckParams,
@@ -1435,6 +1449,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.peerMailAck': PeerMailAckParams,
   'orchestration.peerMailDeliver': PeerMailDeliverParams,
   'orchestration.peerMailPull': PeerMailPullParams,
+  'orchestration.peerRunCancel': PeerRunCancelParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,
@@ -1450,6 +1465,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.taskList': TaskListParams,
   'orchestration.turnSender': null,
   'orchestration.workerAbandon': WorkerDispatchParams,
+  'orchestration.workerApprovalsSubscribe': WorkerApprovalsSubscribeParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
@@ -1638,6 +1654,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.focus': TerminalFocus,
   'terminal.getAutoRestoreFit': TerminalGetAutoRestoreFitParams,
   'terminal.getDisplayMode': TerminalHandle,
+  'terminal.inferCodexQuestionSkip': TerminalInferCodexQuestionSkip,
   'terminal.inspectProcess': TerminalInspectProcess,
   'terminal.isRunningAgent': TerminalHandle,
   'terminal.list': TerminalListParams,
@@ -1686,6 +1703,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'workspaceCleanup.scan': WorkspaceCleanupScanParams,
   'workspacePorts.forwardTunnel': WorkspacePortForwardTunnelParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,

@@ -10,7 +10,7 @@ import {
   type RecipeStepProvider,
   type RecipeStepProviderResult
 } from '../../shared/ephemeral-vm-recipe-step-providers'
-import { getRemoteUrl } from '../git/repo'
+import { getRemoteUrl } from '../git/remotes/repo-remote-queries'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import {

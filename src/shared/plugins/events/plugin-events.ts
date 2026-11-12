@@ -7,6 +7,7 @@ import {
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
   pluginWorkspaceContextSchema
 } from '../workers/plugin-host-api'
+import { pluginEditorTypographySchema } from '../workers/plugin-host-api-editor-typography'
 
 /**
  * Payload contracts for the v0 plugin event set (workspace lifecycle + agent
@@ -77,7 +78,8 @@ export const PLUGIN_EVENT_PAYLOAD_SCHEMAS = {
   'workspace.created': workspaceCreatedPayloadSchema,
   'workspace.removed': workspaceRemovedPayloadSchema,
   'agent.status.changed': agentStatusChangedPayloadSchema,
-  'workspace.changed': workspaceChangedPayloadSchema
+  'workspace.changed': workspaceChangedPayloadSchema,
+  'editor.typography.changed': pluginEditorTypographySchema
 } satisfies Record<PluginEventName, z.ZodType>
 
 /** One line per event for the generated reference and author typings. */
@@ -87,7 +89,9 @@ export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
   'agent.status.changed':
     'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it.',
   'workspace.changed':
-    'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.'
+    'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.',
+  'editor.typography.changed':
+    "What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability."
 }
 
 export type PluginEventPayload<E extends PluginEventName> = z.infer<

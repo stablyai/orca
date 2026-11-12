@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { TeammateUsage } from '../../../../shared/cloud-workspaces/team-presence-wire'
 import { formatSandboxHours, sandboxHours } from '../cloud-workspaces/cloud-workspace-format'
 import { calendarDate, layoutHeatmap, type HeatmapCell } from './teammate-heatmap'

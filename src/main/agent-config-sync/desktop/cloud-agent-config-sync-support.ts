@@ -11,7 +11,8 @@ export const MAX_EXCLUDED = 1024
 export const DEFAULT_PREFERENCES: CloudAgentConfigSyncPreferences = {
   autoSync: false,
   shareAcrossAgents: false,
-  excluded: []
+  excluded: [],
+  optedIn: []
 }
 
 export class RuntimeCallError extends Error {
@@ -41,19 +42,23 @@ export async function trackedAgentConfigPaths(repoPath: string): Promise<Readonl
   return new Set(stdout.split('\0').filter(Boolean))
 }
 
+function keysOf(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((key): key is string => typeof key === 'string' && key.length <= 300)
+        .slice(0, MAX_EXCLUDED)
+    : []
+}
+
 export function parsePreferences(text: string): CloudAgentConfigSyncPreferences {
   const raw: unknown = JSON.parse(text)
   if (!raw || typeof raw !== 'object') {
-    return { ...DEFAULT_PREFERENCES, excluded: [] }
+    return { ...DEFAULT_PREFERENCES, excluded: [], optedIn: [] }
   }
   return {
     autoSync: 'autoSync' in raw && raw.autoSync === true,
     shareAcrossAgents: 'shareAcrossAgents' in raw && raw.shareAcrossAgents === true,
-    excluded:
-      'excluded' in raw && Array.isArray(raw.excluded)
-        ? raw.excluded
-            .filter((key): key is string => typeof key === 'string' && key.length <= 300)
-            .slice(0, MAX_EXCLUDED)
-        : []
+    excluded: keysOf('excluded' in raw ? raw.excluded : undefined),
+    optedIn: keysOf('optedIn' in raw ? raw.optedIn : undefined)
   }
 }

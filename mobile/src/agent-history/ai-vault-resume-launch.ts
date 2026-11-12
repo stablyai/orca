@@ -16,7 +16,7 @@ import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agen
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import {
   reviewTerminalCreateRun,
@@ -78,7 +78,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
 }
 
 export async function resumeAiVaultSessionInTerminal(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   launch: MobileAiVaultResumeLaunch & {
     clientMutationId?: string

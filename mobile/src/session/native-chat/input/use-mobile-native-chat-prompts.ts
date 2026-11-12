@@ -14,7 +14,7 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat/na
 import {
   useMobileStructuredAsyncQuestion,
   type MobileStructuredAskSession
-} from '../../use-mobile-structured-async-question'
+} from './use-mobile-structured-async-question'
 
 export type MobileNativeChatPrompts = {
   /** A terminal chat's approval; a structured chat's journal prompts are its own cards. */

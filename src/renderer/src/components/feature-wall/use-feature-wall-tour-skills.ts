@@ -5,7 +5,7 @@ import {
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
 
 type DiscoveryTarget = NonNullable<Parameters<typeof useInstalledAgentSkill>[1]>['discoveryTarget']
 

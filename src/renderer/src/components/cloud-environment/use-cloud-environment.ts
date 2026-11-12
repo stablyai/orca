@@ -11,7 +11,7 @@ import { draftFromEnvironment, draftPatch, upsertBuild } from './environment-dra
 import { useEnvironmentStaleness } from './use-environment-staleness'
 import { idleActions, type ActionState } from './environment-action-state'
 import { mergeBuildsByRecency, settledEnvironmentsApi } from './environment-api-safety'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 /** Builds advance server-side; while one runs, re-read the history this often (the log streams). */
 const IN_PROGRESS_POLL_MS = 8_000

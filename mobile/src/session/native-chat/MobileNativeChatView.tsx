@@ -22,19 +22,19 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatInputLockStatus } from './composer/MobileNativeChatInputLockStatus'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
-import { MobileNativeChatEmptyStateView } from '../MobileNativeChatEmptyStateView'
-import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
-import { mobileNativeChatListHeader } from './mobile-native-chat-list-header'
+import { MobileNativeChatEmptyStateView } from './transcript/MobileNativeChatEmptyStateView'
+import { mobileNativeChatListFooter } from './transcript/mobile-native-chat-list-footer'
+import { mobileNativeChatListHeader } from './transcript/mobile-native-chat-list-header'
 import {
   mobileNativeChatEmptyState,
   type MobileNativeChatPendingItem
-} from './mobile-native-chat-render-data'
+} from './transcript/mobile-native-chat-render-data'
 import { useMobileNativeChatTransientData } from './transcript/use-mobile-native-chat-transient-data'
 import { useMobileNativeChatRowKeys } from './transcript/mobile-native-chat-row-keys'
 import { useMobileNativeChatPinchGesture } from './transcript/use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTailFollow } from './transcript/use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './transcript/use-mobile-native-chat-turn-disclosure'
-import { mobileNativeChatComposerPlaceholder } from './use-mobile-native-chat-input-lease'
+import { mobileNativeChatComposerPlaceholder } from './composer/use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './transcript/MobileNativeChatLiveLine'
 import { MobileNativeChatAwaitingInputRow } from './transcript/MobileNativeChatAwaitingInputRow'
 import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
@@ -43,9 +43,9 @@ import type { PendingNativeChatImage } from './composer/mobile-native-chat-image
 import type { MobilePastedImages } from './composer/mobile-native-chat-composer-paste'
 import {
   MobileNativeChatDraftComposer,
-  type MobileNativeChatSendProps,
-  type MobileNativeChatStructuredComposer
+  type MobileNativeChatSendProps
 } from './composer/MobileNativeChatComposer'
+import type { MobileNativeChatStructuredComposer } from './composer/mobile-native-chat-structured-composer'
 import { MobileNativeChatPromptCard } from './input/MobileNativeChatPromptCard'
 import type { MobileNativeChatMicProps } from './composer/MobileNativeChatComposerMic'
 import { useMobileNativeChatPromptInputOwner } from './input/use-mobile-native-chat-prompt-input-owner'
@@ -54,11 +54,11 @@ import {
   type ComposerTrayProps
 } from './composer/use-mobile-native-chat-composer-tray'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
-import { MobileNativeChatScrollRootsBoundary } from '../MobileNativeChatScrollRootsBoundary'
+import { MobileNativeChatScrollRootsBoundary } from './transcript/MobileNativeChatScrollRootsBoundary'
 import { MobileNativeChatRowList } from './transcript/MobileNativeChatRowList'
 import { useMobileNativeChatRowRenderer } from './transcript/use-mobile-native-chat-row-renderer'
-import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
-import type { OlderPagePhase } from '../use-mobile-older-page-loader'
+import type { MobileNativeChatStatus } from './mobile-native-chat-session-status'
+import type { OlderPagePhase } from './transcript/use-mobile-older-page-loader'
 import { MobileNativeChatOpenFileContext } from './mobile-native-chat-open-file-context'
 import { MobileNativeChatLowerRegion } from './MobileNativeChatLowerRegion'
 import { MobileNativeChatOfflineQueue } from './input/MobileNativeChatOfflineQueue'

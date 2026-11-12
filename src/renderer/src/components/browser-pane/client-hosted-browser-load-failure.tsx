@@ -11,11 +11,14 @@ import {
 
 /** A client-hosted page's failure page; its Retry and auto-retry re-attempt the load in the local guest. */
 export function ClientHostedBrowserLoadFailure({
+  shown,
   browserTab,
   isActive,
   onRetry,
   runtimeEnvironmentId
 }: {
+  /** False while the pane shows its unavailable notice instead (or there is no failure). */
+  shown: boolean
   browserTab: BrowserPageState
   isActive: boolean
   onRetry: () => void
@@ -25,7 +28,7 @@ export function ClientHostedBrowserLoadFailure({
     (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
   const sandboxNotAwake = useSetupScriptAsleepCloud(browserTab.worktreeId)
-  if (!browserTab.loadError) {
+  if (!shown || !browserTab.loadError) {
     return null
   }
   // Why: name the URL that failed, not the page still loaded behind it.

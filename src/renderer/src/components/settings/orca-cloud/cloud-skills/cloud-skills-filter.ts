@@ -1,4 +1,8 @@
 import {
+  AGENT_CONFIG_OPT_IN_KINDS,
+  type AgentConfigSyncRow
+} from '../../../../../../shared/agent-config-sync/agent-config-sync-contract'
+import {
   cloudSkillsEntryCount,
   cloudSkillsEntryKeys,
   cloudSkillsRowToggleable,
@@ -63,4 +67,20 @@ export function cloudSkillsFilterGroups(
 
 export function cloudSkillsFilterIsEmpty(groups: CloudSkillsGroups): boolean {
   return allEntries(groups).length === 0
+}
+
+/** The switch state for every row: an opt-in item (memory) is off until the user turned it on. */
+export function cloudSkillsEffectiveExcluded(
+  rows: readonly AgentConfigSyncRow[],
+  excluded: readonly string[],
+  optedIn: readonly string[]
+): ReadonlySet<string> {
+  const on = new Set(optedIn)
+  const off = new Set(excluded)
+  for (const row of rows) {
+    if (AGENT_CONFIG_OPT_IN_KINDS.has(row.kind) && !on.has(row.key)) {
+      off.add(row.key)
+    }
+  }
+  return off
 }

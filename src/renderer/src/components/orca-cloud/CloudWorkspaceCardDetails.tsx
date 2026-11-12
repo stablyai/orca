@@ -4,7 +4,7 @@ import React from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getIntlLocale } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   formatBytes,
   formatDuration,

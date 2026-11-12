@@ -6,7 +6,7 @@ import { PickerModal } from '../components/PickerModal'
 import { useConnectedHostPicker } from '../components/use-connected-host-picker'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { homeListStyles as styles } from './home-list-styles'
 
 type HomeHostSectionProps = {

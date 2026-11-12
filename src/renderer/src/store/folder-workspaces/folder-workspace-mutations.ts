@@ -20,7 +20,7 @@ import {
 import { FolderWorkspaceUpdateCoordinator } from './folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
-import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
+import { holdCreatedSidebarWorkspace } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
 import {
   folderWorkspaceOwnerTarget,
   folderWorkspaceUpdateInvalidatesPathStatus,

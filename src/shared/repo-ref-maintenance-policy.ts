@@ -1,13 +1,13 @@
 import type { PackIndexMaintenanceOutcome } from './repo-pack-index-maintenance-policy'
 
-/** Compensate for Orca fetches disabling Git auto-maintenance: pack loose refs after a quiet period.
+/** Compensate for Orca fetches disabling Git auto-maintenance: pack loose refs at an idle opportunity.
  * Execution hosts own Git/filesystem access and supply host-scoped target identities. */
 
 /** Conservative threshold for unsolicited maintenance; well above Git 2.47’s files-backend heuristic
  * (~76 refs for the motivating 4.1 MB packed-refs). Packing smaller backlogs costs more than it saves. */
 export const LOOSE_REF_PACK_THRESHOLD = 1000
 
-/** No fetch, create, or other tracked write on the repo for this long. */
+/** Initial opportunity delay; explicit user ref work restarts it. */
 export const REF_MAINTENANCE_QUIET_PERIOD_MS = 10 * 60_000
 
 /** Packing empties the backlog; there is nothing to do again for a long while. */
@@ -113,4 +113,18 @@ export class RefMaintenanceRepoLocked extends Error {
     super(`packed-refs.lock is held: ${detail}`)
     this.name = 'RefMaintenanceRepoLocked'
   }
+}
+
+/** Activity retains debt at capped backoff; failed probes retire until the next arm. */
+export const REF_MAINTENANCE_LIMITS = {
+  deferrals: 6,
+  backoffMultiplier: 8,
+  trackedRepos: 64
+} as const
+
+export type TrackedRepo = {
+  target: RepoRefMaintenanceTarget
+  timer: ReturnType<typeof setTimeout> | null
+  deferrals: number
+  superseded?: boolean
 }

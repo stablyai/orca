@@ -17,6 +17,10 @@ export const ONE_BYTE_UNMINIFIED_OUTPUT = {
 const GUEST_PRELOADS = [
   { entry: 'src/preload/browser-extension-preload.ts', fileName: 'browser-extension-preload.js' },
   { entry: 'src/preload/browser-guest.ts', fileName: 'browser-guest-preload.js' },
+  {
+    entry: 'src/preload/browser-passkey-request.ts',
+    fileName: 'browser-passkey-request-preload.js'
+  },
   { entry: 'src/preload/doc-preview-link.ts', fileName: 'doc-preview-link-preload.js' },
   { entry: 'src/preload/plugin-frame-guest.ts', fileName: 'plugin-frame-guest-preload.js' }
 ]

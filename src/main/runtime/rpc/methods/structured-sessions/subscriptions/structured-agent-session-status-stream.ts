@@ -15,7 +15,7 @@ export function bindStructuredAgentSessionStream(
   ctx: RpcContext,
   subscriptionId: string,
   onClose: () => void
-): { isClosed: () => boolean } {
+): { isClosed: () => boolean; close: () => void } {
   let closed = false
   let releaseTransportSubscription = (): void => {}
   const onTransportAbort = (): void => releaseTransportSubscription()
@@ -40,7 +40,7 @@ export function bindStructuredAgentSessionStream(
   if (ctx.signal?.aborted) {
     onTransportAbort()
   }
-  return { isClosed: () => closed }
+  return { isClosed: () => closed, close: () => releaseTransportSubscription() }
 }
 
 export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [

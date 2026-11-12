@@ -14,7 +14,7 @@ import {
 import { parsePluginGitInstallInput } from '../../shared/plugins/installation/plugin-git-install-input'
 import type { PluginInstallSourceInfo } from '../../shared/plugins/installation/plugin-install-source-info'
 import type { PluginInstallSource } from '../../shared/plugins/installation/plugin-install-lockfile'
-import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
+import type { RpcCallerIdentity } from '../runtime/rpc/callers/rpc-caller-identity'
 import type { PluginPolicySource } from './plugin-activation-policy'
 import {
   installCatalogReleaseWithApproval,

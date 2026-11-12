@@ -3,12 +3,12 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import {
   hasClosedTerminalTabRecord,
   recordClosedTerminalTabTombstone
-} from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+} from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { TerminalSurfaceCloseTarget } from '../../../../shared/workspace-layout/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import {
   closeTerminalTabInWorkspaceSession,
   type WorkspaceSessionTerminalTabCloseResult

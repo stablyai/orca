@@ -12,7 +12,7 @@ import {
 import {
   finishMobileNativeChatMessages,
   foldMobileNativeChatMessages
-} from '../mobile-native-chat-render-data'
+} from './mobile-native-chat-render-data'
 import {
   prepareMobileNativeChatSources,
   type MobileNativeChatProjectionSource

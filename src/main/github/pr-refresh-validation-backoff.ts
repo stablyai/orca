@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
-import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
+import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 
 const VALIDATION_BACKOFF_TTL_MS = 5 * 60_000
 const MAX_VALIDATION_BACKOFF_ENTRIES = 256

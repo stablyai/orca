@@ -1,8 +1,8 @@
 import { pendingEditorEntityIds } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 // Patch framed workspaces, reusing equal objects to avoid rerenders and retaining window-owned terminal/editor/page state. Every built patch applies and records staged browser handover (L284).
 
-import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../../../shared/workspace-layout/workspace-layout-beside'
-import { stableJson } from '../../../../../shared/workspace-layout/workspace-layout-load-report'
+import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { stableJson } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { isEditorTabContentType } from '../../slices/editor/tabs/editor-tab-content-type'
 import type { AppState } from '../../types'

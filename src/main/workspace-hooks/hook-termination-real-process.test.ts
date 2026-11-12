@@ -27,7 +27,7 @@ async function survivorsAfterDeadline(
   )
   let pids: number[] = []
   try {
-    const result = await runHook('archive', dir, REPO, dir, undefined, 400)
+    const result = await runHook('archive', dir, REPO, dir, undefined, { timeoutMs: 400 })
     expect(result.success).toBe(false)
     expect(existsSync(pidFile)).toBe(true)
     pids = readFileSync(pidFile, 'utf8').trim().split(/\s+/).map(Number)

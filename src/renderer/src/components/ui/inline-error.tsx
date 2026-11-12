@@ -1,6 +1,6 @@
 import React from 'react'
 import { CircleAlert, Info, RotateCw } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from './button'
 
 type InlineErrorProps = {

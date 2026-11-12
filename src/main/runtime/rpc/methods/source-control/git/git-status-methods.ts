@@ -74,6 +74,13 @@ export const GIT_STATUS_METHODS = [
     }
   }),
   defineMethod({
+    name: 'git.atRiskLocalFiles',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime, signal }) =>
+      runtime.readRuntimeWorktreeAtRiskLocalFiles(params.worktree, signal)
+  }),
+  defineMethod({
     name: 'git.conflictOperation',
     permission: 'workspace',
     params: WorktreeSelector,

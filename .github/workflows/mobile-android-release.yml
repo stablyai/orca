@@ -284,7 +284,7 @@ jobs:
               "${{ steps.apk.outputs.checksum }}"
           fi
 
-  # Advisory like the site bump: a failed mirror only leaves onorca.dev's "mirror link" on the prior APK.
+  # Advisory like the site bump: a failed mirror only leaves orca.dev's "mirror link" on the prior APK.
   release-mirror-r2:
     needs: android-build
     if: needs.android-build.outputs.publish_release == 'true'

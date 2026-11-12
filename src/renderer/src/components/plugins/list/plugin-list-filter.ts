@@ -34,7 +34,8 @@ const KIND_BY_CATEGORY: Readonly<Record<string, PluginFilterKind>> = {
   panels: 'commands',
   'vm-recipes': 'machines',
   machines: 'machines',
-  recipes: 'machines'
+  recipes: 'machines',
+  games: 'games'
 }
 
 const PLUGIN_FILTER_KINDS = [
@@ -43,7 +44,8 @@ const PLUGIN_FILTER_KINDS = [
   'icons',
   'editors',
   'commands',
-  'machines'
+  'machines',
+  'games'
 ] as const
 export type PluginFilterKind = (typeof PLUGIN_FILTER_KINDS)[number]
 

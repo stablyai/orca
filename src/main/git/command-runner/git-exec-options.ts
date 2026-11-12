@@ -3,8 +3,6 @@ export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 
-export type { GitAdmissionTier }
-
 export type GitExecOptions = {
   cwd: string
   encoding?: BufferEncoding | 'buffer'

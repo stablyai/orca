@@ -1,7 +1,7 @@
 // The status (dot and text) of a cloud agent row that needs sign-in: clicking it opens
 // Settings → Agent accounts, where the fix lives. The rest of the row still opens the pane.
 import React, { useCallback } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { STATE_INDICATOR_TOOLTIP_DELAY_MS } from '@/components/StateIndicatorTooltip'

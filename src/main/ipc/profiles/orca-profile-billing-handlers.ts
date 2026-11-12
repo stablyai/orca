@@ -10,10 +10,10 @@ import type {
   OrcaBillingTrialClaimResult,
   OrcaBillingUsageHistoryResult
 } from '../../../shared/orca-billing'
+import type { OrcaPlanCatalogResult } from '../../../shared/orca-billing-plans'
 import {
   ORCA_BILLING_INTERVALS,
   ORCA_BILLING_MAX_SEATS,
-  ORCA_BILLING_PLAN_IDS,
   ORCA_BILLING_TEAM_PLANS_MAX_ORGS
 } from '../../../shared/orca-billing'
 import {
@@ -21,6 +21,7 @@ import {
   getOrcaBillingStatus,
   getOrcaBillingTeamPlans,
   getOrcaBillingUsageHistory,
+  getOrcaPlanCatalog,
   openOrcaBillingCheckout,
   openOrcaBillingPortal,
   setOrcaBillingOverage
@@ -46,7 +47,8 @@ import {
 
 const CheckoutArgs = z
   .object({
-    plan: z.enum(ORCA_BILLING_PLAN_IDS),
+    // A plan id from billing's catalog (GET /v1/plans); billing decides what it sells.
+    plan: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
     interval: z.enum(ORCA_BILLING_INTERVALS),
     seats: z.number().int().min(1).max(ORCA_BILLING_MAX_SEATS),
     setupSessionId: z.string().regex(CLOUD_SETUP_SESSION_ID).optional()
@@ -157,6 +159,9 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
     }
     return result
   })
+  ipcMain.handle('orcaProfiles:billingPlans', async (): Promise<OrcaPlanCatalogResult> =>
+    getOrcaPlanCatalog(getProfileUserDataPath())
+  )
   ipcMain.handle(
     'orcaProfiles:billingOpenCheckout',
     async (_event, rawArgs: unknown): Promise<OrcaBillingOpenResult> =>

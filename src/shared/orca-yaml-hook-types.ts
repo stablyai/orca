@@ -70,6 +70,9 @@ export type OrcaVmRecipe = {
   timeoutSeconds?: OrcaVmRecipeTimeoutSeconds
   /** Built-in providers run in-process; the lifecycle strings are labels, never executed. */
   provider?: OrcaVmRecipeProviderId
+  // Opt-in allowlist of Orca's environment variables the scripts receive (plus a safe base set).
+  // Omitted means scripts inherit the full environment.
+  passEnv?: string[]
 }
 
 export type OrcaVmRecipeProviderId = 'orca-cloud'

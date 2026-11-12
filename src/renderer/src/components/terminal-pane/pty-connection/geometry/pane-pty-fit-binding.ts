@@ -1,6 +1,9 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { safeFit } from '@/lib/pane-manager/pane-fit'
-import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import {
+  bindPanePtyId,
+  getFitOverrideForPty
+} from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

@@ -11,7 +11,8 @@ import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
 } from '../../../terminals/recently-closed-terminal-tabs'
-import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
+import '../../tabs/worktree-layout-lifecycle'
+import { renameWorktreeLayoutKeys } from '../../tabs/rename-worktree-layout'
 import { replaceRecordEntries } from '../../../keyed-record-transitions'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 

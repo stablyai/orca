@@ -1,4 +1,4 @@
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 
 // Share lazy component identities across surfaces; a second lazy wrapper over the same module causes separate boundaries and remounts.
 export const MonacoEditor = lazy(() => import('./MonacoEditor'))
@@ -16,5 +16,5 @@ export const MediaViewer = lazy(() => import('./MediaViewer'))
 export const ImageDiffViewer = lazy(() => import('./diff/large-files/ImageDiffViewer'))
 export const MermaidViewer = lazy(() => import('./MermaidViewer'))
 export const CsvViewer = lazy(() => import('./csv/CsvViewer'))
-export const CsvPagedViewer = lazy(() => import('./csv/CsvPagedViewer'))
+export const CsvPagedViewer = lazy(() => import('./csv/preview/CsvPagedViewer'))
 export const IpynbViewer = lazy(() => import('./notebook/document/IpynbViewer'))

@@ -4,7 +4,7 @@ import type {
   BrowserScreencastResult
 } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/runtime-rpc-feature-interaction-source'
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import { isRemoteBrowserPageMissingCode } from './remote-browser-stream-errors'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
 

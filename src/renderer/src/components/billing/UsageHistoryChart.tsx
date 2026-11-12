@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { OrcaBillingUsageHistory } from '../../../../shared/orca-billing'
 import {
   usageBarPercent,

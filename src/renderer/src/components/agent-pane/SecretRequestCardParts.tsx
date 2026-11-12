@@ -10,7 +10,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { cloudSecretScopeLabel } from '@/components/settings/cloud-secrets/cloud-secrets-copy'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { SecretRequestScope } from '../../../../shared/secret-request-contract'
 
 const NAME_SLOT = '\u0000'

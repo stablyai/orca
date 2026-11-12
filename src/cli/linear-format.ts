@@ -25,6 +25,7 @@ import {
   formatLinearProjectListRows,
   linearProjectListWarningLines
 } from '../shared/linear/project-list-format'
+import { padEndToTerminalWidth } from '../shared/terminal/display-width/terminal-display-width'
 import { terminalSafeLine as safe } from '../shared/terminal/output/terminal-safe-text'
 
 export function formatLinearIssue(result: LinearIssueContextResult): string {
@@ -89,7 +90,7 @@ export function formatLinearTeamList(result: LinearTeamListResult): string {
   return result.teams
     .map((team) => {
       const workspace = team.workspace ? ` ${safe(team.workspace.name)}` : ''
-      return `${safe(team.key).padEnd(10)} ${safe(team.name)}${workspace}`
+      return `${padEndToTerminalWidth(safe(team.key), 10)} ${safe(team.name)}${workspace}`
     })
     .join('\n')
 }
@@ -99,7 +100,10 @@ export function formatLinearTeamMembers(result: LinearTeamMembersResult): string
     return `No Linear members found for ${safe(result.team.key)}.`
   }
   return result.members
-    .map((member) => `${safe(member.displayName ?? 'unknown').padEnd(24)} ${safe(member.id ?? '')}`)
+    .map(
+      (member) =>
+        `${padEndToTerminalWidth(safe(member.displayName ?? 'unknown'), 24)} ${safe(member.id ?? '')}`
+    )
     .join('\n')
 }
 
@@ -110,7 +114,7 @@ export function formatLinearTeamStates(result: LinearTeamStatesResult): string {
   return result.states
     .map(
       (state) =>
-        `${safe(state.name).padEnd(24)} ${safe(state.type ?? '').padEnd(12)} ${safe(state.id)}`
+        `${padEndToTerminalWidth(safe(state.name), 24)} ${padEndToTerminalWidth(safe(state.type ?? ''), 12)} ${safe(state.id)}`
     )
     .join('\n')
 }
@@ -119,7 +123,9 @@ export function formatLinearTeamLabels(result: LinearTeamLabelsResult): string {
   if (result.labels.length === 0) {
     return `No Linear labels found for ${safe(result.team.key)}.`
   }
-  return result.labels.map((label) => `${safe(label.name).padEnd(24)} ${safe(label.id)}`).join('\n')
+  return result.labels
+    .map((label) => `${padEndToTerminalWidth(safe(label.name), 24)} ${safe(label.id)}`)
+    .join('\n')
 }
 
 export function formatLinearIssueList(result: LinearIssueListResult): string {
@@ -265,7 +271,7 @@ export function printLinearProjectListWarnings(result: LinearProjectListResult):
 function formatSearchRow(issue: LinearSearchIssueSummary): string {
   const state = safe(issue.state?.name ?? 'unknown')
   const assignee = safe(issue.assignee?.displayName ?? 'unassigned')
-  return `${safe(issue.identifier).padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${safe(issue.title)}`
+  return `${padEndToTerminalWidth(safe(issue.identifier), 10)} ${padEndToTerminalWidth(state, 14)} ${padEndToTerminalWidth(assignee, 18)} ${safe(issue.title)}`
 }
 
 function formatPriority(priority: number | null | undefined): string {

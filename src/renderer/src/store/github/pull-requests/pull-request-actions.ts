@@ -5,7 +5,8 @@ import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubPRFallbackSource } from '../cache/cache-model'
 import { getHostedReviewCacheKey } from '../../slices/hosted-review/hosted-review-cache-identity'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
-import { prCacheKey } from '../cache/cache-identity'
+import '../cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/github-cache-key'
 import { isFresh } from '../cache/cache-policy'
 import { buildGitHubPRRefreshStateClearToken } from '../refresh/pr-refresh-state'
 import { githubHostedReviewFallbackPRNumber, prLookupHintKey } from './pr-result-routing'
@@ -29,7 +30,7 @@ export const createPullRequestActions = (
     )
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
-    const cacheKey = prCacheKey(
+    const cacheKey = getGitHubRepoCacheKey(
       repoPath,
       repoId,
       branch,

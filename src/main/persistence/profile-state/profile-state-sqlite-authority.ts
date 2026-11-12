@@ -4,38 +4,38 @@ import type {
   ProfileStateAuthorityInitialState,
   ProfileStateDomainReplacement,
   ProfileStateMaintenance
-} from '../loading-store/profile-state-authority'
+} from '../loading-store/profile-writing/profile-state-authority'
 import {
   importProfileStateJson,
   readAcceptedProfileStateParsedSnapshot,
   readProfileStateParsedSnapshot,
-  readProfileStateRevision,
   readProfileStateSnapshot
-} from './profile-state-documents'
+} from './documents/profile-state-documents'
+import { readProfileStateRevision } from './database/profile-state-revision'
 import {
   openWritableProfileStateDatabase,
   openProfileStateDatabaseReadOnly
-} from './profile-state-database'
-import { writeProfileStateDomains } from './profile-state-domain-writes'
+} from './database/profile-state-database'
+import { writeProfileStateDomains } from './documents/profile-state-domain-writes'
 import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction
-} from './profile-state-domain-write-validation'
+} from './documents/profile-state-domain-write-validation'
 import {
   parseProfileStateRoot,
   ProfileStateRevisionConflictError
-} from './profile-state-document-validation'
-import { assertProfileStateRevisionOnDisk } from './profile-state-revision-readmission'
+} from './documents/profile-state-document-validation'
+import { assertProfileStateRevisionOnDisk } from './database/profile-state-revision-readmission'
 import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine
-} from './profile-state-database-quarantine'
+} from './recovery/profile-state-database-quarantine'
 import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
-import { buildCompleteDocumentReplacements } from './profile-state-complete-replacements'
-import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
-import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
-import { ProfileStateLegacyDocumentRefresh } from './profile-state-legacy-document-refresh'
+import { buildCompleteDocumentReplacements } from './documents/profile-state-complete-replacements'
+import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
+import { ensureProfileStateAuthorityMarker } from './database/profile-state-authority-marker'
+import type { ProfileStateWriterInitialization } from './writer/profile-state-writer-protocol'
+import { ProfileStateLegacyDocumentRefresh } from './document-parts/profile-state-legacy-document-refresh'
 
 /** Reuse one writable handle; fenced domain commits preserve unchanged normalized rows. */
 export class ProfileStateSqliteAuthority implements ProfileStateAuthority {

@@ -1,9 +1,10 @@
-import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { lstat, readdir, realpath, stat } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import {
   AGENT_CONFIG_COMMAND_NAME,
   AGENT_CONFIG_FILE_PATH,
   AGENT_CONFIG_LIMITS,
+  AGENT_CONFIG_MEMORY_NAME,
   AGENT_CONFIG_PROJECT_KINDS,
   AGENT_CONFIG_SELF_PATH,
   AGENT_CONFIG_SKILL_NAME,
@@ -14,7 +15,8 @@ import {
 } from '../../../shared/agent-config-sync/agent-config-sync-contract'
 import { agentConfigDigest, type AgentConfigDigestEntry } from '../agent-config-digest'
 import { agentConfigRoot, type AgentConfigHomes } from '../agent-config-roots'
-import { hasSecretContent, isSecretFileName } from './agent-config-secret-scan'
+import { readItemFile } from './agent-config-item-file'
+import { readMemory } from './local-agent-memory-read'
 
 export type LocalAgentConfigItem = {
   scope: AgentConfigItemScope
@@ -25,6 +27,8 @@ export type LocalAgentConfigItem = {
   fileCount: number
   bytes: number
   withheldFiles: number
+  /** Memory only: imports of files outside its folder. */
+  localRefs?: number
   digest: string | null
   skipReason?: Extract<AgentConfigSkipReason, 'in-repo' | 'too-large' | 'secret' | 'invalid'>
 }
@@ -45,33 +49,6 @@ const SKILL_FILE = 'SKILL.md'
 type Walked =
   | { ok: true; files: AgentConfigDigestEntry[]; withheld: number; bytes: number }
   | { ok: false; reason: 'too-large' | 'secret' | 'invalid' }
-
-async function isExecutable(path: string): Promise<boolean> {
-  try {
-    return ((await stat(path)).mode & 0o111) !== 0
-  } catch {
-    return false
-  }
-}
-
-/** One file's verdict: kept, kept back as a likely secret, or too big for any skill. */
-async function readItemFile(
-  path: string,
-  name: string
-): Promise<'too-large' | 'withheld' | { bytes: Buffer; executable: boolean }> {
-  const info = await stat(path)
-  if (info.size > AGENT_CONFIG_LIMITS.fileBytes) {
-    return 'too-large'
-  }
-  if (isSecretFileName(name)) {
-    return 'withheld'
-  }
-  const bytes = await readFile(path)
-  if (hasSecretContent(bytes)) {
-    return 'withheld'
-  }
-  return { bytes, executable: await isExecutable(path) }
-}
 
 /** Every regular file in a skill folder; symlinks only when they stay inside it. */
 async function walkSkill(dir: string): Promise<Walked> {
@@ -211,7 +188,7 @@ async function readCommands(
   kind: AgentConfigItemKind,
   scope: AgentConfigItemScope
 ): Promise<LocalAgentConfigItem[]> {
-  const maxDepth = kind === 'codex-prompt' ? 0 : 2
+  const maxDepth = kind === 'claude-command' ? 2 : 0
   const items: LocalAgentConfigItem[] = []
   const visit = async (dir: string, depth: number): Promise<void> => {
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
@@ -277,9 +254,14 @@ export async function readLocalAgentConfig(
   const items: LocalAgentConfigItem[] = []
   for (const kind of AgentConfigItemKind.options) {
     const root = agentConfigRoot(kind, 'user', deps.homes, null)
-    if (root) {
-      items.push(...(await (isSkillKind(kind) ? readSkills : readCommands)(root, kind, 'user')))
+    if (!root) {
+      continue
     }
+    if (AGENT_CONFIG_MEMORY_NAME[kind]) {
+      items.push(...(await readMemory(root, kind)))
+      continue
+    }
+    items.push(...(await (isSkillKind(kind) ? readSkills : readCommands)(root, kind, 'user')))
   }
   const repoPath = deps.repoPath
   if (repoPath) {

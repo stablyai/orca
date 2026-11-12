@@ -1,6 +1,6 @@
-import { normalizeComparablePath } from '../usage/usage-path-comparison'
-import type { UsageScanWorktreeRef } from '../usage/usage-provider-contract'
-import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
+import { normalizeComparablePath } from '../usage/worktree-attribution/usage-path-comparison'
+import type { UsageScanWorktreeRef } from '../usage/provider-lifecycle/usage-provider-contract'
+import type { UsageWorktreeResolver } from '../usage/worktree-attribution/usage-worktree-resolver'
 import type { OpenCodeUsageAttributedEvent, OpenCodeUsageParsedEvent } from './types'
 
 export type OpenCodeUsageWorktreeRef = UsageScanWorktreeRef

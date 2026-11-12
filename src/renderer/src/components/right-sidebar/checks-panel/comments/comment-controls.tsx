@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
 import { basename } from '@/lib/path'

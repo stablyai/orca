@@ -3,13 +3,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildProfileStateCutoverFixture } from './profile-state-cutover-fixture'
-import type { ProfileStateOfflineLocation } from './profile-state/profile-state-offline-settings'
+import type { ProfileStateOfflineLocation } from './profile-state/offline-access/profile-state-offline-settings'
 import {
   createProfileStateStore,
   type ProfileStateStoreFactoryOptions,
   type ProfileStateStoreFactoryResult
-} from './profile-state/profile-state-store-factory'
-import { profileStateDatabaseFile } from './profile-state/profile-state-database'
+} from './profile-state/startup/profile-state-store-factory'
+import './profile-state/database/profile-state-database'
+import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
 
 vi.mock('electron', () => ({
   app: {

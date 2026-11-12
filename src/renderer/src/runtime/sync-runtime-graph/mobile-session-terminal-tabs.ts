@@ -1,5 +1,5 @@
 import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout/terminal-layout-normalization'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'

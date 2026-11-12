@@ -9,7 +9,7 @@ import {
 import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
 import { orcaCloudSandboxIdFor } from '../hosted-sandbox/orca-cloud-sandbox-id'
-import { claudeStateFile, readClaudeFolderLogin } from '../claude-accounts/claude-account-folder'
+import { claudeStateFile, readClaudeFolderLogin } from '../claude-accounts/sign-in/claude-account-folder'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
 import { createAgentCredentialsClient } from './agent-credentials-client'

@@ -1,7 +1,7 @@
 import React from 'react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
+import { getScreenSubmitModifierLabel } from '@/lib/keyboard/screen-submit-shortcut'
 import type { PrimaryAction } from './source-control-primary-action-types'
 
 // Show only useful tooltip context: blockers, counts, shortcuts, or the Create intent's hidden stage/commit/push steps.

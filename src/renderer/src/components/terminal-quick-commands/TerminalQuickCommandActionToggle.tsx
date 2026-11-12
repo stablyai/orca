@@ -1,5 +1,5 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { TerminalQuickCommandDialogAction } from './terminal-quick-command-dialog-draft'
 import { QUICK_COMMAND_TOGGLE_ITEM_CLASS } from './terminal-quick-command-toggle-style'
 import { useTranslate } from '@/i18n/use-translate'

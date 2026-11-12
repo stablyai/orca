@@ -1,4 +1,4 @@
-import { runKeyedSerializedOperation } from '../../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 
 export class StructuredAgentSessionTaskQueue {

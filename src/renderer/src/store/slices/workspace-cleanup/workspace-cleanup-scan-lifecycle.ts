@@ -26,6 +26,10 @@ import {
   isLatestWorkspaceCleanupScan
 } from './workspace-cleanup-scan-progress'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import {
+  cancelWorkspaceCleanupHostScan,
+  scanWorkspaceCleanupHosts
+} from './workspace-cleanup-host-scan'
 
 type SetState = (
   partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
@@ -38,7 +42,7 @@ export async function scanWorkspaceCleanup(
   args?: WorkspaceCleanupScanArgs
 ): Promise<WorkspaceCleanupScanResult> {
   if (args?.worktreeId !== undefined || args?.worktreeIds !== undefined) {
-    const scan = await window.api.workspaceCleanup.scan(args)
+    const scan = await scanWorkspaceCleanupHosts(args, get())
     const enriched = await enrichWorkspaceCleanupCandidates(scan.candidates, get(), {
       applyDismissals: false
     })
@@ -76,7 +80,7 @@ export async function scanWorkspaceCleanup(
 
   // Supersede changed fleet-scan keys instead of running concurrent scans; legacy suggestion and full-workspace modes remain independent.
   supersedeInFlightWorkspaceCleanupScans(
-    window.api.workspaceCleanup.cancelScan,
+    cancelWorkspaceCleanupHostScan,
     (key) => getWorkspaceCleanupScanKeyMode(key) === (scanArgs.includeAllWorkspaces === true)
   )
   set({
@@ -87,7 +91,7 @@ export async function scanWorkspaceCleanup(
   const scanToken = beginWorkspaceCleanupScan()
   const promise = (async () => {
     try {
-      const scan = await window.api.workspaceCleanup.scan(scanArgs, (progress) => {
+      const scan = await scanWorkspaceCleanupHosts(scanArgs, get(), (progress) => {
         enqueueWorkspaceCleanupProgress(progress, scanToken, get, set)
       })
       throwIfWorkspaceCleanupScanSuperseded(scanArgs.scanId)

@@ -1,4 +1,6 @@
 import type { AppState } from '../../types'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import {
@@ -64,7 +66,14 @@ export function getLinearReadScope(
 }
 
 export function getLinearSourceScope(source: RowLessSource): LinearReadScope {
-  const target = rowLessSourceTarget(source)
+  return buildLinearReadScope(source, rowLessSourceTarget(source))
+}
+
+export function getLinearTaskSourceScope(source: TaskSourceContext): LinearReadScope {
+  return buildLinearReadScope(source, taskSourceRuntimeTarget(source))
+}
+
+function buildLinearReadScope(source: RowLessSource, target: RuntimeClientTarget): LinearReadScope {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const runtimeKey = getEnvironmentRuntimeContextKey(environmentId)
   const cachePrefix = source.kind === 'task-source' ? getTaskSourceCacheScope(source) : null

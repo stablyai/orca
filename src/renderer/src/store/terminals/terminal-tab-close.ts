@@ -1,3 +1,7 @@
+import {
+  getTerminalNoticeLifetime,
+  retireTerminalNoticeLifetime
+} from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
 import { getRecentlyClosedTabPosition } from '../slices/tabs/recently-closed-tab-position'
@@ -38,6 +42,16 @@ export function createTerminalTabCloseActions(
         opts?.precomputedRetirementPlan?.tabId === tabId
           ? opts.precomputedRetirementPlan
           : buildTerminalTabRetirementPlan(get(), tabId)
+      const closingPtyIds = new Set([
+        ...retirementPlan.localOrSshPtyIds,
+        ...retirementPlan.runtimeTerminals.map((terminal) => terminal.ptyId),
+        ...retirementPlan.cleanupOnlyPtyIds,
+        ...retirementPlan.unroutablePtyIds
+      ])
+      const retiringNotices = [...closingPtyIds].flatMap((id) => {
+        const lifetime = getTerminalNoticeLifetime(id)
+        return lifetime ? [lifetime] : []
+      })
       let closingWorktreeId: string | null = null
       // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
       retireParkedTerminalTab(tabId)
@@ -193,12 +207,6 @@ export function createTerminalTabCloseActions(
           // Clear unconsumed snapshots/cold restores even if closed before pane mount to bound memory.
           let nextSnapshots = s.pendingSnapshotByPtyId
           let nextColdRestores = s.pendingColdRestoreByPtyId
-          const closingPtyIds = new Set([
-            ...retirementPlan.localOrSshPtyIds,
-            ...retirementPlan.runtimeTerminals.map((terminal) => terminal.ptyId),
-            ...retirementPlan.cleanupOnlyPtyIds,
-            ...retirementPlan.unroutablePtyIds
-          ])
           for (const closingId of closingPtyIds) {
             if (closingId in nextSnapshots) {
               nextSnapshots = { ...nextSnapshots }
@@ -260,6 +268,11 @@ export function createTerminalTabCloseActions(
           }
         })
       )
+      if (retiresSession) {
+        for (const lifetime of retiringNotices) {
+          retireTerminalNoticeLifetime(lifetime)
+        }
+      }
       if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
         // Switch point: main records the close through layout.apply.
         if (

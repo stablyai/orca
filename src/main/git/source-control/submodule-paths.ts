@@ -1,7 +1,11 @@
 import * as path from 'node:path'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
 import { iterateNulDelimitedFields } from '../../../shared/nul-delimited-fields'
 

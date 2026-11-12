@@ -5,7 +5,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   agentHostKindLabel,
   type AgentHostKind

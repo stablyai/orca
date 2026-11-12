@@ -8,7 +8,7 @@ import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in
 import type { AgentSourcesView } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { agentTurnEndedUncleanly } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { orcaCloudAgentCoverage } from './orca-cloud-agent-accounts-model'
 import {
   ensureFreshOrcaCloudAgentAccounts,

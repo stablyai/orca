@@ -1,4 +1,4 @@
-import type { LocalGitExecOptions } from '../../../git/repo-default-base-ref'
+import type { LocalGitExecOptions } from '../../../git/refs/resolution/repo-default-base-ref'
 import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'

@@ -1,20 +1,23 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import {
+  isLocalPathOpenBlocked,
+  showLocalPathOpenBlockedToast
+} from '@/lib/files/os-open/local-path-open-guard'
 import { openHttpLink } from '@/lib/browser/navigation/http-link-routing'
-import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
+import { getLinkSourceLocalOpenOwner } from '@/lib/links/ownership/link-source-local-open-owner'
 import { useAppStore } from '@/store/index'
 import {
   absolutePathToFileUri,
   resolveMarkdownLinkTarget
 } from '../../markdown/link-routing/markdown-internal-links'
 import { openMarkdownFileLinkWithSystemDefault } from '../../markdown/link-routing/markdown-file-link-system-open'
-import type { MarkdownPreviewLinkContext } from './markdown-preview-link-actions'
 import {
   getMarkdownPreviewLinkTarget,
   isMarkdownPreviewSystemBrowserModifier,
   resolveMarkdownPreviewHttpOpenOptions
 } from '../../markdown/link-routing/markdown-preview-links'
+import type { MarkdownPreviewLinkContext } from './markdown-preview-link-actions'
 
 export function handleMarkdownPreviewSystemLinkClick({
   event,

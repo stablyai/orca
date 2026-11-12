@@ -53,10 +53,9 @@ export function clipboardImageMountAdapters(
             mountFixture<Parameters<typeof attach>[1]>({
               client,
               terminal: TERMINAL,
-              deviceToken: name === 'anonymous' ? null : DEVICE_TOKEN,
+              deviceToken: DEVICE_TOKEN,
               getConnectionId: () => Promise.resolve(CONNECTION),
-              pickImage: () =>
-                Promise.resolve(name === 'cancelled' ? null : { base64: IMAGE_BASE64 }),
+              pickImage: () => Promise.resolve({ base64: IMAGE_BASE64 }),
               onUploadStart: () => effect('upload-start', {}),
               beforeTerminalSend: (terminal: string) => {
                 effect('before-terminal-send', { terminal })
@@ -91,11 +90,9 @@ export function clipboardImageMountAdapters(
               client,
               getConnectionId: () => Promise.resolve(CONNECTION),
               pickImages: () =>
-                name === 'cancelled'
-                  ? []
-                  : name === 'two'
-                    ? [{ base64: IMAGE_BASE64 }, { base64: IMAGE_BASE64, uri: 'file:///b.png' }]
-                    : [{ base64: IMAGE_BASE64, uri: 'file:///a.png' }],
+                name === 'two'
+                  ? [{ base64: IMAGE_BASE64 }, { base64: IMAGE_BASE64, uri: 'file:///b.png' }]
+                  : [{ base64: IMAGE_BASE64, uri: 'file:///a.png' }],
               onUploadStart: () => effect('upload-start', {}),
               onImageUploaded: (image) => effect('image-uploaded', image)
             })
@@ -125,10 +122,9 @@ export function clipboardImageMountAdapters(
             mountFixture<Parameters<typeof paste>[0]>({
               client,
               terminal: TERMINAL,
-              deviceToken: name === 'anonymous' ? null : DEVICE_TOKEN,
+              deviceToken: DEVICE_TOKEN,
               imagePaths: name === 'two' ? ['/tmp/a.png', '/tmp/b.png'] : ['/tmp/a.png'],
-              followedByText: name !== 'trailing',
-              ...(name === 'burst' ? { clearInput: '' } : {})
+              followedByText: true
             })
           ).then(
             (value: unknown) => {

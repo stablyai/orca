@@ -9,8 +9,11 @@ import {
   ensurePathWithinWorkspaceMock
 } from '../orca-runtime-test-mocks/setup.spec'
 import { createSetupRunnerScript } from '../../workspace-hooks/worktree-runner-script'
-import { shouldRunSetupForCreate } from '../../workspace-hooks/effective-hook-config'
-import { getEffectiveHooks } from '../../workspace-hooks/hooks'
+import {
+  getEffectiveHooksFromConfig,
+  shouldRunSetupForCreate
+} from '../../workspace-hooks/effective-hook-config'
+import { getEffectiveHooks, loadHooks } from '../../workspace-hooks/hooks'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
@@ -144,6 +147,12 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(getEffectiveHooks).mockImplementation((_repo, worktreePath) =>
       worktreePath ? { scripts: { setup: 'pnpm worktree:setup' } } : null
     )
+    vi.mocked(loadHooks).mockImplementation((path) =>
+      path === '/tmp/workspaces/runtime-branch-added-setup'
+        ? { scripts: { setup: 'pnpm worktree:setup' } }
+        : null
+    )
+    vi.mocked(getEffectiveHooksFromConfig).mockImplementation((_repo, yamlHooks) => yamlHooks)
     // Model an ask-policy repo that refuses an undecided create.
     vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => {
       if (decision === 'run' || decision === 'skip') {

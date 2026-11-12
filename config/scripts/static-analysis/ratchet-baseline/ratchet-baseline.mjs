@@ -195,7 +195,7 @@ export function runCountRatchet(ratchet, root, arg) {
   }
   if (shrunk.length > 0) {
     console.error(
-      `The baseline may only shrink. Fix it: pnpm check:${ratchet.name}-ratchet --prune`
+      `The baseline may only shrink. Fix it: ${ratchet.pruneCommand ?? `pnpm check:${ratchet.name}-ratchet --prune`}`
     )
   }
   if (grown.length + shrunk.length > 0) {

@@ -13,7 +13,7 @@ import {
 } from '@/components/settings/orca-cloud/orca-cloud-settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsNavSection, SettingsNavTarget } from '@/lib/settings-navigation-types'
+import type { SettingsNavSection, SettingsNavTarget } from '@/components/settings/navigation/settings-navigation-types'
 import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
 import {
   BookOpenText,

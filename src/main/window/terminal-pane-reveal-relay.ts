@@ -3,7 +3,7 @@ import { app, type BrowserWindow } from 'electron'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealTarget
-} from '../../shared/workspace-layout/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import { focusExistingMainWindow } from './focus-existing-window'
 import { requestRendererReply } from './renderer-reply-request'
 

@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { Check, CircleDashed, Minus } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AgentConfigSyncRow } from '../../../../../../shared/agent-config-sync/agent-config-sync-contract'
 import { SettingsSegmentedControl } from '../../form-controls/SettingsSegmentedControl'
 import {

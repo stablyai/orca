@@ -77,11 +77,12 @@ export function buildNativeChatRailItems(
       slot.kind !== 'message' ||
       slot.depth !== 0 ||
       slot.message.role !== 'user' ||
+      slot.message.from !== undefined ||
       slot.message.stoppedBeforeStart === true
     ) {
       continue
     }
-    const preview = nativeChatUserMessagePreview(slot.message.blocks)
+    const preview = nativeChatUserMessagePreview(slot.message)
     const hasImages = preview.imageCount > 0
     const prior = previous[items.length]
     items.push(

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { ProfileStateWriterError } from '../persistence/profile-state/profile-state-writer-errors'
+import { ProfileStateWriterError } from '../persistence/profile-state/writer/profile-state-writer-errors'
 
 const fixture = await vi.hoisted(async () => {
   const events = await import('node:events')
@@ -16,13 +16,13 @@ vi.mock('../window/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => fixture.background
 }))
 vi.mock('./main-process-state', () => ({ mainProcessState: fixture.state }))
-vi.mock('../persistence/profile-state/profile-state-writer-diagnostics', () => ({
+vi.mock('../persistence/profile-state/writer/profile-state-writer-diagnostics', () => ({
   recordProfileStateWriteFailureReport: vi.fn()
 }))
 
 const { reportProfileStateWriteFailure } = await import('./profile-state-write-failure')
 const { recordProfileStateWriteFailureReport } =
-  await import('../persistence/profile-state/profile-state-writer-diagnostics')
+  await import('../persistence/profile-state/writer/profile-state-writer-diagnostics')
 
 class FakeWindow extends EventEmitter {
   visible: boolean

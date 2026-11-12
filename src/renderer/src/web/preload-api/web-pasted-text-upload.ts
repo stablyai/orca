@@ -3,7 +3,7 @@ import {
   type AgentSessionAttachmentClipboardTarget
 } from '../../../../shared/agent-session/agent-session-attachments'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { holdBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { blobToBase64 } from '@/lib/clipboard/images/image-blob-png'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 

@@ -5,7 +5,7 @@ import type { TerminalTabTitleUpdate } from '@/store/terminals/terminal-tab-titl
 import type {
   PublishedTab,
   PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 /** Each retitled tab's change for the pane it shows, against the tab as the store showed it. */
 export function liveTitleUpdates(

@@ -14,8 +14,11 @@ import { getPtyIdForPaneKey } from '../../ipc/pty/pane/key-state'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 import type { ManagedHookDetectionSettings } from '../installation/managed-hook-detection-commands'
 import { installRemoteManagedAgentHooks } from '../installation/remote-managed-hook-installers'
-import { getOpenCode2PluginSource, getOpenCodePluginSource } from '../../opencode/hook-service'
-import { getPiAgentStatusExtensionSource } from '../../pi/agent-status-extension-source'
+import {
+  getOpenCode2PluginSource,
+  getOpenCodePluginSource
+} from '../../opencode/status-hooks/plugin-source/status-plugin-module-source'
+import { getPiAgentStatusExtensionSource } from '../../pi/managed-extensions/agent-status/agent-status-extension-source'
 import { codexHookService } from '../../codex/hooks/installation/hook-service'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import type { PluginSources } from '../../../wsl-guest/plugin-sources'

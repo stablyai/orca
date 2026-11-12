@@ -7,6 +7,9 @@ import { join } from 'node:path'
 import type { OrcadWorkVerdict } from '../../shared/hosted-sandbox/hosted-session-events'
 import { readOrcadWorkVerdict } from './orcad-work-verdict'
 
+// orcad wires the probes and starts the beacon together.
+export { installOrcadWorkProbes } from './orcad-work-verdict'
+
 export const WORK_VERDICT_BEACON_INTERVAL_MS = 60_000
 
 /** Same path as WORK_VERDICT_FILE in cloud/apps/sandbox-control/src/vm-activity.ts. */

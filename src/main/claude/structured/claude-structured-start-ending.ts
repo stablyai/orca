@@ -9,7 +9,7 @@ import type {
   StructuredAgentSessionProviderOpenResult
 } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { openClaudeStructuredSession } from './claude-structured-session-open'
-import { claudeStartFailure } from '../claude-startup-failure'
+import { claudeStartFailure } from '../sdk-transport/claude-startup-failure'
 import type { ClaudeSession, ClaudeSessionExit } from './claude-structured-session-state'
 
 /** Publishes an acquisition's session with its start ending admitted first, so its exit is never

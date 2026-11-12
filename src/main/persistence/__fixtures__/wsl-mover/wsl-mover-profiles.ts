@@ -2,7 +2,7 @@
 import type {
   WslMoveProjectionInput,
   WslMoveProjectionScope
-} from '../../moving-wsl-projects/wsl-move-state-projection'
+} from '../../moving-wsl-projects/manifest-scope/wsl-move-state-projection'
 import { foldersAndAutomationsWslMoverProfile } from './wsl-mover-folders-profile'
 import { heavyWslMoverProfile } from './wsl-mover-heavy-profile'
 import {

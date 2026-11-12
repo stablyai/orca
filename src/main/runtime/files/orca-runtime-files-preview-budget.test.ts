@@ -8,7 +8,7 @@ import {
   createRuntimeFileHost,
   useRuntimeFileHostLifecycle
 } from './runtime-file-host.test-fixture'
-import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './file-preview-budget'
+
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-rpc-content-budget'
 
 vi.mock('fs', async () => (await import('./runtime-file-command-mock-registry')).fsModuleMock())
@@ -22,7 +22,7 @@ vi.mock(
 vi.mock('../../ipc/filesystem/access/filesystem-auth', async () =>
   (await import('./runtime-file-command-mock-registry')).filesystemAuthModuleMock()
 )
-vi.mock('../../git/runner', async () =>
+vi.mock('../../git/command-runner/host-routing/wsl-aware-spawn', async () =>
   (await import('./runtime-file-command-mock-registry')).gitRunnerModuleMock()
 )
 vi.mock(
@@ -48,16 +48,6 @@ describe('RuntimeFileReads', () => {
       await writeFile(join(dir, 'logo.png'), Buffer.alloc(size, 0x61))
       return dir
     }
-
-    it('rejects a previewable image one byte above the cap', async () => {
-      const dir = await previewFixture(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES + 1)
-      const { commands } = createFileReads({ path: dir })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-
-      await expect(
-        commands.readFileExplorerPreview('id:wt-1', 'logo.png', REMOTE_RPC_MAX_CONTENT_BYTES)
-      ).rejects.toThrow('file_too_large')
-    })
 
     // Phones read images a chat names by host path; only image files on this machine qualify.
     it('reads a chat image outside every project root but never another file type', async () => {

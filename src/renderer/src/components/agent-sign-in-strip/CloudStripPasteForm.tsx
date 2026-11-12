@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { CloudStripModel } from './cloud-agent-strip-model'
 
 /** A pasted value that is a whole code (`code#state`) or the callback URL carrying one. */

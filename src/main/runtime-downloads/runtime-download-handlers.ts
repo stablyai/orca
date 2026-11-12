@@ -19,7 +19,7 @@ import {
   promoteDownloadedFile
 } from '../ipc/filesystem/filesystem-download-promotion'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
-import { markPluginSavedFileAsDownloaded as markFileAsDownloaded } from '../plugins/panels/plugin-save-as-download-mark'
+import { markPluginSavedFileAsDownloaded as markFileAsDownloaded } from '../plugins/panels/desktop-actions/plugin-save-as-download-mark'
 import {
   RuntimeDownloadError,
   transferRuntimeFile,

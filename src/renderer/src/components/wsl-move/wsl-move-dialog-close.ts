@@ -1,7 +1,7 @@
 /** Leaving the dialog: closing, or hiding what must not be lost, and the reload after a move. */
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { requestLazyChunkRecoveryReload } from '@/lib/lazy-chunk-recovery-reload'
+import { requestLazyChunkRecoveryReload } from '@/app-shell/startup/lazy-chunk-recovery-reload'
 import {
   getWslMoveDialog,
   invalidateWslMovePreviews,

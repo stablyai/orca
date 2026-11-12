@@ -9,17 +9,17 @@ import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import type { AgentListRowHandlers } from '../../agents/MobileAgentListRows'
-import type { HostCatalogEntry } from '../../transport/hosts/host-profile'
+import type { HostCatalogEntry } from '../../host-catalog/host-profile'
 import { MobileHomeAppUpdateCard } from '../MobileHomeAppUpdateCard'
 import { MobileHomeCloudSection } from '../MobileHomeCloudSection'
 import { MobileHomeEmptyState } from '../MobileHomeEmptyState'
 import { MobileHomeHostList } from '../MobileHomeHostList'
-import { MobileHomeNeedsYou } from '../MobileHomeNeedsYou'
+import { MobileHomeActiveAgents } from '../MobileHomeActiveAgents'
 import { MobileHomeTasksSection } from '../MobileHomeTasksSection'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { MobileHomeTabHeader } from './MobileHomeTabHeader'
 
-/** Home's first tab: agents that need you, the desktops, and Tasks. */
+/** Home's first tab: agents that need you or are working, the desktops, and Tasks. */
 export function MobileHomeFeedTab(props: {
   data: MobileHomeData
   bottomInset: number
@@ -65,7 +65,7 @@ export function MobileHomeFeedTab(props: {
       />
     )
   }
-  const needsYou = data.agentsNeedingYou.length > 0
+  const hasActiveAgents = data.activeAgents.length > 0
   return (
     <>
       {title}
@@ -76,8 +76,8 @@ export function MobileHomeFeedTab(props: {
           isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
         ]}
       >
-        <MobileHomeNeedsYou
-          rows={data.agentsNeedingYou}
+        <MobileHomeActiveAgents
+          rows={data.activeAgents}
           hosts={data.sortedHosts}
           now={data.agentList.now}
           handlers={props.agentHandlers}
@@ -85,7 +85,7 @@ export function MobileHomeFeedTab(props: {
         />
         <MobileHomeHostList
           autoConnectHostIds={data.autoConnectHostIds}
-          first={!needsYou}
+          first={!hasActiveAgents}
           hostAttempts={data.hostAttempts}
           hostLastConnected={data.hostLastConnected}
           hostConnections={data.hostConnections}

@@ -37,7 +37,7 @@ export async function subscribeRuntimeClientEvents(
   // Control-outage events are lost, not queued. First replay-tagged response is the only signal to resync event-derived mirrors such as per-environment SSH state.
   onReplayedAfterReconnect?: () => void,
   // Managed SSH hosts reach this desktop's browser through the desktop browser bridge instead.
-  options: { hostsBrowserPages: boolean } = { hostsBrowserPages: false }
+  options: { hostsBrowserPages: boolean; onClose?: () => void } = { hostsBrowserPages: false }
 ): Promise<RuntimeClientEventSubscription> {
   const handle = await subscribeRuntimeEnvironment(
     {
@@ -58,7 +58,8 @@ export async function subscribeRuntimeClientEvents(
           onReplayedAfterReconnect
         )
       },
-      onError
+      onError,
+      onClose: options.onClose
     }
   )
   return { unsubscribe: handle.unsubscribe }
@@ -140,6 +141,7 @@ function isRuntimeClientEvent(
       isNotificationAttentionAcknowledgement(message.acknowledgement)) ||
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
+    message.type === 'workspaceMetadataSet' ||
     message.type === 'nativeChatLaunchDraftResolved' ||
     message.type === 'terminalSideEffects' ||
     message.type === 'sshStateChanged' ||

@@ -13,10 +13,13 @@ import { useOrcaBillingStatus } from '../use-orca-billing-status'
 import { PlansDialogContent } from './PlansDialogContent'
 import { closePlansPage, usePlansPageState } from './plans-page-store'
 import { useOrgSeatCount } from './use-org-seat-count'
+import { usePlanCatalog } from './use-plan-catalog'
+import { resolvePlansModel } from './plans-model'
 
 /**
  * The plans page. A dialog because choosing a plan is a decision step in front of Checkout;
- * it reads the billing service's offers, so prices and limits are never hardcoded here.
+ * it reads billing's plan catalog (GET /v1/plans: Stripe's prices, the catalog's features), so
+ * prices and features are never hardcoded here.
  * Checkout itself runs on Stripe's hosted page in the browser; this dialog follows it and,
  * once paid, returns to the Orca Cloud wall that opened it, or hands over to the Team page.
  */
@@ -56,7 +59,9 @@ export function PlansDialogHost(): React.JSX.Element {
     )
   }
 
-  const team = billing.result?.status === 'ok' ? billing.result.entitlement.offers?.team : null
+  const catalog = usePlanCatalog(open)
+  const plans = resolvePlansModel(catalog.result, billing.result)
+  const team = plans.state === 'ready' ? plans.model.team : null
 
   return (
     <Dialog
@@ -75,16 +80,20 @@ export function PlansDialogHost(): React.JSX.Element {
       {open ? (
         <PlansDialogContent
           result={billing.result}
+          catalog={catalog.result}
           busy={busy}
           notice={notice}
           seats={seats}
-          onCheckout={({ interval, seats: count }) => {
+          onCheckout={({ planId, interval, seats: count }) => {
             setOrderedAt(Date.now())
-            checkout.start({ interval, seats: count })
+            checkout.start({ planId, interval, seats: count })
           }}
           onManage={() => void openPortal()}
           onContactSales={(url) => void window.api.shell.openUrl(url)}
-          onRetry={billing.refresh}
+          onRetry={() => {
+            billing.refresh()
+            catalog.refresh()
+          }}
           checkoutState={
             checkout.phase.kind === 'paid'
               ? 'paid'
@@ -99,7 +108,21 @@ export function PlansDialogHost(): React.JSX.Element {
                 phase={checkout.phase}
                 team={team}
                 now={orderedAt}
-                onReopen={checkout.reopen}
+                onReopen={() => {
+                  // Billing couldn't sell the plan: re-read the catalog (and plan state) first.
+                  if (
+                    checkout.phase.kind === 'open-failed' &&
+                    checkout.phase.result.status === 'plan-unavailable'
+                  ) {
+                    catalog.refresh()
+                    billing.refresh()
+                  }
+                  checkout.reopen()
+                }}
+                contactUrl={
+                  plans.state === 'ready' ? (plans.model.enterprise?.contactUrl ?? null) : null
+                }
+                onContact={(url) => void window.api.shell.openUrl(url)}
                 onKeepWaiting={checkout.keepWaiting}
                 onBack={() => {
                   checkout.reset()

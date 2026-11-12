@@ -10,7 +10,6 @@ import { agentOwnsTerminal, offerInterruptedTurnContinue } from './interrupted-t
 import { getPtyIdForPaneKey } from '@/hooks/pane-key-pty-id'
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-followup-delivery'
 import { sendBracketedPasteToRunningAgent } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
-import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isResumableTuiAgent } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -259,7 +258,6 @@ async function continueOne(turn: ArmedTurn, deps: ContinueDeps): Promise<boolean
       const sent = await deps.send({
         ptyId,
         agent: turn.agent,
-        expectedProcess: TUI_AGENT_CONFIG[turn.agent].expectedProcess,
         prompt: INTERRUPTED_TURN_CONTINUE_PROMPT
       })
       if (sent) {

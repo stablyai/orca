@@ -51,6 +51,8 @@ describe('OrcaRuntimeService', () => {
       withDurableRuntimeStore({
         ...runtimeStore,
         getFolderWorkspaces: () => [folderWorkspace],
+        getFolderWorkspace: (id: string) =>
+          id === folderWorkspace.id ? folderWorkspace : undefined,
         getProjectGroups: () => [projectGroup],
         flushOrThrow: vi.fn()
       }),

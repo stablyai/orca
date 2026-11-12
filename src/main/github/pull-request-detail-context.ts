@@ -3,9 +3,14 @@ import type {
   GitHubAssignableUser,
   GitHubPRFileViewedState
 } from '../../shared/github/pull-request-types'
-import { extractExecError } from '../git/exec-error'
-import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-utils'
-import type { LocalGitExecOptions } from './gh-utils'
+import { extractExecError } from '../git/command-runner/process-capture/exec-error'
+import {
+  ghExecFileAsync,
+  ghRepoExecOptions,
+  githubRepoContext,
+  type LocalGitExecOptions
+} from './gh-utils'
+
 import { githubHostExecOptions, type GitHubApiRepository } from './github-api-repository'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 import { getWorkItemParticipants } from './work-item-participants'

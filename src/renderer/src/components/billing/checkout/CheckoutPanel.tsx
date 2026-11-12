@@ -3,20 +3,28 @@ import { AlertCircle, Check, ExternalLink, Lock, RotateCcw, XCircle } from 'luci
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import type { OrcaBillingOffers } from '../../../../../shared/orca-billing'
+import { cn } from '@/lib/class-names'
 import { openFailureCopy } from '../plan-billing-copy'
 import { formatCents, periodTotalCents } from '../plans/plans-pricing'
 import type { CheckoutPhase } from './checkout-flow'
 
 export type CheckoutPanelProps = {
   phase: Exclude<CheckoutPhase, { kind: 'idle' }>
-  team: OrcaBillingOffers['team']
+  /** The plan's name and per-seat prices (billing's catalog, or an older service's offers). */
+  team: {
+    label: string
+    monthlyPriceCentsPerSeat: number | null
+    annualPriceCentsPerSeat: number | null
+    currency?: string
+  }
   /** When the order was placed; the renewal date counts from it. */
   now: number
   onReopen: () => void
   onKeepWaiting: () => void
   onBack: () => void
+  /** Where "Contact us" goes when billing can't sell the plan (the catalog's Enterprise contact). */
+  contactUrl?: string | null
+  onContact?: (url: string) => void
 }
 
 function OrderSummary({
@@ -60,7 +68,7 @@ function OrderSummary({
                     {
                       count: seats,
                       seats: seatCount,
-                      price: formatCents(perSeat, locale),
+                      price: formatCents(perSeat, locale, team.currency),
                       defaultValue_one: '{{seats}} × {{price}} per seat, billed yearly'
                     }
                   )
@@ -70,7 +78,7 @@ function OrderSummary({
                     {
                       count: seats,
                       seats: seatCount,
-                      price: formatCents(perSeat, locale),
+                      price: formatCents(perSeat, locale, team.currency),
                       defaultValue_one: '{{seats}} × {{price}} per seat per month'
                     }
                   )}
@@ -83,7 +91,7 @@ function OrderSummary({
               : t('auto.components.billing.checkout.dueToday', 'Due today')}
           </dt>
           <dd className="text-base font-semibold tabular-nums">
-            {total === null ? '—' : formatCents(total, locale)}
+            {total === null ? '—' : formatCents(total, locale, team.currency)}
           </dd>
         </div>
       </dl>
@@ -200,7 +208,13 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
       )
       break
     case 'open-failed':
-      title = t('auto.components.billing.checkout.openFailed', 'Checkout didn’t open')
+      title =
+        phase.result.status === 'plan-unavailable'
+          ? t(
+              'auto.components.billing.checkout.planUnavailableTitle',
+              'This plan isn’t available right now'
+            )
+          : t('auto.components.billing.checkout.openFailed', 'Checkout didn’t open')
       body =
         openFailureCopy(phase.result, t) ??
         t('auto.components.billing.openFailed', 'Could not reach billing. Try again.')
@@ -242,7 +256,10 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
           id={bodyId}
           className={cn(
             'max-w-sm text-sm text-pretty',
-            phase.kind === 'open-failed' ? 'text-destructive' : 'text-muted-foreground'
+            // Unavailable is not the buyer's error: the title and icon carry it, the body stays muted.
+            phase.kind === 'open-failed' && phase.result.status !== 'plan-unavailable'
+              ? 'text-destructive'
+              : 'text-muted-foreground'
           )}
         >
           {body}
@@ -254,6 +271,19 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
       {phase.kind === 'paid' ? null : (
         <div className="flex flex-wrap items-center justify-center gap-2">
           {phase.kind === 'opening' ? null : reopen}
+          {phase.kind === 'open-failed' &&
+          phase.result.status === 'plan-unavailable' &&
+          props.contactUrl &&
+          props.onContact ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => props.contactUrl && props.onContact?.(props.contactUrl)}
+            >
+              {t('auto.components.billing.checkout.contactUs', 'Contact us')}
+              <ExternalLink />
+            </Button>
+          ) : null}
           {phase.kind === 'timed-out' ? (
             <Button type="button" variant="outline" onClick={props.onKeepWaiting}>
               {t('auto.components.billing.checkout.keepWaiting', 'Keep waiting')}

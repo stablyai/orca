@@ -1,3 +1,4 @@
+import { useMobileNativeChatGeneratedImageAnswers } from './use-mobile-native-chat-generated-image-answers'
 import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diffs'
 import type { MobileNativeChatTurnRow } from './use-mobile-native-chat-row-props'
 import { useCallback, useMemo, useState } from 'react'
@@ -23,7 +24,7 @@ import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../src/shar
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
-import type { MobileNativeChatRunPresentation } from '../mobile-native-chat-run-descriptors'
+import type { MobileNativeChatRunPresentation } from './mobile-native-chat-run-descriptors'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -99,7 +100,13 @@ export function useMobileNativeChatTurnDisclosure({
   liveLine: MobileNativeChatLiveLine | null
   onToggleReasoning: (key: string) => void
 } {
-  const { rows, turnKeys, liveTurnKey, unresolvedRowIds, partialTurnKey } = useMemo(() => {
+  const {
+    rows: sourceRows,
+    turnKeys,
+    liveTurnKey,
+    unresolvedRowIds,
+    partialTurnKey
+  } = useMemo(() => {
     if (!enabled) {
       return {
         rows: messages,
@@ -118,6 +125,23 @@ export function useMobileNativeChatTurnDisclosure({
       unresolvedRowIds: membership.unresolvedRowIds
     }
   }, [enabled, messages, turnJournal])
+  const turnStatuses = useMobileNativeChatTurnStatus({
+    turnKeys,
+    liveTurnKey,
+    enabled,
+    isWorking,
+    workingStartedAt,
+    settledTurns,
+    thinking,
+    scopeKey
+  })
+  const { active, activeTurnKey, completedByTurn } = turnStatuses
+  const rows = useMobileNativeChatGeneratedImageAnswers(
+    enabled,
+    sourceRows,
+    turnKeys,
+    completedByTurn
+  )
   const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
   const waiting = useMemo(() => {
     const ids = enabled
@@ -138,23 +162,12 @@ export function useMobileNativeChatTurnDisclosure({
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
   }, [enabled, rows, stopping, turnJournal])
-  const turnStatuses = useMobileNativeChatTurnStatus({
-    turnKeys,
-    liveTurnKey,
-    enabled,
-    isWorking,
-    workingStartedAt,
-    settledTurns,
-    thinking,
-    scopeKey
-  })
   const [expandedTurnIds, toggleExpandedTurn] = useScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useScopedOpenKeys(scopeKey)
   const [openSubagentGroups, toggleSubagentGroup] = useScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
 
-  const { active, activeTurnKey, completedByTurn } = turnStatuses
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
       isNativeChatRowInLiveWorkingTurn(

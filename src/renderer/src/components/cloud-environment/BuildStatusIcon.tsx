@@ -9,10 +9,10 @@ import {
   MinusCircle,
   Pause
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { StepStatus } from './build-steps'
 import type { EnvironmentBuildStatus } from './cloud-environment-types'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 export function stepStatusFromBuild(status: EnvironmentBuildStatus): StepStatus {
   if (status === 'starting' || status === 'running' || status === 'snapshotting') {

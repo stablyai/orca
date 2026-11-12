@@ -79,12 +79,14 @@ export function NewWorkspaceComposerFooter({
             onClick={() => void onCreate()}
             disabled={createDisabled}
             size="sm"
+            // Why: the title already says what is created; the button keeps the full name for AT.
+            aria-label={primaryActionLabel}
             {...(needsRepo ? { 'aria-describedby': ORCA_CLOUD_NEEDS_REPO_ID } : {})}
           >
             {/* The footer's compact type, as before; the Button keeps its own variant styling. */}
             <span className="flex items-center gap-1.5 whitespace-nowrap text-xs">
               {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              {primaryActionLabel}
+              {t('auto.components.NewWorkspaceComposerFooter.create', 'Create')}
               <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
             </span>
           </Button>

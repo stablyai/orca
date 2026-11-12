@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import { connect, type ConnectOptions } from '../transport/rpc/direct-rpc-connect'
-import { resolvePairingHostIdentity, savePairedHost } from '../transport/hosts/host-store'
+import { resolvePairingHostIdentity, savePairedHost } from '../host-catalog/host-store'
 import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
@@ -21,7 +21,7 @@ import { settleMobileRelayPairingRecovery } from './mobile-relay-pairing-recover
 import {
   promotePairingJournalCredential,
   writeMobileRelayCredentialBundle
-} from '../transport/hosts/mobile-relay-credential-bundle'
+} from '../host-credentials/mobile-relay-credential-bundle'
 import {
   connectMobileRelayForPairing,
   type PairingCandidateClient
@@ -33,7 +33,7 @@ import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate
 import { createPairingRelayLogger } from '../diagnostics/connection/pairing-relay-log'
 import { redactSocketEndpoint } from '../diagnostics/connection/socket-event-debug'
 import { assertCommittedInstall, directHost, relayHost } from './pairing-relay-host'
-import { recordHostDescriptorFromStatus } from '../transport/hosts/host-descriptor-recorder'
+import { recordHostDescriptorFromStatus } from '../host-descriptors/host-descriptor-recorder'
 import { adoptExchangedToken, exchangePairingTicket } from './pairing-ticket-exchange'
 import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 

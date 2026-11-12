@@ -8,7 +8,7 @@ import {
   startedAgentSender
 } from '../../../orchestration/workers/launch/worker-start-card'
 import type { RpcContext } from '../../core'
-import { isAgentRpcCaller } from '../../rpc-caller-identity'
+import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
 
 /** An agent that hands work to another from its chat leaves a card there linking to it.
  *  Display bookkeeping: nothing here refuses, holds or fails the launch, whose result passes through. */

@@ -4,7 +4,7 @@ import { matchesRecentTabSwitcherChord } from '../../../../../../shared/window-s
 import {
   globalShortcutTargetYields,
   findPluginCommandForKeybinding
-} from '@/lib/plugin-command-keybindings'
+} from '@/lib/plugins/commands/plugin-command-keybindings'
 import { getKeybindingContext } from '../../../terminal-workspace-model'
 import {
   ModifierDoubleTapDetector,
@@ -19,7 +19,7 @@ import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/na
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { resolveKeyboardWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
+import { resolveKeyboardWorkspaceId } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId

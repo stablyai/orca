@@ -1,4 +1,5 @@
-import type { RemoteDesktopPageState } from '../../../shared/hosted-sandbox/cloud-remote-desktop'
+import type { RemoteDesktopBrowserApi } from './remote-desktop-browser-api'
+import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
@@ -77,7 +78,7 @@ import type {
   BrowserClientPageRendererRequest
 } from '../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
-export type BrowserApi = {
+export type BrowserApi = RemoteDesktopBrowserApi & {
   /** Absent on clients that host no browser guests, including web clients. */
   readClientHostId?: () => string | null
   onClientPageRendererRequest?: (
@@ -85,6 +86,11 @@ export type BrowserApi = {
       request: BrowserClientPageRendererRequest
     ) => BrowserClientPageRendererOutcome | Promise<BrowserClientPageRendererOutcome>
   ) => () => void
+  getGuestMetadata: (args: {
+    browserPageId: string
+    webContentsId: number
+  }) => Promise<BrowserGuestMetadata | null | undefined>
+  onGuestMetadata: (callback: (state: BrowserGuestMetadata) => void) => () => void
   registerGuest: (args: {
     browserPageId: string
     workspaceId: string
@@ -213,10 +219,6 @@ export type BrowserApi = {
   ) => () => void
   /** Escape pressed in a focused page; the page also receives it unless a grab pick is running. */
   onGuestEscape: (callback: (args: { browserPageId: string }) => void) => () => void
-  /** A browser page became (or stopped being) a remote desktop, or gained or lost the keyboard. */
-  onRemoteDesktopState: (callback: (args: RemoteDesktopPageState) => void) => () => void
-  /** The release chord was pressed in a remote desktop: give the keyboard back to Orca. */
-  onRemoteDesktopRelease: (callback: (args: { browserPageId: string }) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
   onSessionProfilesChanged: (callback: () => void) => () => void
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */

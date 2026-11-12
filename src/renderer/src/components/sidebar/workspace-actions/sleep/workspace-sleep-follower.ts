@@ -1,15 +1,15 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { sleepWorktreeBrowserTabs, wakeWorktreeBrowserTabs } from './browser-tab-sleep'
 import {
   captureWorkspaceSelection,
-  restoreWorkspaceSelection,
-  type WorkspaceSelection
+  restoreWorkspaceSelection
 } from '@/lib/workspace/ownership/active-workspace-host'
+import type { WorkspaceSelection } from '@/lib/workspace/ownership/active-workspace-host'
 import {
   clearWorktreeSleepIntent,
   markWorktreeSleepIntent,
   withWorktreeSleepTeardown
-} from '@/lib/worktree-sleep-intent'
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   clearWorktreeGoingToSleep,
   clearWorktreeKeptAwake,
@@ -30,10 +30,10 @@ import {
 } from '@/lib/worktree-sleep-wake-request'
 import { endWorkspaceWake } from '@/components/terminal-pane/input/wake-input-buffer'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
-import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
-import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace-sleep'
 import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-position'
 import { toastWorkspaceSleepOutcome } from './sleep-worktree-flow'
+import type { HostTerminalStop } from '@/store/terminals/terminal-actions'
+import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace-sleep'
 import { holdActiveCloudSleepView } from './workspace-sleep-view-hold'
 
 type FollowedSleep = {

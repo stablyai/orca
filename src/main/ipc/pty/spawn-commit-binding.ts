@@ -1,5 +1,5 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { PersistPtyBindingArgs } from '../../persistence/loading-store/pty-binding-persistence'
+import type { PersistPtyBindingArgs } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/workspace-session/terminal-session-state-save-failure'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'

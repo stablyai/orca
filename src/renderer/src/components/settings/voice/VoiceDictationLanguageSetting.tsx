@@ -21,11 +21,18 @@ function describeLanguageSetting(
   intlLocale?: string
 ): string {
   if (model && modelIgnoresLanguage) {
-    return t(
-      'components.settings.voice.dictationLanguage.ignored',
-      '{{model}} only transcribes the languages it was built for, so it ignores this setting.',
-      { model: model.label }
-    )
+    // Models without a language hint either know one language or work out which of theirs you speak.
+    return model.languages.length === 1
+      ? t(
+          'components.settings.voice.dictationLanguage.alwaysUses',
+          'The language you speak. {{model}} always uses {{language}}.',
+          { model: model.label, language: languageDisplayName(model.languages[0], intlLocale) }
+        )
+      : t(
+          'components.settings.voice.dictationLanguage.detectsItself',
+          'The language you speak. {{model}} detects it by itself.',
+          { model: model.label }
+        )
   }
   if (model && language !== DICTATION_LANGUAGE_AUTO && !engineDictationLanguage(model, language)) {
     return t(
@@ -35,8 +42,8 @@ function describeLanguageSetting(
     )
   }
   return t(
-    'components.settings.voice.dictationLanguage.description',
-    'The language you speak. Auto-detect lets the model work it out each time.'
+    'components.settings.voice.dictationLanguage.rated',
+    'The language you speak. Quality is rated for it.'
   )
 }
 
@@ -44,12 +51,14 @@ type VoiceDictationLanguageSettingProps = {
   voiceSettings: VoiceSettings
   selectedModel: SpeechModelManifest | undefined
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
+  className?: string
 }
 
 export function VoiceDictationLanguageSetting({
   voiceSettings,
   selectedModel,
-  onUpdateVoiceSettings
+  onUpdateVoiceSettings,
+  className
 }: VoiceDictationLanguageSettingProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -67,11 +76,12 @@ export function VoiceDictationLanguageSetting({
   const options = codes
     .map((code) => ({ code, name: languageDisplayName(code, intlLocale) }))
     .sort((a, b) => collator.compare(a.name, b.name))
-  const label = t('components.settings.voice.dictationLanguage.a9df191aba', 'Dictation language')
+  const label = t('components.settings.voice.language.title', 'Language')
   const autoLabel = t('components.settings.voice.dictationLanguage.auto', 'Auto-detect')
 
   return (
     <SettingsRow
+      className={className}
       label={label}
       description={describeLanguageSetting(
         selectedModel,
@@ -83,6 +93,7 @@ export function VoiceDictationLanguageSetting({
       control={
         <SettingsSearchableSelect
           ariaLabel={label}
+          fitValue
           value={language}
           groups={[
             {

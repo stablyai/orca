@@ -8,7 +8,7 @@ import {
 import { getEffectiveGitUpstreamStatus } from '../../../shared/git/remotes/git-effective-upstream'
 import { getPublishTargetStatus } from '../../../shared/git/remotes/git-publish-target-status'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
-import { validateGitPushTarget } from '../push-target-validation'
+import { validateGitPushTarget } from '../remotes/push-target-validation'
 import { nativeAndWslGitUpstreamStatusReadOwner } from './git-upstream-status-read-owner'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 

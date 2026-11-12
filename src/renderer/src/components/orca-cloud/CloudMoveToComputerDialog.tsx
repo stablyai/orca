@@ -24,7 +24,7 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { runArchiveCloudWorkspace } from './cloud-workspace-actions'
 import { returnFocusToWorkspace } from './cloud-focus-return'
 import {

@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
+import type { MobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

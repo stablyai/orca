@@ -1,4 +1,5 @@
-import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
+import { gitStreamStdout } from '../command-runner/git-stream-stdout'
 import { readStampedGitConfig } from './stamped-git-config'
 import type { GetStatusOptions } from './get-status-options'
 import { bulkPathspecCommands } from './git-pathspec'

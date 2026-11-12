@@ -1,4 +1,4 @@
-import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/database/profile-state-storage-classification'
 
 /** Exclude paths, profile IDs and serialized state from fleet telemetry. */
 export type OrcadProfileStateAuthoritySelection = {

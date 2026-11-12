@@ -1,10 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
-  AGENT_CONFIG_SYNC_PLAN_METHOD,
-  AGENT_CONFIG_SYNC_PUT_METHOD,
-  AgentConfigSyncPlanResult,
-  AgentConfigSyncPutResult,
+  AGENT_CONFIG_OPT_IN_KINDS,
+  AgentConfigItemKind,
   type AgentConfigSyncStatus,
   type CloudAgentConfigSyncPreferences
 } from '../../../shared/agent-config-sync/agent-config-sync-contract'
@@ -12,11 +10,8 @@ import { listEphemeralVmRuntimes } from '../../../shared/ephemeral-vm-runtime-st
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
 import { defaultAgentConfigHomes } from '../agent-config-roots'
-import {
-  agentConfigPutBatches,
-  applyAgentConfigSyncResults,
-  planAgentConfigSync
-} from './agent-config-sync-plan'
+import { applyAgentConfigSyncResults, planAgentConfigSync } from './agent-config-sync-plan'
+import { exchangeAgentConfig } from './agent-config-host-exchange'
 import { readLocalAgentConfig, type LocalAgentConfigItem } from './local-agent-config-read'
 import { readOrCreateSyncerId } from './syncer-id'
 import {
@@ -27,9 +22,6 @@ import {
   parsePreferences,
   trackedAgentConfigPaths
 } from './cloud-agent-config-sync-support'
-
-const PLAN_TIMEOUT_MS = 30_000
-const PUT_TIMEOUT_MS = 60_000
 
 export type CloudAgentConfigSyncDeps = {
   userDataPath: string
@@ -92,10 +84,10 @@ export function createCloudAgentConfigSync(deps: CloudAgentConfigSyncDeps): Clou
     .catch(() => null)
     .then((loaded) => {
       // A change saved while this read ran wins.
-      preferences ??= loaded ?? { ...DEFAULT_PREFERENCES, excluded: [] }
+      preferences ??= loaded ?? { ...DEFAULT_PREFERENCES, excluded: [], optedIn: [] }
     })
   function getPreferences(): CloudAgentConfigSyncPreferences {
-    return preferences ?? { ...DEFAULT_PREFERENCES, excluded: [] }
+    return preferences ?? { ...DEFAULT_PREFERENCES, excluded: [], optedIn: [] }
   }
 
   function cloudRuntime(environmentId: string) {
@@ -111,6 +103,7 @@ export function createCloudAgentConfigSync(deps: CloudAgentConfigSyncDeps): Clou
     return planAgentConfigSync({
       items: local,
       excluded: new Set(prefs.excluded),
+      optedIn: new Set(prefs.optedIn),
       shareAcrossAgents: prefs.shareAcrossAgents
     })
   }
@@ -142,39 +135,16 @@ export function createCloudAgentConfigSync(deps: CloudAgentConfigSyncDeps): Clou
     })
     const syncer = await readOrCreateSyncerId(deps.userDataPath)
     try {
-      const hostPlan = AgentConfigSyncPlanResult.parse(
-        await call(
-          environmentId,
-          AGENT_CONFIG_SYNC_PLAN_METHOD,
-          {
-            syncer,
-            items: planned.desired.map(({ scope, kind, name, digest }) => ({
-              scope,
-              kind,
-              name,
-              digest
-            }))
-          },
-          PLAN_TIMEOUT_MS
-        )
+      const exchange = await exchangeAgentConfig(call, environmentId, syncer, planned.desired)
+      const hostPlan = exchange.plan
+      const rows = applyAgentConfigSyncResults(planned.rows, hostPlan, exchange.put).map((row) =>
+        exchange.outdatedKeys.has(row.key)
+          ? { ...row, state: 'skipped' as const, skipReason: 'host-outdated' as const }
+          : row
       )
-      const needed = planned.desired.filter((item) => hostPlan.items[item.key] === 'needed')
-      const put: AgentConfigSyncPutResult['items'] = {}
-      for (const batch of agentConfigPutBatches(needed)) {
-        const answer = AgentConfigSyncPutResult.parse(
-          await call(
-            environmentId,
-            AGENT_CONFIG_SYNC_PUT_METHOD,
-            { syncer, items: batch },
-            PUT_TIMEOUT_MS
-          )
-        )
-        Object.assign(put, answer.items)
-      }
-      const rows = applyAgentConfigSyncResults(planned.rows, hostPlan, put)
       const synced = rows.filter((row) => row.state === 'synced').length
       console.info(
-        `[cloud-agent-config-sync] ${environmentId}: ${synced} synced, ${needed.length} sent, ${hostPlan.removed} removed, ${rows.length - synced} not synced`
+        `[cloud-agent-config-sync] ${environmentId}: ${synced} synced, ${exchange.sent} sent, ${hostPlan.removed} removed, ${rows.length - synced} not synced`
       )
       return publish({ environmentId, running: false, lastSyncedAt: now(), error: null, rows })
     } catch (error) {
@@ -220,7 +190,8 @@ export function createCloudAgentConfigSync(deps: CloudAgentConfigSyncDeps): Clou
     const merged: CloudAgentConfigSyncPreferences = {
       autoSync: next.autoSync ?? current.autoSync,
       shareAcrossAgents: next.shareAcrossAgents ?? current.shareAcrossAgents,
-      excluded: [...new Set(next.excluded ?? current.excluded)].sort().slice(0, MAX_EXCLUDED)
+      excluded: [...new Set(next.excluded ?? current.excluded)].sort().slice(0, MAX_EXCLUDED),
+      optedIn: [...new Set(next.optedIn ?? current.optedIn)].sort().slice(0, MAX_EXCLUDED)
     }
     writeFileAtomically(preferencesPath, `${JSON.stringify(merged, null, 2)}\n`)
     preferences = merged
@@ -281,13 +252,16 @@ export function createCloudAgentConfigSync(deps: CloudAgentConfigSyncDeps): Clou
       return merged
     },
     setItemIncluded(key, included) {
-      const excluded = new Set(getPreferences().excluded)
-      if (included) {
-        excluded.delete(key)
+      // Memory is opt-in: its switch lives in optedIn; every other item's in excluded.
+      const kind = AgentConfigItemKind.safeParse(key.split(':')[1])
+      const optIn = kind.success && AGENT_CONFIG_OPT_IN_KINDS.has(kind.data)
+      const set = new Set(optIn ? getPreferences().optedIn : getPreferences().excluded)
+      if (included === optIn) {
+        set.add(key)
       } else {
-        excluded.add(key)
+        set.delete(key)
       }
-      const merged = setPreferences({ excluded: [...excluded] })
+      const merged = setPreferences(optIn ? { optedIn: [...set] } : { excluded: [...set] })
       resyncSynced()
       return merged
     }

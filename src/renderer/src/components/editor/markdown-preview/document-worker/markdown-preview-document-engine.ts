@@ -5,7 +5,7 @@ import '../search/markdown-preview-search'
 import {
   findTextMatchRanges,
   isTextSearchQueryTooLarge as isMarkdownPreviewSearchQueryTooLarge
-} from '../../../../lib/text-match-ranges'
+} from '../../../../lib/text-search/text-match-ranges'
 import {
   markdownPreviewBlockHasMath,
   parseMarkdownPreviewDocument,

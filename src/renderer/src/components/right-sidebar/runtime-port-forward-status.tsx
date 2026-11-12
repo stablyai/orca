@@ -1,7 +1,7 @@
 import React from 'react'
 import { ArrowRight, LoaderCircle, Plug, RotateCw, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
 

@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { getReachableRuntimeSessionMirrorTargets } from '@/lib/runtime-session-mirror-targets'
+import { getReachableRuntimeSessionMirrorTargets } from '@/runtime/web-session-tabs-sync/subscriptions/runtime-session-mirror-targets'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
 
 export type RuntimeSessionMirrorTargetInputs = Pick<
   AppState,

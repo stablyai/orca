@@ -11,7 +11,7 @@ import {
   addWorkspace,
   emptySession,
   leaf
-} from '../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
+} from '../../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import {
   closeTestStores,
   createStore,
@@ -36,7 +36,6 @@ const testStateDirRef = vi.hoisted(() => ({ dir: '' }))
 const REPO_ID = 'repo-1'
 const ORPHAN_TAB = 'tab-orphan'
 const ORPHAN_LEAF = leaf(2)
-const ORPHAN_PANE = `${ORPHAN_TAB}:${ORPHAN_LEAF}`
 
 function seededSession(revision: number | undefined): WorkspaceSessionState {
   const session = addWorkspace(emptySession(), GIT_KEY, [
@@ -153,23 +152,6 @@ describe('orphan adoption whose flush fails', () => {
     vi.restoreAllMocks()
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it.each([
-    ['a repo with no fence yet', undefined],
-    ['a repo whose fence is armed', 3]
-  ])('leaves no adopted tab, layout or incarnation behind in %s', async (_label, revision) => {
-    const store = createStore()
-    store.setWorkspaceSession(seededSession(revision))
-    const before = store.getWorkspaceSession()
-
-    await expect(adoptWithFailingFlush(store, revision ?? 0)).rejects.toThrow('disk_full')
-
-    const after = store.getWorkspaceSession()
-    expect(after.tabsByWorktree[GIT_KEY]?.map((tab) => tab.id)).toEqual(['tab-kept'])
-    expect(after.terminalLayoutsByTabId[ORPHAN_TAB]).toBeUndefined()
-    expect(after.terminalPtyIncarnationsByPaneKey?.[ORPHAN_PANE]).toBeUndefined()
-    expect(after.tabGroups?.[GIT_KEY]).toEqual(before.tabGroups?.[GIT_KEY])
   })
 
   it('keeps an unrelated edit that landed while it waited to write', async () => {

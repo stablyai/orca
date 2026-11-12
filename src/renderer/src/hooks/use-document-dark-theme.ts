@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
-import { resolvePaintedDark } from '@/lib/terminal-app-theme'
+import { resolvePaintedDark } from '@/app-shell/appearance/terminal-app-theme'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 
 /** The mode the Appearance setting asks for; it picks the app and terminal theme slots. */

@@ -9,7 +9,7 @@ import { moveNativeChatComposerDraft } from '@/components/native-chat/drafts/nat
 import type { NativeChatComposerDraftChange } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
 import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from './structured-agent-session-launch-state-store'
 
 type DraftDestination = Pick<
   StructuredLaunchState['intent'],

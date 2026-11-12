@@ -1,6 +1,6 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { bindTerminalKittyFileReader } from '@/lib/pane-manager/terminal-kitty-file-reader'
+import { bindTerminalKittyFileReader } from '@/lib/pane-manager/terminal-rendering/terminal-kitty-file-reader'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import { waitForPromiseWithSignal } from '../../../../../../shared/abort-signal-reason'
 import {

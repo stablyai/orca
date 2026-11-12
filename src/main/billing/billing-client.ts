@@ -7,7 +7,7 @@ import type {
   OrcaBillingOverageArgs,
   OrcaBillingTeamPlan
 } from '../../shared/orca-billing'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import { normalizeEntitlement } from './billing-entitlement-schema'
 
 export { normalizeEntitlement }

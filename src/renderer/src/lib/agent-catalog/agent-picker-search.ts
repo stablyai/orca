@@ -67,6 +67,9 @@ export function searchAgentPickerEntries(
   return matches.map((m) => m.agent)
 }
 
+const BLANK_TERMINAL_TERMS = ['blank', 'terminal', 'shell'] as const
+const BLANK_TERMINAL_ACRONYM = 'bt'
+
 export function agentPickerBlankTerminalMatches(rawQuery: string): boolean {
   const query = getAgentPickerSearchQuery(rawQuery)
   if (query === null) {
@@ -75,12 +78,13 @@ export function agentPickerBlankTerminalMatches(rawQuery: string): boolean {
   if (!query) {
     return true
   }
+  if (query === BLANK_TERMINAL_ACRONYM) {
+    return true
+  }
 
-  return (
-    scoreCandidate(query, 'Blank Terminal', 0) !== NO_MATCH ||
-    scoreCandidate(query, 'terminal', 0) !== NO_MATCH ||
-    scoreCandidate(query, 'shell', 0) !== NO_MATCH
-  )
+  return query
+    .split(' ')
+    .every((word) => BLANK_TERMINAL_TERMS.some((term) => term.startsWith(word)))
 }
 
 function scoreAgent(agent: AgentCatalogEntry, query: string): number {

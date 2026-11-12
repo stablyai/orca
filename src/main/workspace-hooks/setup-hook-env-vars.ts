@@ -3,6 +3,14 @@ import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/shell/lau
 import type { Repo } from '../../shared/repo-types'
 import { buildWorkspacePortEnv } from '../../shared/workspace-port-block'
 import { peekWorkspacePortBlock } from '../workspace-ports/workspace-port-block-registry'
+import { isFolderRepo } from '../../shared/repo-kind'
+
+/** The workspace a hook runs for; folder workspaces share one directory, so the path can't name them. */
+export type HookWorkspaceIdentity = {
+  worktreeId: string
+  /** Names a folder workspace; a worktree's name is its directory's. */
+  displayName?: string
+}
 
 // Path-valued keys only, so WSL and posix-shell launches translate them; names are not paths.
 export const SETUP_RUNNER_PATH_ENV_KEYS = [
@@ -14,17 +22,26 @@ export const SETUP_RUNNER_PATH_ENV_KEYS = [
 ] as const
 
 export function getSetupEnvVars(
-  repo: Pick<Repo, 'path'>,
-  worktreePath: string
+  repo: Pick<Repo, 'path' | 'kind'>,
+  worktreePath: string,
+  identity?: HookWorkspaceIdentity
 ): Record<string, string> {
+  const workspaceName =
+    identity?.displayName && isFolderRepo(repo)
+      ? identity.displayName
+      : getRuntimePathBasename(worktreePath)
   return {
     ORCA_ROOT_PATH: repo.path,
     ORCA_WORKTREE_PATH: worktreePath,
-    ORCA_WORKSPACE_NAME: getRuntimePathBasename(worktreePath),
+    ORCA_WORKSPACE_NAME: workspaceName,
+    // Same values a pane sets, so `orca worktree create` in the hook attaches to this workspace.
+    ...(identity
+      ? { ORCA_WORKSPACE_ID: identity.worktreeId, ORCA_WORKTREE_ID: identity.worktreeId }
+      : {}),
     // Imported Conductor scripts read these names.
     CONDUCTOR_ROOT_PATH: repo.path,
     CONDUCTOR_WORKSPACE_PATH: worktreePath,
-    CONDUCTOR_WORKSPACE_NAME: getRuntimePathBasename(worktreePath),
+    CONDUCTOR_WORKSPACE_NAME: workspaceName,
     GHOSTX_ROOT_PATH: repo.path,
     ...getWorkspacePortEnv(worktreePath)
   }
@@ -40,9 +57,13 @@ function getWorkspacePortEnv(worktreePath: string): Record<string, string> {
   }
 }
 
-export function getSetupRunnerEnvVars(repo: Repo, worktreePath: string): Record<string, string> {
+export function getSetupRunnerEnvVars(
+  repo: Repo,
+  worktreePath: string,
+  identity?: HookWorkspaceIdentity
+): Record<string, string> {
   return {
-    ...getSetupEnvVars(repo, worktreePath),
+    ...getSetupEnvVars(repo, worktreePath, identity),
     // Unattended setup always needs credential protection, regardless of user opt-out.
     [TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]: 'guard'
   }

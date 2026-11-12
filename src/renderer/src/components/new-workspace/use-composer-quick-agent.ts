@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { useOrcaCloudAgentPickerStatusLabels } from '@/lib/orca-cloud/orca-cloud-agent-picker-status'
 import { useAppStore } from '@/store/index'
-import { agentChoicePending } from '@/lib/host-chat-program'
-import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
+import { agentChoicePending } from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { useAgentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import {
   composerLaunchWorkspace,
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
-} from '@/lib/quick-workspace-agent-selection'
+} from '@/lib/workspace/creation/quick-workspace-agent-selection'
 import {
   ORCA_CLOUD_AGENT_IDS,
   orcaCloudAgentMenuModel,

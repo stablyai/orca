@@ -8,12 +8,12 @@ import {
 } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { assertOrcadMigrationRequestFits } from '../../managed-server/migration/catalog/orcad-migration-request-budget'
-import { createOrcadMigrationManifest } from '../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+import { createOrcadMigrationManifest } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import {
   findOrcadMigrationSourceCutoverForTarget,
   removeOrcadMigrationSourceCutover,
   writeOrcadMigrationSourceCutover
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   confirmOrcadMigrationTerminalsUnderFence,
   type OrcadMigrationTerminalVerdict

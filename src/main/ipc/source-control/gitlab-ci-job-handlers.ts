@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron'
 import { toGitLabJobLogExcerptResult } from '../../../shared/source-control/checks/gitlab/gitlab-job-log-excerpt'
 import type { Store } from '../../persistence/loading-store/store'
-import { getJobTrace, retryJob } from '../../gitlab/pipeline-job-mutations'
-import type { ProjectRef } from '../../gitlab/project-ref-parser'
+import { getJobTrace, retryJob } from '../../gitlab/pipelines/pipeline-job-mutations'
+import type { ProjectRef } from '../../gitlab/projects/project-ref-parser'
 
 import {
   type GitLabRepoSelectorArgs,

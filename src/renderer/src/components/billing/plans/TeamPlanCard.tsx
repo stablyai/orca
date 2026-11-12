@@ -5,15 +5,11 @@ import { InlineError } from '@/components/ui/inline-error'
 import type { PlanBillingNotice } from '../PlanBillingSection'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { OrcaBillingInterval, OrcaBillingOffers } from '../../../../../shared/orca-billing'
+import type { OrcaBillingInterval } from '../../../../../shared/orca-billing'
+import type { TeamPlanModel } from './plans-model'
+import { planFeatureLines } from './plan-feature-copy'
 import { PlanCardShell } from './PlanCardShell'
-import {
-  formatCents,
-  formatRateCents,
-  perSeatMonthlyCents,
-  periodTotalCents
-} from './plans-pricing'
-import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { formatCents, perSeatMonthlyCents, periodTotalCents } from './plans-pricing'
 
 export type TeamPlanCardMode = 'choose' | 'current' | 'locked'
 
@@ -28,7 +24,7 @@ export function TeamPlanCard({
   onCheckout,
   onManage
 }: {
-  team: OrcaBillingOffers['team']
+  team: TeamPlanModel
   interval: OrcaBillingInterval
   seats: number
   /** choose: can buy; current: already on Team; locked: only owners/admins can buy. */
@@ -48,36 +44,10 @@ export function TeamPlanCard({
   const discounted =
     interval === 'year' && monthly !== null && fullMonthly !== null && monthly < fullMonthly
 
-  // Same bullets as the marketing site's /cloud pricing card; the overage line is in-app only.
-  const features = [
-    t(
-      'auto.components.billing.plans.featureHours4',
-      '{{value0}} sandbox hours per seat each month, pooled across your team',
-      { value0: String(team.includedHoursPerSeat) }
-    ),
-    t(
-      'auto.components.billing.plans.featureSpec',
-      'Every sandbox gets {{value0}} vCPU · {{value1}} GB',
-      {
-        value0: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
-        value1: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
-      }
-    ),
-    t(
-      'auto.components.billing.plans.featureSleep3',
-      'Sleeps after {{value0}} minutes idle, so quiet time is free',
-      { value0: String(team.idleSleepMinutes) }
-    ),
-    t('auto.components.billing.plans.featureReady', 'Ready in seconds, nothing to set up or host'),
-    t(
-      'auto.components.billing.plans.featureOverage7',
-      'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default)',
-      {
-        rate: formatRateCents(team.overageCentsPerHour, locale),
-        cap: formatCents(team.defaultSpendCapCents, locale)
-      }
-    )
-  ]
+  // Which bullets, and their numbers, are billing's catalog; known ones are localized.
+  const features = planFeatureLines(team.features, team, t, locale)
+  const fmt = (cents: number): string => formatCents(cents, locale, team.currency)
+  const legacyLabel = team.legacyPriceLabels?.[interval] || null
 
   const price = (
     // Keyed so the figure fades in again when the period changes.
@@ -88,15 +58,14 @@ export function TeamPlanCard({
       {discounted && fullMonthly !== null ? (
         <del className="text-lg text-muted-foreground tabular-nums">
           <span className="sr-only">{t('auto.components.billing.plans.was', 'Was')} </span>
-          {formatCents(fullMonthly, locale)}
+          {fmt(fullMonthly)}
         </del>
       ) : null}
       <span className="text-3xl font-semibold tracking-tight tabular-nums">
         {monthly === null
-          ? interval === 'month'
-            ? team.monthlyPriceLabel
-            : team.annualPriceLabel
-          : formatCents(monthly, locale)}
+          ? (legacyLabel ??
+            t('auto.components.billing.plans.priceUnavailable', 'Price unavailable'))
+          : fmt(monthly)}
       </span>
       {monthly === null ? null : (
         <span className="text-sm text-muted-foreground">
@@ -114,7 +83,7 @@ export function TeamPlanCard({
             'auto.components.billing.plans.billedYearlyAmount2',
             '{{value0}} per seat, billed yearly',
             {
-              value0: formatCents(team.annualPriceCentsPerSeat, locale)
+              value0: fmt(team.annualPriceCentsPerSeat)
             }
           )
       : t('auto.components.billing.plans.billedMonthly', 'Billed monthly')
@@ -136,10 +105,10 @@ export function TeamPlanCard({
           <p className="text-sm font-medium tabular-nums" aria-live="polite">
             {interval === 'year'
               ? t('auto.components.billing.plans.totalPerYear', '{{total}} per year', {
-                  total: formatCents(total, locale)
+                  total: fmt(total)
                 })
               : t('auto.components.billing.plans.totalPerMonth', '{{total}} per month', {
-                  total: formatCents(total, locale)
+                  total: fmt(total)
                 })}
           </p>
         )}
@@ -147,7 +116,16 @@ export function TeamPlanCard({
     ) : null
 
   let footer: React.ReactNode
-  if (mode === 'choose') {
+  if (mode === 'choose' && !team.checkoutAvailable) {
+    footer = (
+      <p role="status" className="text-center text-xs text-muted-foreground text-pretty">
+        {t(
+          'auto.components.billing.plans.checkoutUnavailable',
+          'This plan isn’t available right now. Try again later.'
+        )}
+      </p>
+    )
+  } else if (mode === 'choose') {
     footer = (
       <>
         <Button

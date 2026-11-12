@@ -92,9 +92,9 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['issue-12656-terminal-link-tooltip', 'terminal-pane-padding-edges'],
     [
       'src/renderer/src/assets/terminal.css',
-      'src/renderer/src/lib/pane-manager/pane-divider.ts',
+      'src/renderer/src/lib/pane-manager/pane-layout/pane-divider.ts',
       'src/renderer/src/lib/pane-manager/pane-dom-creation.ts',
-      'src/renderer/src/lib/pane-manager/terminal-linkifier-hover-reset-on-mouseleave.ts'
+      'src/renderer/src/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset-on-mouseleave.ts'
     ]
   ),
   featureRoute(

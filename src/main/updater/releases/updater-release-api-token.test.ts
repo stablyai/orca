@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ghExecMock = vi.fn()
-vi.mock('../../git/command-runner/gh-exec-file', () => ({
+vi.mock('../../git/command-runner/hosted-cli/gh-exec-file', () => ({
   ghExecFileWithScopeAsync: async (...args: unknown[]) => ({
     rateLimitScope: 'native:github.com',
     ...(await ghExecMock(...args))

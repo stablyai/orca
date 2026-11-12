@@ -10,7 +10,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
-import { searchRepos } from '@/lib/repo-search'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -10,6 +10,7 @@ import type {
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type { WorktreeAtRiskLocalFiles } from '../../shared/worktree/at-risk-local-files'
 import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-worktree-scope'
 import type {
   GitHistoryItemRef,
@@ -50,6 +51,10 @@ export const gitApi = {
     paths: string[]
     connectionId?: string
   }): Promise<string[]> => ipcRenderer.invoke('git:checkIgnored', args),
+  atRiskLocalFiles: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<WorktreeAtRiskLocalFiles> => ipcRenderer.invoke('git:atRiskLocalFiles', args),
   findHugeFoldersToIgnore: (args: { worktreePath: string }): Promise<string[]> =>
     ipcRenderer.invoke('git:findHugeFoldersToIgnore', args),
   appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>

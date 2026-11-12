@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Label } from '@/components/ui/label'
 import { SecretValueInput } from '@/components/settings/cloud-secrets/SecretValueInput'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { SecretRequestScope } from '../../../../shared/secret-request-contract'
 import {
   SecretRequestDone,

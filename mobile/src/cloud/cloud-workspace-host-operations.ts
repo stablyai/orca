@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
-import { agentLaunchReplayRun } from '../tasks/mobile-workspace-create-operations'
+import { agentLaunchReplayRun } from '../new-workspace/creation/mobile-workspace-create-operations'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'

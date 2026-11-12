@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
 import { accountMenuTrialRow } from './plan-billing-usage-copy'
 import { openPlansPage } from './plans/plans-page-store'

@@ -1,5 +1,5 @@
 import { FolderPlus, GitBranchPlus } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
 import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import logo from '../../../../resources/logo.svg'

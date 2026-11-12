@@ -1,6 +1,6 @@
 import type { RuntimePtySpawnState } from './spawn-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 type RuntimeResumeOutcomeState = Pick<
   RuntimePtySpawnState,

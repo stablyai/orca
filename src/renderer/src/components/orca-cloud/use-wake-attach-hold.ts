@@ -3,7 +3,7 @@ import {
   isActiveWakePaneAttached,
   retryActiveWakePane
 } from '@/components/terminal-pane/input/wake-pane-attach'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
 /** How often the hold checks the pane in front while it waits. */

@@ -19,8 +19,6 @@ import {
 } from '../../workspace/ownership/unified-tab-host-ownership'
 import { maxValidPaletteActivityTimestamp } from '../../../../../shared/palette-match/palette-ranking'
 
-type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
-
 export type BuildSearchableBrowserPagesOptions = {
   worktrees: readonly Worktree[]
   ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
@@ -34,7 +32,7 @@ export type BuildSearchableBrowserPagesOptions = {
   activeBrowserTabId: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  activeTabType: BrowserPaletteActiveTabType
+  activeTabType: WorkspaceVisibleTabType
 }
 
 export function buildSearchableBrowserPages({

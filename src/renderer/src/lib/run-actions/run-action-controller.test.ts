@@ -45,7 +45,7 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace(/\{\{(\w+)\}\}/g, (_m, key: string) => values?.[key] ?? '')
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({
+vi.mock('@/runtime/repo-hooks/ensure-hooks-confirmed', () => ({
   ensureHooksConfirmed: mocks.ensureHooksConfirmed
 }))
 vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({

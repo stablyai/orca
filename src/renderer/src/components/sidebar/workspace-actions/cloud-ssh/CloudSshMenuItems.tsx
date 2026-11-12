@@ -16,7 +16,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
+import { OpenInApplicationIcon } from '@/lib/files/os-open/open-in-app-catalog'
 import { BUILT_IN_EDITOR_COMMANDS } from '../../../../../../shared/open-in-applications'
 import type { CloudSshStatus } from '../../../../../../shared/cloud-ssh'
 import {

@@ -1,6 +1,6 @@
 import { parsePairingCode } from '../pairing/pairing'
 import { startPreProfilePairing } from '../pairing/pre-profile-pairing-coordinator'
-import { updateHostNameAndEndpoint } from '../transport/hosts/host-store'
+import { updateHostNameAndEndpoint } from '../host-catalog/host-store'
 import { cloudWorkspaceHostId, recordCloudWorkspaceHost } from './cloud-workspace-links'
 import { requestCloudWorkspaceGrant } from './cloud-control-plane-access'
 import { wakeCloudWorkspace } from './cloud-control-plane-client'

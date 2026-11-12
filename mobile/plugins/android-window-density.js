@@ -55,7 +55,6 @@ const METHODS = `
       densityDpi = pane.densityDpi
       scaledDensity = pane.scaledDensity
     }
-    DisplayMetricsHolder.setWindowDisplayMetrics(pane)
     DisplayMetricsHolder.setScreenDisplayMetrics(screen)
   }
 `

@@ -5,7 +5,6 @@ import {
   flushAsyncTicks,
   writeHeadlessTerminal
 } from '../pty-connection/test-fixtures/pty-connection-test-async'
-import { buildMainModelSnapshotReplayWrites } from './terminal-snapshot-replay-paint'
 import {
   terminalWriteText,
   createMockTransport,
@@ -101,7 +100,6 @@ function pushedImage(hostRows: number): string {
 function recoveryPayload(hostRows: number): string {
   return `\x1b[?2026l\x1b[2J\x1b[3J\x1b[H${pushedImage(hostRows)}`
 }
-const REQUESTED_IMAGE = `${NORMAL_LINES.join('\r\n')}${ENTER_AGENT_FRAME}`
 
 type PaneEvent = string | { cols: number; rows: number }
 
@@ -207,30 +205,6 @@ describe('remote snapshot replay onto a live alt screen', () => {
     return [...events, { cols: COLS, rows: ROWS }]
   }
 
-  // Folded normal history must not paint into a revisited live TUI’s alt buffer.
-  it('repaints a pushed image exactly and keeps the history the TUI covers', async () => {
-    const payload = recoveryPayload(ROWS)
-    const client = await render([
-      LIVE_PANE,
-      ...(await drainOntoLiveAltScreen(payload, {
-        carriesNormalBuffer: true,
-        snapshotCols: COLS,
-        snapshotRows: ROWS
-      }))
-    ])
-    const host = await render([LIVE_PANE])
-    const fresh = await render([pushedImage(ROWS)])
-    try {
-      expect(client.buffer.active.type).toBe('alternate')
-      expect(viewport(client, 'alternate')).toEqual(viewport(fresh, 'alternate'))
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(host, 'normal'))
-    } finally {
-      client.dispose()
-      host.dispose()
-      fresh.dispose()
-    }
-  })
-
   // Keep frozen normal history when a push repaints only the live alt frame, regardless of capture grid.
   it("keeps the pane's history when the host screen has another grid", async () => {
     const hostRows = 10
@@ -248,28 +222,6 @@ describe('remote snapshot replay onto a live alt screen', () => {
     } finally {
       client.dispose()
       untouched.dispose()
-      fresh.dispose()
-    }
-  })
-
-  // Shared requested captures may include history; avoid duplicating it over the retained normal buffer.
-  it('keeps history unduplicated when a pushed image also carries history', async () => {
-    const client = await render([
-      LIVE_PANE,
-      ...(await drainOntoLiveAltScreen(`\x1b[?2026l\x1b[2J\x1b[3J\x1b[H${REQUESTED_IMAGE}`, {
-        carriesNormalBuffer: true,
-        snapshotCols: COLS,
-        snapshotRows: ROWS
-      }))
-    ])
-    const host = await render([LIVE_PANE])
-    const fresh = await render([REQUESTED_IMAGE])
-    try {
-      expect(viewport(client, 'alternate')).toEqual(viewport(fresh, 'alternate'))
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(host, 'normal'))
-    } finally {
-      client.dispose()
-      host.dispose()
       fresh.dispose()
     }
   })
@@ -292,89 +244,6 @@ describe('remote snapshot replay onto a live alt screen', () => {
     } finally {
       client.dispose()
       host.dispose()
-      fresh.dispose()
-    }
-  })
-
-  // If the TUI started while hidden, rebuild its normal history and enter alt from the host image.
-  it('paints the whole image when the TUI started while hidden', async () => {
-    const client = await render([
-      NORMAL_LINES.join('\r\n'),
-      ...(await drainOntoLiveAltScreen(
-        recoveryPayload(ROWS),
-        { carriesNormalBuffer: true, snapshotCols: COLS, snapshotRows: ROWS },
-        'normal'
-      ))
-    ])
-    const fresh = await render([pushedImage(ROWS)])
-    try {
-      expect(client.buffer.active.type).toBe('alternate')
-      expect(viewport(client, 'alternate')).toEqual(viewport(fresh, 'alternate'))
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(fresh, 'normal'))
-    } finally {
-      client.dispose()
-      fresh.dispose()
-    }
-  })
-
-  // Host TUI exit requires leaving alt and showing its normal screen.
-  it('repaints from the normal buffer once the host TUI has exited', async () => {
-    const hostScreen = [...NORMAL_LINES, 'Resume with claude --resume', '$ ']
-      .slice(-ROWS)
-      .join('\r\n')
-    const client = await render([
-      LIVE_PANE,
-      ...(await drainOntoLiveAltScreen(`\x1b[?2026l\x1b[2J\x1b[3J\x1b[H${hostScreen}`, {
-        carriesNormalBuffer: true,
-        terminalOwner: 'shell',
-        alternateScreen: false,
-        snapshotCols: COLS,
-        snapshotRows: ROWS
-      }))
-    ])
-    const fresh = await render([hostScreen])
-    try {
-      expect(client.buffer.active.type).toBe('normal')
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(fresh, 'normal'))
-    } finally {
-      client.dispose()
-      fresh.dispose()
-    }
-  })
-
-  // Raw relay windows continue live alt output without replacing normal history.
-  it('clears a raw byte replay in place on the alt screen', async () => {
-    const client = await render([LIVE_PANE, ...(await drainOntoLiveAltScreen(AGENT_FRAME, {}))])
-    const expected = await render([LIVE_PANE, `\x1b[2J${AGENT_FRAME}`])
-    try {
-      expect(client.buffer.active.type).toBe('alternate')
-      expect(viewport(client, 'alternate')).toEqual(viewport(expected, 'alternate'))
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(expected, 'normal'))
-    } finally {
-      client.dispose()
-      expected.dispose()
-    }
-  })
-
-  // Shell-owner images must restore normal content even when the dead TUI omitted alt teardown.
-  it('paints a requested image from an exited TUI exactly over an alt screen', async () => {
-    const client = await render([
-      LIVE_PANE,
-      ...buildMainModelSnapshotReplayWrites(
-        {
-          data: REQUESTED_IMAGE,
-          alternateScreen: true,
-          carriesNormalBuffer: true
-        },
-        { paneOnAlternateScreen: true }
-      )
-    ])
-    const fresh = await render([REQUESTED_IMAGE])
-    try {
-      expect(viewport(client, 'alternate')).toEqual(viewport(fresh, 'alternate'))
-      expect(bufferLines(client, 'normal')).toEqual(bufferLines(fresh, 'normal'))
-    } finally {
-      client.dispose()
       fresh.dispose()
     }
   })

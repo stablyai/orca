@@ -6,7 +6,7 @@ import type { SshConnectionState } from '../../../../../shared/ssh-types'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/workspace/ownership/worktree-operation-catalog-route'
 import { resolveWorktreeOperationRouteResultForHost } from '@/lib/workspace/ownership/worktree-operation-route'
-import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExplicitRuntimeEnvironmentIdForFolderWorkspace
@@ -17,9 +17,6 @@ import {
 } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 
-/** Reuse HostLiveTerminalProbeVerdict: live means remote owns creation, unverifiable means owner cannot answer, none means local or connected SSH without host-replaced scope. Unknown must never authorize client seeding or sleeping resume, which duplicate tabs/writers (STA-4658/3500/3498/3374; ssh-execution-boundary.md). */
-export type WorkspaceTerminalHostAuthority = HostLiveTerminalProbeVerdict
-
 export type WorkspaceTerminalHostAuthorityState = WorktreeRuntimeOwnerState & {
   sshConnectionStates?: ReadonlyMap<string, SshConnectionState>
 }
@@ -28,7 +25,7 @@ export type WorkspaceTerminalHostAuthorityState = WorktreeRuntimeOwnerState & {
 function resolveDirectSshAuthority(
   state: WorkspaceTerminalHostAuthorityState,
   targetId: string
-): WorkspaceTerminalHostAuthority {
+): HostLiveTerminalProbeVerdict {
   // Not connected is "we could not ask", never "nothing there".
   return state.sshConnectionStates?.get(targetId)?.status === 'connected' ? 'none' : 'unverifiable'
 }
@@ -39,7 +36,7 @@ export function resolveWorkspaceTerminalHostAuthority(
   worktreeId: string | null | undefined,
   /** The host the caller knows owns the workspace (a create's target), over the active selection. */
   executionHostId?: ExecutionHostId
-): WorkspaceTerminalHostAuthority {
+): HostLiveTerminalProbeVerdict {
   if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'none'
   }
@@ -133,9 +130,9 @@ function captureAuthorityInputs(state: WorkspaceTerminalHostAuthorityState): Aut
 
 export function createWorkspaceTerminalHostAuthoritySelector(
   worktreeId: string | null | undefined
-): (state: WorkspaceTerminalHostAuthorityState) => WorkspaceTerminalHostAuthority {
+): (state: WorkspaceTerminalHostAuthorityState) => HostLiveTerminalProbeVerdict {
   let previousInputs: AuthorityInputs | null = null
-  let previousResult: WorkspaceTerminalHostAuthority = 'none'
+  let previousResult: HostLiveTerminalProbeVerdict = 'none'
   return (state) => {
     const inputs = captureAuthorityInputs(state)
     if (previousInputs?.every((value, index) => value === inputs[index]) === true) {

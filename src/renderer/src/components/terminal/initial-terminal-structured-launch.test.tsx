@@ -86,6 +86,7 @@ function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}
     terminalStartupRestorationReady: restored,
     hydrationSucceeded: hydrated,
     workspaceSurfaceIds: [],
+    workspaceSurfaceIdSet: new Set(),
     tabsByWorktree: {},
     createTab: mocks.createTab,
     reconcileWorktreeTabModel: () => ({

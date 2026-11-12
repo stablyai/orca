@@ -1,6 +1,6 @@
 import type { GitBranchChangeEntry } from '../../../shared/git/diff/git-diff-compare-types'
 import { gitChangeListArgs } from '../../../shared/git/diff/git-change-list'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 import { loadBranchChanges } from './branch-change-entries'
 import type { CommitPairScope } from './commit-pair-cache'
 import { readStampWithinDeadline, type StampProbes } from './deadline-bounded-stamp'

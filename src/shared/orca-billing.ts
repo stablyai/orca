@@ -163,7 +163,8 @@ export type OrcaBillingStatusResult =
   | { status: 'failed'; error: string }
 
 export type OrcaBillingCheckoutArgs = {
-  plan: OrcaBillingPlanId
+  /** The catalog plan id (GET /v1/plans); billing resolves the Stripe price. */
+  plan: string
   interval: OrcaBillingInterval
   seats: number
   /** The plans dialog joins an open cloud setup session: Checkout then returns to its next step. */
@@ -185,6 +186,8 @@ export type OrcaBillingOpenResult =
   | { status: 'no-billing-account' }
   /** Personal account: every plan lands on a team, so the caller starts cloud setup instead. */
   | { status: 'team-required' }
+  /** Billing's 409 plan_unavailable: Stripe has no price on sale for this plan and interval. */
+  | { status: 'plan-unavailable' }
   | { status: 'failed'; error: string }
 
 export type OrcaBillingOverageResult =

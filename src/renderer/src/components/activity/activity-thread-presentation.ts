@@ -10,7 +10,7 @@ import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
   resolveActivityThreadStatusPreview
-} from '@/lib/activity-thread-display'
+} from '@/lib/workspace/activity/activity-thread-display'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -266,7 +266,11 @@ export function activityThreadRowCopy(
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
   const state = activityThreadStatusId(thread)
   const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'
-  if (renderedPreview && !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)) {
+  if (
+    state !== 'unverifiable' &&
+    renderedPreview &&
+    !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)
+  ) {
     return {
       taskTitle,
       statusLine: renderedPreview,

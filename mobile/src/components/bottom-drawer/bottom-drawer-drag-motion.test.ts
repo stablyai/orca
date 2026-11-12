@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  bottomDrawerDismissMotion,
-  bottomDrawerScrim,
-  shouldDismissBottomDrawer
-} from './bottom-drawer-drag-motion'
+import { bottomDrawerDismissMotion, shouldDismissBottomDrawer } from './bottom-drawer-drag-motion'
 
 describe('bottom drawer release', () => {
   it('judges where the sheet is heading, not where the finger let go', () => {
@@ -22,11 +18,5 @@ describe('bottom drawer release', () => {
       // The curve's start slope (y1 / x1) times the average speed is the speed it starts at.
       expect(((y1 / x1) * remaining) / (duration / 1000)).toBeCloseTo(velocity)
     }
-  })
-
-  it('clears the dim exactly when the sheet has left the screen', () => {
-    const travel = 777 + 48
-    expect(bottomDrawerScrim(1, travel, 777)).toBe(1)
-    expect(bottomDrawerScrim(1 - 777 / travel, travel, 777)).toBeCloseTo(0)
   })
 })

@@ -21,7 +21,7 @@ import {
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 
 /** A cancel's cleanup toast waits for an Orca Cloud create run. */
 function trackOrcaCloudCreate(
@@ -202,7 +202,8 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     pausedMs: undefined,
     resumedAt: undefined,
     checkoutProgress: undefined,
-    worktreeId: undefined
+    worktreeId: undefined,
+    chatHandedOffAt: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

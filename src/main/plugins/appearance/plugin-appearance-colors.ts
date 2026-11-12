@@ -10,7 +10,7 @@ import {
   parsePluginTerminalThemeArtifact,
   type PluginTerminalThemeRegistration
 } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import { PluginHostCallError } from '../workers/plugin-host-call-scope'
+import { PluginHostCallError } from '../workers/host-api/plugin-host-call-scope'
 
 export type PluginAppearanceColors = { app: string; terminal: string }
 export type PreparedPluginAppearance = {

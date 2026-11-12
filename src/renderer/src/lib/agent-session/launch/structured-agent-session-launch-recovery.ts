@@ -1,20 +1,18 @@
 import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
-import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
-import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  launchStructuredAgentSession,
-  type StructuredLaunchHostSeedListener
-} from './structured-agent-session-launch-create-call'
+import { launchStructuredAgentSession } from './structured-agent-session-launch-create-call'
+import type { StructuredLaunchHostSeedListener } from './structured-agent-session-launch-create-call'
 import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
-import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { readStructuredSessionTabInventory } from '@/runtime/native-chat/tab-inventory/structured-session-tab-inventory'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
+import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionLaunchIntent } from '@/lib/agent-session/launch/structured-agent-session-launch-intent'
 
 export type StructuredAgentLaunchReceipt = {
   sessionId: string

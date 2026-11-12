@@ -1,4 +1,4 @@
-import { onTerminalScrollIntentFollowOutput } from '@/lib/pane-manager/terminal-scroll-intent'
+import { onTerminalScrollIntentFollowOutput } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
 import { HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS } from './hidden-output-restore-limits'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

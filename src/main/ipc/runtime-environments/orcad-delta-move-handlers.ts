@@ -17,7 +17,7 @@ import {
   orcadMigrationDestinationFor,
   orcadServerAutomationEnablerFor
 } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
-import { enableMovedOrcadAutomationsForTarget } from '../../persistence/migrating-orcad-catalog/orcad-migration-moved-automations'
+import { enableMovedOrcadAutomationsForTarget } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-moved-automations'
 import { requiredString } from './orcad-runtime-lifecycle-handlers'
 import { publishResolvedChangedHostStatus } from './runtime-environment-managed-tunnel'
 import { runTargetLifecycle } from '../ssh/ssh-target-lifecycle-queue'

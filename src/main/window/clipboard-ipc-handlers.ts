@@ -41,6 +41,7 @@ import { uploadPasteToAgentSessionAttachments } from '../ipc/agent-session-attac
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
+import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
 import { encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
@@ -125,7 +126,7 @@ export function registerClipboardHandlers(
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
-    return assertClipboardTextWithinLimitWithYield(clipboard.readText(), options)
+    return assertClipboardTextWithinLimitWithYield(readClipboardPlainText(clipboard), options)
   })
   // Rich-text copies keep their links only in the HTML flavor; skip shipping HTML that has none.
   ipcMain.handle('clipboard:readLinkHtml', (event): string => {

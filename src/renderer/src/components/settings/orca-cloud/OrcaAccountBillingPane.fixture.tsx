@@ -1,5 +1,6 @@
 import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { PlanBillingView } from '../../billing/PlanBillingSection'
 import {
   sampleTeam,
@@ -66,6 +67,16 @@ function page(status: OrcaProfileAuthStatus, billing: React.ReactNode) {
             Promise.resolve({ status: 'ready' as const, controlPlaneUrl: 'https://cloud.example' })
         }
       })
+      // The GitHub row under the identity: this person connected their own GitHub.
+      Object.assign(window.api, {
+        orcaCloudWorkspace: {
+          getGitHubUser: () =>
+            Promise.resolve({
+              ok: true,
+              value: { connected: true, login: 'adalovelace', githubUserId: 1 }
+            })
+        }
+      })
     },
     render: () => (
       <div className="bg-background px-8 py-6">
@@ -76,7 +87,9 @@ function page(status: OrcaProfileAuthStatus, billing: React.ReactNode) {
           forceVisible
           bodyClassName={BARE_BODY}
         >
-          <AccountBillingLayout account={<OrcaAccountSettingsPane />} billing={billing} />
+          <ConfirmationDialogProvider>
+            <AccountBillingLayout account={<OrcaAccountSettingsPane />} billing={billing} />
+          </ConfirmationDialogProvider>
         </SettingsSection>
       </div>
     )

@@ -1,3 +1,4 @@
+import type { ClaudePermissionHolds } from './claude-permission-hook-hold'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { parseFormEncodedBody } from '../../../shared/agent-hook-listener/request-body'
@@ -27,6 +28,11 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     }
   >()
   private readonly claudeContinuations = new ClaudeSessionContinuationTracker()
+
+  /** The runtime that answers workers' Claude PermissionRequests; null passes them all. */
+  setClaudePermissionHolds(holds: ClaudePermissionHolds | null): void {
+    this.claudePermissionHooks.set(holds)
+  }
 
   /** Issue pane-root bindings for a relay's request on the link generation current when it
    *  asked; a link restart during the read issues nothing. */

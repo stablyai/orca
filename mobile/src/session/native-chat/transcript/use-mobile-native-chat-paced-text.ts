@@ -13,7 +13,7 @@ import {
   type NativeChatTextRevealFrames
 } from '../../../../../src/shared/native-chat/transcript/native-chat-text-reveal'
 import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
-import { MobileNativeChatGrowthHoldContext } from '../../mobile-native-chat-growth-hold'
+import { MobileNativeChatGrowthHoldContext } from './mobile-native-chat-growth-hold'
 
 /** Phones spread each arrival over less time than desktop, so new words show sooner. */
 const REVEAL_MS = 180

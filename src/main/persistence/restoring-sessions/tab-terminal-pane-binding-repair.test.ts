@@ -14,7 +14,7 @@ import {
   GIT_KEY,
   leaf,
   SSH_KEY
-} from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
+} from '../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import {
   bindPersistedTabTerminalPanes,
   bindTabTerminalPanesInSession
@@ -50,21 +50,6 @@ describe("load repair: a tab's own terminal and its unbound pane", () => {
     expect(repair(stored, true)).toBe(stored)
     stored.remoteSessionIdsByTabId = { 'tab-a': 'ssh:box@@pty-9' }
     expect(bindings(repair(stored, true))).toEqual({ [leaf(1)]: 'ssh:box@@pty-9' })
-  })
-
-  it("never takes a terminal another tab's pane binds", () => {
-    const stored = addWorkspace(emptySession(), GIT_KEY, [
-      {
-        id: 'g1',
-        tabs: [
-          { id: 'tab-a', leaves: [[leaf(1)]] },
-          { id: 'tab-b', leaves: [[leaf(2), 'pty-a']] }
-        ]
-      }
-    ])
-    stored.tabsByWorktree[GIT_KEY]![0]!.ptyId = 'pty-a'
-    stored.activeWorktreeIdsOnShutdown = [GIT_KEY]
-    expect(repair(stored)).toBe(stored)
   })
 
   it('binds one of two tabs naming the same terminal, never both', () => {

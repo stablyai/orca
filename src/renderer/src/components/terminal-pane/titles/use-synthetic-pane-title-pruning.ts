@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
-} from '../../../../../shared/workspace-layout/terminal-pane-title-sanitization'
+} from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import type { TerminalPaneStartupController } from '../controller/use-terminal-pane-startup-actions'
 
 export function useSyntheticPaneTitlePruning({

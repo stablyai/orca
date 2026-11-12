@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetSelfInitiatedTreeKillLogForTest } from '../crash-reporting/self-initiated-tree-kill-log'
+import { resetSelfInitiatedTreeKillLogForTest } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { terminateProviderProcessTree as terminateWithEvidence } from './provider-process-teardown'
 

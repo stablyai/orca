@@ -7,7 +7,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { STATUS_LABELS, statusColor } from '../settings/ssh/targets/SshTargetCard'
 import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'

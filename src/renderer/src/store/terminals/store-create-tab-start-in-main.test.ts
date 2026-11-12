@@ -130,22 +130,6 @@ describe("a new tab's first terminal, started by main in a layout-owner build", 
     expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toBeUndefined()
   })
 
-  it('starts its own terminal, with its startup, when main does not hold the tab', async () => {
-    const store = storeWithWorktree()
-    store.getState().createTab(WORKTREE, undefined, undefined, {
-      id: TAB,
-      initialLeafId: LEAF,
-      pendingStartup: { command: 'make dev' }
-    })
-    await settle()
-
-    mocks.create!.reject(new Error('host_not_owned'))
-    await settle()
-
-    expect(store.getState().terminalPaneStartsByPaneKey[PANE_KEY]).toBeUndefined()
-    expect(store.getState().pendingStartupByTabId[TAB]).toMatchObject({ command: 'make dev' })
-  })
-
   it('gives no startup back to a tab the user closed before main answered', async () => {
     const store = storeWithWorktree()
     store.getState().createTab(WORKTREE, undefined, undefined, {

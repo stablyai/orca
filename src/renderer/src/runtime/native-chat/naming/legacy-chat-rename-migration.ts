@@ -30,9 +30,12 @@ export function installLegacyChatRenameMigration(): () => void {
       ? getStructuredAgentSessionTabs(state.unifiedTabsByWorktree).flatMap((tab) => {
           const alias = tab.customLabel ?? ''
           const name = normalizeAgentSessionConversationName(alias)
+          if (!name) {
+            return []
+          }
           const owner = legacyStructuredChatRenameOwner(state, tab)
           const target = structuredAgentSessionTargetForHost(owner)
-          return name && target
+          return target
             ? [
                 {
                   tab,

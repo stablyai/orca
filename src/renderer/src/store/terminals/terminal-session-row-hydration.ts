@@ -4,12 +4,12 @@ import type {
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import {
   readCanonicalPtyOwners,
   resolveCanonicalPtyClaim,
   type CanonicalPtyOwners
-} from '../../../../shared/workspace-layout/legacy-terminal-row-claims'
+} from '../../../../shared/workspace-layout/terminal-topology/legacy-terminal-row-claims'
 import { clearTransientTerminalState } from './terminal-transient-state'
 
 /** Canonical/unified and legacy rows may share PTYs: retain uniquely owned panes, drop fully subsumed rows and strip shared PTYs from partial overlaps. */

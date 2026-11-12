@@ -1,4 +1,7 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import {
+  isWorkspaceCleanupHeadLanded,
+  type WorkspaceCleanupCandidate
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 import type {
@@ -241,6 +244,10 @@ function getGitSortRank(candidate: WorkspaceCleanupCandidate): number {
 }
 
 function hasUnpushedCommits(candidate: WorkspaceCleanupCandidate): boolean {
+  // Commits ahead of an upstream can already be in the base after a squash.
+  if (isWorkspaceCleanupHeadLanded(candidate.git.merge)) {
+    return false
+  }
   return (candidate.git.upstreamAhead ?? 0) > 0 || candidate.blockers.includes('unpushed-commits')
 }
 

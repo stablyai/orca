@@ -71,6 +71,7 @@ export function renderProjectSettingsSections(
                 : undefined
             }
             removalScope={getSettingsProjectRemovalScope(settingsProject)}
+            removalSetups={settingsProject.setups}
             isLocalWindowsProject={
               getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
               terminal.isWindowsTerminalHost

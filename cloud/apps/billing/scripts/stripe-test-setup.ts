@@ -1,4 +1,5 @@
-// One-time TEST MODE catalog setup: the Team product with monthly + annual seat prices, the
+// One-time TEST MODE catalog setup (every Product and Price carries metadata.orca_plan, the join key
+// to catalog/catalog.json): the Team product with monthly + annual seat prices, the
 // sandbox-seconds meter with its metered overage price, and a Customer Portal configuration
 // (monthly <-> annual switch, cancel; seats follow membership). Refuses any key that is not
 // sk_test_/rk_test_ and stops if Stripe ever reports a live-mode object. Prints the Worker vars.
@@ -53,7 +54,9 @@ const monthly = await post(
     unit_amount: prices.teamMonthly,
     recurring: { interval: 'month' },
     lookup_key: 'orca_team_seat_monthly',
-    transfer_lookup_key: true
+    transfer_lookup_key: true,
+    // The join key to the catalog (catalog/catalog.json plan id).
+    metadata: { orca_plan: 'team' }
   },
   `price:team:month:${suffix}`
 )
@@ -65,7 +68,8 @@ const annual = await post(
     unit_amount: prices.teamAnnual,
     recurring: { interval: 'year' },
     lookup_key: 'orca_team_seat_annual',
-    transfer_lookup_key: true
+    transfer_lookup_key: true,
+    metadata: { orca_plan: 'team' }
   },
   `price:team:year:${suffix}`
 )
@@ -95,6 +99,7 @@ const overage = await post(
     transform_quantity: { divide_by: OVERAGE_SECONDS_PER_BILLED_UNIT, round: 'up' },
     lookup_key: 'orca_sandbox_overage_per_minute',
     transfer_lookup_key: true,
+    metadata: { orca_plan: 'team', orca_role: 'overage' },
     nickname: 'Sandbox overage, billed by the minute'
   },
   `price:overage:minute:${suffix}`

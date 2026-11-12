@@ -166,6 +166,7 @@ export function useMobileSessionTerminalSubscription(
             return
           }
           if (data.type === 'subscribed') {
+            acceptTerminalLayoutSeq(layoutSeqRef.current, handle, data)
             outputAck.start(data)
             if (resume.subscribed(data)) {
               initializedHandlesRef.current.add(handle)

@@ -39,7 +39,7 @@ import {
   removeTestRoot
 } from '../../../../orcad/orcad-daemon-teardown-fixture'
 import { locatePinnedNodeForTests } from '../../../../orcad/orcad-node-slot-fixture'
-import { resolveAppImageExtractedRoot } from '../../../../cli/appimage-extracted-root'
+import { resolveAppImageExtractedRoot } from '../../../../cli/appimage/appimage-extracted-root'
 
 const ENTRY_IN_APPDIR = 'resources/app.asar.unpacked/out/main/daemon-entry.js'
 const requireFromTest = createRequire(import.meta.url)

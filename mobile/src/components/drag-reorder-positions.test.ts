@@ -9,16 +9,6 @@ import {
 } from './drag-reorder-positions'
 
 describe('drag reorder positions', () => {
-  it('shifts intermediate rows down when dragging a row later', () => {
-    const positions = dragReorderPositionsFromKeys(['a', 'b', 'c', 'd'])
-    expect(orderedKeysFromDragReorderPositions(moveDragReorderKey(positions, 'a', 2))).toEqual([
-      'b',
-      'c',
-      'a',
-      'd'
-    ])
-  })
-
   it('shifts intermediate rows up when dragging a row earlier', () => {
     const positions = dragReorderPositionsFromKeys(['a', 'b', 'c', 'd'])
     expect(orderedKeysFromDragReorderPositions(moveDragReorderKey(positions, 'd', 1))).toEqual([

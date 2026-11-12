@@ -95,6 +95,9 @@ public static class OrcaDesktopWin32 {
     public static extern bool ShowWindow(IntPtr hwnd, int nCmdShow);
 
     [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hwnd);
 
     [DllImport("user32.dll")]
@@ -342,7 +345,10 @@ function Assert-OrcaWindowTarget($Process, $WindowId, $WindowIndex) {
 
 function Restore-OrcaWindow($Process) {
     if ($Process.MainWindowHandle -eq 0) { return }
-    [void][OrcaDesktopWin32]::ShowWindow([IntPtr]$Process.MainWindowHandle, 9)
+    # Why: SW_RESTORE also un-maximizes, which moves the frame the agent targeted.
+    if ([OrcaDesktopWin32]::IsIconic([IntPtr]$Process.MainWindowHandle)) {
+        [void][OrcaDesktopWin32]::ShowWindow([IntPtr]$Process.MainWindowHandle, 9)
+    }
     [void][OrcaDesktopWin32]::SetForegroundWindow([IntPtr]$Process.MainWindowHandle)
 }
 

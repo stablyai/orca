@@ -20,7 +20,7 @@ import {
   setBackgroundWslGitGate,
   setLocalGitRuntimeRouter,
   type LocalGitRuntimeRouter
-} from '../../git/command-runner/local-git-runtime-route'
+} from '../../git/command-runner/host-routing/local-git-runtime-route'
 import { isWslDistroRunningForBackgroundWork } from '../../wsl/discovery/wsl-background-distro-gate'
 import {
   onWslHostsNewWorkChanged,

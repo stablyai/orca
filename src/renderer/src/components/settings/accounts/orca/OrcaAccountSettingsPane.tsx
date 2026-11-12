@@ -4,13 +4,14 @@ import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-reac
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
 import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
+import { GitHubIdentityRow } from './GitHubIdentityRow'
 
 function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -130,6 +131,9 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           )}
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </div>
+
+        {/* The person's own GitHub for cloud commits; only signed in to Orca Cloud. */}
+        {connected && cloudAvailable ? <GitHubIdentityRow /> : null}
 
         {/* JA-16: with Orca Cloud the page is identity + Sign out only; plan, team and agents have
             their own entries in the Orca Cloud group right beside it. */}

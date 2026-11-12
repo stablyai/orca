@@ -11,7 +11,7 @@ import { reviewTerminalListRead, reviewTerminalSendRun } from './mobile-review-t
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import { launchAgentWithPrompt } from './pr-ai-triage-launch'
 import { interpretOrThrowRefusalMessage } from '../../transport/rpc/rpc-refusal-message'
-import { healMobileNativeChatStaleInput } from '../../session/native-chat/mobile-native-chat-stale-input'
+import { healMobileNativeChatStaleInput } from '../../session/native-chat/composer/mobile-native-chat-stale-input'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
 

@@ -9,7 +9,6 @@ import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
 import { DeleteWorktreeDialogHeading } from './DeleteWorktreeDialogDescription'
-import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
 import {
@@ -27,19 +26,20 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
+import { useDeleteWorktreeAtRiskLocalFiles } from './use-delete-worktree-at-risk-local-files'
 import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'
 import { runLineageDeleteAll } from './delete-worktree-lineage-delete-all'
 import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { useSidebarHostScopeOptions } from '../../worktree-list/controls/use-sidebar-host-scope-options'
+import { translateHostDisplayLabel } from '../../execution-host-label'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-targets'
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import { useDetachWorktreeDeleteChildren } from './use-detach-worktree-delete-children'
 import { useDeleteWorktreeDialogDismissal } from './use-delete-worktree-dialog-dismissal'
-import * as cloudDelete from './DeleteCloudWorkspaceParts'
-import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import * as cloudDelete from './DeleteCloudWorkspaceSwitch'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const t = useTranslate()
@@ -58,8 +58,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
-    [hostOptions]
+    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host, t)])),
+    [hostOptions, t]
   )
   const isOpen = activeModal === 'delete-worktree'
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
@@ -123,7 +123,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   )
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   // One Orca Cloud workspace: its own copy, Archive instead, and no Force step when it's asleep.
-  const isCloud = useIsCloudWorkspace(isBatchDelete ? null : worktree?.id)
+  const cloud = cloudDelete.useCloudDeleteTarget(isBatchDelete ? undefined : worktree)
   // Git cannot remove the original clone with worktree remove; block it before the force-delete dead end.
   const isMainWorktree = !isBatchDelete && (worktree?.isMainWorktree ?? false)
   const childWorkspaceCount = lineageDelete.descendants.length
@@ -188,6 +188,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     isOpen,
     deleteTargets,
     visibleTargets: worktrees,
+    repoMap
+  })
+  const atRiskLocalFilesByIdentity = useDeleteWorktreeAtRiskLocalFiles({
+    isOpen,
+    deleteTargets,
     repoMap
   })
   const dirtyChanges = useMemo(() => {
@@ -321,12 +326,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         }}
       >
         <DialogHeader>
-          {isCloud && worktree ? (
-            <cloudDelete.DeleteCloudWorkspaceHeader
-              worktree={worktree}
-              dirtyCounts={dirtyChanges.counts}
-            />
-          ) : (
+          <cloudDelete.CloudDeleteHeading cloud={cloud} dirtyCounts={dirtyChanges.counts}>
             <DeleteWorktreeDialogHeading
               isBatchDelete={isBatchDelete}
               showUnknownChangeLossWarning={hasUnknownChangeState}
@@ -334,23 +334,23 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               targetName={isBatchDelete ? undefined : worktree?.displayName}
               description={deleteAllLineage ? lineageDeleteDescription : deleteCopy.description}
             />
-          )}
+          </cloudDelete.CloudDeleteHeading>
         </DialogHeader>
 
         <div className="scrollbar-sleek max-h-[50vh] min-w-0 space-y-4 overflow-y-auto">
-          {isCloud ? null : (
-            <DeleteWorktreeTargetPreview
-              isBatchDelete={isBatchDelete}
-              worktree={worktree}
-              worktrees={worktrees}
-              collisionWorktrees={allWorktrees}
-              hostLabelById={hostLabelById}
-              deleteStateByWorktreeId={deleteStateByWorktreeId}
-              changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
-              dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
-              dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
-            />
-          )}
+          <cloudDelete.LocalDeleteTargetPreview
+            cloud={cloud}
+            isBatchDelete={isBatchDelete}
+            worktree={worktree}
+            worktrees={worktrees}
+            collisionWorktrees={allWorktrees}
+            hostLabelById={hostLabelById}
+            deleteStateByWorktreeId={deleteStateByWorktreeId}
+            changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
+            dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
+            dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+            atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
+          />
 
           <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
 
@@ -362,6 +362,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
               dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
               dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+              atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
               preserveChildren={preserveChildrenSelected}
               canPreserveChildren={canPreserveChildren}
               disabled={isDeleting}
@@ -377,16 +378,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         />
 
         <DialogFooter>
-          {isCloud && worktree ? (
-            <cloudDelete.DeleteCloudWorkspaceFooter
-              isDeleting={isDeleting}
-              onCancel={() => handleOpenChange(false)}
-              onArchive={() => cloudDelete.archiveInsteadOfDelete(worktree, closeModal)}
-              // The dialog is the consent: an asleep sandbox is deleted without waking it.
-              onDelete={() => handleDelete(true)}
-              cancelButtonRef={confirmButtonRef}
-            />
-          ) : (
+          <cloudDelete.CloudDeleteFooter
+            cloud={cloud}
+            isDeleting={isDeleting}
+            onCancel={() => handleOpenChange(false)}
+            onDelete={() => handleDelete(true)}
+            cancelButtonRef={confirmButtonRef}
+          >
             <DeleteWorktreeDialogFooter
               isMainWorktree={isMainWorktree}
               isDeleting={isDeleting || isSavingForcePreference}
@@ -412,7 +410,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               onAlwaysDelete={allowSkipConfirm ? persistSkipConfirmPreference : undefined}
               confirmButtonRef={confirmButtonRef}
             />
-          )}
+          </cloudDelete.CloudDeleteFooter>
         </DialogFooter>
       </DialogContent>
     </Dialog>

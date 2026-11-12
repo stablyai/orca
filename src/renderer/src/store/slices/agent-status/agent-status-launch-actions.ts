@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type { AgentLaunchConfigRegistryEntry } from './agent-status-contract'
@@ -62,13 +63,15 @@ export function createAgentStatusLaunchActions(
               })
             : null
           if (refreshedRecord) {
-            nextSleepingAgentSessions = {
-              ...s.sleepingAgentSessionsByPaneKey,
-              [paneKey]: {
-                ...refreshedRecord,
-                capturedAt: existingSleepingRecord.capturedAt
-              }
-            }
+            nextSleepingAgentSessions = replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
+              [
+                paneKey,
+                {
+                  ...refreshedRecord,
+                  capturedAt: existingSleepingRecord.capturedAt
+                }
+              ]
+            ])
           }
         }
         if (!registryChanged && nextSleepingAgentSessions === s.sleepingAgentSessionsByPaneKey) {
@@ -84,7 +87,9 @@ export function createAgentStatusLaunchActions(
               }
             : {}),
           ...(nextSleepingAgentSessions !== s.sleepingAgentSessionsByPaneKey
-            ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions }
+            ? {
+                sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions
+              }
             : {})
         }
       })

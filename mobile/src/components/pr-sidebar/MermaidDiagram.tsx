@@ -1,5 +1,5 @@
 import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View, type HostInstance } from 'react-native'
 import { Maximize2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -24,7 +24,7 @@ export type MermaidDiagramProps = {
 // Source is a JS string argument, never inline-script interpolation.
 export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
   const colorScheme = useMobileColorScheme()
-  const hostRef = useRef<View>(null)
+  const hostRef = useRef<HostInstance>(null)
   // Remember failing source, not flag, so next source need not clear failure through effect.
   const [failedSource, setFailedSource] = useState<string | null>(null)
   // Sanitize React id for CSS identifier because mermaid embeds #id rules; do not assume React’s current _R_0_ spelling.

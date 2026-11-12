@@ -16,7 +16,15 @@ export const AgentConfigItemKind = z.enum([
   /** ~/.codex/skills/<name>/: Codex's older skills folder. */
   'codex-skill',
   /** ~/.codex/prompts/<name>.md: Codex custom prompts (its slash commands). */
-  'codex-prompt'
+  'codex-prompt',
+  /** ~/.claude/agents/<name>.md or <repo>/.claude/agents/<name>.md: Claude subagents. */
+  'claude-agent',
+  /** ~/.claude/output-styles/<name>.md: Claude output styles. */
+  'claude-output-style',
+  /** ~/.claude/CLAUDE.md: Claude's user memory (name `CLAUDE`). Off until the user turns it on. */
+  'claude-memory',
+  /** ~/.codex/AGENTS.md: Codex's global instructions (name `AGENTS`). Off until turned on. */
+  'codex-memory'
 ])
 export type AgentConfigItemKind = z.infer<typeof AgentConfigItemKind>
 
@@ -25,18 +33,48 @@ export type AgentConfigItemScope = z.infer<typeof AgentConfigItemScope>
 
 export const AGENT_CONFIG_FILE_KINDS: ReadonlySet<AgentConfigItemKind> = new Set([
   'claude-command',
+  'codex-prompt',
+  'claude-agent',
+  'claude-output-style',
+  'claude-memory',
+  'codex-memory'
+])
+/** What the first sync protocol knew. A host that answers `invalid_argument` to the `kinds` field
+ * only gets these; the newer kinds wait for a workspace on a newer image. */
+export const AGENT_CONFIG_LEGACY_KINDS: ReadonlySet<AgentConfigItemKind> = new Set([
+  'claude-skill',
+  'claude-command',
+  'agents-skill',
+  'codex-skill',
   'codex-prompt'
 ])
+/** Personal instructions: they reach a sandbox (which teammates may share) only when turned on. */
+export const AGENT_CONFIG_OPT_IN_KINDS: ReadonlySet<AgentConfigItemKind> = new Set([
+  'claude-memory',
+  'codex-memory'
+])
+/** The one name a memory item has: its file is `<name>.md` in the agent's config folder. */
+export const AGENT_CONFIG_MEMORY_NAME: Partial<Record<AgentConfigItemKind, string>> = {
+  'claude-memory': 'CLAUDE',
+  'codex-memory': 'AGENTS'
+}
 /** Kinds Claude Code or Codex reads from a project checkout. */
 export const AGENT_CONFIG_PROJECT_KINDS: ReadonlySet<AgentConfigItemKind> = new Set([
   'claude-skill',
   'claude-command',
-  'agents-skill'
+  'agents-skill',
+  'claude-agent'
 ])
 
 export type AgentConfigAgent = 'claude' | 'codex'
+const CODEX_KINDS: ReadonlySet<AgentConfigItemKind> = new Set([
+  'agents-skill',
+  'codex-skill',
+  'codex-prompt',
+  'codex-memory'
+])
 export const agentOfKind = (kind: AgentConfigItemKind): AgentConfigAgent =>
-  kind === 'claude-skill' || kind === 'claude-command' ? 'claude' : 'codex'
+  CODEX_KINDS.has(kind) ? 'codex' : 'claude'
 export const isSkillKind = (kind: AgentConfigItemKind): boolean =>
   !AGENT_CONFIG_FILE_KINDS.has(kind)
 
@@ -97,9 +135,16 @@ export type AgentConfigItemRef = z.infer<typeof ItemRef>
 export const AgentConfigSyncPlanParams = z
   .object({
     syncer: Syncer,
-    items: z.array(ItemRef).max(AGENT_CONFIG_LIMITS.items)
+    items: z.array(ItemRef).max(AGENT_CONFIG_LIMITS.items),
+    /** Kinds this call manages: only these are pruned. Absent means the legacy five. */
+    kinds: z.array(AgentConfigItemKind).max(32).optional()
   })
   .strict()
+  .refine(
+    (params) =>
+      !params.kinds || params.items.every((item) => params.kinds?.includes(item.kind) === true),
+    { message: 'An item’s kind is not in kinds.' }
+  )
 export type AgentConfigSyncPlanParams = z.infer<typeof AgentConfigSyncPlanParams>
 
 export const AgentConfigPlanOutcome = z.enum([
@@ -182,6 +227,8 @@ export type AgentConfigSkipReason =
   /** The skill's main file (or the command) looks like it holds a key or token. */
   | 'secret'
   | 'invalid'
+  /** This sandbox's Orca predates this kind (subagents, output styles, memory). */
+  | 'host-outdated'
 
 /** One item as the UI sees it: never file contents. */
 export type AgentConfigSyncRow = {
@@ -193,6 +240,8 @@ export type AgentConfigSyncRow = {
   fileCount: number
   /** Files kept on this computer because they look like keys or credentials. */
   withheldFiles: number
+  /** Memory that imports files from outside its folder (`@/path`): those aren't copied. */
+  localRefs?: number
   /** Set on a copy made for the other agent: the key of the item it came from. */
   convertedFrom?: string
   /** Content identity; the same digest in two agents' folders is one skill shown on one row. */
@@ -218,6 +267,8 @@ export type CloudAgentConfigSyncPreferences = {
   shareAcrossAgents: boolean
   /** Item keys the user turned off. */
   excluded: string[]
+  /** Keys of opt-in items (memory) the user turned on. */
+  optedIn: string[]
 }
 
 export const CLOUD_AGENT_CONFIG_SYNC_CHANGED_CHANNEL = 'cloudAgentConfigSync:changed'

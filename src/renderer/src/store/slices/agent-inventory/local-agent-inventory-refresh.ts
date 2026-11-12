@@ -1,15 +1,15 @@
-import type { StoreApi } from 'zustand'
-import type { AppState } from '../../types'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { filterEnabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
-import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
+import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
-import type { LocalAgentRefreshOptions } from './local-detected-agent-store-state'
 import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import type { StoreApi } from 'zustand'
+import type { AppState } from '../../types'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { LocalAgentRefreshOptions } from './local-detected-agent-store-state'
 
 export type LocalAgentInventoryLifecycle = {
   detectPromises: Map<string, Promise<TuiAgent[]>>

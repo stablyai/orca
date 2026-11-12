@@ -8,7 +8,7 @@ import {
   type ComponentProps,
   type Ref
 } from 'react'
-import { Platform, ScrollView } from 'react-native'
+import { Platform, ScrollView, type ScrollViewInstance } from 'react-native'
 import { MobileNativeChatDisclosureContext } from './mobile-native-chat-disclosure-store'
 
 const RootAddress = createContext<{ id: string; address: string; owner: string } | null>(null)
@@ -28,7 +28,7 @@ export function MobileNativeChatOwnedScrollView({
   owner?: string
   initialFollow?: boolean
   followKey?: number
-  ref?: Ref<ScrollView>
+  ref?: Ref<ScrollViewInstance>
 }) {
   const store = useContext(MobileNativeChatDisclosureContext)
   const parent = useContext(RootAddress)
@@ -37,10 +37,10 @@ export function MobileNativeChatOwnedScrollView({
   const rootOwner = owner ?? parent?.owner ?? id
   const value = useMemo(() => ({ id, address, owner: rootOwner }), [id, address, rootOwner])
   const roots = store?.roots
-  const scroll = useRef<ScrollView>(null)
+  const scroll = useRef<ScrollViewInstance>(null)
   const release = useRef<(() => void) | undefined>(undefined)
   const attach = useCallback(
-    (node: ScrollView | null) => {
+    (node: ScrollViewInstance | null) => {
       scroll.current = node
       if (typeof ref === 'function') {
         return ref(node)

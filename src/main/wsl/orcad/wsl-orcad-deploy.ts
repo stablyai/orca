@@ -31,7 +31,7 @@ import {
   deployOrcad,
   type OrcadDeployOptions
 } from '../../managed-server/install/orcad-remote-deploy'
-import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { readLocalFullVersion } from '../../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 

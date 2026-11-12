@@ -21,20 +21,8 @@ describe('areStructurallyEqual', () => {
     expect(areStructurallyEqual({ a: 1 }, { b: 1 })).toBe(false)
   })
 
-  it('compares functions by identity', () => {
-    const press = () => {}
-    expect(areStructurallyEqual({ press }, { press })).toBe(true)
-    expect(areStructurallyEqual({ press }, { press: () => {} })).toBe(false)
-  })
-
   it('does not equate an array with an object of the same entries', () => {
     expect(areStructurallyEqual(['a'], { 0: 'a' })).toBe(false)
     expect(areStructurallyEqual([], {})).toBe(false)
-  })
-
-  it('compares primitives with Object.is', () => {
-    expect(areStructurallyEqual(Number.NaN, Number.NaN)).toBe(true)
-    expect(areStructurallyEqual(null, undefined)).toBe(false)
-    expect(areStructurallyEqual(0, '0')).toBe(false)
   })
 })

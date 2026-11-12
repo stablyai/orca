@@ -5,12 +5,12 @@ import {
   isBrowserPageMobileDriven,
   onBrowserDriverChange,
   useBrowserMobileDriverForAny
-} from '../../../lib/pane-manager/browser-mobile-driver-state'
+} from '../../../runtime/browser/ownership/browser-mobile-driver-state'
+import { useBrowserRemoteViewerForAny } from '../../../runtime/browser/ownership/browser-remote-viewer-state'
 import {
   isBrowserPageRemotelyViewed,
-  onBrowserRemoteViewerChange,
-  useBrowserRemoteViewerForAny
-} from '../../../lib/pane-manager/browser-remote-viewer-state'
+  onBrowserRemoteViewerChange
+} from '../../../runtime/browser/ownership/browser-remote-viewer-store'
 import {
   isBrowserAutomationVisible,
   onBrowserAutomationVisibilityChange,

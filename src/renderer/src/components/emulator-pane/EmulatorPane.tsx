@@ -34,6 +34,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     sendGesture,
     sendRotate,
     displayName,
+    deviceId,
     previewUrl,
     wsUrl,
     streamKey,
@@ -97,6 +98,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             </p>
           ) : null}
           <EmulatorDeviceFrame
+            deviceId={deviceId}
             previewUrl={previewUrl}
             wsUrl={wsUrl}
             streamKey={streamKey}

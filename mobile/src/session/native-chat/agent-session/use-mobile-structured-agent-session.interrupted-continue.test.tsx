@@ -7,12 +7,12 @@ import { agentJournalItemKey } from '../../../../../src/shared/agent-session/jou
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
-import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
+import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import {
   snapshotEvent,
   SESSION_ID
 } from './use-mobile-structured-agent-session-queued.test-fixture'
-import { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
+import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null), setItem: vi.fn(), removeItem: vi.fn() }

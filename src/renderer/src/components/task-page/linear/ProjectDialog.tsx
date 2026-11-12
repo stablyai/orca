@@ -6,12 +6,12 @@ import {
   DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, Check, X, LoaderCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { TaskPageLinearProjectFields } from './ProjectFields'
 export function TaskPageLinearProjectDialog({
   model

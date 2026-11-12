@@ -1,4 +1,3 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import {
   NumberField,
   SettingsRow,
@@ -7,8 +6,9 @@ import {
   SettingsSwitchRow
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { clampNumber } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 type TerminalCursorAppearanceSectionProps = {
   settings: GlobalSettings

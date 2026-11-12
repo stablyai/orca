@@ -1,3 +1,4 @@
+import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import { ipcRenderer } from 'electron'
 import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'
@@ -22,6 +23,17 @@ import type { PreloadApi } from '../../api-types'
 export const browserGuestRegistrationAndDownloadsApi = {
   onClientPageRendererRequest: browserClientPageRendererRequests.subscribe,
   readClientHostId: (): string | null => readBrowserClientHostIdArgument(process.argv),
+  getGuestMetadata: (args: {
+    browserPageId: string
+    webContentsId: number
+  }): Promise<BrowserGuestMetadata | null | undefined> =>
+    ipcRenderer.invoke('browser:getGuestMetadata', args),
+  onGuestMetadata: (callback: (state: BrowserGuestMetadata) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: BrowserGuestMetadata): void =>
+      callback(state)
+    ipcRenderer.on('browser:guest-metadata', listener)
+    return () => ipcRenderer.removeListener('browser:guest-metadata', listener)
+  },
   registerGuest: (args: {
     browserPageId: string
     workspaceId: string

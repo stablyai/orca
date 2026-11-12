@@ -1,17 +1,17 @@
 // Accumulate per-record changes until flush. Bindings/live titles apply alone; other records require a workspace build.
 
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout/workspace-layout-cache'
-import { stableJson } from '../../../../../shared/workspace-layout/workspace-layout-load-report'
-import type { WorkspaceLayoutRecordsFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+import { stableJson } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
+import type { WorkspaceLayoutRecordsFrame } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import type {
   PublishedPane,
   PublishedTab,
   PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type {
   PublishedPaneTree,
   WorkspaceLayoutRecordChange
-} from '../../../../../shared/workspace-layout/workspace-layout-records'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-records'
 
 export type PendingWorkspaceChanges = {
   rebuild: boolean

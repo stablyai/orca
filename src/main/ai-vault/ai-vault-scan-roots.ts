@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
+import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { getCachedWslDistros, hasCachedWslDistros } from '../wsl/discovery/distro-catalog'
 import {
   listLastKnownRunningWslHomeDirs,
@@ -9,7 +9,7 @@ import {
 } from '../wsl/discovery/wsl-home-unless-stopped'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl/filesystem/wsl-running-path-filter'
 import type { AiVaultScanOptions } from './session-scanner-types'
-import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
+import { managedOpenCodeAccountDataDirs } from '../opencode/accounts/opencode-managed-account-data-dirs'
 import { antigravityChatBrainDir } from '../antigravity/antigravity-chat-home'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'

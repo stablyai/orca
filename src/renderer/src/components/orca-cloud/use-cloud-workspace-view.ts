@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useNow } from '@/hooks/use-now'
 import { useAppStore } from '@/store'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useIsSleepingWorktree } from '@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state'
 import {
   deriveCloudDotState,

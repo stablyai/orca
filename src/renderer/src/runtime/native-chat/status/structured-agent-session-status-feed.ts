@@ -25,12 +25,10 @@ import {
   type StructuredAgentSessionStatusChange
 } from './structured-agent-session-status-dispatch'
 
-export type StructuredAgentSessionStatusSnapshot = AgentSessionStatusSnapshot
-
 export type StructuredAgentSessionStatusFeedOwner = {
   activate: () => () => void
   /** The live map, updated in place: read entries, never use its identity as a change signal. */
-  getSnapshot: () => StructuredAgentSessionStatusSnapshot
+  getSnapshot: () => AgentSessionStatusSnapshot
   getNamingSnapshot: () => AgentSessionConversationNames
   getAssociationRevision: () => number
   getSessionSleepState: (sessionId: string) => number | null | undefined

@@ -49,7 +49,6 @@ export type BrowserPageWebviewGuestSessionArgs = {
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   setGuestRecoveryGeneration: Dispatch<SetStateAction<number>>
   focusAddressBarNow: () => boolean
-  syncNavigationState: (webview: Electron.WebviewTag) => void
   syncBrowserAnnotationViewportBridge: () => void
 }
 
@@ -78,7 +77,6 @@ export function createBrowserPageWebviewGuestSession({
   onUpdatePageStateRef,
   setGuestRecoveryGeneration,
   focusAddressBarNow,
-  syncNavigationState,
   syncBrowserAnnotationViewportBridge
 }: BrowserPageWebviewGuestSessionArgs): BrowserPageWebviewGuestSession {
   let registrationInFlight: {
@@ -255,7 +253,6 @@ export function createBrowserPageWebviewGuestSession({
         guestRecovery.validateAfterResume()
       }
     }
-    syncNavigationState(webview)
     if (keepAddressBarFocusRef.current) {
       focusAddressBarNow()
     }

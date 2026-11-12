@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcRequest } from '../../../core'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import '../../../../../linear/linear-issue-write-support'
+import '../../../../../linear/issues/linear-issue-write-support'
 import {
   linearError,
   sanitizeLinearErrorMessage,
   type LinearAgentAccessError
-} from '../../../../../linear/issue-context/errors'
+} from '../../../../../linear/issues/context/linear-access-errors'
 import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {

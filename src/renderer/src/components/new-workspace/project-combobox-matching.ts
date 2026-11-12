@@ -1,5 +1,5 @@
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import { isNewWorkspaceProjectOptionQueryTooLarge } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
+import { isNewWorkspaceProjectOptionQueryTooLarge } from '@/lib/workspace/creation/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

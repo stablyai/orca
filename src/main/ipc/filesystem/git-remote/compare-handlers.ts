@@ -9,7 +9,7 @@ import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registere
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
 import { validateFullGitObjectId } from '../access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
-import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'

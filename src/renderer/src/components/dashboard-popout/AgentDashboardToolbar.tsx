@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status/presentation/workspace-status'
 import type { DashboardCard, DashboardFilterOptions } from '../../../../shared/dashboard-snapshot'
 import {

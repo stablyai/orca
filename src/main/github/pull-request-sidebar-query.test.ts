@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { exec, spend } = vi.hoisted(() => ({ exec: vi.fn(), spend: vi.fn() }))
-vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: exec
 }))

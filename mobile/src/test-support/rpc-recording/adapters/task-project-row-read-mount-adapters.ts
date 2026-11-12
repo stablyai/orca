@@ -1,3 +1,5 @@
+import type * as UseMobileTasksProjectDetailLoadingModule from '../../../tasks/project-board/use-mobile-tasks-project-detail-loading'
+import type * as UseMobileTasksProjectMetadataLoadingModule from '../../../tasks/project-board/use-mobile-tasks-project-metadata-loading'
 import { useTaskFileMountOwner } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -159,7 +161,6 @@ function mountModelHook<Actions>(
 export function taskProjectRowReadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const boardFixture = {
     activeGitHubProjectHost: PROJECT_HOST,
     findProjectRowRepo: () => PROJECT_REPO,
@@ -171,9 +172,9 @@ export function taskProjectRowReadMountAdapters(
     projectRowDetailRefreshSeq: 0
   }
   const rowDetail: MountAdapter = (context) => {
-    const useLoading = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-detail-loading')
-    >('use-mobile-tasks-project-detail-loading.tsx').useMobileTasksProjectDetailLoading
+    const useLoading = modules.load<typeof UseMobileTasksProjectDetailLoadingModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-detail-loading.tsx'
+    ).useMobileTasksProjectDetailLoading
     return mountModelHook(modules, context, {
       useHook: (model) => useLoading(model),
       fileOwner: true,
@@ -216,9 +217,9 @@ export function taskProjectRowReadMountAdapters(
     })
   }
   const rowMetadataLoad: MountAdapter = (context) => {
-    const useLoading = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-metadata-loading')
-    >('use-mobile-tasks-project-metadata-loading.tsx').useMobileTasksProjectMetadataLoading
+    const useLoading = modules.load<typeof UseMobileTasksProjectMetadataLoadingModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-metadata-loading.tsx'
+    ).useMobileTasksProjectMetadataLoading
     return mountModelHook(modules, context, {
       useHook: (model) => useLoading(model),
       fixture: {

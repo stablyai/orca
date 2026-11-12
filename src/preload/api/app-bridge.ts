@@ -82,8 +82,10 @@ export const appApi = {
     ipcRenderer.on('app:structuredAgentSessionsHeldChanged', listener)
     return () => ipcRenderer.removeListener('app:structuredAgentSessionsHeldChanged', listener)
   },
-  recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
-    ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
+  recoverLegacyWorkerTerminalsForRendererStartup: (options?: {
+    afterReconnect?: boolean
+  }): Promise<void> =>
+    ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup', options),
   startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
     startupDiagnosticsEnabled
       ? ipcRenderer.invoke('app:startupDiagnostic', event, details)

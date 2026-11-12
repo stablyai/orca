@@ -19,7 +19,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
-import { isLastVisitedWorktreeRow } from './host-list-highlight'
 import {
   readLastVisitedWorktreeOnHost,
   subscribeLastVisitedWorktree,
@@ -34,12 +33,6 @@ import {
 const stored = () => storage.values.get(LAST_VISITED_WORKTREE_STORAGE_KEY) ?? null
 
 describe('readLastVisitedWorktreeOnHost', () => {
-  it('reads nothing for a host this phone never opened a workspace on', () => {
-    expect(readLastVisitedWorktreeOnHost(null, 'host-1')).toBeNull()
-    const raw = withLastVisitedWorktree(null, { hostId: 'host-2', worktreeId: 'repo::/w/a' })
-    expect(readLastVisitedWorktreeOnHost(raw, 'host-1')).toBeNull()
-  })
-
   it('remembers each host’s own visit, whichever host was visited last', () => {
     let raw = withLastVisitedWorktree(null, { hostId: 'host-1', worktreeId: 'repo::/w/a' })
     raw = withLastVisitedWorktree(raw, {
@@ -81,28 +74,6 @@ describe('readLastVisitedWorktreeOnHost', () => {
       worktreeId: 'repo::/w/revisited'
     })
     expect(readLastVisitedWorktreeOnHost(raw, 'host-5')).toBeNull()
-  })
-})
-
-describe('isLastVisitedWorktreeRow', () => {
-  it('matches a desktop row (local or SSH) by id, and a server row by its server too', () => {
-    const visit = { worktreeId: 'repo::/w/a' }
-    expect(isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'local' }, visit)).toBe(
-      true
-    )
-    expect(isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'ssh:gpu' }, visit)).toBe(
-      true
-    )
-    expect(
-      isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'runtime:env-1' }, visit)
-    ).toBe(false)
-    const serverVisit = { worktreeId: 'repo::/w/a', executionHost: 'runtime:env-1' as const }
-    expect(
-      isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'runtime:env-1' }, serverVisit)
-    ).toBe(true)
-    expect(isLastVisitedWorktreeRow({ worktreeId: 'repo::/w/a', hostId: 'local' }, null)).toBe(
-      false
-    )
   })
 })
 

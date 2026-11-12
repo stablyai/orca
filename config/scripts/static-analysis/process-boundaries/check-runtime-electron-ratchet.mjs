@@ -23,6 +23,7 @@ const ENTRY_POINTS = [
 
 // Whole lane directories cover new files automatically; only structured-chat files are plain-Node-safe inside runtime/.
 export const STRUCTURED_CHAT_LANES = [
+  { directory: ['src', 'main', 'backend'] },
   { directory: ['src', 'main', 'native-chat'] },
   { directory: ['src', 'main', 'claude'] },
   { directory: ['src', 'main', 'codex'] },

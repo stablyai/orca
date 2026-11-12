@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { safeFit } from '@/lib/pane-manager/pane-fit'
-import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
+import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-focus/pane-overlay-focus'
 
 type ExpandCollapseState = {
   expandedPaneIdRef: React.MutableRefObject<number | null>

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type MutableRefObject } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import {
@@ -39,24 +40,26 @@ export function useBrowserPageReloadActions({
     () => ({ loading: browserTab.loading, loadErrorCode: browserTab.loadError?.code ?? null }),
     [browserTab.loading, browserTab.loadError]
   )
-  const reloadWebviewOrRecoverGuest = useCallback(
-    (ignoreCache: boolean) => {
-      const webview = webviewRef.current
-      if (!webview) {
-        return
-      }
-      const result = reloadBrowserPageWebview(webview, { ignoreCache })
-      if (result === 'not-ready') {
-        return
-      }
-      onUpdatePageStateRef.current(browserTab.id, { loading: true })
-      if (result === 'guest-missing') {
-        // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
-        retryGuestRecoveryRef.current()
-      }
-    },
-    [browserTab.id, onUpdatePageStateRef, retryGuestRecoveryRef, webviewRef]
-  )
+  // Stable so shortcut listeners don't re-register on every page-state update.
+  const reloadWebviewOrRecoverGuest = useLatestHandler((ignoreCache: boolean) => {
+    const webview = webviewRef.current
+    if (!webview) {
+      return
+    }
+    const result = reloadBrowserPageWebview(webview, { ignoreCache })
+    if (result === 'not-ready') {
+      return
+    }
+    if (result === 'nothing-to-reload') {
+      retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+      return
+    }
+    onUpdatePageStateRef.current(browserTab.id, { loading: true })
+    if (result === 'guest-missing') {
+      // Why: reload cannot revive a destroyed guest (STA-3448) — recreate it instead.
+      retryGuestRecoveryRef.current()
+    }
+  })
   const runReloadTrigger = useCallback(
     (trigger: BrowserReloadTrigger) => {
       const webview = webviewRef.current

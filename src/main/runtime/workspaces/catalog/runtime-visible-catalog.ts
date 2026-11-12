@@ -18,7 +18,7 @@ import {
   visibleProjectGroups,
   visibleProjectHostSetups,
   visibleRepos
-} from '../../../persistence/migrating-orcad-catalog/orcad-source-visibility'
+} from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 type CatalogSource = Pick<

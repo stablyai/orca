@@ -8,19 +8,16 @@ import {
 } from '../../../src/shared/worktree/retired-name-registry'
 import { useRetiredWorktreeNames } from './use-retired-worktree-names'
 
-type Pending = { resolve: (response: unknown) => void; reject: (err: Error) => void }
+type Pending = { resolve: (response: unknown) => void }
 
 // Defer RPC replies to control both their repo and arrival order.
 function mountNames() {
   const pending: Pending[] = []
-  const requests: { method: string; params: unknown }[] = []
   let latest: RetiredNameRegistry = EMPTY_RETIRED_NAME_REGISTRY
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The hook only calls this fixture's deferred sendRequest method.
   const client = {
-    sendRequest: (method: string, params: unknown) => {
-      requests.push({ method, params })
-      return new Promise<unknown>((resolve, reject) => pending.push({ resolve, reject }))
-    }
+    sendRequest: () => new Promise<unknown>((resolve) => pending.push({ resolve }))
   } as unknown as RpcClient
 
   function Probe({ repoId, refreshKey }: { repoId: string | null; refreshKey: string }) {
@@ -33,13 +30,9 @@ function mountNames() {
     renderer = create(createElement(Probe, { repoId: 'repo-1', refreshKey: 'a' }))
   })
   return {
-    get registry(): RetiredNameRegistry {
-      return latest
-    },
     get names(): readonly string[] {
       return latest.names
     },
-    requests,
     rerender(props: { repoId: string | null; refreshKey: string }) {
       act(() => {
         renderer.update(createElement(Probe, props))
@@ -58,29 +51,11 @@ function mountNames() {
         })
         await Promise.resolve()
       })
-    },
-    async fail(index: number) {
-      await act(async () => {
-        pending[index]!.reject(new Error('host unreachable'))
-        await Promise.resolve()
-      })
     }
   }
 }
 
 describe('useRetiredWorktreeNames', () => {
-  // Match desktop: refresh failure must not un-retire every name for the rest of the sheet session.
-  it('keeps previously loaded names when a refresh fails', async () => {
-    const probe = mountNames()
-    await probe.settle(0, { 'repo-1': ['nautilus'] })
-    expect(probe.names).toEqual(['nautilus'])
-
-    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
-    await probe.fail(1)
-
-    expect(probe.names).toEqual(['nautilus'])
-  })
-
   it('drops names when the repo changes rather than showing another repo pool', async () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': ['nautilus'] })
