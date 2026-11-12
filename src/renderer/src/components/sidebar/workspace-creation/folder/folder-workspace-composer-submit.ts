@@ -3,7 +3,8 @@ import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-la
 import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
+import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import '@/diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
 import { activateAndRevealFolderWorkspace } from '@/lib/workspace/activation/worktree-activation'
@@ -107,40 +108,43 @@ export async function submitFolderWorkspaceCreate({
     : settings
   const typedPrompt = quickAgent && initialPrompt?.trim() ? initialPrompt : null
   const prompt = typedPrompt ?? note
-  const startupPlan =
-    quickAgent && launchPlatform && linkedWorkItem && !typedPrompt
-      ? buildFolderWorkspaceLinkedStartupPlan({
+  let startupPlan: AgentStartupPlan | null = null
+  if (quickAgent && launchPlatform && linkedWorkItem && !typedPrompt) {
+    startupPlan = buildFolderWorkspaceLinkedStartupPlan({
+      agent: quickAgent,
+      settings: effectiveSettings,
+      linkedWorkItem,
+      note,
+      agentCmdOverrides,
+      agentArgs,
+      sessionOptions,
+      agentEnv,
+      platform: launchPlatform,
+      shell: launchShell,
+      isRemote: launchIsRemote
+    })
+  } else if (quickAgent && launchPlatform) {
+    const startup = planLaunchAgentStartupPrompt({
+      base: {
+        ...resolveAgentStartupPlanInputs({
           agent: quickAgent,
-          settings: effectiveSettings,
-          linkedWorkItem,
-          note,
-          agentCmdOverrides,
-          agentArgs,
+          settings: effectiveSettings ?? { agentCmdOverrides },
+          agentArgs: settings ? agentArgs : (agentArgs ?? null),
           sessionOptions,
-          agentEnv,
           platform: launchPlatform,
           shell: launchShell,
           isRemote: launchIsRemote
-        })
-      : quickAgent && launchPlatform
-        ? buildAgentStartupPlan({
-            ...resolveAgentStartupPlanInputs({
-              agent: quickAgent,
-              settings: effectiveSettings ?? { agentCmdOverrides },
-              agentArgs: settings ? agentArgs : (agentArgs ?? null),
-              sessionOptions,
-              platform: launchPlatform,
-              shell: launchShell,
-              isRemote: launchIsRemote
-            }),
-            ...(agentEnv ? { agentEnv } : {}),
-            prompt: typedPrompt ? '' : note,
-            allowEmptyPromptLaunch: true,
-            ...(typedPrompt ? { suppressStartupUpdatePrompt: true } : {})
-          })
-        : null
-  if (startupPlan && typedPrompt) {
-    startupPlan.followupPrompt = typedPrompt
+        }),
+        ...(agentEnv ? { agentEnv } : {})
+      },
+      prompt,
+      promptDelivery: typedPrompt ? 'submit-after-ready' : 'auto-submit',
+      isFollowupPath: false
+    })
+    startupPlan = startup.startupPlan
+    if (startupPlan && startup.submitPastedPrompt) {
+      startupPlan.followupPrompt = startup.pasteDraftAfterLaunch
+    }
   }
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
