@@ -9,6 +9,7 @@ import {
 import {
   prepareAndInvokeAppRestart,
   prepareAndInvokeUpdaterInstall,
+  registerApplicationsFolderMoveRelay,
   registerRendererRestartIpcRelays
 } from './renderer-restart-wiring'
 
@@ -159,5 +160,84 @@ describe('renderer restart wiring', () => {
 
     expect(invoke).not.toHaveBeenCalled()
     expect(relay.markPrepared).not.toHaveBeenCalled()
+  })
+})
+
+function moveRelayIpc(
+  eventTarget: EventTarget,
+  options: { move?: () => unknown; checkpoint?: () => Promise<void> } = {}
+) {
+  let invoked = (): void => {}
+  const invokedOnce = new Promise<void>((resolve) => {
+    invoked = resolve
+  })
+  let sent = (): void => {}
+  const sentOnce = new Promise<void>((resolve) => {
+    sent = resolve
+  })
+  const ipcRenderer = Object.assign(new EventEmitter(), {
+    invoke: vi.fn(async () => {
+      const moved = options.move ? options.move() : true
+      invoked()
+      return moved
+    }),
+    postMessage: vi.fn(),
+    send: vi.fn(() => {
+      sent()
+    }),
+    sendSync: vi.fn(),
+    sendToHost: vi.fn()
+  })
+  registerApplicationsFolderMoveRelay(
+    ipcRenderer,
+    eventTarget,
+    options.checkpoint ?? (async () => {})
+  )
+  return { ipcRenderer, invokedOnce, sentOnce }
+}
+
+describe('applications folder move relay', () => {
+  it('marks an intentional restart before main moves the bundle', async () => {
+    const eventTarget = new EventTarget()
+    const order: string[] = []
+    eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, () =>
+      order.push('restart-started')
+    )
+    const { ipcRenderer, invokedOnce } = moveRelayIpc(eventTarget, {
+      move: () => {
+        order.push('move')
+        return true
+      }
+    })
+    ipcRenderer.emit('applicationsFolderMove:begin', {}, 'move-token')
+    await invokedOnce
+    expect(order).toEqual(['restart-started', 'move'])
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith('applicationsFolderMove:move', 'move-token')
+  })
+
+  it('re-arms quit guards when main declines to move', async () => {
+    const eventTarget = new EventTarget()
+    const aborted = new Promise<void>((resolve) => {
+      eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, () => resolve())
+    })
+    const { ipcRenderer } = moveRelayIpc(eventTarget, { move: () => false })
+    ipcRenderer.emit('applicationsFolderMove:begin', {}, 'move-token')
+    await aborted
+  })
+
+  it('tells main when preparation fails instead of moving', async () => {
+    const eventTarget = new EventTarget()
+    const { ipcRenderer, sentOnce } = moveRelayIpc(eventTarget, {
+      checkpoint: async () => {
+        throw new Error('checkpoint failed')
+      }
+    })
+    ipcRenderer.emit('applicationsFolderMove:begin', {}, 'move-token')
+    await sentOnce
+    expect(ipcRenderer.send).toHaveBeenCalledWith(
+      'applicationsFolderMove:prepareFailed',
+      'move-token'
+    )
+    expect(ipcRenderer.invoke).not.toHaveBeenCalled()
   })
 })

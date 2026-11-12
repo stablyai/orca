@@ -1,7 +1,10 @@
 import { ipcRenderer } from 'electron'
 import { createBrowserClientPageRendererRequests } from './browser-client-page-renderer-requests'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
-import { registerRendererRestartIpcRelays } from './renderer-restart-wiring'
+import {
+  registerApplicationsFolderMoveRelay,
+  registerRendererRestartIpcRelays
+} from './renderer-restart-wiring'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 export async function awaitBeforeUnloadCheckpoint(): Promise<void> {
@@ -52,3 +55,4 @@ export const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
 )
 
 registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
+registerApplicationsFolderMoveRelay(ipcRenderer, window, awaitBeforeUnloadCheckpoint)

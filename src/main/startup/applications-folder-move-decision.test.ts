@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   handleApplicationsFolderMoveOffer,
   resolveApplicationsFolderMoveConflict,
+  runApplicationsFolderMove,
   shouldOfferApplicationsFolderMove,
   type ApplicationsFolderMoveDecision,
   type ApplicationsFolderMoveEligibility
@@ -22,12 +23,12 @@ function macLaunch(
   }
 }
 
-function offer(decision: ApplicationsFolderMoveDecision, move: () => boolean = () => true) {
+function offer(decision: ApplicationsFolderMoveDecision) {
   const handlers = {
     prompt: async () => decision,
     isQuitting: () => false,
     optOut: vi.fn(),
-    move: vi.fn(move),
+    requestMove: vi.fn(),
     onPromptFailed: vi.fn(),
     onMoveFailed: vi.fn()
   }
@@ -63,32 +64,41 @@ describe('handleApplicationsFolderMoveOffer', () => {
     const { handlers, done } = offer('never')
     await done
     expect(handlers.optOut).toHaveBeenCalledTimes(1)
-    expect(handlers.move).not.toHaveBeenCalled()
+    expect(handlers.requestMove).not.toHaveBeenCalled()
   })
 
   it('leaves settings alone for Not Now so the next launch asks again', async () => {
     const { handlers, done } = offer('not-now')
     await done
     expect(handlers.optOut).not.toHaveBeenCalled()
-    expect(handlers.move).not.toHaveBeenCalled()
+    expect(handlers.requestMove).not.toHaveBeenCalled()
   })
+})
 
-  it('treats a cancelled administrator prompt as the user’s choice, not a failure', async () => {
-    const { handlers, done } = offer('move', () => {
-      throw new Error('User rejected the authorization request')
+describe('runApplicationsFolderMove', () => {
+  it('treats a cancelled administrator prompt as the user’s choice, not a failure', () => {
+    const onMoveFailed = vi.fn()
+    const moved = runApplicationsFolderMove({
+      move: () => {
+        throw new Error('User rejected the authorization request')
+      },
+      onMoveFailed
     })
-    await done
-    expect(handlers.onMoveFailed).not.toHaveBeenCalled()
-    expect(handlers.optOut).not.toHaveBeenCalled()
+    expect(moved).toBe(false)
+    expect(onMoveFailed).not.toHaveBeenCalled()
   })
 
-  it('reports a failed copy so the user learns the session kept running', async () => {
+  it('reports a failed copy so the user learns the session kept running', () => {
     const failure = new Error('Failed to copy current bundle to the applications folder')
-    const { handlers, done } = offer('move', () => {
-      throw failure
+    const onMoveFailed = vi.fn()
+    const moved = runApplicationsFolderMove({
+      move: () => {
+        throw failure
+      },
+      onMoveFailed
     })
-    await done
-    expect(handlers.onMoveFailed).toHaveBeenCalledWith(failure)
+    expect(moved).toBe(false)
+    expect(onMoveFailed).toHaveBeenCalledWith(failure)
   })
 })
 

@@ -44,13 +44,10 @@ export type ApplicationsFolderMoveHandlers = {
   prompt: () => Promise<ApplicationsFolderMoveDecision>
   isQuitting: () => boolean
   optOut: () => void
-  move: () => boolean
+  requestMove: () => void
   onPromptFailed: (error: unknown) => void
   onMoveFailed: (error: unknown) => void
 }
-
-// Electron throws this (rather than returning false) when the user cancels the admin prompt.
-const AUTHORIZATION_REJECTED_MESSAGE = 'User rejected the authorization request'
 
 export async function handleApplicationsFolderMoveOffer(
   handlers: ApplicationsFolderMoveHandlers
@@ -73,12 +70,26 @@ export async function handleApplicationsFolderMoveOffer(
     return
   }
   try {
-    // On success Electron quits through the normal quit path and reopens the moved copy.
-    handlers.move()
+    handlers.requestMove()
   } catch (error) {
-    if (error instanceof Error && error.message === AUTHORIZATION_REJECTED_MESSAGE) {
-      return
-    }
     handlers.onMoveFailed(error)
+  }
+}
+
+// Electron throws this (rather than returning false) when the user cancels the admin prompt.
+const AUTHORIZATION_REJECTED_MESSAGE = 'User rejected the authorization request'
+
+/** Returns true only when Electron moved the bundle and started quitting to reopen it. */
+export function runApplicationsFolderMove(handlers: {
+  move: () => boolean
+  onMoveFailed: (error: unknown) => void
+}): boolean {
+  try {
+    return handlers.move()
+  } catch (error) {
+    if (!(error instanceof Error && error.message === AUTHORIZATION_REJECTED_MESSAGE)) {
+      handlers.onMoveFailed(error)
+    }
+    return false
   }
 }
