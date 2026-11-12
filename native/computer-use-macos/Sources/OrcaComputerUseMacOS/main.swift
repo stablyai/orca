@@ -451,10 +451,14 @@ final class Provider {
         pruneSnapshotCache()
         let cached = try cachedSnapshot(params: params)
         let requestedIndexes = try requestedElementIndexes(params)
-        var observeParams = params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
+        let observeParams = params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
         // Why: elements read with --element-index may lie past the whole-window node limit, so only their subtree can re-find them.
-        if let scope = cached?.scope, !requestedIndexes.isEmpty, requestedIndexes.allSatisfy(scope.walkedIndexes.contains) {
-            observeParams["rootElementIndex"] = .number(Double(scope.rootIndex))
+        if let scope = cached?.scope,
+           requestedIndexes.allSatisfy(scope.walkedIndexes.contains),
+           let scoped = try? observe(params: observeParams.merging(["rootElementIndex": .number(Double(scope.rootIndex))]) { _, replacement in replacement }),
+           !requestedIndexes.isEmpty || scoped.focusedElementId != nil {
+            try validateRequestedElements(cached: cached, current: scoped, requestedIndexes: requestedIndexes)
+            return scoped
         }
         // Why: cached AX frames can be stale after a window move or resize, and
         // stale geometry can turn an intended action into a misclick.
@@ -523,7 +527,11 @@ final class Provider {
             throw ProviderError.coded("element_not_found", "element indexes require a fresh get-app-state snapshot for this app/window")
         }
         for index in requestedIndexes {
-            guard let expected = cached.elements[index], let actual = current.elements[index] else {
+            // Why: a subtree read also carries the window's earlier records, which prove nothing about the element now.
+            guard let expected = cached.elements[index],
+                  let actual = current.elements[index],
+                  current.scope?.walkedIndexes.contains(index) ?? true
+            else {
                 throw ProviderError.coded("element_not_found", "element \(index) is stale; run get-app-state again and use a fresh element index")
             }
             guard expected.signature == actual.signature else {
@@ -761,8 +769,11 @@ final class Provider {
         var elementOrder = indexes.order
         if let subtree {
             // Why: elements outside the subtree keep resolving, so the agent can still act on what the whole-window read showed.
-            elements = subtree.base.elements.merging(renderer.records) { _, walked in walked }
-            elementOrder = subtree.base.elementOrder.filter { renderer.records[$0] == nil } + indexes.order
+            // Re-reading the same subtree replaces its last walk, so rows scrolled away don't pile up.
+            let replaced = subtree.base.scope.flatMap { $0.rootIndex == subtree.root.index ? $0.walkedIndexes : nil } ?? []
+            let kept = subtree.base.elements.filter { !replaced.contains($0.key) && renderer.records[$0.key] == nil }
+            elements = kept.merging(renderer.records) { _, walked in walked }
+            elementOrder = subtree.base.elementOrder.filter { kept[$0] != nil } + indexes.order
         }
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {

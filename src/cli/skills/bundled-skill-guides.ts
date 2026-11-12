@@ -1065,7 +1065,7 @@ const ORCA_COMPUTER_USE_MARKDOWN = [
   "ORCA computer get-app-state --app com.apple.finder --query Downloads --json",
   "```",
   "",
-  "A snapshot reads at most `truncation.maxNodes` elements and `maxDepth` levels. When it stops early, `truncation.truncated` is true and each cut-off place shows a `... N more not shown (snapshot limit)` line, indented like the children it stands for. To read them, pass the parent element's index (the nearest line above with less indentation) as `get-app-state --element-index <n>`: it reads only that element and its descendants, with the full limit. Elements already shown keep their indexes, hidden ones get new ones, and you can act on both. On macOS, acting on an element from that read returns that subtree again; on Linux and Windows, actions return the whole window with fresh indexes.",
+  "A snapshot reads at most `truncation.maxNodes` elements and `maxDepth` levels. When it stops early, `truncation.truncated` is true and each cut-off place shows a `... N more not shown (snapshot limit)` line, indented like the children it stands for. To read them, pass the parent element's index (the nearest line above with less indentation) as `get-app-state --element-index <n>`: it reads only that element and its descendants, with the full limit. Elements already shown keep their indexes and hidden ones get new ones; you can act on elements from this read and from the last whole-window read. On macOS, acting on an element from that read returns that subtree again; on Linux and Windows, actions return the whole window with fresh indexes.",
   "",
   "```text",
   "ORCA computer get-app-state --app com.apple.Safari --element-index 312 --json",
