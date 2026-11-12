@@ -119,7 +119,6 @@
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
 6 src/main/codex-accounts/managed-homes/host-codex-managed-home-ownership.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
-21 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 36 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 6 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 1 src/main/codex-accounts/credentials/managed-codex-auth-readiness.ts

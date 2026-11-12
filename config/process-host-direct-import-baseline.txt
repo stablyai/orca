@@ -11,7 +11,6 @@ src/main/automations/precheck-runner.ts
 src/main/browser/agent-browser/helper-process/agent-browser-bridge-execution.ts
 src/main/browser/agent-browser/helper-process/agent-browser-bridge-raw-process.ts
 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
-src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/service.ts
 src/main/computer/desktop-script/desktop-script-provider-bridge.ts
