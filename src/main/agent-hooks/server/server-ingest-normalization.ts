@@ -86,8 +86,16 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   protected override applyNormalizedStatus(
     ...args: Parameters<AgentHookServerTmuxStatus['applyNormalizedStatus']>
   ): EnrichedAgentHookEventPayload | undefined {
-    const applied = super.applyNormalizedStatus(...args)
     const [incoming, , origin = 'hook'] = args
+    const now = Date.now()
+    const restated = this.restatingStatus
+    const applied = super.applyNormalizedStatus(...args)
+    if (applied) {
+      this.producerProgress.retireOwner(applied)
+      if (origin === 'hook' && !restated && incoming.hookEventName && !incoming.isReplay) {
+        this.producerProgress.observe(incoming, now)
+      }
+    }
     // Claude can still block the prompt after this hook, and its idle may already have landed.
     if (
       applied?.payload.agentType === 'claude' &&

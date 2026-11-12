@@ -80,6 +80,9 @@ Never:
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
   `exited` or `lost` means it is gone: retry it or tell the user.
+- A `status` with `quietNotice` is advisory: the worker is still running and
+  silence may be normal. Don't stop or message it unless the user asks or you
+  know it should have finished. Continue other work or keep waiting.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.

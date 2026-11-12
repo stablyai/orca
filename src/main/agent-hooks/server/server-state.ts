@@ -54,11 +54,14 @@ import type {
   StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
+import { ProducerProgressStore } from './producer-progress'
 import { RevisionedMap } from './revisioned-map'
 import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import type { LastStatusStore } from './last-status-store'
 
 export abstract class AgentHookServerState {
+  readonly producerProgress = new ProducerProgressStore()
+
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
     return canAdmitLegacyAgentStatusEntry(
       this.state,

@@ -31,6 +31,8 @@ import {
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
 
+import { startWorkerQuietSweep } from '../orchestration/workers/reports/worker-quiet-runtime'
+
 function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
   const timer = setTimeout(run, delayMs)
   timer.unref?.()
@@ -172,6 +174,14 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   attachAgentStatusStore(store: AgentStatusStoreView): () => void {
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
+    const stopQuietSweep = startWorkerQuietSweep({
+      store,
+      getDb: () => this._orchestrationDb,
+      resolveTerminal: (paneKey) =>
+        resolveTerminalWorkerDispatch(this.terminalWorkerResolution, paneKey),
+      readPty: (paneKey) => this.getPtyRecordForPaneKey(paneKey),
+      notify: this.workerTurnStopReportDeps.notify
+    })
     const detachTransitions = this.agentTransitions.attach(store)
     const detachCrew = store.subscribeStatusRowMutations(() =>
       this.crewChanges.notify(new Set(['status', 'names']))
@@ -183,6 +193,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
     return () => {
+      stopQuietSweep()
       detachCrew()
       detachRows()
       this.crewChanges.notify(new Set(['status', 'names']))

@@ -219,6 +219,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       if (hookOwnsAgent && previous && Number.isFinite(yieldEndsAt)) {
         const yieldedTo = previous.receivedAt
         const delayMs = yieldEndsAt - now
+        const replay = { ...event, renewsProgramStatusLease: true as const }
         this.hookSilenceRechecks.defer(paneKey, delayMs + 1, (currentPaneKey) => {
           const row = this.state.lastStatusByPaneKey.get(currentPaneKey)
           // Re-offer only against the hook observation this report yielded to.
@@ -229,12 +230,15 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
             row.receivedAt === yieldedTo
           ) {
             const tabId = parsePaneKey(currentPaneKey)?.tabId ?? event.tabId
-            this.ingestTerminalStatus({ ...event, paneKey: currentPaneKey, tabId })
+            this.ingestTerminalStatus({ ...replay, paneKey: currentPaneKey, tabId })
           }
         })
       } else {
         this.hookSilenceRechecks.cancel(paneKey)
       }
+    }
+    if (event.fromProgramStatus && !event.renewsProgramStatusLease) {
+      this.producerProgress.observe({ paneKey, connectionId, payload }, now, newRun)
     }
     if (
       hookOwnsCommand ||

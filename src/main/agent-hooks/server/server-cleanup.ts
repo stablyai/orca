@@ -304,6 +304,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     if (!existing) {
       return this.deleteTmuxSelectedStatus(resolvedPaneKey) ?? null
     }
+    this.producerProgress.delete(resolvedPaneKey)
     deleteLegacyAgentStatus(this.state, resolvedPaneKey)
     this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     if (!options?.preserveAuthority) {

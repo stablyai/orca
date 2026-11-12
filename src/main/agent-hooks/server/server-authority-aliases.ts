@@ -178,6 +178,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       | EnrichedAgentHookEventPayload
       | undefined
     const hadStatus = previousStatus !== undefined
+    this.producerProgress.move(previousOwnerPaneKey, toPaneKey)
     movePaneCacheState(this.state, previousOwnerPaneKey, toPaneKey)
     const movedStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
       | EnrichedAgentHookEventPayload
