@@ -5,6 +5,17 @@ import {
 } from './agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 
+it('passes Genie prompts after the option separator', () => {
+  const plan = buildAgentStartupPlan({
+    agent: 'genie',
+    prompt: 'review the migration',
+    cmdOverrides: {},
+    platform: 'linux'
+  })
+
+  expect(plan?.launchCommand).toBe("genie -- 'review the migration'")
+  expect(plan?.expectedProcess).toBe('genie')
+})
 describe('a picked session option outranks configured launch arguments', () => {
   // Compose the surfaces: prove one model flag reaches argv and the chat can name the selected model, beyond asserting the policy flag.
   function commandFor(settings: AgentStartupSettings) {

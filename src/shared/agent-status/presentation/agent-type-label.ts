@@ -6,6 +6,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   codebuddy: 'CodeBuddy',
   openclaude: 'OpenClaude',
   codex: 'Codex',
+  genie: 'Genie Code',
   qoder: 'Qoder CLI',
   qodercli: 'Qoder CLI',
   gemini: 'Gemini',
