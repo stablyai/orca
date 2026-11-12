@@ -209,14 +209,17 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
       authority_self=CASE WHEN live.claimed THEN authority_self ELSE NULL END,
       authority_tree=CASE WHEN live.claimed THEN authority_tree ELSE NULL END,
       reclaimable=CASE WHEN live.claimed THEN 0 ELSE NULL END
-      FROM live WHERE source=? AND search_inventory_activity.path=live.path AND authority_self IS NOT NULL`)
+      FROM live WHERE source=? AND search_inventory_activity.path=live.path
+      AND search_inventory_activity.path IN (SELECT value FROM json_each(?))
+      AND authority_self IS NOT NULL`)
       .run(
         `${scope}:dirty`,
         `${scope}:refusals`,
         `${scope}:file-refusals`,
         keys,
         owner.source,
-        owner.source
+        owner.source,
+        keys
       )
     this.db
       .prepare(`DELETE FROM temp.search_inventory_activity WHERE source=?
