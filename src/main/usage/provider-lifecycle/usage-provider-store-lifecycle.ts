@@ -14,6 +14,7 @@ import {
 } from '../worktree-attribution/usage-worktree-refs'
 import { UsageInlineCachePreservation } from '../cache/usage-inline-cache-preservation'
 import { usageSourceCachePath } from '../cache/usage-source-cache-file'
+import { readUsageCacheJson } from '../cache/usage-cache-json'
 import type {
   UsageProviderStoreState,
   UsageProviderStoreLifecycleConfig,
@@ -180,6 +181,7 @@ export abstract class UsageProviderStoreLifecycle<
   private async loadOnWorker(cacheFile: string): Promise<void> {
     try {
       let fallback = false
+      let fallbackState: State | null = null
       const { reportText, migrated, reportIntegrityVerified } = await Promise.resolve()
         .then(() =>
           this.config.splitCacheFile({
@@ -192,6 +194,18 @@ export abstract class UsageProviderStoreLifecycle<
           // Preserve usage history when the worker cannot start.
           console.warn(`${this.config.logTag} Reading the usage cache on the main thread:`, error)
           fallback = true
+          if (!this.config.providerId) {
+            fallbackState = await readUsageCacheJson<State>(cacheFile)
+            if (!fallbackState) {
+              throw new Error('Saved usage cache is invalid')
+            }
+            const { [this.config.sourceKey]: _sources, ...report } = fallbackState
+            return {
+              reportText: JSON.stringify(report),
+              migrated: false,
+              reportIntegrityVerified: false
+            }
+          }
           return {
             reportText: await readFile(cacheFile, 'utf-8'),
             migrated: false,
@@ -201,7 +215,7 @@ export abstract class UsageProviderStoreLifecycle<
       if (reportText === null) {
         return
       }
-      const parsed: State = JSON.parse(reportText)
+      const parsed: State = fallbackState ?? JSON.parse(reportText)
       this.inlineCache.active =
         fallback &&
         !('usageIntegrity' in parsed) &&

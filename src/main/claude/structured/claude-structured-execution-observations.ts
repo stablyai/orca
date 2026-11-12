@@ -1,7 +1,7 @@
 import { claudeObservedEffort } from './launch/claude-structured-session-options'
 import { claudeRecord, claudeText } from './journal/claude-structured-item-translation'
-import { claudeMatchingInitModel } from '../claude-context-usage'
-import { isRootClaudeFrame } from '../claude-turn-opening'
+import { claudeMatchingInitModel } from '../context-usage/claude-context-usage'
+import { isRootClaudeFrame } from './turns/claude-turn-opening'
 import { MAX_CONTEXT_MODEL_ID_CHARS } from '../../../shared/agent-session/agent-session-context-usage'
 import type { ClaudeSession } from './claude-structured-session-state'
 

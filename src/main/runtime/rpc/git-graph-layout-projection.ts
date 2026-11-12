@@ -1,6 +1,6 @@
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../../shared/source-control/runtime/git-graph-capabilities'
-import { visibleGroupTree } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
-import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
+import { visibleGroupTree } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
+import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   applyPublishedLayoutRecordChanges,
   splitPublishedLayout,
@@ -8,8 +8,8 @@ import {
   type PublishedLayoutRecords,
   diffPublishedLayouts,
   indexPublishedLayout
-} from '../../../shared/workspace-layout/workspace-layout-records'
-import type { WorkspaceLayoutStreamFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../shared/workspace-layout/published-layout/workspace-layout-records'
+import type { WorkspaceLayoutStreamFrame } from '../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 export function readsGitGraph(capabilities?: readonly string[]): boolean {
   return capabilities?.includes(GIT_GRAPH_TAB_CAPABILITY) === true
 }

@@ -72,7 +72,7 @@ export function searchAgentPickerSetups(
       continue
     }
     for (const model of agentPickerModels(entry)) {
-      if (model.isLegacy || model.hidden) {
+      if (model.hidden) {
         continue
       }
       const modelWords = tokens([model.id, model.label].join(' '))

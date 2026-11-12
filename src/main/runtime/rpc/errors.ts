@@ -19,7 +19,7 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orches
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../shared/orchestration/orchestration-federation-error-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/computer-use-runtime-types'
-import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
+import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
@@ -148,6 +148,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'cursor_dispatch_mismatch',
   'source_changed',
   'transcript_required',
+  // A released worker's original transcript or chat is gone, or it never had one.
+  'archive_unavailable',
   ...ORCHESTRATION_FEDERATION_ERROR_CODES,
   'dispatch_capability_invalid',
   'agent_unconfigured',

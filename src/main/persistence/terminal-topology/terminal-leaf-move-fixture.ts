@@ -6,7 +6,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { Store } from '../loading-store/store'
-import { collectLayoutLeafIdsInOrder } from '../restoring-sessions/terminal-layout-normalization'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 // Import only after the test mocks electron.
 

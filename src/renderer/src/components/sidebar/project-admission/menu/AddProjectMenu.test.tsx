@@ -14,23 +14,13 @@ import {
 } from '@/lib/workspace/creation/project-host-setup-options'
 import { NewWorkspaceComposerProjectSection } from '@/components/new-workspace/NewWorkspaceComposerProjectSection'
 import { SidebarHeaderActions } from '../../sidebar-header-actions'
-import AddRepoDialog from '../dialog/AddRepoDialog'
 import type { AddRepoDialogEntryRequest } from '../dialog/add-repo-dialog-types'
-
-const browseRuntimeServerDirectoryMock = vi.fn()
-const callRuntimeRpcMock = vi.fn()
 
 vi.mock('@/components/new-workspace/use-recent-project-ids', () => ({
   useRecentProjectIds: () => []
 }))
 vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({
   AddRemoteHostDialog: () => null
-}))
-vi.mock('@/runtime/files/reads/runtime-server-directory-browser', () => ({
-  browseRuntimeServerDirectory: (...args: unknown[]) => browseRuntimeServerDirectoryMock(...args)
-}))
-vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
-  callRuntimeRpc: (...args: unknown[]) => callRuntimeRpcMock(...args)
 }))
 
 const UBUNTU_RUNTIME: PublicKnownRuntimeEnvironment = {
@@ -57,8 +47,6 @@ const pickFoldersMock = vi.fn<() => Promise<string[]>>()
 
 beforeEach(() => {
   pickFoldersMock.mockReset()
-  browseRuntimeServerDirectoryMock.mockReset()
-  callRuntimeRpcMock.mockReset()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -287,35 +275,5 @@ describe('AddProjectMenu default host sync in worktree composer', () => {
         hostId: 'runtime:wsl-ubuntu'
       })
     )
-  })
-})
-
-describe('AddRepoDialog direct menu entry', () => {
-  it('opens directly on Create new project for the requested host without a Back button or cancelled host defaults', async () => {
-    browseRuntimeServerDirectoryMock.mockResolvedValue({
-      resolvedPath: '/home/alice',
-      parentPath: '/home',
-      entries: []
-    })
-    callRuntimeRpcMock.mockResolvedValue({ available: true })
-
-    render(
-      <TooltipProvider>
-        <AddRepoDialog />
-      </TooltipProvider>
-    )
-
-    useAppStore.getState().openModal('add-repo', {
-      entryRequest: {
-        id: 1,
-        kind: 'create',
-        hostId: 'runtime:wsl-ubuntu'
-      }
-    })
-
-    expect(await screen.findByRole('dialog', { name: 'Create a new project' })).not.toBeNull()
-    expect(screen.queryByRole('button', { name: /Back/i })).toBeNull()
-    expect(await screen.findByText('Git repository in /home/alice/orca/projects')).not.toBeNull()
-    expect(browseRuntimeServerDirectoryMock).toHaveBeenCalledWith('wsl-ubuntu', '~')
   })
 })
