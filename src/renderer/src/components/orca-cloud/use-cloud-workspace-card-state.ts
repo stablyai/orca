@@ -50,7 +50,12 @@ export function useCloudCardAttention(workspaceId: string): CloudCardAttention |
   return mostUrgentAttention([
     hold
       ? {
-          kind: hold.reason === 'accountExpired' ? 'agentExpired' : 'agentNotSetUp',
+          kind:
+            hold.reason === 'accountExpired'
+              ? 'agentExpired'
+              : hold.reason === 'awaitingStart'
+                ? 'agentNotStarted'
+                : 'agentNotSetUp',
           agent: agentName(hold.agent, t),
           tabId: cloudAgentHoldTabId(hold.paneKey)
         }
@@ -72,6 +77,7 @@ export function openCloudCardAttention(workspaceId: string, item: CloudCardAtten
   switch (item.kind) {
     case 'agentNotSetUp':
     case 'agentExpired':
+    case 'agentNotStarted':
       activateAndRevealWorktree(workspaceId)
       useAppStore.getState().setActiveTab(item.tabId)
       return

@@ -16,7 +16,10 @@ import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-acc
 import { agentSignInCardActions } from '../agent-sign-in/AgentSignInPanePortals'
 import type { CloudStripActions } from './CloudAgentSignInStrip'
 import { cloudAgentStripModel, type CloudStripModel } from './cloud-agent-strip-model'
-import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'
+import {
+  cloudAgentAwaitingStartStripModel,
+  cloudAgentSetupStripModel
+} from './cloud-agent-setup-strip-model'
 import { cloudSetupStripActions } from './cloud-setup-strip-actions'
 
 export type CloudHeldStrip = {
@@ -60,22 +63,31 @@ export function useCloudHeldStrip(
       : 'paused'
   const gateActions = agentSignInCardActions(paneKey)
   // PC-3b: a launch held because the agent isn't set up runs the one-time setup in the pane.
-  const setupHold = hold?.reason === 'notSetUp'
+  const awaiting = hold?.reason === 'awaitingStart' ? (hold.awaiting ?? 'unread') : null
+  // V3-01: a restored hold waiting for Start shares the setup hold's actions (Start, cancel).
+  const setupHold = hold?.reason === 'notSetUp' || awaiting !== null
   const setup = accounts.setups[agent]
-  const model = setupHold
-    ? cloudAgentSetupStripModel({
+  const model = awaiting
+    ? cloudAgentAwaitingStartStripModel({
         agent,
-        setup,
-        ready: accounts.load.kind === 'ready' && cloudAgentHoldReason(agent, accounts) === null,
+        awaiting,
+        queuedPrompt: Boolean(hold?.prompt),
         t
       })
-    : cloudAgentStripModel({
-        agent,
-        reason,
-        view: hold ? null : (cloudGate?.view ?? null),
-        hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
-        t
-      })
+    : setupHold
+      ? cloudAgentSetupStripModel({
+          agent,
+          setup,
+          ready: accounts.load.kind === 'ready' && cloudAgentHoldReason(agent, accounts) === null,
+          t
+        })
+      : cloudAgentStripModel({
+          agent,
+          reason,
+          view: hold ? null : (cloudGate?.view ?? null),
+          hostLabel: cloudGate?.hostLabel ?? t('agentSignInStrip.sandbox', 'the sandbox'),
+          t
+        })
   const holdActions: CloudStripActions | null = setupHold
     ? cloudSetupStripActions({
         agent,

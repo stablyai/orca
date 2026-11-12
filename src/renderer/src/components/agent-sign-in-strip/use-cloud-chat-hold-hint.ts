@@ -22,7 +22,9 @@ export function cloudChatHoldHint(
     const agent = agentName(hold.agent, t)
     return hold.reason === 'notSetUp'
       ? t('orcaCloud.chatHold.notSetUp', 'Set up {{agent}} above to start', { agent })
-      : t('orcaCloud.chatHold.expired', 'Renew {{agent}} sign-in above to start', { agent })
+      : hold.reason === 'awaitingStart'
+        ? t('orcaCloud.chatHold.awaitingStart', 'Start {{agent}} above', { agent })
+        : t('orcaCloud.chatHold.expired', 'Renew {{agent}} sign-in above to start', { agent })
   }
   if (gate && isOrcaCloudEnvironmentId(gate.environmentId)) {
     return t('orcaCloud.chatHold.signIn', 'Sign in to {{agent}} above to start', {

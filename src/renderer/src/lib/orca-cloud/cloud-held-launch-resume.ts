@@ -1,8 +1,9 @@
 // V3-01: after a restart, put back the holds the quit dropped. Each remembered placeholder tab comes
 // back from the host as a plain shell; once it is in the store again, its hold is re-placed under the
 // same key, so the strip and the sidebar's key mark return and Start launches the original agent and
-// prompt. A record whose tab doesn't come back within a bounded wait is dropped. Nothing launches
-// unasked: a restored hold waits for the person's Start even if the account now covers the agent.
+// prompt. A record whose tab doesn't come back within a bounded wait is dropped (a workspace or
+// sandbox deleted meanwhile ends that way, or ages out). A restored hold always waits for the
+// person's explicit Start, even once its account covers the agent or is renewed.
 import { useAppStore } from '@/store'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import { cloudTabHoldKey, readCloudAgentHold } from './cloud-agent-launch-hold'

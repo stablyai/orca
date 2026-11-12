@@ -222,3 +222,60 @@ export function cloudAgentSetupStripModel(args: {
     }
   }
 }
+
+/**
+ * V3-01: a launch put back after a restart that only needs the person's Start: the account covers
+ * the agent, Orca couldn't read it, or an expired sign-in was just renewed. Neutral, never "isn't
+ * set up"; Start launches it (a start that then finds no account holds as "isn't set up" again).
+ */
+export function cloudAgentAwaitingStartStripModel(args: {
+  agent: HostAgentSignInAgent
+  awaiting: 'covered' | 'unread' | 'renewed'
+  /** A first prompt waits with the launch. */
+  queuedPrompt: boolean
+  t: Translate
+}): CloudStripModel {
+  const { t } = args
+  const agent = HOST_AGENT_SIGN_IN_AGENT_NAME[args.agent]
+  const title =
+    args.awaiting === 'covered'
+      ? t('agentSignInStrip.awaitingCoveredTitle', '{{agent}} is set up', { agent })
+      : args.awaiting === 'renewed'
+        ? t('agentSignInStrip.renewed', '{{agent}} sign-in renewed', { agent })
+        : t('agentSignInStrip.awaitingUnreadTitle', '{{agent}} hasn’t started', { agent })
+  const detail =
+    args.awaiting === 'unread'
+      ? t(
+          'agentSignInStrip.awaitingUnreadDetail',
+          'Orca couldn’t check your sign-in after restarting. Start {{agent}} to try.',
+          { agent }
+        )
+      : args.awaiting === 'covered'
+        ? args.queuedPrompt
+          ? t(
+              'agentSignInStrip.awaitingCoveredPromptDetail',
+              'Orca restarted before {{agent}} started. Your first prompt is kept.',
+              { agent }
+            )
+          : t(
+              'agentSignInStrip.awaitingCoveredDetail',
+              'Orca restarted before {{agent}} started.',
+              { agent }
+            )
+        : ''
+  return {
+    status: 'setup',
+    title,
+    detail,
+    description: null,
+    code: null,
+    paste: null,
+    otherWays: false,
+    primary: {
+      label: t('agentSignInStrip.startAgent', 'Start {{agent}}', { agent }),
+      narrowLabel: t('agentSignInStrip.start', 'Start'),
+      action: { kind: 'start' }
+    },
+    announcement: detail ? `${title}. ${detail}` : title
+  }
+}

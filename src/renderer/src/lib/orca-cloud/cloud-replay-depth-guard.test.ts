@@ -83,8 +83,6 @@ describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
     const before = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].join('\r\n')
     expect(mergeDeeperHistory(before, ['tail-of-d', 'e', 'f', 'g'].join('\r\n'))).toBe(before)
     expect(mergeDeeperHistory(before, ['x', 'y', 'z', 'w'].join('\r\n'))).toBeNull()
-    expect(
-      mergeDeeperHistory(['a', 'b'].join('\r\n'), ['a', 'b', 'c', 'd'].join('\r\n'))
-    ).toBeNull()
+    expect(mergeDeeperHistory(['a', 'b'].join('\r\n'), ['a', 'b', 'c', 'd'].join('\r\n'))).toBeNull()
   })
 })

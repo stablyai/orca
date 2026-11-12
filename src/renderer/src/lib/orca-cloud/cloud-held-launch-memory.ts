@@ -97,18 +97,6 @@ export function forgetHeldCloudLaunch(tabId: string): void {
   }
 }
 
-/** Forget every record on a deleted workspace or environment. */
-export function forgetHeldCloudLaunchesWhere(
-  match: (record: HeldCloudLaunchRecord) => boolean
-): void {
-  const profileId = activeProfileId()
-  const records = readAll(profileId)
-  const kept = records.filter((each) => !match(each))
-  if (kept.length !== records.length) {
-    writeAll(profileId, kept)
-  }
-}
-
 /** The records for one Orca Cloud environment, for the active profile. */
 export function readHeldCloudLaunches(environmentId: string): HeldCloudLaunchRecord[] {
   return readAll(activeProfileId()).filter((each) => each.environmentId === environmentId)

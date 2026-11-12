@@ -1,5 +1,6 @@
 import React from 'react'
-import { KeyRound } from 'lucide-react'
+import { CirclePlay, KeyRound } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -39,10 +40,19 @@ export function CloudAgentHeldMark({
     return null
   }
   const agent = agentName(hold.agent, t)
-  const label =
-    hold.reason === 'accountExpired'
+  const waiting = hold.reason === 'awaitingStart'
+  const label = waiting
+    ? t(
+        'orcaCloud.agentHold.notStarted',
+        '{{agent}} hasn’t started. Open the workspace to start it.',
+        {
+          agent
+        }
+      )
+    : hold.reason === 'accountExpired'
       ? t('orcaCloud.agentHold.expired', '{{agent}} sign-in expired', { agent })
       : t('orcaCloud.agentHold.notSetUp', '{{agent}} isn’t set up for Orca Cloud', { agent })
+  const Icon = waiting ? CirclePlay : KeyRound
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -50,9 +60,13 @@ export function CloudAgentHeldMark({
           role="img"
           aria-label={label}
           data-cloud-agent-held={hold.reason}
-          className="inline-flex size-3.5 shrink-0 items-center justify-center text-status-warning-text"
+          className={cn(
+            'inline-flex size-3.5 shrink-0 items-center justify-center',
+            // V3-01: a restored launch waiting for Start is no alarm: muted, not the amber key.
+            waiting ? 'text-muted-foreground' : 'text-status-warning-text'
+          )}
         >
-          <KeyRound className="size-3" aria-hidden />
+          <Icon className="size-3" aria-hidden />
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={6}>

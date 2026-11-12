@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const track = vi.fn()
-vi.mock('@/diagnostics/telemetry/telemetry', () => ({
-  track: (...args: unknown[]) => track(...args)
-}))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: (...args: unknown[]) => track(...args) }))
 
 import { eventSchemas } from '../../../../shared/telemetry-events'
 import {

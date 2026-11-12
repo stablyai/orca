@@ -43,6 +43,7 @@ import { CloudWorkspaceCardMenu } from './CloudWorkspaceCardMenu'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import {
   cloudCardAttentionLabel,
+  cloudCardAttentionTone,
   cloudCardOnComputerStatus,
   cloudCardPrimary,
   cloudCardStateDetail,
@@ -300,11 +301,11 @@ export function CloudWorkspaceStatusPanel({
       {attention ? (
         <button
           type="button"
-          className={cn(ROW, 'font-medium text-status-warning-text')}
+          className={cn(ROW, 'font-medium', cloudCardAttentionTone(attention).text)}
           onClick={() => openCloudCardAttention(workspaceId, attention)}
           data-cloud-card-attention={attention.kind}
         >
-          <span className="size-1.5 shrink-0 rounded-full bg-status-warning" aria-hidden />
+          <span className={cloudCardAttentionTone(attention).dot} aria-hidden />
           <span className="min-w-0 flex-1 truncate">{cloudCardAttentionLabel(attention, t)}</span>
           <ChevronRight aria-hidden className="size-3.5 shrink-0" />
         </button>

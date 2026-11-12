@@ -11,7 +11,10 @@ import {
   type CloudStripActions
 } from './CloudAgentSignInStrip'
 import { cloudAgentStripModel } from './cloud-agent-strip-model'
-import { cloudAgentSetupStripModel } from './cloud-agent-setup-strip-model'
+import {
+  cloudAgentAwaitingStartStripModel,
+  cloudAgentSetupStripModel
+} from './cloud-agent-setup-strip-model'
 import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import { cloudRestartAttemptModel, cloudRunningStripModel } from './cloud-running-strip-model'
 import type { CloudAgentRestartAttempt } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
@@ -272,3 +275,59 @@ export const notSetUpBrowserCodeGapNarrow = fixture({
   setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: false, code: 'rejected' } },
   width: 420
 })
+
+/** V3-01: restored after a restart; the account covers Claude; the first prompt waits. */
+export const awaitingStartCovered = defineFixture({
+  width: 940,
+  render: () => <AwaitingPane awaiting="covered" queuedPrompt />
+})
+/** V3-01: restored; Orca couldn't read the sign-in after restarting. */
+export const awaitingStartUnread = defineFixture({
+  width: 940,
+  render: () => <AwaitingPane awaiting="unread" queuedPrompt={false} />
+})
+/** V3-01: a restored expired hold, renewed: no auto-start, Start waits. */
+export const awaitingStartRenewed = defineFixture({
+  width: 940,
+  render: () => <AwaitingPane awaiting="renewed" queuedPrompt />
+})
+export const awaitingStartUnreadNarrow = defineFixture({
+  width: 460,
+  render: () => <AwaitingPane awaiting="unread" queuedPrompt={false} width={420} />
+})
+
+function AwaitingPane({
+  awaiting,
+  queuedPrompt,
+  width = 900
+}: {
+  awaiting: 'covered' | 'unread' | 'renewed'
+  queuedPrompt: boolean
+  width?: number
+}): React.JSX.Element {
+  return (
+    <div className="bg-background p-4">
+      <div
+        className="pane relative h-[160px] overflow-hidden rounded-md border border-border bg-background"
+        style={{ width }}
+      >
+        <CloudStripLayer>
+          <CloudAgentSignInStrip
+            model={cloudAgentAwaitingStartStripModel({
+              agent: 'claude',
+              awaiting,
+              queuedPrompt,
+              t: translate
+            })}
+            prompt={queuedPrompt ? PROMPT : null}
+            width={cloudStripWidth(width)}
+            actions={ACTIONS}
+          />
+        </CloudStripLayer>
+        <div className="xterm-container overflow-hidden font-mono text-xs leading-4 text-muted-foreground">
+          <div data-terminal-last-row>~/acme/web $</div>
+        </div>
+      </div>
+    </div>
+  )
+}

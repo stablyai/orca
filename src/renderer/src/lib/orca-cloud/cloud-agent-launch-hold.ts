@@ -39,7 +39,14 @@ export function cloudAgentStripReason(
 }
 
 /** Why a launch is held: account recovery, or the one-time setup (PC-3b). */
-export type CloudAgentHoldReason = 'accountExpired' | 'notSetUp'
+export type CloudAgentHoldReason =
+  | 'accountExpired'
+  | 'notSetUp'
+  /**
+   * V3-01: a hold put back after a restart whose account now covers the agent (or whose read
+   * failed): it waits for the person's Start. Never labelled "not set up" or "expired".
+   */
+  | 'awaitingStart'
 
 /** The hold a launch needs from this accounts read; null starts it. */
 export function cloudAgentHoldReason(
@@ -80,6 +87,11 @@ export type CloudAgentHold = {
   agent: HostAgentSignInAgent
   prompt: string | null
   reason: CloudAgentHoldReason
+  /**
+   * Why an 'awaitingStart' hold waits: the account covers the agent now, Orca couldn't read it,
+   * or an expired sign-in was renewed (V3-01). Absent for every other reason.
+   */
+  awaiting?: 'covered' | 'unread' | 'renewed'
 }
 
 /** The hold key of a host-published tab (RA-1): its first pane shows the strip. */
@@ -87,12 +99,13 @@ export function cloudTabHoldKey(tabId: string): string {
   return `tab:${tabId}`
 }
 
-type HoldRequest = Omit<CloudAgentHold, 'reason'> & {
+type HoldRequest = Omit<CloudAgentHold, 'reason' | 'awaiting'> & {
   /** The caller already read the account and decided to hold; skip the re-read. */
   decided?: boolean
   /**
-   * V3-01: a hold put back after a restart waits for the person's Start even when the account now
-   * covers the agent: nothing launches unasked. The setup strip then offers "Start {{agent}}".
+   * V3-01: a hold put back after a restart always waits for the person's explicit Start: a covered
+   * account (or a failed read) holds as 'awaitingStart', and an expired one that is then renewed
+   * turns 'awaitingStart' instead of starting. In-session holds keep their behaviour.
    */
   restored?: boolean
 }
@@ -106,11 +119,12 @@ const listeners = new Set<() => void>()
 let holdsSnapshot: readonly CloudAgentHold[] = []
 
 function notify(): void {
-  holdsSnapshot = [...holds.values()].map(({ paneKey, agent, prompt, reason }) => ({
+  holdsSnapshot = [...holds.values()].map(({ paneKey, agent, prompt, reason, awaiting }) => ({
     paneKey,
     agent,
     prompt,
-    reason
+    reason,
+    ...(awaiting ? { awaiting } : {})
   }))
   for (const listener of listeners) {
     listener()
@@ -227,20 +241,32 @@ export async function holdCloudAgentLaunch({
   const read = decided
     ? cloudAgentHoldReason(hold.agent, readOrcaCloudAgentAccounts())
     : await holdReasonBeforeLaunch(hold.agent)
-  const reason = read ?? (restored ? 'notSetUp' : null)
+  const reason = read ?? (restored ? 'awaitingStart' : null)
   if (!reason) {
     return 'proceed'
   }
+  const accountsRead = readOrcaCloudAgentAccounts().load.kind === 'ready'
+  const awaiting =
+    reason === 'awaitingStart' ? (accountsRead ? ('covered' as const) : ('unread' as const)) : null
   return new Promise((resolve) => {
     const stop = subscribeOrcaCloudAgentAccounts(() => {
       // Renewed (or a key now covers it): every pane held on recovery starts. A first-time setup
       // waits for its "Start {{agent}}" click instead (PC-3b), so it never starts unasked.
+      const entry = holds.get(hold.paneKey)
       if (
-        reason === 'accountExpired' &&
-        cloudAgentStripReason(hold.agent, readOrcaCloudAgentAccounts()) !== 'accountExpired'
+        entry?.release !== finish ||
+        entry.reason !== 'accountExpired' ||
+        cloudAgentStripReason(hold.agent, readOrcaCloudAgentAccounts()) === 'accountExpired'
       ) {
-        finish('proceed')
+        return
       }
+      if (restored) {
+        // After a restart the person starts it: renewed, it waits for Start (V3-01).
+        holds.set(hold.paneKey, { ...entry, reason: 'awaitingStart', awaiting: 'renewed' })
+        notify()
+        return
+      }
+      finish('proceed')
     })
     function finish(outcome: 'proceed' | 'cancel'): void {
       if (holds.get(hold.paneKey)?.release !== finish) {
@@ -251,7 +277,7 @@ export async function holdCloudAgentLaunch({
       notify()
       resolve(outcome)
     }
-    holds.set(hold.paneKey, { ...hold, reason, release: finish })
+    holds.set(hold.paneKey, { ...hold, reason, ...(awaiting ? { awaiting } : {}), release: finish })
     notify()
   })
 }

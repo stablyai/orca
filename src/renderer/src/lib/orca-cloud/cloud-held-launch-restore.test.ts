@@ -7,9 +7,14 @@ import { useAppStore } from '@/store'
 import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 
 const mocks = vi.hoisted(() => {
-  const state: { coverage: 'notSetUp' | 'covered'; closed: string[] } = {
+  const state: {
+    coverage: 'notSetUp' | 'covered' | 'expired'
+    closed: string[]
+    listeners: Set<() => void>
+  } = {
     coverage: 'notSetUp',
-    closed: []
+    closed: [],
+    listeners: new Set()
   }
   return state
 })
@@ -22,12 +27,21 @@ vi.mock('./orca-cloud-agent-accounts-store', () => ({
   readOrcaCloudAgentAccounts: () => ({ load: { kind: 'ready' }, keyKinds: {} }),
   ensureFreshOrcaCloudAgentAccounts: async () => ({ load: { kind: 'ready' }, keyKinds: {} }),
   isOrcaCloudAgentAccountsFresh: () => true,
-  subscribeOrcaCloudAgentAccounts: () => () => undefined
+  subscribeOrcaCloudAgentAccounts: (listener: () => void) => {
+    mocks.listeners.add(listener)
+    return () => mocks.listeners.delete(listener)
+  }
 }))
 vi.mock('./orca-cloud-agent-accounts-model', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  orcaCloudAgentCoverageFromAccounts: () =>
-    mocks.coverage === 'covered' ? { kind: 'account' } : { kind: 'notSetUp' }
+  orcaCloudAgentCoverageFromAccounts: () => ({
+    kind:
+      mocks.coverage === 'covered'
+        ? 'account'
+        : mocks.coverage === 'expired'
+          ? 'expired'
+          : 'notSetUp'
+  })
 }))
 vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: async (args: { tabId: string }) => {
@@ -69,6 +83,7 @@ beforeEach(() => {
   localStorage.clear()
   mocks.coverage = 'notSetUp'
   mocks.closed = []
+  mocks.listeners.clear()
   resetHeldCloudLaunchResumeForTest()
   useAppStore.setState({ activeOrcaProfileId: 'profile-a' })
   setTabs([])
@@ -157,7 +172,7 @@ describe('after a restart', () => {
     expect(readHeldCloudLaunches(ENV)).toEqual([])
   })
 
-  it('an account that is covered now still waits for Start: nothing launches unasked', async () => {
+  it('an account that is covered now waits for Start, as awaitingStart (never "not set up")', async () => {
     mocks.coverage = 'covered'
     remember()
     setTabs([TAB])
@@ -165,8 +180,52 @@ describe('after a restart', () => {
     resumeHeldCloudLaunches(ENV, { create, waitMs: 5_000 })
     await flush()
     await flush()
-    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('notSetUp')
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))).toMatchObject({
+      reason: 'awaitingStart',
+      awaiting: 'covered'
+    })
     expect(create).not.toHaveBeenCalled()
+  })
+
+  it('restored and expired: a Renew turns it awaitingStart and starts nothing', async () => {
+    mocks.coverage = 'expired'
+    remember()
+    setTabs([TAB])
+    const create = vi.fn(async () => created('host-agent'))
+    resumeHeldCloudLaunches(ENV, { create, waitMs: 5_000 })
+    await flush()
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('accountExpired')
+    mocks.coverage = 'covered'
+    for (const listener of mocks.listeners) {
+      listener()
+    }
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))).toMatchObject({
+      reason: 'awaitingStart',
+      awaiting: 'renewed'
+    })
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('in-session (not restored), an expired hold still starts on Renew as before', async () => {
+    mocks.coverage = 'expired'
+    setTabs([TAB])
+    const create = vi.fn(async (args: CreateWebRuntimeSessionTerminalOnHostArgs) =>
+      args.agent ? created('host-agent') : created(HOST_TAB)
+    )
+    const launch = createWithCloudAgentHold(
+      { worktreeId: WT, environmentId: ENV, agent: 'claude', prompt: 'p' },
+      create
+    )
+    await flush()
+    expect(readCloudAgentHold(cloudTabHoldKey(TAB))?.reason).toBe('accountExpired')
+    mocks.coverage = 'covered'
+    for (const listener of mocks.listeners) {
+      listener()
+    }
+    await launch
+    expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ agent: 'claude' }))
   })
 
   it('Cancel forgets the record and launches nothing', async () => {
