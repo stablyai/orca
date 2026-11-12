@@ -47,6 +47,14 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
   return env
 }
 
+export function sourceControlCommandAssignments(
+  commandEnv: Record<string, string> | undefined
+): string[] {
+  return Object.entries(commandEnv ?? {})
+    .filter(([key]) => !BACKGROUND_HOOK_ENV_KEYS.has(key))
+    .map(([key, value]) => `${key}=${value}`)
+}
+
 export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   const wslDistro = input.preparation
     ? wslDistroForCommand(input.cwd, input.wslDistro)
@@ -61,29 +69,29 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   spawnEnv[ORCA_AGENT_HOOKS_DISABLED_ENV] = '1'
   if (process.platform === 'win32' && wslDistro) {
     // Apply command assignments after guest login-shell setup, never to the Windows launcher.
-    const assignments = Object.entries(input.commandEnv ?? {})
-      .filter(([key]) => !BACKGROUND_HOOK_ENV_KEYS.has(key))
-      .map(([key, value]) => `${key}=${value}`)
+    const assignments = sourceControlCommandAssignments(input.commandEnv)
+    const program = assignments.length ? '/usr/bin/env' : input.binary
+    const args = assignments.length ? [...assignments, input.binary, ...input.args] : input.args
+    const invocation = input.literalWslArgs
+      ? [program, ...args].map(quotePosixShell).join(' ')
+      : quotePosixShell(program)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WSL spawn pipes both output streams and supplies the configured stdin stream.
-    return wslAwareSpawn(
-      assignments.length ? '/usr/bin/env' : input.binary,
-      assignments.length ? [...assignments, input.binary, ...input.args] : input.args,
-      {
-        cwd: input.cwd,
-        env: buildWslLauncherEnv(spawnEnv),
-        stdio: [input.stdinMode, 'pipe', 'pipe'],
-        windowsHide: true,
-        wslDistro,
-        useWslLoginShell: true,
-        // Profiles may restore pane identity; clear it in the guest before invoking the agent.
-        wslShellCommand: [
-          `command unset ${AGENT_PANE_HOOK_ENV_KEYS.join(' ')}`,
-          `command export ${ORCA_AGENT_HOOKS_DISABLED_ENV}=1`,
-          quotePosixShell(assignments.length ? '/usr/bin/env' : input.binary)
-        ].join(' && '),
-        ...(input.preparation ? { preparation: input.preparation } : {})
-      }
-    ) as SpawnedSourceControlAgentProcess
+    return wslAwareSpawn(program, input.literalWslArgs ? [] : args, {
+      cwd: input.cwd,
+      env: buildWslLauncherEnv(spawnEnv),
+      stdio: [input.stdinMode, 'pipe', 'pipe'],
+      windowsHide: true,
+      wslDistro,
+      useWslLoginShell: true,
+      checkCommandLineBudget: input.literalWslArgs,
+      // Profiles may restore pane identity; clear it in the guest before invoking the agent.
+      wslShellCommand: [
+        `command unset ${AGENT_PANE_HOOK_ENV_KEYS.join(' ')}`,
+        `command export ${ORCA_AGENT_HOOKS_DISABLED_ENV}=1`,
+        invocation
+      ].join(' && '),
+      ...(input.preparation ? { preparation: input.preparation } : {})
+    }) as SpawnedSourceControlAgentProcess
   }
   const child =
     process.platform === 'win32'

@@ -1,3 +1,7 @@
+import {
+  generationOptionTokens,
+  type GenerationArgument
+} from '../../shared/source-control/ai/generation/generation-argument'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -15,7 +19,7 @@ import { CODEX_DISABLE_PLUGINS_ARGS } from '../codex-cli/codex-read-only-app-ser
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { TEXT_TASK_DIRECTORY } from './source-control-prompt-files'
 import { runSourceControlPolicyProbe } from './source-control-policy-probe'
-import { sourceControlWslPath } from './source-control-wsl-paths'
+import { sourceControlWslPath, sourceControlWslPaths } from './source-control-wsl-paths'
 import type {
   LocalGenerationTarget,
   LocalProcessExecution,
@@ -90,7 +94,7 @@ function jsonObject(text: string): Record<string, unknown> {
 }
 
 async function antigravityPolicy(
-  plan: CommitMessagePlan,
+  plan: CommitMessagePlan<GenerationArgument>,
   target: LocalGenerationTarget,
   signal: AbortSignal
 ) {
@@ -98,7 +102,7 @@ async function antigravityPolicy(
   let cursor = 0
   for (;;) {
     const option = findOptionOccurrence(
-      plan.args,
+      generationOptionTokens(plan.args),
       ['--settings'],
       true,
       settingsOptions,
@@ -157,12 +161,14 @@ async function antigravityPolicy(
     args: [
       ...compactRecipeOptions(plan.args, ['--settings'], settingsOptions),
       '--settings',
-      JSON.stringify(composed)
+      { value: JSON.stringify(composed), literal: true as const }
     ]
   }
 }
 
-function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
+function dshPolicy(
+  plan: CommitMessagePlan<GenerationArgument>
+): CommitMessagePlan<GenerationArgument> {
   const plugin = `export const inject = ['tools']\nexport function apply(ctx) {\n  ctx.tools.guard(exec => exec.name === 'read' ? undefined : 'This text task permits only file reads')\n  ctx.provide('orcaTextReadPolicy', Object.freeze({}))\n}\n`
   const patch = JSON.stringify([
     { id: 'tools', config: { mode: 'native' } },
@@ -192,15 +198,19 @@ function dshPolicy(plan: CommitMessagePlan): CommitMessagePlan {
 
 export function prepareSourceControlReadOnlyPlan(input: {
   agentId: string
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   target: LocalGenerationTarget
   signal: AbortSignal
   spawnAgent: SpawnSourceControlAgent
   operation?: TextGenerationOperation
-}): LocalProcessExecution<CommitMessagePlan> {
+}): LocalProcessExecution<CommitMessagePlan<GenerationArgument>> {
   let probeClosed = Promise.resolve()
   const probe = async (args: string[]) => {
-    const execution = runSourceControlPolicyProbe({ ...input, args })
+    const resolvedArgs =
+      process.platform === 'win32' && input.target.wslDistro
+        ? await sourceControlWslPaths(args, input.target.wslDistro, input.signal)
+        : args
+    const execution = runSourceControlPolicyProbe({ ...input, args: resolvedArgs })
     probeClosed = execution.processClosed
     const output = await execution.result
     await execution.processClosed
@@ -216,7 +226,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
     )
   }
 
-  async function prepare(): Promise<CommitMessagePlan> {
+  async function prepare(): Promise<CommitMessagePlan<GenerationArgument>> {
     const { plan, target, signal } = input
     const naming = input.operation === 'conversation-name'
     if (input.agentId === 'amp' || input.agentId === 'muse') {
@@ -237,7 +247,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
     }
     if (input.agentId === 'kimi') {
       const selected = findOptionOccurrence(
-        plan.args,
+        generationOptionTokens(plan.args),
         ['--agent', '--session', '-S', '--resume', '-r', '--continue', '-c', '-C'],
         true,
         [...KIMI_VALUE_OPTIONS, '--session', '-S', '--resume', '-r'],

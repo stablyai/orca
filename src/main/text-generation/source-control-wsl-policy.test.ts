@@ -1,3 +1,4 @@
+import { generationArgumentText } from '../../shared/source-control/ai/generation/generation-argument'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { createMockDiscoveryChild } from './commit-message-text-generation-test-harness'
@@ -99,7 +100,9 @@ it('retains same-distro UNC and guest-relative recipe identities without reading
       signal: new AbortController().signal,
       spawnAgent: vi.fn()
     }).result
-    expect(JSON.parse(plan.args[plan.args.indexOf('--settings') + 1])).toMatchObject({
+    expect(
+      JSON.parse(generationArgumentText(plan.args[plan.args.indexOf('--settings') + 1]))
+    ).toMatchObject({
       customSetting: 'preserved',
       permissions: { deny: expect.arrayContaining(['write_file(*)', 'command(*)', 'mcp(*)']) }
     })

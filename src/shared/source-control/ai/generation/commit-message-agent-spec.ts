@@ -1,3 +1,4 @@
+import type { GenerationArgument } from './generation-argument'
 import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from '../../../omp-model-list-probe'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../agent-launch/catalog/tui-agent-selection'
@@ -53,15 +54,15 @@ export type CommitMessageAgentSpec = {
   binary: string
   /** Transport for the prompt; stdin and file delivery avoid argv limits. */
   promptDelivery: 'argv' | 'stdin' | 'file'
-  buildArgs: (params: {
-    prompt: string
+  buildArgs: <T extends GenerationArgument>(params: {
+    prompt: T
     model: string
     thinkingLevel?: string
     strictMcp?: boolean
     /** Claude only: the tool-policy syntax older CLIs accept. */
     legacyToolPolicy?: boolean
     userArgs?: readonly string[]
-  }) => string[]
+  }) => (string | T)[]
   /** User recipe args replace generated singleton alias groups; repeats make yargs parse arrays and crash. Default: model flag only. */
   singletonOptions?: readonly (readonly string[])[]
   modelFlag: readonly TextGenerationFlag[]

@@ -1,3 +1,4 @@
+import type { GenerationArgument } from '../../shared/source-control/ai/generation/generation-argument'
 import { abortSignalReason } from '../../shared/abort-signal-reason'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
@@ -11,7 +12,7 @@ import type {
 
 /** Effective configuration may contain credentials; keep both streams private even on failure. */
 export function runSourceControlPolicyProbe(input: {
-  plan: CommitMessagePlan
+  plan: CommitMessagePlan<GenerationArgument>
   args: string[]
   target: LocalGenerationTarget
   signal: AbortSignal

@@ -1,3 +1,4 @@
+import { generationOptionTokens, type GenerationArgument } from './generation-argument'
 import { findOptionOccurrence } from '../../../command-option-occurrence'
 import {
   tokenizeCustomCommandTemplate,
@@ -32,14 +33,14 @@ export const KIMI_VALUE_OPTIONS = [
 ]
 
 export function findRecipeOption(
-  tokens: readonly string[],
+  tokens: readonly GenerationArgument[],
   aliases: readonly string[],
   valueOptions: readonly string[],
   startIndex = 0,
   stopAtTerminator = true
 ) {
   return findOptionOccurrence(
-    tokens,
+    generationOptionTokens(tokens),
     aliases,
     stopAtTerminator,
     valueOptions,
@@ -48,13 +49,13 @@ export function findRecipeOption(
   )
 }
 
-export function compactRecipeOptions(
-  tokens: string[],
+export function compactRecipeOptions<T extends GenerationArgument>(
+  tokens: T[],
   aliases: readonly string[],
   valueOptions: readonly string[] = [],
   keepFirst = false
-): string[] {
-  const result: string[] = []
+): T[] {
+  const result: T[] = []
   let cursor = 0
   let kept = false
   let found = findRecipeOption(tokens, aliases, valueOptions, cursor)

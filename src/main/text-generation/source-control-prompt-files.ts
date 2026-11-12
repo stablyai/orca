@@ -1,3 +1,4 @@
+import type { GenerationArgument } from '../../shared/source-control/ai/generation/generation-argument'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -11,7 +12,7 @@ import type { CommitMessagePlan } from '../../shared/source-control/ai/generatio
 const PAYLOAD_BYTES = 5 * 1024 * 1024 - 3
 export const TEXT_TASK_DIRECTORY = '__ORCA_TEXT_TASK_DIRECTORY__'
 
-function generationFiles(plan: CommitMessagePlan) {
+function generationFiles(plan: CommitMessagePlan<GenerationArgument>) {
   const files: {
     name: string
     content: string
@@ -38,8 +39,8 @@ function generationFiles(plan: CommitMessagePlan) {
   return files
 }
 
-function materializedPlan(
-  plan: CommitMessagePlan,
+function materializedPlan<T extends GenerationArgument>(
+  plan: CommitMessagePlan<T>,
   directory: string,
   files: ReturnType<typeof generationFiles>
 ) {
@@ -56,7 +57,7 @@ function materializedPlan(
     values.push(file.attachment ? `@${path}` : path)
     substitutions.set(file.argIndex, values)
   }
-  const args = [...plan.args]
+  const args: (T | string)[] = [...plan.args]
   for (const [index, values] of [...substitutions].sort(([left], [right]) => right - left)) {
     args.splice(index, 1, ...values)
   }
@@ -83,10 +84,10 @@ export function* promptFileContents(content: string): Generator<string> {
   }
 }
 
-export function stageLocalPromptFiles(
-  plan: CommitMessagePlan,
+export function stageLocalPromptFiles<T extends GenerationArgument>(
+  plan: CommitMessagePlan<T>,
   own: (directory: string) => void
-): CommitMessagePlan {
+): CommitMessagePlan<T | string> {
   const files = generationFiles(plan)
   if (!files.length && !plan.promptFile) {
     return plan
@@ -130,7 +131,10 @@ umask "$old_umask"
 exec "$@"
 `
 
-export function prepareWslPrompt(plan: CommitMessagePlan, distro: string) {
+export function prepareWslPrompt<T extends GenerationArgument>(
+  plan: CommitMessagePlan<T>,
+  distro: string
+) {
   const nonce = randomUUID()
   const directory = `/tmp/orca-generation-${nonce}`
   const files = generationFiles(plan)

@@ -1,3 +1,4 @@
+import type { GenerationArgument } from './generation-argument'
 import { extractLeadingEnvAssignments } from '../../../command-environment'
 // Share prompt wording between renderer preview/tests and main generation.
 
@@ -228,6 +229,9 @@ export type CustomCommandPlan =
       ok: true
       binary: string
       args: string[]
+      localArgs: GenerationArgument[]
+      trailingPrompt?: GenerationArgument
+      literalBinary?: boolean
       stdinPayload: string | null
       env?: Record<string, string>
     }
@@ -258,13 +262,28 @@ export function planCustomCommand(
       : token
   const usesPlaceholder = commandTokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
   if (usesPlaceholder) {
+    const localArgs: GenerationArgument[] = rest.map((token) =>
+      token.includes(CUSTOM_PROMPT_PLACEHOLDER)
+        ? { value: substitute(token), literal: true }
+        : token
+    )
     return {
       ok: true,
       binary: substitute(binary),
       args: rest.map(substitute),
+      localArgs,
+      literalBinary: binary.includes(CUSTOM_PROMPT_PLACEHOLDER),
+      ...(rest.at(-1) === CUSTOM_PROMPT_PLACEHOLDER ? { trailingPrompt: localArgs.at(-1) } : {}),
       stdinPayload: null,
       ...(env ? { env } : {})
     }
   }
-  return { ok: true, binary, args: rest, stdinPayload: prompt, ...(env ? { env } : {}) }
+  return {
+    ok: true,
+    binary,
+    args: rest,
+    localArgs: rest,
+    stdinPayload: prompt,
+    ...(env ? { env } : {})
+  }
 }

@@ -1,3 +1,4 @@
+import { generationOptionTokens, type GenerationArgument } from './generation-argument'
 import { findOptionOccurrence } from '../../../command-option-occurrence'
 import { compactRecipeOptions, findRecipeOption } from './commit-message-generation-options'
 
@@ -70,12 +71,12 @@ export function codexRecipeConfigArgs(args: string[]): string[] {
   return result
 }
 
-function applyRecipeOptionOverride(args: {
-  generatedArgs: string[]
-  recipeArgs: string[]
+function applyRecipeOptionOverride<T extends GenerationArgument>(args: {
+  generatedArgs: T[]
+  recipeArgs: T[]
   aliases: readonly string[]
   valueOptions: readonly string[]
-}): { generatedArgs: string[]; recipeArgs: string[] } {
+}): { generatedArgs: T[]; recipeArgs: T[] } {
   const recipeOption = findRecipeOption(args.recipeArgs, args.aliases, args.valueOptions)
   const generatedOption = findRecipeOption(
     args.generatedArgs,
@@ -106,18 +107,18 @@ function applyRecipeOptionOverride(args: {
 }
 
 /** User recipe args outrank override prefixes, which outrank generated singleton values. */
-export function applySingletonOptionOverrides(args: {
-  generatedArgs: string[]
-  prefixArgs: string[]
-  recipeArgs: string[]
+export function applySingletonOptionOverrides<T extends GenerationArgument>(args: {
+  generatedArgs: T[]
+  prefixArgs: T[]
+  recipeArgs: T[]
   singletonOptions: readonly (readonly string[])[]
   valueOptions: readonly string[]
 }): {
-  generatedArgs: string[]
-  prefixArgs: string[]
-  recipeArgs: string[]
-  nativePrefixArgs: string[]
-  nativePrefixOptions: string[]
+  generatedArgs: T[]
+  prefixArgs: T[]
+  recipeArgs: T[]
+  nativePrefixArgs: T[]
+  nativePrefixOptions: T[]
 } {
   let generatedArgs = args.generatedArgs
   let prefixArgs = args.prefixArgs
@@ -130,7 +131,14 @@ export function applySingletonOptionOverrides(args: {
     const recipeOption = findRecipeOption(recipeArgs, aliases, args.valueOptions)
     const prefixOption = findRecipeOption(prefixArgs, aliases, args.valueOptions)
     const prefixHasTerminator =
-      findOptionOccurrence(prefixArgs, ['--'], false, args.valueOptions, 0, false) !== null
+      findOptionOccurrence(
+        generationOptionTokens(prefixArgs),
+        ['--'],
+        false,
+        args.valueOptions,
+        0,
+        false
+      ) !== null
     if (recipeOption && !prefixHasTerminator) {
       prefixArgs = compactRecipeOptions(prefixArgs, aliases, args.valueOptions)
     } else if (prefixOption && !prefixHasTerminator) {
