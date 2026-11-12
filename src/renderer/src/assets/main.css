@@ -568,12 +568,14 @@
     inset 0 1px 0 rgb(255 255 255 / 0.06);
 }
 
-/* Why: buttons and inner panels paint from these; the default dark --secondary equals the lifted surface. */
+/* Why: buttons and inner panels paint from these; foregrounds pair with the popover the surface lifts. */
 [data-sonner-toaster],
 .notification-card-stack {
   --popover: var(--notice-surface);
   --card: var(--notice-surface);
+  --card-foreground: var(--popover-foreground);
   --secondary: var(--notice-secondary);
+  --secondary-foreground: var(--popover-foreground);
 }
 
 [data-sonner-toaster] {
@@ -697,6 +699,7 @@ body[data-modal-overlay-open]
   [data-close-button]:hover {
   color: var(--accent-foreground);
   background: var(--accent);
+  border-color: var(--notice-border);
 }
 
 /* Re-evaluate chat colors where the appearance producer supplies their source colors. */

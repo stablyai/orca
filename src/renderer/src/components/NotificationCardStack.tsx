@@ -8,9 +8,7 @@ import {
   setNotificationCardLayoutVar
 } from '@/lib/notifications/notification-card-layout-vars'
 
-// Why: a scroll box clips its overflow, so it pads out (and offsets back) to keep card shadows visible.
-// Horizontally the room is the 1rem gutter, so the box and its scrollbar end at the window edge;
-// vertically it collapses while the cards scroll, so they never slide over the status bar.
+// Why: the scroll box clips, so it pads out (offset back) to show card shadows; the room collapses while it scrolls.
 const SHADOW_ROOM_Y_PX = 40
 const ROOM_Y = 'var(--stack-shadow-room-y)'
 
@@ -34,8 +32,8 @@ export function NotificationCardStack({ children }: { children: ReactNode }): Re
     const publish = (): void => {
       const overflowing = stack.hasAttribute('data-overflowing')
       const height = stack.offsetHeight - (overflowing ? 0 : 2 * SHADOW_ROOM_Y_PX)
-      // Toggling resizes the box, so the observer republishes with the matching padding.
-      stack.toggleAttribute('data-overflowing', stack.scrollHeight > stack.clientHeight)
+      // Toggling swaps padding for max-height, so the content height published above stays valid.
+      stack.toggleAttribute('data-overflowing', stack.scrollHeight - stack.clientHeight > 1)
       setNotificationCardLayoutVar(
         NOTIFICATION_CARD_STACK_HEIGHT_VAR,
         height > 0 ? `calc(${height}px + 0.5rem)` : null
