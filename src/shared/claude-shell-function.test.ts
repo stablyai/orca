@@ -96,6 +96,22 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     )
   })
 
+  it('signs in the account a host pane points at, where its system sign-in would miss it', () => {
+    const f = fixture()
+    writeFileSync(f.pointer, f.a)
+    // A WSL host's pane carries only the pointer: the desktop that owns its accounts set it.
+    const signIn = (account: 'managed' | 'system') =>
+      f.run(
+        shell,
+        [],
+        'summary',
+        '',
+        agentSessionSignInCommand('claude', { account, remote: true })!
+      )
+    expect(signIn('managed').stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
+    expect(signIn('system').stdout).toBe('HOME=default KEY=fake TWIN=none\n')
+  })
+
   it('creates a missing account folder and runs Claude in it, printing nothing', () => {
     const f = fixture()
     const fresh = join(f.a, 'claude-profiles', 'id', 'home')
