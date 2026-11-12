@@ -169,7 +169,7 @@ export function settingsMountAdapters(
     },
     'settings.task-hydration': (context) => {
       const useHydration = modules.load<typeof UseMobileTasksRuntimeHydrationModule>(
-        'mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx'
+        'mobile/src/tasks/screen-state/use-mobile-tasks-runtime-hydration.tsx'
       ).useMobileTasksRuntimeHydration
       const model = observableModel(context, {
         client: context.client,

@@ -1,3 +1,4 @@
+import type * as UseMobileTasksGithubCheckFileActionsModule from '../../../tasks/item-detail/use-mobile-tasks-github-check-file-actions'
 import type * as GitlabGithubStatusModule from '../../../tasks/item-detail/use-mobile-tasks-gitlab-github-status-actions'
 import type { ActionableTaskItem } from '../../../tasks/mobile-tasks-project-workspace-types'
 import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
@@ -179,11 +180,10 @@ function mountModelHook<Actions>(
 export function taskItemChecksStatusMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const checkFiles: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/item-detail/use-mobile-tasks-github-check-file-actions')
-    >('use-mobile-tasks-github-check-file-actions.tsx').useMobileTasksGithubCheckFileActions
+    const useActions = modules.load<typeof UseMobileTasksGithubCheckFileActionsModule>(
+      'mobile/src/tasks/item-detail/use-mobile-tasks-github-check-file-actions.tsx'
+    ).useMobileTasksGithubCheckFileActions
     return mountModelHook(modules, context, {
       useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),
       observedFields: [
@@ -242,9 +242,11 @@ export function taskItemChecksStatusMountAdapters(
             typeof GitlabGithubStatusModule.useMobileTasksGitlabGithubStatusActions
           >[0]
         ) =>
-          load<typeof GitlabGithubStatusModule>(
-            'use-mobile-tasks-gitlab-github-status-actions.tsx'
-          ).useMobileTasksGitlabGithubStatusActions(model),
+          modules
+            .load<typeof GitlabGithubStatusModule>(
+              'mobile/src/tasks/item-detail/use-mobile-tasks-gitlab-github-status-actions.tsx'
+            )
+            .useMobileTasksGitlabGithubStatusActions(model),
         observedFields: [
           'itemAddLabelsDraft',
           'itemRemoveLabelsDraft',

@@ -116,15 +116,16 @@ function mountModelHook<Actions>(
 export function taskItemDetailMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   function itemDetail(item: Record<string, unknown>) {
     // Load on mount so this and task-mount-adapters cannot both apply a mutant to the same module.
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(modules, context, {
         useHook: (model) => {
-          return load<typeof TaskDetailLoading>(
-            'use-mobile-tasks-item-detail-loading.tsx'
-          ).useMobileTasksItemDetailLoading(model)
+          return modules
+            .load<typeof TaskDetailLoading>(
+              'mobile/src/tasks/item-detail/use-mobile-tasks-item-detail-loading.tsx'
+            )
+            .useMobileTasksItemDetailLoading(model)
         },
         fixture: {
           actionItem: item,

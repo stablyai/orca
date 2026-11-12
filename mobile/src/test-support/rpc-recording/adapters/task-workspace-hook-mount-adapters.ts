@@ -1,3 +1,6 @@
+import type * as UseMobileTasksWorkspaceSshStateModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-ssh-state'
+import type * as UseMobileTasksWorkspaceSourceEffectsModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-source-effects'
+import type * as UseMobileTasksWorkspaceSparseActionsModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-sparse-actions'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -11,9 +14,9 @@ export function taskWorkspaceHookMountAdapters(
   // A connectionId selects remote detection; omission selects local preflight.
   function sshStateAdapter(connectionId: string | undefined): MountAdapter {
     return (context) => {
-      const useSsh = modules.load<
-        typeof import('../../../tasks/workspace-creation/use-mobile-tasks-workspace-ssh-state')
-      >('mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx').useMobileTasksWorkspaceSshState
+      const useSsh = modules.load<typeof UseMobileTasksWorkspaceSshStateModule>(
+        'mobile/src/tasks/workspace-creation/use-mobile-tasks-workspace-ssh-state.tsx'
+      ).useMobileTasksWorkspaceSshState
       const repo = { id: REPO, displayName: 'Repo', connectionId }
       const model = observableModel(context, {
         client: context.client,
@@ -78,10 +81,8 @@ export function taskWorkspaceHookMountAdapters(
 
   return {
     'tasks.workspace-source': (context) => {
-      const useEffects = modules.load<
-        typeof import('../../../tasks/workspace-creation/use-mobile-tasks-workspace-source-effects')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx'
+      const useEffects = modules.load<typeof UseMobileTasksWorkspaceSourceEffectsModule>(
+        'mobile/src/tasks/workspace-creation/use-mobile-tasks-workspace-source-effects.tsx'
       ).useMobileTasksWorkspaceSourceEffects
       const model = observableModel(context, {
         client: context.client,
@@ -129,10 +130,8 @@ export function taskWorkspaceHookMountAdapters(
       }
     },
     'tasks.workspace-sparse': (context) => {
-      const useSparse = modules.load<
-        typeof import('../../../tasks/workspace-creation/use-mobile-tasks-workspace-sparse-actions')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx'
+      const useSparse = modules.load<typeof UseMobileTasksWorkspaceSparseActionsModule>(
+        'mobile/src/tasks/workspace-creation/use-mobile-tasks-workspace-sparse-actions.tsx'
       ).useMobileTasksWorkspaceSparseActions
       const model = observableModel(context, {
         client: context.client,

@@ -1,3 +1,4 @@
+import type * as MobileTasksFilterPickersModule from '../../../tasks/screen/mobile-tasks-filter-pickers'
 import { isValidElement } from 'react'
 import { performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
@@ -11,9 +12,9 @@ export function tasksLinearWorkspaceMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'linear.select-workspace-picker': ({ client, effect }) => {
-      const renderPicker = modules.load<
-        typeof import('../../../tasks/screen/mobile-tasks-filter-pickers')
-      >('mobile/src/tasks/mobile-tasks-filter-pickers.tsx').renderMobileTasksLinearWorkspacePicker
+      const renderPicker = modules.load<typeof MobileTasksFilterPickersModule>(
+        'mobile/src/tasks/screen/mobile-tasks-filter-pickers.tsx'
+      ).renderMobileTasksLinearWorkspacePicker
       let selectedWorkspaceId: ConnectionPresentationModel['selectedLinearWorkspaceId'] =
         'workspace-a'
       let teamCount = 2

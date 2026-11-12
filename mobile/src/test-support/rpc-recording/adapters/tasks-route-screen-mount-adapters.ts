@@ -1,3 +1,4 @@
+import type * as UseMobileTasksRouteAndItemStateModule from '../../../tasks/screen-state/use-mobile-tasks-route-and-item-state'
 import type * as HostProtocolGatesContext from '../../../components/host-protocol-gates-context'
 import { createElement } from 'react'
 import { screenMount } from '../mounted-screen-tree'
@@ -20,10 +21,8 @@ export function tasksRouteScreenMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'tasks.route-repo-list': ({ client, effect }) => {
-      const useRoute = modules.load<
-        typeof import('../../../tasks/screen-state/use-mobile-tasks-route-and-item-state')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-route-and-item-state.tsx'
+      const useRoute = modules.load<typeof UseMobileTasksRouteAndItemStateModule>(
+        'mobile/src/tasks/screen-state/use-mobile-tasks-route-and-item-state.tsx'
       ).useMobileTasksRouteAndItemState
       const hostClientContext = loadHostClientContext(modules)
       // The screen sits under the host route's protocol gate; this one advertises no capabilities.
