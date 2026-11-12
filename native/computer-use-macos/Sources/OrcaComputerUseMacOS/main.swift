@@ -553,6 +553,7 @@ final class Provider {
                     "annotatedScreenshot": false,
                     "elementFrames": true,
                     "ocr": false,
+                    "disabledState": true,
                 ],
                 "actions": [
                     "click": true,

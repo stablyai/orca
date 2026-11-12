@@ -1,5 +1,9 @@
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import {
+  COMPUTER_WAIT_DEFAULT_TIMEOUT_MS,
+  COMPUTER_WAIT_MAX_TIMEOUT_MS
+} from '../../shared/computer-wait-timeout'
 
 const COMPUTER_FLAGS = [...GLOBAL_FLAGS, 'worktree', 'session', 'app']
 const COMPUTER_WINDOW_TARGET_FLAGS = ['window-id', 'window-index']
@@ -42,6 +46,25 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot] [--json]',
     allowedFlags: [...COMPUTER_OBSERVE_FLAGS, 'query', 'max-elements']
+  },
+  {
+    path: ['computer', 'wait'],
+    summary: 'Wait until an app shows text, enables a control, or opens a window',
+    usage:
+      'orca computer wait --app <name|bundle|pid:N> (--text <text> | --enabled <text> | --window-title <text>) [--timeout <ms>] [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--json]',
+    allowedFlags: [
+      ...COMPUTER_FLAGS,
+      ...COMPUTER_WINDOW_TARGET_FLAGS,
+      'text',
+      'enabled',
+      'window-title',
+      'timeout'
+    ],
+    notes: [
+      'Polls the accessibility tree (or, for --window-title, the window list) until the condition holds, then prints the matching elements or windows. Matching is a case-insensitive substring, like get-app-state --query.',
+      '--enabled holds once an element contains the text and no element containing it is disabled.',
+      `--timeout defaults to ${COMPUTER_WAIT_DEFAULT_TIMEOUT_MS} ms (at most ${COMPUTER_WAIT_MAX_TIMEOUT_MS}); on timeout the command fails with wait_timeout.`
+    ]
   },
   {
     path: ['computer', 'click'],

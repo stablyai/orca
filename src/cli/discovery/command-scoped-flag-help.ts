@@ -1,3 +1,5 @@
+import { COMPUTER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/computer-wait-timeout'
+
 // File focus differs from terminal create's shared --focus help.
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
@@ -19,6 +21,14 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'computer get-app-state': {
     query:
       '--query <text>        Show only elements whose line contains this text, with their ancestors'
+  },
+  'computer wait': {
+    text: '--text <text>          Wait until an element line contains this text',
+    enabled:
+      '--enabled <text>       Wait until elements containing this text exist and none is disabled',
+    'window-title':
+      "--window-title <text>  Wait until one of the app's windows has this in its title",
+    timeout: `--timeout <ms>         How long to wait before failing with wait_timeout (default ${COMPUTER_WAIT_DEFAULT_TIMEOUT_MS})`
   },
   'reference find': {
     query: '--query <url-or-key>   Full URL or native issue key such as STA-1234',

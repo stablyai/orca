@@ -160,6 +160,8 @@ export type ComputerProviderCapabilities = {
       ocr: boolean
       // Absent from runtimes that predate action-result tree diffs.
       treeDiff?: boolean
+      // Tree lines mark disabled elements with a `(disabled)` trait. Absent from older Linux and Windows providers.
+      disabledState?: boolean
     }
     actions: {
       click: boolean
