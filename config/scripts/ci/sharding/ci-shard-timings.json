@@ -6354,7 +6354,6 @@
       "src/shared/git/worktrees/git-worktree-admin.test.ts": 161,
       "src/shared/github/account-binding.test.ts": 48,
       "src/shared/github/api-availability.test.ts": 47,
-      "src/shared/source-control/review-comments/pr-comments-resolution-prompt.test.ts": 49,
       "src/shared/github/project-board-columns.test.ts": 64,
       "src/shared/github/project-identity.test.ts": 33,
       "src/shared/github/project-ref-input.test.ts": 40,
