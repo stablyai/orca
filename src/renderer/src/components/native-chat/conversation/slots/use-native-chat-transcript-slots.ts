@@ -1,9 +1,15 @@
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { toggleNativeChatExpandedKey } from '../../messages/disclosure/native-chat-expanded-keys'
+import {
+  nativeChatHistoryTurnFold,
+  nativeChatTurnFoldRow,
+  type NativeChatTurnFoldHistory
+} from '../../../../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { NativeChatVisualOwnerContext } from '../../media/visuals/native-chat-visual-owner'
 import {
   nativeChatMarkdownImageSources,
   nativeChatVisualMarkdownImageSources
 } from '../../markdown/native-chat-markdown-image-sources'
-import { useContext, useMemo } from 'react'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
@@ -19,10 +25,16 @@ import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-in
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
 export function useNativeChatTranscriptSlots({
   line,
+  scopeKey,
+  historyHead,
   ...input
-}: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'tailRowBelow'> & {
+}: Omit<
+  NativeChatTranscriptSlotsInput,
+  'liveReasoningId' | 'expandedTurnKeys' | 'turnFold' | 'tailRowBelow'
+> & {
+  scopeKey: string
+  historyHead?: string
   line: {
-    /** The row drawn under the transcript, if any. */
     tailRow: 'awaiting-input' | 'activity' | null
     thinking: boolean
     stopping?: boolean
@@ -30,8 +42,10 @@ export function useNativeChatTranscriptSlots({
   }
 }): {
   slots: NativeChatTranscriptSlot[]
-  forkPoint: NativeChatSideChatForkPoint | null
   liveLine: NativeChatLiveLine | null
+  expandedTurnKeys: ReadonlySet<string>
+  toggleExpandedTurn: (key: string) => void
+  forkPoint: NativeChatSideChatForkPoint | null
 } {
   const visualOwner = useContext(NativeChatVisualOwnerContext)
   const imageSources = visualOwner
@@ -47,13 +61,41 @@ export function useNativeChatTranscriptSlots({
     turnStatuses,
     turnDiffs,
     openedPullRequests,
-    expandedTurnKeys,
     isWorking,
     lifecycleWorking,
     subagentSections,
     subagentChoices,
     forkOffer
   } = input
+  const [expandedTurnKeys, setExpandedTurnKeys] = useState<ReadonlySet<string>>(new Set())
+  const committedFold = useRef<NativeChatTurnFoldHistory | null>(null)
+  const historyFold = useMemo(
+    () =>
+      nativeChatHistoryTurnFold(committedFold.current, {
+        scope: scopeKey,
+        historyHead,
+        messages,
+        rows: messages.map((message, index) =>
+          nativeChatTurnFoldRow(message, turnKeys[index], receipts.has(message.id))
+        ),
+        settledTurnKeys: new Set(
+          Object.entries(turnStatuses.completedByTurn).flatMap(([key, status]) =>
+            status.workedSeconds != null ? [key] : []
+          )
+        ),
+        expandedTurnKeys
+      }),
+    [scopeKey, historyHead, messages, turnKeys, receipts, turnStatuses, expandedTurnKeys]
+  )
+  useLayoutEffect(() => {
+    committedFold.current = historyFold
+  }, [historyFold])
+  const toggleExpandedTurn = useCallback(
+    (key: string) => {
+      setExpandedTurnKeys(toggleNativeChatExpandedKey(historyFold.expandedTurnKeys, key))
+    },
+    [historyFold.expandedTurnKeys]
+  )
   const { tailRow, thinking, stopping = false, activityText } = line
   const draws = tailRow === 'activity'
   const liveLine = useMemo(
@@ -101,7 +143,8 @@ export function useNativeChatTranscriptSlots({
         turnStatuses,
         turnDiffs,
         openedPullRequests,
-        expandedTurnKeys,
+        expandedTurnKeys: historyFold.expandedTurnKeys,
+        turnFold: historyFold,
         isWorking,
         lifecycleWorking,
         subagentSections,
@@ -111,7 +154,7 @@ export function useNativeChatTranscriptSlots({
         forkOffer
       }),
     [
-      expandedTurnKeys,
+      historyFold,
       imageSources,
       forkOffer,
       isWorking,
@@ -131,5 +174,11 @@ export function useNativeChatTranscriptSlots({
       unresolvedRowIds
     ]
   )
-  return { slots, forkPoint, liveLine }
+  return {
+    slots,
+    forkPoint,
+    liveLine,
+    expandedTurnKeys: historyFold.expandedTurnKeys,
+    toggleExpandedTurn
+  }
 }

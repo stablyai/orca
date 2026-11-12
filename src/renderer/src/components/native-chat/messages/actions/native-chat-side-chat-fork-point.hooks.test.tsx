@@ -83,7 +83,11 @@ function Transcript({ conversation: c }: { conversation: Conversation }): null {
     lifecycleWorking: false,
     ...(forkOffer ? { forkOffer } : {})
   }
-  const { forkPoint } = useNativeChatTranscriptSlots({ ...input, line: LINE })
+  const { forkPoint } = useNativeChatTranscriptSlots({
+    ...input,
+    scopeKey: 'side-chat-fork-test',
+    line: LINE
+  })
   useNativeChatSideChatForkPointReport(forkPoint)
   return null
 }

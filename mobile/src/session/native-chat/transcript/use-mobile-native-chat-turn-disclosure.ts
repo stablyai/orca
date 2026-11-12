@@ -1,7 +1,8 @@
 import { useMobileNativeChatGeneratedImageAnswers } from './use-mobile-native-chat-generated-image-answers'
 import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diffs'
 import type { MobileNativeChatTurnRow } from './use-mobile-native-chat-row-props'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
+import { useMobileNativeChatScopedOpenKeys } from './mobile-native-chat-disclosure-store'
 import {
   isSubagentGroupBlock,
   type NativeChatMessage
@@ -31,37 +32,9 @@ import {
 } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-grouping'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 
-const EMPTY_TURN_IDS: ReadonlySet<string> = new Set()
 const NO_TURN_KEYS: readonly undefined[] = []
-const MAX_EXPANDED_TURNS = 128
 
 export type MobileNativeChatLiveLine = NativeChatLiveLine & { reasoningExpanded: boolean }
-
-function useScopedOpenKeys(scopeKey: string): [ReadonlySet<string>, (key: string) => void] {
-  const [state, setState] = useState<{ scopeKey: string; keys: ReadonlySet<string> }>(() => ({
-    scopeKey,
-    keys: new Set()
-  }))
-  const toggle = useCallback(
-    (key: string) => {
-      setState((current) => {
-        const next = new Set(current.scopeKey === scopeKey ? current.keys : [])
-        if (!next.delete(key)) {
-          if (next.size >= MAX_EXPANDED_TURNS) {
-            const oldest = next.values().next().value
-            if (oldest) {
-              next.delete(oldest)
-            }
-          }
-          next.add(key)
-        }
-        return { scopeKey, keys: next }
-      })
-    },
-    [scopeKey]
-  )
-  return [state.scopeKey === scopeKey ? state.keys : EMPTY_TURN_IDS, toggle]
-}
 
 export function useMobileNativeChatTurnDisclosure({
   messages,
@@ -162,10 +135,10 @@ export function useMobileNativeChatTurnDisclosure({
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
   }, [enabled, rows, stopping, turnJournal])
-  const [expandedTurnIds, toggleExpandedTurn] = useScopedOpenKeys(scopeKey)
-  const [expandedReasoning, toggleReasoning] = useScopedOpenKeys(scopeKey)
-  const [openSubagentGroups, toggleSubagentGroup] = useScopedOpenKeys(scopeKey)
-  const [openUserMessages, toggleUserMessage] = useScopedOpenKeys(scopeKey)
+  const [expandedTurnIds, toggleExpandedTurn] = useMobileNativeChatScopedOpenKeys(scopeKey)
+  const [expandedReasoning, toggleReasoning] = useMobileNativeChatScopedOpenKeys(scopeKey)
+  const [openSubagentGroups, toggleSubagentGroup] = useMobileNativeChatScopedOpenKeys(scopeKey)
+  const [openUserMessages, toggleUserMessage] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
 
   const inLiveWorkingTurn = useCallback(
@@ -202,8 +175,15 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
-  const { fold, trailingRunIndex, workRuns } = useMobileNativeChatTranscriptRows({
+  const {
+    fold,
+    expandedTurnKeys: historyExpandedTurns,
+    trailingRunIndex,
+    workRuns
+  } = useMobileNativeChatTranscriptRows({
     enabled,
+    scopeKey,
+    historyHead: turnJournal?.items[0]?.itemId,
     rows,
     turnKeys,
     receipts,
@@ -211,6 +191,10 @@ export function useMobileNativeChatTurnDisclosure({
     expandedTurnKeys: expandedTurnIds,
     liveReasoningId
   })
+  const toggleHistoryTurn = useCallback(
+    (key: string) => toggleExpandedTurn(key, historyExpandedTurns),
+    [toggleExpandedTurn, historyExpandedTurns]
+  )
   const presentation = useMemo(
     () => ({ rows, workRuns, turnKeys, receipts }),
     [rows, workRuns, turnKeys, receipts]
@@ -234,7 +218,7 @@ export function useMobileNativeChatTurnDisclosure({
         turnDiff: summaries.get(message.id),
         turnStatus,
         ...(bar?.above === true && turnStatus !== null ? { turnStatusAbove: true } : {}),
-        turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
+        turnExpanded: turnKey ? historyExpandedTurns.has(turnKey) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
         turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
         ...(turnKey === message.id ? { opensTurn: true as const } : {}),
@@ -273,7 +257,7 @@ export function useMobileNativeChatTurnDisclosure({
       activeTurnKey,
       active,
       completedByTurn,
-      expandedTurnIds,
+      historyExpandedTurns,
       inLiveWorkingTurn,
       trailingRunIndex,
       workRuns,
@@ -296,7 +280,7 @@ export function useMobileNativeChatTurnDisclosure({
     active,
     presentation,
     activeActivityText,
-    onToggleTurn: toggleExpandedTurn,
+    onToggleTurn: toggleHistoryTurn,
     resolveRow,
     listMessages: waiting.listMessages,
     waitingRows: waiting.waitingRows,

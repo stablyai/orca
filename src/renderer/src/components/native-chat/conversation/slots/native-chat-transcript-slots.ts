@@ -146,18 +146,22 @@ export function buildNativeChatTranscript(
     imageSources
   )
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
-  const foldRows = messages.map((message, index) =>
-    nativeChatTurnFoldRow(message, turnKeys[index], receipts.has(message.id))
-  )
+  const foldRows =
+    input.turnFold?.rows ??
+    messages.map((message, index) =>
+      nativeChatTurnFoldRow(message, turnKeys[index], receipts.has(message.id))
+    )
   // Liveness follows the turn frontier, not a call’s stale running flag.
   const trailingRunIndex = messages.findLastIndex((message) =>
     nativeChatRowSpeaksOrActs(message, nativeChatRowRendersProse(message), receipts)
   )
-  const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({
-    rows: foldRows,
-    settledTurnKeys,
-    expandedTurnKeys
-  })
+  const { foldedRows, foldableTurnKeys } =
+    input.turnFold?.fold ??
+    nativeChatTurnFold({
+      rows: foldRows,
+      settledTurnKeys,
+      expandedTurnKeys
+    })
   const bars = nativeChatTurnBarRows(messages, turnKeys)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
