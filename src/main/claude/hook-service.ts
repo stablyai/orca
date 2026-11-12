@@ -3,7 +3,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import {
   listClaudeProfileHomes,
   listClaudeProfileHomesAsync
-} from '../claude-accounts/claude-profile-homes'
+} from '../claude-accounts/profiles/claude-profile-homes'
 import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { SFTPWrapper } from 'ssh2'
 import type {
@@ -43,7 +43,6 @@ import {
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
-  getManagedEventHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
@@ -57,6 +56,7 @@ import {
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
 import { claudeAcceptsExecFormHooks } from './claude-hook-event-versions'
+import { getManagedEventHook } from './claude-managed-event-hook'
 import {
   getClaudeManagedHookPlan,
   OPENCLAUDE_MANAGED_HOOK_PLAN,
@@ -209,7 +209,8 @@ export class ClaudeHookService {
       (eventName) =>
         getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
       getManagedScriptFileName(this.options.settings),
-      plan
+      plan,
+      process.platform !== 'win32'
     )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
@@ -254,7 +255,8 @@ export class ClaudeHookService {
         (eventName) =>
           buildManagedCommandHook(getRemoteManagedEventCommand(eventName, remoteScriptPath)),
         remoteScriptFileName,
-        this.managedHookPlan(options)
+        this.managedHookPlan(options),
+        true
       )
 
       // Publish scripts before settings can reference them.

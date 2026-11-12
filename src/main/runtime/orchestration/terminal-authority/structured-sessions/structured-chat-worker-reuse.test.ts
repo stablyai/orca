@@ -39,7 +39,10 @@ vi.mock(
     }) => {
       const rig = await import('./structured-chat-coordinator-mail-rig.test-fixture')
       const { attachParams } = await import('./structured-chat-coordinator-fake-codex-fixture')
-      const attached = await rig.host.attach(args.caller, attachParams(args.envelope.sessionId))
+      const attached = await rig.host.attach(
+        args.caller,
+        attachParams(args.envelope.sessionId, rig.root)
+      )
       await rig.host.setSessionTabVisibility(args.envelope.sessionId, true)
       rig.threadBySession.set(args.envelope.sessionId, rig.codex.connections.at(-1)!.threadId!)
       return attached
@@ -352,6 +355,15 @@ describe('a send to a finished structured worker', () => {
 
     expect(await followUp).toMatchObject({ delivery: 'reopened', state: 'ready' })
     expect(host.isSessionTabVisible(identity.sessionId)).toBe(true)
+    // The coordinator's chat shows the reopen, never a newly started worker.
+    await vi.waitFor(async () => {
+      const cards = (await host.journalSnapshot(COORDINATOR)).items.flatMap(({ body }) =>
+        body?.kind === 'agent-start' ? [body] : []
+      )
+      expect(cards).toEqual([
+        expect.objectContaining({ followUp: { of: firstDispatchId, reopened: true } })
+      ])
+    }, WAIT)
     expect(db.getWorkerTerminalResourceByOwner(String((await followUp).dispatchId))).toMatchObject({
       terminal_handle: identity.handle,
       ownership_state: 'owned'

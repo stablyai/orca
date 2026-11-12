@@ -119,6 +119,12 @@ export const BROWSER_CORE_METHODS = [
     handler: async (params, { runtime }) => runtime.browserTabCurrent(params)
   }),
   defineMethod({
+    name: 'browser.tabAnnotations',
+    permission: 'workspace',
+    params: BrowserTarget,
+    handler: async (params, { runtime }) => runtime.browserTabAnnotations(params)
+  }),
+  defineMethod({
     name: 'browser.tabSwitch',
     permission: 'workspace',
     params: TabSwitch,

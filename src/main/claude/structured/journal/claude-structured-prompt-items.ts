@@ -17,14 +17,14 @@ import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies
 import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
 
 const APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
-  { id: 'allow', label: 'Allow' },
-  { id: 'allowForSession', label: 'Allow for this session' },
-  { id: 'deny', label: 'Deny' }
+  { id: 'allow', label: 'Allow', intent: 'allow_once' },
+  { id: 'allowForSession', label: 'Allow for this session', intent: 'allow_always' },
+  { id: 'deny', label: 'Deny', intent: 'reject_once' }
 ]
 
 const PLAN_APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
-  { id: 'allow', label: 'Approve plan' },
-  { id: 'deny', label: 'Keep planning' }
+  { id: 'allow', label: 'Approve plan', intent: 'allow_once' },
+  { id: 'deny', label: 'Keep planning', intent: 'reject_once' }
 ]
 
 const PENDING = {
@@ -58,6 +58,7 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),
     ...(prompt.matchedAskRule ? { matchedAskRule: prompt.matchedAskRule } : {}),
     ...(prompt.subject ? { subject: prompt.subject } : {}),
+    ...(prompt.personOnly ? { personOnly: true } : {}),
     detail: detail || null,
     options: (planSubject ? PLAN_APPROVAL_OPTIONS : APPROVAL_OPTIONS).map((option) => ({
       ...option

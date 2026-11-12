@@ -17,7 +17,7 @@ import { shouldCopySyntheticTitleFrameToPtyData } from '../runtime/terminal/titl
 import { mainProcessState as state } from './main-process-state'
 import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
 
-// Cursor redraws overwrite one-shot OSC titles; reassert at Pi's 80ms cadence and share the animation with OpenCode.
+// Agent redraws can overwrite one-shot OSC titles; reassert at Pi's 80ms cadence.
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const SPINNER_INTERVAL_MS = 80
 const syntheticTitleSpinnerByPaneKey = new Map<

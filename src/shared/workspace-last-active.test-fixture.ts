@@ -11,8 +11,6 @@ export function makeCleanupCandidate(
     displayName: 'w',
     branch: 'w',
     path: '/w',
-    tier: 'ready',
-    selectedByDefault: true,
     blockers: [],
     localContext: {
       terminalTabCount: 1,

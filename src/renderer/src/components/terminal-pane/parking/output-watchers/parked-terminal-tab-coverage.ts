@@ -1,3 +1,4 @@
+import { isTerminalNoticeLifetimeCurrent } from '../../provider-notices/terminal-notice-lifetime'
 import { useAppStore } from '@/store/index'
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -11,8 +12,11 @@ import {
   parkedTerminalCaptureRevision
 } from './terminal-parked-watcher-registry'
 import type { ParkableTerminalTabModel } from './terminal-parked-watcher-reconciliation'
-import { collectLeafIdsInOrder } from '../../layout/terminal-layout-leaf-traversal'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import '../../layout/terminal-layout-leaf-traversal'
+import {
+  collectLayoutLeafIdsInOrder,
+  resolveRootlessTerminalLayoutLeafId
+} from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
 import { launchAgentTabIds } from './parked-tab-agent-owner-index'
 
@@ -114,7 +118,7 @@ function fallbackParkedPaneCandidates(
   state: ParkedPaneFallbackState
 ): ParkedTerminalPaneCapture[] {
   const layout = state.terminalLayoutsByTabId[tab.id]
-  const rootLeafIds = collectLeafIdsInOrder(layout?.root)
+  const rootLeafIds = collectLayoutLeafIdsInOrder(layout?.root)
   const rootlessLeafId = layout ? resolveRootlessTerminalLayoutLeafId(layout) : null
   const leafIds =
     rootLeafIds.length > 0 ? rootLeafIds : rootlessLeafId !== null ? [rootlessLeafId] : []
@@ -181,6 +185,10 @@ function resolveParkedTerminalPaneCandidates(
       ? {
           ...pane,
           paneId: prior.paneId,
+          ...(prior.noticeLifetime?.ptyId === pane.ptyId &&
+          isTerminalNoticeLifetimeCurrent(prior.noticeLifetime)
+            ? { noticeLifetime: prior.noticeLifetime }
+            : {}),
           ...(prior.ptyId === pane.ptyId && prior.workspaceOwner
             ? { workspaceOwner: prior.workspaceOwner }
             : {}),

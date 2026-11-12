@@ -6,7 +6,7 @@ import {
   codeBlockHTML,
   type EditorAnimatedVisualRefs
 } from './editor-animated-visual-markup'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 export function useEditorAnimatedVisualAnimation(
   reducedMotion: boolean,

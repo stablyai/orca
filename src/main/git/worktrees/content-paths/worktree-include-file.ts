@@ -1,7 +1,7 @@
 import { lstat, readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { checkIgnoredPaths } from '../../source-control/check-ignored-paths'
-import type { GitRuntimeOptions } from '../../git-runtime-options'
+import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 
 /** Cross-tool convention for copying selected gitignored paths into new worktrees (#7549). */

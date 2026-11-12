@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { getLocalPreflightContext } from '@/lib/local-preflight-context'
-import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
 

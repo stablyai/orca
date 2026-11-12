@@ -2,7 +2,7 @@ import { MountedTerminalWorktrees } from './terminal/split-group-mount'
 import { useEffect, useRef } from 'react'
 import { useTerminalParkingWorkspaceChanges } from './terminal-pane/parking/use-terminal-parking-workspace-changes'
 import { invalidateTerminalParkingInputs } from './terminal-pane/parking/terminal-parking-input-events'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
   countEvictionExemptTabRoutes,
@@ -10,7 +10,7 @@ import {
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees
 } from './terminal-pane/parking/retention/terminal-hidden-worktree-retention'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/parking/retention/terminal-eviction-exempt-tabs'
 import { captureParkedTerminalBuffers } from './terminal-pane/parking/capture/parked-terminal-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/layout/reconciliation/terminal-lifecycle-diagnostics'

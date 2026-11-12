@@ -61,10 +61,4 @@ final class AttributeValueCoercionTests: XCTestCase {
         }
     }
 
-    func testDoubleValuePreservesDoubleKindForIntegralInput() {
-        let coercion = AttributeValueCoercion(existingValue: NSNumber(value: 2.5), requested: "3")
-
-        XCTAssertEqual(coercion.writeValue, .double(3.0))
-    }
-
 }

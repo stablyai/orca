@@ -33,6 +33,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
   { agent: 'pi', loginCommand: ['pi'], slashCommand: '/login' },
   { agent: 'omp', loginCommand: ['omp'], slashCommand: '/login' },
   {
+    agent: 'copilot',
+    loginCommand: ['copilot', 'login'],
+    remoteLoginCommand: ['copilot', 'login', '--device-code'],
+    installCommand: 'curl -fsSL https://gh.io/copilot-install | bash'
+  },
+  {
     agent: 'kiro',
     loginCommand: ['kiro-cli', 'login'],
     remoteLoginCommand: ['kiro-cli', 'login', '--use-device-flow']

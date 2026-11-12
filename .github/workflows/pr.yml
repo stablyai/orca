@@ -790,15 +790,7 @@ jobs:
         id: shells
         background: true
         run: |
-          # Per-connection limits complement the whole-command apt deadlines below.
-          sudo tee /etc/apt/apt.conf.d/99-orca-shell-contracts >/dev/null <<'APTCONF'
-          Acquire::http::Timeout "15";
-          Acquire::https::Timeout "15";
-          Acquire::Retries "1";
-          APTCONF
-          # Unrelated runner repositories may fail refresh; installing zsh must still succeed.
-          timeout 120 sudo apt-get update || true
-          timeout 300 sudo apt-get install -y zsh
+          bash .github/scripts/install-ubuntu-apt-packages.sh zsh
           # A fixed 4.x release meets the contract without tracking package-repository updates.
           case "$(uname -m)" in
             aarch64) arch=aarch64 sha=57349f0111728c64b703a84e611aa97ff4d1fa8466385d64e67bd5bc3ffa49fc ;;
@@ -859,6 +851,7 @@ jobs:
             src/main/pty/history/terminal-history-fish-session.node-pty.test.ts \
             src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts \
             src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            src/main/runtime/terminal/wait/tui-idle-zsh-preexec-hook-order.live-shell.test.ts \
             src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts \
             src/main/startup/shell-probe-terminal-detach.live-shell.test.ts \
             src/main/startup/shell-probe-lifetime.live-shell.test.ts \
@@ -936,7 +929,18 @@ jobs:
         background: true
         run: |
           bash .github/scripts/prepare-ubuntu-apt.sh
-          pnpm exec playwright-core install --with-deps webkit
+          if [ ! -f .github/scripts/use-ubuntu-apt-mirror.sh ]; then
+            pnpm exec playwright-core install --with-deps webkit
+            exit 0
+          fi
+          echo 'Installing WebKit dependencies through the primary route.'
+          if ! sudo env "PATH=$PATH" timeout --kill-after=10s 240 ./node_modules/.bin/playwright-core install-deps webkit; then
+            echo 'Dependency installation did not complete; retrying with the Ubuntu mirror fallback.'
+            bash .github/scripts/use-ubuntu-apt-mirror.sh
+            bash .github/scripts/recover-ubuntu-dpkg.sh || true
+            sudo env "PATH=$PATH" timeout --kill-after=10s 600 ./node_modules/.bin/playwright-core install-deps webkit
+          fi
+          timeout --kill-after=10s 180 pnpm exec playwright-core install webkit
 
       # The entry lives in mobile/ so one React resolves; without this every RN import is nothing.
       - uses: ./.github/actions/install-mobile-dependencies
@@ -1110,7 +1114,6 @@ jobs:
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
           src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
           src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts
           src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts

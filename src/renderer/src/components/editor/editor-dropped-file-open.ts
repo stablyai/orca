@@ -1,35 +1,33 @@
-import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import { toast } from 'sonner'
 import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath
 } from '../../../../shared/terminal/links/terminal-links'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { basename, joinPath } from '@/lib/path'
-import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
-import { describeSharedDropFailureReason } from '@/lib/drop-skip-reason-copy'
-import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { describeSharedDropFailureReason } from '@/lib/files/drop/drop-skip-reason-copy'
+import { captureWorktreeSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mutation-expectation'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/open-document-in-floating-workspace'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import {
-  isResolvedWorkspaceFileDragExecutionHost,
-  type WorkspaceFileDragSource
-} from '@/lib/workspace-file-drag'
+import { isResolvedWorkspaceFileDragExecutionHost } from '@/lib/files/drop/workspace-file-drag'
+import type { WorkspaceFileDragSource } from '@/lib/files/drop/workspace-file-drag'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
 } from '../right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
+import type { EditorFileDropDestination } from './editor-file-drop-destination'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export function shouldUploadRemoteEditorFileDrop(
   target: RuntimeClientTarget,

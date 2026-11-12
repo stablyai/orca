@@ -11,14 +11,14 @@ import {
   type ClaudeUsageVerifiedSources
 } from './persisted-projection-validation'
 import { parseClaudeUsageReport, serializeClaudeUsageReport } from './persisted-usage-report'
-import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/usage-cache-json-integrity'
+import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/cache/usage-cache-json-integrity'
 import {
   usageSourceCachePath,
   writeUsageSourceCacheData,
   type UsageCacheSplitRequest,
   type UsageCacheSplitResult,
   type UsageSourceCacheRef
-} from '../usage/usage-source-cache-file'
+} from '../usage/cache/usage-source-cache-file'
 
 const SOURCE_DOMAIN = 'claude-usage-sources-v1'
 

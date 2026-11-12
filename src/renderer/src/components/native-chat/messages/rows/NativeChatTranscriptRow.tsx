@@ -1,5 +1,5 @@
 import { memo, useContext } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from '../../prompts/NativeChatResolutionReceipt'
@@ -11,6 +11,7 @@ import { NativeChatSubagentEntries } from '../../subagents/NativeChatSubagentRun
 import type { NativeChatSubagentDisclosure } from '../../subagents/native-chat-subagent-sections'
 import type { NativeChatTaskListPredecessors } from '../../../../../../shared/native-chat/input/native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import type { NativeChatTimedRow } from '../../conversation/slots/native-chat-timed-rows'
 import type {
   NativeChatDiffReveal,
   NativeChatDiffTarget
@@ -36,6 +37,8 @@ export type NativeChatTranscriptRowContext = {
   latestTurnKey?: string
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  /** Keyed by message id: rows from outside the conversation that came right after that message. */
+  timedRows?: ReadonlyMap<string, readonly NativeChatTimedRow[]>
   structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   onToggleExpandedTurn: (turnKey: string) => void
@@ -175,6 +178,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {openedPullRequests ? (
         <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
       ) : null}
+      {context.timedRows?.get(message.id)?.map(({ key, node }) => (
+        <div key={key}>{node}</div>
+      ))}
     </div>
   )
 })

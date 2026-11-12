@@ -27,7 +27,8 @@ export function prepareCreatedWorktreeActivation({
 }): { primaryTabId: string | null; options: WorktreeActivationOptions } {
   const onCreationHost = executionHostId ? { executionHostId } : {}
   let primaryTabId: string | null = null
-  if (isInstantFolderWorktreeCreation(useAppStore.getState(), request)) {
+  const instantFolder = isInstantFolderWorktreeCreation(useAppStore.getState(), request)
+  if (instantFolder) {
     // Metadata is not a destination surface; build the selected ordinary tabs before navigation.
     primaryTabId = ensureWorktreeHasInitialTerminal(
       useAppStore.getState(),
@@ -53,7 +54,8 @@ export function prepareCreatedWorktreeActivation({
       ...(primaryTabId
         ? { worktreeCreationId: creationId, providesInitialSurface: true }
         : {
-            ...(result.setup ? { setup: result.setup } : {}),
+            // Seeding above owns setup delivery; passing it again opens a second Setup tab.
+            ...(result.setup && !instantFolder ? { setup: result.setup } : {}),
             ...(defaultTabs ? { defaultTabs } : {}),
             ...(windowStartup.startup ? { startup: windowStartup.startup } : {}),
             ...(request.issueCommand ? { issueCommand: request.issueCommand } : {}),
