@@ -1,3 +1,8 @@
+import {
+  NativeChatWorkerApprovalTimeline,
+  NativeChatPartyWorkerApprovalStack,
+  nativeChatWorkerApprovalParty
+} from './worker-approvals/NativeChatWorkerApprovals'
 import { NativeChatCrewFrame, NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
 import { NativeChatSessionChildren } from './NativeChatSessionChildren'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
@@ -36,6 +41,7 @@ export function NativeChatStructuredTranscript({
   | 'workingStartedAt'
   | 'settledTurns'
   | 'turnActivity'
+  | 'timedRows'
 > & {
   pane: ComponentProps<typeof NativeChatUsageLimitActionsProvider>['pane']
   directory: ComponentProps<typeof NativeChatUsageLimitActionsProvider>['directory']
@@ -55,23 +61,28 @@ export function NativeChatStructuredTranscript({
         view={continuation}
       >
         <NativeChatHostSetupContext.Provider value={setup}>
-          <NativeChatMessageList
-            {...props}
-            structuredAttachments
-            key={`${controller.epoch}:${controller.contextClear.clears}`}
-            ref={messageListRef}
-            journalItems={controller.journalItems}
-            journalSubmissions={controller.submissions}
-            journalLatestTurn={controller.latestTurn}
-            journalHostWork={controller.hostWork}
-            subagentRoster={controller.subagentRoster}
-            railOutline={controller.railOutline}
-            isWorking={controller.isWorking}
-            expandSignal={false}
-            workingStartedAt={controller.workingStartedAt}
-            settledTurns={controller.settledTurns}
-            turnActivity={controller.turnActivity}
-          />
+          <NativeChatWorkerApprovalTimeline party={nativeChatWorkerApprovalParty(pane)}>
+            {(timedRows) => (
+              <NativeChatMessageList
+                {...props}
+                timedRows={timedRows}
+                structuredAttachments
+                key={`${controller.epoch}:${controller.contextClear.clears}`}
+                ref={messageListRef}
+                journalItems={controller.journalItems}
+                journalSubmissions={controller.submissions}
+                journalLatestTurn={controller.latestTurn}
+                journalHostWork={controller.hostWork}
+                subagentRoster={controller.subagentRoster}
+                railOutline={controller.railOutline}
+                isWorking={controller.isWorking}
+                expandSignal={false}
+                workingStartedAt={controller.workingStartedAt}
+                settledTurns={controller.settledTurns}
+                turnActivity={controller.turnActivity}
+              />
+            )}
+          </NativeChatWorkerApprovalTimeline>
         </NativeChatHostSetupContext.Provider>
       </NativeChatUsageLimitActionsProvider>
     </NativeChatRowActionsProvider>
@@ -98,5 +109,21 @@ export function NativeChatStructuredTranscriptFrame({
       <NativeChatSessionChildren {...pane} isVisible={isVisible} />
       {children}
     </NativeChatCrewFrame>
+  )
+}
+
+export function NativeChatStructuredWorkerApprovals({
+  pane,
+  isVisible
+}: {
+  pane: Pick<NativeChatStructuredViewProps, 'target' | 'sessionId'>
+  isVisible: boolean
+}): React.JSX.Element {
+  return (
+    <NativeChatPartyWorkerApprovalStack
+      party={nativeChatWorkerApprovalParty(pane)}
+      target={pane.target}
+      isVisible={isVisible}
+    />
   )
 }

@@ -16,7 +16,7 @@ import {
   TerminalWorkerTurnStops
 } from '../orchestration/workers/turn-stops/terminal-worker-turn-stops'
 import { TerminalWorkerApprovalHolds } from '../orchestration/workers/approvals/terminal-worker-approval-holds'
-import { readClaudeToolResult } from '../orchestration/workers/approvals/claude-tool-result-close'
+import { readClaudeToolRecord } from '../orchestration/workers/approvals/claude-tool-result-close'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { resolveStructuredWorkerIdentity } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
@@ -84,7 +84,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       return process.platform !== 'win32' && pty !== null && pty.connectionId === null && !pty.isWsl
     },
     processIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
-    readToolResult: (call) => readClaudeToolResult(call.transcriptPath, call.toolUseId),
+    readToolRecord: (call) => readClaudeToolRecord(call.transcriptPath, call.toolUseId),
     readScreen: (paneKey) => {
       const ptyId = this.getPtyRecordForPaneKey(paneKey)?.ptyId
       return ptyId ? (this.readCaughtUpRuledScreen(ptyId)?.lines ?? null) : null
@@ -99,8 +99,8 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
     setTimer: unrefTimer,
     readScreen: (handle) => this.readTerminal(handle, { screen: true, limit: 15 }),
-    takeOpenApproval: (paneKey, dispatchId) =>
-      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId)
+    takeOpenApproval: (paneKey, dispatchId, reporting) =>
+      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId, reporting)
   })
 
   private readonly externalConversations = installExternalConversations(this.store, this)

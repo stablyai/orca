@@ -1,8 +1,14 @@
-import { BranchSwitchLandedWithWarningError } from '../../git/branch-switch'
+import { BranchSwitchLandedWithWarningError } from '../../git/worktrees/checkout/branch-switch'
 import { mapBrowserError } from './browser-error-response'
 import { ZodError } from 'zod'
-import { InvalidArgumentError, formatZodError } from './core'
-import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
+import {
+  InvalidArgumentError,
+  formatZodError,
+  type RpcEnvelopeMeta,
+  type RpcRequest,
+  type RpcResponse
+} from './core'
+
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { errorResponse, mapEmulatorError, mapRuntimeError } from './errors'
 import { PluginHookDeniedError } from '../../plugins/hooks/plugin-hook-dispatch'

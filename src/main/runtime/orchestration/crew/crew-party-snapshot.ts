@@ -206,7 +206,7 @@ export function buildCrewSnapshot(
   }
   const snapshot = emptyCrew('ok')
   const approvals = Map.groupBy(
-    host.sourceInputs.approvals(selfAliases(), now),
+    host.sourceInputs.approvals(selfAliases()),
     ({ approval }) => approval.worker.dispatchId
   )
   for (const { assignment, worker, parent } of host.relations.get(self.address) ?? []) {

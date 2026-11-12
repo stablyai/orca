@@ -1,5 +1,5 @@
 import { lstat } from 'node:fs/promises'
-import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-no-prompt-env'
+import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/git-no-prompt-env'
 import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
@@ -10,7 +10,7 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 import {
   type RemoveWorktreeOptions,

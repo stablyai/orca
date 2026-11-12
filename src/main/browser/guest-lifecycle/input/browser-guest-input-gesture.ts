@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
 
 // Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
@@ -26,9 +27,12 @@ export function isActivatingBrowserGuestInput(input: Electron.InputEvent | undef
   return typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)
 }
 
+/** A recent activating input; `byAgent` when an agent or remote viewer sent it, not this desktop's user. */
+export type ObservedBrowserGuestGesture = { byAgent: boolean }
+
 export type BrowserGuestInputGesture = {
   /** Single-use: one observed click cannot be replayed into a second window or tab. */
-  consume: () => boolean
+  consume: () => ObservedBrowserGuestGesture | null
   dispose: () => void
 }
 
@@ -37,9 +41,11 @@ export function trackBrowserGuestInputGesture(
   { now = Date.now, onActivatingInput }: { now?: () => number; onActivatingInput?: () => void } = {}
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
+  let lastGestureByAgent = false
   const onInputEvent = (_event: Electron.Event, input: Electron.InputEvent): void => {
     if (isActivatingBrowserGuestInput(input)) {
       lastGestureAt = now()
+      lastGestureByAgent = isAgentInjectingInput(guest)
       onActivatingInput?.()
     }
   }
@@ -55,6 +61,8 @@ export function trackBrowserGuestInputGesture(
       const observedAt = lastGestureAt
       lastGestureAt = null
       return attached && observedAt !== null && isRecentBrowserGuestInput(observedAt, now())
+        ? { byAgent: lastGestureByAgent }
+        : null
     },
     dispose: () => {
       lastGestureAt = null

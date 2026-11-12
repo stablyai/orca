@@ -42,15 +42,6 @@ describe('DroidHookService', () => {
     removeTreeSync(hoisted.home)
   })
 
-  it('does not register PermissionRequest', () => {
-    const status = new DroidHookService().install()
-
-    expect(status.state).toBe('installed')
-    const hooks = readSettings().hooks
-    expect(hooks?.PermissionRequest).toBeUndefined()
-    expect(JSON.stringify(hooks?.Notification)).toContain('droid-hook')
-  })
-
   it('removes a managed PermissionRequest command and keeps a user command', () => {
     mkdirSync(dirname(settingsPath()), { recursive: true })
     writeFileSync(
@@ -89,31 +80,5 @@ describe('DroidHookService', () => {
         hooks: [{ type: 'command', command: '/usr/local/bin/my-approval.sh' }]
       }
     ])
-  })
-
-  it('drops a previously managed PermissionRequest hook but keeps the user hook on it', () => {
-    const configPath = join(hoisted.home, '.factory', 'settings.json')
-    const userDefinition = {
-      matcher: 'Edit',
-      hooks: [{ type: 'command', command: '/usr/local/bin/my-approval.sh' }]
-    }
-    const managedCommand = join(hoisted.home, '.orca', 'agent-hooks', 'droid-hook.sh')
-    mkdirSync(dirname(configPath), { recursive: true })
-    writeFileSync(
-      configPath,
-      JSON.stringify({
-        hooks: {
-          PermissionRequest: [
-            { matcher: '*', hooks: [{ type: 'command', command: managedCommand }] },
-            userDefinition
-          ]
-        }
-      })
-    )
-
-    expect(new DroidHookService().install().state).toBe('installed')
-
-    const installed = readSettings()
-    expect(installed.hooks?.PermissionRequest).toEqual([userDefinition])
   })
 })

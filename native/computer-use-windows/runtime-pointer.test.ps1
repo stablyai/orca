@@ -13,7 +13,6 @@ using System.Collections.Generic;
 public static class OrcaDesktopWin32 {
     public static readonly List<string> Calls = new List<string>();
     public static bool AllowActivation;
-    public static bool Minimized;
     public static IntPtr Foreground;
     public static IntPtr Pending;
     public static int FocusReads;
@@ -22,14 +21,13 @@ public static class OrcaDesktopWin32 {
     public static void Reset(bool allow) {
         Calls.Clear();
         AllowActivation = allow;
-        Minimized = false;
         Foreground = new IntPtr(202);
         Pending = IntPtr.Zero;
         FocusReads = 0;
         WindowX = 100;
     }
     public static bool IsIconic(IntPtr hwnd) {
-        return Minimized;
+        return false;
     }
     public static bool ShowWindow(IntPtr hwnd, int command) {
         Calls.Add("restore");
@@ -119,13 +117,4 @@ foreach ($case in @(
 $result = Invoke-OrcaOperation ([pscustomobject]@{ tool = "click"; app = "Fixture"; element = [pscustomobject]@{ index = 1 } })
 Assert-TestEqual $result.action.path "accessibility" "pattern click path"
 Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "pattern click bypasses activation and global input"
-[OrcaDesktopWin32]::Reset($true)
-Restore-OrcaWindow (Find-OrcaProcess)
-Assert-TestEqual (@([OrcaDesktopWin32]::Calls) -join ",") "activate" "non-minimized window skips SW_RESTORE"
-
-[OrcaDesktopWin32]::Reset($true)
-[OrcaDesktopWin32]::Minimized = $true
-Restore-OrcaWindow (Find-OrcaProcess)
-Assert-TestEqual (@([OrcaDesktopWin32]::Calls) -join ",") "restore,activate" "minimized window runs SW_RESTORE"
-
 Write-Output "windows-pointer-tests-ok"

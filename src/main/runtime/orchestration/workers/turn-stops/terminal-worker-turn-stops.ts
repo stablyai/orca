@@ -25,7 +25,12 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   getProcessIncarnation: (handle: string) => string | null
   readScreen: (handle: string) => Promise<RuntimeTerminalRead>
   /** The pane's open approval Orca can answer; taking it marks it reported. */
-  takeOpenApproval: (paneKey: string, dispatchId: string) => WorkerApprovalPayload | null
+  /** `reporting` is read after the wait; the approval is marked reported only when it holds. */
+  takeOpenApproval: (
+    paneKey: string,
+    dispatchId: string,
+    reporting: () => boolean
+  ) => Promise<WorkerApprovalPayload | null>
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
@@ -71,16 +76,22 @@ export class TerminalWorkerTurnStops {
         .readScreen(stopped.handle)
         .then((view) => redactWorkerTerminalView(view).tail.join('\n'))
         .catch(() => undefined))
-    // The read awaited: the worker may have resumed, reported, or been handed a new Dispatch since.
+    const before = this.stillStopped(stop)
+    // One report per approval; the screen shows Claude's own reason for asking.
+    const approval =
+      reason === 'needs-input' && before?.target.kind === 'local'
+        ? await this.deps.takeOpenApproval(
+            stop.paneKey,
+            before.target.dispatch.id,
+            // Read at the end of the dialog wait; a resume after it is caught by the re-read below.
+            () => this.stillStopped(stop) !== null
+          )
+        : null
+    // Both reads awaited: the worker may have resumed, reported, or been handed a new Dispatch since.
     const resolved = this.stillStopped(stop)
     if (!resolved) {
       return
     }
-    // One report per approval; the screen shows Claude's own reason for asking.
-    const approval =
-      reason === 'needs-input' && resolved.target.kind === 'local'
-        ? this.deps.takeOpenApproval(stop.paneKey, resolved.target.dispatch.id)
-        : null
     reportWorkerTurnStop(
       resolved.db,
       resolved.target,
