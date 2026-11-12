@@ -1,47 +1,48 @@
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot } from 'react-dom/client'
-import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
-import { renderDiffCommentDraftCard } from './diff-comment-zone-card'
 import {
-  resizeDiffCommentZone,
-  snapshotDiffCommentDraft,
-  type CarriedDiffCommentDraft,
-  type OpenDiffCommentDraft,
-  type RestoreDiffCommentDraft,
+  invalidateCombinedEditorGeometry,
+  isCombinedEditorBindingCurrent,
+  onCombinedEditorUnbind
+} from '../editor/combined-diff/scroll-viewport/combined-diff-editor-geometry'
+import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
+import { renderDiffCommentDraftZoneCard } from './diff-comment-draft-zone-card'
+import {
+  disposeDiffCommentDraftZone,
   DRAFT_ZONE_DEFAULT_HEIGHT,
   type DraftZoneEntry
 } from './diff-comment-view-zone-entry'
+import {
+  DiffCommentFileSession,
+  type DiffCommentCreate,
+  type DiffCommentDraftSession
+} from './diff-comment-session'
+import { useLocalDiffCommentSession } from './use-local-diff-comment-session'
 
-export type DiffCommentDraft = {
-  lineNumber: number
-  startLine?: number
-}
-
+export type DiffCommentDraft = { lineNumber: number; startLine?: number }
 export type UseDiffCommentDraftZoneArgs = {
   editor: monacoEditor.ICodeEditor | null
   monacoModelIdentity?: string
   canOpenDraft?: boolean
   captureCreateComment?: boolean
-  onCreateComment?: (args: {
-    lineNumber: number
-    startLine?: number
-    body: string
-  }) => Promise<boolean>
+  onCreateComment?: DiffCommentCreate
   imageUploadAddress?: GitHubImageIntake['address']
   draftPlaceholder?: string
   draftSubmitLabel?: string
   onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
+  session?: DiffCommentFileSession
 }
 
 export type DiffCommentDraftZoneHandle = {
-  disposeDraftZone: (focusEditor?: boolean) => void
   isDraftOpen: () => boolean
   onAddCommentClickRef: React.RefObject<
     (args: { lineNumber: number; startLine?: number; top: number }) => void
   >
 }
+
+const subscribeNoDraft = (): (() => void) => () => {}
 
 export function useDiffCommentDraftZone({
   editor,
@@ -52,107 +53,93 @@ export function useDiffCommentDraftZone({
   imageUploadAddress,
   draftPlaceholder,
   draftSubmitLabel,
-  onAddCommentClick
+  onAddCommentClick,
+  session
 }: UseDiffCommentDraftZoneArgs): DiffCommentDraftZoneHandle {
+  const fileSession = useLocalDiffCommentSession(() => new DiffCommentFileSession(), session)
+  const draft = useSyncExternalStore(fileSession.subscribeDraft, fileSession.getDraft)
+  const phase = useSyncExternalStore(
+    draft?.subscribe ?? subscribeNoDraft,
+    useCallback(() => draft?.getSnapshot().phase ?? null, [draft])
+  )
   const draftZoneRef = useRef<DraftZoneEntry | null>(null)
-  // Retain the only draft copy between card teardown and replacement.
-  const pendingDraftRef = useRef<CarriedDiffCommentDraft | null>(null)
-  const previousModelIdentityRef = useRef(monacoModelIdentity)
-  const reanchorFrameRef = useRef<number | null>(null)
+  const onCreateCommentRef = useRef(onCreateComment)
+  const onLegacyAddCommentClickRef = useRef(onAddCommentClick)
   const onAddCommentClickRef = useRef<
     (args: { lineNumber: number; startLine?: number; top: number }) => void
   >(() => {})
-
-  // A save settling after unmount must not restore an undisposable retry card.
-  const unmountedRef = useRef(false)
-  const onCreateCommentRef = useRef(onCreateComment)
-  const onLegacyAddCommentClickRef = useRef(onAddCommentClick)
-
-  useEffect(() => {
-    unmountedRef.current = false
-    return () => {
-      unmountedRef.current = true
-    }
-  }, [])
-
   useEffect(() => {
     onCreateCommentRef.current = onCreateComment
     onLegacyAddCommentClickRef.current = onAddCommentClick
   }, [onAddCommentClick, onCreateComment])
 
-  const isDraftOpen = useCallback((): boolean => draftZoneRef.current !== null, [])
-
-  const cancelReanchorFrame = useCallback((): void => {
-    if (reanchorFrameRef.current === null) {
-      return
-    }
-    cancelAnimationFrame(reanchorFrameRef.current)
-    reanchorFrameRef.current = null
-  }, [])
-
-  const disposeDraftZone = useCallback((focusEditor = false): void => {
-    const entry = draftZoneRef.current
-    if (!entry) {
-      return
-    }
-    draftZoneRef.current = null
-    if (entry.editor.getModel()) {
-      entry.editor.changeViewZones((accessor) => accessor.removeZone(entry.zoneId))
-    }
-    entry.disposeMouseDownStopper()
-    queueMicrotask(() => entry.root.unmount())
-    if (focusEditor) {
-      entry.editor.focus()
-    }
-  }, [])
-
-  // Re-anchor frames and settling submits need the latest opener.
-  const openDraftRef = useRef<OpenDiffCommentDraft>(() => false)
-
-  // Restore failed submissions after teardown unless another card now owns the composer; the toast covers displaced failures.
-  const restoreFailedSubmit = useCallback<RestoreDiffCommentDraft>((draft, body, createComment) => {
-    if (
-      unmountedRef.current ||
-      draftZoneRef.current ||
-      openDraftRef.current(draft, body, createComment)
-    ) {
-      return
-    }
-    pendingDraftRef.current = { draft, body, createComment }
-  }, [])
-
-  const openDraft = useCallback<OpenDiffCommentDraft>(
-    (draft, initialBody = '', capturedCreateComment = onCreateCommentRef.current) => {
-      if (!editor || !editor.getModel() || !capturedCreateComment || !canOpenDraft) {
-        return false
+  const detachDraftZone = useCallback(
+    (focusEditor = false, expected = draftZoneRef.current): void => {
+      const entry = draftZoneRef.current
+      if (entry && entry === expected) {
+        draftZoneRef.current = null
+        disposeDiffCommentDraftZone(entry, focusEditor)
       }
+    },
+    []
+  )
 
-      disposeDraftZone()
+  const cancelDraftZone = useCallback(
+    (entry: DraftZoneEntry): void => {
+      if (draftZoneRef.current === entry && fileSession.getDraft() === entry.session) {
+        fileSession.cancelDraft(entry.session)
+        detachDraftZone(true, entry)
+      }
+    },
+    [detachDraftZone, fileSession]
+  )
+  const isDraftOpen = useCallback(
+    (): boolean => fileSession.getDraft()?.live === true,
+    [fileSession]
+  )
+
+  const mountDraft = useCallback(
+    (current: DiffCommentDraftSession, focusOnOpen: boolean): void => {
+      if (
+        !editor ||
+        !editor.getModel() ||
+        !canOpenDraft ||
+        !isCombinedEditorBindingCurrent(editor, monacoModelIdentity) ||
+        fileSession.getDraft() !== current ||
+        current.getSnapshot().phase !== 'editing'
+      ) {
+        return
+      }
+      if (draftZoneRef.current?.session === current && draftZoneRef.current.editor === editor) {
+        return
+      }
+      const combined = !isCombinedEditorBindingCurrent(editor)
+      detachDraftZone()
       editor.changeViewZones((accessor) => {
         const dom = document.createElement('div')
         dom.className = 'orca-diff-comment-inline'
         const marginDom = document.createElement('div')
         marginDom.className = 'orca-diff-comment-draft-margin'
-        const disposeDomMouseDownStopper = installDiffCommentZoneMouseDownStopper(dom)
-        const disposeMarginMouseDownStopper = installDiffCommentZoneMouseDownStopper(marginDom)
+        const disposeDom = installDiffCommentZoneMouseDownStopper(dom)
+        const disposeMargin = installDiffCommentZoneMouseDownStopper(marginDom)
         const root = createRoot(dom)
+        const lifetime = new AbortController()
         let didFocus = false
         const delegate: monacoEditor.IViewZone = {
-          afterLineNumber: draft.lineNumber,
+          afterLineNumber: current.target.lineNumber,
           heightInPx: DRAFT_ZONE_DEFAULT_HEIGHT,
           domNode: dom,
           marginDomNode: marginDom,
           suppressMouseDown: false,
           onDomNodeTop: () => {
-            if (didFocus) {
+            if (combined || !focusOnOpen || lifetime.signal.aborted || didFocus) {
               return
             }
             const textarea = dom.querySelector<HTMLTextAreaElement>('textarea')
-            if (!textarea) {
-              return
+            if (textarea) {
+              didFocus = true
+              textarea.focus()
             }
-            didFocus = true
-            textarea.focus()
           }
         }
         const zoneId = accessor.addZone(delegate)
@@ -163,173 +150,93 @@ export function useDiffCommentDraftZone({
           marginDomNode: marginDom,
           delegate,
           root,
-          draft,
-          body: initialBody,
-          createComment: capturedCreateComment,
-          submitting: false,
+          lifetime,
+          session: current,
           disposeMouseDownStopper: () => {
-            disposeDomMouseDownStopper()
-            disposeMarginMouseDownStopper()
+            disposeDom()
+            disposeMargin()
           }
         }
         draftZoneRef.current = entry
-
-        renderDiffCommentDraftCard(root, draft, {
+        renderDiffCommentDraftZoneCard(entry, {
+          draftZoneRef,
+          onCreateCommentRef,
+          monacoModelIdentity,
+          combined,
+          focusOnOpen,
+          captureCreateComment,
           imageUploadAddress,
-          placeholder: draftPlaceholder,
-          submitLabel: draftSubmitLabel,
-          initialBody,
-          onBodyChange: (body) => {
-            if (draftZoneRef.current === entry) {
-              entry.body = body
-            }
-          },
-          resizeZone: () => {
-            if (draftZoneRef.current === entry) {
-              resizeDiffCommentZone(editor, entry)
-            }
-          },
-          onCancel: () => disposeDraftZone(true),
-          onSubmit: async (body) => {
-            const createComment = captureCreateComment
-              ? entry.createComment
-              : onCreateCommentRef.current
-            if (!createComment) {
-              return false
-            }
-            entry.submitting = true
-            let succeeded = false
-            try {
-              const result = await createComment({
-                lineNumber: draft.lineNumber,
-                startLine: draft.startLine,
-                body
-              })
-              succeeded = result !== false
-              return result
-            } finally {
-              entry.submitting = false
-              if (succeeded) {
-                if (draftZoneRef.current === entry) {
-                  // Restore Monaco focus only if this card still owns it when the save settles.
-                  disposeDraftZone(entry.domNode.contains(document.activeElement))
-                }
-              } else if (draftZoneRef.current !== entry) {
-                restoreFailedSubmit(draft, body, entry.createComment)
-              }
-            }
-          }
+          draftPlaceholder,
+          draftSubmitLabel,
+          fileSession,
+          cancelDraftZone
         })
       })
-      // The re-anchor frame drops its draft only after a card actually mounts.
-      return draftZoneRef.current !== null
+      invalidateCombinedEditorGeometry(editor)
     },
     [
       canOpenDraft,
       captureCreateComment,
-      disposeDraftZone,
-      imageUploadAddress,
+      detachDraftZone,
+      cancelDraftZone,
       draftPlaceholder,
       draftSubmitLabel,
       editor,
-      restoreFailedSubmit
+      fileSession,
+      imageUploadAddress,
+      monacoModelIdentity
     ]
   )
 
   useEffect(() => {
-    openDraftRef.current = openDraft
-  }, [openDraft])
-
-  // Keep the stash until mounting succeeds; the editor may still be refreshing on the first frame.
-  const scheduleReanchor = useCallback((): void => {
-    if (reanchorFrameRef.current !== null) {
+    if (!editor || !isCombinedEditorBindingCurrent(editor, monacoModelIdentity)) {
       return
     }
-    reanchorFrameRef.current = requestAnimationFrame(() => {
-      reanchorFrameRef.current = null
-      const pending = pendingDraftRef.current
-      if (pending && openDraftRef.current(pending.draft, pending.body, pending.createComment)) {
-        pendingDraftRef.current = null
+    return onCombinedEditorUnbind(editor, () => {
+      const entry = draftZoneRef.current
+      if (entry?.editor === editor) {
+        detachDraftZone(false, entry)
       }
     })
-  }, [])
+  }, [detachDraftZone, editor, monacoModelIdentity])
 
-  const openDraftFromArgs = useCallback(
-    (args: { lineNumber: number; startLine?: number; top: number }): void => {
-      if (!canOpenDraft) {
+  useEffect(() => {
+    const entry = draftZoneRef.current
+    if (entry && (entry.session !== draft || phase === 'saved' || phase === 'canceled')) {
+      detachDraftZone(
+        entry.session.getSnapshot().phase === 'saved' &&
+          entry.domNode.contains(entry.domNode.ownerDocument.activeElement)
+      )
+    }
+    if (!draft || phase !== 'editing') {
+      return
+    }
+    const frame = requestAnimationFrame(() => mountDraft(draft, false))
+    return () => cancelAnimationFrame(frame)
+  }, [detachDraftZone, draft, editor, monacoModelIdentity, mountDraft, phase])
+
+  useEffect(() => {
+    onAddCommentClickRef.current = (args) => {
+      if (
+        !canOpenDraft ||
+        (editor && !isCombinedEditorBindingCurrent(editor, monacoModelIdentity))
+      ) {
         return
       }
-      if (!onCreateCommentRef.current) {
+      const createComment = onCreateCommentRef.current
+      if (!createComment) {
         onLegacyAddCommentClickRef.current?.(args)
         return
       }
-      const current = draftZoneRef.current
-      const pending = pendingDraftRef.current
-      // A submitting card's text is already on its way to the store; carrying it would post it twice.
-      const carriedBody =
-        (current && !current.submitting ? current.body : '') || pending?.body || ''
-      // A new anchor must cancel any frame that would move the card back.
-      cancelReanchorFrame()
-      pendingDraftRef.current = null
-      if (
-        !openDraft(
-          { lineNumber: args.lineNumber, startLine: args.startLine },
-          carriedBody,
-          current?.createComment ?? pending?.createComment
-        )
-      ) {
-        pendingDraftRef.current = pending
+      const current = fileSession.openDraft(
+        { lineNumber: args.lineNumber, startLine: args.startLine },
+        captureCreateComment ? createComment : undefined
+      )
+      if (current) {
+        mountDraft(current, true)
       }
-    },
-    [canOpenDraft, cancelReanchorFrame, openDraft]
-  )
+    }
+  }, [canOpenDraft, captureCreateComment, editor, fileSession, monacoModelIdentity, mountDraft])
 
-  useEffect(() => {
-    onAddCommentClickRef.current = openDraftFromArgs
-  }, [openDraftFromArgs])
-
-  useEffect(() => {
-    if (previousModelIdentityRef.current === monacoModelIdentity) {
-      return
-    }
-    previousModelIdentityRef.current = monacoModelIdentity
-    cancelReanchorFrame()
-    const current = draftZoneRef.current
-    if (current) {
-      // In-flight saves restore their own failures; carrying their text would allow duplicate submission.
-      if (!current.submitting) {
-        pendingDraftRef.current = snapshotDiffCommentDraft(current)
-      }
-      disposeDraftZone()
-    }
-    if (pendingDraftRef.current) {
-      scheduleReanchor()
-    }
-  }, [cancelReanchorFrame, disposeDraftZone, monacoModelIdentity, scheduleReanchor])
-
-  // Combined-diff refreshes briefly clear the editor ref; retry carried drafts when its replacement arrives.
-  useEffect(() => {
-    if (!editor || !canOpenDraft || !pendingDraftRef.current) {
-      return
-    }
-    scheduleReanchor()
-    return cancelReanchorFrame
-  }, [cancelReanchorFrame, canOpenDraft, editor, scheduleReanchor])
-
-  useEffect(() => {
-    if (!editor) {
-      return
-    }
-    return () => {
-      cancelReanchorFrame()
-      // Runs before the identity effect on a same-render swap, so stash here or the draft is lost.
-      const current = draftZoneRef.current
-      if (!unmountedRef.current && current && !current.submitting) {
-        pendingDraftRef.current = snapshotDiffCommentDraft(current)
-      }
-      disposeDraftZone(false)
-    }
-  }, [cancelReanchorFrame, disposeDraftZone, editor])
-
-  return { disposeDraftZone, isDraftOpen, onAddCommentClickRef }
+  return { isDraftOpen, onAddCommentClickRef }
 }

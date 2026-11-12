@@ -5,6 +5,8 @@ import baseConfig from './vitest.config'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
 
 const contracts = [
+  'src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-editor-pool.test.ts',
+  'src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-viewport-owner.test.ts',
   'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',

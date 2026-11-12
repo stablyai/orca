@@ -3,6 +3,7 @@ import type { editor as monacoEditor } from 'monaco-editor'
 // (see monaco-nls-import-order.test.ts); these two modules carry no localized labels.
 import { Range } from 'monaco-editor/esm/vs/editor/common/core/range.js'
 import { MouseTargetType } from 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js'
+import { capturePointer, releasePointerCapture } from './diff-comment-range-pointer-capture'
 import { getDragAutoScrollStepPx, REFERENCE_FRAME_MS } from './diff-comment-drag-auto-scroll'
 import {
   areLineRangesEqual,
@@ -34,6 +35,7 @@ type RangeDragArgs = {
   /** Fired on press, on every line the focus moves to, and on release. */
   onDragChange?: (state: { dragging: boolean; focusLine: number | null }) => void
   onCommit: (range: DiffCommentLineRange) => void
+  scrollBy?: (delta: number) => boolean
 }
 
 export type DiffCommentRangeDragHandle = {
@@ -69,7 +71,8 @@ export function installDiffCommentRangeDrag({
   commentableLineSet,
   resolvePressLine,
   onDragChange,
-  onCommit
+  onCommit,
+  scrollBy
 }: RangeDragArgs): DiffCommentRangeDragHandle {
   const decorations = editor.createDecorationsCollection()
   let pendingRange: DiffCommentLineRange | null = null
@@ -143,6 +146,14 @@ export function installDiffCommentRangeDrag({
     if (step === 0) {
       return false
     }
+    const previousTop = editor.getScrollTop()
+    if (scrollBy?.(step)) {
+      return (
+        !disposed &&
+        (editor.getScrollTop() !== previousTop ||
+          editorDomNode.getBoundingClientRect().top !== rect.top)
+      )
+    }
     const maxScrollTop = Math.max(0, editor.getScrollHeight() - editor.getLayoutInfo().height)
     const scrollTop = editor.getScrollTop()
     const nextScrollTop = Math.max(0, Math.min(maxScrollTop, scrollTop + step))
@@ -177,7 +188,10 @@ export function installDiffCommentRangeDrag({
     drag.lastFrameMs = timestampMs
     const rect = editorDomNode.getBoundingClientRect()
     const scrolling = autoScroll(rect, drag.clientY, frameDeltaMs)
-    resolveFocusLine(drag, rect)
+    if (!drag || disposed) {
+      return
+    }
+    resolveFocusLine(drag, editorDomNode.getBoundingClientRect())
     repaint()
     // Continue frames only while edge scrolling; a stationary interior pointer needs no work.
     if (scrolling) {
@@ -322,28 +336,5 @@ export function installDiffCommentRangeDrag({
       repaint()
     },
     isDragging: () => drag !== null
-  }
-}
-
-// Capture preserves releases outside the window; test DOMs may lack it.
-function capturePointer(node: HTMLElement, pointerId: number): void {
-  if (typeof node.setPointerCapture !== 'function') {
-    return
-  }
-  try {
-    node.setPointerCapture(pointerId)
-  } catch {
-    // The pointer is already gone; the document listeners still finish the drag.
-  }
-}
-
-function releasePointerCapture(node: HTMLElement, pointerId: number): void {
-  if (typeof node.releasePointerCapture !== 'function') {
-    return
-  }
-  try {
-    node.releasePointerCapture(pointerId)
-  } catch {
-    // Capture was never taken or already lost.
   }
 }

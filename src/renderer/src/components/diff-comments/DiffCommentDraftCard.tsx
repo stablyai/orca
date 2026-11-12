@@ -2,10 +2,11 @@ import { useGitHubTextareaImages } from '@/components/github/use-github-textarea
 import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useMountedRef } from '@/hooks/useMountedRef'
+import { DiffCommentComposerSession } from './diff-comment-session'
+import { useLocalDiffCommentSession } from './use-local-diff-comment-session'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getCommentBodySubmitState,
@@ -13,6 +14,11 @@ import {
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { toast } from 'sonner'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
+import {
+  listenForDiffCommentZoneMouseDown,
+  observeDiffCommentZoneSize,
+  untilDiffCommentZoneRemoved
+} from './diff-comment-zone-lifetime'
 
 export type DiffCommentDraftCardProps = {
   lineNumber: number
@@ -26,6 +32,14 @@ export type DiffCommentDraftCardProps = {
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
   onContentResize?: () => void
+  autoFocus?: boolean
+  lifetime?: AbortSignal
+  session?: DiffCommentComposerSession
+}
+
+function reportDraftSubmitFailure(error: unknown, message: string): void {
+  console.error('Failed to submit diff comment draft:', error)
+  toast.error(message)
 }
 
 function resizeDraftTextarea(textarea: HTMLTextAreaElement): boolean {
@@ -46,20 +60,29 @@ export function DiffCommentDraftCard({
   onSubmit,
   onContentResize,
   initialBody = '',
-  onBodyChange
+  onBodyChange,
+  autoFocus = true,
+  lifetime,
+  session
 }: DiffCommentDraftCardProps): React.JSX.Element {
   const t = useTranslate()
-  const [body, setBody] = useState(initialBody)
-  const bodyRef = useRef(body)
-  const [submitting, setSubmitting] = useState(false)
+  const composer = useLocalDiffCommentSession(
+    () => new DiffCommentComposerSession(initialBody),
+    session
+  )
+  const snapshot = useSyncExternalStore(composer.subscribe, composer.getSnapshot)
+  const body = snapshot.body
+  const submitting = snapshot.phase === 'submitting'
   const imagePending = useGitHubImagePending()
-  const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const images = useGitHubTextareaImages(
     textareaRef,
     body,
     (next) => {
-      setBody(next)
+      if (lifetime?.aborted) {
+        return
+      }
+      composer.setBody(next)
       onBodyChange?.(next)
     },
     {
@@ -70,10 +93,6 @@ export function DiffCommentDraftCard({
   )
   const cardRef = useRef<HTMLDivElement | null>(null)
   const onContentResizeRef = useRef(onContentResize)
-
-  useEffect(() => {
-    bodyRef.current = body
-  }, [body])
 
   useEffect(() => {
     onContentResizeRef.current = onContentResize
@@ -95,29 +114,44 @@ export function DiffCommentDraftCard({
   const hasImageUpload = !!imageUploadAddress
   const focusTextareaRef = useCallback(
     (textarea: HTMLTextAreaElement | null): void => {
+      if (lifetime?.aborted) {
+        textarea = null
+      }
       if (hasImageUpload) {
         attachDrop(textarea)
       } else {
         textareaRef.current = textarea
       }
-      textarea?.focus()
+      if (autoFocus) {
+        textarea?.focus()
+      }
     },
-    [attachDrop, hasImageUpload]
+    [attachDrop, autoFocus, hasImageUpload, lifetime]
   )
 
+  useLayoutEffect(() => {
+    return untilDiffCommentZoneRemoved(lifetime, () => {
+      attachDrop(null)
+      textareaRef.current = null
+    })
+  }, [attachDrop, lifetime])
+
   useEffect(() => {
+    if (!autoFocus || lifetime?.aborted) {
+      return
+    }
     const focusTextarea = (): void => textareaRef.current?.focus()
     focusTextarea()
     if (typeof requestAnimationFrame !== 'function') {
       return
     }
     const frame = requestAnimationFrame(focusTextarea)
-    return () => cancelAnimationFrame(frame)
-  }, [])
+    return untilDiffCommentZoneRemoved(lifetime, () => cancelAnimationFrame(frame))
+  }, [autoFocus, lifetime])
 
   useLayoutEffect(() => {
     const card = cardRef.current
-    if (!card || !onContentResizeRef.current) {
+    if (!card || lifetime?.aborted || !onContentResizeRef.current) {
       return
     }
     const textarea = textareaRef.current
@@ -128,22 +162,23 @@ export function DiffCommentDraftCard({
     if (typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver(() => {
+    return observeDiffCommentZoneSize(lifetime, card, () => {
       onContentResizeRef.current?.()
     })
-    observer.observe(card)
-    return () => observer.disconnect()
-  }, [])
+  }, [lifetime])
 
   useEffect(() => {
     const card = cardRef.current
-    if (!card) {
+    if (!card || lifetime?.aborted) {
       return
     }
-    return installOpenDraftAddReviewNoteGuard(card)
-  }, [])
+    return untilDiffCommentZoneRemoved(lifetime, installOpenDraftAddReviewNoteGuard(card))
+  }, [lifetime])
 
   useEffect(() => {
+    if (lifetime?.aborted) {
+      return
+    }
     const onDocumentMouseDown = (event: MouseEvent): void => {
       const card = cardRef.current
       const target = event.target
@@ -151,17 +186,16 @@ export function DiffCommentDraftCard({
         return
       }
       // Keep a non-empty draft alive when the user clicks another line's add button.
-      if (/\S/u.test(bodyRef.current)) {
+      if (/\S/u.test(composer.getSnapshot().body)) {
         return
       }
       onCancel()
     }
-    document.addEventListener('mousedown', onDocumentMouseDown)
-    return () => document.removeEventListener('mousedown', onDocumentMouseDown)
-  }, [onCancel])
+    return listenForDiffCommentZoneMouseDown(lifetime, onDocumentMouseDown)
+  }, [composer, lifetime, onCancel])
 
-  const handleSubmit = async (): Promise<void> => {
-    if (submitting || imagePending.pendingRef.current) {
+  const handleSubmit = (): void => {
+    if (lifetime?.aborted || submitting || imagePending.pendingRef.current) {
       return
     }
     const bodyState = getCommentBodySubmitState(body)
@@ -178,21 +212,10 @@ export function DiffCommentDraftCard({
       return
     }
     // Park focus before disabling the button; the zone restores Monaco focus only while its card owns focus.
-    textareaRef.current?.focus()
-    setSubmitting(true)
-    try {
-      const result = await onSubmit(bodyState.body)
-      if (result === false && mountedRef.current) {
-        setSubmitting(false)
-      }
-    } catch (err) {
-      console.error('Failed to submit diff comment draft:', err)
-      // A rejected save never reaches the caller's own failure toast, so report it here.
-      toast.error(t('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
-      if (mountedRef.current) {
-        setSubmitting(false)
-      }
-    }
+    textareaRef.current?.focus(autoFocus ? undefined : { preventScroll: true })
+    const message = t('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+    const request = session ? onSubmit(bodyState.body) : composer.submit(onSubmit, bodyState.body)
+    void request.catch((error) => reportDraftSubmitFailure(error, message))
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -219,7 +242,8 @@ export function DiffCommentDraftCard({
     }
   }
 
-  const canSubmit = !imagePending.pending && !submitting && hasBoundedCommentBodyText(body)
+  const canSubmit =
+    !imagePending.pending && snapshot.phase === 'editing' && hasBoundedCommentBodyText(body)
 
   return (
     <div

@@ -903,16 +903,6 @@ body[data-modal-overlay-open]
   background-clip: padding-box;
 }
 
-.combined-diff-scroll-container {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.combined-diff-scroll-container::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
 /* Why: horizontal tab strips scroll via chevrons, wheel, and trackpad; a
    native scrollbar thumb overlays tab labels and looks broken. */
 .terminal-tab-strip,

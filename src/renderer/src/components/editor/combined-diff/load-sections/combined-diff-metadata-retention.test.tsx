@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
@@ -97,17 +97,14 @@ function useReview(props: Review) {
     shouldAutoReloadFromGitStatus: entrySet.shouldAutoReloadFromGitStatus,
     treeMode: entrySet.treeMode
   })
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   useCombinedDiffViewPersist({
     combinedGitStatusSignature: signature,
     entryCount: entrySet.entries.length,
     entrySignature: entrySet.entrySignature,
     loadedIndicesRef: registry.loadedIndicesRef,
     memoryLeaseRef: restore.memoryLeaseRef,
-    scrollContainerRef,
     sectionHeights,
-    sections,
-    viewStateKey: props.viewStateKey
+    sections
   })
   return {
     sections,

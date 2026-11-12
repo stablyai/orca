@@ -1,4 +1,5 @@
 import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
+import { consumeDiffCommentScrollCommand } from '../../../diff-comments/diff-comment-scroll-command'
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -83,7 +84,6 @@ export default function DiffViewer({
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
-  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
@@ -191,7 +191,7 @@ export default function DiffViewer({
           commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
       : undefined,
     pendingScrollCommentId: pendingScrollForThisViewer,
-    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
+    onPendingScrollConsumed: consumeDiffCommentScrollCommand
   })
 
   useDiffViewerFirstChangeAutoScroll({

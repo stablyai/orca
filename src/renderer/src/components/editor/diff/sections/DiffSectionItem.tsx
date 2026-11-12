@@ -1,7 +1,9 @@
+import { useDiffCommentFileSession } from '../../../diff-comments/diff-comment-session-registry'
 import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
+import { consumeDiffCommentScrollCommand } from '../../../diff-comments/diff-comment-scroll-command'
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { DiffOnMount } from '@monaco-editor/react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { CombinedDiffEditorMount } from '../../combined-diff/scroll-viewport/CombinedDiffEditor'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { useAppStore } from '@/store/index'
@@ -14,12 +16,10 @@ import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../.
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
-import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
-import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
-import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
 import { DiffSectionSaveConflictBar } from './DiffSectionSaveConflictBar'
+import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
 
 export function DiffSectionItem({
   section,
@@ -49,6 +49,7 @@ export function DiffSectionItem({
   modifiedEditorsRef,
   handleSectionSaveRef
 }: DiffSectionItemProps): React.JSX.Element {
+  const commentSession = useDiffCommentFileSession(section.key)
   const diffTypography = useEditorTypography('diff')
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
@@ -61,28 +62,25 @@ export function DiffSectionItem({
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
-  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
     [allDiffComments, section.path]
   )
   const language = detectLanguage(section.path)
   const isEditable = section.area === 'unstaged'
-  const modelPathBase = useMemo(
-    () =>
-      `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
-    [section.contentGeneration, section.key, worktreeId]
-  )
+  const [editorBinding, setEditorBinding] = useState<{
+    editor: monacoEditor.ICodeEditor
+    identity: string
+  } | null>(null)
+  const modifiedEditor = editorBinding?.editor ?? null
 
-  const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
+  const currentIndex = useRef(index)
+  useLayoutEffect(() => {
+    currentIndex.current = index
+  }, [index])
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
-
-  const { disposeDiffModels, setSectionRootNode } = useDiffSectionModelLifecycle({
-    modelPathBase,
-    collapsed: section.collapsed
-  })
 
   const { lineStats, sectionBodyHeight, useIntrinsicImageHeight, isLargeDiffLimited } =
     useDiffSectionLayoutMetrics({
@@ -122,11 +120,12 @@ export function DiffSectionItem({
   )
 
   useDiffCommentDecorator({
+    session: commentSession,
     imageUploadAddress,
     captureCreateComment: !onAddLineComment,
     commentOwner,
     editor: hasLineCommentAction ? modifiedEditor : null,
-    monacoModelIdentity: `${modelPathBase}:modified`,
+    monacoModelIdentity: editorBinding?.identity,
     filePath: section.path,
     worktreeId: worktreeId ?? '',
     comments: inlineComments ?? (worktreeId ? diffComments : []),
@@ -147,7 +146,7 @@ export function DiffSectionItem({
           commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
       : undefined,
     pendingScrollCommentId: pendingScrollForThisSection,
-    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
+    onPendingScrollConsumed: consumeDiffCommentScrollCommand
   })
 
   useEffect(() => {
@@ -163,20 +162,14 @@ export function DiffSectionItem({
     }
   }, [sideBySide])
 
-  useDiffSectionFallbackCleanup({
-    disposeDiffModels,
-    index,
-    isLargeDiffLimited,
-    setSectionHeights
-  })
-
-  const handleMount: DiffOnMount = (editor, _monaco) => {
+  const handleMount: CombinedDiffEditorMount = (editor, _monaco, identity) => {
+    const cleanups: (() => void)[] = []
     diffEditorRef.current = editor
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
 
-    // Wait for Monaco’s hidden-region layout; earlier full-file measurements make virtualized rows jump on remount.
+    // Persist content heights for tab restore; live viewport geometry belongs to the owner.
     let diffLayoutReady = false
     let pendingHeightFrame: number | null = null
     const updateHeight = (): void => {
@@ -186,10 +179,10 @@ export function DiffSectionItem({
       }
       const contentHeight = editor.getModifiedEditor().getContentHeight()
       setSectionHeights((prev) => {
-        if (prev[index] === contentHeight) {
+        if (prev[currentIndex.current] === contentHeight) {
           return prev
         }
-        return { ...prev, [index]: contentHeight }
+        return { ...prev, [currentIndex.current]: contentHeight }
       })
     }
     const requestHeightUpdate = (): void => {
@@ -215,9 +208,9 @@ export function DiffSectionItem({
       markDiffLayoutReady()
     }
 
-    setModifiedEditor(modified)
-    // Monaco disposes inner editors on unmount; clear state so decorators and drafts cannot retain a disposed instance.
-    modified.onDidDispose(() => {
+    setEditorBinding({ editor: modified, identity })
+    // A pooled widget must release section callbacks before it binds another model.
+    cleanups.push(() => {
       contentSizeSub.dispose()
       diffUpdateSub.dispose()
       if (pendingHeightFrame !== null) {
@@ -227,20 +220,24 @@ export function DiffSectionItem({
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
       diffEditorRef.current = null
-      if (modifiedEditorsRef.current.get(index) === modified) {
-        modifiedEditorsRef.current.delete(index)
+      if (modifiedEditorsRef.current.get(currentIndex.current) === modified) {
+        modifiedEditorsRef.current.delete(currentIndex.current)
       }
-      setModifiedEditor(null)
+      setEditorBinding((binding) => (binding?.identity === identity ? null : binding))
     })
 
     if (!isEditable) {
-      return
+      return () => {
+        for (const cleanup of cleanups.toReversed()) {
+          cleanup()
+        }
+      }
     }
 
     modifiedEditorsRef.current.set(index, modified)
     const original = editor.getOriginalEditor()
     const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
-      handleSectionSaveRef.current(index)
+      handleSectionSaveRef.current(currentIndex.current)
     )
     const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
     const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
@@ -249,7 +246,7 @@ export function DiffSectionItem({
       setSections((prev) => {
         let changed = false
         const next = prev.map((s, i) => {
-          if (i !== index) {
+          if (i !== currentIndex.current) {
             return s
           }
 
@@ -276,21 +273,40 @@ export function DiffSectionItem({
         return changed ? next : prev
       })
     })
-    modified.onDidDispose(() => {
+    cleanups.push(() => {
       // Dispose shortcut bridges and model subscriptions with their owning diff instance.
       cleanupSaveShortcut()
       cleanupOriginalFindShortcut()
       cleanupModifiedFindShortcut()
       modelContentSub.dispose()
     })
+    return () => {
+      for (const cleanup of cleanups.toReversed()) {
+        cleanup()
+      }
+    }
   }
+
+  useLayoutEffect(() => {
+    const modified = editorBinding?.editor
+    if (!modified || !isEditable) {
+      return
+    }
+    const editors = modifiedEditorsRef.current
+    editors.set(index, modified)
+    return () => {
+      if (editors.get(index) === modified) {
+        editors.delete(index)
+      }
+    }
+  }, [editorBinding, index, isEditable, modifiedEditorsRef])
 
   useEffect(() => {
     loadSection(index)
   }, [index, loadSection])
 
   return (
-    <div ref={setSectionRootNode} className="border-b border-border">
+    <div className="border-b border-border">
       <DiffSectionHeader
         path={section.path}
         dirty={section.dirty}
@@ -314,10 +330,12 @@ export function DiffSectionItem({
       />
 
       {section.saveConflict && (
-        <DiffSectionSaveConflictBar
-          onReload={() => retrySection(index)}
-          onOverwrite={() => void handleSectionSaveRef.current(index, 'overwrite')}
-        />
+        <div data-combined-diff-conflict="">
+          <DiffSectionSaveConflictBar
+            onReload={() => retrySection(index)}
+            onOverwrite={() => void handleSectionSaveRef.current(index, 'overwrite')}
+          />
+        </div>
       )}
       {!section.collapsed && (
         <DiffSectionBody
@@ -329,7 +347,6 @@ export function DiffSectionItem({
           sideBySide={sideBySide}
           isDark={isDark}
           language={language}
-          modelPathBase={modelPathBase}
           isEditable={isEditable}
           typography={diffTypography}
           diffWordWrap={diffWordWrap}

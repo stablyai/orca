@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, type MutableRefObject } from 'react'
 import { setWithLRU } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
-import { prFilesDiffScrollTopCache, prFilesDiffViewStateCache } from '../cache/files-diff-view'
+import type { DiffReadingAnchor } from '@/components/editor/combined-diff/scroll-viewport/combined-diff-layout'
+import type { CombinedDiffViewportOwner } from '@/components/editor/combined-diff/scroll-viewport/combined-diff-viewport-owner'
+import { prFilesDiffViewStateCache } from '../cache/files-diff-view'
 
 export function usePRFilesDiffViewPersistence(args: {
   sections: DiffSection[]
@@ -13,25 +15,40 @@ export function usePRFilesDiffViewPersistence(args: {
   fileTreeCollapsed: boolean
   activeTreeSectionKey: string | null
   loadedIndicesRef: MutableRefObject<Set<number>>
-  scrollContainerRef: RefObject<HTMLDivElement | null>
-  pendingRestoreScrollTopRef: MutableRefObject<number | null>
+  viewport: CombinedDiffViewportOwner
+  pendingRestoreAnchorRef: MutableRefObject<{ anchor: DiffReadingAnchor | null } | null>
 }): void {
+  const { pendingRestoreAnchorRef } = args
+  useLayoutEffect(() => {
+    const pending = pendingRestoreAnchorRef.current
+    if (pending && args.sections.length > 0) {
+      args.viewport.importView(pending.anchor, 0)
+      pendingRestoreAnchorRef.current = null
+    }
+  }, [pendingRestoreAnchorRef, args.sections, args.viewport])
+
   useEffect(() => {
     if (args.sections.length === 0 && args.entriesLength > 0) {
       return
     }
-    const preservedScrollTop =
-      prFilesDiffScrollTopCache.get(args.viewStateKey) ??
-      args.scrollContainerRef.current?.scrollTop ??
-      0
+    const existing = prFilesDiffViewStateCache.get(args.viewStateKey)
     setWithLRU(prFilesDiffViewStateCache, args.viewStateKey, {
       entrySignature: args.entrySignature,
       sections: args.sections,
-      sectionHeights: args.sectionHeights,
+      sectionHeights: Object.fromEntries(
+        args.sections.flatMap((section, index) =>
+          args.sectionHeights[index] === undefined
+            ? []
+            : [[section.key, args.sectionHeights[index]]]
+        )
+      ),
       loadedIndices: Array.from(args.loadedIndicesRef.current).filter(
         (index) => !args.sections[index]?.loading
       ),
-      scrollTop: preservedScrollTop,
+      scrollAnchor:
+        existing?.entrySignature === args.entrySignature
+          ? existing.scrollAnchor
+          : args.viewport.getViewMemory().scrollAnchor,
       sideBySide: args.sideBySide,
       fileTreeCollapsed: args.fileTreeCollapsed,
       activeTreeSectionKey: args.activeTreeSectionKey
@@ -42,97 +59,28 @@ export function usePRFilesDiffViewPersistence(args: {
     args.entrySignature,
     args.fileTreeCollapsed,
     args.loadedIndicesRef,
-    args.scrollContainerRef,
     args.sectionHeights,
     args.sections,
     args.sideBySide,
-    args.viewStateKey
+    args.viewStateKey,
+    args.viewport
   ])
 
   useLayoutEffect(() => {
-    const container = args.scrollContainerRef.current
-    if (!container) {
-      return
-    }
-
-    const writeCachedScrollPosition = (scrollTop: number): void => {
+    const persist = (): void => {
       const existing = prFilesDiffViewStateCache.get(args.viewStateKey)
-      setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, scrollTop)
-      if (!existing || existing.entrySignature !== args.entrySignature) {
+      if (existing?.entrySignature !== args.entrySignature) {
         return
       }
-      setWithLRU(prFilesDiffViewStateCache, args.viewStateKey, { ...existing, scrollTop })
+      setWithLRU(prFilesDiffViewStateCache, args.viewStateKey, {
+        ...existing,
+        scrollAnchor: args.viewport.getViewMemory().scrollAnchor
+      })
     }
-
-    const cacheScrollPositionOnScroll = (): void => {
-      // Why: mid-restore scrollTop is a clamped intermediate, so caching it would lose the real target.
-      if (args.pendingRestoreScrollTopRef.current !== null) {
-        return
-      }
-      writeCachedScrollPosition(container.scrollTop)
-    }
-
-    const cacheScrollPositionOnTeardown = (): void => {
-      // Why: tearing down mid-restore must persist the pending target, not the clamped intermediate.
-      writeCachedScrollPosition(args.pendingRestoreScrollTopRef.current ?? container.scrollTop)
-    }
-
-    container.addEventListener('scroll', cacheScrollPositionOnScroll, { passive: true })
+    const unsubscribe = args.viewport.subscribeScroll(persist)
     return () => {
-      cacheScrollPositionOnTeardown()
-      container.removeEventListener('scroll', cacheScrollPositionOnScroll)
+      persist()
+      unsubscribe()
     }
-  }, [
-    args.entrySignature,
-    args.pendingRestoreScrollTopRef,
-    args.scrollContainerRef,
-    args.viewStateKey
-  ])
-
-  useLayoutEffect(() => {
-    const container = args.scrollContainerRef.current
-    const targetScrollTop = args.pendingRestoreScrollTopRef.current
-    if (!container || targetScrollTop === null) {
-      return
-    }
-
-    let frameId = 0
-    let attempts = 0
-    const restoreScrollPosition = (): void => {
-      const liveContainer = args.scrollContainerRef.current
-      const liveTarget = args.pendingRestoreScrollTopRef.current
-      if (!liveContainer || liveTarget === null) {
-        return
-      }
-
-      const maxScrollTop = Math.max(0, liveContainer.scrollHeight - liveContainer.clientHeight)
-      const nextScrollTop = Math.min(liveTarget, maxScrollTop)
-      liveContainer.scrollTop = nextScrollTop
-
-      // Why: only cache once the restore lands; an intermediate clamp would overwrite the real target.
-      if (Math.abs(liveContainer.scrollTop - liveTarget) <= 1 || maxScrollTop >= liveTarget) {
-        setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, nextScrollTop)
-        args.pendingRestoreScrollTopRef.current = null
-        return
-      }
-
-      attempts += 1
-      if (attempts < 30) {
-        frameId = window.requestAnimationFrame(restoreScrollPosition)
-        return
-      }
-      // Why: cache what we actually reached; an unreachable target would replay this fight every visit.
-      setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, liveContainer.scrollTop)
-      args.pendingRestoreScrollTopRef.current = null
-    }
-
-    restoreScrollPosition()
-    return () => window.cancelAnimationFrame(frameId)
-  }, [
-    args.pendingRestoreScrollTopRef,
-    args.scrollContainerRef,
-    args.sectionHeights,
-    args.sections,
-    args.viewStateKey
-  ])
+  }, [args.entrySignature, args.viewStateKey, args.viewport])
 }

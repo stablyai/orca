@@ -165,6 +165,18 @@ export function enqueueDiffCommentPersist(
 }
 
 // Why: derive the next list inside the `set` updater so concurrent writes can't clobber each other via a stale closure.
+function pendingAfterMutation(
+  id: string | null,
+  previous: DiffComment[] | undefined,
+  next: DiffComment[]
+): string | null {
+  return id &&
+    previous?.some((comment) => comment.id === id) &&
+    !next.some((comment) => comment.id === id)
+    ? null
+    : id
+}
+
 export function mutateDiffComments(
   set: Parameters<StateCreator<AppState>>[0],
   owner: DiffCommentOwner,
@@ -191,6 +203,7 @@ export function mutateDiffComments(
       }
       next = computed
       return {
+        scrollToDiffCommentId: pendingAfterMutation(s.scrollToDiffCommentId, previous, computed),
         folderWorkspaces: s.folderWorkspaces.map((workspace) =>
           workspace === target ? { ...workspace, diffComments: computed } : workspace
         )
@@ -213,7 +226,10 @@ export function mutateDiffComments(
     const nextList: Worktree[] = repoList.map((w) =>
       rows.includes(w) ? { ...w, diffComments: computed } : w
     )
-    return { worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList } }
+    return {
+      scrollToDiffCommentId: pendingAfterMutation(s.scrollToDiffCommentId, previous, computed),
+      worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList }
+    }
   })
   if (next === null) {
     return null

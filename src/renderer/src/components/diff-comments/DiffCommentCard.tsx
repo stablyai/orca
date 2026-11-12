@@ -1,12 +1,17 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineMetaLabel } from './diff-comment-line-meta-label'
-import { useMountedRef } from '@/hooks/useMountedRef'
+import { DiffCommentFileSession, type DiffCommentComposerSnapshot } from './diff-comment-session'
+import { useLocalDiffCommentSession } from './use-local-diff-comment-session'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import {
+  observeDiffCommentZoneSize,
+  untilDiffCommentZoneRemoved
+} from './diff-comment-zone-lifetime'
 
 // Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
@@ -26,7 +31,15 @@ type Props = {
   observeRenderedSize?: boolean
   onSubmitEdit?: (body: string) => Promise<boolean>
   headerActions?: ReactNode
+  lifetime?: AbortSignal
+  preventScrollOnFocus?: boolean
+  session?: DiffCommentFileSession
+  commentId?: string
 }
+
+const NO_EDIT: DiffCommentComposerSnapshot = { body: '', phase: 'canceled' }
+const getNoEdit = (): DiffCommentComposerSnapshot => NO_EDIT
+const subscribeNoEdit = (): (() => void) => () => {}
 
 function resizeDiffCommentTextarea(textarea: HTMLTextAreaElement): boolean {
   const previousHeight = textarea.style.height
@@ -49,18 +62,34 @@ export function DiffCommentCard({
   onContentResize,
   observeRenderedSize,
   onSubmitEdit,
-  headerActions
+  headerActions,
+  lifetime,
+  preventScrollOnFocus = false,
+  session,
+  commentId = 'note'
 }: Props): React.JSX.Element {
   const t = useTranslate()
   // Zone cards live in separate React roots, so subscribe directly to language changes.
   useUiLanguageRevision()
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(body)
-  const [submitting, setSubmitting] = useState(false)
-  const mountedRef = useMountedRef()
+  const fileSession = useLocalDiffCommentSession(() => new DiffCommentFileSession(), session)
+  const edit = useSyncExternalStore(
+    useCallback(
+      (listener) => fileSession.subscribeEdit(commentId, listener),
+      [fileSession, commentId]
+    ),
+    useCallback(() => fileSession.getEdit(commentId), [fileSession, commentId])
+  )
+  const composer = useSyncExternalStore(
+    edit?.subscribe ?? subscribeNoEdit,
+    edit?.getSnapshot ?? getNoEdit
+  )
+  const editing = edit !== null
+  const draft = composer.body
+  const submitting = composer.phase === 'submitting'
   const cardRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const resizeAfterCloseRef = useRef(false)
+  const focusRequestedRef = useRef(false)
   const observesRenderedSize = observeRenderedSize === true && onContentResize !== undefined
 
   // Read the latest resize callback without rerunning edit layout; fresh parent arrows would move the caret to the end mid-edit.
@@ -69,7 +98,7 @@ export function DiffCommentCard({
 
   useLayoutEffect(() => {
     const card = cardRef.current
-    if (!card || !observesRenderedSize) {
+    if (!card || lifetime?.aborted || !observesRenderedSize) {
       return
     }
     onContentResizeRef.current?.()
@@ -84,25 +113,25 @@ export function DiffCommentCard({
       })
     }
     if (typeof ResizeObserver === 'undefined') {
-      return () => {
+      return untilDiffCommentZoneRemoved(lifetime, () => {
         if (frameId !== null) {
           cancelAnimationFrame(frameId)
         }
-      }
+      })
     }
     // Initial Monaco estimates miss narrow-pane wrapping; observe actual card height in both diff layouts.
-    const observer = new ResizeObserver(() => notifyResize())
-    observer.observe(card)
-    return () => {
-      observer.disconnect()
+    return observeDiffCommentZoneSize(lifetime, card, notifyResize, () => {
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }
-    }
-  }, [observesRenderedSize])
+    })
+  }, [lifetime, observesRenderedSize])
 
   // Measure the newly edited textarea before paint so its view zone cannot jump on the next frame.
   useLayoutEffect(() => {
+    if (lifetime?.aborted) {
+      return
+    }
     if (!editing) {
       if (resizeAfterCloseRef.current) {
         resizeAfterCloseRef.current = false
@@ -115,25 +144,24 @@ export function DiffCommentCard({
       return
     }
     resizeDiffCommentTextarea(el)
-    el.focus()
-    el.setSelectionRange(el.value.length, el.value.length)
-    onContentResizeRef.current?.()
-  }, [editing])
-
-  const scheduleContentResizeAfterClose = (): void => {
-    // Measure after the body-only commit; async saves must not retain the textarea/footer height.
     resizeAfterCloseRef.current = true
-  }
+    if (focusRequestedRef.current) {
+      focusRequestedRef.current = false
+      el.focus(preventScrollOnFocus ? { preventScroll: true } : undefined)
+      el.setSelectionRange(el.value.length, el.value.length)
+    }
+    onContentResizeRef.current?.()
+  }, [editing, lifetime, preventScrollOnFocus])
 
   const handleStartEdit = (): void => {
-    setDraft(body)
-    setEditing(true)
+    focusRequestedRef.current = true
+    fileSession.startEdit(commentId, body)
   }
 
   const handleCancel = (): void => {
-    scheduleContentResizeAfterClose()
-    setEditing(false)
-    setDraft(body)
+    if (edit) {
+      fileSession.cancelEdit(commentId, edit)
+    }
   }
 
   const trimmedDraft = draft.trim()
@@ -149,25 +177,13 @@ export function DiffCommentCard({
     .filter(Boolean)
     .join(' ')
 
-  const handleSubmit = async (): Promise<void> => {
-    if (!canSubmit || !onSubmitEdit) {
+  const handleSubmit = (): void => {
+    if (lifetime?.aborted || !canSubmit || !onSubmitEdit || !edit) {
       return
     }
-    setSubmitting(true)
-    try {
-      const ok = await onSubmitEdit(trimmedDraft)
-      if (ok && mountedRef.current) {
-        scheduleContentResizeAfterClose()
-        setEditing(false)
-      }
-    } catch (err) {
-      // Catch rejected saves and retain the draft for retry; fire-and-forget callers cannot handle this rejection.
+    void fileSession.submitEdit(commentId, edit, onSubmitEdit, trimmedDraft).catch((err) => {
       console.error('Failed to submit diff comment edit:', err)
-    } finally {
-      if (mountedRef.current) {
-        setSubmitting(false)
-      }
-    }
+    })
   }
 
   return (
@@ -277,7 +293,7 @@ export function DiffCommentCard({
               className="orca-diff-comment-popover-textarea"
               value={draft}
               onChange={(e) => {
-                setDraft(e.target.value)
+                edit?.setBody(e.target.value)
                 // Why: rich-review layout measures every note; skip it when this card stayed put.
                 if (resizeDiffCommentTextarea(e.currentTarget)) {
                   onContentResizeRef.current?.()

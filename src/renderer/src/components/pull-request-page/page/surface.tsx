@@ -1,3 +1,7 @@
+import {
+  DiffCommentSessionScope,
+  useDiffCommentSessionRegistry
+} from '@/components/diff-comments/diff-comment-session-registry'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -42,7 +46,15 @@ export default function PullRequestPage(props: PullRequestPageProps): React.JSX.
   return <PullRequestPageItem key={key} {...props} />
 }
 
-function PullRequestPageItem({
+function PullRequestPageItem(props: PullRequestPageProps): React.JSX.Element {
+  return (
+    <DiffCommentSessionScope>
+      <PullRequestPageItemBody {...props} />
+    </DiffCommentSessionScope>
+  )
+}
+
+function PullRequestPageItemBody({
   workItem,
   repoPath,
   repoId,
@@ -54,6 +66,7 @@ function PullRequestPageItem({
   onReviewRequestsChange,
   onClose
 }: PullRequestPageProps): React.JSX.Element {
+  const noteSessions = useDiffCommentSessionRegistry()
   const t = useTranslate()
   const backLabel =
     backLabelOverride ?? t('auto.components.TaskPage.backToPullRequests', 'Pull requests')
@@ -314,7 +327,12 @@ function PullRequestPageItem({
         ) : (
           <PullRequestPageTabs
             tab={tab}
-            onTabChange={setTab}
+            onTabChange={(next) => {
+              if (next !== 'files') {
+                noteSessions?.clear()
+              }
+              setTab(next)
+            }}
             workItem={displayWorkItem ?? workItem}
             displayWorkItem={displayWorkItem}
             repoPath={repoPath}

@@ -32,6 +32,7 @@ import { installMonacoContextMenuPaste } from '@/components/editor/install-monac
 import { runMonacoSetupSteps } from './monaco-setup-steps'
 import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
 import { onPluginFontLoadsChanged } from '@/store/plugins/appearance/plugin-fonts'
+import { configureMonacoTypeScriptDefaults } from './monaco-typescript-defaults'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -55,24 +56,7 @@ globalThis.MonacoEnvironment = {
   }
 }
 
-// Sandboxed workers cannot resolve project imports, and inline diffs can concatenate invalid programs; disable diagnostic categories while retaining useful tokenization.
-const diagnosticsOptions = {
-  noSemanticValidation: true,
-  noSuggestionDiagnostics: true,
-  noSyntaxValidation: true
-}
-monacoTS.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
-monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
-
-// TSX/JSX share TypeScript/JavaScript defaults; preserve JSX parsing without emission to avoid TS17004 on tags.
-monacoTS.typescriptDefaults.setCompilerOptions({
-  ...monacoTS.typescriptDefaults.getCompilerOptions(),
-  jsx: monacoTS.JsxEmit.Preserve
-})
-monacoTS.javascriptDefaults.setCompilerOptions({
-  ...monacoTS.javascriptDefaults.getCompilerOptions(),
-  jsx: monacoTS.JsxEmit.Preserve
-})
+configureMonacoTypeScriptDefaults(monacoTS)
 
 runMonacoSetupSteps([
   ['Vue language registration', () => registerVueLanguage(monaco)],

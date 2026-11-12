@@ -28,7 +28,7 @@ export function useCombinedDiffSectionSave({
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
 }) {
-  const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
+  const modifiedEditorsRef = useRef<Map<number, monacoEditor.ICodeEditor>>(new Map())
   const writtenBySectionRef = useRef(
     new Map<string, { operation: DiffSection['operation']; content: string }>()
   )
