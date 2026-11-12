@@ -160,13 +160,13 @@ declare module 'orca/host' {
       result: { revision: string; themeId: string; mode: "dark" | "light"; delivery: "published" }
       surfaces: "worker"
     }
-    /** Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. Since host API 1.3. */
+    /** Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. `hostId` is the host a row records (`local`, `ssh:…`, `runtime:…`), or null when it records none, as for a project-group folder on this machine. Since host API 1.3. */
     "workspace.list": {
       params: { includeStatus?: boolean } | undefined
       result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }
       surfaces: "worker"
     }
-    /** Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. Since host API 1.7. */
+    /** Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. `hostId` is always named: `local`, `ssh:…` or `runtime:…`. Since host API 1.7. */
     "project.list": {
       params: Record<string, never> | undefined
       result: { projects: { id: string; name: string; kind: "git" | "folder"; hostId: string | null; path: string }[]; truncated: boolean }
@@ -220,16 +220,16 @@ declare module 'orca/host' {
       result: { terminals: { id: string; title?: string }[]; truncated: boolean }
       surfaces: "worker"
     }
-    /** Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. Since host API 1.7. */
+    /** Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. `focused` is false when a newer focus request won or the window did not move to it. Since host API 1.7. */
     "terminal.focus": {
       params: { terminalId: string }
-      result: { focused: true }
+      result: { focused: boolean }
       surfaces: "worker"
     }
-    /** Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. Since host API 1.7. */
+    /** Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. A plugin keeps its terminals until it is disabled or removed. Since host API 1.7. */
     "terminal.close": {
       params: { terminalId: string }
-      result: { closed: true; processExited: boolean }
+      result: { closed: true }
       surfaces: "worker"
     }
     /** The font family, size, weight, line height, ligatures, word wrap and minimap Orca's file editor uses now, editor zoom included. `editor.typography.changed` reports each change after. Since host API 1.6. */

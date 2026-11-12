@@ -33,8 +33,8 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`statusBar.update`](#statusbarupdate) | none | worker | no | 1.2 | Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. A plugin with `main` and status bar items has its worker started when it is enabled and kept running while it stays enabled, so a worker can poll and update its items without an event or a hook. |
 | [`appearance.read`](#appearanceread) | `appearance:write` | worker | no | 1.4 | Reads the current desktop appearance revision for a conditional update. |
 | [`appearance.apply`](#appearanceapply) | `appearance:write` | worker | yes | 1.4 | Publishes owned app/editor and terminal colors and selects them in the desktop. Returns publication, not renderer acknowledgement. |
-| [`workspace.list`](#workspacelist) | `workspace:read` | worker | no | 1.3 | Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. |
-| [`project.list`](#projectlist) | `workspace:read` | worker | no | 1.7 | Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. |
+| [`workspace.list`](#workspacelist) | `workspace:read` | worker | no | 1.3 | Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. `hostId` is the host a row records (`local`, `ssh:…`, `runtime:…`), or null when it records none, as for a project-group folder on this machine. |
+| [`project.list`](#projectlist) | `workspace:read` | worker | no | 1.7 | Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. `hostId` is always named: `local`, `ssh:…` or `runtime:…`. |
 | [`workspace.open`](#workspaceopen) | `workspace:write` | worker | yes | 1.3 | Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app. |
 | [`workspace.rename`](#workspacerename) | `workspace:write` | worker | yes | 1.5 | Renames a workspace in Orca's sidebar, as renaming it by hand does; the name stays until it is renamed again. |
 | [`terminal.create`](#terminalcreate) | `terminal:send` | worker | yes | 1.3 | Opens a terminal in a workspace, optionally running a command, in the background. |
@@ -43,8 +43,8 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`editor.open`](#editoropen) | `workspace:write` | worker | yes | 1.3 | Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace. |
 | [`commands.run`](#commandsrun) | `workspace:write` | worker | yes | 1.3 | Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only. |
 | [`terminal.list`](#terminallist) | `workspace:read` | worker | no | 1.7 | Lists a workspace's terminals, at most 50; `workspace.readContext` lists the focused one's. |
-| [`terminal.focus`](#terminalfocus) | `workspace:write` | worker | yes | 1.7 | Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. |
-| [`terminal.close`](#terminalclose) | `terminal:send` | worker | yes | 1.7 | Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. |
+| [`terminal.focus`](#terminalfocus) | `workspace:write` | worker | yes | 1.7 | Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. `focused` is false when a newer focus request won or the window did not move to it. |
+| [`terminal.close`](#terminalclose) | `terminal:send` | worker | yes | 1.7 | Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. A plugin keeps its terminals until it is disabled or removed. |
 | [`editor.readTypography`](#editorreadtypography) | none | worker, panel, editor | no | 1.6 | The font family, size, weight, line height, ligatures, word wrap and minimap Orca's file editor uses now, editor zoom included. `editor.typography.changed` reports each change after. |
 
 ### `workspace.readContext`
@@ -217,7 +217,7 @@ Publishes owned app/editor and terminal colors and selects them in the desktop. 
 
 ### `workspace.list`
 
-Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status.
+Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. `hostId` is the host a row records (`local`, `ssh:…`, `runtime:…`), or null when it records none, as for a project-group folder on this machine.
 
 ```ts
 (params?: { includeStatus?: boolean }) => { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }
@@ -225,7 +225,7 @@ Lists every workspace, Git worktrees and folders, on every host Orca reaches; `i
 
 ### `project.list`
 
-Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`.
+Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. `hostId` is always named: `local`, `ssh:…` or `runtime:…`.
 
 ```ts
 (params?: {}) => { projects: { id: string; name: string; kind: "git" | "folder"; hostId: string | null; path: string }[]; truncated: boolean }
@@ -297,18 +297,18 @@ Lists a workspace's terminals, at most 50; `workspace.readContext` lists the foc
 
 ### `terminal.focus`
 
-Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only.
+Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. `focused` is false when a newer focus request won or the window did not move to it.
 
 ```ts
-(params: { terminalId: string }) => { focused: true }
+(params: { terminalId: string }) => { focused: boolean }
 ```
 
 ### `terminal.close`
 
-Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`.
+Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. A plugin keeps its terminals until it is disabled or removed.
 
 ```ts
-(params: { terminalId: string }) => { closed: true; processExited: boolean }
+(params: { terminalId: string }) => { closed: true }
 ```
 
 ### `editor.readTypography`

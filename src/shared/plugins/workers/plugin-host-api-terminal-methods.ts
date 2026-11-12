@@ -28,13 +28,12 @@ const terminalListResult = z.object({
 })
 
 const terminalTargetParams = z.strictObject({ terminalId: pluginTerminalIdSchema })
-const terminalFocusResult = z.object({ focused: z.literal(true) })
-const terminalCloseResult = z.object({
-  closed: z.literal(true),
-  /** Nothing runs in the terminal any more. False when Orca could not confirm its process
-   *  stopped: it may still run, as on an unreachable SSH host, where Orca stops it on reconnect. */
-  processExited: z.boolean()
+const terminalFocusResult = z.object({
+  /** False when Orca's window did not move to the terminal: a newer focus request won, or the
+   *  window could not show it. */
+  focused: z.boolean()
 })
+const terminalCloseResult = z.object({ closed: z.literal(true) })
 
 export const PLUGIN_TERMINAL_ACTIONS_API = {
   'terminal.list': spec({
@@ -49,7 +48,7 @@ export const PLUGIN_TERMINAL_ACTIONS_API = {
   }),
   'terminal.focus': spec({
     summary:
-      "Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only.",
+      "Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. `focused` is false when a newer focus request won or the window did not move to it.",
     since: 7,
     scope: 'explicit-terminal',
     capability: 'workspace:write',
@@ -60,7 +59,7 @@ export const PLUGIN_TERMINAL_ACTIONS_API = {
   }),
   'terminal.close': spec({
     summary:
-      'Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`.',
+      'Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. A plugin keeps its terminals until it is disabled or removed.',
     since: 7,
     scope: 'explicit-terminal',
     capability: 'terminal:send',

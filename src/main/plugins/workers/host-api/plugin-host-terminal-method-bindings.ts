@@ -28,12 +28,7 @@ const terminalListAnswer = z.object({
   totalCount: z.number().optional(),
   truncated: z.boolean().optional()
 })
-const terminalCloseAnswer = z.object({
-  close: z.object({
-    ptyKilled: z.boolean(),
-    ptyStopVerdict: z.enum(['live', 'unverifiable']).optional()
-  })
-})
+const terminalFocusAnswer = z.object({ focus: z.object({ navigated: z.boolean().optional() }) })
 
 export const TERMINAL_CLOSE_REFUSAL =
   'terminal.close closes only terminals of the focused workspace or ones this plugin opened'
@@ -79,13 +74,13 @@ export const PLUGIN_TERMINAL_ACTION_HANDLERS = {
   'terminal.focus': bind(api['terminal.focus'], async ({ terminalId }, ctx) => {
     // Focus means Orca's window; headless serve has none to show.
     renderer(ctx.services)
-    // `navigated: false` in the answer means a later request for this terminal won; it is shown.
-    await effect(ctx, 'terminal.focus', {
+    const answer = await effect(ctx, 'terminal.focus', {
       terminal: terminalId,
       // This window only: paired phones and other clients are not steered by a plugin.
       navigation: 'host'
     })
-    return { focused: true as const }
+    // `navigated: false`: a newer focus request won, or Orca's window did not move to it.
+    return { focused: terminalFocusAnswer.parse(answer).focus.navigated !== false }
   }),
   'terminal.close': bind(api['terminal.close'], async ({ terminalId }, ctx) => {
     // Destructive, so narrower than focus: the focused workspace's terminals (where
@@ -96,11 +91,9 @@ export const PLUGIN_TERMINAL_ACTION_HANDLERS = {
     ) {
       throw new PluginHostCallError('action_failed', TERMINAL_CLOSE_REFUSAL)
     }
-    const { close } = terminalCloseAnswer.parse(
-      await effect(ctx, 'terminal.close', { terminal: terminalId })
-    )
+    await effect(ctx, 'terminal.close', { terminal: terminalId })
     forgetPluginOpenedTerminal(ctx.pluginId, terminalId)
-    // No verdict and no kill: the terminal had no running process (it already exited).
-    return { closed: true as const, processExited: close.ptyKilled || !close.ptyStopVerdict }
+    // Why no exit report: a local close answers before Orca knows whether the process stopped.
+    return { closed: true as const }
   })
 } satisfies Record<string, BoundPluginHostMethod>

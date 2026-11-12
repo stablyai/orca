@@ -89,22 +89,35 @@ describe('workspace.list', () => {
     expect(plain.mock.calls.map(([method]) => method)).not.toContain('worktree.ps')
   })
 
-  it('names hosts as project.list does, and leaves out rows past the bounds', async () => {
-    const rpc = vi.fn(async (method: string) =>
-      method === 'worktree.list'
-        ? {
-            worktrees: [
-              { id: 'r1::/ok', repoId: 'r1', displayName: 'ok', path: '/ok' },
-              { id: 'r1::/long', repoId: 'r1', displayName: 'x', path: `/${'x'.repeat(2000)}` }
-            ]
-          }
-        : ANSWERS[method]
-    )
+  it('keeps the host ids 1.3 shipped, cuts long labels, and leaves out rows past the bounds', async () => {
+    const rpc = vi.fn(async (method: string) => {
+      if (method === 'worktree.list') {
+        return {
+          worktrees: [
+            { id: 'r1::/a', repoId: 'r1', displayName: 'a', path: '/a', hostId: 'ssh:box' },
+            { id: 'r1::/ok', repoId: 'r1', displayName: 'n'.repeat(600), path: '/ok' },
+            { id: 'r1::/long', repoId: 'r1', displayName: 'x', path: `/${'x'.repeat(2000)}` }
+          ]
+        }
+      }
+      if (method === 'folderWorkspace.list') {
+        return {
+          folderWorkspaces: [
+            { id: 'f1', name: 'Notes', folderPath: '/notes' },
+            { id: 'f2', name: 'Remote', folderPath: '/r', executionHostId: 'ssh:box' }
+          ]
+        }
+      }
+      return ANSWERS[method]
+    })
     const outcome = await list(rpc, {})
     expect(outcome.ok && outcome.value).toMatchObject({
+      // What origin/main returned: the recorded host, else null (also for project-group folders).
       workspaces: [
-        { id: 'r1::/ok', hostId: 'local' },
-        { id: 'folder:f1', hostId: 'local' }
+        { id: 'r1::/a', hostId: 'ssh:box' },
+        { id: 'r1::/ok', hostId: null, name: 'n'.repeat(512) },
+        { id: 'folder:f1', hostId: null },
+        { id: 'folder:f2', hostId: 'ssh:box' }
       ],
       truncated: true
     })
@@ -128,6 +141,37 @@ describe('workspace.list', () => {
     expect(first.ok && first.value).toMatchObject({ statusTruncated: true })
     expect(second).toEqual(first)
     expect(rpc.mock.calls.filter(([method]) => method === 'worktree.ps')).toHaveLength(1)
+  })
+
+  it('shares a slow listing however long it takes, then keeps its answer for a second', async () => {
+    let now = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const slow = Promise.withResolvers<unknown>()
+    const rpc = vi.fn(async (method: string) =>
+      method === 'worktree.ps' ? slow.promise : ANSWERS[method]
+    )
+    const services = pluginHostTestServices(rpc)
+    const call = () =>
+      callPluginHost({
+        method: 'workspace.list',
+        params: { includeStatus: true },
+        granted: ['workspace:read'],
+        services
+      })
+    const psCalls = () => rpc.mock.calls.filter(([method]) => method === 'worktree.ps').length
+    const first = call()
+    now = 5000
+    const second = call()
+    slow.resolve(PS_ANSWER)
+    expect(await Promise.all([first, second])).toMatchObject([{ ok: true }, { ok: true }])
+    expect(psCalls()).toBe(1)
+    now = 5900
+    await call()
+    expect(psCalls()).toBe(1)
+    now = 6100
+    await call()
+    expect(psCalls()).toBe(2)
+    vi.restoreAllMocks()
   })
 
   it('refuses unknown params, as older hosts refuse includeStatus', async () => {

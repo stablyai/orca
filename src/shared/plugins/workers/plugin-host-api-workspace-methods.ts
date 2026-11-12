@@ -36,9 +36,6 @@ export function pluginWorkspaceId(row: { id: string; identityKey?: string | null
     : row.id
 }
 
-/** The execution host: `local` for this machine, `ssh:<connection>` or `runtime:<environment>`.
- *  `workspace.list` and `project.list` name a host the same way. Hosts before 1.7 sent null for
- *  this machine when the workspace recorded no host. */
 const pluginHostIdSchema = z.string().max(ID_MAX).nullable()
 
 const workspaceListParams = z
@@ -78,6 +75,9 @@ const workspaceListResult = z.object({
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
         path: z.string().max(ID_MAX),
         branch: z.string().max(512).nullable(),
+        /** The host the workspace records: `local`, `ssh:<connection>` or `runtime:<environment>`;
+         *  null when it records none (older rows on this machine). A project-group folder gives
+         *  its folder's recorded host, null for this machine. */
         hostId: pluginHostIdSchema,
         /** Present only with `includeStatus`, for workspaces Orca has a status for. */
         status: workspaceStatus.optional()
@@ -102,6 +102,7 @@ const projectListResult = z.object({
         name: z.string().max(512),
         /** `folder`: a plain folder, with no Git repository. */
         kind: z.enum(['git', 'folder']),
+        /** Always named: `local` for this machine, `ssh:<connection>` or `runtime:<environment>`. */
         hostId: pluginHostIdSchema,
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
         path: z.string().max(ID_MAX)
@@ -219,7 +220,7 @@ const commandsRunResult = z.object({ ran: z.literal(true) })
 export const PLUGIN_WORKSPACE_ACTIONS_API = {
   'workspace.list': spec({
     summary:
-      "Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status.",
+      "Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. `hostId` is the host a row records (`local`, `ssh:…`, `runtime:…`), or null when it records none, as for a project-group folder on this machine.",
     since: 3,
     scope: 'any-workspace',
     capability: 'workspace:read',
@@ -230,7 +231,7 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
   }),
   'project.list': spec({
     summary:
-      'Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`.',
+      'Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. `hostId` is always named: `local`, `ssh:…` or `runtime:…`.',
     since: 7,
     scope: 'any-workspace',
     capability: 'workspace:read',

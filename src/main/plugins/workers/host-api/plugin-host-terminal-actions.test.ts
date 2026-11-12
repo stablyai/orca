@@ -3,6 +3,8 @@ import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import { callPluginHost, pluginHostTestServices } from './__mocks__/plugin-host-services-fixture'
 import { executePluginHostCall } from './plugin-host-methods'
+import { PluginHostCallError } from './plugin-host-call-scope'
+import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
 
 // The runtime's refusal of a handle it no longer knows, as the in-process RPC raises it.
 const runtimeError = (code: string) =>
@@ -86,6 +88,22 @@ describe('runtime failures', () => {
   })
 })
 
+describe('runtime refusal codes', () => {
+  it('keep action_failed for methods older than 1.7, and their own code from 1.7', async () => {
+    const rpc = vi.fn().mockRejectedValue(runtimeError('runtime_unavailable'))
+    const calls: { method: string; params: unknown; granted: PluginCapabilityKind[] }[] = [
+      { method: 'terminal.read', params: { terminalId: 'term_a' }, granted: ['terminal:read'] },
+      { method: 'terminal.list', params: { workspaceId: 'w' }, granted: ['workspace:read'] }
+    ]
+    const [older, newer] = await Promise.all(
+      calls.map((call) => callPluginHost({ ...call, services: pluginHostTestServices(rpc) }))
+    )
+    const message = 'this Orca host cannot run workspace actions now'
+    expect(older).toEqual({ ok: false, code: 'action_failed', error: message })
+    expect(newer).toEqual({ ok: false, code: 'unavailable', error: message })
+  })
+})
+
 describe('terminal.focus', () => {
   it("focuses in this Orca's window only, never steering paired clients", async () => {
     const rpc = vi.fn().mockResolvedValue({ focus: { handle: 'term_a', navigated: true } })
@@ -106,6 +124,18 @@ describe('terminal.focus', () => {
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'terminal.focus', summary: 'terminal=term_a' })
     )
+  })
+
+  it('reports false when a newer request won or the window did not move', async () => {
+    const rpc = vi.fn().mockResolvedValue({ focus: { handle: 'term_a', navigated: false } })
+    expect(
+      await callPluginHost({
+        method: 'terminal.focus',
+        params: { terminalId: 'term_a' },
+        granted: ['workspace:write'],
+        services: pluginHostTestServices(rpc, { renderer })
+      })
+    ).toEqual({ ok: true, value: { focused: false } })
   })
 
   it('is unavailable without a window, before asking the runtime', async () => {
@@ -143,9 +173,9 @@ describe('terminal.close', () => {
     const rpc = vi.fn(async (method: string) =>
       method === 'terminal.create'
         ? { terminal: { handle: 'term_elsewhere' } }
-        : { close: { handle: 'x', tabId: 't', ptyKilled: true } }
+        : { close: { handle: 'x', tabId: 't', ptyKilled: false } }
     )
-    expect(await close(rpc)).toMatchObject({ ok: true })
+    expect(await close(rpc)).toEqual({ ok: true, value: { closed: true } })
     await callPluginHost({
       method: 'terminal.create',
       params: { workspaceId: 'identity:other' },
@@ -171,24 +201,31 @@ describe('terminal.close', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('reports whether the process is known to have stopped', async () => {
-    const answers = [
-      { ptyKilled: true },
-      { ptyKilled: false },
-      { ptyKilled: false, ptyStopVerdict: 'live' },
-      { ptyKilled: false, ptyStopVerdict: 'unverifiable' }
-    ]
-    const outcomes = await Promise.all(
-      answers.map((answer) =>
-        close(vi.fn().mockResolvedValue({ close: { handle: 'term_a', tabId: 't', ...answer } }))
-      )
-    )
-    expect(outcomes.map((outcome) => outcome.ok && outcome.value)).toEqual([
-      { closed: true, processExited: true },
-      { closed: true, processExited: true },
-      { closed: true, processExited: false },
-      { closed: true, processExited: false }
-    ])
+  it('gains no close rights from a create that finished after the plugin lost approval', async () => {
+    let approved = true
+    const rpc = vi.fn(async () => {
+      // Approval is revoked while the runtime creates the terminal.
+      approved = false
+      return { terminal: { handle: 'term_late' } }
+    })
+    const created = await executePluginHostCall({
+      pluginId: 'samples.demo',
+      method: 'terminal.create',
+      params: { workspaceId: 'identity:other' },
+      surface: 'worker',
+      grantedCapabilities: ['terminal:send'],
+      services: pluginHostTestServices(rpc),
+      audit: { record: vi.fn().mockResolvedValue(undefined) },
+      scope: {
+        assertActive: () => {
+          if (!approved) {
+            throw new PluginHostCallError('consent_required', 'plugin is no longer enabled')
+          }
+        }
+      }
+    })
+    expect(created).toMatchObject({ ok: false, code: 'consent_required' })
+    expect(await close(vi.fn(), 'term_late')).toMatchObject({ ok: false, code: 'action_failed' })
   })
 
   it('names a stale or exited terminal without the runtime wording', async () => {

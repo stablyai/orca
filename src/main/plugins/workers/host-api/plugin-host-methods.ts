@@ -10,7 +10,9 @@ import type {
 } from '../../../../shared/plugins/frames/plugin-protocol'
 import type { PluginAuditLog } from '../../plugin-audit-log'
 import {
+  PLUGIN_RUNTIME_FAILURE_CODES_SINCE,
   PluginHostCallError,
+  PluginRuntimeCallError,
   UNSCOPED_PLUGIN_HOST_CALL,
   type PluginHostCallScope
 } from './plugin-host-call-scope'
@@ -128,7 +130,12 @@ export async function executePluginHostCall(
       if (error.detail) {
         scope.log?.(`${input.method}: ${error.detail}`)
       }
-      const { code, message, retryAfterMs } = error
+      const { message, retryAfterMs } = error
+      const code =
+        error instanceof PluginRuntimeCallError &&
+        bound.spec.since < PLUGIN_RUNTIME_FAILURE_CODES_SINCE
+          ? 'action_failed'
+          : error.code
       return {
         ok: false,
         code,

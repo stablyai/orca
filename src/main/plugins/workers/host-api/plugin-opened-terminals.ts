@@ -1,7 +1,7 @@
 /**
  * Terminals each plugin opened itself (`terminal.create`, `agent.launch`), which it may close
- * wherever they are. Bounded per plugin, oldest forgotten first; cleared when the plugin's worker
- * stops or the plugin is disabled or removed, so a restarted or reinstalled plugin starts with none.
+ * wherever they are. Bounded per plugin, oldest forgotten first; cleared when the plugin is
+ * disabled or removed, so a re-enabled or reinstalled plugin starts with none.
  */
 
 export const PLUGIN_OPENED_TERMINAL_LIMIT = 128
@@ -42,22 +42,16 @@ export function prunePluginOpenedTerminals(keep: (pluginId: string) => boolean):
   }
 }
 
-type PluginLifecycleSource = {
+type PluginApprovalSource = {
   onChanged(listener: () => void): () => void
   findApprovedPlugin(pluginKey: string, allowRefreshPause?: boolean): unknown
-  workerState(pluginKey: string): { state: 'inactive' | 'running' | 'restarting' | 'errored' }
 }
 
-/** Forgets a plugin's terminals once its worker stops (deactivated, reaped, errored) or it is
- *  disabled or removed: every one of those notifies a change. */
-export function installPluginOpenedTerminalPruning(service: PluginLifecycleSource): () => void {
+/** Forgets a plugin's terminals once it is disabled, loses consent or is removed: each notifies a
+ *  change. Why not on worker stop: an event-driven worker is reaped and restarted between events,
+ *  and must still close what it opened. */
+export function installPluginOpenedTerminalPruning(service: PluginApprovalSource): () => void {
   return service.onChanged(() =>
-    prunePluginOpenedTerminals((pluginKey) => {
-      const { state } = service.workerState(pluginKey)
-      return (
-        service.findApprovedPlugin(pluginKey, true) !== null &&
-        (state === 'running' || state === 'restarting')
-      )
-    })
+    prunePluginOpenedTerminals((pluginKey) => service.findApprovedPlugin(pluginKey, true) !== null)
   )
 }

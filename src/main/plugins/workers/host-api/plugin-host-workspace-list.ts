@@ -98,33 +98,45 @@ async function readWorkspaceStatuses(call: PluginRuntimeRpc): Promise<WorkspaceS
 }
 
 export const PLUGIN_WORKSPACE_STATUS_TTL_MS = 1000
-// Why shared: `worktree.ps` refreshes every terminal host, so plugins polling together share
-// one listing in flight and its answer for a second. Keyed by the runtime RPC it came from.
-const statusReads = new WeakMap<object, { at: number; read: Promise<WorkspaceStatuses> }>()
+// Why shared: `worktree.ps` refreshes every terminal host, so plugins polling together share one
+// listing in flight, however long it takes, and its answer for a second after it lands. Keyed by
+// the runtime RPC it came from.
+type StatusRead = { read: Promise<WorkspaceStatuses>; settledAt: number | null }
+const statusReads = new WeakMap<object, StatusRead>()
 
 function workspaceStatuses(call: PluginRuntimeRpc, source: object): Promise<WorkspaceStatuses> {
-  const now = Date.now()
   const cached = statusReads.get(source)
-  if (cached && now - cached.at < PLUGIN_WORKSPACE_STATUS_TTL_MS) {
+  if (
+    cached &&
+    (cached.settledAt === null || Date.now() - cached.settledAt < PLUGIN_WORKSPACE_STATUS_TTL_MS)
+  ) {
     return cached.read
   }
-  const read = readWorkspaceStatuses(call)
-  statusReads.set(source, { at: now, read })
-  // A failed listing is not kept: the next call asks again.
-  read.catch(() => {
-    if (statusReads.get(source)?.read === read) {
-      statusReads.delete(source)
+  const entry: StatusRead = { read: readWorkspaceStatuses(call), settledAt: null }
+  statusReads.set(source, entry)
+  entry.read.then(
+    () => {
+      entry.settledAt = Date.now()
+    },
+    // A failed listing is not kept: the next call asks again.
+    () => {
+      if (statusReads.get(source) === entry) {
+        statusReads.delete(source)
+      }
     }
-  })
-  return read
+  )
+  return entry.read
 }
 
-type HostOwner = { executionHostId?: string | null; connectionId?: string | null }
-
-/** One convention for every list: `local` for this machine, else the `ssh:`/`runtime:` host. */
-function pluginHostId(owner: HostOwner | undefined): string {
-  return getRepoExecutionHostId(owner ?? {})
+/** `project.list`'s host: `local` for this machine, else its `ssh:` or `runtime:` host. */
+function projectHostId(repo: {
+  executionHostId?: string | null
+  connectionId?: string | null
+}): string {
+  return getRepoExecutionHostId(repo)
 }
+
+const LABEL_MAX = 512
 
 /** Whether a row's ids and path fit the public bounds; one that does not is left out. */
 function fitsBounds(row: {
@@ -157,6 +169,7 @@ export async function listPluginWorkspaces(
   const { worktrees, totalCount, truncated } = worktreeListAnswer.parse(listed)
   const repoRows = repoListAnswer.parse(repos).repos
   const reposById = new Map(repoRows.map((repo) => [repo.id, repo]))
+  // Host ids keep the values host API 1.3 shipped: the row's recorded host, else null.
   const withStatus = <Row extends { id: string }>(row: Row) => {
     const status = statuses?.byId.get(row.id)
     return status ? { ...row, status } : row
@@ -167,12 +180,12 @@ export async function listPluginWorkspaces(
     return withStatus({
       id: pluginWorkspaceId({ id: worktree.id, identityKey: worktree.identity?.key }),
       kind: folder ? ('folder' as const) : ('worktree' as const),
-      name: worktree.displayName,
-      project: repo?.displayName?.slice(0, 512) || null,
+      name: worktree.displayName.slice(0, LABEL_MAX),
+      project: repo?.displayName?.slice(0, LABEL_MAX) || null,
       projectId: worktree.repoId,
       path: worktree.path,
-      branch: folder ? null : branchName(worktree.branch),
-      hostId: worktree.hostId ?? pluginHostId(repo)
+      branch: folder ? null : (branchName(worktree.branch)?.slice(0, LABEL_MAX) ?? null),
+      hostId: worktree.hostId ?? null
     })
   })
   // Project-group folders have no repo row; their key is what selectors take.
@@ -180,12 +193,12 @@ export async function listPluginWorkspaces(
     withStatus({
       id: folderWorkspaceKey(folder.id),
       kind: 'folder' as const,
-      name: folder.name,
+      name: folder.name.slice(0, LABEL_MAX),
       project: null,
       projectId: null,
       path: folder.folderPath,
       branch: null,
-      hostId: pluginHostId(folder)
+      hostId: folder.executionHostId ?? null
     })
   )
   const room = PLUGIN_WORKSPACE_LIST_LIMIT - worktreeRows.length
@@ -211,9 +224,9 @@ export async function listPluginProjects(
   const { repos } = projectListAnswer.parse(await call('repo.list', {}))
   const candidates = repos.slice(0, PLUGIN_PROJECT_LIST_LIMIT).map((repo) => ({
     id: repo.id,
-    name: (repo.displayName ?? '').slice(0, 512),
+    name: (repo.displayName ?? '').slice(0, LABEL_MAX),
     kind: repo.kind === 'folder' ? ('folder' as const) : ('git' as const),
-    hostId: pluginHostId(repo),
+    hostId: projectHostId(repo),
     path: repo.path
   }))
   const projects = candidates.filter((project) => project.id.length > 0 && fitsBounds(project))

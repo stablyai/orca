@@ -106,7 +106,12 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       presentation: 'background'
     })
     const terminalId = terminalCreateAnswer.parse(answer).terminal.handle
-    recordPluginOpenedTerminal(ctx.pluginId, terminalId)
+    // A plugin that lost approval, or a worker that cancelled, while the call ran gains no close
+    // rights from it.
+    ctx.scope.assertActive()
+    if (!ctx.scope.signal?.aborted) {
+      recordPluginOpenedTerminal(ctx.pluginId, terminalId)
+    }
     return { terminalId }
   }),
   'terminal.read': bind(api['terminal.read'], async (params, { services, scope }) => {
@@ -135,7 +140,12 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       launchSource: 'plugin'
     })
     const terminalId = agentLaunchAnswer.parse(answer).outcome.handle
-    recordPluginOpenedTerminal(ctx.pluginId, terminalId)
+    // A plugin that lost approval, or a worker that cancelled, while the call ran gains no close
+    // rights from it.
+    ctx.scope.assertActive()
+    if (!ctx.scope.signal?.aborted) {
+      recordPluginOpenedTerminal(ctx.pluginId, terminalId)
+    }
     if (params.prompt) {
       // Delivery waits for the agent's composer (up to a minute), longer than a host call may take.
       void effect(ctx, 'agent.launch', {

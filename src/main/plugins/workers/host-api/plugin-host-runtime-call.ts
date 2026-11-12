@@ -1,7 +1,7 @@
 import type { PluginErrorCode } from '../../../../shared/plugins/frames/plugin-protocol'
 import type { PluginHostMethodContext } from './plugin-host-method-bind'
 import type { PluginHostServices } from './plugin-host-method-bindings'
-import { PluginHostCallError } from './plugin-host-call-scope'
+import { PluginHostCallError, PluginRuntimeCallError } from './plugin-host-call-scope'
 import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
 
 /** The runtime RPC the `orca` CLI calls, run in process; rejects with the runtime's error.
@@ -54,7 +54,7 @@ export function pluginRuntimeFailure(error: unknown): unknown {
       : undefined
   const [failureCode, message] =
     (code && RUNTIME_FAILURES.get(code)) || RUNTIME_FAILURES.get(detail) || UNKNOWN_FAILURE
-  return new PluginHostCallError(failureCode, message, undefined, detail)
+  return new PluginRuntimeCallError(failureCode, message, undefined, detail)
 }
 
 export function pluginHostRenderer(services: PluginHostServices): PluginHostRendererActions {

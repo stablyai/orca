@@ -7,29 +7,24 @@ import {
 } from './plugin-opened-terminals'
 
 describe('terminals a plugin opened', () => {
-  it('are forgotten once its worker stops or it loses approval', () => {
+  it('are forgotten once the plugin is disabled or removed, not when its worker stops', () => {
     let notify = () => {}
-    const workers: Record<string, 'running' | 'inactive'> = {
-      'a.one': 'running',
-      'a.two': 'running'
-    }
     const approved = new Set(['a.one', 'a.two'])
     installPluginOpenedTerminalPruning({
       onChanged: (listener) => {
         notify = listener
         return () => {}
       },
-      findApprovedPlugin: (key) => (approved.has(key) ? {} : null),
-      workerState: (key) => ({ state: workers[key] ?? 'inactive' })
+      findApprovedPlugin: (key) => (approved.has(key) ? {} : null)
     })
     recordPluginOpenedTerminal('a.one', 'term_1')
     recordPluginOpenedTerminal('a.two', 'term_2')
+    // An idle reap or restart notifies too; both plugins stay approved.
     notify()
     expect(isPluginOpenedTerminal('a.one', 'term_1')).toBe(true)
-    workers['a.one'] = 'inactive'
     approved.delete('a.two')
     notify()
-    expect(isPluginOpenedTerminal('a.one', 'term_1')).toBe(false)
+    expect(isPluginOpenedTerminal('a.one', 'term_1')).toBe(true)
     expect(isPluginOpenedTerminal('a.two', 'term_2')).toBe(false)
   })
 
