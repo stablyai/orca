@@ -93,21 +93,16 @@ export function WorktreeJumpPaletteResultList({
     return observeVirtualizedListScrollMargin(container, scrollElement, updateMargin)
   }, [scrollElement, windowed])
 
-  // Stable per result list: TanStack rebuilds every row's geometry when these getters change.
+  // Estimates are read lazily per row; a header and an option never share a key.
   const estimateSize = useCallback(
     (index: number) => estimateEntryHeight(listEntries[index]),
     [listEntries]
   )
-  const getItemKey = useCallback(
-    (index: number) => listEntryRenderKeys[index] ?? listEntries[index]?.id ?? index,
-    [listEntries, listEntryRenderKeys]
-  )
   const virtualizer = useWindowedCommandVirtualizer({
-    count: listEntries.length,
+    itemKeys: listEntryRenderKeys,
     enabled: windowed && scrollElement !== null,
     scrollElement: () => scrollElement,
     estimateSize,
-    getItemKey,
     activeIndex,
     overscan: VIRTUALIZED_LIST_OVERSCAN,
     scrollMargin,

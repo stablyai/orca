@@ -63,11 +63,9 @@ function WorkspaceComboboxList({
   const activeIndex = activeId === null ? -1 : (indexById.get(activeId) ?? -1)
 
   const virtualizer = useWindowedCommandVirtualizer({
-    count: filtered.length,
+    itemKeys: itemIds,
     scrollElement: () => listRef.current,
     estimateSize: estimateWorkspaceOptionSize,
-    // Stable per result list: TanStack rebuilds every row's geometry when the key getter changes.
-    getItemKey: React.useCallback((index: number) => itemIds[index] ?? index, [itemIds]),
     activeIndex,
     overscan: WORKSPACE_OPTION_OVERSCAN,
     initialRect: { width: 0, height: WORKSPACE_LIST_MAX_HEIGHT }

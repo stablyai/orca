@@ -99,11 +99,9 @@ function SkillInstallWorkspaceChoiceList({
   const activeIndex = activeKey === null ? -1 : (indexByKey.get(activeKey) ?? -1)
 
   const virtualizer = useWindowedCommandVirtualizer({
-    count: filteredChoices.length,
+    itemKeys: choiceKeys,
     scrollElement: () => listRef.current,
     estimateSize: estimateChoiceOptionSize,
-    // Stable per result list: TanStack rebuilds every row's geometry when the key getter changes.
-    getItemKey: useCallback((index: number) => choiceKeys[index] ?? index, [choiceKeys]),
     activeIndex,
     overscan: CHOICE_OPTION_OVERSCAN,
     initialRect: { width: 0, height: CHOICE_LIST_MAX_HEIGHT }
