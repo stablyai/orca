@@ -49,16 +49,17 @@ export function isFastServiceTier(
   return tier.label.toLowerCase() === 'fast' || tier.value.toLowerCase() === 'fast'
 }
 
-/** Standard plus the tiers the model lists, valued by tier id; one choice in place of Fast. */
+/** Preserve native clear choices; other agents use Orca's synthetic Standard choice. */
 export function serviceTierOption(tiers: readonly AgentSessionOptionChoice[]): CatalogOption {
+  const nativeClear = tiers.some((tier) => tier.value === 'none')
   return {
     id: 'serviceTier',
     label: 'Speed',
     category: 'mode',
     kind: {
       type: 'select',
-      choices: [{ value: 'default', label: 'Standard' }, ...tiers],
-      defaultValue: 'default'
+      choices: nativeClear ? [...tiers] : [{ value: 'default', label: 'Standard' }, ...tiers],
+      defaultValue: nativeClear ? 'none' : 'default'
     },
     apply: {}
   }

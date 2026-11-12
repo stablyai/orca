@@ -21,16 +21,14 @@ import type {
   SessionConfigOption,
   SessionModelState
 } from '../generated/acp-protocol.generated'
+import * as Omp from '../../omp/omp-native-chat-options'
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
 export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
-
-function isSelect(option: SessionConfigOption): option is SelectOption {
-  return option.type === 'select'
-}
+  | { method: 'command'; text: string }
 
 export class AcpStructuredOptions {
   constructor(
@@ -41,12 +39,14 @@ export class AcpStructuredOptions {
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
+      | 'serviceTierCommand'
     > = {}
   ) {}
 
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
+  private serviceTiers?: Omp.OmpNativeChatOptions
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined
   private isBuiltin: (command: AvailableCommand) => boolean = () => false
@@ -147,6 +147,7 @@ export class AcpStructuredOptions {
       return
     }
     this.configOptions = configOptions
+    this.appliedInput.delete('serviceTier')
     const proof = this.selectorProof
     if (!proof || this.writing > 0) {
       return
@@ -160,6 +161,11 @@ export class AcpStructuredOptions {
       this.appliedInput.delete('model')
       this.appliedInput.delete('effort')
     }
+  }
+
+  adoptServiceTiers(report: Omp.OmpNativeChatOptions): void {
+    this.appliedInput.delete('serviceTier')
+    this.serviceTiers = report
   }
 
   adoptModel(modelId: string): void {
@@ -216,7 +222,14 @@ export class AcpStructuredOptions {
       const option = this.select('thought_level')
       return option ? { method: 'config', configId: option.id, value } : null
     }
-    return null
+    return key === 'serviceTier'
+      ? Omp.ompServiceTierWrite(
+          this.serviceTiers,
+          this.currentValues().model,
+          value,
+          this.dialect.serviceTierCommand
+        )
+      : null
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
@@ -264,15 +277,15 @@ export class AcpStructuredOptions {
           : {})
       }
     })
-    const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
+    const current = {
+      ...(currentModel ? { model: currentModel } : {}),
+      ...(effortOption ? { effort: effortOption.currentValue } : {}),
+      ...Omp.currentOmpServiceTier(this.serviceTiers, currentModel)
+    }
     return {
-      models,
+      models: Omp.withOmpServiceTiers(models, this.serviceTiers),
       forkSupport: this.forkSupport,
-      current: {
-        ...(currentModel ? { model: currentModel } : {}),
-        ...(effortOption ? { effort: effortOption.currentValue } : {}),
-        confirmed
-      }
+      current: { ...current, confirmed: Object.keys(current) }
     }
   }
 
@@ -295,7 +308,8 @@ export class AcpStructuredOptions {
     const { current } = this.read()
     return {
       ...(current.model ? { model: current.model } : {}),
-      ...(current.effort ? { effort: current.effort } : {})
+      ...(current.effort ? { effort: current.effort } : {}),
+      ...(current.serviceTier ? { serviceTier: current.serviceTier } : {})
     }
   }
 
@@ -332,6 +346,6 @@ export class AcpStructuredOptions {
     const option = this.configOptions.find(
       (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
     )
-    return option && isSelect(option) ? option : null
+    return option?.type === 'select' ? option : null
   }
 }

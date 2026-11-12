@@ -195,22 +195,26 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   return { catalog, models, ...shown, controls, values }
 }
 
-/** Without model evidence, a saved speed some model lists stays shown so Standard can turn it off. */
+/** Without model evidence, retain a listed speed and its native clear choice. */
 function modellessControls(
   catalog: AgentSessionOptionCatalog,
   record: StructuredAgentSessionOptionRecord
 ): CatalogOption[] {
   const tier = record.values.serviceTier?.value
-  if (typeof tier !== 'string' || tier === 'default') {
+  if (typeof tier !== 'string' || tier === 'none') {
     return []
   }
-  const named = catalog.models
+  const choices = catalog.models
     .flatMap((model) => model.options)
     .flatMap((option) =>
       option.id === 'serviceTier' && option.kind.type === 'select' ? option.kind.choices : []
     )
-    .find((choice) => choice.value === tier)
-  return named ? [serviceTierOption([named])] : []
+  const clear = choices.find((choice) => choice.value === 'none')
+  if (tier === 'default' && !clear) {
+    return []
+  }
+  const named = choices.find((choice) => choice.value === tier)
+  return named ? [serviceTierOption(clear ? [clear, named] : [named])] : []
 }
 
 function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionOptionDescriptor[] {

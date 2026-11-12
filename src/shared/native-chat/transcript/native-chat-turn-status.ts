@@ -131,6 +131,19 @@ export function formatNativeChatTurnStatusLabel(input: {
   return NATIVE_CHAT_TURN_STATUS_COPY[key].replaceAll('{{value0}}', duration)
 }
 
+/** Append settled throughput when positive; running or unmeasured turns show no rate. */
+export function formatNativeChatTurnRate(
+  workedSeconds: number | null | undefined,
+  tokensPerSecond: number | null | undefined
+): string {
+  return workedSeconds != null &&
+    tokensPerSecond != null &&
+    Number.isFinite(tokensPerSecond) &&
+    tokensPerSecond > 0
+    ? ` · ${tokensPerSecond.toFixed(1)} tok/s`
+    : ''
+}
+
 export type NativeChatTurnTiming = {
   startedAt: number
   workedSeconds: number | null
@@ -142,6 +155,7 @@ export type NativeChatTurnStatus = {
   workedSeconds: number | null
   /** How a settled turn ended, when the host recorded it. */
   verdict?: AgentTurnOutcome
+  tokensPerSecond?: number | null
 }
 
 export type NativeChatTurnTimingByTurn = Readonly<Record<string, NativeChatTurnTiming>>
@@ -224,6 +238,7 @@ export type NativeChatSettledTurn = {
   startedAt: number
   workedSeconds: number
   verdict?: AgentTurnOutcome
+  tokensPerSecond?: number | null
 }
 
 /** Host duration or explicit null (running/unobserved end) overrides local timing; absent entries permit local fallback. */
@@ -264,7 +279,12 @@ export function selectNativeChatTurnStatuses(
       startedAt: settled.startedAt,
       thinking: false,
       workedSeconds: settled.workedSeconds,
-      ...(settled.verdict ? { verdict: settled.verdict } : {})
+      ...(settled.verdict ? { verdict: settled.verdict } : {}),
+      ...(settled.tokensPerSecond != null &&
+      Number.isFinite(settled.tokensPerSecond) &&
+      settled.tokensPerSecond > 0
+        ? { tokensPerSecond: settled.tokensPerSecond }
+        : {})
     }
   }
   const activeTiming = timingByTurn[activeTurnKey]

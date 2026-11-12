@@ -1,4 +1,4 @@
-/** A model's standard tier, which every model runs. */
+/** Synthetic clear tier for agents that do not list their own. */
 export const STANDARD_SERVICE_TIER = 'default'
 
 /** Unlisted model tiers fall back to Standard unless the agent reports a configured tier no model lists.
@@ -10,10 +10,11 @@ export function effectiveServiceTier(input: {
   reported: boolean
 }): string {
   const { tier, modelTiers } = input
-  if (tier === STANDARD_SERVICE_TIER || !modelTiers || modelTiers.includes(tier)) {
+  const standard = modelTiers?.includes('none') ? 'none' : STANDARD_SERVICE_TIER
+  if (tier === standard || !modelTiers || modelTiers.includes(tier)) {
     return tier
   }
-  return input.reported && !input.listedTiers.includes(tier) ? tier : STANDARD_SERVICE_TIER
+  return input.reported && !input.listedTiers.includes(tier) ? tier : standard
 }
 
 type TieredModel = { id: string; serviceTiers?: readonly { value: string }[] }

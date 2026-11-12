@@ -7,6 +7,7 @@
 
 import * as z from 'zod'
 import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-schema'
+import { AgentSessionGenerationUsageSchema } from '../agent-session-generation-usage'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
@@ -200,7 +201,8 @@ const TurnLifecycleFields = {
   startedAt: z.number().finite().positive().optional(),
   requestedAt: z.number().finite().positive().optional(),
   completedAt: z.number().finite().positive().optional(),
-  durationMs: z.number().finite().nonnegative().optional()
+  durationMs: z.number().finite().nonnegative().optional(),
+  generationUsage: AgentSessionGenerationUsageSchema.optional()
 }
 
 const KnownItemBody = z.discriminatedUnion('kind', [

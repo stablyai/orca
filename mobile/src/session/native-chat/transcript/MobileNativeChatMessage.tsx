@@ -199,6 +199,7 @@ function MobileNativeChatMessageImpl({
       startedAt={turnStatus.startedAt}
       workedSeconds={turnStatus.workedSeconds}
       verdict={turnStatus.verdict}
+      tokensPerSecond={turnStatus.tokensPerSecond}
       expanded={turnExpanded ?? false}
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />

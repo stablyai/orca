@@ -9,6 +9,10 @@ import type {
   SessionOptionSelectChoice
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
+  loneFastTier,
+  speedButtonTiers
+} from '../../../../../src/shared/native-chat/input/native-chat-session-speed-tiers'
+import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatPickerPresentation
 } from './MobileNativeChatSessionOptionPickers'
@@ -167,6 +171,58 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     await act(async () => rowByText('Permissions').props.onPress())
     await act(async () => rowByText('Full access').props.onPress())
     expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
+  })
+
+  it('keeps OMP native None and literal Default distinct in speed pickers and summary pills', async () => {
+    const ompOpenAiSpeed: SessionOptionDescriptor = {
+      id: 'serviceTier',
+      label: 'Speed',
+      category: 'mode',
+      kind: {
+        type: 'select',
+        currentValue: 'none',
+        choices: [
+          { value: 'none', label: 'None', description: 'Do not send service_tier' },
+          { value: 'auto', label: 'Auto' },
+          { value: 'default', label: 'Default', description: 'Use the provider default tier' },
+          { value: 'flex', label: 'Flex' },
+          { value: 'scale', label: 'Scale' },
+          { value: 'priority', label: 'Priority' },
+          { value: 'ultrafast', label: 'Ultrafast' }
+        ]
+      },
+      valueSource: 'reported',
+      transport: 'agent-session',
+      settable: true
+    }
+    const tiers = speedButtonTiers(ompOpenAiSpeed)
+    expect(tiers?.standard).toMatchObject({ value: 'none', label: 'None' })
+    expect(tiers?.tiers.map((choice) => choice.value)).toEqual([
+      'auto',
+      'default',
+      'flex',
+      'scale',
+      'priority',
+      'ultrafast'
+    ])
+    expect(loneFastTier(tiers?.tiers ?? [])).toBeUndefined()
+
+    const update = mount([MODEL_DESCRIPTOR, ompOpenAiSpeed])
+    expect(pill('Model').props.accessibilityLabel).toBe('Model, Sonnet 5')
+    await act(async () => pill('Model').props.onPress())
+    expect(findAllByHostType(renderer!.root, 'Switch')).toHaveLength(0)
+    await act(async () => rowByText('Speed').props.onPress())
+    await act(async () => rowByText('Default').props.onPress())
+    expect(setOption).toHaveBeenCalledExactlyOnceWith('serviceTier', 'default')
+
+    update(false, [
+      MODEL_DESCRIPTOR,
+      {
+        ...ompOpenAiSpeed,
+        kind: { ...ompOpenAiSpeed.kind, currentValue: 'default' }
+      }
+    ])
+    expect(pill('Model').props.accessibilityLabel).toBe('Model, Sonnet 5 Default')
   })
 })
 

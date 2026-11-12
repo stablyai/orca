@@ -1,6 +1,7 @@
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpOptionWrite, AcpStructuredOptions } from './acp-structured-options'
+import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 
 export type AcpOptionWriteBound = {
   agent: string
@@ -11,13 +12,27 @@ export type AcpOptionWriteBound = {
 
 /** A native setter carries its own call deadline, so an unanswered one fails only its send. */
 export function writeAcpSessionOption(
-  connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
+  connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel' | 'prompt'>,
   options: AcpStructuredOptions,
   write: AcpOptionWrite,
-  { onUncertain: _retire, ...bound }: AcpOptionWriteBound & { key: string; value: string }
+  bound: AcpOptionWriteBound & { key: string; value: string }
 ): Promise<void> {
   const { timeoutMs } = bound
-  return boundAcpOptionWrite(options, bound, () =>
+  if (write.method === 'command') {
+    return boundAcpOptionWrite(options, bound, async () => {
+      options.commandReply = ''
+      try {
+        const result = await connection.prompt([{ type: 'text', text: write.text }])
+        if (result.stopReason !== 'end_turn' || options.reported()[bound.key] !== bound.value) {
+          throw new AgentSessionOptionRejectedError('The agent did not confirm the service tier')
+        }
+        return () => {}
+      } finally {
+        options.commandReply = null
+      }
+    })
+  }
+  return boundAcpOptionWrite(options, { ...bound, onUncertain: undefined }, () =>
     write.method === 'config'
       ? connection
           .setConfigOption(write.configId, write.value, undefined, undefined, timeoutMs)

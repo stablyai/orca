@@ -49,6 +49,12 @@ pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]]   # temporary profile, rem
 - Before a cross-architecture build (including `pnpm build:mac`, which builds x64 and arm64), run `pnpm install:release`.
 - On Linux, `pnpm build`, `pnpm build:native`, and packaging need a running Docker daemon for the clipboard helper. For native Wayland development, run `pnpm build:native` before `pnpm dev`. See the [clipboard build guide](../native/wayland-clipboard/README.md#building-and-testing).
 
+## OMP native chat
+
+OMP loads the bundled `resources/native-chat-visuals/omp-native-chat.mjs` telemetry extension independently of inline visuals and scratch setup, including restored ACP sessions and model discovery. The speed picker preserves the running OMP version's native provider-family choices, descriptions, and current value for each model. `None` clears the override; literal `Default` is a distinct selection. Native provider adapters decide which values reach a request, so a listed tier does not guarantee that the provider realizes it. Reasoning effort remains a separate control.
+
+The settled desktop/mobile turn bar shows `tok/s` from native assistant `usage.output` counters divided by measured provider-request time. Native request duration is preferred; when absent, the real provider-request/message-end interval includes first-token wait and excludes tool gaps. Cumulative snapshots arrive before turn settlement and replace earlier snapshots in the durable journal rather than being added twice. Synthetic zero-token notices leave valid measurements intact. Running turns, older unmeasured history, missing counters/timing, and spans below 100 ms show no rate; text length supplies no token estimate.
+
 ## Troubleshooting
 
 - Slow main-process rebuilds: set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev` when you don't need main-process source maps.

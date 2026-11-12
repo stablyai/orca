@@ -70,15 +70,17 @@ export function sessionOptionValueMarker(
   return descriptor.valueSource === 'unknown' ? 'unreported' : null
 }
 
-/** Like Fast off, the standard tier adds nothing to a summary pill. */
+/** Like Fast off, the standard or unset tier adds nothing to a summary pill. */
 export function isDefaultServiceTier(
   descriptor: Pick<SessionOptionDescriptor, 'id' | 'kind'>
 ): boolean {
-  return (
-    descriptor.id === 'serviceTier' &&
-    descriptor.kind.type === 'select' &&
-    descriptor.kind.currentValue === 'default'
-  )
+  if (descriptor.id !== 'serviceTier' || descriptor.kind.type !== 'select') {
+    return false
+  }
+  const clearValue = descriptor.kind.choices.some((choice) => choice.value === 'none')
+    ? 'none'
+    : 'default'
+  return descriptor.kind.currentValue === clearValue
 }
 
 export type SessionOptionSetResult = {

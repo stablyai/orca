@@ -109,6 +109,7 @@ export function decideProviderTimelineEvent(
     case 'request.withdrawn':
       return decideWithdrawal(input, event)
     case 'context.usage':
+    case 'generation.usage':
       return decideContextUsage(input, event)
     case 'provider.frame':
       return decideFrame(input, event)

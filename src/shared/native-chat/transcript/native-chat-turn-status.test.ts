@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   describeNativeChatActiveTurnLabel,
+  formatNativeChatTurnRate,
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
   type NativeChatTurnTimingByTurn
@@ -231,5 +232,29 @@ describe('selectNativeChatTurnStatuses', () => {
       settledByTurn: new Map([['u1', null]])
     })
     expect(unverifiable.active).toBeNull()
+  })
+
+  it('surfaces positive settled throughput on active and prior turns without claiming a live rate', () => {
+    const settledByTurn = new Map([
+      ['u1', { startedAt: 1_000, workedSeconds: 0, tokensPerSecond: 42 }],
+      ['u2', { startedAt: 2_000, workedSeconds: 3, tokensPerSecond: 0 }]
+    ])
+    const running = selectNativeChatTurnStatuses(
+      { u1: { startedAt: 1_000, workedSeconds: null } },
+      { activeTurnKey: 'u1', isWorking: true, thinking: false, settledByTurn }
+    )
+    expect(running.active?.tokensPerSecond).toBeUndefined()
+    expect(formatNativeChatTurnRate(running.active?.workedSeconds, 42)).toBe('')
+
+    const settled = selectNativeChatTurnStatuses(
+      {},
+      { activeTurnKey: 'u1', isWorking: false, thinking: false, settledByTurn }
+    )
+    expect(settled.active?.tokensPerSecond).toBe(42)
+    expect(
+      formatNativeChatTurnRate(settled.active?.workedSeconds, settled.active?.tokensPerSecond)
+    ).toBe(' · 42.0 tok/s')
+    expect(settled.completedByTurn.u2?.tokensPerSecond).toBeUndefined()
+    expect(formatNativeChatTurnRate(3, settled.completedByTurn.u2?.tokensPerSecond)).toBe('')
   })
 })

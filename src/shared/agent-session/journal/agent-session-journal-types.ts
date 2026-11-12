@@ -4,7 +4,8 @@ import type {
 } from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
-import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
+import type { AgentJournalStatusItemFields } from './agent-session-journal-status'
+import type { AgentSessionGenerationUsage } from '../agent-session-generation-usage'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
@@ -239,6 +240,8 @@ export type AgentJournalTurnLifecycle = {
   /** What the provider said about its context window during or after this turn.
    *  Usually written by a later revision, since the provider answers after the end. */
   contextUsage?: AgentSessionContextUsage
+  /** Provider counters over model-request time, retained across settlement and reconnect. */
+  generationUsage?: AgentSessionGenerationUsage
   /** On a turn a conversation command opened: the provider turn that carried out the command,
    *  once the provider opened one. Nothing else re-derives it after the command settles. */
   providerTurnId?: string
@@ -272,32 +275,6 @@ export type AgentJournalThreadGoal = {
 export type AgentJournalThreadGoalState =
   | { state: 'set'; goal: AgentJournalThreadGoal }
   | { state: 'cleared' }
-
-type AgentJournalStatusItemFields = {
-  kind: 'status'
-  /** Optional display hints; unknown values retain the ordinary text fallback. */
-  presentation?: string
-  contextClear?: AgentSessionProviderContextBoundary
-  tone?: string
-  /** Legacy carrier of a turn record: written by hosts before v3, and published
-   *  to clients that predate the `turn` item. New code reads turns through
-   *  `readAgentJournalTurn`, never this field. */
-  turnLifecycle?: AgentJournalTurnLifecycle
-  /** Additive fallback for provider traffic this host cannot model yet. Older
-   *  clients still render `text`; newer clients expose the bounded frame. */
-  providerFrame?: {
-    provider: string
-    kind: string
-    payload: AgentJournalBoundedPayload
-  }
-  /** Present on thread-goal transitions; absent on rows from older hosts. */
-  threadGoal?: AgentJournalThreadGoalState
-  /** On the row about a reply Orca's own stop cut off: why Orca stopped. Its cause is open (a newer
-   *  host may name one this build does not know), so read it with `readAgentSessionOrcaStop`. */
-  orcaStop?: { cause: string }
-  /** On the derived "Forked from" row: the chat this one was forked from. */
-  forkedFrom?: { sessionId: string }
-}
 
 /** A status row that reports no failure; its text is its writer's own. */
 export type AgentJournalPlainStatusItem = AgentJournalStatusItemFields & {
