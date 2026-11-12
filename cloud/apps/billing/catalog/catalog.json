@@ -1,0 +1,94 @@
+{
+  "$comment": "Orca Cloud plan catalog. Edit here, review by PR, apply with scripts/catalog-apply.ts (dev first). Prices are NOT here: they come from the Stripe Prices holding each lookup key. Changing an entitlement or policy of a plan means adding a version and pointing currentVersion at it; an applied version is never rewritten. Hours are sandbox hours (1 = one hour awake on the one Standard size).",
+  "schemaVersion": 1,
+  "plans": [
+    {
+      "id": "team",
+      "kind": "self_serve",
+      "name": "Team",
+      "sort": 10,
+      "public": true,
+      "currentVersion": 1,
+      "stripe": {
+        "seatLookupKeys": { "month": "orca_team_seat_monthly", "year": "orca_team_seat_annual" },
+        "overageLookupKey": "orca_sandbox_overage_per_minute"
+      },
+      "versions": [
+        {
+          "version": 1,
+          "note": "Launch pricing: 60 h per seat per month pooled, 3 running per seat, opt-in overage.",
+          "entitlements": {
+            "sandbox_hours_monthly": { "value": 60, "perSeat": true },
+            "max_concurrent_sandboxes": { "value": 3, "perSeat": true },
+            "max_concurrent_sandboxes_per_member": { "value": 3 },
+            "machine_sizes": { "value": ["standard", "large"] },
+            "overage_allowed": { "value": true },
+            "max_seats": { "value": 500 }
+          },
+          "policy": {
+            "paymentGraceHours": 96,
+            "seatTrueDownHours": 6,
+            "warnAtPercent": [75, 90, 100],
+            "overage": { "defaultSpendCapCents": 2500, "maxSpendCapCents": 500000 },
+            "seats": { "min": 1, "max": 500 }
+          },
+          "features": [
+            { "id": "included_hours_per_seat", "params": { "hours": 60 }, "text": "60 sandbox hours per seat each month, pooled across your team" },
+            { "id": "agents_keep_running", "params": {}, "text": "Agents keep running when you close your laptop" },
+            { "id": "idle_sleep", "params": {}, "text": "Sandboxes sleep when idle, so you only use hours while they work" },
+            { "id": "overage_optional", "params": {}, "text": "Optional overage up to a monthly spend cap you set" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "enterprise",
+      "kind": "contact_sales",
+      "name": "Enterprise",
+      "sort": 20,
+      "public": true,
+      "currentVersion": 1,
+      "contactUrl": "https://onorca.dev/contact-sales",
+      "priceLabel": "Custom",
+      "versions": [
+        {
+          "version": 1,
+          "entitlements": {},
+          "policy": {},
+          "features": [
+            { "id": "byoc", "params": {}, "text": "Run sandboxes in your own cloud" },
+            { "id": "sso_scim", "params": {}, "text": "SSO and SCIM" },
+            { "id": "egress_controls", "params": {}, "text": "Network egress controls" },
+            { "id": "custom_limits", "params": {}, "text": "Custom limits and pricing" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trial",
+      "kind": "trial",
+      "name": "Trial",
+      "sort": 0,
+      "public": true,
+      "currentVersion": 1,
+      "versions": [
+        {
+          "version": 1,
+          "note": "One-time trial per new team (no card): 2 sandbox hours, 1 at a time, no overage.",
+          "entitlements": {
+            "sandbox_hours_lifetime": { "value": 2 },
+            "max_concurrent_sandboxes": { "value": 1 },
+            "max_concurrent_sandboxes_per_member": { "value": 1 },
+            "machine_sizes": { "value": ["standard", "large"] },
+            "overage_allowed": { "value": false }
+          },
+          "policy": {},
+          "features": [
+            { "id": "trial_hours", "params": { "hours": 2 }, "text": "2 sandbox hours to try Orca Cloud" },
+            { "id": "no_card", "params": {}, "text": "No card needed" }
+          ]
+        }
+      ]
+    }
+  ]
+}

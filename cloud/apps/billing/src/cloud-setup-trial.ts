@@ -1,7 +1,7 @@
 // The setup session's view of the one-time trial (N11, owned by src/trial.ts). Kept behind this
 // port so the setup flow reads one shape whatever the trial module returns.
 import type { Env } from './env'
-import { TRIAL_INCLUDED_SECONDS, grantTrial, trialRow, trialState } from './trial'
+import { grantTrial, trialIncludedSeconds, trialRow, trialState } from './trial'
 
 export type SetupTrial = { includedSeconds: number; usedSeconds: number; exhausted: boolean }
 
@@ -17,7 +17,7 @@ export type TrialGrantInput = {
 
 export type TrialPort = {
   /** Sandbox seconds a new team's trial includes, or null when no trial is offered at all. */
-  offeredSeconds(env: Env): number | null
+  offeredSeconds(env: Env, now: number): number | null | Promise<number | null>
   /** The account's trial, or null when it has none (or a plan ended it). */
   current(env: Env, accountId: string, now: number): Promise<SetupTrial | null>
   /** Grants the trial if this account and user may still get one. Idempotent. */
@@ -33,7 +33,7 @@ export const noTrialPort: TrialPort = {
 
 /** The trial module (N11) as the setup session sees it. */
 export const billingTrialPort: TrialPort = {
-  offeredSeconds: () => TRIAL_INCLUDED_SECONDS,
+  offeredSeconds: (env, now) => trialIncludedSeconds(env, now),
   async current(env, accountId) {
     const row = await trialRow(env.BILLING_DB, accountId)
     if (!row || row.revoked_at !== null) {

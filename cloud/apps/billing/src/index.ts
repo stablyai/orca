@@ -44,7 +44,9 @@ import { MembershipUnavailableError, authMembershipSource, type MembershipSource
 import { TeamPlansRequestSchema, authOrgMemberCheck, teamPlans, type OrgMemberCheck } from './team-plans'
 import { graceExpiredAccounts } from './store'
 import { CheckoutRequestSchema, createCheckout, createPortal } from './checkout'
-import { checkStart, computeEntitlement } from './entitlements'
+import { checkStart, computeEntitlement, entitlementsMode } from './entitlements'
+import { CatalogUnavailableError, loadCatalog, policyFor } from './catalog'
+import { backfillGrants } from './entitlements-backfill'
 import type { Env } from './env'
 import { MACHINE_SIZES, PlanConfigError, planCatalog, publicOffers } from './plans'
 import { OverageRequestSchema, updateOverage } from './overage'
@@ -111,7 +113,7 @@ function trialInput(caller: BillingCaller, request: Request): TrialInput {
 
 /** The desktop's entitlement body: the account's state plus what this caller is offered. */
 async function desktopEntitlement(env: Env, caller: BillingCaller, request: Request, now: number) {
-  const entitlement = await computeEntitlement(env, caller.accountId, now)
+  const entitlement = await computeEntitlement(env, caller.accountId, now, 'desktop')
   const offers = publicOffers(planCatalog(env))
   const neverHadPlan = entitlement.reason === 'no_subscription'
   const trial = neverHadPlan ? await trialOffer(env, trialInput(caller, request), now) : null
@@ -119,6 +121,14 @@ async function desktopEntitlement(env: Env, caller: BillingCaller, request: Requ
   // GitHub identity, or a disposable email) is told so instead of being offered one.
   const reason = neverHadPlan && !trial && isTeamAccount(caller.accountId) ? 'trial_unavailable' : entitlement.reason
   return { ...entitlement, reason, canManageBilling: caller.canManage, offers: { ...offers, trial } }
+}
+
+/** Payment grace for the suspension sweep: the plan's policy (one self-serve plan today). */
+async function suspensionGraceHours(env: Env, now: number): Promise<number> {
+  if (entitlementsMode(env) !== 'on') {
+    return planCatalog(env).team.paymentGraceHours
+  }
+  return policyFor(await loadCatalog(env.BILLING_DB, now), null, null).paymentGraceHours
 }
 
 function json(body: unknown, status = 200): Response {
@@ -155,7 +165,7 @@ async function handleCloudSetup(
   const route = `${request.method} ${url.pathname}`
   if (route === 'GET /v1/cloud-setup/offers') {
     // Public: the setup pages show the trial and prices before anyone has signed in.
-    const offered = deps.trial.offeredSeconds(env)
+    const offered = await deps.trial.offeredSeconds(env, now)
     return json({ ...publicOffers(planCatalog(env)), trial: offered ? { includedSeconds: offered } : null })
   }
   if (route === 'POST /v1/cloud-setup/sessions') {
@@ -423,7 +433,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!(await authenticateControlPlane(env, request))) {
           return json({ error: 'unauthorized' }, 401)
         }
-        const graceMs = planCatalog(env).team.paymentGraceHours * 3600_000
+        const graceMs = (await suspensionGraceHours(env, now)) * 3600_000
         const accounts = await graceExpiredAccounts(env.BILLING_DB, now - graceMs)
         return json({
           accounts: accounts.map((row) => ({
@@ -451,7 +461,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!body.success) {
           return json({ error: 'invalid_request' }, 400)
         }
-        const entitlement = await computeEntitlement(env, body.data.accountId, now)
+        const entitlement = await computeEntitlement(env, body.data.accountId, now, 'start_check')
         return json({
           ...checkStart(entitlement, body.data),
           // Billed seats: the period's peak (never raw membership), so caps can't be inflated by
@@ -480,7 +490,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
           // Best effort inline; the cron trigger retries whatever is still pending.
           ctx.waitUntil(flushMeterReports(env, stripe, now, { usageId: body.data.usageId }).catch(() => undefined))
         }
-        const entitlement = await computeEntitlement(env, body.data.accountId, now)
+        const entitlement = await computeEntitlement(env, body.data.accountId, now, 'usage')
         return json({
           ...result,
           canStartSandbox: entitlement.canStartSandbox,
@@ -496,7 +506,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
     if (error instanceof SyntaxError) {
       return json({ error: 'invalid_json' }, 400)
     }
-    if (error instanceof LiveModeRefusedError || error instanceof PlanConfigError) {
+    if (error instanceof LiveModeRefusedError || error instanceof PlanConfigError || error instanceof CatalogUnavailableError) {
       return json({ error: 'billing_misconfigured' }, 503)
     }
     if (error instanceof MembershipUnavailableError) {
@@ -523,5 +533,17 @@ export default {
     ctx.waitUntil(flushMeterReports(env, stripe, Date.now()).then(() => undefined))
     // Seat drift from a missed membership push heals here (needs AUTH_INTERNAL_URL).
     ctx.waitUntil(reconcileSeats(env, stripe, authMembershipSource(env), Date.now()).then(() => undefined))
+    // Entitlement grants: backfill and heal (no-op while ENTITLEMENTS_MODE is off).
+    ctx.waitUntil(
+      backfillGrants(env, Date.now())
+        .then((result) => {
+          if (result.subscriptions + result.trials + result.failed > 0) {
+            console.log(JSON.stringify({ event: 'entitlements_backfill', ...result }))
+          }
+        })
+        .catch((error: unknown) => {
+          console.error(JSON.stringify({ error: 'entitlements_backfill', message: error instanceof Error ? error.message.slice(0, 200) : '' }))
+        })
+    )
   }
 } satisfies ExportedHandler<Env>

@@ -3,7 +3,10 @@
 import type { Env } from './env'
 import { planForPrice } from './plans'
 import { allowsLiveMode, type StripeClient, type StripeSubscription } from './stripe'
-import { accountForCustomer, claimEvent, currentSubscription, customerFor, finishEvent, upsertSubscription } from './store'
+import { accountForCustomer, claimEvent, currentSubscription, customerFor, finishEvent, subscriptionById, upsertSubscription } from './store'
+import { entitlementsMode } from './entitlements-mode'
+import { loadCatalog } from './catalog'
+import { projectSubscription } from './grants'
 import { retireOverageItem } from './overage'
 import { splitSecrets, verifyStripeSignature } from './webhook-signature'
 
@@ -74,6 +77,7 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     throw new IgnoredSubscription('unknown_customer')
   }
   let match: ReturnType<typeof planForPrice> = null
+  let seatPriceId: string | null = null
   let seats = 1
   let overageItemId: string | null = null
   let periodStart = subscription.current_period_start
@@ -86,6 +90,7 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     const itemPlan = planForPrice(env, item.price.id)
     if (itemPlan) {
       match = itemPlan
+      seatPriceId = item.price.id
       seats = Math.max(1, item.quantity ?? 1)
       periodStart = item.current_period_start ?? periodStart
       periodEnd = item.current_period_end ?? periodEnd
@@ -111,8 +116,10 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     // The upsert keeps the earliest value while it stays unpaid and clears it once paid.
     past_due_since: PAYMENT_FAILED_STATUSES.has(subscription.status) ? now : null,
     // Membership comes from auth, not Stripe: keep the stored count.
-    member_count: null
+    member_count: null,
+    seat_price_id: seatPriceId
   })
+  await projectGrants(env, subscription.id, now)
   if (overageItemId) {
     // An opted-out account's overage item goes once the period it was used in has been invoiced.
     const stored = await currentSubscription(db, accountId)
@@ -121,6 +128,26 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
         console.error(JSON.stringify({ error: 'retire_overage_item', message: error instanceof Error ? error.message.slice(0, 200) : '' }))
       })
     }
+  }
+}
+
+/** Re-projects the subscription's entitlement grants from the row just written (grants.ts). */
+async function projectGrants(env: Env, subscriptionId: string, now: number): Promise<void> {
+  const mode = entitlementsMode(env)
+  if (mode === 'off') {
+    return
+  }
+  try {
+    const row = await subscriptionById(env.BILLING_DB, subscriptionId)
+    if (row) {
+      await projectSubscription(env.BILLING_DB, await loadCatalog(env.BILLING_DB, now), row, now, 'stripe_webhook')
+    }
+  } catch (error) {
+    if (mode === 'on') {
+      // Stripe retries; the reconciliation sweep and the lazy read path heal it too.
+      throw error
+    }
+    console.error(JSON.stringify({ error: 'grant_projection', message: error instanceof Error ? error.message.slice(0, 200) : '' }))
   }
 }
 

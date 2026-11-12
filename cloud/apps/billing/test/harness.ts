@@ -6,6 +6,11 @@ import type { OrgMemberCheck } from '../src/team-plans'
 import { createFakeD1 } from './d1-fake'
 import { createFakeStripe, signStripePayload } from './stripe-fake'
 import type { TrialPort } from '../src/cloud-setup-trial'
+import { applyCatalog } from '../src/catalog'
+import { testCatalog } from './catalog-fixture'
+
+/** Harnesses created by the current test (the shadow guard checks each one's diff table). */
+export const liveHarnesses: Array<{ raw: ReturnType<typeof createFakeD1>['raw']; env: Env }> = []
 
 export const WEBHOOK_SECRET = 'whsec_test_local_fixture_secret'
 export const CONTROL_TOKEN = 'cp_test_0123456789abcdef0123456789abcdef'
@@ -29,8 +34,14 @@ export async function createHarness(overrides: Partial<Env> = {}) {
     BILLING_JWT_AUDIENCE: 'orca-billing',
     BILLING_AUTH_ISSUER: 'https://login.onorca.dev',
     CONTROL_PLANE_TOKEN: CONTROL_TOKEN,
+    // The suite runs once per mode (vitest.config.ts projects): legacy, shadow and on.
+    ...(process.env.BILLING_TEST_ENTITLEMENTS_MODE ? { ENTITLEMENTS_MODE: process.env.BILLING_TEST_ENTITLEMENTS_MODE } : {}),
     ...overrides
   }
+  // The D1 catalog every environment gets from catalog/catalog.json (with any BILLING_PLANS test
+  // override carried over, so the modes agree).
+  await applyCatalog(db, testCatalog(env.BILLING_PLANS), Date.now())
+  liveHarnesses.push({ raw, env })
   let now = Date.now()
   // Live org member counts from auth; null = not configured (the default).
   let membership: (orgId: string) => Promise<number | null> = async () => null
