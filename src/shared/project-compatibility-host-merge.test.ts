@@ -7,18 +7,20 @@ import { mergeFetchedHostProjectCatalog } from './project-compatibility-host-mer
 const REMOTE = 'runtime:devbox'
 
 function repo(id: string, hostId: string, path: string): Repo {
-  return {
+  const partial = {
     id,
     path,
     displayName: 'myapp',
     kind: 'git',
     connectionId: null,
     executionHostId: hostId
-  } as unknown as Repo
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture fills only the fields the merge reads.
+  return partial as unknown as Repo
 }
 
 function setup(id: string, repoId: string, hostId: string, path: string): ProjectHostSetup {
-  return {
+  const partial = {
     id,
     projectId: 'github:acme/myapp',
     hostId,
@@ -30,17 +32,21 @@ function setup(id: string, repoId: string, hostId: string, path: string): Projec
     setupMethod: 'imported-existing-folder',
     createdAt: 1,
     updatedAt: 1
-  } as unknown as ProjectHostSetup
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture fills only the fields the merge reads.
+  return partial as unknown as ProjectHostSetup
 }
 
-const project: Project = {
+const partialProject = {
   id: 'github:acme/myapp',
   displayName: 'myapp',
   badgeColor: '#888888',
   sourceRepoIds: ['repo-local', 'repo-remote'],
   createdAt: 1,
   updatedAt: 1
-} as unknown as Project
+}
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture fills only the fields the merge reads.
+const project = partialProject as unknown as Project
 
 const repos = [
   repo('repo-local', 'local', '/Users/me/src/myapp'),

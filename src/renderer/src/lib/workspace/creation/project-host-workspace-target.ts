@@ -264,13 +264,21 @@ export function resolveWorkspaceCreationTarget(
 
   const repoId = resolveNewWorkspaceDialogRepoId(input)
   const legacyCandidates = repoId ? (reposById.get(repoId) ?? []) : []
+  const isActionableHost = (hostId: ExecutionHostId): boolean =>
+    !actionableHostIds || actionableHostIds.has(hostId)
   const activeLegacyRepo = input.activeWorkspaceHostId
     ? legacyCandidates.find(
-        (candidate) => getRepoExecutionHostId(candidate) === input.activeWorkspaceHostId
+        (candidate) =>
+          getRepoExecutionHostId(candidate) === input.activeWorkspaceHostId &&
+          isActionableHost(getRepoExecutionHostId(candidate))
       )
     : null
   const focusedLegacyRepo = focusedHostId
-    ? legacyCandidates.find((candidate) => getRepoExecutionHostId(candidate) === focusedHostId)
+    ? legacyCandidates.find(
+        (candidate) =>
+          getRepoExecutionHostId(candidate) === focusedHostId &&
+          isActionableHost(getRepoExecutionHostId(candidate))
+      )
     : null
   const legacyRepo =
     activeLegacyRepo ??

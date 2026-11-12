@@ -45,7 +45,8 @@ export type UISlicePreferences = {
   workspaceHostScope: WorkspaceHostScope
   setWorkspaceHostScope: (scope: WorkspaceHostScope) => void
   visibleWorkspaceHostIds: VisibleWorkspaceHostIds
-  setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
+  /** `scope` lets callers with host-row knowledge derive it; without it the visible count decides. */
+  setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds, scope?: WorkspaceHostScope) => void
   workspaceHostOrder: WorkspaceHostOrder
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
   /** Automations page host filter, in stable form. Never written from an unhydrated catalog. */

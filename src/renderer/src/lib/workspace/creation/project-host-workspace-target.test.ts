@@ -7,18 +7,20 @@ const REMOTE = 'runtime:devbox'
 const PROJECT_ID = 'github:acme/myapp'
 
 function repo(id: string, hostId: string, path: string): Repo {
-  return {
+  const partial = {
     id,
     path,
     displayName: 'myapp',
     kind: 'git',
     connectionId: null,
     executionHostId: hostId
-  } as unknown as Repo
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture fills only the fields the resolver reads.
+  return partial as unknown as Repo
 }
 
 function setup(id: string, repoId: string, hostId: string, path: string): ProjectHostSetup {
-  return {
+  const partial = {
     id,
     projectId: PROJECT_ID,
     hostId,
@@ -30,17 +32,21 @@ function setup(id: string, repoId: string, hostId: string, path: string): Projec
     setupMethod: 'imported-existing-folder',
     createdAt: 1,
     updatedAt: 1
-  } as unknown as ProjectHostSetup
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture fills only the fields the resolver reads.
+  return partial as unknown as ProjectHostSetup
 }
 
-const project: Project = {
+const partialProject = {
   id: PROJECT_ID,
   displayName: 'myapp',
   badgeColor: '#888888',
   sourceRepoIds: ['repo-local', 'repo-remote'],
   createdAt: 1,
   updatedAt: 1
-} as unknown as Project
+}
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture fills only the fields the resolver reads.
+const project = partialProject as unknown as Project
 
 const localRepo = repo('repo-local', 'local', '/Users/me/src/myapp')
 const remoteRepo = repo('repo-remote', REMOTE, '/home/me/myapp')
@@ -139,5 +145,26 @@ describe('resolveWorkspaceCreationTarget default host', () => {
     })
     expect(resolution.status).toBe('ready')
     expect(resolution.status === 'ready' ? resolution.target.hostId : null).toBe('local')
+  })
+
+  it('skips a non-actionable active-host twin copy for an actionable focused copy', () => {
+    const twins = [
+      repo('repo-myapp', REMOTE, '/home/me/myapp'),
+      repo('repo-myapp', 'local', '/Users/me/src/myapp')
+    ]
+    const twinSetups = [
+      setup('s-r', 'repo-myapp', REMOTE, '/home/me/myapp'),
+      setup('s-l', 'repo-myapp', 'local', '/Users/me/src/myapp')
+    ]
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: twins,
+      projectHostSetups: twinSetups,
+      activeRepoId: 'repo-myapp',
+      activeWorkspaceHostId: 'local',
+      focusedHostScope: REMOTE,
+      actionableHostIds: new Set([REMOTE])
+    })
+    expect(resolution.status).toBe('ready')
+    expect(resolution.status === 'ready' ? resolution.target.hostId : null).toBe(REMOTE)
   })
 })

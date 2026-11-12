@@ -31,7 +31,7 @@ type SidebarHostScopeMenuSectionProps = {
   preserveWorkspaceBoardOpen: boolean
   setWorkspaceHostScope: (scope: WorkspaceHostScope) => void
   visibleWorkspaceHostIds: VisibleWorkspaceHostIds
-  setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
+  setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds, scope?: WorkspaceHostScope) => void
 }
 
 function getHostMetadata(host: SidebarHostOption, t: Translate = translate): string {
@@ -95,17 +95,15 @@ export function SidebarHostScopeMenuSection({
     if (next === null) {
       setWorkspaceHostScope(ALL_EXECUTION_HOSTS_SCOPE)
     } else if (next) {
-      setVisibleWorkspaceHostIds(next)
-      // Row-aware scope correction: one merged row saves several equivalent IDs (#41140).
-      setWorkspaceHostScope(workspaceHostScopeForVisibleHosts(next, hostOptions))
+      // Row-aware scope: one merged row saves several equivalent IDs and must keep its scope (#41140).
+      setVisibleWorkspaceHostIds(next, workspaceHostScopeForVisibleHosts(next, hostOptions))
     }
   }
 
   const toggleHost = (host: SidebarHostOption): void => {
     const next = toggleVisibleHostRow(hostOptions, visibleWorkspaceHostIds, host)
     if (next !== undefined) {
-      setVisibleWorkspaceHostIds(next)
-      setWorkspaceHostScope(workspaceHostScopeForVisibleHosts(next, hostOptions))
+      setVisibleWorkspaceHostIds(next, workspaceHostScopeForVisibleHosts(next, hostOptions))
     }
   }
 
