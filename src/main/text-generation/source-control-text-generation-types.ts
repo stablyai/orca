@@ -124,6 +124,8 @@ export type SpawnSourceControlAgent = (
 export type LocalSourceControlPlanInput = {
   plan: CommitMessagePlan
   cwd: string
+  /** Guest spelling for execution; cwd retains the user's cancellation identity. */
+  executionCwd?: string
   env: NodeJS.ProcessEnv | undefined
   operation: TextGenerationOperation
   wslDistro?: string

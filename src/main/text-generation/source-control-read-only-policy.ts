@@ -10,11 +10,12 @@ import {
   KIMI_VALUE_OPTIONS
 } from '../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
-import { parseWslUncPath, wslDistroForCommand } from '../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { CODEX_DISABLE_PLUGINS_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { TEXT_TASK_DIRECTORY } from './source-control-prompt-files'
 import { runSourceControlPolicyProbe } from './source-control-policy-probe'
+import { sourceControlWslPath } from './source-control-wsl-paths'
 import type {
   LocalGenerationTarget,
   LocalProcessExecution,
@@ -45,7 +46,8 @@ async function recipeFile(
   const distro =
     process.platform === 'win32' ? wslDistroForCommand(target.cwd, target.wslDistro) : null
   if (distro) {
-    const cwd = parseWslUncPath(target.cwd)?.linuxPath ?? target.cwd
+    const cwd = await sourceControlWslPath(target.cwd, distro, signal)
+    const guestFile = await sourceControlWslPath(file, distro, signal)
     const home =
       commandEnv?.HOME ?? (target.env?.HOME !== process.env.HOME ? target.env?.HOME : undefined)
     const result = await runWslProcess({
@@ -55,7 +57,8 @@ async function recipeFile(
       ...(home !== undefined ? { env: { ORCA_TEXT_TASK_HOME: home } } : {}),
       script:
         'if [ "${ORCA_TEXT_TASK_HOME+x}" ]; then HOME=$ORCA_TEXT_TASK_HOME; fi; case "$1" in "~/"*) file=$HOME/${1#??} ;; *) file=$1 ;; esac; cat -- "$file"',
-      args: [file],
+      args: [guestFile],
+      signal,
       timeoutMs: 10_000,
       maxOutputBytes: 1024 * 1024
     })

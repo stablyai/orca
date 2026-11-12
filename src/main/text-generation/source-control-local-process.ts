@@ -75,7 +75,7 @@ export function runLocalSourceControlPlan(
       child = input.spawnAgent({
         binary: plan.binary,
         args: plan.args,
-        cwd,
+        cwd: input.executionCwd ?? cwd,
         env: input.env,
         commandEnv: plan.env,
         wslDistro: distro ?? input.wslDistro,

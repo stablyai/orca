@@ -12,6 +12,7 @@ import {
 } from './source-control-generation-lanes'
 import { runLocalSourceControlPlan } from './source-control-local-process'
 import { prepareSourceControlReadOnlyPlan } from './source-control-read-only-policy'
+import { sourceControlWslPath } from './source-control-wsl-paths'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
 import { textGenerationFailure } from '../../shared/text-generation-failure-copy'
 import type {
@@ -32,9 +33,7 @@ export function runLocalPlanForAgent(input: {
 }): Promise<InternalTextGenerationResult> {
   const needsPolicy = ['codex', 'kimi', 'dsh', 'antigravity', 'amp', 'muse'].includes(input.agentId)
   const wslDistro =
-    input.plan.promptFile || input.plan.taskFiles?.length || needsPolicy
-      ? (wslDistroForCommand(input.target.cwd, input.target.wslDistro) ?? undefined)
-      : input.target.wslDistro
+    wslDistroForCommand(input.target.cwd, input.target.wslDistro) ?? input.target.wslDistro
   const target = {
     ...input.target,
     wslDistro,
@@ -44,10 +43,11 @@ export function runLocalPlanForAgent(input: {
       wslDistro ? 'linux' : process.platform
     )
   }
-  const launch = (plan: CommitMessagePlan, timeoutMs?: number) =>
+  const launch = (plan: CommitMessagePlan, timeoutMs?: number, executionCwd?: string) =>
     runLocalSourceControlPlan({
       plan,
       cwd: input.target.cwd,
+      executionCwd,
       env: wslDistro ? input.target.env : target.env,
       operation: input.operation,
       wslDistro,
@@ -84,7 +84,12 @@ export function runLocalPlanForAgent(input: {
           canceled.abort()
         }
         signal.throwIfAborted()
-        preparation = prepareSourceControlReadOnlyPlan({ ...input, target, signal })
+        const preparedTarget =
+          process.platform === 'win32' && wslDistro
+            ? { ...target, cwd: await sourceControlWslPath(target.cwd, wslDistro, signal) }
+            : target
+        signal.throwIfAborted()
+        preparation = prepareSourceControlReadOnlyPlan({ ...input, target: preparedTarget, signal })
         const plan = await preparation.result
         await preparation.processClosed
         signal.throwIfAborted()
@@ -93,7 +98,7 @@ export function runLocalPlanForAgent(input: {
           signal.throwIfAborted()
         }
         signal.removeEventListener('abort', abort)
-        execution = launch(plan, Math.max(1, deadlineAt - Date.now()))
+        execution = launch(plan, Math.max(1, deadlineAt - Date.now()), preparedTarget.cwd)
         result.resolve(await execution.result)
       } catch {
         result.resolve(failure())
@@ -109,7 +114,7 @@ export function runLocalPlanForAgent(input: {
   const start = ():
     | LocalProcessExecution<InternalTextGenerationResult>
     | Promise<LocalProcessExecution<InternalTextGenerationResult>> => {
-    if (needsPolicy) {
+    if (needsPolicy || (process.platform === 'win32' && wslDistro)) {
       return prepare()
     }
     return input.shouldExecute?.() === false
