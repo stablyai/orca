@@ -36,7 +36,7 @@ export const SESSION_TAB_METHODS = [
     params: WorktreeTabSelector,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
-      return projectSessionTabsForClient(
+      const result = projectSessionTabsForClient(
         await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
           includeInitialSurfaceLaunch: true,
           includeAgentSenders: clientKind !== 'mobile'
@@ -44,6 +44,8 @@ export const SESSION_TAB_METHODS = [
         clientKind,
         clientCapabilities
       )
+      runtime.observeClientHostedPageSnapshots?.([result], pairedDeviceId)
+      return result
     }
   }),
   defineMethod({
@@ -129,6 +131,7 @@ export const SESSION_TAB_METHODS = [
       },
       emit
     ) => {
+      const observation = {}
       let subscriptionId: string | null = null
       let released = false
       let endOnRelease = true
@@ -164,6 +167,7 @@ export const SESSION_TAB_METHODS = [
             closePhoneSession?.()
             signal?.removeEventListener('abort', release)
             stopListening()
+            runtime.forgetClientHostedPageObservation?.(pairedDeviceId, observation)
             stopCapabilities()
             if (endOnRelease) {
               emit({ type: 'end' })
@@ -184,13 +188,30 @@ export const SESSION_TAB_METHODS = [
         snapshot: NonNullable<typeof currentSnapshot>,
         capabilities = capabilitySource?.current ?? clientCapabilities
       ) => projectSessionTabsForClient(snapshot, clientKind, capabilities)
+      const emitSnapshot = (
+        projected: NonNullable<typeof currentSnapshot>,
+        type: 'snapshot' | 'updated'
+      ): void => {
+        if (released) {
+          return
+        }
+        emit({
+          type,
+          ...(type === 'snapshot'
+            ? tabDelta.full(withProofDelta(projected))
+            : tabDelta.update(withProofDelta(projected)))
+        })
+        if (!released) {
+          runtime.observeClientHostedPageSnapshots?.([projected], pairedDeviceId, observation)
+        }
+      }
       stopCapabilities =
         capabilitySource?.observe((previous) => {
           if (!released && currentSnapshot) {
             const projected = project(currentSnapshot)
             // The last frame was projected with the previous set; a change it ignores sends nothing.
             if (!isDeepStrictEqual(projected, project(currentSnapshot, previous))) {
-              emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+              emitSnapshot(projected, 'updated')
             }
           }
         }) ?? (() => {})
@@ -223,15 +244,15 @@ export const SESSION_TAB_METHODS = [
         }
         let subscribedWorktree = initial.worktree
         currentSnapshot = initial
-        emit({
-          type: 'snapshot',
-          ...tabDelta.full(withProofDelta(project(initial)))
-        })
+        emitSnapshot(project(initial), 'snapshot')
         if (released) {
           return
         }
         stopListening = runtime.onMobileSessionTabsChanged(
           (snapshot) => {
+            if (released) {
+              return
+            }
             if (
               snapshot.worktree !== subscribedWorktree &&
               worktreeIdsEqual(snapshot.worktree, subscribedWorktree)
@@ -254,14 +275,12 @@ export const SESSION_TAB_METHODS = [
                   : { ...snapshot, worktree: initial.worktree }
               const { navigationIntent: _intent, ...retained } = streamSnapshot
               currentSnapshot = retained
-              emit({
-                type: 'updated',
-                ...tabDelta.update(withProofDelta(project(streamSnapshot)))
-              })
+              emitSnapshot(project(streamSnapshot), 'updated')
             }
           },
           pairedDeviceId,
-          clientKind
+          clientKind,
+          { observation: 'caller' }
         )
       } catch (error) {
         // A stream already ended by its release must not also report an error.

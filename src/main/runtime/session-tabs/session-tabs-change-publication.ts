@@ -94,7 +94,8 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
             }
             frame = desktopFrame
           }
-          subscription.listener(project(frame, subscription.clientNavigationId), changeSequence)
+          const supplied = project(frame, subscription.clientNavigationId)
+          this.deliverMobileSessionTabsFrame(subscription, supplied, changeSequence)
         }
         if (clientNavigationId === undefined && desktopFrame?.agentSenderAssociations) {
           this.agentProjections.senders.acknowledgeFrame(

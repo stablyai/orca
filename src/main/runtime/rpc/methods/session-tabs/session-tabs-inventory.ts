@@ -1,15 +1,14 @@
+import { projectSessionTabsForClient } from './session-tabs-client-projection'
+export { projectSessionTabsForClient } from './session-tabs-client-projection'
 import {
   collectSessionTabsInventory,
-  type SessionTabsInventory
+  clientUnderstandsAuthoritativeInventory
 } from './session-tabs-inventory-collection'
+export { listSessionTabsInventory } from './session-tabs-inventory-collection'
 import { isDeepStrictEqual } from 'node:util'
 import '../../../../../shared/protocol-version'
-import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type { RpcContext } from '../../core'
-import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
-import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
-import { projectSessionTabFileHosts } from './session-tab-file-host-projection'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/session-tabs-tab-delta'
@@ -18,52 +17,6 @@ type SessionTabsChange = RuntimeMobileSessionTabsResult & { removed?: true }
 
 const MAX_BUFFERED_CENSUS_CHANGES = 256
 const MAX_CENSUS_COLLECTION_ATTEMPTS = 3
-
-function clientUnderstandsAuthoritativeInventory(context: RpcContext): boolean {
-  return (
-    context.clientCapabilities?.includes(
-      SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
-    ) === true
-  )
-}
-
-export function projectSessionTabsForClient(
-  snapshot: RuntimeMobileSessionTabsResult,
-  clientKind: 'mobile' | 'runtime' | undefined,
-  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
-): RuntimeMobileSessionTabsResult {
-  // Phones draw no agent message cards, so they never pay for sender identity.
-  const { agentSenderAssociations: _desktopOnly, ...phone } = snapshot
-  return projectSessionTabBrowserPlacements(
-    projectSessionTabFileHosts(
-      projectSessionTabAgentStatus(
-        clientKind === 'mobile' ? phone : snapshot,
-        clientKind,
-        clientCapabilities
-      ),
-      clientKind
-    ),
-    clientCapabilities
-  )
-}
-
-function projectInventory(
-  inventory: SessionTabsInventory,
-  context: RpcContext
-): SessionTabsInventory {
-  return {
-    snapshots: inventory.snapshots.map((snapshot) =>
-      projectSessionTabsForClient(snapshot, context.clientKind, context.clientCapabilities)
-    ),
-    ...(inventory.authoritative && clientUnderstandsAuthoritativeInventory(context)
-      ? { authoritative: true as const }
-      : {})
-  }
-}
-
-export async function listSessionTabsInventory(context: RpcContext): Promise<SessionTabsInventory> {
-  return projectInventory((await collectSessionTabsInventory(context)).inventory, context)
-}
 
 export async function subscribeSessionTabsInventory(
   context: RpcContext,
@@ -75,6 +28,7 @@ export async function subscribeSessionTabsInventory(
   }
   const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
   const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
+  const observation = {}
   const inventoryController = new AbortController()
   // For the stream's whole life, not just the census: a desktop unsubscribe arrives as this abort.
   const onTransportAbort = (): void => runtime.cleanupSubscription(subscriptionId)
@@ -163,6 +117,21 @@ export async function subscribeSessionTabsInventory(
       changeSequence
     })
   }
+  const emitChange = (projected: SessionTabsChange): void => {
+    if (closed) {
+      return
+    }
+    emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+    if (!closed) {
+      runtime.observeClientHostedPageSnapshots?.(
+        [
+          projected.removed ? { ...projected, clientHostedPagesUnreconciled: undefined } : projected
+        ],
+        pairedDeviceId,
+        observation
+      )
+    }
+  }
   const publishChange = (snapshot: SessionTabsChange, changeSequence: number): void => {
     const { navigationIntent: _intent, ...canonical } = snapshot
     if (snapshot.removed) {
@@ -177,10 +146,10 @@ export async function subscribeSessionTabsInventory(
       deliveredChangeSequenceByWorktree.set(snapshot.worktree, changeSequence)
       return
     }
-    emit({
-      type: 'updated',
-      ...tabDelta.update(withProofDelta(projected))
-    })
+    emitChange(projected)
+    if (closed) {
+      return
+    }
     if (projected.removed === true) {
       publishedSnapshotsByWorktree.delete(snapshot.worktree)
       deliveredChangeSequenceByWorktree.delete(snapshot.worktree)
@@ -191,6 +160,9 @@ export async function subscribeSessionTabsInventory(
   }
   const unsubscribe = runtime.onMobileSessionTabsChanged(
     (runtimeSnapshot, changeSequence) => {
+      if (closed) {
+        return
+      }
       const snapshot = runtimeSnapshot as SessionTabsChange
       if (!initialized) {
         bufferChange(snapshot, changeSequence)
@@ -205,7 +177,8 @@ export async function subscribeSessionTabsInventory(
       publishChange(snapshot, changeSequence)
     },
     pairedDeviceId,
-    context.clientKind
+    context.clientKind,
+    { observation: 'caller' }
   )
   const stopCapabilities = context.capabilitySource?.observe(() => {
     if (!initialized || closed) {
@@ -216,17 +189,24 @@ export async function subscribeSessionTabsInventory(
       if (isDeepStrictEqual(publishedSnapshotsByWorktree.get(snapshot.worktree), projected)) {
         continue
       }
-      emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+      emitChange(projected)
+      if (closed) {
+        return
+      }
       publishedSnapshotsByWorktree.set(snapshot.worktree, projected)
     }
   })
   runtime.registerSubscriptionCleanup(
     subscriptionId,
     () => {
+      if (closed) {
+        return
+      }
       closed = true
       context.signal?.removeEventListener('abort', onTransportAbort)
       inventoryController.abort()
       unsubscribe()
+      runtime.forgetClientHostedPageObservation?.(pairedDeviceId, observation)
       stopCapabilities?.()
       canonicalSnapshotsByWorktree.clear()
       clearBufferedChanges()
@@ -278,15 +258,18 @@ export async function subscribeSessionTabsInventory(
   }
   const { inventory, changeSequence } = collected
   censusChangeSequence = changeSequence
+  const projectedSnapshots = inventory.snapshots.map(projectChange)
   emit({
     type: 'snapshots',
     ...(inventory.authoritative && clientUnderstandsAuthoritativeInventory(context)
       ? { authoritative: true as const }
       : {}),
-    snapshots: inventory.snapshots.map((snapshot) =>
-      tabDelta.full(withProofDelta(projectChange(snapshot)))
-    )
+    snapshots: projectedSnapshots.map((snapshot) => tabDelta.full(withProofDelta(snapshot)))
   })
+  if (closed) {
+    return
+  }
+  runtime.observeClientHostedPageSnapshots?.(projectedSnapshots, pairedDeviceId, observation)
   for (const snapshot of inventory.snapshots) {
     const canonical = withoutNavigationIntent(snapshot)
     canonicalSnapshotsByWorktree.set(snapshot.worktree, canonical)

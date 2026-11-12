@@ -221,6 +221,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void
     clientNavigationId?: string
     clientKind?: 'mobile' | 'runtime'
+    observation?: 'caller'
   }>()
 
   protected pendingMobileSessionTabsChangeSequenceByWorktree = new Map<string, number>()

@@ -214,6 +214,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
         changeSequence
       )
     }
+    this.clientHostedPageReconciliation.forgetWorktree(worktreeId)
     this.clientSessionTabSelections.forgetWorktree(worktreeId)
   }
 
