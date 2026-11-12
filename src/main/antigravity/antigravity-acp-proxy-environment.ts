@@ -35,8 +35,8 @@ export async function prepareAntigravityAcpProxyEnvironment(
       : undefined
   const upper = selectedWindowsBypass ? effective[selectedWindowsBypass] : effective.NO_PROXY
   const lower = selectedWindowsBypass ? effective[selectedWindowsBypass] : effective.no_proxy
-  env.NO_PROXY = appendBypass(upper ?? lower ?? '', [...bypass, ...LOOPBACK])
-  env.no_proxy = appendBypass(lower ?? upper ?? '', [...bypass, ...LOOPBACK])
+  env.NO_PROXY = appendBypass(upper ?? lower ?? proxies.get('no') ?? '', [...bypass, ...LOOPBACK])
+  env.no_proxy = appendBypass(lower ?? upper ?? proxies.get('no') ?? '', [...bypass, ...LOOPBACK])
 }
 
 function appendBypass(value: string, additions: readonly string[]): string {

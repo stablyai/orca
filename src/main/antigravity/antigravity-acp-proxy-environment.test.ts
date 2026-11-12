@@ -83,6 +83,11 @@ it.each([
     'upper.example,localhost,127.0.0.1,::1,[::1]',
     'localhost,127.0.0.1,::1,[::1]'
   ],
+  [
+    { No_Proxy: 'corp.example' },
+    'corp.example,localhost,127.0.0.1,::1,[::1]',
+    'corp.example,localhost,127.0.0.1,::1,[::1]'
+  ],
   [{ no_proxy: '*' }, '*', '*']
 ])(
   'keeps external exclusions per alias under an environment SOCKS proxy: %j',
