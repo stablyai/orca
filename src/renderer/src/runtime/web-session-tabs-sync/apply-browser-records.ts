@@ -1,5 +1,9 @@
 import type { applyTerminalRecordUpdates } from './apply-terminal-records'
 import {
+  preserveBrowserPageLoadingOwner,
+  revokeBrowserPageLoadingOwner
+} from '@/lib/browser/browser-page-loading-ownership'
+import {
   browserCertificateFailureEqual,
   optionalRuntimeBrowserPlacementsEqual,
   sameBrowserPages
@@ -49,6 +53,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         if (nextBrowserPageIds.has(page.id)) {
           continue
         }
+        revokeBrowserPageLoadingOwner(page)
         if (nextBrowserCertificateFailuresByPageId[page.id]) {
           nextBrowserCertificateFailuresByPageId =
             nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
@@ -77,11 +82,20 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
 
   for (const {
     page,
+    previousPage,
+    preservesLoading,
     certificateFailure,
     remotePageId,
     browserProfileId,
     placement
   } of mirroredBrowserTabs) {
+    if (previousPage) {
+      if (preservesLoading) {
+        preserveBrowserPageLoadingOwner(previousPage, page)
+      } else {
+        revokeBrowserPageLoadingOwner(previousPage)
+      }
+    }
     const current = nextBrowserPagesByWorkspace[page.workspaceId] ?? []
     if (!sameBrowserPages(current, [page])) {
       nextBrowserPagesByWorkspace =

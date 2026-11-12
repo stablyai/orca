@@ -21,7 +21,7 @@ import {
 import type {
   BrowserChromeShortcutScope,
   BrowserPageUrlSetter,
-  BrowserTabPageState
+  BrowserPageStateWriter
 } from '../describe-page/browser-page-types'
 import type { RemoteBrowserPaneNotice } from './remote-browser-page-input-model'
 import { useRemoteBrowserPageLifecycle } from './use-remote-browser-page-lifecycle'
@@ -57,7 +57,7 @@ export function RemoteBrowserPagePane({
   worktreeId: string
   isActive: boolean
   chromeShortcutScope: BrowserChromeShortcutScope
-  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onUpdatePageState: BrowserPageStateWriter
   onSetUrl: BrowserPageUrlSetter
 }): React.JSX.Element {
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)

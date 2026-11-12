@@ -2,6 +2,7 @@ import type {
   BrowserPage,
   BrowserCertificateFailure
 } from '../../../../../shared/browser-workspace-types'
+import { readBrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 
 type BrowserObservationState = {
   browserPagesByWorkspace: Record<string, BrowserPage[]>
@@ -21,8 +22,6 @@ export function readRemoteBrowserPageObservation(
   workspaceId: string,
   pageId: string
 ): readonly unknown[] {
-  return [
-    readRemoteBrowserPage(state, workspaceId, pageId),
-    state.browserCertificateFailuresByPageId[pageId]
-  ]
+  const page = readRemoteBrowserPage(state, workspaceId, pageId)
+  return [page, state.browserCertificateFailuresByPageId[pageId], readBrowserPageLoadingOwner(page)]
 }

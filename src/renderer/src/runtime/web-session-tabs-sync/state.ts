@@ -185,6 +185,8 @@ export type MirroredTerminalTab = {
 export type MirroredBrowserTab = {
   workspace: BrowserWorkspace
   page: BrowserPage
+  previousPage?: BrowserPage
+  preservesLoading: boolean
   certificateFailure: BrowserCertificateFailure | null
   remotePageId: string
   browserProfileId?: string

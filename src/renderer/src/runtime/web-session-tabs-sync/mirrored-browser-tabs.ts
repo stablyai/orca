@@ -221,6 +221,8 @@ export function buildMirroredBrowserTabs(
     return {
       workspace,
       page,
+      previousPage: existing?.page,
+      preservesLoading: clientHostsMirroredBrowserPage(tab),
       certificateFailure: tab.certificateFailure ?? null,
       remotePageId: tab.browserPageId,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),

@@ -1,4 +1,6 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
+import type { BrowserPageStateWriter } from '../describe-page/browser-page-types'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -41,7 +43,7 @@ export class RemoteBrowserPageSession {
   private nextObservationId = 0
   private appliedObservationId = 0
   private observationAnchor: readonly unknown[] | null = null
-  private loadingGeneration: number | null = null
+  private loadingOwner: BrowserPageLoadingOwner | null = null
 
   constructor(private readonly deps: RemoteBrowserPageSessionDeps) {}
 
@@ -50,7 +52,7 @@ export class RemoteBrowserPageSession {
     this.cancelTabInfoRefresh()
   }
 
-  private observeExternalChanges(): void {
+  private observeExternalChanges(): readonly unknown[] {
     const current = this.deps.readCurrentObservation()
     if (
       this.observationAnchor &&
@@ -58,9 +60,13 @@ export class RemoteBrowserPageSession {
         this.observationAnchor.some((value, index) => value !== current[index]))
     ) {
       this.observationGeneration += 1
-      this.loadingGeneration = null
+      if (this.loadingOwner && current[2] !== this.loadingOwner) {
+        this.loadingOwner.active = false
+        this.loadingOwner = null
+      }
     }
     this.observationAnchor = current
+    return current
   }
 
   private applyObservedWrite(write: () => void): void {
@@ -74,17 +80,18 @@ export class RemoteBrowserPageSession {
   setPageLoading(
     token: RemoteBrowserOperationToken,
     loading: boolean,
-    update: (pageId: string, state: { loading: boolean }) => void
+    update: BrowserPageStateWriter
   ): void {
     if (!this.deps.tokens.isCurrent(token)) {
       return
     }
-    this.observeExternalChanges()
-    if (!loading && this.loadingGeneration !== this.observationGeneration) {
+    const observation = this.observeExternalChanges()
+    if (!loading && (!this.loadingOwner || observation[2] !== this.loadingOwner)) {
       return
     }
-    this.applyObservedWrite(() => update(token.tabId, { loading }))
-    this.loadingGeneration = loading ? this.observationGeneration : null
+    const owner = loading ? { active: true } : undefined
+    this.loadingOwner = owner ?? null
+    this.applyObservedWrite(() => update(token.tabId, { loading }, owner))
   }
 
   captureTabInfoAdmission(token: RemoteBrowserOperationToken): {
@@ -118,7 +125,7 @@ export class RemoteBrowserPageSession {
         this.applyObservedWrite(() => {
           this.deps.applyTabInfo(tab)
           this.appliedObservationId = id
-          this.loadingGeneration = null
+          this.loadingOwner = null
           onApplied?.(tab)
         })
         return true

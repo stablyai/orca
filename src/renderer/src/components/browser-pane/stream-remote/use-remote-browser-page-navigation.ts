@@ -9,7 +9,10 @@ import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runti
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
-import type { BrowserPageUrlSetter, BrowserTabPageState } from '../describe-page/browser-page-types'
+import type {
+  BrowserPageUrlSetter,
+  BrowserPageStateWriter
+} from '../describe-page/browser-page-types'
 import { getBrowserDisplayTitle, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import type {
   RemoteBrowserPaneNotice,
@@ -44,7 +47,7 @@ export function useRemoteBrowserPageNavigation({
   isCurrentRemoteOperationToken: (token: RemoteBrowserOperationToken) => boolean
   closeMissingRemotePage: (remotePageId?: string | null) => void
   onSetUrl: BrowserPageUrlSetter
-  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onUpdatePageState: BrowserPageStateWriter
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   setPaneBusy: (busy: boolean) => void
 }): {
