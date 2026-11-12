@@ -4258,7 +4258,6 @@
             "cloneCounting": "Counting objects…",
             "updateCloud": "Update repository",
             "updateFetching": "Fetching changes…",
-            "repositoryPending": "Repository",
             "getRepository": "Get repository"
           },
           "VmBuildFailureCard": {

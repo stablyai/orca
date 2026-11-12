@@ -1,15 +1,12 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, render } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, expect, it } from 'vitest'
 import type { Translate } from '@/i18n/use-translate'
 import { VmBuildStepRow } from './VmBuildStepRow'
 import type { VmBuildStep } from './vm-build-steps'
 
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-})
+afterEach(cleanup)
 
 const t: Translate = (_key, fallback) => fallback
 const pendingClone = (cloneMode?: 'clone' | 'update'): VmBuildStep => ({
@@ -22,50 +19,19 @@ const pendingClone = (cloneMode?: 'clone' | 'update'): VmBuildStep => ({
   ...(cloneMode ? { cloneMode } : {})
 })
 
-it('names the repository row once: no label guessed, a placeholder only after 150 ms (PC-4)', () => {
-  vi.useFakeTimers()
-  const row = (step: VmBuildStep) => (
-    <ol>
-      <VmBuildStepRow step={step} cloud detail={null} timing={null} t={t} />
-    </ol>
-  )
-  const { container, rerender } = render(row(pendingClone()))
-  // Accessible name only; no visible label, no placeholder yet (the plan usually answers by now).
-  expect(container.textContent).toContain('Repository')
-  expect(container.textContent).not.toContain('Clone repository')
-  expect(container.querySelector('[data-slot="skeleton"]')).toBeNull()
-  act(() => {
-    vi.advanceTimersByTime(160)
-  })
-  expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull()
-  // The plan answers: the one label, never changed afterwards.
-  rerender(row(pendingClone('update')))
-  expect(container.querySelector('[data-slot="skeleton"]')).toBeNull()
-  expect(container.textContent).toContain('Update repository')
-})
+const row = (step: VmBuildStep) => (
+  <ol>
+    <VmBuildStepRow step={step} cloud detail={null} timing={null} t={t} />
+  </ol>
+)
 
-it('names an undecided repository step neutrally once the start has failed (N-12)', () => {
-  const { container } = render(
-    <ol>
-      <VmBuildStepRow step={pendingClone()} cloud detail={null} timing={null} stopped t={t} />
-    </ol>
-  )
+it('reads "Get repository" until the boot plan answers, then switches in place, no placeholder bar', () => {
+  const { container, rerender } = render(row(pendingClone()))
   expect(container.textContent).toContain('Get repository')
   expect(container.querySelector('[data-slot="skeleton"]')).toBeNull()
-})
-
-it('shows the placeholder at once when the create has already waited past 150 ms (no blank row)', () => {
-  const { container } = render(
-    <ol>
-      <VmBuildStepRow
-        step={pendingClone()}
-        cloud
-        detail={null}
-        timing={null}
-        t={t}
-        waitedMs={12_000}
-      />
-    </ol>
-  )
-  expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull()
+  rerender(row(pendingClone('update')))
+  expect(container.textContent).toContain('Update repository')
+  expect(container.textContent).not.toContain('Get repository')
+  rerender(row(pendingClone('clone')))
+  expect(container.textContent).toContain('Clone repository')
 })
