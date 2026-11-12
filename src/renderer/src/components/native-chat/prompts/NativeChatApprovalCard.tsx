@@ -1,6 +1,6 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useRef, useState } from 'react'
-import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
+import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/agent-session-approval-detail-preview'
 import { cn } from '@/lib/class-names'
@@ -26,6 +26,8 @@ export type NativeChatApprovalCardProps = {
   onCollapse?: () => void
   /** A choice is being delivered: the options wait for its answer. */
   isSubmitting?: boolean
+  /** The option being sent, while `isSubmitting`: its button shows that it is working. */
+  submittingOption?: string
   shouldFocus?: boolean
   /** Shown when the card has no options: only the terminal can answer it. */
   onOpenTerminal?: () => void
@@ -44,6 +46,7 @@ export function NativeChatApprovalCard({
   onCancel,
   onCollapse,
   isSubmitting = false,
+  submittingOption,
   shouldFocus = false,
   onOpenTerminal,
   worker,
@@ -209,7 +212,14 @@ export function NativeChatApprovalCard({
                       : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                   )}
                 >
-                  {opt.label}
+                  {isSubmitting && opt.send === submittingOption ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                      {opt.label}
+                    </span>
+                  ) : (
+                    opt.label
+                  )}
                 </button>
               ))}
               {approval.options.length === 0 && onOpenTerminal ? (

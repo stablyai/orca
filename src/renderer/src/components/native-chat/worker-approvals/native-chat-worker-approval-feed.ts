@@ -5,18 +5,12 @@ import {
   type OrchestrationWorkerApprovalEntry
 } from '../../../../../shared/orchestration/orchestration-crew'
 import { workerApprovalLapsesAt } from './worker-approval-card-model'
-import {
-  closedApproval,
-  type WorkerApprovalOutcome
-} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type NativeChatWorkerApproval = OrchestrationWorkerApprovalEntry
 
 type Feed = {
   /** The host's list, as last received. */
   received: readonly NativeChatWorkerApproval[]
-  /** Prompts answered or found closed here, shown closed until the host's list closes them too. */
-  closedHere: Map<string, { outcome: WorkerApprovalOutcome; at: string }>
   /** Prompts that closed while shown, kept pinned until then (epoch ms) so the outcome lands in view. */
   settling: Map<string, number>
   settleTimer?: ReturnType<typeof setTimeout>
@@ -57,20 +51,7 @@ function publish(feed: Feed): void {
   const wasOpen = new Set(
     feed.pinned.flatMap(({ approval }) => (approval.state === 'open' ? [approval.approvalId] : []))
   )
-  for (const [approvalId] of feed.closedHere) {
-    const entry = feed.received.find(({ approval }) => approval.approvalId === approvalId)
-    if (entry?.approval.state !== 'open') {
-      feed.closedHere.delete(approvalId)
-    }
-  }
-  const entries = feed.closedHere.size
-    ? feed.received.map((entry) => {
-        const closed = feed.closedHere.get(entry.approval.approvalId)
-        return closed
-          ? { ...entry, approval: closedApproval(entry.approval, closed.outcome), at: closed.at }
-          : entry
-      })
-    : feed.received
+  const entries = feed.received
   const now = Date.now()
   for (const { approval } of entries) {
     if (approval.state !== 'open' && wasOpen.has(approval.approvalId)) {
@@ -98,24 +79,6 @@ function publish(feed: Feed): void {
   feed.listeners.forEach((notify) => notify())
 }
 
-/** Shows a prompt closed at once, as answered here or found gone, before the host's list says so;
- *  null shows it open again, for an answer that was not applied. */
-export function closeNativeChatWorkerApproval(
-  party: string,
-  approvalId: string,
-  outcome: WorkerApprovalOutcome | null
-): void {
-  const feed = feeds.get(party)
-  if (feed) {
-    if (outcome) {
-      feed.closedHere.set(approvalId, { outcome, at: new Date().toISOString() })
-    } else {
-      feed.closedHere.delete(approvalId)
-    }
-    publish(feed)
-  }
-}
-
 /** One stream per chat party, shared by its transcript rows and its strip; local hosts only (v1).
  *  Not parked while hidden: a hidden coordinator tab still needs its workers' prompts. */
 function observeWorkerApprovals(party: string, listener: () => void): () => void {
@@ -123,7 +86,6 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
   if (!feed) {
     const held: Feed = {
       received: EMPTY,
-      closedHere: new Map(),
       settling: new Map(),
       pinned: EMPTY,
       receipts: EMPTY,

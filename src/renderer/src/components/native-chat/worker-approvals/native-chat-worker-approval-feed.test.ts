@@ -71,22 +71,13 @@ it('keeps a prompt that closed while shown pinned as its receipt for a moment, t
   expect(pinned.result.current.map((e) => e.approval.approvalId)).toEqual(['apr_1'])
   const history = receipts.result.current
 
-  // The click: shown answered at once, where the card was.
-  act(() =>
-    feed.closeNativeChatWorkerApproval(PARTY, 'apr_1', {
-      by: 'person',
-      decision: 'allow',
-      reason: null,
-      reasonDelivered: false
-    })
-  )
+  // The host closes it: its receipt stays where the card was for a moment.
+  send(approval('apr_old', 'answered', 'person'), approval('apr_1', 'answered', 'person'))
   expect(pinned.result.current.map((e) => [e.approval.approvalId, e.approval.state])).toEqual([
     ['apr_1', 'answered']
   ])
-  // Only an open card changed: the transcript's receipts are the same array.
+  // Only a pinned prompt changed: the transcript's receipts are the same array.
   expect(receipts.result.current).toBe(history)
-
-  send(approval('apr_old', 'answered', 'person'), approval('apr_1', 'answered', 'person'))
   act(() => vi.advanceTimersByTime(4_000))
   expect(pinned.result.current).toEqual([])
   expect(receipts.result.current.map((e) => e.approval.approvalId)).toEqual(['apr_old', 'apr_1'])

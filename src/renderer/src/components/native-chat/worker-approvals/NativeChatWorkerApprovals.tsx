@@ -16,7 +16,6 @@ import {
   workerApprovalTimeLeft
 } from './worker-approval-card-model'
 import {
-  closeNativeChatWorkerApproval,
   useNativeChatPinnedWorkerApprovals,
   useNativeChatWorkerApprovalReceipts,
   type NativeChatWorkerApproval
@@ -27,10 +26,7 @@ import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import type {
-  WorkerApprovalDecision,
-  WorkerApprovalOutcome
-} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
+import type { WorkerApprovalDecision } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 // The person's own Deny: the worker gets this, word for word where its agent takes a message.
 const OWNER_DENY_REASON = 'Denied by the owner.'
@@ -65,26 +61,24 @@ export function NativeChatWorkerApprovalReceipt({
 export function NativeChatWorkerApprovalStack({
   approvals,
   target,
-  isVisible = true,
-  onClosed
+  isVisible = true
 }: {
   approvals: readonly NativeChatWorkerApproval[]
   target: RuntimeClientTarget
   /** A hidden pane's countdown stands still; it shows the time again once visible. */
   isVisible?: boolean
-  /** Show the prompt closed this way now; null shows it open again. */
-  onClosed?: (approvalId: string, outcome: WorkerApprovalOutcome | null) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const open = approvals.filter(({ approval }) => approval.state === 'open')
-  const [submitting, setSubmitting] = useState<ReadonlySet<string>>(new Set())
+  // Each prompt being answered here, and with which decision: the card waits on the host's outcome.
+  const [submitting, setSubmitting] = useState<ReadonlyMap<string, WorkerApprovalDecision>>(
+    new Map()
+  )
   const now = useSecondClock(isVisible && open.some(({ approval }) => approval.expiresAt))
   const answer = useCallback(
     (entry: NativeChatWorkerApproval, decision: WorkerApprovalDecision) => {
       const { approvalId, worker } = entry.approval
-      setSubmitting((current) => new Set(current).add(approvalId))
-      // The card answers at once, as the chat's own prompt does; only an answer Claude did not take changes it.
-      onClosed?.(approvalId, { by: 'person', decision, reason: null, reasonDelivered: false })
+      setSubmitting((current) => new Map(current).set(approvalId, decision))
       const name = entry.worker.label
       callRuntimeRpc(target, 'orchestration.approvalAnswer', {
         dispatch: worker.dispatchId,
@@ -92,50 +86,43 @@ export function NativeChatWorkerApprovalStack({
         decision,
         ...(decision === 'deny' ? { reason: OWNER_DENY_REASON } : {})
       })
-        // A landed answer needs no toast: the card turns into its receipt.
+        // A landed answer needs no toast: the host's list turns the card into its receipt.
         .catch((error: unknown) => {
+          // Not applied: the host's list decides. A prompt that closed meanwhile (its worker ended,
+          // or it was answered elsewhere) turns into its receipt from that; one still open stays answerable.
           const code = error instanceof RuntimeRpcCallError ? error.code : null
-          if (code === 'dispatch_inactive') {
-            // Its worker ended: nothing is left to answer, and the card says so now.
-            onClosed?.(approvalId, WORKER_ENDED)
+          if (code === 'dispatch_inactive' || code === 'approval_not_open') {
             toast.info(
-              t(
-                'components.native-chat.approval.answerWorkerEnded',
-                '{{name}} has ended, so this prompt is closed',
-                { name }
-              )
+              code === 'dispatch_inactive'
+                ? t(
+                    'components.native-chat.approval.answerWorkerEnded',
+                    '{{name}} has ended, so this prompt is closed',
+                    { name }
+                  )
+                : t(
+                    'components.native-chat.approval.answerNotApplied',
+                    '{{name}}: the answer did not reach this prompt',
+                    { name }
+                  )
             )
             return
           }
-          // Not applied: the host's list decides. A prompt that closed meanwhile turns into its
-          // receipt from that; one still open is answerable again.
-          onClosed?.(approvalId, null)
-          if (code === 'approval_not_open') {
-            toast.info(
-              t(
-                'components.native-chat.approval.answerNotApplied',
-                '{{name}}: the answer did not reach this prompt',
-                { name }
-              )
-            )
-          } else {
-            toast.error(
-              t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
-                name,
-                detail: error instanceof Error ? error.message : String(error)
-              })
-            )
-          }
+          toast.error(
+            t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
+              name,
+              detail: error instanceof Error ? error.message : String(error)
+            })
+          )
         })
         .finally(() =>
           setSubmitting((current) => {
-            const next = new Set(current)
+            const next = new Map(current)
             next.delete(approvalId)
             return next
           })
         )
     },
-    [onClosed, t, target]
+    [t, target]
   )
   if (approvals.length === 0) {
     return null
@@ -170,6 +157,7 @@ export function NativeChatWorkerApprovalStack({
                 }
               }}
               isSubmitting={submitting.has(approval.approvalId)}
+              submittingOption={submitting.get(approval.approvalId)}
               worker={{
                 name: entry.worker.label,
                 onOpen: () => void openOrchestrationCrewAgent(entry.worker, target)
@@ -199,28 +187,12 @@ export function NativeChatPartyWorkerApprovalStack({
 }: Omit<Parameters<typeof NativeChatWorkerApprovalStack>[0], 'approvals'> & {
   party: string | null
 }): React.JSX.Element | null {
-  const onClosed = useCallback(
-    (approvalId: string, outcome: WorkerApprovalOutcome | null) => {
-      if (party) {
-        closeNativeChatWorkerApproval(party, approvalId, outcome)
-      }
-    },
-    [party]
-  )
   return (
     <NativeChatWorkerApprovalStack
       approvals={useNativeChatPinnedWorkerApprovals(party)}
-      onClosed={onClosed}
       {...stack}
     />
   )
-}
-
-const WORKER_ENDED: WorkerApprovalOutcome = {
-  by: 'worker-ended',
-  decision: null,
-  reason: null,
-  reasonDelivered: false
 }
 
 /** A per-second clock, only while some countdown is shown. */

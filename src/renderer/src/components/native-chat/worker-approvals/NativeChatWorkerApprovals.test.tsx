@@ -51,61 +51,36 @@ const reject = (code: string) =>
   )
 
 function renderStack() {
-  const onClosed = vi.fn()
-  render(
-    <NativeChatWorkerApprovalStack
-      approvals={[entry]}
-      target={{ kind: 'local' }}
-      onClosed={onClosed}
-    />
-  )
-  return onClosed
+  render(<NativeChatWorkerApprovalStack approvals={[entry]} target={{ kind: 'local' }} />)
 }
 
-it('answers the card on click, before the host confirms, with no toast once it lands', async () => {
-  const onClosed = renderStack()
+it('waits on the host after a click: both buttons off, the clicked one working, no toast when it lands', async () => {
+  renderStack()
   let land: (value: unknown) => void = () => {}
   rpc.call.mockReturnValueOnce(new Promise((resolve) => (land = resolve)))
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-  // The RPC has not resolved: the card is already shown as allowed by the person.
-  expect(onClosed).toHaveBeenCalledWith('apr_1', {
-    by: 'person',
-    decision: 'allow',
-    reason: null,
-    reasonDelivered: false
-  })
+  expect(screen.getByRole('button', { name: 'Allow' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Deny' })).toBeDisabled()
+  expect(
+    screen.getByRole('button', { name: 'Allow' }).querySelector('.animate-spin')
+  ).not.toBeNull()
+  expect(screen.getByRole('button', { name: 'Deny' }).querySelector('.animate-spin')).toBeNull()
   land({})
   await waitFor(() => expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled())
-  expect(onClosed).toHaveBeenCalledTimes(1)
   expect(toast.success).not.toHaveBeenCalled()
   expect(toast.info).not.toHaveBeenCalled()
 })
 
-it('hands the card back to the host list when the answer did not reach the prompt', async () => {
-  const onClosed = renderStack()
+it('leaves the card to the host list when the answer was not applied', async () => {
+  renderStack()
   reject('approval_not_open')
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-  // A prompt the host still holds open must stay answerable: no local close outlives the click.
-  await waitFor(() => expect(onClosed).toHaveBeenLastCalledWith('apr_1', null))
-  expect(toast.info).toHaveBeenCalledTimes(1)
+  await waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1))
+  // Still open as far as this card knows: answerable again until the host's list says otherwise.
+  expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled()
 
   reject('internal_error')
-  fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Deny' }))
   await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
-  expect(onClosed).toHaveBeenLastCalledWith('apr_1', null)
-})
-
-it("closes the card at once when an answer finds the worker's Dispatch ended", async () => {
-  const onClosed = renderStack()
-  reject('dispatch_inactive')
-  fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-  await waitFor(() =>
-    expect(onClosed).toHaveBeenLastCalledWith('apr_1', {
-      by: 'worker-ended',
-      decision: null,
-      reason: null,
-      reasonDelivered: false
-    })
-  )
-  expect(toast.error).not.toHaveBeenCalled()
+  expect(screen.getByRole('button', { name: 'Deny' })).toBeEnabled()
 })
