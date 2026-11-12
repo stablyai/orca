@@ -51,6 +51,7 @@ const NO_EFFECTS = { effectsApplied: false } as const
 const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
   // Each reads, or waits on and so holds back, the mail that wakes the session.
   'orchestration.check',
+  'orchestration.ackMessages',
   'orchestration.ask',
   // Answers that the session is live.
   'orchestration.callerShow'

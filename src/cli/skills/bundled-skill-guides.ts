@@ -4181,6 +4181,8 @@ const ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN = [
   "it remains that Dispatch's current consumer. Existing consumer/pane fencing still",
   "applies: reattachment rejects the replaced consumer's selection even on the same",
   "pane. Do not use this to discard mail the agent has not processed.",
+  "Released agent sessions cannot acknowledge wake-up mail until they are running",
+  "again.",
   "",
   "Do not combine `--ack-ids` with other read, acknowledgment, formatting or wait",
   "options. Both the CLI and the execution host need selective-ack support; older",
