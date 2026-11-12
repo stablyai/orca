@@ -1,4 +1,4 @@
-import { app as electronApp, type BrowserWindow } from 'electron'
+import { app as electronApp, BrowserWindow, type BaseWindow } from 'electron'
 
 /** Automation must not steal OS foreground. Background/sidecar requests override E2E_FOREGROUND; the hosted-Xvfb benchmark may present explicitly after startup (tests/AGENTS.md), while automatic reveals stay suppressed. */
 
@@ -107,4 +107,22 @@ export function showWindowWithoutStealingFocus(
     return
   }
   window.show()
+}
+
+/** Shows a window an agent opened without activating Orca: now if Orca is in front, else once the user returns to it. */
+export function showWhenAppActive(window: BaseWindow, env: PolicyEnv = process.env): void {
+  if (window.isDestroyed() || isWindowlessLaunch(env)) {
+    return
+  }
+  if (BrowserWindow.getFocusedWindow()) {
+    window.showInactive()
+    return
+  }
+  const reveal = (): void => {
+    if (!window.isDestroyed()) {
+      window.showInactive()
+    }
+  }
+  electronApp.once('browser-window-focus', reveal)
+  window.once('closed', () => electronApp.off('browser-window-focus', reveal))
 }

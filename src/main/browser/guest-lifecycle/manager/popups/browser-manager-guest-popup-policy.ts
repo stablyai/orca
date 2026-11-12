@@ -36,7 +36,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     guest.on('did-create-window', handleDidCreateWindow)
     guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features, referrer }) => {
       // Spend activation even on popups so it cannot fund a later tab.
-      const clicked = gesture.consume()
+      const observed = gesture.consume()
+      const clicked = observed !== null
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
       const browserTabId = ownerContext?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
@@ -98,6 +99,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             opener: guest,
             options: SAFE_POPUP_WINDOW_OPTIONS,
             background: disposition === 'background-tab',
+            showWhenAppActive: observed?.byAgent,
             canPresent: () => Boolean(this.resolvePopupOwnerContext(guest.id)),
             onCreated: (options) =>
               openAsTabWithoutOpener(options) ??
@@ -113,6 +115,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             openAsTabWithoutOpener(options) ??
             this.createPopupChildWindowWithOriginBar(guest, url, {
               ...options,
+              showWhenAppActive: observed?.byAgent,
               // Bind link-created contents to the opener's session.
               webPreferences: { ...options.webPreferences, session: guest.session }
             })
