@@ -17,6 +17,11 @@ const LIST_MAX_BUFFER = 512 * 1024 * 1024
 const REGULAR_FILE_MODES = new Set(['100644', '100755'])
 // A checkout runs these, so a fresh file can differ from main's bytes that clean to the same blob.
 const CHECKOUT_CONVERSION_ATTRIBUTES = ['filter', 'ident', 'working-tree-encoding']
+// Decide whether a checkout can add CRs; other line-ending conversions only remove them on clean.
+const LINE_ENDING_ATTRIBUTES = ['text', 'eol', 'crlf']
+const GIT_TRUE = new Set(['true', 'yes', 'on', '1'])
+
+type CloneableFile = { mode: string; size: number }
 
 /** How this host can clone from the main checkout without silently copying, or null. */
 export async function resolveCopyOnWriteCheckout(
@@ -45,8 +50,8 @@ export async function resolveCopyOnWriteCheckout(
   return (await canCloneWithApfs(repoPath, dirname(worktreePath))) ? 'apfs' : null
 }
 
-function parseEntries(stdout: string, entryKey: (header: string) => string | null) {
-  const entries = new Map<string, string>()
+function parseEntries<T>(stdout: string, entryKey: (header: string) => T | null) {
+  const entries = new Map<string, T>()
   for (const record of stdout.split('\0')) {
     const tab = record.indexOf('\t')
     const key = tab === -1 ? null : entryKey(record.slice(0, tab))
@@ -57,25 +62,30 @@ function parseEntries(stdout: string, entryKey: (header: string) => string | nul
   return entries
 }
 
-/** Modes of regular files whose blob in `commit` matches the main checkout's index entry. */
+/** Regular files whose blob in `commit` matches the main checkout's index entry. */
 async function listCloneableFiles(
   repoPath: string,
   worktreePath: string,
   commit: string,
   options: GitWorktreeExecOptions
-): Promise<Map<string, string>> {
+): Promise<Map<string, CloneableFile>> {
   const listOptions = (cwd: string) => ({
     ...gitExecOptions(cwd, options),
     maxBuffer: LIST_MAX_BUFFER
   })
   const [tree, index] = await Promise.all([
-    gitExecFileAsync(['ls-tree', '-r', '-z', '--full-tree', commit], listOptions(worktreePath)),
+    gitExecFileAsync(
+      ['ls-tree', '-r', '-l', '-z', '--full-tree', commit],
+      listOptions(worktreePath)
+    ),
     gitExecFileAsync(['ls-files', '--stage', '-z'], listOptions(repoPath))
   ])
-  // ls-tree: "<mode> blob <oid>"; ls-files: "<mode> <oid> <stage>".
+  // ls-tree -l: "<mode> blob <oid> <padded size>"; ls-files: "<mode> <oid> <stage>".
   const wanted = parseEntries(tree.stdout, (header) => {
-    const [mode, type, oid] = header.split(' ')
-    return type === 'blob' && REGULAR_FILE_MODES.has(mode) ? `${mode} ${oid}` : null
+    const [mode, type, oid, size] = header.split(/ +/)
+    return type === 'blob' && REGULAR_FILE_MODES.has(mode)
+      ? { key: `${mode} ${oid}`, mode, size: Number(size) }
+      : null
   })
   const checkedOut = parseEntries(index.stdout, (header) => {
     const [mode, oid, stage] = header.split(' ')
@@ -83,47 +93,80 @@ async function listCloneableFiles(
   })
   return new Map(
     [...wanted]
-      .filter(([path, key]) => checkedOut.get(path) === key)
-      .map(([path, key]) => [path, key.slice(0, key.indexOf(' '))])
+      .filter(([path, { key }]) => checkedOut.get(path) === key)
+      .map(([path, { mode, size }]) => [path, { mode, size }])
   )
 }
 
-/** Drops files whose checkout applies a filter (e.g. Git LFS); Git writes those itself. */
+async function readConfig(key: string, worktreePath: string, options: GitWorktreeExecOptions) {
+  return gitExecFileAsync(['config', '--get', key], gitExecOptions(worktreePath, options)).then(
+    ({ stdout }) => stdout.trim().toLowerCase(),
+    () => ''
+  )
+}
+
+/**
+ * Drops files whose checkout can write bytes other than the blob's: filters (e.g. Git LFS), ident,
+ * encodings, and line-ending conversion that adds CRs. Git writes those itself.
+ */
 async function withoutCheckoutConversion(
   worktreePath: string,
   paths: string[],
   options: GitWorktreeExecOptions
 ): Promise<string[]> {
-  // --cached reads the attributes of the base commit that read-tree just staged.
-  const { stdout } = await gitExecFileAsync(
-    ['check-attr', '--cached', '-z', '--stdin', ...CHECKOUT_CONVERSION_ATTRIBUTES],
-    {
-      ...gitExecOptions(worktreePath, options),
-      maxBuffer: LIST_MAX_BUFFER,
-      stdin: paths.join('\0')
-    }
-  )
+  const [{ stdout }, autocrlf, eol] = await Promise.all([
+    // --cached reads the attributes of the base commit that read-tree just staged.
+    gitExecFileAsync(
+      [
+        'check-attr',
+        '--cached',
+        '-z',
+        '--stdin',
+        ...CHECKOUT_CONVERSION_ATTRIBUTES,
+        ...LINE_ENDING_ATTRIBUTES
+      ],
+      {
+        ...gitExecOptions(worktreePath, options),
+        maxBuffer: LIST_MAX_BUFFER,
+        stdin: paths.join('\0')
+      }
+    ),
+    readConfig('core.autocrlf', worktreePath, options),
+    readConfig('core.eol', worktreePath, options)
+  ])
+  const crlfByConfig = GIT_TRUE.has(autocrlf) || eol === 'crlf'
   // -z output: "<path>\0<attribute>\0<value>\0" per path and attribute.
-  const converted = new Set<string>()
+  const attributes = new Map<string, Map<string, string>>()
   const fields = stdout.split('\0')
   for (let i = 0; i + 2 < fields.length; i += 3) {
-    if (fields[i + 2] !== 'unspecified' && fields[i + 2] !== 'unset') {
-      converted.add(fields[i])
-    }
+    const values = attributes.get(fields[i]) ?? new Map<string, string>()
+    values.set(fields[i + 1], fields[i + 2])
+    attributes.set(fields[i], values)
   }
-  return paths.filter((path) => !converted.has(path))
+  return paths.filter((path) => {
+    const values = attributes.get(path)
+    const set = (name: string) => {
+      const value = values?.get(name) ?? 'unspecified'
+      return value !== 'unspecified' && value !== 'unset'
+    }
+    const addsCr =
+      values?.get('eol') === 'crlf' ||
+      (crlfByConfig && values?.get('text') !== 'unset' && values?.get('crlf') !== 'unset')
+    return !CHECKOUT_CONVERSION_ATTRIBUTES.some(set) && !addsCr
+  })
 }
 
 /**
- * Keeps sources that are regular files with the permissions a checkout of their blob mode would
- * create, since clones keep their source's mode. Git writes the rest, including files deleted from
- * the main checkout and files whose exec bit differs from the index under core.fileMode=false.
+ * Keeps sources that are regular files with the blob's size and the permissions a checkout of its
+ * mode would create, since clones keep their source's mode. Clean conversion only removes CRs, so a
+ * source with the blob's size holds the blob's bytes. Git writes the rest, including files deleted
+ * from the main checkout, stale line endings, and exec bits hidden by core.fileMode=false.
  */
-async function withCheckoutPermissions(
+async function withFreshCheckoutStat(
   repoPath: string,
   worktreePath: string,
   paths: string[],
-  modes: Map<string, string>
+  files: Map<string, CloneableFile>
 ): Promise<string[]> {
   // Git creates the worktree's `.git` file like a checked-out file: 0666 minus the umask.
   const regular = (await lstat(join(worktreePath, '.git'))).mode & 0o777
@@ -131,8 +174,11 @@ async function withCheckoutPermissions(
   const keep = await Promise.all(
     paths.map(async (path) => {
       const stat = await lstat(join(repoPath, path)).catch(() => null)
-      const expected = modes.get(path) === '100755' ? executable : regular
-      return stat?.isFile() === true && (stat.mode & 0o7777) === expected
+      const file = files.get(path)
+      const expected = file?.mode === '100755' ? executable : regular
+      return (
+        stat?.isFile() === true && (stat.mode & 0o7777) === expected && stat.size === file?.size
+      )
     })
   )
   return paths.filter((_, i) => keep[i])
@@ -232,7 +278,7 @@ export async function cloneMainCheckoutIntoWorktree(
       return
     }
     await readTreeIntoPlainIndex(worktreePath, commit, options)
-    const paths = await withCheckoutPermissions(
+    const paths = await withFreshCheckoutStat(
       repoPath,
       worktreePath,
       await withoutCheckoutConversion(worktreePath, [...candidates.keys()], options),

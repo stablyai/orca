@@ -119,6 +119,23 @@ describe.runIf(process.platform === 'darwin')('copy-on-write worktree checkout',
     expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
   })
 
+  it('lets Git write files whose line endings a fresh checkout would change', async () => {
+    const { repoPath, root } = await createRepo()
+    // Both files keep line endings that predate their attributes, and stay stat-clean.
+    await writeFile(join(repoPath, 'run.bat'), 'echo\n')
+    await writeFile(join(repoPath, 'notes.txt'), 'line\r\n')
+    await writeFile(join(repoPath, '.gitattributes'), '*.bat text eol=crlf\n*.txt text=auto\n')
+    git(repoPath, ['add', '.'])
+    git(repoPath, ['commit', '--quiet', '-m', 'line endings'])
+    const worktreePath = join(root, 'feature')
+
+    await addWorktreeWithCopyOnWriteCheckout(repoPath, worktreePath, 'feature', 'main', false)
+
+    expect(await readFile(join(worktreePath, 'run.bat'), 'utf8')).toBe('echo\r\n')
+    expect(await readFile(join(worktreePath, 'notes.txt'), 'utf8')).toBe('line\n')
+    expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
+  })
+
   it('lets Git write files that a checkout filter would change', async () => {
     const { repoPath, root } = await createRepo()
     git(repoPath, ['config', 'filter.tag.clean', "sed 's/^SMUDGE://'"])
