@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { CreateFromPicker } from './CreateFromPicker'
 import { TooltipProvider } from '../ui/tooltip'
@@ -45,17 +45,18 @@ it('keeps deferred search focus through typing and cancels it when the picker cl
       />
     </TooltipProvider>
   )
-  fireEvent.click(view.getByRole('combobox'))
+  const trigger = view.getByRole('combobox')
+  fireEvent.click(trigger)
   const input = await view.findByPlaceholderText('Search repo branches...')
   fireEvent.change(input, { target: { value: 'origin' } })
   flushFrames()
   expect(document.activeElement).toBe(input)
 
-  fireEvent.click(view.getByRole('combobox'))
-  fireEvent.click(view.getByRole('combobox'))
+  fireEvent.click(trigger)
+  fireEvent.click(trigger)
   const reopened = await view.findByPlaceholderText('Search repo branches...')
   const focus = vi.spyOn(reopened, 'focus')
-  fireEvent.click(view.getByRole('combobox'))
+  fireEvent.click(trigger)
   flushFrames()
   expect(focus).not.toHaveBeenCalled()
 })
@@ -87,8 +88,9 @@ it('uses the latest project default and default action after a rerender', async 
     (await view.findByRole('menuitem', { name: 'Current default' })).getAttribute('aria-disabled')
   ).toBe('true')
   fireEvent.keyDown(view.getByRole('menu'), { key: 'Escape' })
+  await waitFor(() => expect(view.queryByRole('menu')).toBeNull())
   fireEvent.contextMenu(view.getByRole('option', { name: 'main' }))
-  fireEvent.click(await view.findByRole('menuitem', { name: 'Set as default' }))
+  fireEvent.click(view.getByRole('menuitem', { name: 'Set as default' }))
   expect(initial).not.toHaveBeenCalled()
   expect(latest).toHaveBeenCalledWith('refs/heads/main')
 })

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NewWorkspaceComposerNameSection } from './NewWorkspaceComposerNameSection'
+import { buildWorkspaceSourceSelection } from '@shared/new-workspace/workspace-source'
 
 function BranchReusePreview({
   busy = false,
@@ -18,6 +19,9 @@ function BranchReusePreview({
   const [reuse, setReuse] = useState(initialReuse)
   const [branchName, setBranchName] = useState<string | undefined>(initialBranchName)
   const [name, setName] = useState('Feature review')
+  const baseBranch = remote
+    ? `refs/remotes/origin/${existingBranch}`
+    : `refs/heads/${existingBranch}`
   return (
     <div className="rounded-xl border border-border bg-background p-4">
       <NewWorkspaceComposerNameSection
@@ -30,10 +34,7 @@ function BranchReusePreview({
         onSmartGitLabItemSelect={() => {}}
         onSmartBranchSelect={() => {}}
         onSmartLinearIssueSelect={() => {}}
-        smartNameSelection={{
-          kind: 'branch',
-          label: remote ? `origin/${existingBranch}` : existingBranch
-        }}
+        smartNameSelection={buildWorkspaceSourceSelection({ linkedWorkItem: null, baseBranch })}
         onClearSmartNameSelection={() => {}}
         selectedRepoRequiresConnection={false}
         selectedRepoIsGit
@@ -49,9 +50,7 @@ function BranchReusePreview({
           setBranchName(undefined)
         }}
         onOpenSelectedBranchWorkspace={busy && reuse ? () => {} : undefined}
-        baseBranch={
-          remote ? `refs/remotes/origin/${existingBranch}` : `refs/heads/${existingBranch}`
-        }
+        baseBranch={baseBranch}
         onNamePlainEnter={() => {}}
       />
     </div>
