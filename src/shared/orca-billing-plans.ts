@@ -22,6 +22,8 @@ export type OrcaSelfServePlan = {
   name: string
   version: number
   features: OrcaPlanFeature[]
+  /** Where "Contact us" goes for this plan (https), or null: fall back to the Enterprise contact. */
+  supportUrl: string | null
   /** Only intervals Stripe has a price for; empty when none is on sale. */
   prices: OrcaPlanPrice[]
   overage: {
@@ -41,6 +43,8 @@ export type OrcaContactSalesPlan = {
   name: string
   version: number
   features: OrcaPlanFeature[]
+  /** Where "Contact us" goes for this plan (https), or null: fall back to the Enterprise contact. */
+  supportUrl: string | null
   contactUrl: string | null
   priceLabel: string | null
 }
@@ -52,6 +56,8 @@ export type OrcaOtherPlan = {
   name: string
   version: number
   features: OrcaPlanFeature[]
+  /** Where "Contact us" goes for this plan (https), or null: fall back to the Enterprise contact. */
+  supportUrl: string | null
 }
 
 export type OrcaPlanCatalogPlan = OrcaSelfServePlan | OrcaContactSalesPlan | OrcaOtherPlan

@@ -20,7 +20,7 @@ describe('checkout when billing cannot sell the plan (409 plan_unavailable)', ()
         onReopen={onReopen}
         onKeepWaiting={() => {}}
         onBack={() => {}}
-        contactUrl="https://onorca.dev/contact-sales"
+        contactUrl="https://orca.dev/enterprise"
         onContact={onContact}
       />
     )
@@ -30,7 +30,7 @@ describe('checkout when billing cannot sell the plan (409 plan_unavailable)', ()
     fireEvent.click(screen.getByRole('button', { name: /Try again/ }))
     expect(onReopen).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /Contact us/ }))
-    expect(onContact).toHaveBeenCalledWith('https://onorca.dev/contact-sales')
+    expect(onContact).toHaveBeenCalledWith('https://orca.dev/enterprise')
   })
 
   it('a generic failure keeps its own title and no contact action', () => {
@@ -42,7 +42,7 @@ describe('checkout when billing cannot sell the plan (409 plan_unavailable)', ()
         onReopen={() => {}}
         onKeepWaiting={() => {}}
         onBack={() => {}}
-        contactUrl="https://onorca.dev/contact-sales"
+        contactUrl="https://orca.dev/enterprise"
         onContact={() => {}}
       />
     )

@@ -13,6 +13,7 @@ export const sampleCatalog: OrcaPlanCatalog = {
       id: 'trial',
       name: 'Trial',
       version: 1,
+      supportUrl: null,
       features: [
         { id: 'trial_hours', params: { hours: 2 }, text: '2 sandbox hours to try Orca Cloud' }
       ]
@@ -21,13 +22,16 @@ export const sampleCatalog: OrcaPlanCatalog = {
       kind: 'self_serve',
       id: 'team',
       name: 'Team',
-      version: 1,
+      version: 2,
+      supportUrl: 'https://orca.dev/enterprise',
       features: [
         {
           id: 'included_hours_per_seat',
           params: { hours: 60 },
           text: '60 sandbox hours per seat each month, pooled across your team'
         },
+        { id: 'sandbox_spec', params: {}, text: 'Every sandbox gets 8 vCPU and 16 GB' },
+        { id: 'ready_in_seconds', params: {}, text: 'Ready in seconds, nothing to set up or host' },
         {
           id: 'agents_keep_running',
           params: {},
@@ -58,13 +62,14 @@ export const sampleCatalog: OrcaPlanCatalog = {
       id: 'enterprise',
       name: 'Enterprise',
       version: 1,
+      supportUrl: null,
       features: [
         { id: 'byoc', params: {}, text: 'Run sandboxes in your own cloud' },
         { id: 'sso_scim', params: {}, text: 'SSO and SCIM' },
         { id: 'egress_controls', params: {}, text: 'Network egress controls' },
         { id: 'custom_limits', params: {}, text: 'Custom limits and pricing' }
       ],
-      contactUrl: 'https://onorca.dev/contact-sales',
+      contactUrl: 'https://orca.dev/enterprise',
       priceLabel: 'Custom'
     }
   ]

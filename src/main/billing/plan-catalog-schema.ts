@@ -34,7 +34,10 @@ const Base = z.object({
   name: z.string().min(1).max(40),
   version: z.number().int().nonnegative().catch(0),
   features: z.array(z.unknown()).max(100).catch([]),
-  entitlements: z.record(z.string(), z.unknown()).catch({}).optional()
+  entitlements: z.record(z.string(), z.unknown()).catch({}).optional(),
+  // "Contact us" for this plan. https only: the desktop opens links through shell:openUrl, which
+  // refuses other schemes (a mailto: from billing falls back to the Enterprise contact).
+  supportUrl: z.string().url().startsWith('https://').max(500).nullable().catch(null).optional()
 })
 
 const SelfServe = z.object({
@@ -98,7 +101,8 @@ function plan(raw: unknown): OrcaPlanCatalogPlan | null {
     id: base.data.id,
     name: base.data.name,
     version: base.data.version,
-    features: features(base.data.features)
+    features: features(base.data.features),
+    supportUrl: base.data.supportUrl ?? null
   }
   if (base.data.kind === 'self_serve') {
     const extra = SelfServe.safeParse(raw)

@@ -46,7 +46,7 @@ describe("plans dialog from billing's catalog", () => {
     fireEvent.click(screen.getByRole('button', { name: /Continue to checkout/ }))
     expect(props.onCheckout).toHaveBeenCalledWith({ planId: 'team', interval: 'month', seats: 4 })
     fireEvent.click(screen.getByRole('button', { name: /Contact sales/ }))
-    expect(props.onContactSales).toHaveBeenCalledWith('https://onorca.dev/contact-sales')
+    expect(props.onContactSales).toHaveBeenCalledWith('https://orca.dev/enterprise')
   })
 
   it('offers only the intervals Stripe prices: no toggle with one', () => {

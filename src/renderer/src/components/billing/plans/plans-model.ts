@@ -33,6 +33,8 @@ export type TeamPlanModel = {
   checkoutAvailable: boolean
   /** An older service's display labels, for a price it sends no cents for. */
   legacyPriceLabels: { month: string; year: string } | null
+  /** The plan's own "Contact us" (https), when the catalog names one. */
+  supportUrl: string | null
 }
 
 export type EnterprisePlanModel = {
@@ -73,7 +75,8 @@ export function plansModelFromCatalog(catalog: OrcaPlanCatalog): PlansModel | nu
       overage: team.overage,
       idleSleepMinutes: null,
       checkoutAvailable: team.checkoutAvailable,
-      legacyPriceLabels: null
+      legacyPriceLabels: null,
+      supportUrl: team.supportUrl
     },
     enterprise: enterprise
       ? {
@@ -127,7 +130,8 @@ export function plansModelFromOffers(offers: OrcaBillingOffers): PlansModel {
       },
       idleSleepMinutes: team.idleSleepMinutes,
       checkoutAvailable: true,
-      legacyPriceLabels: { month: team.monthlyPriceLabel, year: team.annualPriceLabel }
+      legacyPriceLabels: { month: team.monthlyPriceLabel, year: team.annualPriceLabel },
+      supportUrl: null
     },
     enterprise: {
       label: offers.enterprise.label,
@@ -163,4 +167,9 @@ export function resolvePlansModel(
     return { state: 'loading' }
   }
   return offers ? { state: 'ready', model: plansModelFromOffers(offers) } : { state: 'failed' }
+}
+
+/** Where "Contact us" goes when billing can't sell the plan: its support URL, else Enterprise's contact. */
+export function planContactUrl(model: PlansModel): string | null {
+  return model.team.supportUrl ?? model.enterprise?.contactUrl ?? null
 }
