@@ -13,6 +13,8 @@ const REISSUED_HANDLE = 'term_worker-lead-reissued'
 const WORKER_PANE = 'tab_lead:44444444-4444-4444-8444-444444444444'
 const INCARNATION = 'wt::/repo/lead@@pty1:inc-original'
 const REPLACEMENT = 'wt::/repo/lead@@pty1:inc-replacement'
+const SUCCESSOR_HANDLE = 'term_worker-successor'
+const SUCCESSOR_INCARNATION = 'wt::/repo/lead@@pty1:inc-successor'
 const HOST_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
 
 describe('Run check draining a pre-bind Dispatch after its worker process changed', () => {
@@ -128,24 +130,25 @@ describe('Run check draining a pre-bind Dispatch after its worker process change
   ])(
     'leaves residual mail unread for a replacement process on the same handle (%s)',
     async (_label, mode) => {
-      const { dispatchId } = setup()
+      const { dispatchId, leadRunId } = setup()
       paneIncarnation = REPLACEMENT
 
-      const checked = await check(WORKER_HANDLE, ctx, mode).catch((error: unknown) => error)
+      const checked = await check(WORKER_HANDLE, ctx, mode)
 
+      expect(checked).toMatchObject({ runId: leadRunId })
       expect(checkedBodies(checked)).not.toContain('Pre-bind instructions')
       expect(residualUnread(dispatchId)).toBe(true)
     }
   )
 
-  it('leaves residual mail unread for a stale handle whose process recovery refused', async () => {
+  it('refuses a stale handle whose process recovery refused, before any mailbox is read', async () => {
     const { dispatchId } = setup()
     liveHandle = REISSUED_HANDLE
     paneIncarnation = REPLACEMENT
 
-    const checked = await check(WORKER_HANDLE, staleEnv()).catch((error: unknown) => error)
-
-    expect(checkedBodies(checked)).not.toContain('Pre-bind instructions')
+    await expect(check(WORKER_HANDLE, staleEnv())).rejects.toMatchObject({
+      code: 'dispatch_inactive'
+    })
     expect(residualUnread(dispatchId)).toBe(true)
   })
 
@@ -154,11 +157,76 @@ describe('Run check draining a pre-bind Dispatch after its worker process change
     liveHandle = REISSUED_HANDLE
     paneIncarnation = REPLACEMENT
 
-    const checked = await check(WORKER_HANDLE, staleEnv(), { run: leadRunId }).catch(
-      (error: unknown) => error
+    await expect(check(WORKER_HANDLE, staleEnv(), { run: leadRunId })).rejects.toMatchObject({
+      code: 'dispatch_inactive'
+    })
+    expect(residualUnread(dispatchId)).toBe(true)
+  })
+
+  describe('after a successor Dispatch took the pane and bound its Run', () => {
+    /** The stale handle's Dispatch finished; a new worker process in the same pane runs a successor
+     *  Dispatch with its own pre-bind mail, then binds a Run of its own. */
+    function setupSuccessor(): { successorId: string; successorRunId: string } {
+      const { dispatchId } = setupDispatch()
+      db.db
+        .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
+        .run(dispatchId)
+      liveHandle = SUCCESSOR_HANDLE
+      paneIncarnation = SUCCESSOR_INCARNATION
+      const successor = createRootDispatch(
+        db,
+        db.createTask({ spec: 'successor lead' }).id,
+        SUCCESSOR_HANDLE,
+        WORKER_PANE,
+        undefined,
+        SUCCESSOR_INCARNATION
+      )
+      db.db
+        .prepare('UPDATE dispatch_contexts SET host_scope = ? WHERE id = ?')
+        .run(HOST_SCOPE, successor.id)
+      db.insertMessage({
+        from: 'term_coord',
+        to: `dispatch:${successor.id}`,
+        subject: 'successor',
+        body: 'Successor instructions',
+        runId: successor.run_id
+      })
+      const successorRunId = db.createRun({
+        objective: 'successor Run',
+        coordinatorHandle: SUCCESSOR_HANDLE,
+        coordinatorPaneKey: WORKER_PANE
+      }).id
+      return { successorId: successor.id, successorRunId }
+    }
+
+    const successorUnread = (successorId: string) =>
+      db
+        .getUnreadMessages(`dispatch:${successorId}`)
+        .some((m) => m.body === 'Successor instructions')
+
+    it.each([
+      ['implicitly bound', () => ({})],
+      ['naming the Run', (runId: string) => ({ run: runId })]
+    ])(
+      'refuses the stale handle without reading the successor mail (%s)',
+      async (_label, extra) => {
+        const { successorId, successorRunId } = setupSuccessor()
+
+        await expect(check(WORKER_HANDLE, staleEnv(), extra(successorRunId))).rejects.toMatchObject(
+          { code: 'dispatch_inactive' }
+        )
+        expect(successorUnread(successorId)).toBe(true)
+      }
     )
 
-    expect(checkedBodies(checked)).not.toContain('Pre-bind instructions')
-    expect(residualUnread(dispatchId)).toBe(true)
+    it('still serves the successor its own pre-bind mail through its Run (control)', async () => {
+      const { successorId, successorRunId } = setupSuccessor()
+
+      const checked = await check(SUCCESSOR_HANDLE, ctx)
+
+      expect(checked).toMatchObject({ dispatchId: successorId })
+      expect(checkedBodies(checked)).toContain('Successor instructions')
+      expect(db.getCurrentRunForPane(WORKER_PANE)?.id).toBe(successorRunId)
+    })
   })
 })
