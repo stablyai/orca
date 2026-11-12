@@ -8,7 +8,9 @@ import {
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
-import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/trimmed-string'
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
 import type SyncDatabase from '../sqlite/sync-database'
 import { rowsOf, rowsWithinBudget } from './transcript-opencode-row-budget'
 import {

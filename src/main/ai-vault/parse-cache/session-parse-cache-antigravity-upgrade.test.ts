@@ -10,7 +10,7 @@ import {
 import { createSessionParseStats, parseAgentSessionFileCached } from './session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from './session-parse-cache-store'
 
-import { writeAntigravityTranscript } from '../session-scanner-test-fixtures'
+import { writeAntigravityTranscript } from '../scanner-fixtures/session-scanner-test-fixtures'
 import type { SessionFileCandidate } from '../session-scanner-types'
 
 let root: string | undefined
