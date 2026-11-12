@@ -11,7 +11,7 @@ let wantsPlay = false
 // Why remember: an unplayable video must not be refetched on every focus change.
 let failedUrl: string | null = null
 
-/** Why paused under overlays: their backdrop blur would re-filter the window on every frame. */
+/** Why paused under overlays: the dimmed video would keep decoding and compositing every frame. */
 function syncPlayback(): void {
   if (!current) {
     return

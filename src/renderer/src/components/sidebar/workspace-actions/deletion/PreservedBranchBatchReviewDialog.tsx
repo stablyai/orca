@@ -91,7 +91,7 @@ export function PreservedBranchBatchReviewDialog({
         </DialogHeader>
 
         <div className="max-h-72 overflow-y-auto scrollbar-sleek rounded-md border border-border/70 bg-muted/35 text-xs">
-          <div className="sticky top-0 z-10 flex min-h-9 items-center justify-between gap-3 border-b border-border/70 bg-background/95 px-3 backdrop-blur-sm">
+          <div className="sticky top-0 z-10 flex min-h-9 items-center justify-between gap-3 border-b border-border/70 bg-[color-mix(in_srgb,var(--background)_95%,color-mix(in_srgb,var(--muted)_35%,var(--dialog-surface)))] px-3">
             <Label htmlFor="preserved-branch-select-all" className="gap-2 text-xs">
               <Checkbox
                 id="preserved-branch-select-all"

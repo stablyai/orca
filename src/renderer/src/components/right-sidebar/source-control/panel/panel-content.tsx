@@ -15,7 +15,7 @@ import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
   // Folder sections sit in cards, so the dock matches the card instead of the sidebar.
-  const dockBackground = useSourceControlScope() ? 'bg-card/95' : 'bg-sidebar/95'
+  const dockBackground = useSourceControlScope() ? 'bg-card' : 'bg-sidebar'
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -236,7 +236,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
       {isGitHistoryVisible && (
         // Dock history as reference context while the rest of the pane scrolls.
         <div
-          className={`sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border ${dockBackground} backdrop-blur-sm`}
+          className={`sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border ${dockBackground}`}
         >
           <GitHistoryPanel
             worktreeId={currentWorktreeId ?? undefined}

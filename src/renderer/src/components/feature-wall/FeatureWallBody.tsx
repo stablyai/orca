@@ -251,7 +251,7 @@ export function FeatureWallBody(props: {
         )}
       </div>
       {settingContent && shouldStickSetupToBottom ? (
-        <div className="sticky bottom-0 z-10 -mx-8 mt-auto border-t border-border bg-card/95 px-8 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/85">
+        <div className="sticky bottom-0 z-10 -mx-8 mt-auto border-t border-border bg-[color-mix(in_srgb,var(--card)_85%,var(--dialog-surface))] px-8 py-3">
           <TourZone
             className={cn(
               'scrollbar-sleek mx-auto max-h-[220px] w-full gap-2 overflow-y-auto',

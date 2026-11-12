@@ -1,6 +1,6 @@
 const MOUNTED_MODAL_OVERLAY_CHILD_SELECTOR =
   ":scope > :is([data-slot='dialog-overlay'], [data-slot='sheet-overlay'])"
-// Radix keeps a closing overlay mounted through its fade; it must not hold the blur past the dim.
+// Radix keeps a closing overlay mounted through its fade; the open state ends when the close starts.
 export const MODAL_OVERLAY_CHILD_SELECTOR = `${MOUNTED_MODAL_OVERLAY_CHILD_SELECTOR}:not([data-state='closed'])`
 const ONBOARDING_OVERLAY_CHILD_SELECTOR = ':scope > [data-onboarding-overlay]'
 

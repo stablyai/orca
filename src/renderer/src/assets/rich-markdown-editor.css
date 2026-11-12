@@ -851,7 +851,6 @@
   border-radius: 0;
   color: var(--muted-foreground);
   pointer-events: auto;
-  backdrop-filter: blur(8px);
 }
 
 .rich-markdown-table-control::before {

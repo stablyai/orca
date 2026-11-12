@@ -216,7 +216,7 @@
   --orca-security-input: #e5e5e5;
   --orca-security-ring: #a1a1a1;
   --orca-security-floating-surface: rgba(255, 255, 255, 0.82);
-  --orca-security-dialog-surface: rgba(255, 255, 255, 0.96);
+  --orca-security-dialog-surface: var(--orca-security-popover);
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
@@ -240,9 +240,9 @@
   --card-foreground: #0a0a0a;
   --popover: #fff;
   --popover-foreground: #0a0a0a;
-  /* Glass tints for menus and dialogs; a plugin theme replaces both with its --popover. */
+  /* Glass tint for menus and a solid dialog panel; a plugin theme replaces both with its --popover. */
   --floating-surface: rgba(255, 255, 255, 0.82);
-  --dialog-surface: color-mix(in srgb, var(--background) 96%, transparent);
+  --dialog-surface: var(--background);
   --primary: #171717;
   --primary-foreground: #fafafa;
   --secondary: #f5f5f5;
@@ -338,7 +338,7 @@
   --orca-security-input: rgb(255 255 255 / 0.15);
   --orca-security-ring: #737373;
   --orca-security-floating-surface: rgba(0, 0, 0, 0.72);
-  --orca-security-dialog-surface: rgba(23, 23, 23, 0.96);
+  --orca-security-dialog-surface: var(--orca-security-popover);
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #f0f0f0;
@@ -363,7 +363,7 @@
   --popover: #171717;
   --popover-foreground: #f0f0f0;
   --floating-surface: rgba(0, 0, 0, 0.72);
-  --dialog-surface: rgba(23, 23, 23, 0.96);
+  --dialog-surface: var(--popover);
   --primary: #e5e5e5;
   --primary-foreground: #171717;
   --secondary: #262626;
@@ -1037,7 +1037,7 @@ body[data-modal-overlay-open]
   background-color: var(--background);
 }
 
-/* The modal blur samples transparent pixels past the window edge; keep it over an opaque base. */
+/* Keep the modal scrim over an opaque base so the window material never shows through the dim. */
 :root[data-window-material] body:is([data-modal-overlay-open], [data-onboarding-overlay-open]) {
   background-color: var(--background);
 }
@@ -1048,28 +1048,7 @@ body[data-modal-overlay-open]
     border-box;
 }
 
-/* Blur source regions independently so status-bar animation cannot re-filter the workspace. */
-:root:not([data-reduce-effects])
-  body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
-  .app-layout
-  > :not(.window-controls) {
-  filter: blur(2px);
-}
-
-:root:not([data-reduce-effects])
-  body
-  > :is(
-    [data-slot='dialog-content'],
-    [data-slot='command-dialog-content'],
-    [data-slot='sheet-content'],
-    [data-onboarding-overlay]
-  ):has(
-    ~ :is([data-slot='dialog-overlay'], [data-slot='sheet-overlay']):not([data-state='closed'])
-  ) {
-  filter: blur(2px);
-}
-
-/* Reduce visual effects (#20936): no blur passes over the workspace, and solid floating surfaces. */
+/* Reduce visual effects (#20936): solid floating surfaces and no backdrop blur. */
 :root[data-reduce-effects] {
   --floating-surface: var(--popover);
   --dialog-surface: var(--background);

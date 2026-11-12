@@ -84,7 +84,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
         className={cn(
           presentation.sectionHeader,
           // Keep filters and Add Comment reachable while the sidebar scrolls through long threads.
-          'sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm'
+          'sticky top-0 z-10 bg-sidebar'
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
