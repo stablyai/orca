@@ -165,12 +165,13 @@ function terminalProvenance(state: VisibleOrchestrationState) {
 
 function projection(state: VisibleOrchestrationState): NonNullable<typeof cache> {
   const rows = rowIdentities(state)
-  const terminals = terminalProvenance(state)
   const inputs = [
     state.runtimeAgentOrchestrationByPaneKey,
     state.agentStatusByPaneKey,
     state.retainedAgentsByPaneKey,
-    terminals,
+    state.unifiedTabsByWorktree,
+    state.tabsByWorktree,
+    state.ptyIdsByTabId,
     rows
   ]
   if (cache && inputs.every((value, index) => value === cache?.inputs[index])) {
@@ -206,7 +207,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
     worktreeId = entry.worktreeId
   ) => {
     visits++
-    if (!entry?.orchestration) {
+    if (!entry?.orchestration?.parentPaneKey) {
       return
     }
     const row = canonical.get(entry.paneKey)
@@ -220,10 +221,11 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       // Matching graph facts already carry the context's producer, independently of execution routing.
       return
     }
+    const terminals = row ? undefined : terminalProvenance(state)
     const tabId = parseAgentStatusPaneIdentity(entry.paneKey)?.tabId
     const terminalKey = worktreeId && tabId ? aliasKey(worktreeId, tabId) : null
-    const tabHost = terminalKey ? terminals.hosts.get(terminalKey) : undefined
-    const ptyHost = tabId ? terminals.ptys.get(tabId) : undefined
+    const tabHost = terminalKey ? terminals?.hosts.get(terminalKey) : undefined
+    const ptyHost = tabId ? terminals?.ptys.get(tabId) : undefined
     const terminalHost =
       tabHost === undefined
         ? ptyHost
