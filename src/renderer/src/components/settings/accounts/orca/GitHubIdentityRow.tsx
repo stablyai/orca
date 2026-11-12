@@ -61,9 +61,21 @@ export function GitHubIdentityRowView({
       </Button>
     )
   } else if (state.kind === 'connected' && state.disconnectFailed) {
-    detail = t(
-      'auto.components.settings.orcaAccount.github.disconnectError',
-      "Couldn't disconnect GitHub."
+    // Both lines: the connection is still there; only the disconnect failed.
+    detail = (
+      <>
+        <span className="block">
+          {t('auto.components.settings.orcaAccount.github.connectedAs', 'Connected as @{{login}}', {
+            login: state.login
+          })}
+        </span>
+        <span className="block text-destructive">
+          {t(
+            'auto.components.settings.orcaAccount.github.disconnectError',
+            "Couldn't disconnect GitHub."
+          )}
+        </span>
+      </>
     )
     action = (
       <Button
