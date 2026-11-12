@@ -10,7 +10,7 @@ import {
 } from '../../shared/telemetry-wsl-move-event-schemas'
 import type { WslMoveRefusalCode, WslMoveResult } from '../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveCutoverPhase } from '../../shared/wsl-move/wsl-move-cutover'
-import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/wsl-move-driver-ports'
+import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import { track } from './client'
 
 type Props = EventProps<'wsl_move'>

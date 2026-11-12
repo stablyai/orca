@@ -1,13 +1,13 @@
 import { ORCHESTRATION_HANDLER_GROUP } from './orchestration-handler-group'
 import type { CommandHandler } from './dispatch'
 import { BROWSER_HANDLER_GROUPS } from './browser/browser-handler-groups'
-import { JIRA_HANDLER_GROUP } from './jira-handler-group'
-import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
+import { JIRA_HANDLER_GROUP } from './jira/jira-handler-group'
+import { LINEAR_HANDLER_GROUP } from './linear/linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
-import { SERVE_PAIRING_HANDLER_GROUPS } from './serve-pairing-handler-groups'
+import { SERVE_PAIRING_HANDLER_GROUPS } from './server/serve-pairing-handler-groups'
 import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
-import { HOST_HANDLER_GROUPS } from './host-handler-groups'
-import { WORKTREE_HANDLER_GROUPS } from './worktree-handler-groups'
+import { HOST_HANDLER_GROUPS } from './hosts/host-handler-groups'
+import { WORKTREE_HANDLER_GROUPS } from './workspaces/worktree-handler-groups'
 
 export type HandlerGroup = {
   name: string
@@ -16,7 +16,6 @@ export type HandlerGroup = {
   load: () => Promise<Record<string, CommandHandler>>
 }
 
-// handler-group-manifest.test.ts checks keys against the real exports to prevent drift.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
@@ -31,17 +30,17 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'serve-reset-identity',
     keys: ['serve reset-identity'],
     load: async () =>
-      (await import('./handlers/serve-reset-identity.js')).SERVE_RESET_IDENTITY_HANDLERS
+      (await import('./server/serve-reset-identity.js')).SERVE_RESET_IDENTITY_HANDLERS
   },
   {
     name: 'serve-service',
     keys: ['serve service install', 'serve service status', 'serve service uninstall'],
-    load: async () => (await import('./handlers/serve-service.js')).SERVE_SERVICE_HANDLERS
+    load: async () => (await import('./server/serve-service.js')).SERVE_SERVICE_HANDLERS
   },
   {
     name: 'account',
     keys: ['account add', 'account list', 'account select', 'account rm'],
-    load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
+    load: async () => (await import('./accounts/account.js')).ACCOUNT_HANDLERS
   },
   {
     name: 'artifacts',
@@ -52,7 +51,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'artifacts unshare',
       'artifacts delete'
     ],
-    load: async () => (await import('./handlers/artifacts.js')).ARTIFACT_HANDLERS
+    load: async () => (await import('./artifacts/artifacts.js')).ARTIFACT_HANDLERS
   },
   {
     name: 'automations',
@@ -65,7 +64,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'automations run',
       'automations runs'
     ],
-    load: async () => (await import('./handlers/automations.js')).AUTOMATION_HANDLERS
+    load: async () => (await import('./automations/automations.js')).AUTOMATION_HANDLERS
   },
   {
     name: 'project',
@@ -78,7 +77,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'project setup-update',
       'project setup-delete'
     ],
-    load: async () => (await import('./handlers/project.js')).PROJECT_HANDLERS
+    load: async () => (await import('./projects/project.js')).PROJECT_HANDLERS
   },
   {
     name: 'repo',
@@ -90,13 +89,13 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'repo set-base-ref',
       'repo search-refs'
     ],
-    load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
+    load: async () => (await import('./projects/repo.js')).REPO_HANDLERS
   },
   ...WORKTREE_HANDLER_GROUPS,
   {
     name: 'file',
     keys: ['file open', 'file diff', 'file open-changed'],
-    load: async () => (await import('./handlers/file.js')).FILE_HANDLERS
+    load: async () => (await import('./files/file.js')).FILE_HANDLERS
   },
   {
     name: 'terminal',
@@ -114,7 +113,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'terminal close',
       'terminal split'
     ],
-    load: async () => (await import('./handlers/terminal.js')).TERMINAL_HANDLERS
+    load: async () => (await import('./terminals/terminal.js')).TERMINAL_HANDLERS
   },
   ...BROWSER_HANDLER_GROUPS,
   ORCHESTRATION_HANDLER_GROUP,
@@ -138,7 +137,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'emulator ax',
       'emulator logcat'
     ],
-    load: async () => (await import('./handlers/emulator.js')).EMULATOR_HANDLERS
+    load: async () => (await import('./emulator/emulator.js')).EMULATOR_HANDLERS
   },
   {
     name: 'computer',
@@ -158,22 +157,22 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'computer paste-text',
       'computer set-value'
     ],
-    load: async () => (await import('./handlers/computer.js')).COMPUTER_HANDLERS
+    load: async () => (await import('./computer/computer.js')).COMPUTER_HANDLERS
   },
   {
     name: 'agent-hooks',
     keys: ['agent hooks prepare-codex', 'agent hooks status', 'agent hooks off', 'agent hooks on'],
-    load: async () => (await import('./handlers/agent-hooks.js')).AGENT_HOOK_HANDLERS
+    load: async () => (await import('./agents/agent-hooks.js')).AGENT_HOOK_HANDLERS
   },
   {
     name: 'agent-launch',
     keys: ['agent launch'],
-    load: async () => (await import('./handlers/agent-launch.js')).AGENT_LAUNCH_HANDLERS
+    load: async () => (await import('./agents/agent-launch.js')).AGENT_LAUNCH_HANDLERS
   },
   {
     name: 'chat',
-    keys: ['chat rename', 'chat list', 'chat read', 'chat send', 'chat wait'],
-    load: async () => (await import('./handlers/chat.js')).CHAT_HANDLERS
+    keys: ['chat rename'],
+    load: async () => (await import('./agents/chat.js')).CHAT_HANDLERS
   },
   {
     name: 'connector',
@@ -223,11 +222,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'search',
     keys: ['search'],
-    load: async () => (await import('./handlers/search.js')).SEARCH_HANDLERS
+    load: async () => (await import('./session-search/search.js')).SEARCH_HANDLERS
   },
   {
     name: 'ports',
     keys: ['ports'],
-    load: async () => (await import('./handlers/ports.js')).PORTS_HANDLERS
+    load: async () => (await import('./workspace-ports/ports.js')).PORTS_HANDLERS
   }
 ]

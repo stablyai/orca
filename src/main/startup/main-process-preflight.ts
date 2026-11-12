@@ -1,3 +1,4 @@
+import { captureBackendBootstrap } from '../backend-desktop/backend-supervisor'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { getRelocatedDaemonHost } from '../daemon/executable-host/windows/daemon-host-relocation'
 import { app, ipcMain, powerMonitor, session } from 'electron'
@@ -80,16 +81,12 @@ import '../orca-profiles/profile-index-store'
 import { getProfileUserDataPath, initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
 import { recoverPendingProfileProjectMoves } from '../orca-profiles/project-transfer/profile-project-move-intent'
 import { initStatsPath } from '../stats/collector'
-import { initClaudeUsagePath } from '../claude-usage/store'
-import { initCodexUsagePath } from '../codex-usage/store'
-import { initOpenCodeUsagePath } from '../opencode-usage/store'
-import { initMuseUsagePath } from '../muse-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/document-preview/doc-preview-protocol'
 import { PRIVILEGED_CUSTOM_SCHEMES } from './privileged-custom-schemes'
-import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
-import { CrashReportStore } from '../crash-reporting/crash-report-store'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { getMainProcessLifecycleIdentity } from '../crash-reporting/main-process-lifecycle-identity'
+import { startCrashpadCapture } from '../crash-reporting/capture/crashpad-capture'
+import { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { getMainProcessLifecycleIdentity } from '../crash-reporting/process-exits/main-process-lifecycle-identity'
 import {
   ensureVirtualDisplayForHeadlessServe,
   hasUsableLinuxDisplay,
@@ -304,10 +301,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   )
   // Capture stats/usage paths before app naming can shift userData.
   initStatsPath()
-  initClaudeUsagePath()
-  initCodexUsagePath()
-  initOpenCodeUsagePath()
-  initMuseUsagePath()
+  captureBackendBootstrap()
   // Register preview privileges before ready freezes the table or webviews lose fetch/secure-origin access.
   registerDocPreviewSchemePrivileges(PRIVILEGED_CUSTOM_SCHEMES)
   // Install Crashpad before first renderer; earlier CHECK failures have exit-code evidence only.

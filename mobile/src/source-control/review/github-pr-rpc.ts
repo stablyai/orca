@@ -2,7 +2,7 @@ import { GITHUB_CONNECTION_CHANGED, githubOperationResponse } from './github-tar
 import { captureMobilePRCheckContract } from './pr-check-observation-contract'
 import { acceptPRCheckObservation } from '../../../../src/shared/github/complete-pr-check-owner'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { withGitHubTargetOperation } from '../../tasks/github-work-item-operation'
+import { withGitHubTargetOperation } from './github-work-item-operation'
 import { requireGitHubWorkItemTargetDetails } from '../../../../src/shared/github/work-item-target'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../src/shared/github/check-types'
 import type {

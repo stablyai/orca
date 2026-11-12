@@ -18,10 +18,10 @@ import {
   createSqliteTestStore
 } from '../../../persistence/persistence-test-harness'
 import { Store } from '../../../persistence/loading-store/store'
-import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { fakeOrcadMigrationDestination } from './testing/orcad-migration-destination-fake'
 import { runOrcadDeltaMove } from './orcad-migration-delta-move'
-import { reconcileManagedOrcadSshTargets } from '../../../persistence/migrating-orcad-catalog/orcad-retained-source'
+import { reconcileManagedOrcadSshTargets } from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
 import { SshConnectionStore } from '../../../ssh/targets/ssh-connection-store'
 import { runTargetLifecycle } from '../../../ipc/ssh/ssh-target-lifecycle-queue'
 

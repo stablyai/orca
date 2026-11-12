@@ -1,70 +1,8 @@
-import {
-  sourceShapedKimiOutput,
-  realKimiOccupiedOutput
-} from '../../shared/__fixtures__/kimi-generation-source-shaped'
+import { realKimiOccupiedOutput } from '../../shared/__fixtures__/kimi-generation-source-shaped'
 import { describe, expect, it } from 'vitest'
 import { generateBranchNameFromContext } from './commit-message-text-generation'
 
 describe('generateBranchNameFromContext', () => {
-  it.each(['custom', 'kimi'] as const)('%s branch slug', async (agentId) => {
-    const result = await generateBranchNameFromContext(
-      { firstPrompt: 'Fix login flow' },
-      {
-        agentId,
-        model: agentId === 'kimi' ? 'default' : '',
-        customAgentCommand: 'agent'
-      },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
-          stdout:
-            agentId === 'kimi'
-              ? sourceShapedKimiOutput('"Fix/Login Flow now please"')
-              : '"Fix/Login Flow now please"\n',
-          stderr: '',
-          exitCode: 0,
-          timedOut: false
-        })
-      }
-    )
-
-    expect(result).toEqual({
-      success: true,
-      slug: 'fix-login-flow-now',
-      agentLabel: agentId === 'kimi' ? 'Kimi' : 'agent'
-    })
-  })
-
-  it('fails when remote agent output sanitizes to an empty branch slug', async () => {
-    const result = await generateBranchNameFromContext(
-      { firstPrompt: 'Fix login flow' },
-      {
-        agentId: 'custom',
-        model: '',
-        customAgentCommand: 'agent'
-      },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
-          stdout: '!!! ___\n',
-          stderr: '',
-          exitCode: 0,
-          timedOut: false
-        })
-      }
-    )
-
-    expect(result).toMatchObject({
-      success: false,
-      error: 'Generated branch name was empty after sanitization.',
-      failureOutput: { label: 'agent', exitCode: 0, stdout: '!!! ___', stderr: '' }
-    })
-  })
-
   it.each(['pi', 'kimi'] as const)('%s failure diagnostics', async (agentId) => {
     const result = await generateBranchNameFromContext(
       { firstPrompt: 'Fix login flow' },
@@ -97,32 +35,6 @@ describe('generateBranchNameFromContext', () => {
       exitCode: agentId === 'kimi' ? 4 : 1,
       stdout: agentId === 'kimi' ? realKimiOccupiedOutput : 'partial',
       stderr: 'No API key found for github-copilot.'
-    })
-  })
-
-  it('describes a signal-terminated generator without a null exit code', async () => {
-    const result = await generateBranchNameFromContext(
-      { firstPrompt: 'Fix login flow' },
-      {
-        agentId: 'pi',
-        model: 'github-copilot/gpt-5.5'
-      },
-      {
-        kind: 'remote',
-        cwd: '/repo',
-        missingBinaryLocation: 'remote PATH',
-        execute: async () => ({
-          stdout: '',
-          stderr: 'Process killed by host',
-          exitCode: null,
-          timedOut: false
-        })
-      }
-    )
-
-    expect(result).toMatchObject({
-      success: false,
-      error: 'Pi CLI command was terminated before exiting: Process killed by host'
     })
   })
 

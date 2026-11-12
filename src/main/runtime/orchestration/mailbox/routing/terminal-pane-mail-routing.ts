@@ -230,7 +230,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
       const db = this.getExistingOrchestrationDb()
       pauseSessionLinkForSession(db, sessionId)
       for (const dispatch of db ? exitedChatDispatchesForSession(sessionId, db) : []) {
-        this.failActiveDispatchOnExit(dispatch.assignee_handle, null, 0, OPERATOR_CLOSE_EXIT_CAUSE)
+        this.failActiveDispatchOnExit(dispatch.assignee_handle, null, OPERATOR_CLOSE_EXIT_CAUSE)
       }
     } catch (error) {
       console.warn('[orchestration] settling a closed chat worker failed', {

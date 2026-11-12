@@ -1,5 +1,5 @@
 import type { KeybindingOverrides } from '../../shared/keybindings'
-import type { LowCommitOomVerdict } from '../crash-reporting/low-commit-oom-recovery-gate'
+import type { LowCommitOomVerdict } from '../crash-reporting/recovery/low-commit-oom-recovery-gate'
 import type {
   RecoveryExhaustionCause,
   RecoveryReloadMilestone,

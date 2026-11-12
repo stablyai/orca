@@ -2897,8 +2897,7 @@
     "tabStrip": {
       "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes",
       "newTab": "Nova aba",
-      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpar Terminal",
@@ -2941,6 +2940,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Falha ao anexar (reconectando)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Não foi possível fechar a aba. Tente novamente.",
+      "closeFailedDesktopNotReady": "Não foi possível fechar a aba. O Orca ainda está carregando no seu computador. Tente novamente em instantes."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Falha no comando do navegador",
@@ -3220,8 +3223,6 @@
     },
     "presentation": {
       "loadingTabs": "Carregando guias",
-      "oneTab": "1 guia",
-      "tabCount": "{{tabCount}} guias",
       "tapToRetry": "{{status}} — toque para tentar novamente"
     },
     "documentReaders": {

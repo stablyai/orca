@@ -1,8 +1,14 @@
 import { useMobileNativeChatComposerAllocation } from './MobileNativeChatComposerAllocation'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
+import {
+  StyleSheet,
+  TextInput,
+  View,
+  useWindowDimensions,
+  type TextInputInstance
+} from 'react-native'
 import { useKeyboardOcclusion } from '../../../platform/keyboard-occlusion'
-import { hostOs } from '../../../platform/host-os'
+import { primaryModifierKey } from '../../../platform/primary-modifier-key'
 import { useTextInputContentHeight } from '../../../platform/text-input-content-height'
 import { useTextInputSelectionReveal } from '../../../platform/text-input-selection-reveal.web'
 import { colors } from '../../../theme/mobile-theme'
@@ -50,7 +56,7 @@ export function MobileNativeChatComposerField({
   const allocation = useMobileNativeChatComposerAllocation()
   const [scrollTop, setScrollTop] = useState(0)
   const [fieldHeight, setFieldHeight] = useState(0)
-  const ownRef = useRef<TextInput>(null)
+  const ownRef = useRef<TextInputInstance>(null)
   const input = ref ?? ownRef
   useTextInputSelectionReveal(input)
   const paste = useEffectEvent((event: ClipboardEvent) => onWebPaste?.(event))
@@ -114,7 +120,9 @@ export function MobileNativeChatComposerField({
             key.keyCode === 229 ||
             key.shiftKey ||
             key.altKey ||
-            !(hostOs() === 'ios' ? key.metaKey && !key.ctrlKey : key.ctrlKey && !key.metaKey)
+            !(primaryModifierKey() === 'Meta'
+              ? key.metaKey && !key.ctrlKey
+              : key.ctrlKey && !key.metaKey)
           ) {
             return
           }

@@ -7,9 +7,9 @@ import { wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
 import { readOpenCodeDatabase } from '../opencode/sqlite/session-scanner-opencode-sqlite-open'
 import type { SessionSidecarObservation } from '../../parse-cache/session-sidecar-stat'
-import { asRecord } from '../../session-scanner-record-value'
-import { numberValue } from '../../session-scanner-token-values'
-import { extractString } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { numberValue } from '../../parsing/session-scanner-token-values'
+import { extractString } from '../../../../shared/trimmed-string'
 
 // Devin stores workspace metadata absent from Windows transcripts in a sibling sessions.db.
 

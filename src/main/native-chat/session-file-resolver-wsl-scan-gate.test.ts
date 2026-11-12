@@ -26,7 +26,7 @@ vi.mock('./wsl-transcript-fs-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslTranscriptFsGateModule>()),
   runWslTranscriptFsTask: mocks.gate
 }))
-vi.mock('../ai-vault/session-scanner-discovery', () => ({
+vi.mock('../ai-vault/discovery/session-scanner-discovery', () => ({
   walkSessionFiles: mocks.walk,
   forEachSessionFile: async (
     dir: string,
@@ -60,7 +60,7 @@ vi.mock('../wsl/filesystem/wsl-running-path-filter', async (importOriginal) => (
 }))
 
 import { resolveSessionFilePath } from './session-file-resolver'
-import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
+import { WslTranscriptFsError } from './wsl-transcript-fs-error'
 
 const realPlatform = process.platform
 

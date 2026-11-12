@@ -1,28 +1,81 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 import { summarizeBenchmarkSamples } from '../measurement/benchmark-sample-summary.mjs'
+import ts from 'typescript-api'
+
+const baselineSourcePathArgument = process.argv.find((arg) =>
+  arg.startsWith('--baseline-source-path=')
+)
+const baselineSourcePath = resolve(
+  baselineSourcePathArgument?.slice('--baseline-source-path='.length) ??
+    'src/main/ai-vault/session-scanner-accumulator.ts'
+)
+
+function retargetLegacyAccumulatorValueImports(source) {
+  const program = ts.createSourceFile(baselineSourcePath, source, ts.ScriptTarget.Latest, true)
+  assert.equal(program.parseDiagnostics.length, 0, 'Baseline source must parse')
+  const replacements = []
+  for (const statement of program.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue
+    }
+    if (
+      resolve(dirname(baselineSourcePath), statement.moduleSpecifier.text) !==
+      resolve('src/main/ai-vault/session-scanner-values')
+    ) {
+      continue
+    }
+    const clause = statement.importClause
+    assert(
+      clause && !clause.name && clause.namedBindings && ts.isNamedImports(clause.namedBindings)
+    )
+    const imports = clause.namedBindings.elements.map((binding) => {
+      const name = (binding.propertyName ?? binding.name).text
+      const owner =
+        name === 'extractString'
+          ? 'src/shared/trimmed-string.ts'
+          : name === 'timestampMs'
+            ? 'src/main/ai-vault/parsing/session-record-time.ts'
+            : null
+      assert(owner, `Unsupported historical accumulator value import: ${name}`)
+      return `import ${clause.isTypeOnly ? 'type ' : ''}{ ${binding.getText(program)} } from ${JSON.stringify(resolve(owner))}`
+    })
+    replacements.push({
+      start: statement.getStart(program),
+      end: statement.end,
+      text: imports.join('\n')
+    })
+  }
+  for (const replacement of replacements.toReversed()) {
+    source = source.slice(0, replacement.start) + replacement.text + source.slice(replacement.end)
+  }
+  return source
+}
 
 // git show <ref>:src/main/ai-vault/session-scanner-accumulator.ts | node config/scripts/session-timeline-benchmark.mjs
-const target = resolve('src/main/ai-vault/session-scanner-accumulator.ts')
-async function load(source) {
+const target = resolve('src/main/ai-vault/parsing/session-scanner-accumulator.ts')
+async function load(source, sourcePath = target) {
   const result = await build({
     stdin: {
       contents: `
         export {createAccumulator, cloneSessionAccumulator, updateTimeline, finalizeSession}
           from './session-scanner-accumulator';
         export {createClaudeSessionParseState, consumeClaudeSessionLine}
-          from './session-scanner-primary-parsers';`,
+          from '../scanners/claude/session-scanner-primary-parsers';`,
       loader: 'ts',
       resolveDir: dirname(target)
     },
     bundle: true,
     write: false,
     platform: 'node',
-    format: 'esm',
+    format: 'cjs',
     plugins: [
       {
         name: 'timeline-baseline',
@@ -30,18 +83,26 @@ async function load(source) {
           plugin.onLoad({ filter: /session-scanner-accumulator\.ts$/ }, () => ({
             contents: source,
             loader: 'ts',
-            resolveDir: dirname(target)
+            resolveDir: dirname(sourcePath)
           }))
         }
       }
     ]
   })
-  return import(
-    `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
-  )
+  const directory = await mkdtemp(join(tmpdir(), 'orca-session-timeline-'))
+  try {
+    const file = join(directory, 'timeline.cjs')
+    await writeFile(file, result.outputFiles[0].text)
+    return createRequire(import.meta.url)(file)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 }
 const implementations = {
-  before: await load(readFileSync(0, 'utf8')),
+  before: await load(
+    retargetLegacyAccumulatorValueImports(readFileSync(0, 'utf8')),
+    baselineSourcePath
+  ),
   after: await load(readFileSync(target, 'utf8'))
 }
 const file = { path: 'timeline.jsonl', mtimeMs: 0, modifiedAt: '2026-01-01T00:00:00.000Z' }

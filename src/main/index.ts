@@ -24,7 +24,7 @@ import {
   isDivergedProfileStateFailure,
   profileStateStartupFailureClass
 } from './persistence/profile-state/startup/profile-state-startup-failure'
-import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from './crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import {
   chooseProfileStateCopy,
   chooseProfileStateRepair,
@@ -36,7 +36,7 @@ import { profileStateRepairSectionApproval } from '../shared/profile-state-recov
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
-import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
 import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'

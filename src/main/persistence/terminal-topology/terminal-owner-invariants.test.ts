@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
-import { findTerminalBindingConflict } from '../../../shared/workspace-layout/terminal-owner-invariants'
+import { findTerminalBindingConflict } from '../../../shared/workspace-layout/terminal-topology/terminal-owner-invariants'
 
 const WT = 'repo-1::/tmp/wt'
 

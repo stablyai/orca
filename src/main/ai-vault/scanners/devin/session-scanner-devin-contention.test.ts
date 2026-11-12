@@ -7,7 +7,7 @@ import { scanAiVaultSessions } from '../../session-scanner'
 import { resetDevinSessionsIndexCacheForTests } from './session-scanner-devin-db'
 import * as databaseReader from '../opencode/sqlite/session-scanner-opencode-sqlite-open'
 import { resetSessionParseCacheForTests } from '../../parse-cache/session-parse-cache-store'
-import { isolatedScanRoots } from '../../session-scanner-test-fixtures'
+import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 let root: string | undefined
 

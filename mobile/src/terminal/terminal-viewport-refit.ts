@@ -12,6 +12,7 @@ import {
   type TerminalFrameHeightRefitState,
   type TerminalUpdateViewportCapability
 } from './terminal-viewport-refit-state'
+import { currentAppStateStatus } from '../platform/app-state-status'
 
 export type TerminalViewportDims = { cols: number; rows: number }
 
@@ -264,7 +265,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions) 
     if (Platform.OS !== 'ios') {
       return
     }
-    let previousAppState: AppStateStatus | null = AppState.currentState
+    let previousAppState: AppStateStatus | null = currentAppStateStatus()
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const shouldRefit = shouldRecoverTerminalOnAppStateChange(
         previousAppState,
