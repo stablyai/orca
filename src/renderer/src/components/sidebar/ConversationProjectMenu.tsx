@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '@/store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { RepoHeaderProjectActionsMenu } from './worktree-list/rows/repo-header-project-actions'
@@ -26,6 +26,7 @@ export function ConversationProjectMenu({
   onHide?: () => void
   children?: ReactNode
 }) {
+  const t = useTranslate()
   const repos = useAppStore((state) => state.repos)
   const projectGroups = useAppStore((state) => state.projectGroups)
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
@@ -33,15 +34,13 @@ export function ConversationProjectMenu({
   const hide = (
     <DropdownMenuItem disabled={!onHide} onSelect={onHide}>
       <EyeOff className="size-3.5" />
-      {translate('projectConversations.hideProject', 'Hide project from list')}
+      {t('projectConversations.hideProject', 'Hide project from list')}
     </DropdownMenuItem>
   )
   if (!group.repo) {
-    const label = translate(
-      'projectConversations.projectOptionsFor',
-      'Project options for {{project}}',
-      { project: group.label }
-    )
+    const label = t('projectConversations.projectOptionsFor', 'Project options for {{project}}', {
+      project: group.label
+    })
     return (
       <DropdownMenu>
         <Tooltip>
@@ -109,15 +108,15 @@ export function ConversationProjectMenu({
       </RepoHeaderProjectActionsMenu>
       <ProjectGroupNameDialog
         open={dialogs.nameDialog !== null}
-        title={translate('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')}
-        description={translate(
+        title={t('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')}
+        description={t(
           'auto.components.sidebar.WorktreeList.d880ea0744',
           'Create a group and move this project into it.'
         )}
-        initialName={translate('projectConversations.defaultGroupName', '{{project}} group', {
+        initialName={t('projectConversations.defaultGroupName', '{{project}} group', {
           project: group.repo.displayName
         })}
-        confirmLabel={translate('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')}
+        confirmLabel={t('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')}
         onOpenChange={(open) => {
           if (!open) {
             dialogs.setNameDialog(null)

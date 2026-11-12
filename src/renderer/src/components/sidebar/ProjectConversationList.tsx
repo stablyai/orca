@@ -19,7 +19,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ConversationProjectMenu } from './ConversationProjectMenu'
 import { HiddenConversationProjects } from './HiddenConversationProjects'
 import type { AiVaultSessionVirtualList } from '../right-sidebar/ai-vault/session-list/AiVaultSessionVirtualList'
@@ -46,6 +46,7 @@ export type ProjectConversationListProps = ComponentProps<typeof AiVaultSessionV
   executionHostScope?: ExecutionHostScope
 }
 export function ProjectConversationList(props: ProjectConversationListProps): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const repos = useRepos()
   const worktrees = useAllWorktrees()
@@ -194,7 +195,7 @@ export function ProjectConversationList(props: ProjectConversationListProps): Re
         getManualRepoOrder(rest)
       )
       .catch(() =>
-        toast.error(translate('sidebar.projectOrder.saveFailed', 'Could not save project order'))
+        toast.error(t('sidebar.projectOrder.saveFailed', 'Could not save project order'))
       )
   }
   return (
@@ -206,7 +207,7 @@ export function ProjectConversationList(props: ProjectConversationListProps): Re
               variant="ghost"
               size="xs"
               className="min-w-0"
-              aria-label={translate('projectConversations.projectOrder', 'Project order')}
+              aria-label={t('projectConversations.projectOrder', 'Project order')}
             >
               {orderLabels.get(order)}
               <ChevronDown className="size-3" />
@@ -237,13 +238,13 @@ export function ProjectConversationList(props: ProjectConversationListProps): Re
         >
           <Archive className="size-3.5" />
           {archived
-            ? translate('projectConversations.allChats', 'Chats')
-            : translate('projectConversations.archived', 'Archived')}
+            ? t('projectConversations.allChats', 'Chats')
+            : t('projectConversations.archived', 'Archived')}
         </Button>
       </div>
       {props.loading && visibleGroups.length > 0 ? (
         <p role="status" className="px-3 py-2 text-xs text-muted-foreground">
-          {translate('projectConversations.loading', 'Loading chats…')}
+          {t('projectConversations.loading', 'Loading chats…')}
         </p>
       ) : null}
       <div className="flex justify-end px-3">
@@ -322,14 +323,14 @@ export function ProjectConversationList(props: ProjectConversationListProps): Re
                       <DropdownMenuSeparator />
                       <DropdownMenuItem disabled={index === 0} onSelect={() => move(group, -1)}>
                         <ArrowUp />
-                        {translate('projectConversations.moveUp', 'Move up')}
+                        {t('projectConversations.moveUp', 'Move up')}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         disabled={index === visibleGroups.length - 1}
                         onSelect={() => move(group, 1)}
                       >
                         <ArrowDown />
-                        {translate('projectConversations.moveDown', 'Move down')}
+                        {t('projectConversations.moveDown', 'Move down')}
                       </DropdownMenuItem>
                     </>
                   ) : null}
@@ -353,7 +354,7 @@ export function ProjectConversationList(props: ProjectConversationListProps): Re
               ))}
               {group.sessions.length === 0 && !props.loading ? (
                 <p className="py-1 pl-7 text-xs text-muted-foreground">
-                  {translate('projectConversations.noChats', 'No chats yet')}
+                  {t('projectConversations.noChats', 'No chats yet')}
                 </p>
               ) : null}
             </ProjectConversationSection>
@@ -362,10 +363,10 @@ export function ProjectConversationList(props: ProjectConversationListProps): Re
         {visibleGroups.length === 0 ? (
           <p className="px-2 py-4 text-sm text-muted-foreground">
             {props.loading
-              ? translate('projectConversations.loading', 'Loading chats…')
+              ? t('projectConversations.loading', 'Loading chats…')
               : archived
-                ? translate('projectConversations.noArchived', 'No archived chats')
-                : translate('projectConversations.noMatching', 'No matching chats')}
+                ? t('projectConversations.noArchived', 'No archived chats')
+                : t('projectConversations.noMatching', 'No matching chats')}
           </p>
         ) : null}
       </div>

@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import {
@@ -47,6 +47,7 @@ function refresh(): Promise<void> {
   return flight
 }
 export function useConversationPreferences() {
+  const t = useTranslate()
   const preferences = useSyncExternalStore(
     (listener) => {
       listeners.add(listener)
@@ -78,7 +79,7 @@ export function useConversationPreferences() {
       accept(reply.preferences)
     } catch {
       toast.error(
-        translate(
+        t(
           'projectConversations.saveFailed',
           'Could not save chat preferences. Update Orca or try again.'
         )
@@ -103,7 +104,7 @@ export function useConversationPreferences() {
       accept(reply.preferences)
     } catch {
       toast.error(
-        translate(
+        t(
           'projectConversations.visibilityFailed',
           'Could not save project visibility. Update Orca or try again.'
         )

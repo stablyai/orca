@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 
 export function ProjectConversationSection({
@@ -27,6 +27,7 @@ export function ProjectConversationSection({
   onMore: () => void
   menu?: ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section className="mb-3" aria-label={label}>
       <div className="group/project flex min-w-0 items-center gap-1 rounded-md px-1 hover:bg-sidebar-accent focus-within:bg-sidebar-accent">
@@ -68,7 +69,7 @@ export function ProjectConversationSection({
               onClick={onMore}
               className="ml-6 justify-start"
             >
-              {translate('projectConversations.showMore', 'Show more')}
+              {t('projectConversations.showMore', 'Show more')}
             </Button>
           ) : null}
         </div>

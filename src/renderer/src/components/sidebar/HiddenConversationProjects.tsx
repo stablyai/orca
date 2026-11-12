@@ -7,7 +7,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function HiddenConversationProjects({
   projects,
@@ -16,6 +16,7 @@ export function HiddenConversationProjects({
   projects: Record<string, string> | undefined
   onRestore?: (key: string, label: string) => void
 }) {
+  const t = useTranslate()
   const entries = Object.entries(projects ?? {})
   if (!entries.length) {
     return null
@@ -25,12 +26,12 @@ export function HiddenConversationProjects({
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="xs">
           <Eye className="size-3.5" />
-          {translate('projectConversations.hiddenProjects', 'Hidden projects')}
+          {t('projectConversations.hiddenProjects', 'Hidden projects')}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>
-          {translate('projectConversations.keepFiles', 'Files and history are kept')}
+          {t('projectConversations.keepFiles', 'Files and history are kept')}
         </DropdownMenuLabel>
         {entries.map(([key, label]) => (
           <DropdownMenuItem
@@ -40,7 +41,7 @@ export function HiddenConversationProjects({
           >
             <Eye className="size-3.5" />
             <span className="max-w-64 truncate">
-              {translate('projectConversations.restoreProject', 'Restore {{project}}', {
+              {t('projectConversations.restoreProject', 'Restore {{project}}', {
                 project: label
               })}
             </span>
