@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Server, ServerOff } from 'lucide-react'
-import { CommandItem } from '@/components/ui/command'
+import { CommandOption } from '@/components/ui/command'
 import { PaletteWorktreeStatusDot } from '@/components/cmd-j/palette-live-status'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
@@ -81,8 +81,8 @@ export function WorktreeJumpPaletteWorktreeRow({
   )
 
   return (
-    <CommandItem
-      value={renderKey}
+    <CommandOption
+      {...controller.getOptionProps(renderKey)}
       onSelect={() => handleSelectItem(entry)}
       data-current={isCurrentWorktree ? 'true' : undefined}
       className={cn(
@@ -174,6 +174,6 @@ export function WorktreeJumpPaletteWorktreeRow({
           </div>
         </div>
       </div>
-    </CommandItem>
+    </CommandOption>
   )
 }

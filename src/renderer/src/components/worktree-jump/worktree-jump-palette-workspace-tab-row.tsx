@@ -1,7 +1,7 @@
 import type React from 'react'
 import { FileText, MessageSquare, SquareTerminal } from 'lucide-react'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { CommandItem } from '@/components/ui/command'
+import { CommandOption } from '@/components/ui/command'
 import { PaletteRecentTabStatusDot } from '@/components/cmd-j/palette-live-status'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { cn } from '@/lib/class-names'
@@ -63,8 +63,8 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
   )
 
   return (
-    <CommandItem
-      value={renderKey}
+    <CommandOption
+      {...controller.getOptionProps(renderKey)}
       onSelect={() => controller.handleSelectItem(entry)}
       className={cn(
         'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
@@ -122,6 +122,6 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
           </div>
         </div>
       </div>
-    </CommandItem>
+    </CommandOption>
   )
 }

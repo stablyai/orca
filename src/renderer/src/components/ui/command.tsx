@@ -114,7 +114,7 @@ function CommandDialog({
             <Command
               shouldFilter={shouldFilter}
               className={cn(
-                '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
+                '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[data-slot=command-item]]:px-2 [&_[data-slot=command-item]]:py-3',
                 commandClassName
               )}
               {...commandRootProps}
@@ -259,6 +259,9 @@ function CommandGroup({
   )
 }
 
+const COMMAND_ITEM_BASE_CLASS =
+  'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4'
+
 const commandItemVariants = cva('', {
   variants: {
     selection: { default: '', palette: 'jump-palette-item' },
@@ -281,7 +284,51 @@ function CommandItem({
       ref={ref}
       data-slot="command-item"
       className={cn(
-        'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4',
+        COMMAND_ITEM_BASE_CLASS,
+        commandItemVariants({ selection, density, emphasis }),
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+type CommandOptionProps = Omit<React.ComponentProps<'div'>, 'onSelect'> &
+  VariantProps<typeof commandItemVariants> & {
+    selected: boolean
+    /** Rendered as `data-value`, the identity automation reads from command rows. */
+    value?: string
+    disabled?: boolean
+    onHighlight?: () => void
+    onSelect?: () => void
+  }
+
+/** A listbox option cmdk never sees, for windowed lists that own selection; omitting `cmdk-item` keeps cmdk's DOM queries off it. */
+function CommandOption({
+  className,
+  selection,
+  density,
+  emphasis,
+  selected,
+  value,
+  disabled = false,
+  onHighlight,
+  onSelect,
+  ...props
+}: CommandOptionProps): React.JSX.Element {
+  return (
+    <div
+      data-slot="command-item"
+      data-value={value}
+      role="option"
+      aria-selected={selected}
+      data-selected={selected}
+      aria-disabled={disabled}
+      data-disabled={disabled}
+      onPointerMove={disabled ? undefined : onHighlight}
+      onClick={disabled ? undefined : onSelect}
+      className={cn(
+        COMMAND_ITEM_BASE_CLASS,
         commandItemVariants({ selection, density, emphasis }),
         className
       )}
@@ -311,5 +358,6 @@ export {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandOption,
   CommandSeparator
 }

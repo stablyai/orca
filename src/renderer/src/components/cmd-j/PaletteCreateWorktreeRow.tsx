@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Github, Gitlab, Plus } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
-import { CommandItem } from '@/components/ui/command'
-import { CREATE_WORKTREE_ITEM_ID } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
+import { CommandOption } from '@/components/ui/command'
 import type { CmdJTaskUrlCreatePreview } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import { useTranslate } from '@/i18n/use-translate'
@@ -22,7 +21,13 @@ function TaskUrlProviderIcon({
   return <JiraIcon className="size-3" />
 }
 
+type PaletteCreateWorktreeOptionProps = Omit<
+  React.ComponentProps<typeof CommandOption>,
+  'children' | 'className' | 'onSelect'
+>
+
 export function PaletteCreateWorktreeRow({
+  optionProps,
   className,
   createWorktreeName,
   linearIdentifier,
@@ -32,6 +37,7 @@ export function PaletteCreateWorktreeRow({
   taskUrlPreview,
   onSelect
 }: {
+  optionProps: PaletteCreateWorktreeOptionProps
   className: string
   createWorktreeName: string
   linearIdentifier: string | null
@@ -75,8 +81,8 @@ export function PaletteCreateWorktreeRow({
   }, [taskUrlPreview?.identifier, taskUrlPreview?.loading])
 
   return (
-    <CommandItem
-      value={CREATE_WORKTREE_ITEM_ID}
+    <CommandOption
+      {...optionProps}
       onSelect={onSelect}
       aria-label={previewLabel}
       aria-busy={linearPending || Boolean(taskUrlPreview?.loading && !showLinearPreview)}
@@ -162,6 +168,6 @@ export function PaletteCreateWorktreeRow({
           </div>
         </>
       )}
-    </CommandItem>
+    </CommandOption>
   )
 }

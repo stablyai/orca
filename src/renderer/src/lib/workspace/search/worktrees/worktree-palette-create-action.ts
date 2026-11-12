@@ -47,6 +47,7 @@ type WorktreePaletteSelectionCandidateEntry = {
 
 // Include every rendered item type or keyboard navigation’s includes guard snaps its highlight to top, leaving mouse-only rows.
 const SELECTABLE_ENTRY_TYPES = [
+  'task',
   'worktree',
   'create-worktree',
   'settings',
@@ -73,12 +74,16 @@ export function isSelectableWorktreePaletteEntry(
 
 export function getWorktreePaletteSelectionItemIds<
   T extends WorktreePaletteSelectionCandidateEntry
->(entries: readonly T[], renderKeys: readonly string[] = []): string[] {
-  // Keyboard order must include synthetic actions and skip only headers.
+>(
+  entries: readonly T[],
+  renderKeys: readonly string[] = [],
+  isDisabled: (entry: T) => boolean = () => false
+): string[] {
+  // Keyboard order must include synthetic actions and skip only headers and disabled rows.
   // Prefer deduplicated renderKeys; bare IDs omit duplicate rows and snap keyboard highlight to top.
   return entries
     .map((entry, index) => ({ entry, id: renderKeys[index] ?? entry.id }))
-    .filter(({ entry }) => isSelectableWorktreePaletteEntry(entry))
+    .filter(({ entry }) => isSelectableWorktreePaletteEntry(entry) && !isDisabled(entry))
     .map(({ id }) => id)
 }
 

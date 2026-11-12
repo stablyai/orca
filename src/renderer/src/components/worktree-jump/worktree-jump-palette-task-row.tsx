@@ -1,5 +1,5 @@
 import { CircleDot } from 'lucide-react'
-import { CommandItem } from '@/components/ui/command'
+import { CommandOption } from '@/components/ui/command'
 import type { TaskPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 
@@ -14,8 +14,8 @@ export function WorktreeJumpPaletteTaskRow({
 }) {
   const result = entry.result
   return (
-    <CommandItem
-      value={renderKey}
+    <CommandOption
+      {...controller.getOptionProps(renderKey)}
       onSelect={() => controller.handleSelectItem(entry)}
       selection="palette"
       className="group mx-0.5 cursor-pointer text-left"
@@ -35,6 +35,6 @@ export function WorktreeJumpPaletteTaskRow({
           </div>
         </div>
       </div>
-    </CommandItem>
+    </CommandOption>
   )
 }

@@ -49,7 +49,7 @@ for (const theme of ['light', 'dark'] as const) {
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
     await expect(palette).toBeVisible()
     const rowId = encodePaletteIdentity(['worktree', `local|${workspaceId}`])
-    const row = palette.locator(`[cmdk-item][data-value=${JSON.stringify(rowId)}]`)
+    const row = palette.locator(`[role="option"][data-value=${JSON.stringify(rowId)}]`)
     await expect(row).toContainText('Customer interviews')
     const input = palette.locator('[cmdk-input]')
     await input.fill('Research synthesis')

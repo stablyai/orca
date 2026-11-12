@@ -1,6 +1,6 @@
 import type React from 'react'
 import { FolderTree } from 'lucide-react'
-import { CommandItem } from '@/components/ui/command'
+import { CommandOption } from '@/components/ui/command'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { cn } from '@/lib/class-names'
@@ -39,8 +39,8 @@ export function WorktreeJumpPaletteProjectRow({
     : t('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
 
   return (
-    <CommandItem
-      value={renderKey}
+    <CommandOption
+      {...controller.getOptionProps(renderKey)}
       onSelect={() => controller.handleSelectItem(entry)}
       className={cn(
         'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
@@ -73,7 +73,7 @@ export function WorktreeJumpPaletteProjectRow({
           ) : null}
         </div>
       </div>
-    </CommandItem>
+    </CommandOption>
   )
 }
 
@@ -97,8 +97,8 @@ export function WorktreeJumpPaletteActionRow({
         : t('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
 
   return (
-    <CommandItem
-      value={renderKey}
+    <CommandOption
+      {...controller.getOptionProps(renderKey)}
       disabled={entry.type === 'quick-action' && entry.result.disabled}
       onSelect={() => controller.handleSelectItem(entry)}
       className={cn(
@@ -122,6 +122,6 @@ export function WorktreeJumpPaletteActionRow({
           {result.description}
         </div>
       </div>
-    </CommandItem>
+    </CommandOption>
   )
 }

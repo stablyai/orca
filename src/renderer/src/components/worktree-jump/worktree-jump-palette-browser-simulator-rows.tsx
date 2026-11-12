@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Smartphone } from 'lucide-react'
-import { CommandItem } from '@/components/ui/command'
+import { CommandOption } from '@/components/ui/command'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -49,8 +49,8 @@ export function WorktreeJumpPaletteSimulatorRow({
   )
 
   return (
-    <CommandItem
-      value={renderKey}
+    <CommandOption
+      {...controller.getOptionProps(renderKey)}
       onSelect={() => controller.handleSelectItem(entry)}
       className={cn(
         'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
@@ -107,7 +107,7 @@ export function WorktreeJumpPaletteSimulatorRow({
           </div>
         </div>
       </div>
-    </CommandItem>
+    </CommandOption>
   )
 }
 
@@ -143,8 +143,8 @@ export function WorktreeJumpPaletteBrowserRow({
   )
 
   return (
-    <CommandItem
-      value={renderKey}
+    <CommandOption
+      {...controller.getOptionProps(renderKey)}
       onSelect={() => controller.handleSelectItem(entry)}
       className={cn(
         'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
@@ -197,6 +197,6 @@ export function WorktreeJumpPaletteBrowserRow({
           </div>
         </div>
       </div>
-    </CommandItem>
+    </CommandOption>
   )
 }

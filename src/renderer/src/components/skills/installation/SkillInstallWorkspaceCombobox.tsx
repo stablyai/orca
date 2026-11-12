@@ -1,19 +1,25 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer, defaultRangeExtractor, type Range } from '@tanstack/react-virtual'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from '@/components/ui/command'
+import { Command, CommandInput, CommandList, CommandOption } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import {
+  getWindowedCommandNavigation,
+  useCommandInputActiveDescendant
+} from '@/lib/list-interaction/windowed-command-navigation'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'
+
+// Why: `py-2` around a 20px text line; fixed so rows never need measuring.
+const CHOICE_OPTION_HEIGHT = 36
+const CHOICE_OPTION_OVERSCAN = 8
+// Why: matches `max-h-72`; seeds the first paint before the popover measures.
+const CHOICE_LIST_MAX_HEIGHT = 288
 
 export type SkillInstallWorkspaceComboboxProps = {
   id?: string
@@ -23,6 +29,14 @@ export type SkillInstallWorkspaceComboboxProps = {
   disabled?: boolean
   placeholder?: string
   triggerClassName?: string
+}
+
+/** Opening on the current choice highlights it (or nothing when it is gone); typing highlights the first match. */
+type ChoiceHighlight = { kind: 'choice'; key: string } | { kind: 'none' } | { kind: 'first-match' }
+
+// Worktree and folder ids are separate namespaces; the kind keeps option keys injective.
+function choiceKey(choice: SkillInstallWorkspaceChoice): string {
+  return `${choice.kind}:${choice.id}`
 }
 
 function searchChoices(
@@ -41,6 +55,195 @@ function searchChoices(
   })
 }
 
+function SkillInstallWorkspaceChoiceList({
+  choices,
+  value,
+  query,
+  highlight,
+  setInputNode,
+  onQueryChange,
+  onHighlightChange,
+  onSelect
+}: {
+  choices: readonly SkillInstallWorkspaceChoice[]
+  value: string
+  query: string
+  highlight: ChoiceHighlight
+  setInputNode: (node: HTMLInputElement | null) => void
+  onQueryChange: (query: string) => void
+  onHighlightChange: (highlight: ChoiceHighlight) => void
+  onSelect: (choiceId: string) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const optionIdPrefix = `${useId()}option`
+
+  const filteredChoices = useMemo(() => searchChoices(choices, query), [choices, query])
+  const choiceKeys = useMemo(() => filteredChoices.map(choiceKey), [filteredChoices])
+  const indexByKey = useMemo(
+    () => new Map(choiceKeys.map((key, index) => [key, index])),
+    [choiceKeys]
+  )
+  // A highlighted choice that left the results falls back to the first match, as cmdk does.
+  const activeKey =
+    highlight.kind === 'none'
+      ? null
+      : highlight.kind === 'choice' && indexByKey.has(highlight.key)
+        ? highlight.key
+        : (choiceKeys[0] ?? null)
+  const activeIndex = activeKey === null ? -1 : (indexByKey.get(activeKey) ?? -1)
+
+  const rangeExtractor = useCallback(
+    (range: Range) => {
+      const indexes = defaultRangeExtractor(range)
+      // Keep the active option mounted so aria-activedescendant always names a real element.
+      if (activeIndex >= 0 && !indexes.includes(activeIndex)) {
+        indexes.push(activeIndex)
+        indexes.sort((a, b) => a - b)
+      }
+      return indexes
+    },
+    [activeIndex]
+  )
+  const virtualizer = useVirtualizer({
+    count: filteredChoices.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => CHOICE_OPTION_HEIGHT,
+    overscan: CHOICE_OPTION_OVERSCAN,
+    getItemKey: (index) => choiceKeys[index] ?? index,
+    rangeExtractor,
+    initialRect: { width: 0, height: CHOICE_LIST_MAX_HEIGHT },
+    // Match the list's `scroll-pt-4 scroll-pb-4` so keyboard reveal keeps the same edge gap.
+    scrollPaddingStart: 16,
+    scrollPaddingEnd: 16
+  })
+
+  // Content mounts per open; reveal the choice it opened on.
+  useLayoutEffect(() => {
+    if (activeIndex > 0) {
+      virtualizer.scrollToIndex(activeIndex, { align: 'auto' })
+    }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- reveal only once, when the list opens.
+  }, [])
+
+  const setInputRef = useCallback(
+    (node: HTMLInputElement | null) => {
+      inputRef.current = node
+      setInputNode(node)
+    },
+    [setInputNode]
+  )
+  useCommandInputActiveDescendant(
+    inputRef,
+    activeIndex >= 0 ? `${optionIdPrefix}-${activeIndex}` : null
+  )
+
+  const handleQueryChange = (nextQuery: string): void => {
+    onQueryChange(nextQuery)
+    virtualizer.scrollToOffset(0)
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    const navigation = getWindowedCommandNavigation(event, choiceKeys, activeKey)
+    if (navigation) {
+      event.preventDefault()
+      if (navigation.targetId !== null) {
+        onHighlightChange({ kind: 'choice', key: navigation.targetId })
+        virtualizer.scrollToIndex(indexByKey.get(navigation.targetId) ?? 0, { align: 'auto' })
+      }
+      return
+    }
+    const activeChoice = activeIndex >= 0 ? filteredChoices[activeIndex] : undefined
+    if (event.key === 'Enter' && !isImeOwnedKeyboardEvent(event) && activeChoice) {
+      event.preventDefault()
+      onSelect(activeChoice.id)
+    }
+  }
+
+  return (
+    <Command shouldFilter={false}>
+      <CommandInput
+        ref={setInputRef}
+        placeholder={t(
+          'auto.components.skills.SkillInstallWorkspaceCombobox.search',
+          'Search workspaces...'
+        )}
+        value={query}
+        onValueChange={handleQueryChange}
+        onKeyDown={handleKeyDown}
+      />
+      <TooltipProvider>
+        <CommandList ref={listRef} className="max-h-72">
+          {filteredChoices.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              {t(
+                'auto.components.skills.SkillInstallWorkspaceCombobox.empty',
+                'No workspaces found.'
+              )}
+            </div>
+          ) : (
+            <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const choice = filteredChoices[virtualRow.index]
+                if (!choice) {
+                  return null
+                }
+                const key = choiceKey(choice)
+                const isSelected = choice.id === value
+                const kindLabel =
+                  choice.kind === 'worktree'
+                    ? t(
+                        'auto.components.skills.SkillInstallTargetFields.d628c416a2',
+                        'Git worktree'
+                      )
+                    : t('auto.components.skills.SkillInstallTargetFields.7a366323e7', 'Folder')
+                const fullLabel = `${choice.label} · ${kindLabel}`
+
+                return (
+                  <CommandOption
+                    key={key}
+                    value={choice.id}
+                    id={`${optionIdPrefix}-${virtualRow.index}`}
+                    aria-posinset={virtualRow.index + 1}
+                    aria-setsize={filteredChoices.length}
+                    selected={key === activeKey}
+                    onHighlight={() => onHighlightChange({ kind: 'choice', key })}
+                    onSelect={() => onSelect(choice.id)}
+                    className="absolute left-0 top-0 w-full min-w-0 !p-0 cursor-pointer"
+                    style={{
+                      height: virtualRow.size,
+                      transform: `translateY(${virtualRow.start}px)`
+                    }}
+                  >
+                    <FilePathCursorTooltip path={fullLabel}>
+                      <div
+                        title={fullLabel}
+                        className="flex w-full min-w-0 items-center gap-2 px-3 py-2"
+                      >
+                        <Check
+                          className={cn(
+                            'size-4 shrink-0 text-foreground',
+                            isSelected ? 'opacity-100' : 'opacity-0'
+                          )}
+                        />
+                        <span className="truncate flex-1">
+                          {choice.label} ·{' '}
+                          <span className="text-muted-foreground">{kindLabel}</span>
+                        </span>
+                      </div>
+                    </FilePathCursorTooltip>
+                  </CommandOption>
+                )
+              })}
+            </div>
+          )}
+        </CommandList>
+      </TooltipProvider>
+    </Command>
+  )
+}
+
 export function SkillInstallWorkspaceCombobox({
   id,
   value,
@@ -53,7 +256,7 @@ export function SkillInstallWorkspaceCombobox({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [commandValue, setCommandValue] = useState(value)
+  const [highlight, setHighlight] = useState<ChoiceHighlight>({ kind: 'none' })
   const inputRef = useRef<HTMLInputElement | null>(null)
   const focusFrameRef = useRef<number | null>(null)
 
@@ -61,8 +264,6 @@ export function SkillInstallWorkspaceCombobox({
     () => choices.find((choice) => choice.id === value) ?? null,
     [choices, value]
   )
-
-  const filteredChoices = useMemo(() => searchChoices(choices, query), [choices, query])
 
   const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
@@ -95,18 +296,29 @@ export function SkillInstallWorkspaceCombobox({
     })
   }, [cancelFocusFrame])
 
+  const highlightCurrentChoice = useCallback(() => {
+    setHighlight(
+      selectedChoice ? { kind: 'choice', key: choiceKey(selectedChoice) } : { kind: 'none' }
+    )
+  }, [selectedChoice])
+
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
       if (nextOpen) {
-        setCommandValue(value)
+        highlightCurrentChoice()
         return
       }
       cancelFocusFrame()
       setQuery('')
     },
-    [cancelFocusFrame, value]
+    [cancelFocusFrame, highlightCurrentChoice]
   )
+
+  const handleQueryChange = useCallback((nextQuery: string) => {
+    setQuery(nextQuery)
+    setHighlight({ kind: 'first-match' })
+  }, [])
 
   const handleSelect = useCallback(
     (choiceId: string) => {
@@ -124,7 +336,7 @@ export function SkillInstallWorkspaceCombobox({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setCommandValue(value)
+        highlightCurrentChoice()
         setOpen(true)
         return
       }
@@ -133,12 +345,12 @@ export function SkillInstallWorkspaceCombobox({
       }
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
-        setCommandValue(value)
+        setHighlight({ kind: 'first-match' })
         setQuery(event.key)
         setOpen(true)
       }
     },
-    [open, value]
+    [highlightCurrentChoice, open]
   )
 
   const defaultPlaceholder = t(
@@ -192,65 +404,16 @@ export function SkillInstallWorkspaceCombobox({
           focusSearchInput()
         }}
       >
-        <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
-          <CommandInput
-            ref={setInputNode}
-            placeholder={t(
-              'auto.components.skills.SkillInstallWorkspaceCombobox.search',
-              'Search workspaces...'
-            )}
-            value={query}
-            onValueChange={setQuery}
-          />
-          <TooltipProvider>
-            <CommandList className="max-h-72">
-              <CommandEmpty>
-                {t(
-                  'auto.components.skills.SkillInstallWorkspaceCombobox.empty',
-                  'No workspaces found.'
-                )}
-              </CommandEmpty>
-              {filteredChoices.map((choice) => {
-                const isSelected = choice.id === value
-                const kindLabel =
-                  choice.kind === 'worktree'
-                    ? t(
-                        'auto.components.skills.SkillInstallTargetFields.d628c416a2',
-                        'Git worktree'
-                      )
-                    : t('auto.components.skills.SkillInstallTargetFields.7a366323e7', 'Folder')
-                const fullLabel = `${choice.label} · ${kindLabel}`
-
-                return (
-                  <CommandItem
-                    key={`${choice.kind}:${choice.id}`}
-                    value={choice.id}
-                    onSelect={() => handleSelect(choice.id)}
-                    className="min-w-0 !p-0 cursor-pointer"
-                  >
-                    <FilePathCursorTooltip path={fullLabel}>
-                      <div
-                        title={fullLabel}
-                        className="flex w-full min-w-0 items-center gap-2 px-3 py-2"
-                      >
-                        <Check
-                          className={cn(
-                            'size-4 shrink-0 text-foreground',
-                            isSelected ? 'opacity-100' : 'opacity-0'
-                          )}
-                        />
-                        <span className="truncate flex-1">
-                          {choice.label} ·{' '}
-                          <span className="text-muted-foreground">{kindLabel}</span>
-                        </span>
-                      </div>
-                    </FilePathCursorTooltip>
-                  </CommandItem>
-                )
-              })}
-            </CommandList>
-          </TooltipProvider>
-        </Command>
+        <SkillInstallWorkspaceChoiceList
+          choices={choices}
+          value={value}
+          query={query}
+          highlight={highlight}
+          setInputNode={setInputNode}
+          onQueryChange={handleQueryChange}
+          onHighlightChange={setHighlight}
+          onSelect={handleSelect}
+        />
       </PopoverContent>
     </Popover>
   )

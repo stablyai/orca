@@ -16,12 +16,12 @@ for (const theme of ['light', 'dark'] as const) {
     }, theme)
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
     const input = palette.locator('[cmdk-input]')
-    const website = palette.locator('[cmdk-item][data-value="quick-action:navigate-to-url"]')
+    const website = palette.locator('[role="option"][data-value="quick-action:navigate-to-url"]')
     await input.fill('brex.com')
     await expect(website).toContainText('Go to brex.com')
     await expect(website).toContainText('Open in a new browser tab')
     await expect(website).toHaveAttribute('data-selected', 'true')
-    await expect(palette.locator('[cmdk-item]').first()).toContainText('Go to brex.com')
+    await expect(palette.locator('[role="option"]').first()).toContainText('Go to brex.com')
     const screenshot = testInfo.outputPath(`website-palette-${theme}.png`)
     await palette.screenshot({ path: screenshot, animations: 'disabled' })
     await testInfo.attach(`website-palette-${theme}`, {
@@ -51,7 +51,7 @@ for (const theme of ['light', 'dark'] as const) {
       }))
     })
     await input.fill('project.dev')
-    await expect(palette.locator('[cmdk-item]').first()).toContainText('Go to project.dev')
+    await expect(palette.locator('[role="option"]').first()).toContainText('Go to project.dev')
     await expect(website).toHaveAttribute('data-selected', 'true')
 
     const server = await startBrowserLinkServer()

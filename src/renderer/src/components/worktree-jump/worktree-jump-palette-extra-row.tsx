@@ -1,5 +1,5 @@
 import type React from 'react'
-import { CommandItem } from '@/components/ui/command'
+import { CommandOption } from '@/components/ui/command'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -20,8 +20,8 @@ export function WorktreeJumpPaletteExtraRow({
   const { result } = entry
   const sessionAge = formatPaletteSessionAge(result.lastActiveAt, controller.paletteNowMs, t)
   return (
-    <CommandItem
-      value={renderKey}
+    <CommandOption
+      {...controller.getOptionProps(renderKey)}
       onSelect={() => controller.handleSelectItem(entry)}
       selection="palette"
       className="mx-0.5 cursor-pointer"
@@ -55,6 +55,6 @@ export function WorktreeJumpPaletteExtraRow({
           <div className="flex shrink-0 items-center gap-1.5">{result.trailing}</div>
         ) : null}
       </div>
-    </CommandItem>
+    </CommandOption>
   )
 }

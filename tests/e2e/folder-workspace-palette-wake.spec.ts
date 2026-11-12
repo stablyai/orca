@@ -85,7 +85,7 @@ for (const selection of ['workspace', 'tab'] as const) {
     await openPalette()
     const query = selection === 'workspace' ? 'Sleeping research' : 'Wake marker terminal'
     await palette.getByRole('combobox').fill(query)
-    const row = palette.locator('[cmdk-item][data-selected="true"]')
+    const row = palette.locator('[role="option"][data-selected="true"]')
     await expect(row).toContainText(query)
     await palette.getByRole('combobox').press('Enter')
     await expect(palette).toHaveCount(0)

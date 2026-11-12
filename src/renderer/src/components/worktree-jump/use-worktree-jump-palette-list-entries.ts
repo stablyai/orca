@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   getWorktreePaletteSelectionItemIds,
   CREATE_WORKTREE_ITEM_ID
@@ -266,13 +266,29 @@ export function useWorktreeJumpPaletteListEntries({
     [listEntries]
   )
   const selectionItemIds = useMemo(
-    () => getWorktreePaletteSelectionItemIds(listEntries, listEntryRenderKeys),
+    () =>
+      getWorktreePaletteSelectionItemIds(
+        listEntries,
+        listEntryRenderKeys,
+        (entry) => entry.type === 'quick-action' && entry.result.disabled === true
+      ),
     [listEntries, listEntryRenderKeys]
   )
+  // See more expands inside flushSync; its focus handoff reads the committed order from here.
+  const selectionItemIdsRef = useRef(selectionItemIds)
+  useLayoutEffect(() => {
+    selectionItemIdsRef.current = selectionItemIds
+  }, [selectionItemIds])
   useEffect(() => {
     autoSelectedItemIdRef.current = selectionItemIds[0] ?? null
   }, [autoSelectedItemIdRef, selectionItemIds])
-  return { listEntries, listEntryRenderKeys, selectableItems, selectionItemIds }
+  return {
+    listEntries,
+    listEntryRenderKeys,
+    selectableItems,
+    selectionItemIds,
+    selectionItemIdsRef
+  }
 }
 
 export type WorktreeJumpPaletteListEntries = ReturnType<typeof useWorktreeJumpPaletteListEntries>
