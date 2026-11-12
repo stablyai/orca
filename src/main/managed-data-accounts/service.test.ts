@@ -83,4 +83,48 @@ describe('managed data accounts', () => {
     await windowsService.remove('devin', state.accounts.at(-1)!.id)
     expect(existsSync(liveCredential)).toBe(false)
   })
+
+  it('syncs launch credentials for registry IDs with upper-case letters', async () => {
+    const appData = join(root, 'upper-appdata')
+    const liveCredential = join(appData, 'devin', 'credentials.toml')
+    mkdirSync(join(appData, 'devin'), { recursive: true })
+    writeFileSync(liveCredential, 'windsurf_api_key = "system-default"\n')
+    const managedRoot = join(root, 'upper-managed')
+    const windowsService = new ManagedDataAccountService(managedRoot, undefined, {
+      platform: 'win32',
+      devinAppDataRoot: appData
+    })
+    const state = await windowsService.add('devin', source, 'One')
+    const id = state.accounts.at(-1)!.id
+    const registryPath = join(managedRoot, 'devin', 'accounts.json')
+    const registry = readFileSync(registryPath, 'utf8')
+    writeFileSync(registryPath, registry.replaceAll(id, id.toUpperCase()))
+    writeFileSync(liveCredential, 'windsurf_api_key = "stale-host-value"\n')
+
+    await windowsService.syncLaunchCredentials('devin', windowsService.launchEnvironment('devin'))
+
+    expect(readFileSync(liveCredential, 'utf8')).toContain('test-only-key')
+  })
+
+  it('keeps the system Devin backup when a launch overlaps a switch to System', async () => {
+    const appData = join(root, 'race-appdata')
+    const liveCredential = join(appData, 'devin', 'credentials.toml')
+    mkdirSync(join(appData, 'devin'), { recursive: true })
+    writeFileSync(liveCredential, 'windsurf_api_key = "system-default"\n')
+    const windowsService = new ManagedDataAccountService(join(root, 'race-managed'), undefined, {
+      platform: 'win32',
+      devinAppDataRoot: appData
+    })
+    await windowsService.add('devin', source, 'One')
+    const launchEnvironment = windowsService.launchEnvironment('devin')
+
+    await Promise.all([
+      windowsService.select('devin', null),
+      windowsService.syncLaunchCredentials('devin', launchEnvironment)
+    ])
+    // A later System launch must still be able to restore the original login.
+    await windowsService.syncLaunchCredentials('devin', windowsService.launchEnvironment('devin'))
+
+    expect(readFileSync(liveCredential, 'utf8')).toBe('windsurf_api_key = "system-default"\n')
+  })
 })

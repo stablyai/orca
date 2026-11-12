@@ -101,9 +101,11 @@ export class DevinHostAccountSelection {
     if (provider !== 'devin' || this.options.platform !== 'win32') {
       return
     }
+    // Why: account directories use the lower-cased registry ID (see requireAccount).
     const account = accounts.find(
       (candidate) =>
-        selectedEnvironment.XDG_DATA_HOME === join(this.options.root, 'devin', candidate.id, 'data')
+        selectedEnvironment.XDG_DATA_HOME ===
+        join(this.options.root, 'devin', candidate.id.toLowerCase(), 'data')
     )
     await this.apply(account?.id ?? null)
   }

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs'
+import { copyFileSync, lstatSync, mkdirSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 
@@ -49,7 +49,10 @@ export async function runDevinLoginWithCredentialCapture(
   const hadHostCredential = fileExists(hostCredential)
   if (hadHostCredential) {
     requireCredentialFile(hostCredential)
-    renameSync(hostCredential, backup)
+    // Why: copy rather than move so the host login is never absent while the
+    // interactive login runs; an interrupted CLI leaves the original in place
+    // and this backup as a durable second copy.
+    copyFileSync(hostCredential, backup)
   }
 
   let loginFailed = false
@@ -68,10 +71,9 @@ export async function runDevinLoginWithCredentialCapture(
 
   try {
     if (hadHostCredential) {
-      if (fileExists(hostCredential)) {
-        rmSync(hostCredential)
-      }
-      renameSync(backup, hostCredential)
+      requireCredentialFile(backup)
+      copyFileSync(backup, hostCredential)
+      rmSync(backup)
     } else if (fileExists(hostCredential)) {
       rmSync(hostCredential)
     }

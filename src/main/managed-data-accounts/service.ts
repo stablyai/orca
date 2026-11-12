@@ -163,10 +163,14 @@ export class ManagedDataAccountService {
     if (provider !== 'devin') {
       return
     }
-    await this.devinHostAccountSelection.syncLaunchCredentials(
-      provider,
-      selectedEnvironment,
-      this.list('devin').accounts
+    // Why: serialize with select/remove so a launch cannot overwrite the host
+    // credential after a concurrent switch to System restored and dropped its backup.
+    await this.mutate(() =>
+      this.devinHostAccountSelection.syncLaunchCredentials(
+        provider,
+        selectedEnvironment,
+        this.list('devin').accounts
+      )
     )
   }
 
