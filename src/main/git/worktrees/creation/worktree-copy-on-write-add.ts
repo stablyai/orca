@@ -18,8 +18,10 @@ import {
 
 /** `git hook run` (Git 2.36+), which runs post-checkout with the arguments `worktree add` uses. */
 function supportsHookRun(repoPath: string, options: AddWorktreeOptions): Promise<boolean> {
+  // A native hook name, since Git 2.54 rejects unknown ones; nothing can exist under /dev/null.
+  // Runs only where cloning applies (macOS, Linux).
   return gitExecFileAsync(
-    ['hook', 'run', '--ignore-missing', 'orca-hook-run-probe'],
+    ['-c', 'core.hooksPath=/dev/null', 'hook', 'run', '--ignore-missing', 'post-checkout'],
     gitExecOptions(repoPath, options)
   ).then(
     () => true,
