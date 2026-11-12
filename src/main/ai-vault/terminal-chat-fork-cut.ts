@@ -7,7 +7,7 @@ import type {
 import { claudeDestinationBucket } from '../claude/claude-conversation-copy'
 import { materializeClaudeConversationTranscript } from '../claude/claude-rewind-transcript'
 import { homedir } from 'node:os'
-import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 
 /** A terminal Claude chat's fork: a new conversation ending at one transcript entry, placed in the

@@ -304,6 +304,7 @@ export function NativeChatResolvedView({
   })
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
 
+  const terminalForkTarget = { agent, sessionId, transcriptPath, terminalTabId }
   const root = (
     <div
       ref={rootRef}
@@ -349,13 +350,7 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatTerminalForkProvider
-            agent={agent}
-            sessionId={sessionId}
-            transcriptPath={transcriptPath}
-            terminalTabId={terminalTabId}
-            messages={session.messages}
-          >
+          <NativeChatTerminalForkProvider {...terminalForkTarget} messages={session.messages}>
             <NativeChatMessageList
               ref={messageListRef}
               session={sessionWithPending}
