@@ -816,18 +816,35 @@ final class Provider {
             if !foreground {
                 try requireBackgroundClickAllowed(backgroundClickHit(record.element, snapshot: snapshot))
             }
+            let rowSelection = AccessibilityRowSelection()
+            let unselectedRow = modifiers.isEmpty && count <= 1 && button == .left
+                && RowSelectionClick.isUnselectedRow(record.element, ax: rowSelection)
             if modifiers.isEmpty,
                count <= 1,
                button.hasAccessibilityAction,
                let actionName = try performClickAction(record: record, mouseButton: button) {
-                return actionMetadata(path: "accessibility", actionName: actionName)
+                guard unselectedRow else {
+                    return actionMetadata(path: "accessibility", actionName: actionName)
+                }
+                return rowClickMetadata(
+                    try RowSelectionClick.confirm(record.element, ax: rowSelection),
+                    path: "accessibility",
+                    actionName: actionName
+                )
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
                 try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
-                return actionMetadata(
+                guard unselectedRow else {
+                    return actionMetadata(
+                        path: "synthetic",
+                        fallbackReason: "actionUnsupported",
+                        verification: unverifiedAction(reason: "synthetic_input")
+                    )
+                }
+                return rowClickMetadata(
+                    try RowSelectionClick.confirm(record.element, ax: rowSelection),
                     path: "synthetic",
-                    fallbackReason: "actionUnsupported",
-                    verification: unverifiedAction(reason: "synthetic_input")
+                    actionName: nil
                 )
             }
             throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame")
@@ -838,6 +855,22 @@ final class Provider {
             path: "synthetic",
             verification: unverifiedAction(reason: "synthetic_input")
         )
+    }
+
+    /// The selection reading back on verifies a row click; a row it never selected stays unverified.
+    private func rowClickMetadata(_ outcome: RowSelectionClick.Outcome, path: String, actionName: String?) -> [String: Any] {
+        let fallbackReason = path == "synthetic" ? "actionUnsupported" : nil
+        switch outcome {
+        case .selectedByClick:
+            return actionMetadata(path: path, actionName: actionName, fallbackReason: fallbackReason, verification: verifiedAction(property: "selection"))
+        case let .selectedByWrite(attribute):
+            return actionMetadata(path: "accessibility", actionName: attribute, fallbackReason: fallbackReason, verification: verifiedAction(property: "selection"))
+        case .unselected:
+            // Why: an accessibility click leaves verification to the tree diff, which reports suspected_noop if nothing changed.
+            return path == "synthetic"
+                ? actionMetadata(path: path, fallbackReason: fallbackReason, verification: unverifiedAction(reason: "synthetic_input"))
+                : actionMetadata(path: path, actionName: actionName)
+        }
     }
 
     private func performClickAction(record: ElementRecord, mouseButton: MouseButtonSelection) throws -> String? {
@@ -1873,6 +1906,75 @@ private func performAction(_ element: AXUIElement, _ action: String) throws -> B
 private func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
     var settable = DarwinBoolean(false)
     return AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success && settable.boolValue
+}
+
+/// Once the app stops answering, later reads return nothing at once so a hung app costs one timeout, not dozens.
+private final class AccessibilityRowSelection: RowSelectionAccessibility {
+    private var unanswered = false
+
+    func role(of element: AXUIElement) -> String? {
+        read(element, kAXRoleAttribute as String) as? String
+    }
+
+    func isSelected(_ element: AXUIElement) -> Bool? {
+        read(element, kAXSelectedAttribute as String) as? Bool
+    }
+
+    func parent(of element: AXUIElement) -> AXUIElement? {
+        guard let value = read(element, kAXParentAttribute as String),
+              CFGetTypeID(value) == AXUIElementGetTypeID()
+        else {
+            return nil
+        }
+        return (value as! AXUIElement)
+    }
+
+    func isSettable(_ attribute: String, on element: AXUIElement) -> Bool {
+        guard !unanswered else { return false }
+        var settable = DarwinBoolean(false)
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
+        unanswered = AccessibilityMessaging.timedOut(result, since: start)
+        return result == .success && settable.boolValue
+    }
+
+    func setSelected(_ element: AXUIElement) throws -> Bool {
+        try write(kAXSelectedAttribute as String, on: element, value: kCFBooleanTrue)
+    }
+
+    func setSelection(_ attribute: String, of container: AXUIElement, to member: AXUIElement) throws -> Bool {
+        try write(attribute, on: container, value: [member] as CFArray)
+    }
+
+    func settles(_ check: () -> Bool) -> Bool {
+        // Why: settle counts only its sleeps, and one slow AX read can take the full 3 s timeout.
+        let deadline = CFAbsoluteTimeGetCurrent() + 0.3
+        var shown = false
+        _ = PermissionTrustSettling.settle(timeoutMs: 300, intervalMs: 25) {
+            guard !unanswered, CFAbsoluteTimeGetCurrent() < deadline else { return true }
+            shown = check()
+            return shown
+        }
+        return shown
+    }
+
+    private func read(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+        guard !unanswered else { return nil }
+        var value: CFTypeRef?
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        unanswered = AccessibilityMessaging.timedOut(result, since: start)
+        return result == .success ? value : nil
+    }
+
+    private func write(_ attribute: String, on element: AXUIElement, value: CFTypeRef) throws -> Bool {
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementSetAttributeValue(element, attribute as CFString, value)
+        if AccessibilityMessaging.timedOut(result, since: start) {
+            throw AccessibilityMessaging.unanswered("the \(attribute) write")
+        }
+        return result == .success
+    }
 }
 
 private func frame(_ element: AXUIElement, windowBounds: CGRect) -> CGRect? {
