@@ -58,7 +58,9 @@ export async function listLocalBranches(
   const branches = refs.map((ref) => ref.label)
   if (current) {
     const index = branches.indexOf(current)
-    branches.splice(index, 1)
+    if (index !== -1) {
+      branches.splice(index, 1)
+    }
     branches.unshift(current)
   }
   const committedAt: Record<string, number> = Object.create(null)

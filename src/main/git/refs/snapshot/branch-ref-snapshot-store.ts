@@ -193,9 +193,6 @@ export class BranchRefSnapshotStore {
   remoteNames(identity: BranchSnapshotIdentity) {
     return this.metadata.remoteNames(identity)
   }
-  worktreePaths(identity: BranchSnapshotIdentity) {
-    return this.metadata.worktreePaths(identity)
-  }
   reset(): void {
     this.cache.reset()
   }

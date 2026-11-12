@@ -1,10 +1,8 @@
 import type { BranchSnapshotIdentity } from './branch-ref-snapshot-identity'
 import type { BranchSnapshotOwners } from './branch-ref-snapshot-owners'
-import type { Owner, Context, Lease } from './branch-ref-snapshot-owners'
-import { BranchSnapshotIdentityChanged } from './branch-ref-snapshot-owners'
+import type { Owner, Context } from './branch-ref-snapshot-owners'
 import {
   readBranchRemoteNames,
-  readBranchWorktreePaths,
   readLegacyBranchSelectors,
   LegacyBranchSnapshotTooLarge
 } from './branch-ref-snapshot-read'
@@ -94,58 +92,6 @@ export class BranchSnapshotMetadata {
         }
       })
     context.legacyFlight = promise
-    return promise
-  }
-
-  async worktreePaths(identity: BranchSnapshotIdentity): Promise<Map<string, string>> {
-    const owner = this.cache.owner(identity)
-    const admitted = owner?.generation
-    if (owner?.pathsFlight && owner.pathsFlight.generation !== admitted) {
-      await owner.pathsFlight.promise.catch((error: unknown) => {
-        if (error instanceof BranchSnapshotIdentityChanged) {
-          throw error
-        }
-      })
-    }
-    if (owner?.paths) {
-      return owner.paths
-    }
-    if (owner?.pathsFlight) {
-      return owner.pathsFlight.promise
-    }
-    const generation = owner?.generation
-    const lease = owner
-      ? this.cache.lease(owner, () => owner.generation === generation)
-      : { reserve: () => false, release: () => {} }
-    const promise = readBranchWorktreePaths(identity.cwd, identity.git, lease)
-      .then(async (paths) => {
-        await this.cache.validate(identity, owner ?? undefined)
-        if (
-          owner &&
-          !owner.disposed &&
-          owner.generation === generation &&
-          'bytes' in lease &&
-          lease.bytes
-        ) {
-          owner.paths = paths
-          owner.pathsLease = lease as Lease
-        } else {
-          lease.release()
-        }
-        return paths
-      })
-      .catch((error: unknown) => {
-        lease.release()
-        throw error
-      })
-      .finally(() => {
-        if (owner?.pathsFlight?.promise === promise) {
-          owner.pathsFlight = undefined
-        }
-      })
-    if (owner) {
-      owner.pathsFlight = { generation: generation!, promise }
-    }
     return promise
   }
 }

@@ -8,6 +8,7 @@ import {
 } from './branch-ref-snapshot-identity'
 import { BranchRefSnapshotStore, BranchSnapshotIdentityChanged } from './branch-ref-snapshot-store'
 import { subscribeGitRefChanges } from '../git-ref-change-signal'
+import { readTranslatedWorktreeGraph } from '../../worktrees/catalog/worktree-list-reader'
 
 const snapshots = new BranchRefSnapshotStore({ subscribe: subscribeGitRefChanges })
 
@@ -54,13 +55,19 @@ export function snapshotRemoteNames(
 
 export function snapshotLocalBranchMetadata(path: string, git: LocalGitExecOptions = {}) {
   return withIdentity(path, git, async (identity) => {
-    const [refs, worktreePaths, head] = await Promise.all([
+    const [refs, worktrees, head] = await Promise.all([
       snapshots.localRefs(identity),
-      snapshots.worktreePaths(identity),
+      readTranslatedWorktreeGraph(identity.cwd, identity.git),
       readFile(join(identity.gitDir, 'HEAD'), 'utf8').catch(() => '')
     ])
     const currentRef = /^ref: (refs\/heads\/[^\r\n]+)/.exec(head)?.[1]
-    const current = refs.find((ref) => ref.refName === currentRef)?.label ?? null
+    const current = currentRef?.slice('refs/heads/'.length) ?? null
+    const worktreePaths = new Map<string, string>()
+    for (const worktree of worktrees) {
+      if (worktree.branch.startsWith('refs/heads/') && !worktree.prunable) {
+        worktreePaths.set(worktree.branch.slice('refs/heads/'.length), worktree.path)
+      }
+    }
     return { refs, worktreePaths, current }
   })
 }

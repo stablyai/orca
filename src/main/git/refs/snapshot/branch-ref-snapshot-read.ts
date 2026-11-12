@@ -153,36 +153,6 @@ export async function readLegacyBranchPage(
   return page
 }
 
-export async function readBranchWorktreePaths(
-  path: string,
-  git: LocalGitExecOptions,
-  retention: BranchSnapshotRetention
-): Promise<Map<string, string>> {
-  const paths = new Map<string, string>()
-  let retainable = retention.reserve(128)
-  await readRefLines(
-    ['for-each-ref', '--format=%(refname)%00%(worktreepath)', 'refs/heads'],
-    path,
-    git,
-    (line) => {
-      const [ref, occupied] = line.replace(/\r$/, '').split('\0')
-      if (!ref?.startsWith('refs/heads/') || !occupied) {
-        return
-      }
-      if (retainable && !retention.reserve(96 + 2 * (ref.length + occupied.length))) {
-        // The caller still gets the complete current result; only retention is optional.
-        retention.release()
-        retainable = false
-      }
-      paths.set(ref.slice('refs/heads/'.length), occupied)
-    }
-  ).catch((error: unknown) => {
-    retention.release()
-    throw error
-  })
-  return paths
-}
-
 async function readRefLines(
   args: string[],
   path: string,

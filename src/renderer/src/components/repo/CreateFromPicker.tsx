@@ -35,6 +35,30 @@ import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 
 const DEFAULT_VALUE = '__project_default__'
 
+function createBranchOptions(
+  effectiveDefault: string | null,
+  searchResults: readonly string[],
+  worktrees: readonly Worktree[]
+) {
+  const options = new Set<string>()
+  if (effectiveDefault) {
+    options.add(effectiveDefault)
+  }
+  for (const worktree of worktrees) {
+    const branch = worktree.branch.trim().replace(/^refs\/heads\//, '')
+    if (branch) {
+      options.add(searchResults.includes(branch) ? branch : `refs/heads/${branch}`)
+    }
+  }
+  for (const branch of searchResults) {
+    options.add(branch)
+  }
+  const merged = Array.from(options)
+  const labels = branchRefLabels(merged)
+  merged.sort((left, right) => (labels.get(left) ?? left).localeCompare(labels.get(right) ?? right))
+  return { options: merged, labels }
+}
+
 export function CreateFromPicker({
   repoId,
   repoMap,
@@ -82,27 +106,11 @@ export function CreateFromPicker({
     : effectiveDefault
       ? branchRefLabel(effectiveDefault)
       : projectDefaultLabel
-  const { options: branchOptions, labels } = React.useMemo(() => {
-    const options = new Set<string>()
-    if (effectiveDefault) {
-      options.add(effectiveDefault)
-    }
-    for (const worktree of worktrees) {
-      const branch = worktree.branch.trim().replace(/^refs\/heads\//, '')
-      if (branch) {
-        options.add(searchResults.includes(branch) ? branch : `refs/heads/${branch}`)
-      }
-    }
-    for (const branch of searchResults) {
-      options.add(branch)
-    }
-    const merged = Array.from(options)
-    const labels = branchRefLabels(merged)
-    merged.sort((left, right) =>
-      (labels.get(left) ?? left).localeCompare(labels.get(right) ?? right)
-    )
-    return { options: merged, labels }
-  }, [effectiveDefault, searchResults, worktrees])
+  const { options: branchOptions, labels } = createBranchOptions(
+    effectiveDefault,
+    searchResults,
+    worktrees
+  )
 
   const renderBranchContextMenu = React.useCallback(
     (branch: string, row: React.ReactNode): React.ReactNode => {

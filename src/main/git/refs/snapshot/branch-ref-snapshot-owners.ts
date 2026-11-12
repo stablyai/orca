@@ -39,9 +39,6 @@ export type Owner = {
   oversized: boolean
   localRefs?: readonly BranchRef[]
   localLease?: Lease
-  paths?: Map<string, string>
-  pathsLease?: Lease
-  pathsFlight?: { generation: number; promise: Promise<Map<string, string>> }
   flight?: { generation: number; promise: Promise<Capture> }
   contexts: Map<string, Context>
   base?: Lease
@@ -101,10 +98,8 @@ export class BranchSnapshotOwners {
     owner.oversized = false
     owner.snapshot = null
     owner.localRefs = undefined
-    owner.paths = undefined
     owner.snapshotLease?.release()
     owner.localLease?.release()
-    owner.pathsLease?.release()
     for (const [key, context] of owner.contexts) {
       this.retireContext(owner, key, context)
     }
