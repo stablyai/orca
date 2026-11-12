@@ -147,10 +147,17 @@ function postToolUse(toolUseId: string): AgentHookEventPayload {
   }
 }
 
+/** Takes the open approval and marks its escalation sent, as the turn-stop report does. */
+async function escalated(ctx: ReturnType<typeof setup>) {
+  const approval = (await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id))!
+  ctx.holds.markReported(approval.approvalId)
+  return approval
+}
+
 async function opened(ctx: ReturnType<typeof setup>, asked: ReturnType<typeof hook>) {
   ctx.holds.admit(asked.request)
   await ctx.tick()
-  return (await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id))!.approvalId
+  return (await escalated(ctx)).approvalId
 }
 
 const answer = (
@@ -234,10 +241,10 @@ describe('terminal worker approval holds', () => {
     })
     ctx.holds.admit(asked.request)
     await ctx.tick()
-    const escalated = await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)
-    const approvalId = escalated!.approvalId
+    const approval = await escalated(ctx)
+    const approvalId = approval.approvalId
 
-    expect(escalated).toMatchObject({ personOnly: true })
+    expect(approval).toMatchObject({ personOnly: true })
     expect(await answer(ctx, approvalId, 'allow')).toMatchObject({
       ok: false,
       code: 'approval_requires_person'
@@ -359,8 +366,8 @@ describe('terminal worker approval holds', () => {
     const ctx = setup()
     const asked = hook('tool-1')
     ctx.holds.admit(asked.request)
-    // The worker resumed while the escalation waited for the dialog, so no report was sent.
-    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id, () => false)).toBeNull()
+    // Taken, but the turn-stop report never sent it, so it is never marked reported.
+    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).not.toBeNull()
     asked.end('hook-gone')
     await ctx.tick(40)
 
@@ -370,7 +377,7 @@ describe('terminal worker approval holds', () => {
   it('closes a prompt left open by an earlier run, once, when the database opens', async () => {
     const ctx = setup()
     ctx.holds.admit(hook('tool-1').request)
-    const approval = (await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id))!
+    const approval = await escalated(ctx)
     const escalate = (id: string | undefined, carried: typeof approval) =>
       ctx.db.insertMessage({
         ...(id ? { id } : {}),

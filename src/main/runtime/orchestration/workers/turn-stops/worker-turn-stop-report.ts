@@ -186,13 +186,14 @@ function describeNextStep(
   ]
 }
 
-/** Tell the coordinator once that a worker is at rest or gone without reporting; never settles its Dispatch. */
+/** Tell the coordinator once that a worker is at rest or gone without reporting; never settles its Dispatch.
+ *  True when this call sent the report. */
 export function reportWorkerTurnStop(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
   stop: WorkerTurnStop,
   deps: WorkerTurnStopReportDeps
-): void {
+): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
   // Waiting on mail, or a clean finish resting on its own question or helpers, is deliberate; going away never is.
   if (
@@ -203,7 +204,7 @@ export function reportWorkerTurnStop(
           rejectedReportInTurn(db, dispatchId, stop.turnStartedAt) ||
           (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId)))))
   ) {
-    return
+    return false
   }
   // An idle finish answers the coordinator's mail the worker took, so it is news once per mail taken: a later
   // idle turn (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
@@ -225,7 +226,7 @@ export function reportWorkerTurnStop(
   }
   if (target.kind === 'local') {
     const { dispatch } = target
-    escalateWorkerFailure(
+    const sent = escalateWorkerFailure(
       db,
       dispatch,
       {
@@ -247,13 +248,13 @@ export function reportWorkerTurnStop(
       },
       deps.notify
     )
-    return
+    return sent !== null
   }
   // The Run home imports relayed worker mail into the coordinator's Run and wakes it.
   const { attachment } = target
   // A worker_done the home has not acknowledged yet is still a report.
   if (db.hasPendingFederatedWorkerReport(dispatchId)) {
-    return
+    return false
   }
   // The stable message id makes a repeated report of the same stop a no-op on both sides.
   try {
@@ -278,8 +279,10 @@ export function reportWorkerTurnStop(
         payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
       })
     })
+    return true
   } catch (error) {
     console.warn('[orchestration] failed to relay a worker stop report', dispatchId, error)
+    return false
   }
 }
 
