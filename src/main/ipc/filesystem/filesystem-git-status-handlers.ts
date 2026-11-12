@@ -22,7 +22,7 @@ import { checkIgnoredPaths } from '../../git/source-control/check-ignored-paths'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
-} from '../../git/huge-folder-ignore'
+} from '../../git/source-control/huge-folder-ignore'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { validateGitRelativeFilePath } from './access/filesystem-path-containment'
 import {

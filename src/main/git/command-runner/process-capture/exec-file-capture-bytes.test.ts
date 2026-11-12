@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { execFileCaptureToTermination } from './exec-file-capture'
-import { createWslProcessGroupTermination } from '../../wsl-process-group-termination'
+import { createWslProcessGroupTermination } from './wsl-process-group-termination'
 
 const stdout = Buffer.from([0, 255, 128, 10])
 const stderr = Buffer.from([128, 255, 0, 10])

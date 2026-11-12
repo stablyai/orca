@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitSpawnModule from '../git/command-runner/git-spawn'
-import type * as RepoModule from '../git/repo'
+import type * as RepoDetectionModule from '../git/repositories/discovery/repo-detection'
 
 /** Unconstrained spy; annotated explicitly so declaration emit never names @vitest/spy internals. */
 export type ReposIpcSpy = Mock<(...args: never[]) => unknown>
@@ -92,8 +92,8 @@ export function createGitRepoProbeMocks(): GitRepoProbeMocks {
   }
 }
 
-export function gitRepoModuleMock(
-  actual: typeof RepoModule,
+export function repoDetectionModuleMock(
+  actual: typeof RepoDetectionModule,
   probes: GitRepoProbeMocks = createGitRepoProbeMocks()
 ): Record<string, unknown> {
   const { isGitRepo, getGitRepoRoot } = probes
@@ -107,11 +107,7 @@ export function gitRepoModuleMock(
       isRepo: isGitRepo(path),
       rootPath: getGitRepoRoot(path),
       mainRepoPath: null
-    })),
-    getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
-    getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
-    getRemoteCount: vi.fn().mockResolvedValue(1),
-    searchBaseRefs: vi.fn().mockResolvedValue([])
+    }))
   }
 }
 
