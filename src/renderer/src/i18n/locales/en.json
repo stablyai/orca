@@ -21169,6 +21169,7 @@
         "reconnect": "Reconnect",
         "stopped": "{{distro}} is stopped",
         "start": "Start",
+        "connecting": "Connecting to {{distro}}…",
         "startFailed": "Couldn’t start {{distro}}. Check it in Settings → Remote Orca Servers.",
         "unverifiable": "Orca couldn't check whether {{distro}} is running",
         "startToSend": "Start {{distro}} to send.",

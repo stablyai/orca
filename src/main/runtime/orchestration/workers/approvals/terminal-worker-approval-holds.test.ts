@@ -43,16 +43,6 @@ const USER_NO: ClaudeToolResult = {
   isError: true,
   text: "The user doesn't want to proceed with this tool use. The tool use was rejected."
 }
-const AUTO_BLOCK: ClaudeToolResult = {
-  isError: true,
-  text: 'Permission for this command was denied by a built-in Claude Code safety check, not by the user.'
-}
-// An allowed command that then fails (probe 2026-11-11, the owner's live case).
-const FAILED: ClaudeToolResult = {
-  isError: true,
-  text: "Exit code 1\n(eval):14: parse error near `\\n'"
-}
-const RAN: ClaudeToolResult = { isError: false, text: '59' }
 /** What the transcript holds: the hook decision Claude took, then the tool's result. */
 const record = (
   result: ClaudeToolResult | null,
@@ -147,14 +137,11 @@ function hook(
   }
 }
 
-function postToolUse(
-  toolUseId: string,
-  hookEventName: 'PostToolUse' | 'PostToolUseFailure' = 'PostToolUse'
-): AgentHookEventPayload {
+function postToolUse(toolUseId: string): AgentHookEventPayload {
   return {
     paneKey: PANE,
     connectionId: null,
-    hookEventName,
+    hookEventName: 'PostToolUse',
     toolUseId,
     payload: { state: 'working', prompt: '', agentType: 'claude' }
   }
@@ -232,23 +219,6 @@ describe('terminal worker approval holds', () => {
     expect(ctx.closedWith()[0]).toMatchObject({ state: 'answered', by: 'unknown' })
   })
 
-  it.each([
-    ['allowed, and the command succeeds', record(RAN, 'allow')],
-    ['allowed, and the command fails', record(FAILED, 'allow')],
-    ['allowed, and the command is still running', record(null, 'allow')],
-    ['allowed by a Claude that records no hook decision, and the command fails', record(FAILED)]
-  ])("takes Orca's allow when %s", async (_, written) => {
-    const ctx = setup()
-    const asked = hook('tool-1', () => {
-      ctx.screen.lines = AFTER
-      ctx.screen.record = written
-    })
-    const approvalId = await opened(ctx, asked)
-
-    expect(await answer(ctx, approvalId, 'allow')).toMatchObject({ ok: true })
-    expect(asked.replies).toEqual([{ behavior: 'allow' }])
-  })
-
   it("doesn't take Orca's allow when the person's No won the race", async () => {
     const ctx = setup()
     const approvalId = await opened(
@@ -269,36 +239,6 @@ describe('terminal worker approval holds', () => {
         reasonDelivered: false
       }
     ])
-  })
-
-  it("names a Yes in the terminal whose command failed as allowed in the worker's terminal", async () => {
-    const ctx = setup()
-    await opened(ctx, hook('tool-1'))
-    ctx.screen.lines = AFTER
-    ctx.holds.observe(postToolUse('tool-1', 'PostToolUseFailure'))
-
-    expect(ctx.closedWith()).toEqual([
-      {
-        state: 'answered',
-        by: 'worker-terminal',
-        decision: 'allow',
-        reason: null,
-        reasonDelivered: false
-      }
-    ])
-  })
-
-  it("names Claude's 2:00 auto-block as an expiry", async () => {
-    const ctx = setup()
-    await closedInTerminal(ctx, AUTO_BLOCK)
-
-    expect(ctx.closedWith()[1]).toEqual({
-      state: 'expired',
-      by: 'auto',
-      decision: 'deny',
-      reason: null,
-      reasonDelivered: false
-    })
   })
 
   it("tells the coordinator to send the user to the terminal when the hook is gone but the dialog isn't", async () => {

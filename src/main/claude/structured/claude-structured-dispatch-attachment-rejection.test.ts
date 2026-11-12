@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -25,13 +25,14 @@ describe('Claude structured dispatch attachment rejections', () => {
     expect(session.connection.send).not.toHaveBeenCalled()
   })
 
-  it('rejects local images whose aggregate size exceeds twenty MiB', async () => {
+  it('rejects local images whose aggregate size exceeds sixty-four MiB', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-claude-images-'))
     try {
       const paths = await Promise.all(
-        Array.from({ length: 5 }, async (_, index) => {
+        Array.from({ length: 2 }, async (_, index) => {
           const path = join(directory, `${index}.png`)
-          await writeFile(path, Buffer.alloc(5 * 1024 * 1024))
+          await writeFile(path, '')
+          await truncate(path, 32 * 1024 * 1024 + 1)
           return path
         })
       )
@@ -43,10 +44,10 @@ describe('Claude structured dispatch attachment rejections', () => {
       ).resolves.toEqual({
         state: 'rejected',
         reason:
-          'The images on this message add up to more than 20 MB, so the message was not sent.',
+          'The images on this message add up to more than 64 MB, so the message was not sent.',
         rejection: {
           kind: 'attachmentInvalid',
-          attachment: { reason: 'totalTooLarge', limit: 20 * 1024 * 1024 }
+          attachment: { reason: 'totalTooLarge', limit: 64 * 1024 * 1024 }
         }
       })
       expect(session.connection.send).not.toHaveBeenCalled()
@@ -59,7 +60,8 @@ describe('Claude structured dispatch attachment rejections', () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-claude-image-'))
     try {
       const path = join(directory, 'oversized.png')
-      await writeFile(path, Buffer.alloc(5 * 1024 * 1024 + 1))
+      await writeFile(path, '')
+      await truncate(path, 50 * 1024 * 1024 + 1)
       const session = sessionFor()
       const body = userMessage([{ type: 'image-ref', path }])
 
@@ -67,10 +69,10 @@ describe('Claude structured dispatch attachment rejections', () => {
         dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
       ).resolves.toEqual({
         state: 'rejected',
-        reason: 'An image on this message is larger than 5 MB, so the message was not sent.',
+        reason: 'An image on this message is larger than 50 MB, so the message was not sent.',
         rejection: {
           kind: 'attachmentInvalid',
-          attachment: { reason: 'tooLarge', limit: 5 * 1024 * 1024 }
+          attachment: { reason: 'tooLarge', limit: 50 * 1024 * 1024 }
         }
       })
       expect(session.connection.send).not.toHaveBeenCalled()

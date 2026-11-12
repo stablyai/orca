@@ -26,6 +26,14 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
     ...args: Parameters<SessionGraphAuthority['assertStableReadyGraph']>
   ): ReturnType<SessionGraphAuthority['assertStableReadyGraph']>
 
+  protected abstract captureRendererGraphFence(
+    ...args: Parameters<SessionGraphAuthority['captureRendererGraphFence']>
+  ): ReturnType<SessionGraphAuthority['captureRendererGraphFence']>
+
+  protected abstract assertRendererGraphFence(
+    ...args: Parameters<SessionGraphAuthority['assertRendererGraphFence']>
+  ): ReturnType<SessionGraphAuthority['assertRendererGraphFence']>
+
   protected abstract resolvePtyTabCloseSurfaceAuthority(
     ...args: Parameters<MobileTerminalSurface['resolvePtyTabCloseSurfaceAuthority']>
   ): ReturnType<MobileTerminalSurface['resolvePtyTabCloseSurfaceAuthority']>
