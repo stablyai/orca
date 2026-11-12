@@ -5,6 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { widenSavedExecutionHostIds } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
+import { workspaceHostScopeForVisibleHosts } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import { useSidebarHostScopeOptions } from '../controls/use-sidebar-host-scope-options'
 
 /** Merged SSH rows represent two owner IDs; widen saved filters so selecting the row includes both. */
@@ -15,6 +16,7 @@ export function SavedHostScopeWidenGate(): null {
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
   const setAgentsVisibleHostIds = useAppStore((s) => s.setAgentsVisibleHostIds)
+  const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
 
   useEffect(() => {
     const sidebarScope: readonly ExecutionHostId[] | null =
@@ -23,6 +25,8 @@ export function SavedHostScopeWidenGate(): null {
     const widenedSidebar = widenSavedExecutionHostIds(hostOptions, sidebarScope)
     if (widenedSidebar) {
       setVisibleWorkspaceHostIds(widenedSidebar)
+      // Widening one merged row must not read as several hosts and clear its scope (#41140).
+      setWorkspaceHostScope(workspaceHostScopeForVisibleHosts(widenedSidebar, hostOptions))
     }
     const widenedAgents = widenSavedExecutionHostIds(hostOptions, agentsVisibleHostIds)
     if (widenedAgents) {
@@ -32,6 +36,7 @@ export function SavedHostScopeWidenGate(): null {
     agentsVisibleHostIds,
     hostOptions,
     setAgentsVisibleHostIds,
+    setWorkspaceHostScope,
     setVisibleWorkspaceHostIds,
     visibleWorkspaceHostIds,
     workspaceHostScope

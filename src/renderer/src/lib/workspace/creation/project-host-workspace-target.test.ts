@@ -107,4 +107,37 @@ describe('resolveWorkspaceCreationTarget default host', () => {
     const resolution = resolve({ projectId: PROJECT_ID, hostId: REMOTE })
     expect(resolution.status === 'ready' ? resolution.target.hostId : null).toBe(REMOTE)
   })
+
+  it('ranks the active workspace host above the focused host when they differ', () => {
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: [remoteRepo, localRepo],
+      projects: [project],
+      projectHostSetups: [remoteSetup, localSetup],
+      projectId: PROJECT_ID,
+      activeWorkspaceHostId: 'local',
+      focusedHostScope: REMOTE
+    })
+    expect(resolution.status).toBe('ready')
+    expect(resolution.status === 'ready' ? resolution.target.hostId : null).toBe('local')
+  })
+
+  it('ranks the active workspace host above the focused host for same-id twins', () => {
+    const twins = [
+      repo('repo-myapp', REMOTE, '/home/me/myapp'),
+      repo('repo-myapp', 'local', '/Users/me/src/myapp')
+    ]
+    const twinSetups = [
+      setup('s-r', 'repo-myapp', REMOTE, '/home/me/myapp'),
+      setup('s-l', 'repo-myapp', 'local', '/Users/me/src/myapp')
+    ]
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: twins,
+      projectHostSetups: twinSetups,
+      activeRepoId: 'repo-myapp',
+      activeWorkspaceHostId: 'local',
+      focusedHostScope: REMOTE
+    })
+    expect(resolution.status).toBe('ready')
+    expect(resolution.status === 'ready' ? resolution.target.hostId : null).toBe('local')
+  })
 })

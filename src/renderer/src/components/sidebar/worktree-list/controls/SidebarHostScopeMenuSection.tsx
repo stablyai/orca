@@ -14,7 +14,8 @@ import { pickerExecutionHosts } from '../../../../../../shared/execution-host/ma
 import {
   getCheckedHostRows,
   toggleAllVisibleHosts,
-  toggleVisibleHostRow
+  toggleVisibleHostRow,
+  workspaceHostScopeForVisibleHosts
 } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import { getSidebarHostHealthLabel, type SidebarHostOption } from './sidebar-host-options'
 import { useBoundedHostRows } from '../../../host-picker/use-bounded-host-rows'
@@ -95,6 +96,8 @@ export function SidebarHostScopeMenuSection({
       setWorkspaceHostScope(ALL_EXECUTION_HOSTS_SCOPE)
     } else if (next) {
       setVisibleWorkspaceHostIds(next)
+      // Row-aware scope correction: one merged row saves several equivalent IDs (#41140).
+      setWorkspaceHostScope(workspaceHostScopeForVisibleHosts(next, hostOptions))
     }
   }
 
@@ -102,6 +105,7 @@ export function SidebarHostScopeMenuSection({
     const next = toggleVisibleHostRow(hostOptions, visibleWorkspaceHostIds, host)
     if (next !== undefined) {
       setVisibleWorkspaceHostIds(next)
+      setWorkspaceHostScope(workspaceHostScopeForVisibleHosts(next, hostOptions))
     }
   }
 

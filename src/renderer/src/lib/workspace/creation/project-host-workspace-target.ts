@@ -91,6 +91,10 @@ function isReadySetup(setup: ProjectHostSetup): boolean {
   return setup.setupState === 'ready'
 }
 
+function focusedHostScopeOrNone(scope: ExecutionHostScope | null | undefined) {
+  return scope && scope !== ALL_EXECUTION_HOSTS_SCOPE ? scope : null
+}
+
 function createTarget(
   setup: ProjectHostSetup,
   reposById: ReadonlyMap<string, readonly Repo[]>
@@ -173,6 +177,7 @@ export function resolveWorkspaceCreationTarget(
   const setups = actionableHostIds
     ? allSetups.filter((setup) => actionableHostIds.has(setup.hostId))
     : allSetups
+  const focusedHostId = focusedHostScopeOrNone(focusedHostScope)
 
   if (projectHostSetupId) {
     const matchingSetups = allSetups.filter((entry) => entry.id === projectHostSetupId)
@@ -236,23 +241,11 @@ export function resolveWorkspaceCreationTarget(
   }
 
   if (projectId) {
-    const focusedHostId =
-      focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE ? focusedHostScope : null
-    const focusedTarget = focusedHostId
-      ? findReadySetupTarget(
-          setups,
-          reposById,
-          (setup) => setup.projectId === projectId && setup.hostId === focusedHostId
-        )
-      : null
-    if (focusedTarget) {
-      return { status: 'ready', target: focusedTarget }
-    }
     const target = findPreferredReadySetupTarget(
       setups,
       reposById,
       (setup) => setup.projectId === projectId,
-      [input.activeWorkspaceHostId]
+      [input.activeWorkspaceHostId, focusedHostId]
     )
     if (target) {
       return { status: 'ready', target }
@@ -271,12 +264,18 @@ export function resolveWorkspaceCreationTarget(
 
   const repoId = resolveNewWorkspaceDialogRepoId(input)
   const legacyCandidates = repoId ? (reposById.get(repoId) ?? []) : []
-  const focusedLegacyRepo =
-    focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE
-      ? legacyCandidates.find((candidate) => getRepoExecutionHostId(candidate) === focusedHostScope)
-      : null
+  const activeLegacyRepo = input.activeWorkspaceHostId
+    ? legacyCandidates.find(
+        (candidate) => getRepoExecutionHostId(candidate) === input.activeWorkspaceHostId
+      )
+    : null
+  const focusedLegacyRepo = focusedHostId
+    ? legacyCandidates.find((candidate) => getRepoExecutionHostId(candidate) === focusedHostId)
+    : null
   const legacyRepo =
-    focusedLegacyRepo ?? (legacyCandidates.length === 1 ? legacyCandidates[0] : null)
+    activeLegacyRepo ??
+    focusedLegacyRepo ??
+    (legacyCandidates.length === 1 ? legacyCandidates[0] : null)
   let legacyTarget: WorkspaceCreationTarget | null = null
   if (legacyRepo) {
     const projectedLegacySetup = projectHostSetupProjectionFromRepos([legacyRepo]).setups[0]
@@ -296,7 +295,7 @@ export function resolveWorkspaceCreationTarget(
       setups,
       reposById,
       (setup) => setup.repoId === repoId,
-      [input.activeWorkspaceHostId]
+      [input.activeWorkspaceHostId, focusedHostId]
     )
   }
   if (legacyTarget) {
@@ -307,7 +306,8 @@ export function resolveWorkspaceCreationTarget(
     return { status: 'unavailable', reason: 'setup-not-found' }
   }
   const fallbackTarget = findPreferredReadySetupTarget(setups, reposById, () => true, [
-    input.activeWorkspaceHostId
+    input.activeWorkspaceHostId,
+    focusedHostId
   ])
   return fallbackTarget
     ? { status: 'ready', target: fallbackTarget }
