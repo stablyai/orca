@@ -49,14 +49,11 @@ export function useAutomationsPageHistory({
     if (key === null || requestRef.current || !locationRef.current) {
       return
     }
-    const replayKey = replayKeyRef.current
-    if (replayKey !== null) {
+    if (replayKeyRef.current !== null) {
+      // Why: a replay that lands where it asked is already the current entry. One that settles
+      // elsewhere (its run history could not be read) records nothing: the entry keeps the
+      // requested run, so Back/Forward can try it again, and Forward history is untouched.
       replayKeyRef.current = null
-      // A replay that lands where it asked is already the current entry. One that settles
-      // elsewhere (its run history could not be read) swaps that entry, keeping Forward.
-      if (key !== replayKey) {
-        record(locationRef.current, 'replace')
-      }
       return
     }
     record(locationRef.current)
@@ -74,6 +71,26 @@ export type AutomationsPageFocusTarget = {
   returnRunId?: string
   page: string
 }
+
+/** Leave a visible row where it is; bring an off-screen one to the middle of its scroller. */
+function revealReturnedRow(element: HTMLElement): void {
+  const rect = element.getBoundingClientRect()
+  let scroller = element.parentElement
+  while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+    scroller = scroller.parentElement
+  }
+  const view = scroller?.getBoundingClientRect() ?? {
+    top: 0,
+    bottom: window.innerHeight
+  }
+  const visible = rect.top >= view.top && rect.bottom <= view.bottom
+  if (!visible) {
+    element.scrollIntoView({ block: 'center' })
+  }
+}
+
+// A page's title, or on the list and Runs pages (which have none) their named search field.
+const PAGE_FOCUS_TARGET = '[data-automations-page-title], [data-automations-page-search]'
 
 const RETURN_HIGHLIGHT_MS = 1500
 // How long a returned-to row keeps focus through a list that is still re-rendering.
@@ -119,9 +136,9 @@ function flashReturnedRow(element: HTMLElement): void {
   }
 }
 
-// Virtualized rows mount after a scroll, and a list that reloads on open (Runs) can take a
-// moment to list the row; past this, focus falls back to the page title.
-const FOCUS_RETRY_MS = 3000
+// Virtualized rows mount after a scroll, and a list that reloads on open (Runs) lists the row
+// only once its data arrives; past this, focus falls back to the page's own target.
+const FOCUS_RETRY_MS = 5000
 
 /**
  * Opening a page focuses its title; going back focuses the row or link you left from,
@@ -193,12 +210,12 @@ export function useAutomationsPageFocus(
         (selector ? container.querySelector<HTMLElement>(selector) : null) ??
         (selector && performance.now() < giveUpAt
           ? null
-          : container.querySelector<HTMLElement>('[data-automations-page-title]'))
+          : container.querySelector<HTMLElement>(PAGE_FOCUS_TARGET))
       if (element) {
         if (selector && element.matches(selector)) {
           // Why: focus set from code after a pointer click draws no ring, so mark the row
           // you came back to; a run row is also brought to the middle of its table.
-          element.scrollIntoView({ block: returning?.returnRunId ? 'center' : 'nearest' })
+          revealReturnedRow(element)
           element.focus({ preventScroll: true })
           flashReturnedRow(element)
           keepUntil = performance.now() + RETURN_SETTLE_MS

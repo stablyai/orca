@@ -203,11 +203,8 @@ export type UISliceCore = {
   automationsPageLocationRequest: AutomationsPageLocation | null
   setAutomationsPageLocationRequest: (location: AutomationsPageLocation | null) => void
   /** Record a settled Automations sub-page in back/forward history. */
-  /** `mode` overrides the pending visit mode (a replay the page settled elsewhere replaces). */
-  recordAutomationsPageVisit: (
-    location: AutomationsPageLocation,
-    mode?: AutomationsPageVisitMode
-  ) => void
+  /** Record a settled Automations sub-page in back/forward history. */
+  recordAutomationsPageVisit: (location: AutomationsPageLocation) => void
   /** How the next recorded sub-page enters history; consumed by the next record. */
   /** Set when the user opens Automations (sidebar, deep link, Back/Forward); the page then
    *  focuses its title once. A page restored at launch or on reload leaves focus alone. */

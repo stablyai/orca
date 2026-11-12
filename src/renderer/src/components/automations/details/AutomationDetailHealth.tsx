@@ -98,8 +98,8 @@ export function AutomationDetailHealth({
   const intlLocale = useIntlLocale()
 
   const lastRun = getLocalAutomationLastRunSnapshot(automation, latestRun, t)
-  // Why: lists and run rows name a run by its scheduled slot; the stat uses the same time.
-  const lastRunAt = latestRun ? latestRun.scheduledFor : lastRun.at
+  // The snapshot uses the run's listed time (its slot), the same time the list and rows show.
+  const lastRunAt = lastRun.at
   const lastRunRelative = formatAutomationRelativeTime(lastRunAt, now, t, intlLocale)
   const lastRunWhen = lastRunAt ? formatAutomationDateTime(lastRunAt, t, intlLocale) : null
   const lastRunValue =

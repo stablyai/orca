@@ -18948,7 +18948,8 @@
           "local": "Local",
           "remote": "Remote",
           "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
-          "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only."
+          "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only.",
+          "searchLabel": "Search runs"
         },
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Automations breadcrumb"

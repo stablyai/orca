@@ -64,3 +64,17 @@ export function getAutomationRunStepKey(event: {
 
 /** Runs normally start within seconds of their slot; past this, start and slot are labeled. */
 export const RUN_START_DRIFT_LABEL_MS = 60_000
+
+/**
+ * When a run actually launched, or null. Only dispatch proves a launch; skipped and missed
+ * runs can carry an observation `startedAt` from before anything ran. Older records that
+ * completed or are running without a dispatch time keep their start time.
+ */
+export function getAutomationRunLaunchedAt(
+  run: Pick<AutomationRun, 'status' | 'dispatchedAt' | 'startedAt'>
+): number | null {
+  if (run.dispatchedAt !== null) {
+    return run.dispatchedAt
+  }
+  return run.status === 'completed' || run.status === 'dispatched' ? run.startedAt : null
+}

@@ -128,9 +128,10 @@ export function AutomationRunsDashboard({
                 'Search runs…'
               )}
               aria-label={t(
-                'auto.components.automations.AutomationRunsDashboard.search',
-                'Search runs…'
+                'auto.components.automations.AutomationRunsDashboard.searchLabel',
+                'Search runs'
               )}
+              data-automations-page-search=""
               className="h-8 pl-8 text-xs"
             />
           </div>

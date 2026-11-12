@@ -28,6 +28,7 @@ import { AutomationRunStatusLabel } from './AutomationRunStatusDot'
 import { formatAutomationCost, formatAutomationTokens } from './automation-usage-model'
 import {
   RUN_START_DRIFT_LABEL_MS,
+  getAutomationRunLaunchedAt,
   formatAutomationRunLabel,
   getAutomationRunNeighbors,
   getAutomationRunStepKey
@@ -103,7 +104,7 @@ export function AutomationRunDetailsPage({
   const run = full.run
   const failed = run.status === 'dispatch_failed'
   // Why: the detail's Last run shows when a run started; when that differs from its slot, say both.
-  const startedAt = run.dispatchedAt ?? run.startedAt ?? null
+  const startedAt = getAutomationRunLaunchedAt(run)
   const startedLate =
     startedAt !== null && Math.abs(startedAt - run.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
   const agentLabel = automation ? getAgentLabel(automation.agentId) : undefined

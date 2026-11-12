@@ -24,14 +24,14 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     automationsPageLocationRequest: null,
     setAutomationsPageLocationRequest: (location) =>
       set({ automationsPageLocationRequest: location }),
-    recordAutomationsPageVisit: (location, mode) => {
+    recordAutomationsPageVisit: (location) => {
       // Why: replaying an entry must not record it again and truncate the forward stack.
       if (get().isNavigatingHistory) {
         set({ automationsPageNextVisitMode: 'push' })
         return
       }
       set((state) => ({
-        ...appendAutomationsPageEntry(state, location, mode ?? state.automationsPageNextVisitMode),
+        ...appendAutomationsPageEntry(state, location, state.automationsPageNextVisitMode),
         automationsPageNextVisitMode: 'push'
       }))
     },
