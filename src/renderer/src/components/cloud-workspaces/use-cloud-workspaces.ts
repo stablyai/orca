@@ -40,7 +40,7 @@ let failedProbes = 0
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
 export function cloudWorkspacesAvailable(): Promise<boolean> {
-  availability ??= (window.api.cloudWorkspaces?.available() ?? Promise.resolve(false)).then(
+  availability ??= (window.api?.cloudWorkspaces?.available() ?? Promise.resolve(false)).then(
     (value) => {
       failedProbes = 0
       setAvailable(value)
