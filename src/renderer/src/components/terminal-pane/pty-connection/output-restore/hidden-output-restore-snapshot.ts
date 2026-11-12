@@ -1,3 +1,5 @@
+import { keepDeeperHistoryAfterReplay } from '@/lib/orca-cloud/cloud-replay-depth-guard'
+import { noteBeforeCloudReplay } from '@/lib/orca-cloud/cloud-wake-scrollback'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -112,6 +114,13 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
             return
           }
           scrollRestore.started = true
+          // N-02: a capped (shallower) rebuild of a cloud pane must not shrink what it shows.
+          const paneCopy = restorePtyId
+            ? noteBeforeCloudReplay(session.pane.leafId, session.pane.terminal, restorePtyId)
+            : null
+          if (paneCopy) {
+            await paneCopy
+          }
           if (typeof snapshot.seq === 'number') {
             session.hiddenOutputRestoreReplayingSnapshot = {
               seq: snapshot.seq,
@@ -189,6 +198,14 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           }
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)
+          if (paneCopy && restorePtyId) {
+            await keepDeeperHistoryAfterReplay(
+              session.pane.leafId,
+              session.pane.terminal,
+              restorePtyId,
+              session.writeReplayDataAsync
+            )
+          }
           if (session.deps.isVisibleRef.current) {
             presentPaneViewport(session.pane)
             recordTerminalFreezeBreadcrumb('stale-pixel-restore-present', {

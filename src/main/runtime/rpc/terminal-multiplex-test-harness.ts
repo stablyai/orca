@@ -128,7 +128,8 @@ export function startDesktopMultiplexSubscribe(
 
 export function sendDesktopMultiplexSubscribe(
   handlers: Map<number, (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void>,
-  capabilities: Record<string, 1> = { ackOutput: 1, desktopViewportClaims: 1 }
+  capabilities: Record<string, 1> = { ackOutput: 1, desktopViewportClaims: 1 },
+  extra: Record<string, unknown> = {}
 ) {
   handlers.get(0)?.(
     decodeTerminalStreamFrame(
@@ -141,7 +142,8 @@ export function sendDesktopMultiplexSubscribe(
           terminal: 'terminal-1',
           client: { id: 'desktop-1', type: 'desktop' },
           capabilities,
-          viewport: { cols: 120, rows: 40 }
+          viewport: { cols: 120, rows: 40 },
+          ...extra
         })
       })
     )!

@@ -190,6 +190,9 @@ ca_env=(NODE_USE_SYSTEM_CA="${NODE_USE_SYSTEM_CA:-1}")
 for name in NODE_EXTRA_CA_CERTS SSL_CERT_FILE; do
   if [ -n "${!name:-}" ]; then ca_env+=("$name=${!name}"); fi
 done
+# N-02: the host is a cloud terminal's source of truth across app reopens, so orcad and its
+# daemon keep a local terminal's depth (5000 rows) instead of the desktop daemon's 1000-row live
+# window. Scoped to the VM: local desktop daemons keep their default.
 # Ports panel: programs under $ORCA_HOME are the image's own services, and 23456 is Vercel's
 # sandbox-init (root, pid invisible to this user); neither is listed as the user's port.
 env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color "${ca_env[@]}" \
@@ -197,6 +200,7 @@ env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color "${ca_env[
   ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${managed_env[@]}" \
   ORCA_HOST_MANAGED_LISTENER_PATHS="$ORCA_HOME" ORCA_HOST_MANAGED_UNOWNED_PORTS=23456 \
   NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" ORCA_ORCAD_STARTUP_QUALIFICATION_DIR="$ORCA_HOME/startup-qualification" \
+  ORCA_DAEMON_SESSION_SCROLLBACK_ROWS=5000 \
   ORCA_SESSION_ENV_NAMES="${secret_names[*]}" "${agent_env[@]}" \
   setsid nohup "$node" "$ORCA_HOME/bin/orcad-boot" --code-cache "$ORCA_HOME/compile-cache/orcad-server.v8" \
   "$ORCA_HOME/runtime/orcad/orcad-server.js" --port 6768 --bind 0.0.0.0 --pairing-address "$ORCA_PUBLIC_WSS" \

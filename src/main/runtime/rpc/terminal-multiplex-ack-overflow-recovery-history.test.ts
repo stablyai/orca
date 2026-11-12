@@ -103,6 +103,8 @@ describe('ACK-overflow recovery history under a sustained flood', () => {
       settled.push(...(await ack(inFlight)).recoveryRows)
     }
     expect(inFlight).toBe(0)
+    // A desktop's overflow recovery stays at the recovery budget, not the 5000-row desktop attach
+    // depth (N-02): a deep snapshot on a link that just overflowed can overflow it again.
     expect(settled).toEqual([1000])
     expect(serializeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', { scrollbackRows: 1000 })
 

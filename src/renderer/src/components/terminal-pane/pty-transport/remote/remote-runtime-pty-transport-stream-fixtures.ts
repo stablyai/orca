@@ -21,6 +21,8 @@ type SubscribePayload = {
   terminal: string
   client: { id: string; type: string }
   viewport?: { cols: number; rows: number }
+  historyDepth?: 'full'
+  historyMountId?: string
   capabilities?: {
     ackOutput?: 1
     ackOutputSourceRanges?: 1

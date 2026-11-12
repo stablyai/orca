@@ -31,7 +31,12 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
   // Initial cadence, so a resubscribe resumes coalescing without a follow-up frame.
   outputCadence: z.enum(['focused', 'background']).optional(),
   // Name the client input sequence domain across stream replacement so replay deduplicates.
-  inputSessionId: z.string().min(1).max(128).optional()
+  inputSessionId: z.string().min(1).max(128).optional(),
+  // N-02: the desktop holds no local copy of this pane's history (fresh mount, app reopen), so the
+  // first snapshot carries a local terminal's depth. Absent, every reconnect gets the 1000-row cut.
+  historyDepth: z.literal('full').optional(),
+  // Names the pane mount asking for full depth, so the host limits repeats per mount, not per terminal.
+  historyMountId: z.string().min(1).max(64).optional()
 })
 
 export const TerminalMultiplexLegacyAckFrame = z

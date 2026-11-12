@@ -5,14 +5,14 @@ import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-sch
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { collectLeafIds } from '../../../../../shared/workspace-layout/terminal-pane-layout-tree'
 import { resolveTerminalLayoutActiveLeafId } from '../layout/ownership/terminal-layout-active-leaf'
-import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../../shared/terminal/replay/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT } from '../../../../../shared/terminal/replay/terminal-scrollback-limits'
 import { serializeWithAbsoluteCursor } from '../../../../../shared/terminal/replay/terminal-serialize-absolute-cursor'
 import {
   getUtf8ByteLength,
   isUtf8ByteLengthWithinLimit
 } from '../../../../../shared/utf8-byte-limits'
 
-const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SAVED_PANE_BYTE_LIMIT
 
 type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeAddon'>
 

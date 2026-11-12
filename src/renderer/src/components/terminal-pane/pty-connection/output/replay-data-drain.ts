@@ -1,3 +1,4 @@
+import { keepDeeperHistoryAfterReplay } from '@/lib/orca-cloud/cloud-replay-depth-guard'
 import { RELEASE_SYNCHRONIZED_OUTPUT } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
@@ -119,6 +120,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       // Clear before source-grid resize to avoid reflowing history that replay immediately discards.
       let replayPayload = data
       let preSleep: WakeScrollbackRestore | null = null
+      let paneCopyKept = false
       if (clearBeforeReplay) {
         // WAKE-SCROLLBACK: a resubscribe keeps only the host's 1000 rows; keep the fuller copy first
         // in case a sleep nobody clicked here follows (a teammate, idle auto-sleep).
@@ -128,6 +130,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
           payload.ptyId
         )
         if (keptBeforeReplay) {
+          paneCopyKept = true
           await keptBeforeReplay
           if (!isCurrentPayload()) {
             continue
@@ -193,6 +196,18 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       await session.writeReplayDataAsync(replayPayload)
       if (!isCurrentPayload()) {
         continue
+      }
+      // N-02: a shallower replay of the same terminal never shrinks the pane's history.
+      if (!preSleep && paneCopyKept) {
+        await keepDeeperHistoryAfterReplay(
+          session.pane.leafId,
+          session.pane.terminal,
+          payload.ptyId,
+          session.writeReplayDataAsync
+        )
+        if (!isCurrentPayload()) {
+          continue
+        }
       }
       if (preSleep) {
         const terminal = session.pane.terminal
