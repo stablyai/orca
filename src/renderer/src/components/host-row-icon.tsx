@@ -4,10 +4,7 @@ import { Box, Cloud, Monitor, Server } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
-import {
-  CloudStatusGlyph,
-  type CloudGlyphState
-} from '@/components/orca-cloud/CloudStatusGlyph'
+import { CloudStatusGlyph, type CloudGlyphState } from '@/components/orca-cloud/CloudStatusGlyph'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostVmState } from '../../../shared/execution-host/execution-host-health'
 

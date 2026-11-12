@@ -26,6 +26,7 @@ import {
 } from '../../input/wake-input-buffer'
 import { findColdRestoreResumeSource } from '../startup/cold-restore-resume-startup'
 import { registerWakePane } from '../../input/wake-pane-attach'
+import { noteCloudTerminalTyping } from './cloud-terminal-typing'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
@@ -81,6 +82,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     if (!wasUserInput && !isPassiveTerminalInputReport(data)) {
       session.noteTerminalInputForPty(currentPtyId)
     }
+    // Typing in an Orca Cloud terminal: git there may use my identity for a while (throttled report).
+    noteCloudTerminalTyping(session.runtimeEnvironmentId, data, wasUserInput)
     // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
     const inputKind = wasUserInput ? 'driving' : 'query-reply'
     const intent = session.pendingTerminalInputIntentFor(data)

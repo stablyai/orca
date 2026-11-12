@@ -9,6 +9,14 @@ import type {
 } from './terminal-input-sequence-ledger'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import { recordDrivingDevice, terminalSenderKey } from '../../../sender/driving-device-registry'
+
+/** Keystrokes from a paired device (a person); local windows and the CLI have no device and never count. */
+export function recordTypingDevice(terminal: string, deviceId: string | undefined): void {
+  if (deviceId) {
+    recordDrivingDevice(terminalSenderKey(terminal), { kind: 'paired-device', deviceId })
+  }
+}
 
 export function handleMultiplexInputFrame(
   state: TerminalMultiplexConnection,
@@ -41,6 +49,10 @@ export function handleMultiplexInputFrame(
     })
     if (!sequenced && outcome !== 'paused') {
       state.notifyStreamWriteUnavailable(stream, outcome)
+    }
+    if (outcome === 'delivered') {
+      // A person typing in this terminal drives it: git as the sender (orca-git-as) reads it back.
+      recordTypingDevice(stream.terminal, state.typingDeviceId)
     }
     return outcome === 'delivered' || outcome === 'paused'
       ? 'applied'
