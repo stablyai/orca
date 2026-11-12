@@ -17,7 +17,13 @@ import { CloudWorkspaceRow } from './CloudWorkspaceRow'
 import { CloudWorkspaceGroupView, rowDragProps } from './CloudWorkspaceGroup'
 import { useCloudWorkspaceArrangement } from './use-cloud-workspace-arrangement'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
-import { ANY, CloudWorkspacesToolbar, shouldShowCloudHomeFilters } from './CloudWorkspacesToolbar'
+import {
+  ANY,
+  CloudWorkspacesToolbar,
+  shouldShowCloudHomeArchivedOnly,
+  shouldShowCloudHomeFilters
+} from './CloudWorkspacesToolbar'
+import { useHomeArchivedCount } from './use-cloud-archived-count'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { useCloudHomeFilters } from './use-cloud-home-filters'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
@@ -107,6 +113,15 @@ export function CloudWorkspacesHome({
 
   // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
   const all = useHomeWorkspaces(state.status === 'ready' ? state.workspaces : null)
+  // ARCHIVE-REACH: archived ones are always reachable, however few workspaces are active.
+  const { archivedRead, archivedCount } = useHomeArchivedCount({
+    account,
+    scope,
+    shown: state.status === 'ready' && !stale ? all : null,
+    archivedOn: filters.archived,
+    enabled: Boolean(cloud)
+  })
+  const showFilters = shouldShowCloudHomeFilters(all.length, filters, Boolean(orgId))
   const { directory, canAdmin } = useMemberDirectory(orgId, all)
   const repos = useMemo(
     () => [...new Set(all.flatMap((w) => (w.repo ? [w.repo.url] : [])))].sort(),
@@ -277,7 +292,14 @@ export function CloudWorkspacesHome({
         reading={reading}
         onRefresh={refresh}
         routineRuns={routineRuns}
-        showFilters={shouldShowCloudHomeFilters(all.length, filters, Boolean(orgId))}
+        showFilters={showFilters}
+        archivedOnly={shouldShowCloudHomeArchivedOnly({
+          showFilters,
+          archivedCount,
+          archivedOn: filters.archived,
+          activeCount: all.length
+        })}
+        archivedCount={archivedCount}
       />
 
       <div
@@ -305,6 +327,8 @@ export function CloudWorkspacesHome({
             archived={filters.archived}
             filtered={by !== ANY || repo !== ANY}
             hasOrg={Boolean(orgId)}
+            archivedCount={filters.archived ? 0 : (archivedRead ?? 0)}
+            onShowArchived={() => changeFilters({ archived: true })}
           />
         )}
         {state.status === 'ready' &&

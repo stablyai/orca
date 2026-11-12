@@ -21122,7 +21122,8 @@
         "copyLinkToTerminal": "Copy link to this terminal",
         "copyLinkToChat": "Copy link to this chat",
         "linkToNumber": "Link to {{number}}",
-        "archiveConfirmStops": "{{owner}}'s agents in this workspace will stop."
+        "archiveConfirmStops": "{{owner}}'s agents in this workspace will stop.",
+        "archivedCount": "Archived ({{count}})"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -23705,7 +23706,10 @@
       "newCloudWorkspace": "New cloud workspace",
       "emptyStartBody": "It runs in a sandbox, so your agents keep working even when this computer is off.",
       "emptyMineYoursTitle": "You don’t have any cloud workspaces yet.",
-      "emptyFirstTitle": "Start your first cloud workspace"
+      "emptyFirstTitle": "Start your first cloud workspace",
+      "emptyAllArchivedTitle": "All your cloud workspaces are archived",
+      "showArchivedCount": "Show archived ({{count}})",
+      "emptyAllArchivedBody": "Unarchive one to keep working, or start a new one."
     },
     "worktreeCreation": {
       "pendingNativeChat": {
