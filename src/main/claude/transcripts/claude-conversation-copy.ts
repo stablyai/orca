@@ -5,7 +5,7 @@ import { AgentConversationCopyError } from '../../native-chat/agent-conversation
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { materializeClaudeConversationTranscript } from './claude-rewind-transcript'
-import { encodeClaudeProjectPath } from '../ai-vault/scanners/claude/claude-project-dir-encoding'
+import { encodeClaudeProjectPath } from '../../ai-vault/scanners/claude/claude-project-dir-encoding'
 
 // Claude names a longer path's bucket with a hash Orca cannot reproduce.
 const CLAUDE_PLAIN_BUCKET_NAME_MAX_LENGTH = 200

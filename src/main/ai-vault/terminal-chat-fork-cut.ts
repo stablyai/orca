@@ -4,8 +4,8 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { claudeDestinationBucket } from '../claude/claude-conversation-copy'
-import { materializeClaudeConversationTranscript } from '../claude/claude-rewind-transcript'
+import { claudeDestinationBucket } from '../claude/transcripts/claude-conversation-copy'
+import { materializeClaudeConversationTranscript } from '../claude/transcripts/claude-rewind-transcript'
 import { homedir } from 'node:os'
 import { getClaudeProfileRouter } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
