@@ -56,6 +56,12 @@ export function computerUseErrorRecoveryData(
         'Use a semantic alternative such as `set-value` or `click`, or install the missing desktop dependency if the error names one.'
       )
     case 'permission_denied':
+      if (message?.includes('target_elevated')) {
+        return recoverWith(
+          'Do not retry: Windows blocks input from a non-administrator Orca to an app running as administrator.',
+          'Ask the user to handle this window, or to restart Orca as administrator if they want it to control elevated apps.'
+        )
+      }
       return recoverWith(
         'Run `orca computer permissions --json`, or `orca computer permissions --id accessibility --json` / `--id screenshots --json` when the message names one missing permission.',
         'For remote or SSH targets, verify the command is running inside an active graphical desktop session.'
@@ -86,6 +92,14 @@ export function computerUseErrorRecoveryData(
         'Do not retry the same command unchanged.'
       )
     case 'action_timeout':
+      if (message?.includes('window_not_responding')) {
+        return recoverWith(
+          message.includes('may already have been delivered')
+            ? 'Wait a few seconds, then run `orca computer get-app-state --app <app> --json` and check whether the action already took effect before retrying it.'
+            : 'Wait a few seconds for the app to respond, then run `orca computer get-app-state --app <app> --json` again.',
+          'If it stays unresponsive, ask the user to close or restart the app; do not keep sending it input.'
+        )
+      }
       return recoverWith(
         'Run `orca computer get-app-state --app <app> --json` before retrying so you know whether the UI changed.',
         'Retry with a simpler semantic action or `--no-screenshot` if observation is slow; do not repeat the same timed-out action blindly.'

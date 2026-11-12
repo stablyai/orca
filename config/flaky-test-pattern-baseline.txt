@@ -73,7 +73,6 @@
 1 test-no-polling-loop:tests/e2e/browser-tab.spec.ts
 1 test-no-polling-loop:tests/e2e/chinese-ime-chat-input-repro.spec.ts
 3 test-no-polling-loop:tests/e2e/combined-diff-scroll-restore.spec.ts
-1 test-no-polling-loop:tests/e2e/computer-windows.e2e.ts
 1 test-no-polling-loop:tests/e2e/cross-version-wire/released-relay-daemon.ts
 1 test-no-polling-loop:tests/e2e/cross-version-wire/released-relay-transport.ts
 1 test-no-polling-loop:tests/e2e/daemon-lifecycle-retirement.spec.ts
@@ -251,7 +250,6 @@
 2 test-no-real-time-wait:tests/e2e/cli-floating-file-open-position.spec.ts
 1 test-no-real-time-wait:tests/e2e/codex-ctrl-c-status.spec.ts
 4 test-no-real-time-wait:tests/e2e/combined-diff-scroll-restore.spec.ts
-1 test-no-real-time-wait:tests/e2e/computer-windows.e2e.ts
 1 test-no-real-time-wait:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts
 1 test-no-real-time-wait:tests/e2e/cross-version-wire/released-relay-daemon.ts
 2 test-no-real-time-wait:tests/e2e/cross-version-wire/released-relay-transport.ts
