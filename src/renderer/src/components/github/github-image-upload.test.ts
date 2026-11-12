@@ -26,7 +26,7 @@ const ok = (result: unknown): RuntimeRpcResponse<unknown> => ({
   id: 'request',
   ok: true,
   result,
-  meta: { runtimeId: 'local' }
+  _meta: { runtimeId: 'local' }
 })
 function bridge(subscribe: unknown) {
   vi.stubGlobal('window', { api: { runtime: { subscribe } } })
