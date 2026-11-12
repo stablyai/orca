@@ -2,6 +2,7 @@ import { runProcessSync } from '@orca/process-host'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mergedReviewHeadIsEquivalent } from './merged-review-head-equivalence'
 import { getLocalGitCapabilityCache } from '../git/command-runner/host-routing/git-capability-state'
@@ -9,8 +10,8 @@ import { isUnsupportedMergeTreeWriteTreeError } from '../../shared/git/branches/
 
 describe('merged review head equivalence (real Git)', () => {
   let repoPath = ''
-  const gitWithInput = (args: string[], input?: string | Uint8Array): string => {
-    const result = runProcessSync({ program: 'git', args, cwd: repoPath, input })
+  const gitWithInput = (args: string[], input?: string | Uint8Array, cwd = repoPath): string => {
+    const result = runProcessSync({ program: 'git', args, cwd, input })
     if (result.code !== 0) {
       throw new Error(result.stderr)
     }
@@ -60,6 +61,38 @@ describe('merged review head equivalence (real Git)', () => {
     return { reviewHead, rebasedHead: git('rev-parse', 'HEAD') }
   }
 
+  function shallowRebasedReview() {
+    const { reviewHead, rebasedHead } = rebasedReview('feature.txt')
+    git('branch', 'review', reviewHead)
+    const shallowPath = join(repoPath, 'shallow')
+    git('init', '--quiet', shallowPath)
+    const fetch = (depth: string) =>
+      gitWithInput(
+        [
+          'fetch',
+          '--quiet',
+          depth,
+          pathToFileURL(repoPath).href,
+          '+refs/heads/main:refs/remotes/origin/main',
+          '+refs/heads/review:refs/remotes/origin/review',
+          '+refs/heads/feature:refs/remotes/origin/feature'
+        ],
+        undefined,
+        shallowPath
+      )
+    fetch('--depth=1')
+    return {
+      request: {
+        repoPath: shallowPath,
+        localGitOptions: {},
+        reviewHeadOid: reviewHead,
+        baseBranchName: 'main',
+        headOid: rebasedHead
+      },
+      deepen: () => fetch('--unshallow')
+    }
+  }
+
   it('proves a rebase when main edited the same file on Git with write-tree support', async ({
     skip
   }) => {
@@ -103,6 +136,26 @@ describe('merged review head equivalence (real Git)', () => {
     capabilities.rememberUnsupported('merge-tree-write-tree')
     try {
       await expect(prove(reviewHead, localHead)).resolves.toBe(false)
+    } finally {
+      capabilities.clear()
+    }
+  })
+
+  it('retries a same-commit proof after shallow history is deepened', async () => {
+    const { request, deepen } = shallowRebasedReview()
+    await expect(mergedReviewHeadIsEquivalent(request)).resolves.toBe(false)
+    deepen()
+    await expect(mergedReviewHeadIsEquivalent(request)).resolves.toBe(true)
+  })
+
+  it('retries a same-commit proof after deepening through the older-Git fallback', async () => {
+    const { request, deepen } = shallowRebasedReview()
+    const capabilities = getLocalGitCapabilityCache({ cwd: request.repoPath })
+    capabilities.rememberUnsupported('merge-tree-write-tree')
+    try {
+      await expect(mergedReviewHeadIsEquivalent(request)).resolves.toBe(false)
+      deepen()
+      await expect(mergedReviewHeadIsEquivalent(request)).resolves.toBe(true)
     } finally {
       capabilities.clear()
     }

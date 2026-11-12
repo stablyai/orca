@@ -10,10 +10,11 @@ type Proof = 'equivalent' | 'unproven'
 
 const BASE_REMOTES = ['origin', 'upstream']
 const GIT_OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
+// A fetch can make an unproven result provable without changing any commit IDs.
 const proofMemo = new MergedReviewMembershipMemo<Proof>({
   weight: () => 1,
   maxWeight: 200,
-  ttl: (proof) => (proof === 'equivalent' ? 6 * 60 * 60_000 : 30 * 60_000)
+  ttl: (proof) => (proof === 'equivalent' ? 6 * 60 * 60_000 : 0)
 })
 
 /**
