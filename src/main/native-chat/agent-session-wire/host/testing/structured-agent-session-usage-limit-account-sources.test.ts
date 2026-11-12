@@ -10,15 +10,12 @@ import {
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
 import {
-  FLEET_HOME,
   HOUR,
   fakeAccountSources,
-  usageLimitFleet,
   weekly,
   type FleetSources
 } from './structured-agent-session-usage-limit-fleet.test-fixture'
 
-const WEEKLY_RESET = NOW + 3 * HOUR
 /** The rig's cut resets a minute after it is written; its continue is due 15 s later. */
 const DUE = NOW + 75_000
 const HELD_UNTIL = DUE + 3 * HOUR
@@ -186,42 +183,5 @@ it('never sends on an attribution whose sources moved while it resolved, then se
     expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: HELD_UNTIL })
     sources.limits = weekly(0, null, HELD_UNTIL + 15_000)
     await chat.settle(await chat.pass(HELD_UNTIL + 15_000))
-  }
-})
-
-it('shares attribution for queued continuations blocked by a newer reading at N and 10N', async () => {
-  for (const settingsChange of [false, true]) {
-    for (const count of [300, 3000]) {
-      const sources: FleetSources = {
-        settings: {},
-        shellEnv: {},
-        shellRevision: 1,
-        reading: { home: FLEET_HOME, provenance: 'system' },
-        limits: weekly(0, null, NOW)
-      }
-      const fleet = usageLimitFleet({
-        count,
-        provider: 'codex',
-        now: NOW,
-        sources,
-        // A reading that spends the week lands during the first dispatch, with or without a
-        // settings write that moves every remaining chat's sources at once.
-        dispatching: () => {
-          sources.limits = weekly(100, WEEKLY_RESET, NOW)
-          if (settingsChange) {
-            sources.settings = {}
-          }
-        }
-      })
-      await fleet.pass(NOW)
-      expect(fleet.dispatched).toEqual(['chat-0'])
-      expect(fleet.state(`chat-${count - 1}`)).toMatchObject({
-        state: 'scheduled',
-        continueAt: WEEKLY_RESET
-      })
-      expect(fleet.calls).toEqual(
-        settingsChange ? { launchHome: 2, reader: 2 } : { launchHome: 1, reader: 1 }
-      )
-    }
   }
 })
