@@ -19,6 +19,7 @@ import {
   isWakeFailedFresh
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import {
+  cloudWorkspaceTarget,
   dismissCloudOom,
   dismissCloudWake,
   useIsCloudWorkspace
@@ -81,7 +82,7 @@ function useArchiveLoad(workspaceId: string, enabled: boolean): [ArchiveLoad, ()
     let cancelled = false
     setLoad({ status: 'loading' })
     void window.api.orcaCloudWorkspace
-      .getArchive({ workspaceId })
+      .getArchive(cloudWorkspaceTarget(workspaceId))
       .then((result) => {
         if (!cancelled) {
           setLoad(

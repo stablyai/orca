@@ -10,7 +10,8 @@ import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtim
 import {
   ORCA_CLOUD_WORKSPACE_CHANNELS as CH,
   type CloudWakeProgressEvent,
-  type CloudWakeSource
+  type CloudWakeSource,
+  type CloudWorkspaceTarget
 } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type {
   HostedArchivePullRequest,
@@ -25,6 +26,7 @@ import { toReady } from './hosted-sandbox-driver'
 import { noteWakeTimeline } from './cloud-wake-timeline'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import { getCloudSyncService } from '../cloud-sync/cloud-sync-ipc'
+import { findCloudSandbox, registerCloudArchiveInfoHandler } from './cloud-workspace-target'
 import {
   NOT_CLOUD,
   createOomTracker,
@@ -187,8 +189,8 @@ export function installHostedWorkspaceService(deps: {
 
   registerHostedAccountHandlers(deps.client)
 
-  ipcMain.handle(CH.getStatus, async (_event, args: { workspaceId: string }) => {
-    const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
+  ipcMain.handle(CH.getStatus, async (_event, args: CloudWorkspaceTarget) => {
+    const found = findCloudSandbox(deps.userDataPath, args)
     if (!found) {
       return NOT_CLOUD
     }
@@ -317,17 +319,7 @@ export function installHostedWorkspaceService(deps: {
     }
   })
 
-  ipcMain.handle(CH.getArchive, async (_event, args: { workspaceId: string }) => {
-    const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
-    if (!found) {
-      return NOT_CLOUD
-    }
-    try {
-      return { ok: true, value: await deps.client.archiveInfo(found.sandboxId) }
-    } catch (error) {
-      return failure(error)
-    }
-  })
+  registerCloudArchiveInfoHandler(deps.userDataPath, deps.client)
 
   return service
 }

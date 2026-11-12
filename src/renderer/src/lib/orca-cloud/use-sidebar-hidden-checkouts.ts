@@ -16,14 +16,23 @@ type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
   Partial<Pick<AppState, 'orcaProfileAuthStatus' | 'cloudAccountIdByEnvironmentId'>>
 
 /**
- * Every Orca Cloud server, `+host` when the active team owns it and `-host` otherwise (another
- * team's, or one whose team is not known yet). Newline-joined so the selector compares by value.
+ * Every Orca Cloud server this desktop runs, `+host` when the active team owns it and `-host`
+ * otherwise (another team's, or one whose team is not known yet). Newline-joined so the selector
+ * compares by value.
+ *
+ * A PAIRED server (`orcaCloudPaired`, PAIRED-NO-ROW) is left out: its owner is never in
+ * `cloudAccountIdByEnvironmentId` (that knows this desktop's own runtimes only), so scoping it hid
+ * every row of a workspace this desktop just paired with, a GitHub-only create included. And its
+ * primary checkout IS the workspace's row, so the `+host` treatment would hide it too.
  */
 export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
   const active = orcaCloudAccountId(state.orcaProfileAuthStatus?.cloud)
   const owners = state.cloudAccountIdByEnvironmentId ?? {}
   return (state.runtimeEnvironments ?? [])
-    .filter((environment) => isOrcaCloudRuntimeEnvironment(environment))
+    .filter(
+      (environment) =>
+        isOrcaCloudRuntimeEnvironment(environment) && environment.orcaCloudPaired !== true
+    )
     .map((environment) => {
       const inTeam = active !== null && owners[environment.id] === active
       return `${inTeam ? '+' : '-'}${toRuntimeExecutionHostId(environment.id)}`

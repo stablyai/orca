@@ -2,7 +2,7 @@
 // CHAT-BANNERS (PR-B): a structured chat shows its held launch's strip at the top of its column (the
 // terminal pane's strip, same copy and actions), and a chat closed while held gives up its launch.
 import { act } from 'react'
-import { cleanup, render, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
@@ -14,7 +14,8 @@ const stub = vi.hoisted(() => {
     setup: OrcaCloudAgentSetup
     openTabIds: string[]
     released: [string, string][]
-  } = { hold: null, setup: { phase: 'idle' }, openTabIds: [], released: [] }
+    stopped: string[]
+  } = { hold: null, setup: { phase: 'idle' }, openTabIds: [], released: [], stopped: [] }
   return state
 })
 
@@ -39,6 +40,9 @@ vi.mock('@/lib/agent-sign-in/agent-sign-in-gate-store', () => ({
   useAgentSignInGate: () => null
 }))
 vi.mock('@/lib/orca-cloud/orca-cloud-agent-accounts-store', () => ({
+  stopOrcaCloudAgentSetups: (agent: string) => {
+    stub.stopped.push(agent)
+  },
   orcaCloudAgentAccountsLoadedAt: () => 0,
   useOrcaCloudAgentAccounts: () => ({
     load: { kind: 'loading' },
@@ -84,6 +88,7 @@ beforeEach(() => {
   stub.setup = { phase: 'idle' }
   stub.openTabIds = [TAB_ID]
   stub.released = []
+  stub.stopped = []
 })
 afterEach(() => {
   cleanup()
@@ -114,6 +119,34 @@ describe('the structured chat strip', () => {
   it('nothing held: an empty slot, no strip', () => {
     const view = mount()
     expect(view.container.querySelector('[data-cloud-chat-banners]')?.textContent).toBe('')
+  })
+
+  it('CHAT-CANCEL-ERROR: a held chat has no × and Escape keeps it held on its strip', () => {
+    stub.hold = { agent: 'claude', reason: 'notSetUp', prompt: null }
+    const view = mount()
+    const slot = view.container.querySelector<HTMLElement>('[data-cloud-chat-banners]')!
+    expect(within(slot).queryByRole('button', { name: /Cancel sign-in/ })).toBeNull()
+    fireEvent.keyDown(slot.querySelector('[data-cloud-sign-in-strip]')!, { key: 'Escape' })
+    expect(stub.released).toEqual([])
+    expect(within(slot).getByRole('button', { name: 'Set up once' })).toBeTruthy()
+  })
+
+  it('CHAT-CANCEL-ERROR: an expired held chat keeps its hold on Escape too', () => {
+    stub.hold = { agent: 'claude', reason: 'accountExpired', prompt: null }
+    const view = mount()
+    const strip = view.container.querySelector<HTMLElement>('[data-cloud-sign-in-strip]')!
+    fireEvent.keyDown(strip, { key: 'Escape' })
+    expect(stub.released).toEqual([])
+  })
+
+  it('CHAT-CANCEL-ERROR: during a setup, Cancel stops only the sign-in; the chat stays held', () => {
+    stub.hold = { agent: 'claude', reason: 'notSetUp', prompt: null }
+    stub.setup = { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true }
+    const view = mount()
+    const strip = view.container.querySelector<HTMLElement>('[data-cloud-sign-in-strip]')!
+    fireEvent.keyDown(strip, { key: 'Escape' })
+    expect(stub.stopped).toEqual(['claude'])
+    expect(stub.released).toEqual([])
   })
 
   it('a chat closed while held cancels its launch; a remount keeps it', () => {

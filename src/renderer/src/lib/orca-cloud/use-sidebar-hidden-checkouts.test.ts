@@ -69,3 +69,27 @@ describe('Orca Cloud host scope', () => {
     expect(withoutHiddenHostRepos([local, mine, theirs], scope)).toEqual([local, mine])
   })
 })
+
+describe('a paired-from-birth cloud workspace (PAIRED-NO-ROW)', () => {
+  it('keeps its sidebar row: its paired server is neither hidden nor primary-scoped', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selector reads only these fields.
+    const state = {
+      runtimeEnvironments: [
+        ...environments,
+        { id: 'gh', name: 'orca-sandbox-push-test (cloud)', orcaCloudPaired: true }
+      ],
+      cloudAccountIdByEnvironmentId: owners,
+      orcaProfileAuthStatus: { cloud: { userId: 'u1', activeOrgId: 'team-one' } }
+    } as unknown as Pick<AppState, 'runtimeEnvironments'>
+    const hosts = parseOrcaCloudHostScopeKey(selectOrcaCloudHostScopeKey(state))
+    expect(hosts.hiddenHostIds.has('runtime:gh')).toBe(false)
+    expect(hosts.primaryHostIds.has('runtime:gh')).toBe(false)
+    // The owned sandboxes are still scoped by team exactly as before.
+    expect([...hosts.hiddenHostIds]).toEqual(['runtime:b', 'runtime:unfiled'])
+    // Its project survives the sidebar's repo scoping.
+    const repo = { id: 'gh-repo', executionHostId: 'runtime:gh' as const }
+    expect(
+      withoutHiddenHostRepos([repo], withOrcaCloudHosts(EMPTY_PENDING_VM_CHECKOUT_INDEX, hosts))
+    ).toEqual([repo])
+  })
+})
