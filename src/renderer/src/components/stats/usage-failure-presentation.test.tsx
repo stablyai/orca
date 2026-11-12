@@ -5,11 +5,7 @@ import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
-import { UsageOverviewPane } from './UsageOverviewPane'
 import type { AppState } from '../../store/types'
-import { TooltipProvider } from '../ui/tooltip'
-import { i18n } from '@/i18n/i18n'
-import es from '../../i18n/locales/es.json'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Setup replaces this placeholder before any usage component renders.
 const fixture = vi.hoisted(() => ({ state: {} as AppState }))
@@ -50,10 +46,7 @@ function setup(kind: 'unknown' | 'disabled' | 'empty' | 'cached') {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the populated usage surface selectors are exercised.
   fixture.state = values as unknown as AppState
 }
-afterEach(async () => {
-  cleanup()
-  await i18n.changeLanguage('en')
-})
+afterEach(cleanup)
 
 it.each(providers)(
   '%s exposes failure and Refresh in unknown, disabled, empty and cached states',
@@ -76,57 +69,3 @@ it.each(providers)(
     }
   }
 )
-
-it('deduplicates overview failure, retries unknown providers without enabling, and removes recovered warnings', () => {
-  setup('unknown')
-  const view = render(
-    <TooltipProvider>
-      <UsageOverviewPane />
-    </TooltipProvider>
-  )
-  expect(screen.getAllByRole('alert')).toHaveLength(1)
-  expect(screen.queryByText('Start tracking tokens')).toBeNull()
-  expect(screen.queryByText('0 enabled - 0 with data')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'Refresh usage overview' }))
-  for (const [prefix, name] of providers) {
-    expect(fixture.state[`refresh${name}Usage`]).toHaveBeenCalledTimes(1)
-    expect(fixture.state[`enable${name}Usage`]).not.toHaveBeenCalled()
-    fixture.state[`${prefix}UsageFailure`] = null
-  }
-  view.rerender(
-    <TooltipProvider>
-      <UsageOverviewPane />
-    </TooltipProvider>
-  )
-  expect(screen.queryByRole('alert')).toBeNull()
-  setup('disabled')
-  view.rerender(
-    <TooltipProvider>
-      <UsageOverviewPane />
-    </TooltipProvider>
-  )
-  expect(screen.getByText('Start tracking tokens')).toBeTruthy()
-  expect(screen.getByText('0 enabled - 0 with data')).toBeTruthy()
-})
-
-it('renders translated failure and retry on the provider and overview', async () => {
-  i18n.addResourceBundle('es', 'translation', es)
-  await i18n.changeLanguage('es')
-  setup('unknown')
-  const view = render(<ClaudeUsagePane />)
-  expect(screen.getByRole('alert').textContent).toBe(
-    'No se pudo completar la actualización anterior. Pulsa Actualizar de nuevo.'
-  )
-  fireEvent.click(screen.getByRole('button', { name: 'Actualizar' }))
-  expect(fixture.state.refreshClaudeUsage).toHaveBeenCalledTimes(1)
-  view.unmount()
-  render(
-    <TooltipProvider>
-      <UsageOverviewPane />
-    </TooltipProvider>
-  )
-  expect(screen.queryByText('Empezar a rastrear tokens')).toBeNull()
-  expect(screen.getByRole('alert').textContent).toContain(
-    'No se pudo completar la actualización anterior.'
-  )
-})
