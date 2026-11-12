@@ -61,7 +61,7 @@ export function CloudStripPasteForm({
       <Input
         ref={inputRef}
         aria-label={paste.secretLabel ?? t('agentSignInStrip.pasteLabel', 'Code from claude.ai')}
-        placeholder={setupCode?.placeholder}
+        placeholder={setupCode?.placeholder ?? paste.placeholder}
         type={paste.secretLabel ? 'password' : undefined}
         autoComplete={paste.secretLabel ? 'off' : undefined}
         aria-invalid={paste.refusal ? true : undefined}
@@ -88,7 +88,9 @@ export function CloudStripPasteForm({
         aria-busy={busy || undefined}
         aria-disabled={busy || undefined}
       >
-        {setupCode ? setupCode.submitLabel : t('agentSignInStrip.continue', 'Continue')}
+        {setupCode
+          ? setupCode.submitLabel
+          : (paste.submitLabel ?? t('agentSignInStrip.continue', 'Continue'))}
       </Button>
     </form>
   )

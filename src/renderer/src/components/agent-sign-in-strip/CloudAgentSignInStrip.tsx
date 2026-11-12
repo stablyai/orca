@@ -127,6 +127,29 @@ function StatusSlot({ status }: { status: CloudStripStatus }): React.JSX.Element
   }
 }
 
+/** `…` in a detail is a command: shown as inline code (design-squad). */
+function withInlineCode(text: string): React.ReactNode {
+  if (!text.includes('`')) {
+    return text
+  }
+  // Segments keyed by where they start in the text: fixed for a given string.
+  const segments: { at: number; text: string; code: boolean }[] = []
+  let at = 0
+  text.split(/`([^`]+)`/).forEach((part, i) => {
+    segments.push({ at, text: part, code: i % 2 === 1 })
+    at += part.length + (i % 2 === 1 ? 2 : 0)
+  })
+  return segments.map((segment) =>
+    segment.code ? (
+      <code key={segment.at} className="rounded bg-muted px-1 font-mono text-[11px]">
+        {segment.text}
+      </code>
+    ) : (
+      <React.Fragment key={segment.at}>{segment.text}</React.Fragment>
+    )
+  )
+}
+
 const GRID: Record<CloudStripWidth, string> = {
   wide: 'grid-cols-[16px_minmax(0,1fr)_140px_280px]',
   narrow: 'grid-cols-[16px_minmax(0,1fr)_280px]',
@@ -161,9 +184,11 @@ export function CloudAgentSignInStrip({
   // Text never truncates in these strips (design-squad): title and detail wrap (up to 3 lines each)
   // and the strip grows from 56 px; actions stay top-right.
   const setupCode = model.paste?.setupCode ? model.paste : null
+  // Both secret pastes (the sign-in code and the setup-token fallback) share one layout (design-squad).
+  const secretPaste = model.paste?.secretLabel ? model.paste : null
   // Narrow (<560 px) with the code field: stack, never truncate (design-squad): text wraps on row 1,
   // [Paste code ……] [Finish setup] [Open again] fill row 2.
-  const stacked = setupCode !== null && (width === 'tiny' || compact)
+  const stacked = secretPaste !== null && (width === 'tiny' || compact)
   const lineFit = 'line-clamp-3 break-words'
   const t = useTranslate()
   const titleId = React.useId()
@@ -201,7 +226,7 @@ export function CloudAgentSignInStrip({
         BANNER_TONE[stripSeverity(model.status)].surface,
         BANNER_TONE[stripSeverity(model.status)].border,
         'min-h-14 items-start py-2.5 [&>svg]:mt-0.5',
-        setupCode ? 'grid-cols-[16px_minmax(0,1fr)_auto]' : GRID[width]
+        secretPaste ? 'grid-cols-[16px_minmax(0,1fr)_auto]' : GRID[width]
       )}
     >
       <StatusSlot status={model.status} />
@@ -212,14 +237,14 @@ export function CloudAgentSignInStrip({
         <Tooltip>
           <TooltipTrigger asChild>
             <span id={detailId} className={cn(lineFit, 'text-xs leading-4', BANNER_BODY_TEXT)}>
-              {model.detail}
+              {withInlineCode(model.detail)}
               {model.description ? <span className="sr-only">. {model.description}</span> : null}
             </span>
           </TooltipTrigger>
           {model.description ? <TooltipContent>{model.description}</TooltipContent> : null}
         </Tooltip>
       </div>
-      {width === 'wide' && !setupCode ? (
+      {width === 'wide' && !secretPaste ? (
         prompt ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -321,7 +346,7 @@ export function CloudAgentSignInStrip({
           </Button>
         )}
       </div>
-      {stacked && setupCode ? (
+      {stacked && secretPaste ? (
         // Row 2, under the text: [Paste code ……] [Finish setup] then "Open again" as a quiet button.
         <div
           data-strip-code-row
@@ -330,7 +355,7 @@ export function CloudAgentSignInStrip({
           <div className="min-w-0 flex-1 basis-56">
             <CloudStripPasteForm
               fill
-              paste={setupCode}
+              paste={secretPaste}
               onSubmitCode={actions.submitCode}
               onSubmitSetupCode={actions.submitSetupCode}
             />

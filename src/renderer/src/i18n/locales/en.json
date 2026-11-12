@@ -28271,8 +28271,6 @@
     "finishInBrowser": "Finish in your browser",
     "saving": "Saving to your Orca account",
     "preparing": "Getting sign-in ready",
-    "pasteTokenTitle": "Paste the token from claude setup-token",
-    "pasteTokenDetail": "It’s saved to your Orca account, never to a sandbox.",
     "setupTokenLabel": "Claude setup-token",
     "setupCodeRejected": "That code didn’t work. Paste the newest code from the sign-in page, or open it again.",
     "setupCodeLabel": "Code from {{agent}}’s sign-in page",
@@ -28281,7 +28279,12 @@
     "finishSetup": "Finish setup",
     "finishInBrowserPaste": "Finish in your browser, then paste the code here.",
     "setupCodeRejectedTitle": "Code didn’t work",
-    "setupCodeRejectedDetail": "Paste the newest code from the sign-in page, or open it again."
+    "setupCodeRejectedDetail": "Paste the newest code from the sign-in page, or open it again.",
+    "pasteTokenRejectedTitle": "Token didn’t work",
+    "pasteTokenRejectedDetail": "Paste the full token from `claude setup-token`, or run it again.",
+    "setupTokenPlaceholder": "Paste token",
+    "pasteAgentTokenTitle": "Paste a {{agent}} token",
+    "pasteAgentTokenDetail": "Run `claude setup-token` in any terminal where {{agent}} is installed, then paste the token here. It’s saved to your Orca account, never to a sandbox."
   },
   "cloudSetupPage": {
     "back": "Back",
