@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { MarkdownPreviewSurface } from './MarkdownPreviewSurface'
 import type { MarkdownPreviewProps } from '../render-tree/markdown-preview-types'
 import { useMarkdownPreviewAnnotationRenderers } from '../review/use-markdown-preview-annotation-renderers'
@@ -12,6 +12,10 @@ import { useMarkdownPreviewDocument } from '../document-worker/use-markdown-prev
 import { useMarkdownPreviewDocumentSearch } from '../search/use-markdown-preview-document-search'
 import type { VirtualMarkdownPreviewNavigation } from '../viewport/use-markdown-preview-navigation'
 import { useMarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
+import { readMarkdownPreviewChatSelection } from '../review/markdown-preview-chat-selection'
+import { SelectionAddToChatPopover } from '../../../native-chat/selection-quotes/SelectionAddToChatPopover'
+import { openAddToChatMenuAt } from '../../../native-chat/selection-quotes/add-to-chat-point-menu'
+import { formatNativeChatQuote } from '../../../native-chat/selection-quotes/native-chat-quote-selection'
 
 const EMPTY_MARKDOWN_DOCUMENTS: MarkdownDocument[] = []
 
@@ -20,6 +24,7 @@ export default function MarkdownPreview({
   filePath,
   sourceFileId = null,
   sourceWorktreeId = null,
+  sourceRelativePath = null,
   sourceRuntimeEnvironmentId = undefined,
   scrollCacheKey,
   initialAnchor = null,
@@ -84,20 +89,45 @@ export default function MarkdownPreview({
     onOpenDocument
   })
 
+  // The open file's own workspace and path, so folder workspaces get the action too.
+  const chatWorktreeId = sourceWorktreeId
+  const chatRelativePath = sourceRelativePath
+
   return (
-    <MarkdownPreviewSurface
-      largePreview={largePreview}
-      documentState={documentState}
-      documentSearch={documentSearch}
-      largeNavigationRef={largeNavigationRef}
-      scrollCacheKey={scrollCacheKey}
-      foundation={foundation}
-      viewport={viewport}
-      reviewActions={reviewActions}
-      components={components}
-      filePath={filePath}
-      showTableOfContents={showTableOfContents}
-      onCloseTableOfContents={onCloseTableOfContents}
-    />
+    <>
+      <MarkdownPreviewSurface
+        largePreview={largePreview}
+        documentState={documentState}
+        documentSearch={documentSearch}
+        largeNavigationRef={largeNavigationRef}
+        scrollCacheKey={scrollCacheKey}
+        foundation={foundation}
+        viewport={viewport}
+        reviewActions={reviewActions}
+        components={components}
+        filePath={filePath}
+        showTableOfContents={showTableOfContents}
+        onCloseTableOfContents={onCloseTableOfContents}
+      />
+      <SelectionAddToChatPopover
+        rootRef={foundation.rootRef}
+        enabled={chatWorktreeId !== null && chatRelativePath !== null}
+        readQuotable={(root) =>
+          chatRelativePath === null
+            ? null
+            : readMarkdownPreviewChatSelection(root, displayedContent, chatRelativePath)
+        }
+        onAdd={(text, button) =>
+          chatWorktreeId &&
+          openAddToChatMenuAt({
+            worktreeId: chatWorktreeId,
+            quote: formatNativeChatQuote(text),
+            launchSource: 'native_chat',
+            x: button.left,
+            y: button.bottom
+          })
+        }
+      />
+    </>
   )
 }

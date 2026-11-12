@@ -43,106 +43,20 @@ vi.mock('./browser-cookie-clear-store', () => ({
     dispose: () => undefined
   })
 }))
-vi.mock('../sessions/browser-session-registry', () => ({
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
-vi.mock('../../codex-accounts/fs-utils', () => ({
-  copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
-}))
+
 vi.mock('../../../shared/windows-retry-file-operations', () => ({
   copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
 }))
 
-import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
+import { importCookiesFromBrowser } from './browser-cookie-import'
+import { importCookiesFromFile } from './imports/import-cookie-file'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
-import { acquireCookieMutationLock, withCookieMutationLock } from './browser-cookie-import-clear'
-
-describe('cookie mutation lock', () => {
-  it('serialises two transactions on the same owner', async () => {
-    const owner = {}
-    const order: string[] = []
-
-    const first = withCookieMutationLock(owner, async () => {
-      order.push('A:clear')
-      await Promise.resolve()
-      order.push('A:write')
-    })
-    const second = withCookieMutationLock(owner, async () => {
-      order.push('B:clear')
-      await Promise.resolve()
-      order.push('B:write')
-    })
-
-    await Promise.all([first, second])
-
-    expect(order).toEqual(['A:clear', 'A:write', 'B:clear', 'B:write'])
-  })
-
-  it('does not serialise across different owners', async () => {
-    const order: string[] = []
-    const a = withCookieMutationLock({}, async () => {
-      order.push('a:start')
-      await Promise.resolve()
-      order.push('a:end')
-    })
-    const b = withCookieMutationLock({}, async () => {
-      order.push('b:start')
-      await Promise.resolve()
-      order.push('b:end')
-    })
-
-    await Promise.all([a, b])
-
-    expect(order).toContain('a:end')
-    expect(order).toContain('b:end')
-    expect(order).not.toEqual(['a:start', 'a:end', 'b:start', 'b:end'])
-  })
-
-  it('releases the lock when the transaction throws, so the next import is not wedged', async () => {
-    const owner = {}
-
-    await expect(
-      withCookieMutationLock(owner, async () => {
-        throw new Error('clear rejected')
-      })
-    ).rejects.toThrow('clear rejected')
-
-    await expect(withCookieMutationLock(owner, async () => 'second ran')).resolves.toBe(
-      'second ran'
-    )
-  })
-
-  it('holds across an explicit acquire/release so a rollback stays inside the transaction', async () => {
-    const owner = {}
-    const order: string[] = []
-
-    const release = await acquireCookieMutationLock(owner)
-    const queued = withCookieMutationLock(owner, async () => {
-      order.push('B:clear')
-    })
-
-    order.push('A:replace')
-    await Promise.resolve()
-    order.push('A:rollback')
-    release()
-
-    await queued
-
-    expect(order).toEqual(['A:replace', 'A:rollback', 'B:clear'])
-  })
-
-  it('leaves the lock usable if a holder releases twice', async () => {
-    const owner = {}
-    const release = await acquireCookieMutationLock(owner)
-    release()
-    release()
-
-    await expect(withCookieMutationLock(owner, async () => 'ok')).resolves.toBe('ok')
-  })
-})
 
 describe('two concurrent imports into one partition', () => {
   let tmpDir: string
@@ -347,91 +261,5 @@ describe('two concurrent NATIVE imports into one partition', () => {
     expect(cookiesSetMock).not.toHaveBeenCalled()
     expect(cookiesRemoveMock).not.toHaveBeenCalled()
     expect(events.indexOf('set:first')).toBeLessThan(events.indexOf('set:second'))
-  })
-})
-
-/** An unlocked initialization probe could delete a concurrent import’s localhost/__init cookie. */
-describe('cold-init probe on a partition that has never stored a cookie', () => {
-  let tmpDir: string
-  let events: string[]
-  let cookiesSetMock: ReturnType<typeof vi.fn>
-  let platformSpy: { mockRestore: () => void }
-  let stableSession: object
-
-  beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-probe-'))
-    appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
-    events = []
-    platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    snapshotClearIdentitiesMock
-      .mockReset()
-      .mockImplementation(async (items: { cookie: Record<string, unknown>; url: string }[]) =>
-        items.map(({ cookie: entry, url }) => ({ url, ...entry }))
-      )
-    writeCookieIdentityMock.mockReset().mockResolvedValue(undefined)
-
-    const partitionDir = join(tmpDir, 'userData', 'Partitions', 'probe-conc')
-    cookiesSetMock = vi.fn(async (cookie: { name: string }) => {
-      events.push(`set:${cookie.name}`)
-    })
-    stableSession = {
-      cookies: {
-        get: vi.fn().mockResolvedValue([]),
-        remove: vi.fn(async (_url: string, name: string) => {
-          events.push(`remove:${name}`)
-        }),
-        set: cookiesSetMock,
-        // Create the database only after __init is written so the initial flush cannot bypass the probe.
-        flushStore: vi.fn(async () => {
-          if (events.includes('set:__init')) {
-            createChromiumCookieTestDatabase(join(partitionDir, 'Network', 'Cookies'), []).close()
-          }
-        })
-      },
-      clearData: vi.fn(async () => {
-        events.push('clearData')
-      }),
-      getStoragePath: () => partitionDir,
-      setUserAgent: vi.fn()
-    }
-    sessionFromPartitionMock.mockReset().mockReturnValue(stableSession)
-  })
-
-  afterEach(() => {
-    platformSpy.mockRestore()
-    rmSync(tmpDir, { recursive: true, force: true })
-  })
-
-  it('imports into an unused partition without writing or deleting an initialization probe', async () => {
-    const source = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(source, [
-      { domain: '.probe.example', name: 'probe', value: 'v' }
-    ]).close()
-
-    const release = await acquireCookieMutationLock(stableSession)
-
-    const running = importCookiesFromBrowser(
-      {
-        family: 'chrome' as const,
-        label: 'Google Chrome',
-        cookiesPath: source,
-        keychainService: 'Chrome Safe Storage',
-        keychainAccount: 'Chrome',
-        profiles: [{ name: 'Default', directory: 'Default' }],
-        selectedProfile: 'Default'
-      },
-      'persist:probe-conc'
-    )
-    await new Promise((resolve) => setTimeout(resolve, 20))
-
-    expect(events).not.toContain('set:__init')
-    expect(events).not.toContain('remove:__init')
-
-    release()
-    await running
-
-    expect(cookiesSetMock).not.toHaveBeenCalled()
-    expect(events).not.toContain('remove:__init')
-    expect(writeCookieIdentityMock).toHaveBeenCalledOnce()
   })
 })

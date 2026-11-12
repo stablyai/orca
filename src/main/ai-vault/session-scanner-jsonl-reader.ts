@@ -1,6 +1,10 @@
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from './ai-vault-scan-cancellation'
 import type { Hash } from 'node:crypto'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
-import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import {
+  isZstdTranscriptPath,
+  zstdTranscriptStream
+} from '../native-chat/transcript-zstd-decompression'
 import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
   type SkippedTranscriptRecord
@@ -29,6 +33,7 @@ export async function consumeCompleteJsonlLines(args: {
   path: string
   start: number
   onLine: (line: string) => void
+  drain?: () => Promise<void>
   onLineBytes?: (line: Buffer) => void
   /** Covers [0, start); extended through each complete line and returned for the new end. */
   prefixHash?: Hash | null
@@ -59,77 +64,94 @@ export async function consumeCompleteJsonlLines(args: {
   let discarding = false
   const skippedRecords: SkippedTranscriptRecord[] = []
 
-  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan', args.signal)
+  // Compressed transcripts are immutable archives; every read starts from zero and decodes.
+  const compressed = isZstdTranscriptPath(args.path)
+  if (compressed && args.start !== 0) {
+    throw new Error(`compressed transcript cannot resume at byte ${args.start}: ${args.path}`)
+  }
+  const rawStream = openTranscriptReadStream(
+    args.path,
+    { start: compressed ? 0 : args.start },
+    'scan',
+    args.signal
+  )
+  const stream = compressed ? zstdTranscriptStream(rawStream) : rawStream
   let chunkStart = args.start
-  for await (const chunk of stream as AsyncIterable<Buffer>) {
-    // Check per chunk so cancellation also interrupts giant records and releases the stream.
-    throwIfAiVaultScanCancelled(args.signal)
-    bytesRead += chunk.length
-    const chunkEnd = chunkStart + chunk.length
-    let lineStart = 0
-    let hashedThrough = 0
-    let newlineIndex = chunk.indexOf(NEWLINE_BYTE, lineStart)
-    while (newlineIndex !== -1) {
-      const newlineOffset = chunkStart + newlineIndex
-      const recordLength = newlineOffset - consumedThrough
-      if (discarding || recordLength > MAX_SESSION_TRANSCRIPT_RECORD_BYTES) {
-        skippedRecords.push({ byteOffset: consumedThrough, approximateBytes: recordLength })
-        remainderParts = []
-        remainderLength = 0
-        discarding = false
-      } else {
-        let line = chunk.subarray(lineStart, newlineIndex)
-        // Only the first line carries a prefix; reset here to avoid allocations for complete lines.
-        if (remainderLength > 0) {
-          line = Buffer.concat([...remainderParts, line], recordLength)
+  try {
+    for await (const chunk of stream as AsyncIterable<Buffer>) {
+      // Check per chunk so cancellation also interrupts giant records and releases the stream.
+      throwIfAiVaultScanCancelled(args.signal)
+      bytesRead += chunk.length
+      const chunkEnd = chunkStart + chunk.length
+      let lineStart = 0
+      let hashedThrough = 0
+      let newlineIndex = chunk.indexOf(NEWLINE_BYTE, lineStart)
+      while (newlineIndex !== -1) {
+        const newlineOffset = chunkStart + newlineIndex
+        const recordLength = newlineOffset - consumedThrough
+        if (discarding || recordLength > MAX_SESSION_TRANSCRIPT_RECORD_BYTES) {
+          skippedRecords.push({ byteOffset: consumedThrough, approximateBytes: recordLength })
           remainderParts = []
           remainderLength = 0
-        }
-        const lineEnd = line.at(-1) === CARRIAGE_RETURN_BYTE ? line.length - 1 : line.length
-        if (args.onLineBytes) {
-          args.onLineBytes(line.subarray(0, lineEnd))
+          discarding = false
         } else {
-          args.onLine(line.toString('utf-8', 0, lineEnd))
+          let line = chunk.subarray(lineStart, newlineIndex)
+          // Only the first line carries a prefix; reset here to avoid allocations for complete lines.
+          if (remainderLength > 0) {
+            line = Buffer.concat([...remainderParts, line], recordLength)
+            remainderParts = []
+            remainderLength = 0
+          }
+          const lineEnd = line.at(-1) === CARRIAGE_RETURN_BYTE ? line.length - 1 : line.length
+          if (args.onLineBytes) {
+            args.onLineBytes(line.subarray(0, lineEnd))
+          } else {
+            args.onLine(line.toString('utf-8', 0, lineEnd))
+          }
         }
-      }
-      consumedThrough = newlineOffset + 1
-      lineStart = newlineIndex + 1
-      if (hash) {
-        hash.update(chunk.subarray(hashedThrough, lineStart))
-        hashedThrough = lineStart
-        committedHash = null
-        if (args.prefixCheckpoints?.offsets.has(consumedThrough)) {
-          args.prefixCheckpoints.reached(consumedThrough, hash.copy().digest('hex'))
+        consumedThrough = newlineOffset + 1
+        lineStart = newlineIndex + 1
+        if (hash) {
+          hash.update(chunk.subarray(hashedThrough, lineStart))
+          hashedThrough = lineStart
+          committedHash = null
+          if (args.prefixCheckpoints?.offsets.has(consumedThrough)) {
+            args.prefixCheckpoints.reached(consumedThrough, hash.copy().digest('hex'))
+          }
         }
+        if (args.shouldStop?.()) {
+          stopped = true
+          break
+        }
+        newlineIndex = chunk.indexOf(NEWLINE_BYTE, lineStart)
       }
-      if (args.shouldStop?.()) {
-        stopped = true
-        break
+      if (hash && !stopped && hashedThrough < chunk.length) {
+        committedHash ??= hash.copy()
+        hash.update(chunk.subarray(hashedThrough))
       }
-      newlineIndex = chunk.indexOf(NEWLINE_BYTE, lineStart)
-    }
-    if (hash && !stopped && hashedThrough < chunk.length) {
-      committedHash ??= hash.copy()
-      hash.update(chunk.subarray(hashedThrough))
-    }
-    if (stopped) {
-      remainderParts = []
-      remainderLength = 0
-      break
-    }
-    if (lineStart < chunk.length && !discarding) {
-      // Include carried prefixes when budgeting an unterminated record.
-      if (chunkEnd - consumedThrough > MAX_SESSION_TRANSCRIPT_RECORD_BYTES) {
+      if (stopped) {
         remainderParts = []
         remainderLength = 0
-        discarding = true
-      } else {
-        // Copy a partial tail so retaining it does not pin the whole chunk buffer.
-        remainderParts.push(lineStart === 0 ? chunk : Buffer.from(chunk.subarray(lineStart)))
-        remainderLength = chunkEnd - consumedThrough
+        break
       }
+      if (lineStart < chunk.length && !discarding) {
+        // Include carried prefixes when budgeting an unterminated record.
+        if (chunkEnd - consumedThrough > MAX_SESSION_TRANSCRIPT_RECORD_BYTES) {
+          remainderParts = []
+          remainderLength = 0
+          discarding = true
+        } else {
+          // Copy a partial tail so retaining it does not pin the whole chunk buffer.
+          remainderParts.push(lineStart === 0 ? chunk : Buffer.from(chunk.subarray(lineStart)))
+          remainderLength = chunkEnd - consumedThrough
+        }
+      }
+      await waitForAiVaultScan(args.drain?.() ?? Promise.resolve(), args.signal)
+      chunkStart = chunkEnd
     }
-    chunkStart = chunkEnd
+  } catch (error) {
+    throwIfAiVaultScanCancelled(args.signal)
+    throw error
   }
 
   if (discarding) {

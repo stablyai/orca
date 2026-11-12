@@ -5,7 +5,7 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { isAiVaultAgent } from './session-list-result-validation'
 import { findResumeOwnership } from './structured-session-ownership'
 

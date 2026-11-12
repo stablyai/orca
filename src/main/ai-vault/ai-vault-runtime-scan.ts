@@ -81,6 +81,9 @@ function runtimeScanArgs(
   if (listArgs?.scopePaths !== undefined) {
     scanArgs.scopePaths = listArgs.scopePaths
   }
+  if (listArgs?.scopeOnly === true) {
+    scanArgs.scopeOnly = true
+  }
   if (listArgs?.includeAntigravityIdeSessions === true) {
     scanArgs.includeAntigravityIdeSessions = true
   }

@@ -1,8 +1,8 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import type { RpcCompatibleReader } from '../transport/rpc/rpc-operation-contract'
 
 export type MobileRepoBaseRefSummary = {
   readonly id: string

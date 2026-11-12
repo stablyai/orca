@@ -1,9 +1,9 @@
 import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
-import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import {
   enforceLocalSshWebRtcPolicyForGuest,
   isLocalSshBrowserPartition
@@ -12,8 +12,12 @@ import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from '../browser/routing/sessions/browser-route-session-runtime'
-import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
-import { DOC_PREVIEW_PARTITION, parseDocPreviewUrl } from '../../shared/doc-preview-scheme'
+import '../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../shared/browser/browser-blank-page'
+import {
+  DOC_PREVIEW_PARTITION,
+  parseDocPreviewUrl
+} from '../../shared/document-preview/doc-preview-scheme'
 import { setDocPreviewFailureSink } from '../browser/document-preview/doc-preview-failure-notice'
 import {
   getDocPreviewGrant,
@@ -31,7 +35,8 @@ import {
   attachPluginFrameGuest,
   isPluginFramePartition,
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
-} from '../plugins/panels/plugin-frame-guest-registry'
+} from '../plugins/panels/guest-isolation/plugin-frame-guest-registry'
+import { attachBrowserPasswordGuest } from '../browser-passwords/browser-password-guest-service'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -79,7 +84,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   // Install containment before any plugin/chat srcdoc frame is created.
   registerHostFrameNavigationGuard(mainWindow.webContents)
 
-  const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
+  const browserGuestPreload = join(__dirname, 'browser-guest-preload.js')
   // Only previews get this pinned editor-link preload; never accept renderer preload values or expose it to browsing guests.
   const docPreviewLinkPreload = join(__dirname, 'doc-preview-link-preload.js')
   const pluginFrameGuestPreload = join(__dirname, 'plugin-frame-guest-preload.js')
@@ -119,17 +124,14 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
 
     delete params.preload
     // Install main-world close policy before inline scripts can call window.close.
-    webPreferences.preload = isDocPreviewAttach ? docPreviewLinkPreload : browserWindowClosePreload
+    webPreferences.preload = isDocPreviewAttach ? docPreviewLinkPreload : browserGuestPreload
     // Clear legacy preloadURL as well as preload so guests cannot inherit the main bridge.
     delete (webPreferences as Record<string, unknown>).preloadURL
     // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
     delete webPreferences.additionalArguments
     webPreferences.nodeIntegration = false
-    // Why every local profile: a framed extension page needs Orca's extension preload, and
-    // extensions can be switched on after the tab opens. Sandboxed and without Node, the flag only
-    // runs the same preloads per frame; the close guard keeps to the top frame and the extension
-    // preload, registered only while extensions run, acts only in chrome-extension:// frames.
-    webPreferences.nodeIntegrationInSubFrames = isProfilePartition
+    // Iframes need the passkey watch and framed extension pages; sandboxed, it only runs the preloads per frame.
+    webPreferences.nodeIntegrationInSubFrames = !isDocPreviewAttach
     webPreferences.enableBlinkFeatures = ''
     webPreferences.disableBlinkFeatures = ''
     webPreferences.webSecurity = true
@@ -162,6 +164,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     browserRouteWebContentsRegistry.attachGuest(guest)
     // Proxies cannot block WebRTC UDP; enforce it per WebContents.
     enforceLocalSshWebRtcPolicyForGuest(guest)
+    attachBrowserPasswordGuest(guest)
   })
 }
 

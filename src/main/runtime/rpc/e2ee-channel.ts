@@ -30,7 +30,7 @@ import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-o
 import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'
 import { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import type * as RpcBinary from './rpc-binary-sender'
-import type { E2EEAuthenticatedDevice } from './mobile-e2ee-authenticated-device'
+import type { E2EEAuthenticatedDevice } from './server/mobile-e2ee-authenticated-device'
 
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 
@@ -242,6 +242,7 @@ export class E2EEChannel {
     const authentication = authenticateMobileE2EE({
       plaintext,
       v2Session: this.v2Session,
+      v2TokenCapabilities: this.transportContext.transport === 'direct',
       resolveDevice: this.resolvers.resolveAuthenticatedDevice,
       resolveDeviceKey: this.resolvers.resolveAuthenticatedDeviceKey
     })
@@ -257,11 +258,8 @@ export class E2EEChannel {
     this.deviceToken = authenticatedDevice.deviceToken ?? null
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'
-
-    if (this.handshakeTimer) {
-      clearTimeout(this.handshakeTimer)
-      this.handshakeTimer = null
-    }
+    clearTimeout(this.handshakeTimer ?? undefined)
+    this.handshakeTimer = null
 
     // Complete transport identity checks before auth success; relay resolvers also bind immutable relayDeviceId.
     this.onReady(this, authenticatedDevice)

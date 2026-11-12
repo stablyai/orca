@@ -1,4 +1,4 @@
-import { type AgentCatalogEntry, getAgentCatalog } from '@/lib/agent-catalog'
+import { type AgentCatalogEntry, getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { supportsTerminalAgentQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 

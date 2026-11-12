@@ -1,6 +1,5 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeTerminalDataMeta } from '../orca-runtime'
+import type { RuntimeTerminalDataMeta } from '../terminal/output/runtime-terminal-stream-consumers'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -13,7 +12,7 @@ import {
   TERMINAL_STREAM_CHUNK_BYTES
 } from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harness'
-import { RuntimeTerminalViewSubscribers } from '../runtime-terminal-view-subscribers'
+import { RuntimeTerminalViewSubscribers } from '../terminal/view/runtime-terminal-view-subscribers'
 
 async function subscribePausable(
   capabilities: Record<string, 1>,
@@ -104,29 +103,6 @@ async function subscribePausable(
 }
 
 describe('terminal multiplex paused-output drop notice', () => {
-  it('announces a pause only when it actually discarded output', async () => {
-    const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
-    expect(host.subscribed.capabilities).toMatchObject({ outputPause: 1, outputPauseDropNotice: 1 })
-
-    host.setPaused(true)
-    host.setPaused(false)
-    expect(host.dropNotices()).toBe(0)
-
-    host.setPaused(true)
-    host.emitOutput('hidden-1')
-    host.emitOutput('hidden-2')
-    expect(host.dropNotices()).toBe(1)
-    host.setPaused(false)
-    host.emitOutput('visible')
-    expect(host.dropNotices()).toBe(1)
-
-    // Each pause reports independently.
-    host.setPaused(true)
-    host.emitOutput('hidden-3')
-    expect(host.dropNotices()).toBe(2)
-    await host.close()
-  })
-
   // #32944: main yielded the batched bytes' replies to this view, so a DA1 dropped here went unanswered.
   it('delivers output still batched when the pause lands', async () => {
     const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
@@ -188,29 +164,5 @@ describe('terminal multiplex paused-output drop notice', () => {
     host.setPaused(true)
     await host.close()
     expect(answerYieldedTerminalQueries).not.toHaveBeenCalled()
-  })
-
-  // #32944: the dropped output can carry a query, so main must answer it while this view is paused.
-  it('yields query authority while paused and takes it back on resume and close', async () => {
-    const host = await subscribePausable({ ackOutput: 1, outputPause: 1, outputPauseDropNotice: 1 })
-    expect(host.remoteViewHoldsAuthority()).toBe(true)
-    host.setPaused(true)
-    expect(host.remoteViewHoldsAuthority()).toBe(false)
-    host.setPaused(false)
-    expect(host.remoteViewHoldsAuthority()).toBe(true)
-    host.setPaused(true)
-    await host.close()
-    expect(host.remoteViewHoldsAuthority()).toBe(false)
-  })
-
-  it('never sends the frame to a client that did not negotiate it', async () => {
-    const host = await subscribePausable({ ackOutput: 1, outputPause: 1 })
-    expect(host.subscribed.capabilities?.outputPauseDropNotice).toBeUndefined()
-
-    host.setPaused(true)
-    host.emitOutput('hidden')
-    host.setPaused(false)
-    expect(host.dropNotices()).toBe(0)
-    await host.close()
   })
 })

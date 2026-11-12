@@ -13,15 +13,16 @@ import { useAppStore } from '@/store/index'
 import {
   resolveDismissedOnboardingFolderAgentLaunch,
   revealOnboardingFolderWithAgentLaunch
-} from '@/lib/onboarding-folder-agent-launch'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+} from '@/components/onboarding/onboarding-folder-agent-launch'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
+import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Only the paired server can add folder projects on its own SSH host.
 async function addSshFolderProject(args: {
@@ -57,6 +58,7 @@ async function addSshFolderProject(args: {
 }
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
+  const t = useTranslate()
   useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -75,20 +77,17 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
     (runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)?.name ||
       runtimeEnvironmentId)
   const checkedHostDescription = connectionId
-    ? translate(
+    ? t(
         'auto.components.sidebar.NonGitFolderDialog.9a766f33ac',
         'This path was checked on the SSH host.'
       )
     : runtimeEnvironmentName
-      ? translate(
+      ? t(
           'auto.components.sidebar.NonGitFolderDialog.79fd02cf5f',
           'This path was checked on {{hostName}}.',
           { hostName: runtimeEnvironmentName }
         )
-      : translate(
-          'auto.components.sidebar.NonGitFolderDialog.8851b77327',
-          'This path was checked locally.'
-        )
+      : t('auto.components.sidebar.NonGitFolderDialog.8851b77327', 'This path was checked locally.')
 
   const handleConfirm = useCallback(() => {
     if (connectionId && folderPath) {
@@ -159,10 +158,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.sidebar.NonGitFolderDialog.e52454b7f6', 'Open as Folder')}
+            {t('auto.components.sidebar.NonGitFolderDialog.e52454b7f6', 'Open as Folder')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.sidebar.NonGitFolderDialog.8fba4b8cbb',
               "This folder isn't a Git repository. You'll have the editor, terminal, and search, but Git-based features won't be available."
             )}
@@ -178,10 +177,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            {translate('auto.components.sidebar.NonGitFolderDialog.05b33a17a9', 'Cancel')}
+            {t('auto.components.sidebar.NonGitFolderDialog.05b33a17a9', 'Cancel')}
           </Button>
           <Button onClick={handleConfirm}>
-            {translate('auto.components.sidebar.NonGitFolderDialog.e52454b7f6', 'Open as Folder')}
+            {t('auto.components.sidebar.NonGitFolderDialog.e52454b7f6', 'Open as Folder')}
           </Button>
         </DialogFooter>
       </DialogContent>

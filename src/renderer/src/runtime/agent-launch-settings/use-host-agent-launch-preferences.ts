@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
+import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -7,9 +8,9 @@ import type { AppState } from '@/store/types'
 import {
   buildAgentLaunchRouteInput,
   type ProspectiveWorkspace
-} from '@/lib/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   type AgentLaunchPreferences,
   type Snapshot,
@@ -108,6 +109,30 @@ export async function ensureAgentLaunchPreferences(
   }
 }
 
+// Takes the whole subscription so contact/open stay inputs; React Compiler keys a callback on the fields it reads.
+function subscribeHostPreferences(
+  subscription: {
+    environmentId: string | undefined
+    pairingRevision: number | undefined
+    runtimeId: string | null | undefined
+    active: boolean
+  },
+  listener: () => void
+): () => void {
+  if (!subscription.environmentId || !subscription.active) {
+    return () => {}
+  }
+  return acquire(
+    resource({
+      environmentId: subscription.environmentId,
+      pairingRevision: subscription.pairingRevision,
+      runtimeId: subscription.runtimeId ?? undefined
+    }),
+    listener,
+    true
+  )
+}
+
 export function useHostAgentMenuSettings(
   owner: {
     executionHostId: string
@@ -143,25 +168,23 @@ export function useHostAgentMenuSettings(
       preferences.defaultTuiAgent,
       preferences.disabledTuiAgents,
       preferences.agentLaunchChoices,
+      preferences.agentDefaultArgs,
+      preferences.agentPermissionDefault,
+      preferences.agentPermissionOverrides,
       snapshot === null
     ] as const
   })
-  const [defaultTuiAgent, disabledTuiAgents, agentLaunchChoices, pending] = useSyncExternalStore(
+  const [
+    defaultTuiAgent,
+    disabledTuiAgents,
+    agentLaunchChoices,
+    agentDefaultArgs,
+    agentPermissionDefault,
+    agentPermissionOverrides,
+    pending
+  ] = useAppViewExternalStore(
     useCallback(
-      (listener: () => void) => {
-        if (!subscription.environmentId || !subscription.active) {
-          return () => {}
-        }
-        return acquire(
-          resource({
-            environmentId: subscription.environmentId,
-            pairingRevision: subscription.pairingRevision,
-            runtimeId: subscription.runtimeId ?? undefined
-          }),
-          listener,
-          true
-        )
-      },
+      (listener: () => void) => subscribeHostPreferences(subscription, listener),
       [subscription]
     ),
     () => effectiveSnapshot(undefined),
@@ -176,7 +199,14 @@ export function useHostAgentMenuSettings(
       ...desktopSettings,
       defaultTuiAgent,
       disabledTuiAgents,
-      agentLaunchChoices
+      agentLaunchChoices,
+      agentDefaultArgs,
+      agentPermissionDefault,
+      agentPermissionOverrides,
+      agentCmdOverrides: {},
+      agentDefaultEnv: {},
+      nativeChatSessionOptions: {},
+      nativeChatPermissionMode: undefined
     }
   }
 }

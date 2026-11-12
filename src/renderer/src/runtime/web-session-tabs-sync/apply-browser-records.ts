@@ -5,7 +5,7 @@ import {
   sameBrowserPages
 } from './state-equality-tabs'
 import { writableWebSessionTabsRecord } from './state-equality-core'
-import { markWebSessionBrowserPlacementAdopted } from '../web-session-browser-placement'
+import { markWebSessionBrowserPlacementAdopted } from '../browser/placement/web-session-browser-placement'
 
 type BrowserRecordContext = ReturnType<typeof applyTerminalRecordUpdates>
 

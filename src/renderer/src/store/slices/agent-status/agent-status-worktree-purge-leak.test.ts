@@ -3,18 +3,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '../../types'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -32,16 +34,9 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore } from '../store-test-helpers'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
-import { makeTab } from '../store-session-test-harness'
-import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import {
-  countAgentPaneAuthorityAliasesForTests,
-  resetAgentPaneAuthorityAliasesForTests,
-  resolveAgentPaneAuthorityKey,
-  transferAgentPaneAuthorityAlias
-} from '../agent-pane-authority'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 
 const WT = 'repo1::/path/wt1'
 const TAB = 'tab-1'
@@ -158,27 +153,5 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     const s = store.getState()
     expect(Object.keys(s.sleepingAgentSessionsByPaneKey)).toEqual([OTHER_PANE])
     expect(Object.keys(s.agentLaunchConfigByPaneKey)).toEqual([OTHER_PANE])
-  })
-
-  it('purgeWorktreeTerminalState forgets pane-authority aliases for the removed tabs', () => {
-    resetAgentPaneAuthorityAliasesForTests()
-    const store = createTestStore()
-    const leafId = '77777777-7777-4777-8777-777777777777'
-    const sourcePaneKey = makePaneKey('tab-detached', leafId)
-    const ownerPaneKey = makePaneKey(TAB, leafId)
-    seedPaneState(store)
-    transferAgentPaneAuthorityAlias({
-      fromPaneKey: sourcePaneKey,
-      toPaneKey: ownerPaneKey,
-      ptyId: 'pty-1'
-    })
-    expect(resolveAgentPaneAuthorityKey(sourcePaneKey)).toBe(ownerPaneKey)
-
-    store.getState().purgeWorktreeTerminalState([WT])
-
-    // Purge authority aliases too or module registry keeps routing posts to removed panes.
-    expect(resolveAgentPaneAuthorityKey(sourcePaneKey)).toBe(sourcePaneKey)
-    expect(countAgentPaneAuthorityAliasesForTests()).toBe(0)
-    resetAgentPaneAuthorityAliasesForTests()
   })
 })

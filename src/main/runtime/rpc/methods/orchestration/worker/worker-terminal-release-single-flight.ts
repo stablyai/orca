@@ -1,4 +1,4 @@
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 
 type ActiveRelease<T> = { promise: Promise<T>; recoveryRequested: boolean }
 

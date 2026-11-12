@@ -1,9 +1,9 @@
 // Images cloned with one /etc/machine-id look like one machine to every PID check (#32918).
-import { statSync, utimesSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import process from 'node:process'
 import { ORCA_MACHINE_NAME_ENV } from '../../shared/orcad-managed-launch-env'
 import type { OrcadPeerMachine } from './orcad-lock-holder-locality'
-import { currentLinuxBootStartedAtMs } from '../persistence/profile-state/profile-state-access-identity'
+import { currentLinuxBootStartedAtMs } from '../persistence/profile-state/access/profile-state-access-identity'
 
 const CLONE_MACHINE_ID_HINT =
   'Machines cloned from one image share /etc/machine-id, so Orca cannot tell them apart. If the Orca ' +
@@ -73,17 +73,9 @@ export function orcadLockSelf(
   return { ...self, nowMs, ...(bootStartedAtMs === null ? {} : { bootStartedAtMs }) }
 }
 
-/** Keep the lock's mtime fresh so a machine sharing this machine-id can see the holder lives. */
-export function startOrcadLockHeartbeat(lockPath: string): () => void {
-  const heartbeat = setInterval(() => {
-    try {
-      const now = new Date()
-      utimesSync(lockPath, now, now)
-    } catch (error) {
-      // A stalled heartbeat lets a machine sharing this machine-id take the lock.
-      console.warn('[orcad] could not refresh the instance lock heartbeat:', error)
-    }
-  }, ORCAD_LOCK_HEARTBEAT_MS)
+/** Beat well inside the freshness window so a machine sharing this machine-id can see the holder lives. */
+export function startOrcadLockHeartbeat(beat: () => void): () => void {
+  const heartbeat = setInterval(beat, ORCAD_LOCK_HEARTBEAT_MS)
   heartbeat.unref()
   return () => clearInterval(heartbeat)
 }

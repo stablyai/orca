@@ -9,15 +9,15 @@ import {
   getEditorViewLanguage,
   getMarkdownViewModes
 } from '../../view-mode/markdown-preview-controls'
-import type { FileWriteResult } from '../../../../../../shared/file-write-disk-precondition'
-import type { LocalFileAccess } from '../../../../../../shared/local-file-access'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
-import { writeRuntimeTerminalArtifactFile } from '@/runtime/runtime-terminal-artifact-write'
-import { getRelativePathInsideWorktree } from '@/runtime/runtime-file-routing'
-import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import type { FileWriteResult } from '../../../../../../shared/file-write/file-write-disk-precondition'
+import type { LocalFileAccess } from '../../../../../../shared/file-access/local-file-access'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
+import { writeRuntimeTerminalArtifactFile } from '@/runtime/files/grants/runtime-terminal-artifact-write'
+import { getRelativePathInsideWorktree } from '@/runtime/files/runtime-file-routing'
+import { chatScratchFileAddress } from '@/runtime/files/addressing/runtime-chat-scratch-file-address'
 import { grantRestoredHostFile } from '../../restored-host-file-grant'
-import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 /** Only overwrite grants disk-conflict consent; convert grants non-UTF-8 conversion consent. Other explicit saves remain guarded. */
 export type EditorSaveTrigger = 'autosave' | 'user' | 'convert' | 'restart' | 'overwrite'
@@ -51,7 +51,9 @@ export function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   const views = getMarkdownViewModes(target)
   const stored = state.markdownViewMode?.[file.id]
   const view =
-    stored !== undefined && views.includes(stored) ? stored : getDefaultMarkdownViewMode(target)
+    stored !== undefined && views.includes(stored)
+      ? stored
+      : getDefaultMarkdownViewMode(target, state.settings?.markdownDefaultViewMode)
   return views.length === 0 || view === 'source'
 }
 

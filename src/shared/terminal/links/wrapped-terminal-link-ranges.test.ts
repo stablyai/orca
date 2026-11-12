@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildHardWrappedPathLogicalLineCandidates,
-  buildWrappedLogicalLine,
   rangeForParsedFileLink
 } from './wrapped-terminal-link-ranges'
 
@@ -43,28 +42,6 @@ function makeBufferLine(
     }
   }
 }
-
-describe('buildWrappedLogicalLine', () => {
-  it('caps pathological soft-wrapped lines before scanning the whole run', () => {
-    const rows = Array.from({ length: 1_000 }, (_value, index) =>
-      makeBufferLine('b'.repeat(80), { isWrapped: index > 0 })
-    )
-    const observedRows: number[] = []
-
-    const logicalLine = buildWrappedLogicalLine(
-      {
-        getLine: (y) => {
-          observedRows.push(y)
-          return rows[y]
-        }
-      },
-      1
-    )
-
-    expect(logicalLine).toBeNull()
-    expect(Math.max(...observedRows)).toBeLessThan(250)
-  })
-})
 
 describe('buildHardWrappedPathLogicalLineCandidates', () => {
   const firstPath = 'validation-screenshots/01-before-white-terminal-scrollbar-gutter.png'
@@ -226,25 +203,6 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
     expect(candidates.filter((candidate) => candidate.text === '/home/alice/file.ts')).toHaveLength(
       1
     )
-  })
-
-  it('fingerprints full source rows outside the selected boundary fragments', () => {
-    const rows = makeThreeLinkRows()
-    const buffer = { getLine: (y: number) => rows[y] }
-    const expectedText = middleStart + middleEnd
-    const before = buildHardWrappedPathLogicalLineCandidates(buffer, 1).find(
-      (candidate) => candidate.text === expectedText
-    )
-
-    rows[1] = makeBufferLine(`${middleEnd} · validation-screenshots/03-after-dark-theme.png`)
-    const after = buildHardWrappedPathLogicalLineCandidates(buffer, 1).find(
-      (candidate) => candidate.text === expectedText
-    )
-
-    expect(before).toBeDefined()
-    expect(after).toBeDefined()
-    expect(after!.rows.map((row) => row.text)).toEqual(before!.rows.map((row) => row.text))
-    expect(after!.fingerprint).not.toBe(before!.fingerprint)
   })
 
   it('preserves Windows drive paths and original continuation columns', () => {

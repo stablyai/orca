@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from '../persistence/loading-store/profile-state-maintenance-fixture'
+} from '../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 
 const {
   handleMock,
@@ -33,21 +33,21 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
   sshConfigHostsToTargets: () => []
 }))
 vi.mock('../ghostty/index', () => ({ previewGhosttyImport: vi.fn() }))
-vi.mock('../warp-themes', () => ({ previewWarpThemeImport: vi.fn() }))
+vi.mock('../warp-themes/index', () => ({ previewWarpThemeImport: vi.fn() }))
 vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
-vi.mock('../browser/sessions/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/proxy/browser-session-proxy', () => ({
   applyBrowserSessionProxies: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('../browser/sessions/browser-session-registry', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: vi.fn(() => []) }
 }))
 vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('../ai-vault-search/session-search-enablement', () => ({
   applySessionSearchSettingsChange: vi.fn()
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 vi.mock('../workspaces/creation/worktree-root-preparation', () => ({

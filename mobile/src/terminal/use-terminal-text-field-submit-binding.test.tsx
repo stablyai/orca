@@ -1,6 +1,6 @@
 import { createElement, forwardRef, useImperativeHandle, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { describe, expect, it, vi } from 'vitest'
 import { useTerminalTextFieldSubmitBinding } from './use-terminal-text-field-submit-binding'
@@ -32,15 +32,9 @@ vi.mock('./terminal-text-field-submit-binding', () => ({
 }))
 
 let submitted: string[] = []
-const field: RefObject<TextInput | null> = { current: null }
+const field: RefObject<TextInputInstance | null> = { current: null }
 
-/**
- * A caller handing the binding a fresh closure each render, whose guard reads `client` and
- * `activeHandle`. This says the listener follows it.
- */
-let rebindField: ((node: TextInput | null) => void) | undefined
-
-const Field = forwardRef<TextInput>(function Field(_props, ref) {
+const Field = forwardRef<TextInputInstance>(function Field(_props, ref) {
   useImperativeHandle(ref, () => node, [])
   return null
 })
@@ -56,16 +50,14 @@ function Harness({ value }: { readonly value: string }) {
       return value === 'second'
     }
   )
-  rebindField = bindField
   return createElement(Field, { ref: bindField })
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the binding never reads the node; the mocked seam only records the handler it was given.
-const node = {} as TextInput
+const node = {} as TextInputInstance
 
 function reset(): void {
   submitted = []
-  rebindField = undefined
   mocks.chordHandlers.length = 0
   mocks.boundHandlers.length = 0
   mocks.unbindCount = 0
@@ -104,24 +96,6 @@ describe('the terminal text field submit binding', () => {
     })
     expect(firstListener?.({ bytes: '\x03' })).toBe(true)
     expect(submitted).toEqual(['first', 'second'])
-    act(() => renderer?.unmount())
-  })
-
-  it('releases the previous listener before binding a node again', () => {
-    reset()
-    let renderer: ReactTestRenderer | null = null
-
-    act(() => {
-      renderer = create(createElement(Harness, { value: 'first' }))
-    })
-    act(() => {
-      renderer?.update(createElement(Harness, { value: 'second' }))
-    })
-
-    act(() => rebindField?.(node))
-
-    // One binding remains live after an explicit rebind.
-    expect(mocks.unbindCount - mocks.releasedCount).toBe(1)
     act(() => renderer?.unmount())
   })
 

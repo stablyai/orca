@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   installCopyingChat,
   PROVIDER_SESSION

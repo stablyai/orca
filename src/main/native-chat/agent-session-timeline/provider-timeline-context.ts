@@ -1,4 +1,3 @@
-import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { ProviderTimelineJoin } from './provider-timeline-event'
@@ -29,28 +28,17 @@ export function providerTimelinePlacement(
   join: ProviderTimelineJoin | undefined
 ): AgentJournalTurnScope {
   const thread = join?.thread ?? null
-  if (join?.turn === undefined) {
+  if (join?.turn === undefined && join?.scope === undefined) {
     return state.scope
   }
   const own = context.ownThread?.() ?? null
   if (thread !== null && own !== null && thread !== own) {
     return state.scope
   }
-  return { kind: 'turn', turnItemId: context.rows.turn(providerKey(join.turn)).itemId }
-}
-
-/** Budget bodies/linkage plus provider strings twice: raw values and derived identities. */
-export function providerTimelineEntryBytes(input: {
-  key: string
-  join: ProviderTimelineJoin | undefined
-  body?: unknown
-  producer: AgentJournalProducerLinkage | undefined
-}): number {
-  const measure = (value: unknown) =>
-    value === undefined ? 0 : Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8')
-  const kept = [input.key, input.join?.thread ?? '', input.join?.turn ?? ''].reduce(
-    (total, part) => total + Buffer.byteLength(part, 'utf8'),
-    0
-  )
-  return 2 * kept + measure(input.body) + measure(input.producer) + 64
+  if (join?.scope) {
+    return join.scope
+  }
+  return join?.turn === undefined
+    ? state.scope
+    : { kind: 'turn', turnItemId: context.rows.turn(providerKey(join.turn)).itemId }
 }

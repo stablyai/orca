@@ -1,8 +1,9 @@
+// @protected-copy
 import type { JSX } from 'react'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { translate } from '@/i18n/i18n'
-import { STATUS_COLORS } from '../../../right-sidebar/status-display'
+import { useTranslate } from '@/i18n/use-translate'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type {
   DeleteWorktreeChangeCheckState,
@@ -18,22 +19,17 @@ export function DeleteWorktreeDirtyChangeHint({
   checkState?: DeleteWorktreeChangeCheckState
   preview?: DeleteWorktreeDirtyChangePreview
 }): JSX.Element | null {
+  const t = useTranslate()
   if (changeCount === undefined) {
     if (!checkState) {
       return null
     }
     const statusLabel =
       checkState === 'complete'
-        ? translate(
-            'components.workspace.delete.changes.clean',
-            'No uncommitted or untracked changes'
-          )
+        ? t('components.workspace.delete.changes.none', 'No uncommitted changes')
         : checkState === 'unavailable'
-          ? translate(
-              'components.workspace.delete.changes.unavailable',
-              'Changes could not be checked'
-            )
-          : translate('components.workspace.delete.changes.checking', 'Checking for changes…')
+          ? t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')
+          : t('components.workspace.delete.changes.checking', 'Checking for changes…')
     return (
       <div className="mt-0.5 flex h-4 min-w-0 items-center text-muted-foreground">
         <span className="truncate">{statusLabel}</span>
@@ -43,14 +39,14 @@ export function DeleteWorktreeDirtyChangeHint({
 
   const label =
     changeCount > 0
-      ? translate(
-          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changeCount',
-          '{{count}} uncommitted or untracked changes',
-          { count: changeCount, defaultValue_one: '{{count}} uncommitted or untracked change' }
+      ? t(
+          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changesLost',
+          '{{count}} uncommitted changes will be lost',
+          { count: changeCount, defaultValue_one: '{{count}} uncommitted change will be lost' }
         )
-      : translate(
-          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changes',
-          'Uncommitted or untracked changes'
+      : t(
+          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.uncountedChangesLost',
+          'Uncommitted changes will be lost'
         )
 
   const warningLabel = (
@@ -63,12 +59,9 @@ export function DeleteWorktreeDirtyChangeHint({
   if (!preview?.files.length) {
     const detailsLabel =
       checkState === 'checking'
-        ? translate('components.workspace.delete.changes.checkingDetails', 'Checking…')
+        ? t('components.workspace.delete.changes.checkingDetails', 'Checking…')
         : checkState === 'unavailable'
-          ? translate(
-              'components.workspace.delete.changes.unavailableDetails',
-              'Details unavailable'
-            )
+          ? t('components.workspace.delete.changes.unavailableDetails', 'Details unavailable')
           : null
     return (
       <div className="mt-0.5 flex h-4 min-w-0 items-center">
@@ -86,7 +79,7 @@ export function DeleteWorktreeDirtyChangeHint({
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label={`${label}: ${translate('auto.components.sidebar.DeleteWorktreeDirtyChangeHint.showLoadedPaths', 'Show loaded paths')}`}
+            aria-label={`${label}: ${t('auto.components.sidebar.DeleteWorktreeDirtyChangeHint.showLoadedPaths', 'Show loaded paths')}`}
             className="flex h-4 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {warningLabel}
@@ -96,7 +89,7 @@ export function DeleteWorktreeDirtyChangeHint({
         <PopoverContent
           align="start"
           side="bottom"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedChangedPaths',
             'Loaded changed paths'
           )}
@@ -105,20 +98,20 @@ export function DeleteWorktreeDirtyChangeHint({
         >
           <div className="scrollbar-sleek max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-3 text-xs">
             <p className="mb-1 font-medium">
-              {translate(
+              {t(
                 'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedChangedPaths',
                 'Loaded changed paths'
               )}
             </p>
             <p className="text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedPathsNotice',
                 'Loaded paths may be incomplete or out of date.'
               )}
             </p>
             <div
               role="region"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedChangedPaths',
                 'Loaded changed paths'
               )}
@@ -139,7 +132,7 @@ export function DeleteWorktreeDirtyChangeHint({
                       {file.path}
                       {file.hasUnresolvedConflict ? (
                         <span className="ml-2 font-sans text-destructive">
-                          {translate(
+                          {t(
                             'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.unresolvedConflict',
                             'Unresolved conflict'
                           )}
@@ -152,7 +145,7 @@ export function DeleteWorktreeDirtyChangeHint({
             </div>
             {preview.remainingPathCount > 0 ? (
               <p className="mt-1 text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths',
                   'and {{count}} more loaded paths',
                   {

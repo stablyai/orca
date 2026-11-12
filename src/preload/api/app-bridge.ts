@@ -1,8 +1,9 @@
 import { ipcRenderer } from 'electron'
 import type { AppIdentity } from '../../shared/app-identity'
+import type { MacosUpgradeSupport } from '../../shared/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
@@ -26,6 +27,8 @@ export const appApi = {
   getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
   getWindowsAdministratorStatus: (): Promise<boolean | null> =>
     ipcRenderer.invoke('app:getWindowsAdministratorStatus'),
+  getMacosUpgradeSupport: (minimumMacosVersion: string): Promise<MacosUpgradeSupport> =>
+    ipcRenderer.invoke('app:getMacosUpgradeSupport', minimumMacosVersion),
   restartAsAdministrator: (): Promise<void> =>
     prepareAndInvokeAppRestart(
       window,
@@ -79,8 +82,10 @@ export const appApi = {
     ipcRenderer.on('app:structuredAgentSessionsHeldChanged', listener)
     return () => ipcRenderer.removeListener('app:structuredAgentSessionsHeldChanged', listener)
   },
-  recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
-    ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
+  recoverLegacyWorkerTerminalsForRendererStartup: (options?: {
+    afterReconnect?: boolean
+  }): Promise<void> =>
+    ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup', options),
   startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>
     startupDiagnosticsEnabled
       ? ipcRenderer.invoke('app:startupDiagnostic', event, details)

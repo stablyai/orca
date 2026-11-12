@@ -8,7 +8,7 @@ import {
   type BrowserClientPageRendererReply as RendererReply,
   type BrowserClientPageRendererRequest as RendererRequest
 } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
-import type { BrowserClientPageRenderer } from '../lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageRenderer } from './browser-client-page-renderer-contract'
 import {
   readCurrentRendererFrame,
   readRendererReplyRequestId,

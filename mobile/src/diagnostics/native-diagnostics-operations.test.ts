@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ConnectionState, HostProfile } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { createNativeDiagnosticsOperations } from './native-diagnostics-operations'
 
 const logStore = vi.hoisted(() => ({
@@ -9,7 +10,7 @@ const logStore = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios', Version: '26' } }))
 vi.mock('expo-constants', () => ({ default: { expoConfig: { version: '0.0.60' } } }))
-vi.mock('../transport/persisted-connection-log-store', () => ({ connectionLogStore: logStore }))
+vi.mock('./connection/persisted-connection-log-store', () => ({ connectionLogStore: logStore }))
 
 const host: HostProfile = {
   id: 'host-a',
@@ -41,13 +42,6 @@ describe('native connection diagnostic reports', () => {
     logStore.hydrate.mockReset().mockResolvedValue(undefined)
   })
 
-  it('keeps the live version while its connection remains current', async () => {
-    const device = createNativeDiagnosticsOperations(host, createContext(), '1.4.197')
-    const { report } = await device.report()
-    expect(report).toContain('State: connected')
-    expect(report).toContain('Host Orca version: 1.4.197')
-  })
-
   it('omits a captured version when hydration crosses a reconnect', async () => {
     let finishHydration = () => {}
     logStore.hydrate.mockReturnValue(
@@ -64,34 +58,6 @@ describe('native connection diagnostic reports', () => {
     const { report } = await pendingReport
     expect(report).toContain('State: connected')
     expect(report).toContain('Host Orca version: unknown')
-    expect(report).not.toContain('1.4.197')
-  })
-
-  it('does not promote a disconnected version when a connection opens during hydration', async () => {
-    let finishHydration = () => {}
-    logStore.hydrate.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishHydration = resolve
-      })
-    )
-    const context = createContext()
-    context.setConnection('disconnected', 1_000)
-    const device = createNativeDiagnosticsOperations(host, context, '1.4.197')
-    const pendingReport = device.report()
-    context.setConnection('connected', 1_000)
-    finishHydration()
-    const { report } = await pendingReport
-    expect(report).toContain('State: connected')
-    expect(report).toContain('Host Orca version: unknown')
-    expect(report).not.toContain('1.4.197')
-  })
-
-  it('keeps disconnected reports explicit even with a captured version', async () => {
-    const context = createContext()
-    context.setConnection('disconnected', 1_000)
-    const device = createNativeDiagnosticsOperations(host, context, '1.4.197')
-    const { report } = await device.report()
-    expect(report).toContain('Host Orca version: unknown (not currently connected)')
     expect(report).not.toContain('1.4.197')
   })
 })

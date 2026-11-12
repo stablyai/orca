@@ -1,6 +1,6 @@
 /** Desktop account routing for terminal agents on WSL orcad hosts without account services: four variables, absolute POSIX paths (the shell pointer may use ~/). Structured-session homes remain host-derived. */
 
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV

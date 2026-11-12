@@ -1,5 +1,5 @@
 import { normalizeWorkspaceAttachmentOrigins } from './workspace-attachment-origins'
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeWorkspaceAttachment } from './workspace-attachment-normalization'
 import type { WorkspaceAttachment } from '../worktree/types'
 

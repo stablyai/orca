@@ -1,3 +1,4 @@
+import { githubBodyImageUrls, githubBodyMediaHeaders } from './body-image-urls'
 import type { GitHubCommentResult, PRComment } from '../../shared/github/comment-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
@@ -41,6 +42,7 @@ export async function addIssueComment(
     const { stdout } = await ghExecFileAsync(
       [
         'api',
+        ...githubBodyMediaHeaders(body),
         '-X',
         'POST',
         `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}/comments`,
@@ -49,14 +51,15 @@ export async function addIssueComment(
       ],
       { ...ghOptions, stdin: JSON.stringify({ body }) }
     )
-    const data = JSON.parse(stdout) as {
+    const data: {
       id?: number
       node_id?: string | null
       user: { login: string; avatar_url: string; type?: string } | null
       body?: string
+      body_html?: string | null
       created_at?: string
       html_url?: string
-    }
+    } = JSON.parse(stdout)
     if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
       return codeHostFailure('github.unexpectedResponse')
     }
@@ -66,6 +69,7 @@ export async function addIssueComment(
       author: data.user?.login ?? 'You',
       authorAvatarUrl: data.user?.avatar_url ?? '',
       body: data.body ?? body,
+      bodyImageUrls: githubBodyImageUrls(data.body ?? body, data.body_html),
       createdAt: data.created_at ?? new Date().toISOString(),
       url: data.html_url ?? '',
       isBot: data.user?.type === 'Bot'

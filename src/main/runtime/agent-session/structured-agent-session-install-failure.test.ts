@@ -4,18 +4,19 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
-import type * as ModelCatalogWiring from '../structured-agent-model-catalog-wiring'
+import { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import type * as ModelCatalogWiring from './model-catalog/structured-agent-model-catalog-wiring'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionRuntimeDeps } from './installation/structured-agent-session-runtime-contract'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const mocks = vi.hoisted(() => ({ failWiring: vi.fn(() => false) }))
 
 // The last step before the host is built: a throw here comes after both stores opened.
-vi.mock('../structured-agent-model-catalog-wiring', async (importOriginal) => {
+vi.mock('./model-catalog/structured-agent-model-catalog-wiring', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelCatalogWiring>()
   return {
     ...actual,
@@ -38,9 +39,12 @@ vi.mock('../structured-agent-model-catalog-wiring', async (importOriginal) => {
 
 let root: string
 
-function install(): ReturnType<typeof ensureStructuredAgentSessionHost> {
+function install(
+  createTurnAttention?: StructuredAgentSessionRuntimeDeps['createTurnAttention']
+): ReturnType<typeof ensureStructuredAgentSessionHost> {
   return ensureStructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),
+    createTurnAttention,
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
@@ -77,5 +81,13 @@ describe('an install that fails after opening the chat journal', () => {
 
     await stopStructuredAgentSessionRuntime()
     expect(opened.isClosed).toBe(true)
+  })
+  it('retries when acquiring the turn-attention owner throws', async () => {
+    await expect(
+      install(() => {
+        throw new Error('attention acquisition failed')
+      })
+    ).rejects.toThrow('attention acquisition failed')
+    await expect(install()).resolves.toBeDefined()
   })
 })

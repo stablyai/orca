@@ -1,5 +1,5 @@
 import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorkItemScopePicker } from './work-item-scope-picker'
 
 export function LinearWorkspacePicker({
@@ -13,6 +13,7 @@ export function LinearWorkspacePicker({
   onChange: (workspaceId: string) => void
   disabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const selected = workspaces.find((workspace) => workspace.id === value)
   return (
     <WorkItemScopePicker
@@ -26,20 +27,14 @@ export function LinearWorkspacePicker({
       selectedLabel={
         value && value !== 'all'
           ? (selected?.organizationName ??
-            translate(
-              'components.linearWorkspacePicker.unavailable',
-              'Unavailable Linear workspace'
-            ))
+            t('components.linearWorkspacePicker.unavailable', 'Unavailable Linear workspace'))
           : undefined
       }
       onChange={(workspaceId) => onChange(workspaceId ?? 'all')}
-      label={translate('components.linearWorkspacePicker.label', 'Linear workspace')}
-      allLabel={translate('components.linearWorkspacePicker.all', 'All Linear workspaces')}
-      searchPlaceholder={translate(
-        'components.linearWorkspacePicker.search',
-        'Search Linear workspaces'
-      )}
-      emptyLabel={translate('components.linearWorkspacePicker.empty', 'No workspaces found.')}
+      label={t('components.linearWorkspacePicker.label', 'Linear workspace')}
+      allLabel={t('components.linearWorkspacePicker.all', 'All Linear workspaces')}
+      searchPlaceholder={t('components.linearWorkspacePicker.search', 'Search Linear workspaces')}
+      emptyLabel={t('components.linearWorkspacePicker.empty', 'No workspaces found.')}
       disabled={disabled}
     />
   )

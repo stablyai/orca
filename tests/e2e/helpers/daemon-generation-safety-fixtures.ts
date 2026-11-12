@@ -2,8 +2,11 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { DaemonPtyAdapter } from '../../../src/main/daemon/daemon-pty-adapter'
-import { getDaemonSocketPath, getDaemonTokenPath } from '../../../src/main/daemon/daemon-spawner'
+import { DaemonPtyAdapter } from '../../../src/main/daemon/providers/adapter/daemon-pty-adapter'
+import {
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from '../../../src/main/daemon/launch/daemon-spawner'
 import {
   recordProcessIdentity,
   recordProcessTree,

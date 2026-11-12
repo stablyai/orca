@@ -4,8 +4,9 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { getTerminalQuickCommandScope } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
 
 type TerminalQuickCommandAdvancedSectionProps = {
@@ -21,15 +22,18 @@ type TerminalQuickCommandAdvancedSectionProps = {
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
 }
 
-function getScopeSummaryLabel({
-  selectedScope,
-  selectedRepo
-}: {
-  selectedScope: ReturnType<typeof getTerminalQuickCommandScope>
-  selectedRepo: Pick<Repo, 'displayName' | 'path'> | null
-}): string {
+function getScopeSummaryLabel(
+  {
+    selectedScope,
+    selectedRepo
+  }: {
+    selectedScope: ReturnType<typeof getTerminalQuickCommandScope>
+    selectedRepo: Pick<Repo, 'displayName' | 'path'> | null
+  },
+  t: Translate = translate
+): string {
   if (selectedScope.type === 'global') {
-    return translate(
+    return t(
       'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.b83efc79e2',
       'Global'
     )
@@ -37,7 +41,7 @@ function getScopeSummaryLabel({
   if (selectedRepo) {
     return selectedRepo.displayName || selectedRepo.path
   }
-  return translate(
+  return t(
     'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.3834d24243',
     'Project'
   )
@@ -55,7 +59,8 @@ export function TerminalQuickCommandAdvancedSection({
   setAdvancedOpen,
   setDraft
 }: TerminalQuickCommandAdvancedSectionProps): React.JSX.Element {
-  const scopeSummary = getScopeSummaryLabel({ selectedScope, selectedRepo })
+  const t = useTranslate()
+  const scopeSummary = getScopeSummaryLabel({ selectedScope, selectedRepo }, t)
 
   return (
     <div>
@@ -68,7 +73,7 @@ export function TerminalQuickCommandAdvancedSection({
         aria-expanded={advancedOpen}
       >
         <span className="shrink-0">
-          {translate(
+          {t(
             'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.925b8e0f6e',
             'Advanced'
           )}

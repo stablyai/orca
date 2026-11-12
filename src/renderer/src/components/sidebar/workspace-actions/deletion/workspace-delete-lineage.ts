@@ -1,10 +1,21 @@
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 
 type WorkspaceDeleteLineage = {
+  directChildren: Worktree[]
   descendants: Worktree[]
   deleteAllTargets: Worktree[]
+}
+
+export function getWorkspaceDeleteLineageRecord(
+  worktree: Worktree,
+  lineageById: Record<string, WorktreeLineage>
+): WorktreeLineage | null | undefined {
+  const projected = lineageById[worktree.id]
+  const inline = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
+  return projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
 }
 
 export function getWorkspaceDeleteLineage(
@@ -13,8 +24,14 @@ export function getWorkspaceDeleteLineage(
   lineageById: Record<string, WorktreeLineage>
 ): WorkspaceDeleteLineage {
   // Lineage IDs omit hosts; prefer the parent’s host so descendant deletion cannot reach another machine.
+  // A row known to live in another store is never a delete target, even when it nests; unknown owners keep the host rule.
+  const parentStoreKey = lineageStoreKeyOfRow(parent)
   const worktreeById = new Map<string, Worktree>()
   for (const worktree of worktrees) {
+    const storeKey = lineageStoreKeyOfRow(worktree)
+    if (parentStoreKey !== undefined && storeKey !== undefined && storeKey !== parentStoreKey) {
+      continue
+    }
     const claimed = worktreeById.get(worktree.id)
     if (claimed && claimed.hostId === parent.hostId && worktree.hostId !== parent.hostId) {
       continue
@@ -23,9 +40,7 @@ export function getWorkspaceDeleteLineage(
   }
   const lineageForSelectedRows: Record<string, WorktreeLineage> = {}
   for (const worktree of worktreeById.values()) {
-    const projected = lineageById[worktree.id]
-    const inline = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
-    const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
+    const lineage = getWorkspaceDeleteLineageRecord(worktree, lineageById)
     if (lineage) {
       lineageForSelectedRows[worktree.id] = lineage
     }
@@ -63,6 +78,7 @@ export function getWorkspaceDeleteLineage(
   visit(parent.id)
 
   return {
+    directChildren: childrenByParentId.get(parent.id) ?? [],
     descendants,
     // Delete nested children first so Git cannot remove them as untracked content under the parent.
     deleteAllTargets: [...childFirstTargets, parent]

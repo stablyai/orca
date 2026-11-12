@@ -4,9 +4,10 @@ import type { FeatureTip } from '../../../../shared/feature-tips'
 import {
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
-} from '@/components/settings/session-history/session-history-status-copy'
+} from '@/components/session-search/session-search-status'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { FeatureTipActions } from './FeatureTipActions'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import {
@@ -19,7 +20,8 @@ import type { SessionSearchTipStage } from './use-session-search-tip-setup'
 
 function stageCopy(
   tip: FeatureTip,
-  stage: SessionSearchTipStage
+  stage: SessionSearchTipStage,
+  t: Translate = translate
 ): { title: string; description: string; cta: string } {
   switch (stage) {
     case 'offer': {
@@ -28,31 +30,35 @@ function stageCopy(
     }
     case 'indexing':
       return {
-        title: translate('featureTips.sessionSearch.indexingTitle', 'Indexing your agent sessions'),
-        description: translate(
+        title: t('featureTips.sessionSearch.indexingTitle', 'Indexing your agent sessions'),
+        description: t(
           'featureTips.sessionSearch.indexingDescription',
           'Orca is reading your past agent transcripts so you can search them. This can take a few minutes.'
         ),
-        cta: translate('featureTips.sessionSearch.continueInBackground', 'Continue in background')
+        cta: t('featureTips.sessionSearch.continueInBackground', 'Continue in background')
       }
     case 'ready':
       return {
-        title: translate('featureTips.sessionSearch.readyTitle', 'Session search is ready'),
-        description: translate(
+        title: t('featureTips.sessionSearch.readyTitle', 'Session search is ready'),
+        description: t(
           'featureTips.sessionSearch.readyDescription',
           'Every agent session on this computer can now be found by what was said in it.'
         ),
-        cta: translate('featureTips.sessionSearch.startSearching', 'Start searching')
+        cta: t('featureTips.sessionSearch.startSearching', 'Start searching')
       }
   }
 }
 
-function progressMessage(status: AiVaultSearchStatus | null): string {
+function progressMessage(
+  status: AiVaultSearchStatus | null,
+  t: Translate = translate,
+  intlLocale?: string
+): string {
   // Why: right after turning on, the indexer may not have started; the shared copy would call that unavailable.
   if (!status?.enabled || status.phase === 'idle' || status.phase === 'closed') {
-    return translate('featureTips.sessionSearch.progressStarting', 'Finding your sessions…')
+    return t('featureTips.sessionSearch.progressStarting', 'Finding your sessions…')
   }
-  return sessionSearchStatusMessage(status)
+  return sessionSearchStatusMessage(status, t, intlLocale)
 }
 
 function IndexProgress({
@@ -62,6 +68,8 @@ function IndexProgress({
   indexing: boolean
   status: AiVaultSearchStatus | null
 }): JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <span className="block space-y-2" role="status" aria-live="polite">
       {indexing ? (
@@ -71,9 +79,9 @@ function IndexProgress({
         </span>
       ) : null}
       <span className="block text-xs font-medium tabular-nums text-foreground">
-        {progressMessage(status)}
+        {progressMessage(status, t, intlLocale)}
       </span>
-      {sessionSearchStatusDetails(status).map((line) => (
+      {sessionSearchStatusDetails(status, t).map((line) => (
         <span key={line} className="block text-xs text-muted-foreground">
           {line}
         </span>
@@ -101,8 +109,9 @@ export function SessionSearchTipDialog({
   stage: SessionSearchTipStage
   status: AiVaultSearchStatus | null
 }): JSX.Element {
+  const t = useTranslate()
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
-  const copy = stageCopy(tip, stage)
+  const copy = stageCopy(tip, stage, t)
 
   return (
     <FeatureTipDialogFrame
@@ -124,7 +133,7 @@ export function SessionSearchTipDialog({
             <span className="block">{copy.description}</span>
             {stage === 'offer' ? (
               <span className="block">
-                {translate(
+                {t(
                   'featureTips.sessionSearch.agentsInstruction',
                   'Your agents can search it too. Ask one to “find the session where we fixed the login timeout.”'
                 )}
@@ -133,7 +142,7 @@ export function SessionSearchTipDialog({
               <IndexProgress indexing={stage === 'indexing'} status={status} />
             )}
             <FeatureTipSettingsLine
-              text={translate(
+              text={t(
                 'featureTips.sessionSearch.changeInSettings',
                 'Change or turn it off anytime in <link>Settings → Agent Session Search</link>.'
               )}

@@ -5,6 +5,15 @@ import {
 import { normalizePairingBase64 } from '../../../shared/remote-runtime/pairing/mobile-pairing-base64'
 import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 import type { DeviceScope } from '../../../shared/runtime-types'
+import { classifyRuntimeHostRePair } from '../../../shared/remote-runtime/host-status/runtime-host-pairing-identity'
+import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
+
+type SavedServerIdentity = Pick<StoredWebRuntimeEnvironment, 'hostDescriptor'> & {
+  endpoints: readonly Pick<
+    StoredWebRuntimeEnvironment['endpoints'][number],
+    'endpoint' | 'publicKeyB64'
+  >[]
+}
 
 const PAIRING_OFFER_VERSION = 2
 
@@ -21,6 +30,7 @@ export type WebPairingOffer = {
 export type WebPairingStartupDecision =
   | { kind: 'auto-save-runtime-offer'; offer: WebPairingOffer }
   | { kind: 'show-connect'; initialPairingInput: string | null }
+  | { kind: 'confirm-replace-saved-server'; initialPairingInput: string }
   | { kind: 'use-stored-environment' }
 
 export function parseWebPairingInput(input: string): WebPairingOffer | null {
@@ -76,18 +86,41 @@ export function readPairingInputFromLocation(
 
 export function decideWebPairingStartup(args: {
   initialPairingInput: string | null
-  hasStoredEnvironment: boolean
+  storedEnvironment: SavedServerIdentity | null
 }): WebPairingStartupDecision {
-  const offer = args.initialPairingInput ? parseWebPairingInput(args.initialPairingInput) : null
+  const { initialPairingInput, storedEnvironment } = args
+  const offer = initialPairingInput ? parseWebPairingInput(initialPairingInput) : null
+  // Why: a link must not silently repoint a browser that is already paired to another server.
+  if (
+    offer &&
+    initialPairingInput &&
+    storedEnvironment &&
+    !isSameSavedServer(storedEnvironment, offer)
+  ) {
+    return { kind: 'confirm-replace-saved-server', initialPairingInput }
+  }
   if (offer?.scope === 'runtime') {
     return { kind: 'auto-save-runtime-offer', offer }
   }
   if (offer) {
-    return { kind: 'show-connect', initialPairingInput: args.initialPairingInput }
+    return { kind: 'show-connect', initialPairingInput }
   }
-  return args.hasStoredEnvironment
+  return storedEnvironment
     ? { kind: 'use-stored-environment' }
     : { kind: 'show-connect', initialPairingInput: null }
+}
+
+function isSameSavedServer(environment: SavedServerIdentity, offer: WebPairingOffer): boolean {
+  return (
+    environment.endpoints.some((entry) => entry.endpoint === offer.endpoint) &&
+    classifyRuntimeHostRePair(
+      {
+        publicKeys: environment.endpoints.map((entry) => entry.publicKeyB64),
+        pin: environment.hostDescriptor
+      },
+      offer
+    ).kind === 'same-host'
+  )
 }
 
 export function clearPairingInputFromAddressBar(): void {

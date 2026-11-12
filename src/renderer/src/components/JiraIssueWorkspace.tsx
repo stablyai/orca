@@ -2,9 +2,12 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { hasBoundedCommentBodyText } from '@/lib/comment-body-submit-state'
+import { hasBoundedCommentBodyText } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { useAppStore } from '@/store'
-import { jiraGetIssueForTarget, jiraUpdateIssueForTarget } from '@/runtime/runtime-jira-client'
+import {
+  jiraGetIssueForTarget,
+  jiraUpdateIssueForTarget
+} from '@/runtime/jira/runtime-jira-detail-client'
 import type {
   JiraEditField,
   JiraIssue,
@@ -14,16 +17,17 @@ import type {
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { JiraIssueMetadataBar, JiraIssueWorkspaceHeader } from './jira-issue-workspace-chrome'
 import { JiraIssueCommentComposer, JiraIssueWorkspaceContent } from './jira-issue-workspace-content'
 import { useJiraIssueWorkspaceActions } from './jira-issue-workspace-actions'
-import { getJiraReadIdentity } from '@/store/slices/jira-read-coordination'
-import { defaultScopeHost } from '@/lib/default-creation-host'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { getJiraReadIdentity } from '@/store/slices/jira/jira-read-coordination'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { editedJiraIssueFields } from './jira-issue-workspace-hydration'
 import { enqueueJiraIssueMutation, jiraIssueRequestScope } from './jira-issue-mutation-queue'
 import { useJiraIssueMutationState } from './use-jira-issue-mutation-state'
@@ -52,6 +56,7 @@ export default function JiraIssueWorkspace({
   onClose,
   sourceContext
 }: JiraIssueWorkspaceProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const owner = useMemo(
     () => (sourceContext ? taskSourceRuntimeTarget(sourceContext) : defaultScopeHost(settings)),
@@ -252,13 +257,12 @@ export default function JiraIssueWorkspace({
       >
         <VisuallyHidden.Root asChild>
           <SheetTitle>
-            {displayed?.title ??
-              translate('auto.components.JiraIssueWorkspace.ef21405c6d', 'Jira issue')}
+            {displayed?.title ?? t('auto.components.JiraIssueWorkspace.ef21405c6d', 'Jira issue')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'auto.components.JiraIssueWorkspace.857bd2f88f',
               'Preview, edit, and start work from the selected issue.'
             )}

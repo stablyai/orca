@@ -1,5 +1,5 @@
 import { dirname } from '@/lib/path'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 type UntitledPathFile = Pick<OpenFile, 'filePath' | 'relativePath'>
 

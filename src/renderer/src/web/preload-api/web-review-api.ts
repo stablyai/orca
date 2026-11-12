@@ -1,7 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { createFallbackProxy } from './web-fallback-api'
 import { callRuntimeResult } from './web-runtime-calls'
-import { mapRepoPathArg } from '@/runtime/runtime-repo-selector-params'
+import { mapRepoPathArg } from '@/runtime/source-control/forge/runtime-repo-selector-params'
 import { repoHooksCheckWakeParams } from '../../../../shared/repo-hooks-check-wake'
 
 export function createRuntimeNamespaceApi(prefix: string): never {

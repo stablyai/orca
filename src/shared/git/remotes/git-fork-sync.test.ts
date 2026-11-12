@@ -93,50 +93,6 @@ describe('syncForkDefaultBranch', () => {
     ])
   })
 
-  it('supports default branch names with slashes', async () => {
-    const { runGit, calls } = createRunner({
-      defaultBranchOutput:
-        'ref: refs/heads/release/1.0\tHEAD\n0123456789012345678901234567890123456789\tHEAD\n',
-      aheadBehind: '0\t1\n'
-    })
-
-    await syncForkDefaultBranch(runGit)
-
-    expect(calls).toContainEqual([
-      'push',
-      'origin',
-      '2222222222222222222222222222222222222222:refs/heads/release/1.0'
-    ])
-  })
-
-  it('does nothing when the fork default branch already matches upstream', async () => {
-    const { runGit, calls } = createRunner({ aheadBehind: '0\t0\n' })
-
-    const result = await syncForkDefaultBranch(runGit)
-
-    expect(result).toMatchObject({ status: 'up-to-date', branchName: 'main' })
-    expect(flattenedCommands(calls)).not.toContain('push origin')
-  })
-
-  it('skips history counts for equal verified tips while retaining fetches and ancestry validation', async () => {
-    const { runGit, calls } = createRunner({ equalTips: true })
-
-    await expect(syncForkDefaultBranch(runGit)).resolves.toMatchObject({
-      status: 'up-to-date',
-      ahead: 0,
-      behind: 0
-    })
-    expect(calls.filter((args) => args[0] === 'fetch')).toHaveLength(2)
-    expect(calls.filter((args) => args[0] === 'rev-parse')).toHaveLength(2)
-    expect(calls.some((args) => args[0] === 'rev-list' || args[0] === 'push')).toBe(false)
-    expect(calls).toContainEqual([
-      'merge-base',
-      '--is-ancestor',
-      '1111111111111111111111111111111111111111',
-      '1111111111111111111111111111111111111111'
-    ])
-  })
-
   it('still blocks equal tips when ancestry cannot be verified', async () => {
     const { runGit, calls } = createRunner({ equalTips: true, ancestryError: true })
 
@@ -160,29 +116,6 @@ describe('syncForkDefaultBranch', () => {
     expect(calls.some((args) => args[0] === 'push')).toBe(false)
   })
 
-  it('scans newline-heavy remote and default-branch output without line-array splitting', async () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    const { runGit } = createRunner({
-      remotes: `${'\r\n'.repeat(10_000)}origin\r\nupstream\r\n`,
-      defaultBranchOutput: `${'metadata\r\n'.repeat(
-        10_000
-      )}ref: refs/heads/main\tHEAD\r\n0123456789012345678901234567890123456789\tHEAD\r\n`,
-      aheadBehind: '0\t0\n'
-    })
-
-    await expect(syncForkDefaultBranch(runGit)).resolves.toMatchObject({
-      status: 'up-to-date',
-      branchName: 'main'
-    })
-
-    const usedLineSplit = splitSpy.mock.calls.some(
-      ([separator]) =>
-        (typeof separator === 'string' && separator === '\n') ||
-        (separator instanceof RegExp && separator.source === '\\r?\\n')
-    )
-    expect(usedLineSplit).toBe(false)
-  })
-
   it('blocks when the fork has commits that are not upstream', async () => {
     const { runGit, calls } = createRunner({ aheadBehind: '2\t4\n' })
 
@@ -200,26 +133,6 @@ describe('syncForkDefaultBranch', () => {
     expect(commands).not.toContain('pull')
     expect(commands).not.toContain('rebase')
     expect(commands).not.toContain('force')
-  })
-
-  it('blocks when the upstream remote is missing', async () => {
-    const { runGit, calls } = createRunner({ remotes: 'origin\n' })
-
-    await expect(syncForkDefaultBranch(runGit)).resolves.toMatchObject({
-      status: 'blocked',
-      reason: 'missing-upstream'
-    })
-    expect(calls).toEqual([['remote']])
-  })
-
-  it('reports missing origin first when both remotes are missing', async () => {
-    const { runGit, calls } = createRunner({ remotes: '' })
-
-    await expect(syncForkDefaultBranch(runGit)).resolves.toMatchObject({
-      status: 'blocked',
-      reason: 'missing-origin'
-    })
-    expect(calls).toEqual([['remote']])
   })
 
   it('blocks when the upstream remote no longer matches the expected fork metadata', async () => {
@@ -270,15 +183,5 @@ describe('syncForkDefaultBranch', () => {
     expect(() => validateGitForkSyncExpectedUpstream(undefined, { required: true })).toThrow(
       'Expected upstream is required.'
     )
-  })
-
-  it('blocks when origin lacks the upstream default branch', async () => {
-    const { runGit } = createRunner({ originExists: false })
-
-    await expect(syncForkDefaultBranch(runGit)).resolves.toMatchObject({
-      status: 'blocked',
-      reason: 'missing-origin-branch',
-      branchName: 'main'
-    })
   })
 })

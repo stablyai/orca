@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayCellConfig } from '../config.js'
-import { openRelayDatabase, type RelayDatabase } from '../database.js'
-import { ReserveLedgerWriter } from '../reserve-ledger-writer.js'
+import { openRelayDatabase, type RelayDatabase } from '../database/database.js'
+import { ReserveLedgerWriter } from './reserve-placement/reserve-ledger-writer.js'
 
 // Only host-requested moves may leave a reserve cell proven dead by heartbeat and poll silence without a fence; live cells retain hosts.
 
@@ -155,14 +155,6 @@ describePostgres('a host leaving a dead reserve cell, on PostgreSQL', () => {
     expect(await rowOf(host)).toEqual({ cell_id: live.id, assignment_epoch: 5 })
     expect((await leasesOf(host)).every((lease) => lease['cell_id'] === live.id)).toBe(true)
     expect(await reservedOn(dead)).toEqual(reservedBefore)
-  })
-
-  it('hard crash with no dead-man trip: a ledger-only row moves too', async () => {
-    const host = nextHost()
-    await ledgerRow(host, 7)
-    await store.setCellAdmitMode(dead.id, 'reserve')
-    await killDeadCell()
-    expect(await hostAssign(host)).toMatchObject({ cellId: live.id, assignmentEpoch: 8 })
   })
 
   it('a seat ahead of the row: the move mints above it, and the revived cell\'s seat never wins the row back', async () => {

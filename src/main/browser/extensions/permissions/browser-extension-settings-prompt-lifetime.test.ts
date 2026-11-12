@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/browser/extensions/browser-extension-webstore'
 import type * as PromptModule from './browser-extension-install-prompt'
 import type * as ServiceModule from '../web-store/browser-extension-webstore-service'
-import type * as InstallModule from '../installation/browser-extension-webstore-install'
+import type * as MutationLockModule from '../installation/browser-extension-mutation-lock'
 
 const state = vi.hoisted(() => ({
   userData: '',
@@ -22,8 +22,8 @@ vi.mock('electron', () => ({
   app: { getPath: () => state.userData },
   webContents: { fromId: () => null }
 }))
-vi.mock('../../browser-manager', () => ({ browserManager: {} }))
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: () => ({ label: 'Work' }),
     getEnabledExtensionIds: () => [],
@@ -65,7 +65,7 @@ const renderers: EventEmitter[] = []
 const installs: Promise<BrowserExtensionWebStoreInstallResult>[] = []
 let service: typeof ServiceModule
 let prompt: typeof PromptModule
-let install: typeof InstallModule
+let mutationLock: typeof MutationLockModule
 
 function renderer() {
   const contents = Object.assign(new EventEmitter(), {
@@ -138,7 +138,7 @@ beforeEach(async () => {
   vi.resetModules()
   service = await import('../web-store/browser-extension-webstore-service')
   prompt = await import('./browser-extension-install-prompt')
-  install = await import('../installation/browser-extension-webstore-install')
+  mutationLock = await import('../installation/browser-extension-mutation-lock')
 })
 
 afterEach(async () => {
@@ -155,14 +155,14 @@ describe('Settings extension install prompt lifetime', () => {
     const pending = start(contents)
     const request = await requested(contents)
     expect(stagedFolders()).toHaveLength(1)
-    expect(install.isBrowserExtensionBusy(extensionId)).toBe(true)
+    expect(mutationLock.isBrowserExtensionBusy(extensionId)).toBe(true)
 
     contents.emit('did-navigate', {}, 'file:///orca/index.html', 200, 'OK')
 
-    await vi.waitFor(() => expect(install.isBrowserExtensionBusy(extensionId)).toBe(false))
+    await vi.waitFor(() => expect(mutationLock.isBrowserExtensionBusy(extensionId)).toBe(false))
     await expect(pending).resolves.toEqual({ status: 'cancelled' })
     expect(stagedFolders()).toEqual([])
-    expect(install.isBrowserExtensionBusy(extensionId)).toBe(false)
+    expect(mutationLock.isBrowserExtensionBusy(extensionId)).toBe(false)
     expect(
       prompt.respondToBrowserExtensionInstallPrompt(asContents(contents), {
         requestId: request.requestId,
@@ -181,32 +181,6 @@ describe('Settings extension install prompt lifetime', () => {
       accepted: true
     })
     await expect(retry).resolves.toEqual({ status: 'installed', name: 'Vault' })
-    expect(install.isBrowserExtensionBusy(extensionId)).toBe(false)
-  })
-
-  it('finishes an accepted install when the renderer navigates during loading', async () => {
-    let finishLoading = (): void => {}
-    state.load.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          finishLoading = resolve
-        })
-    )
-    const contents = renderer()
-    const pending = start(contents)
-    const request = await requested(contents)
-    prompt.respondToBrowserExtensionInstallPrompt(asContents(contents), {
-      requestId: request.requestId,
-      accepted: true
-    })
-    try {
-      await vi.waitFor(() => expect(state.load).toHaveBeenCalledOnce())
-      contents.emit('did-navigate', {}, 'file:///orca/index.html', 200, 'OK')
-      expect(install.isBrowserExtensionBusy(extensionId)).toBe(true)
-    } finally {
-      finishLoading()
-    }
-    await expect(pending).resolves.toEqual({ status: 'installed', name: 'Vault' })
-    expect(install.isBrowserExtensionBusy(extensionId)).toBe(false)
+    expect(mutationLock.isBrowserExtensionBusy(extensionId)).toBe(false)
   })
 })

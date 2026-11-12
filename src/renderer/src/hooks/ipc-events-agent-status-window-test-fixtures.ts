@@ -50,6 +50,7 @@ export function buildWindowApi(args: {
         onRequestTerminalCreate: () => () => {},
         onPublishAgentLaunchTab: () => () => {},
         onRevealTerminalPane: () => () => {},
+        onApplyAgentPaneActivity: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
         onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},
@@ -126,6 +127,7 @@ export function buildWindowApi(args: {
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},
         onPortForwardsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onDetectedPortsChanged: () => () => {},
         ...args.ssh
       },
@@ -158,17 +160,13 @@ export function stubReactSyncEffect(): void {
 }
 
 export function stubAuxiliaryModules(): void {
-  vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('@/app-shell/chrome/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+  vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
   vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
-  }))
-  vi.doMock('@/lib/editor-font-zoom', () => ({
-    nextEditorFontZoomLevel: vi.fn(() => 0),
-    computeEditorFontSize: vi.fn(() => 13)
   }))
   vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
     ...(await importOriginal<typeof UIZoomLevelModule>()),
@@ -176,5 +174,5 @@ export function stubAuxiliaryModules(): void {
     UI_ZOOM_MIN: -3,
     UI_ZOOM_MAX: 3
   }))
-  vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+  vi.doMock('@/app-shell/chrome/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
 }

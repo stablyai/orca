@@ -1,7 +1,7 @@
-import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
+import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getProvider } from '../provider/registry'
 import {
@@ -12,7 +12,7 @@ import {
 import {
   mintPtySessionId,
   ptySessionIdForAgentCreateOperation
-} from '../../../daemon/pty-session-id'
+} from '../../../daemon/sessions/pty-session-id'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'

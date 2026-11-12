@@ -85,6 +85,12 @@ const editmeta = {
   }
 }
 
+function sentBody(init: unknown): unknown {
+  return init && typeof init === 'object' && 'body' in init && typeof init.body === 'string'
+    ? JSON.parse(init.body)
+    : undefined
+}
+
 describe('getIssueEditFields', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -304,5 +310,105 @@ describe('getIssueEditFields', () => {
     jiraRequestMock.mockRejectedValueOnce(authError)
     await expect(getIssueEditFields('ENG-1', 'site-1')).rejects.toBe(authError)
     expect(clearTokenMock).toHaveBeenCalledWith('site-1')
+  })
+})
+
+describe('issue writes from the edit sheet', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    isAuthErrorMock.mockReturnValue(false)
+    getClientsMock.mockReturnValue([makeEntry()])
+  })
+
+  it('sends Cloud comments as ADF that keeps single newlines as line breaks', async () => {
+    jiraRequestMock.mockResolvedValueOnce({ id: 'c1' })
+    const { addIssueComment } = await import('./jira-issue-mutations')
+
+    await addIssueComment('ENG-1', 'first\nsecond\n\n**third**', 'site-1')
+
+    const [, path, init] = jiraRequestMock.mock.calls[0]
+    expect(path).toBe('/rest/api/3/issue/ENG-1/comment')
+    expect(sentBody(init)).toEqual({
+      body: {
+        type: 'doc',
+        version: 1,
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'first' },
+              { type: 'hardBreak' },
+              { type: 'text', text: 'second' }
+            ]
+          },
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'third', marks: [{ type: 'strong' }] }]
+          }
+        ]
+      }
+    })
+  })
+
+  it('shapes edit-screen user and rich-text fields; dedicated keys win', async () => {
+    jiraRequestMock.mockResolvedValue(undefined)
+    const { updateIssue } = await import('./jira-issue-mutations')
+
+    await updateIssue(
+      'ENG-1',
+      {
+        title: 'Dedicated title',
+        fields: {
+          summary: 'ignored',
+          reporter: 'account-9',
+          description: 'line one\nline two',
+          customfield_1: '  ',
+          components: [{ id: '1' }]
+        },
+        userFieldKeys: ['reporter'],
+        richTextFieldKeys: ['description', 'customfield_1']
+      },
+      'site-1'
+    )
+
+    const [, path, init] = jiraRequestMock.mock.calls[0]
+    expect(path).toBe('/rest/api/3/issue/ENG-1')
+    expect(sentBody(init)).toHaveProperty('fields', {
+      summary: 'Dedicated title',
+      reporter: { accountId: 'account-9' },
+      description: {
+        type: 'doc',
+        version: 1,
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'line one' },
+              { type: 'hardBreak' },
+              { type: 'text', text: 'line two' }
+            ]
+          }
+        ]
+      },
+      // Blank rich text clears the field instead of writing an empty document.
+      customfield_1: null,
+      components: [{ id: '1' }]
+    })
+  })
+
+  it('writes Server/DC rich-text fields as wiki text', async () => {
+    getClientsMock.mockReturnValue([makeEntry('server')])
+    jiraRequestMock.mockResolvedValue(undefined)
+    const { updateIssue } = await import('./jira-issue-mutations')
+
+    await updateIssue(
+      'ALP-1',
+      { fields: { description: 'h1. Title' }, richTextFieldKeys: ['description'] },
+      'site-1'
+    )
+
+    const [, path, init] = jiraRequestMock.mock.calls[0]
+    expect(path).toBe('/rest/api/2/issue/ALP-1')
+    expect(sentBody(init)).toEqual({ fields: { description: 'h1. Title' } })
   })
 })

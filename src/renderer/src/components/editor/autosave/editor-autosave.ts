@@ -1,15 +1,15 @@
 import { joinPath } from '@/lib/path'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { areLocalWindowsWslPathAliases } from '../../../../../shared/cross-platform-path'
 import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
-import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
 } from '../../../../../shared/constants'
-import { clampNumber } from '@/lib/terminal-theme'
+import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { isAutosavePausedForNonUtf8File } from './editor-non-utf8-autosave-pause'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'
@@ -64,6 +64,7 @@ export type EditorSaveFileTarget = {
 
 export type EditorSaveAndCloseDetail = {
   fileId: string
+  tabId?: string
   /** Called at once when the tab stays open, so a waiting dialog needn't time out. */
   onNotClosed?: (reason: 'blocked-stale' | 'not-utf8' | 'not-saved') => void
 }
@@ -83,6 +84,7 @@ export type EditorFileSavedDetail = {
 
 export type EditorRequestFileCloseDetail = {
   fileId: string
+  tabId?: string
   /** Runs once the file actually closes — after save or discard, never on cancel. */
   onClosed?: () => void
 }
@@ -227,7 +229,7 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
 
 export function requestEditorFileClose(
   fileId: string,
-  options?: Pick<EditorRequestFileCloseDetail, 'onClosed'>
+  options?: Pick<EditorRequestFileCloseDetail, 'onClosed' | 'tabId'>
 ): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {

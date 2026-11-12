@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { build, type Plugin } from 'vite'
-import { verifySandboxPreloadImports } from '../scripts/sandbox-preload-imports.mjs'
+import { verifySandboxPreloadImports } from '../scripts/desktop-build/output-contracts/sandbox-preload-imports.mjs'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE
@@ -8,9 +8,21 @@ import {
 
 type BundledScript = { code: string; moduleIds: string[] }
 
+// Unminified preload keeps dependency JSDoc whose em dashes would force two-byte storage in every renderer.
+export const ONE_BYTE_UNMINIFIED_OUTPUT = {
+  charset: 'ascii',
+  comments: { legal: true, annotation: true, jsdoc: false }
+} as const
+
 const GUEST_PRELOADS = [
-  { entry: 'src/preload/browser-window-close.ts', fileName: 'browser-window-close-preload.js' },
-  { entry: 'src/preload/doc-preview-link.ts', fileName: 'doc-preview-link-preload.js' }
+  { entry: 'src/preload/browser-extension-preload.ts', fileName: 'browser-extension-preload.js' },
+  { entry: 'src/preload/browser-guest.ts', fileName: 'browser-guest-preload.js' },
+  {
+    entry: 'src/preload/browser-passkey-request.ts',
+    fileName: 'browser-passkey-request-preload.js'
+  },
+  { entry: 'src/preload/doc-preview-link.ts', fileName: 'doc-preview-link-preload.js' },
+  { entry: 'src/preload/plugin-frame-guest.ts', fileName: 'plugin-frame-guest-preload.js' }
 ]
 
 const WORKER_SHIM = {
@@ -45,7 +57,7 @@ async function bundleScript(
         name: 'orcaBrowserExtensionScript',
         fileName: () => fileName
       },
-      rollupOptions: { external: ['electron'] }
+      rollupOptions: { external: ['electron'], output: ONE_BYTE_UNMINIFIED_OUTPUT }
     }
   })
   for (const output of Array.isArray(result) ? result : [result]) {

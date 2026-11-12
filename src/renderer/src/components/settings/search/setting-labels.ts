@@ -26,6 +26,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalThemeLight: 'Light Terminal Theme',
   terminalUseSeparateLightTheme: 'Separate Light Theme',
   terminalCustomThemes: 'Imported Themes',
+  claudeCodeThemeSync: 'Match Claude Code to Terminal Theme',
   terminalMacOptionAsAlt: 'Option as Alt',
   terminalPaddingX: 'Padding X',
   terminalPaddingY: 'Padding Y',

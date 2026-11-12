@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
-import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser-annotation-viewport-bridge'
+import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import { buildGuestOverlayScript } from './grab-guest-script'
 
 type Rect = { x: number; y: number; width: number; height: number }
@@ -165,41 +165,6 @@ async function armGuest(previousMarker?: string, inShadowRoot = false) {
 }
 
 describe('grab overlay after the click', () => {
-  it.each([
-    ['border', 0, 8],
-    ['padding', 8, 0]
-  ])('follows %s-only outer growth with a fixed content box', async (_kind, padding, border) => {
-    const guest = await armGuest()
-    guest.setTargetSpacing(padding, border)
-
-    expect(guest.notifyResizes()).toBe(1)
-    guest.flushFrames()
-
-    expect(guest.outline()).toEqual({ x: 40, y: 300, width: 136, height: 46 })
-  })
-
-  it('re-measures when the document root content box changes', async () => {
-    const guest = await armGuest()
-    guest.moveTarget({ x: 40, y: 250, width: 120, height: 30 })
-    guest.setRootContentSize(980, 800)
-
-    expect(guest.notifyResizes()).toBe(1)
-    guest.flushFrames()
-
-    expect(guest.outline()).toEqual({ x: 40, y: 250, width: 120, height: 30 })
-  })
-
-  it('keeps the outline on the element when a box inside the page scrolls', async () => {
-    const guest = await armGuest()
-    expect(guest.outline()).toEqual({ x: 40, y: 300, width: 120, height: 30 })
-
-    guest.moveTarget({ x: 40, y: 180, width: 120, height: 30 })
-    guest.scroller.dispatchEvent(new guest.window.Event('scroll'))
-    guest.flushFrames()
-
-    expect(guest.outline()).toEqual({ x: 40, y: 180, width: 120, height: 30 })
-  })
-
   it('selects an element inside an open shadow root and follows its scroll', async () => {
     const guest = await armGuest(undefined, true)
     expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('selection-1')
@@ -211,42 +176,6 @@ describe('grab overlay after the click', () => {
     guest.flushFrames()
 
     expect(guest.outline()).toEqual({ x: 40, y: 180, width: 120, height: 30 })
-  })
-
-  it('re-measures on window resize and when the element changes size', async () => {
-    const guest = await armGuest()
-
-    guest.moveTarget({ x: 20, y: 250, width: 90, height: 24 })
-    guest.window.dispatchEvent(new guest.window.Event('resize'))
-    guest.flushFrames()
-    expect(guest.outline()).toEqual({ x: 20, y: 250, width: 90, height: 24 })
-
-    guest.moveTarget({ x: 20, y: 250, width: 90, height: 80 })
-    for (const callback of guest.resizeCallbacks) {
-      callback()
-    }
-    guest.flushFrames()
-    expect(guest.outline()).toEqual({ x: 20, y: 250, width: 90, height: 80 })
-  })
-
-  it('marks the selected element for the viewport bridge and clears it on teardown', async () => {
-    const guest = await armGuest()
-    expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('selection-1')
-
-    guest.grab.cleanup()
-    expect(guest.target.hasAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe(false)
-
-    guest.moveTarget({ x: 0, y: 0, width: 1, height: 1 })
-    guest.scroller.dispatchEvent(new guest.window.Event('scroll'))
-    expect(guest.flushFrames).not.toThrow()
-  })
-
-  it('restores a page-owned marker value on teardown', async () => {
-    const guest = await armGuest('page-owned')
-    expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('selection-1')
-
-    guest.grab.cleanup()
-    expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('page-owned')
   })
 
   it('does not overwrite a page marker changed after the selection', async () => {

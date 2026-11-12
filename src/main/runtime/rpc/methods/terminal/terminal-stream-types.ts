@@ -77,6 +77,7 @@ export type TerminalMultiplexStream = {
   // Set only when the client negotiated `inputAck`; sequenced Input frames are then deduped and acked.
   inputSessionId: string | null
   outputPaused: boolean
+  supportsOutputCadence: boolean
   supportsDesktopViewportClaims: boolean
   desktopClaimTail: Promise<boolean>
   // Only this stream's floor may be released on detach.
@@ -88,6 +89,14 @@ export type TerminalMultiplexStream = {
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
   ackRecoverySnapshotInFlight: boolean
+  // Output sent before the last recovery image and not yet acknowledged; the next image waits for it so images cannot stack up on a slow link.
+  ackRecoveryAwaitedBytes: number
+  // Pending headroom granted while paced; kept until the queue drains so leaving alt cannot force an overflow.
+  ackPendingHoldbackBytes: number
+  // Paced window the last admission used (null when unpaced), so its send records the same decision.
+  ackAdmittedPacedWindowBytes: number | null
+  // Output outran the window since an ACK last found the queue empty; a recovery clears the queue, not the backlog.
+  ackOutputWaited: boolean
   yieldedQueries: YieldedTerminalQuery[]
   yieldedQueryScan: TerminalReplyQueryScanState
   /** A recovery went out screen-only while the link was saturated; history follows once it drains. */

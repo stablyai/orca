@@ -49,6 +49,7 @@ export async function executeBrowserClientPageAutomationCommand(
       browserProfileId: string
       method: BrowserClientAutomationMethod
       params: Record<string, unknown>
+      agent: boolean
       registration: BrowserClientRetainedPage['registration']
     },
     signal: AbortSignal
@@ -67,6 +68,7 @@ export async function executeBrowserClientPageAutomationCommand(
   assertBrowserClientPageCommandNotAborted(signal)
   assertCurrentBrowserClientPageRenderer(page.renderer)
   const method = event.command.method
+  const agent = event.command.agent !== false
   const run = (params: Record<string, unknown>): Promise<unknown> =>
     execute(
       {
@@ -75,6 +77,7 @@ export async function executeBrowserClientPageAutomationCommand(
         browserProfileId: page.inventory.browserProfileId,
         method,
         params,
+        agent,
         registration: page.registration
       },
       signal

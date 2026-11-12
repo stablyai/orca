@@ -7,11 +7,20 @@ import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-sco
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { worktreeRetentionPathComparisonKey } from './worktree-retention-path-comparison'
 import type { Store } from '../../persistence/loading-store/store'
-import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { isLocalWorktreeScanGenerationCurrent } from './local-worktree-scan-generation'
 
 type WorktreeLineagePruningStore = Pick<Store, 'getRepos' | 'getWorktreeMeta' | 'setWorktreeMeta'> &
-  Partial<Pick<Store, 'getAllWorktreeLineage' | 'getAllWorkspaceLineage' | 'removeWorktreeLineage'>>
+  Partial<
+    Pick<
+      Store,
+      | 'getAllWorktreeLineage'
+      | 'getAllWorkspaceLineage'
+      | 'getAllCrossStoreWorkspaceLineage'
+      | 'removeWorktreeLineage'
+    >
+  >
 
 function worktreeIdBelongsToRepo(worktreeId: string, repoPrefix: string): boolean {
   return worktreeId.startsWith(repoPrefix)
@@ -25,9 +34,11 @@ function workspaceKeyBelongsToRepo(workspaceKey: string, repoPrefix: string): bo
 function hasStoredRepoLineage(
   repoPrefix: string,
   worktreeLineage: Readonly<Record<string, WorktreeLineage>>,
-  workspaceLineage: Readonly<Record<string, WorkspaceLineage>>
+  workspaceLineage: Readonly<Record<string, WorkspaceLineage>>,
+  crossStoreChildKeys: readonly string[]
 ): boolean {
   return (
+    crossStoreChildKeys.some((childKey) => workspaceKeyBelongsToRepo(childKey, repoPrefix)) ||
     Object.entries(worktreeLineage).some(
       ([childId, lineage]) =>
         worktreeIdBelongsToRepo(childId, repoPrefix) ||
@@ -48,12 +59,16 @@ export function pruneLineageForMissingRepoWorktrees(
   options: {
     platform?: NodeJS.Platform
     preservedMetadataCandidateIds?: ReadonlySet<string>
+    /** Scan-start generation; a worktree change since then may have recorded lineage these rows miss (#16654). */
+    scanGeneration?: number
   } = {}
 ): void {
-  const { platform = process.platform, preservedMetadataCandidateIds } = options
+  const { platform = process.platform, preservedMetadataCandidateIds, scanGeneration } = options
   // Mid-move a scan can miss paths that still exist; lineage waits for the move to settle.
   if (
     isWslMoveRepoBlocked(repo) ||
+    (scanGeneration !== undefined &&
+      !isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration)) ||
     typeof store.getAllWorktreeLineage !== 'function' ||
     typeof store.removeWorktreeLineage !== 'function'
   ) {
@@ -61,11 +76,12 @@ export function pruneLineageForMissingRepoWorktrees(
   }
   const worktreeLineage = store.getAllWorktreeLineage()
   const workspaceLineage = store.getAllWorkspaceLineage?.() ?? {}
+  const crossStoreChildKeys = Object.keys(store.getAllCrossStoreWorkspaceLineage?.() ?? {})
   const repoPrefix = `${repo.id}::`
   // One empty scan cannot prove every stored lineage edge disappeared.
   if (
     gitWorktrees.length === 0 &&
-    hasStoredRepoLineage(repoPrefix, worktreeLineage, workspaceLineage)
+    hasStoredRepoLineage(repoPrefix, worktreeLineage, workspaceLineage, crossStoreChildKeys)
   ) {
     return
   }
@@ -94,7 +110,11 @@ export function pruneLineageForMissingRepoWorktrees(
     const hostId = store.getWorktreeMeta(worktreeId)?.hostId
     return hostId ? hostId === expectedHostId : repoOwners.length === 1
   }
-  for (const childWorkspaceKey of Object.keys(workspaceLineage)) {
+  // removeWorktreeLineage clears the child's same-store and cross-store records alike.
+  for (const childWorkspaceKey of new Set([
+    ...Object.keys(workspaceLineage),
+    ...crossStoreChildKeys
+  ])) {
     const childScope = parseWorkspaceKey(childWorkspaceKey)
     if (
       childScope?.type === 'worktree' &&

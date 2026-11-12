@@ -41,7 +41,10 @@ export function sessionDetailConversationTurns(
 
   const turns = displayableSessionPreviewMessages(session)
     .map(toDisplayTurn)
-    .filter((turn) => !turnTextMatchesSessionTitle(session.title, turn.text))
+    // Hide only a prompt that repeats the title; a reply matching the title is still the agent's answer.
+    .filter(
+      (turn) => turn.role !== 'user' || !turnTextMatchesSessionTitle(session.title, turn.text)
+    )
 
   return dedupeAdjacentConversationTurns(turns).slice(-limit)
 }

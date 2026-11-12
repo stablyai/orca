@@ -1,10 +1,6 @@
 import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
 import { getWorkspaceCleanupReviewStateLabel } from './workspace-cleanup-facet-labels'
 
-export function formatCompactActivityLabel(label: string): string {
-  return label === 'Just now' ? 'now' : label.replace(/ ago$/, '')
-}
-
 export function getReviewTooltip(reviewInfo: WorkspaceCleanupReviewInfo): string {
   return [reviewInfo.label, getReviewStateSrText(reviewInfo)].filter(Boolean).join(' · ')
 }

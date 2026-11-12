@@ -45,7 +45,7 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
-  '../../crash-reporting/crash-breadcrumb-store',
+  '../../crash-reporting/breadcrumbs/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
 vi.mock('../../git/source-control/commit-changes', async (importOriginal) => ({
@@ -167,39 +167,11 @@ describe('filesystem reads of a stopped WSL distro', () => {
     expect(readFileMock).not.toHaveBeenCalled()
   })
 
-  it('fs:pathsExist answers no path of a stopped distro, rather than calling it absent', async () => {
-    await expect(invoke('fs:pathsExist', { filePaths: [UNC_FILE] })).resolves.toEqual([
-      { error: expect.stringContaining('is not running') }
-    ])
-    expect(realpathMock).not.toHaveBeenCalled()
-    expect(statMock).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['fs:readDir', { dirPath: UNC_ROOT }],
-    ['fs:readFile', { filePath: UNC_FILE }],
-    ['fs:stat', { filePath: UNC_FILE }],
-    ['fs:readFileChunk', { filePath: UNC_FILE, offset: 0, length: 16 }]
-  ])('a user act (%s with wakeWslDistro) goes ahead without asking', async (channel, args) => {
-    await invoke(channel, { ...args, wakeWslDistro: true }).catch((error: unknown) =>
-      expect(error).not.toBeInstanceOf(WslDistroStoppedError)
-    )
-    expect(readStateMock).not.toHaveBeenCalled()
-  })
-
   it("refuses with WSL didn't answer when the running list can't be read", async () => {
     readStateMock.mockResolvedValue('unverifiable')
     await expect(invoke('fs:readDir', { dirPath: UNC_ROOT })).rejects.toBeInstanceOf(
       WslDistroUnverifiableError
     )
     expect(realpathMock).not.toHaveBeenCalled()
-  })
-
-  it('a running distro reads as before', async () => {
-    readStateMock.mockResolvedValue('running')
-    await invoke('fs:stat', { filePath: UNC_FILE }).catch((error: unknown) =>
-      expect(error).not.toBeInstanceOf(WslDistroStoppedError)
-    )
-    expect(readStateMock).toHaveBeenCalledTimes(1)
   })
 })

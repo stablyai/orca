@@ -1,20 +1,28 @@
-import { ImeInput } from '@/lib/ime-text-field'
-import React, { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, FolderPlus } from 'lucide-react'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { isWithinAddProjectMenu } from '@/components/sidebar/project-admission/menu/AddProjectHostSubmenu'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import { translate } from '@/i18n/i18n'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getAmbiguousProjectOptionIds,
   rankProjectOptions,
   sectionProjectOptions
 } from './project-combobox-matching'
+import {
+  focusCascadedAddProjectMenuFirstItem,
+  ProjectComboboxAddProjectOption,
+  type ProjectComboboxAddProjectMenu
+} from './ProjectComboboxAddProjectOption'
 import { ProjectOptionMark, ProjectOptionRow } from './ProjectComboboxRow'
 import { useRecentProjectIds } from './use-recent-project-ids'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_FIELD_SHELL, COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
+
+export type { ProjectComboboxAddProjectMenu }
 
 type ProjectComboboxProps = {
   options: readonly NewWorkspaceProjectOption[]
@@ -22,6 +30,7 @@ type ProjectComboboxProps = {
   onValueChange: (projectId: string) => void
   onValueSelected?: (projectId: string) => void
   onAddProject?: () => void
+  addProjectMenu?: ProjectComboboxAddProjectMenu
   placeholder?: string
   triggerClassName?: string
   invalid?: boolean
@@ -38,13 +47,19 @@ export default function ProjectCombobox({
   onValueChange,
   onValueSelected,
   onAddProject,
+  addProjectMenu,
   placeholder = 'Choose project',
   triggerClassName,
   invalid = false,
   describedBy
 }: ProjectComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  const [cascadeOpen, setCascadeOpen] = useState(false)
+  const [cascadeAutoFocus, setCascadeAutoFocus] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
   const recentIds = useRecentProjectIds()
+  const hasAddProjectRow = Boolean(onAddProject || addProjectMenu)
   // Derive keys from the displayed sections: folder grouping changes raw rank order, so keyboard selection must follow what users see.
   const deriveRowKeys = useCallback(
     (query: string): string[] => [
@@ -53,17 +68,17 @@ export default function ProjectCombobox({
         query,
         recentIds
       ).flatMap((section) => section.items.map((match) => match.option.id)),
-      ...(onAddProject ? [ADD_PROJECT_KEY] : [])
+      ...(hasAddProjectRow ? [ADD_PROJECT_KEY] : [])
     ],
-    [onAddProject, options, recentIds]
+    [hasAddProjectRow, options, recentIds]
   )
   const {
     query,
     setQuery,
     open,
     setOpen,
-    close,
-    handleOpenChange,
+    close: closeCombobox,
+    handleOpenChange: handleComboboxOpenChange,
     armedKey,
     arm,
     moveArm,
@@ -71,6 +86,21 @@ export default function ProjectCombobox({
     listId,
     setListNode
   } = useTypeAheadCombobox(deriveRowKeys)
+
+  const close = useCallback((): void => {
+    setCascadeOpen(false)
+    closeCombobox()
+  }, [closeCombobox])
+
+  const handleOpenChange = useCallback(
+    (next: boolean): void => {
+      if (!next) {
+        setCascadeOpen(false)
+      }
+      handleComboboxOpenChange(next)
+    },
+    [handleComboboxOpenChange]
+  )
 
   const matches = useMemo(
     () => rankProjectOptions(options, query, recentIds),
@@ -104,8 +134,24 @@ export default function ProjectCombobox({
     (event: React.KeyboardEvent<HTMLInputElement>): void => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
+        setCascadeOpen(false)
         setOpen(true)
         moveArm(event.key === 'ArrowDown' ? 1 : -1)
+        return
+      }
+      if (
+        (event.key === 'Enter' || event.key === 'ArrowRight') &&
+        open &&
+        armedKey === ADD_PROJECT_KEY &&
+        addProjectMenu
+      ) {
+        event.preventDefault()
+        setCascadeAutoFocus(true)
+        if (cascadeOpen) {
+          focusCascadedAddProjectMenuFirstItem()
+        } else {
+          setCascadeOpen(true)
+        }
         return
       }
       if (event.key === 'Enter' && open) {
@@ -117,16 +163,34 @@ export default function ProjectCombobox({
       if (event.key === 'Escape' && (open || query.length > 0)) {
         event.preventDefault()
         event.stopPropagation()
+        if (cascadeOpen) {
+          setCascadeOpen(false)
+          return
+        }
         close()
         return
       }
       if (event.key === 'Backspace' && committed && selected) {
         event.preventDefault()
+        setCascadeOpen(false)
         setQuery(selected.displayName)
         setOpen(true)
       }
     },
-    [armedKey, close, commit, committed, moveArm, open, query, selected, setOpen, setQuery]
+    [
+      addProjectMenu,
+      armedKey,
+      cascadeOpen,
+      close,
+      commit,
+      committed,
+      moveArm,
+      open,
+      query,
+      selected,
+      setOpen,
+      setQuery
+    ]
   )
 
   return (
@@ -155,10 +219,7 @@ export default function ProjectCombobox({
                   type="text"
                   role="combobox"
                   data-project-combobox-root="true"
-                  aria-label={translate(
-                    'auto.components.new.workspace.ProjectCombobox.label',
-                    'Project'
-                  )}
+                  aria-label={t('auto.components.new.workspace.ProjectCombobox.label', 'Project')}
                   aria-expanded={open}
                   aria-controls={listId}
                   aria-autocomplete="list"
@@ -172,6 +233,18 @@ export default function ProjectCombobox({
                     setOpen(true)
                   }}
                   onFocus={() => setOpen(true)}
+                  onBlur={(event) => {
+                    const next = event.relatedTarget
+                    // A parent dialog's trap can refocus this field as a nested dialog mounts; Radix misses focus that leaves before the list mounts.
+                    if (
+                      next instanceof Element &&
+                      !isWithinComboboxRoot(next, ROOT_ATTRIBUTE) &&
+                      !contentRef.current?.contains(next) &&
+                      !isWithinAddProjectMenu(next)
+                    ) {
+                      close()
+                    }
+                  }}
                   onKeyDown={handleKeyDown}
                   className={cn(
                     'w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground',
@@ -190,7 +263,7 @@ export default function ProjectCombobox({
               <button
                 type="button"
                 tabIndex={-1}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.new.workspace.ProjectCombobox.browse',
                   'Browse projects'
                 )}
@@ -219,6 +292,7 @@ export default function ProjectCombobox({
       {/* Closing must remove the selector before a nested dialog takes focus. */}
       {open ? (
         <PopoverContent
+          ref={contentRef}
           align="start"
           sideOffset={4}
           // Use an opaque nonfading surface so dialog fields cannot show through during animation; match the primitive’s arbitrary background specificity.
@@ -231,12 +305,18 @@ export default function ProjectCombobox({
           onCloseAutoFocus={(event) => event.preventDefault()}
           // The search anchor sits outside Radix content; preserve interactions inside this control instead of dismissing them as outside events.
           onFocusOutside={(event) => {
-            if (isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE)) {
+            if (
+              isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE) ||
+              isWithinAddProjectMenu(event.target)
+            ) {
               event.preventDefault()
             }
           }}
           onInteractOutside={(event) => {
-            if (isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE)) {
+            if (
+              isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE) ||
+              isWithinAddProjectMenu(event.target)
+            ) {
               event.preventDefault()
             }
           }}
@@ -245,10 +325,7 @@ export default function ProjectCombobox({
           <div
             id={listId}
             role="listbox"
-            aria-label={translate(
-              'auto.components.new.workspace.ProjectCombobox.listLabel',
-              'Projects'
-            )}
+            aria-label={t('auto.components.new.workspace.ProjectCombobox.listLabel', 'Projects')}
             className="flex min-h-0 flex-col"
           >
             {/* Presentation preserves listbox ownership through this scrolling wrapper. */}
@@ -261,11 +338,11 @@ export default function ProjectCombobox({
                 // Match row height so empty results stay visually neutral.
                 <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
                   {options.length === 0
-                    ? translate(
+                    ? t(
                         'auto.components.new.workspace.ProjectCombobox.noProjects',
                         'No projects yet.'
                       )
-                    : translate(
+                    : t(
                         'auto.components.new.workspace.ProjectCombobox.empty',
                         'No projects match your search.'
                       )}
@@ -292,38 +369,32 @@ export default function ProjectCombobox({
                       current={scored.option.id === value}
                       ambiguous={ambiguous.has(scored.option.id)}
                       optionId={armedKey === scored.option.id ? `${listId}-armed` : undefined}
-                      onArm={() => arm(scored.option.id)}
+                      onArm={() => {
+                        if (cascadeOpen) {
+                          setCascadeOpen(false)
+                        }
+                        arm(scored.option.id)
+                      }}
                       onCommit={() => commit(scored.option.id)}
                     />
                   ))}
                 </div>
               ))}
             </div>
-            {onAddProject ? (
-              <div
-                role="option"
-                id={armedKey === ADD_PROJECT_KEY ? `${listId}-armed` : undefined}
-                aria-selected={armedKey === ADD_PROJECT_KEY}
-                data-armed={armedKey === ADD_PROJECT_KEY || undefined}
-                onMouseDown={(event) => event.preventDefault()}
-                onMouseMove={() => arm(ADD_PROJECT_KEY)}
-                onClick={() => commit(ADD_PROJECT_KEY)}
-                className={cn(
-                  'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-3 text-sm',
-                  armedKey === ADD_PROJECT_KEY && 'bg-accent text-accent-foreground'
-                )}
-              >
-                <span className="flex w-4 shrink-0 items-center justify-center">
-                  <FolderPlus className="size-3.5 text-muted-foreground" />
-                </span>
-                <span className="truncate">
-                  {translate(
-                    'auto.components.new.workspace.ProjectCombobox.addProject',
-                    'Add project'
-                  )}
-                </span>
-              </div>
-            ) : null}
+            <ProjectComboboxAddProjectOption
+              optionId={armedKey === ADD_PROJECT_KEY ? `${listId}-armed` : undefined}
+              armed={armedKey === ADD_PROJECT_KEY}
+              cascadeOpen={cascadeOpen}
+              cascadeAutoFocus={cascadeAutoFocus}
+              addProjectMenu={addProjectMenu}
+              onAddProject={onAddProject}
+              onArm={() => arm(ADD_PROJECT_KEY)}
+              onCommitPlain={() => commit(ADD_PROJECT_KEY)}
+              onCascadeOpenChange={setCascadeOpen}
+              onCascadeAutoFocusChange={setCascadeAutoFocus}
+              onCloseCombobox={close}
+              onFocusSearchInput={() => inputRef.current?.focus()}
+            />
           </div>
         </PopoverContent>
       ) : null}

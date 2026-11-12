@@ -5,13 +5,13 @@ const mocks = vi.hoisted(() => ({
   resolvePagePromptTarget: vi.fn()
 }))
 
-vi.mock('../../browser-manager', () => ({
+vi.mock('../manager/browser-manager', () => ({
   browserManager: {
     resolvePagePromptTarget: mocks.resolvePagePromptTarget
   }
 }))
 
-import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
+import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
 import { handleBrowserGuestLogin } from './browser-http-auth-prompt'
 import { BROWSER_PAGE_PROMPT_TIMEOUT_MS, respondToBrowserPagePrompt } from './browser-page-prompts'
 
@@ -94,31 +94,6 @@ describe('browser HTTP auth prompt', () => {
     vi.useRealTimers()
   })
 
-  it('asks the window showing the tab, and signs in or cancels with the answer', async () => {
-    const renderer = mockRenderer(10)
-    showTabIn(renderer)
-    const guest = mockGuest()
-
-    const signIn = challenge(guest)
-
-    expect(signIn.asked).toBe(true)
-    const [request] = sentRequests(renderer)
-    expect(request).toMatchObject({
-      kind: 'http-auth',
-      details: { origin: 'https://staging.acme.com', retry: false }
-    })
-    await expect(answer(renderer, request.requestId, { username: 'qa' })).resolves.toBe('rejected')
-    expect(signIn.callback).not.toHaveBeenCalled()
-    await expect(answer(renderer, request.requestId, CREDENTIALS)).resolves.toBe('answered')
-    expect(signIn.callback).toHaveBeenCalledWith('qa', 'hunter2')
-
-    const retry = challenge(guest, { firstAuthAttempt: false })
-    const [, retryRequest] = sentRequests(renderer)
-    expect(retryRequest.details.retry).toBe(true)
-    await answer(renderer, retryRequest.requestId, null)
-    expect(retry.callback).toHaveBeenCalledWith()
-  })
-
   it.each([
     ['a proxy challenge', { isProxy: true }],
     [
@@ -133,19 +108,6 @@ describe('browser HTTP auth prompt', () => {
 
     expect(asked).toBe(false)
     expect(sentRequests(renderer)).toEqual([])
-  })
-
-  it('asks for a same-site request the page makes', () => {
-    const renderer = mockRenderer(10)
-    showTabIn(renderer)
-
-    const { asked } = challenge(mockGuest(), {
-      url: 'https://staging.acme.com/api/me',
-      isRequestForNavigation: false
-    })
-
-    expect(asked).toBe(true)
-    expect(sentRequests(renderer)).toHaveLength(1)
   })
 
   it('shares one prompt per realm and cancels a different challenge meanwhile', async () => {

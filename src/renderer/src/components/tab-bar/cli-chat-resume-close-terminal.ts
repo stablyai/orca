@@ -1,14 +1,14 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { collectTabPtyIds } from '../terminal/running-terminal-close-guard'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureTerminalSurfaceIdentity,
   isRetainedTerminalSurfaceIdentity
-} from '../../../../shared/workspace-layout/terminal-tab-close'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-close'
 import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalWait
@@ -86,7 +86,7 @@ export async function closeCliChatResumeTerminal(
     })
   )
   hooks.prepared()
-  return await new Promise<boolean>((resolve, reject) => {
+  return await new Promise<boolean>((resolve) => {
     let started = false
     const cancel = () => {
       if (started) {
@@ -97,6 +97,7 @@ export async function closeCliChatResumeTerminal(
     }
     signal.addEventListener('abort', cancel, { once: true })
     closeTerminalTab(source.tabId, {
+      reason: 'user',
       // Continuing is the user's consent to stop this pane's agent, so only other panes' work asks.
       ...(consents && bindings[leafId] ? { consentedPtyId: bindings[leafId] } : {}),
       // The chat opens in this worktree, so emptying it must not leave it.
@@ -132,7 +133,8 @@ export async function closeCliChatResumeTerminal(
         started = true
         signal.removeEventListener('abort', cancel)
         // Skip the already-checked compatibility await so every handle's wait is sent before close.
-        const exited = Promise.all(
+        // Any settled wait proceeds: the create's own writer check refuses a terminal still holding it.
+        const exited = Promise.allSettled(
           terminals.map((terminal) =>
             callRuntimeRpc<{ wait: RuntimeTerminalWait }>(
               target,
@@ -140,30 +142,15 @@ export async function closeCliChatResumeTerminal(
               {
                 terminal: terminal.handle,
                 for: 'exit',
-                timeoutMs: 15_000
+                // Outlasts the host's explicit-close stop, so a slow stop isn't read as running.
+                timeoutMs: 30_000
               },
-              { signal, timeoutMs: 16_000, skipCompatibilityCheck: true }
+              { signal, timeoutMs: 31_000, skipCompatibilityCheck: true }
             )
           )
         )
         hooks.closing()
-        void exited
-          .then((results) => {
-            if (
-              results.some(
-                ({ wait }) =>
-                  !wait.satisfied ||
-                  wait.status !== 'exited' ||
-                  ((wait.exitCode === null || wait.exitCode < 0) &&
-                    wait.exitCause?.kind !== 'operator_close' &&
-                    wait.exitCause?.kind !== 'signaled')
-              )
-            ) {
-              throw new Error('terminal exit unproven')
-            }
-            resolve(true)
-          })
-          .catch(reject)
+        void exited.then(() => resolve(!signal.aborted))
         return true
       }
     })

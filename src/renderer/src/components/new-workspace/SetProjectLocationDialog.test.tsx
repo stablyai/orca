@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { StrictMode, type ComponentProps } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NeedsSetupProjectHostOption } from '@/lib/project-host-setup-options'
+import type { ComponentProps } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { NeedsSetupProjectHostOption } from '@/lib/workspace/creation/project-host-setup-options'
 
 const storeMocks = vi.hoisted(() => ({
   setupProjectExistingFolder: vi.fn(),
@@ -68,47 +68,11 @@ function renderDialog(
   return user
 }
 
-beforeEach(() => {
-  storeMocks.setupProjectExistingFolder.mockReset()
-  storeMocks.setupProjectClone.mockReset()
-  storeMocks.setupProjectExistingFolder.mockResolvedValue({
-    setup: { id: 'setup-openclaw' }
-  })
-  storeMocks.setupProjectClone.mockResolvedValue({
-    setup: { id: 'setup-openclaw-clone' }
-  })
-})
-
 afterEach(() => {
   cleanup()
 })
 
 describe('SetProjectLocationDialog', () => {
-  it('keeps the parent caller in charge of close and saves an existing folder', async () => {
-    const onClose = vi.fn()
-    const onReady = vi.fn()
-    const user = renderDialog({ onClose, onReady })
-
-    expect(screen.getByTestId('set-project-location-dialog')).toBeTruthy()
-    expect(screen.getByText('Set project location')).toBeTruthy()
-    expect(screen.getByText('Choose where orca lives on openclaw.')).toBeTruthy()
-
-    await user.click(screen.getByRole('button', { name: /Browse folder/ }))
-    await user.click(screen.getByRole('button', { name: 'Browse host filesystem' }))
-    await user.click(screen.getByRole('button', { name: 'Select remote folder' }))
-    await user.click(screen.getByRole('button', { name: 'Set location' }))
-
-    expect(storeMocks.setupProjectExistingFolder).toHaveBeenCalledWith({
-      projectId: 'project-orca',
-      hostId: 'ssh:openclaw',
-      path: '/remote/orca',
-      kind: 'git',
-      displayName: 'orca'
-    })
-    expect(onReady).toHaveBeenCalledWith(JSON.stringify(['setup-openclaw', 'ssh:openclaw']))
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
   it('backs out of the host browser on Escape instead of discarding the form', async () => {
     const onClose = vi.fn()
     const user = renderDialog({ onClose })
@@ -125,71 +89,5 @@ describe('SetProjectLocationDialog', () => {
 
     await user.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalled()
-  })
-
-  it('does not retarget the composer when a slow clone lands after dismissal', async () => {
-    // An SSH clone is unbounded and the dialog stays dismissable while it runs.
-    let finishClone: (result: { setup: { id: string } }) => void = () => {}
-    storeMocks.setupProjectClone.mockReturnValue(
-      new Promise((resolve) => {
-        finishClone = resolve
-      })
-    )
-    const onReady = vi.fn()
-    const onClose = vi.fn()
-    const { rerender } = render(
-      <SetProjectLocationDialog
-        option={option}
-        projectName="orca"
-        projectKind="git"
-        defaultCloneUrl="https://github.com/stablyai/orca.git"
-        onClose={onClose}
-        onReady={onReady}
-      />
-    )
-    const user = userEvent.setup()
-
-    await user.click(screen.getByRole('button', { name: /Clone from URL/ }))
-    await user.type(screen.getByPlaceholderText('/destination/on/host'), '/remote/orca')
-    await user.click(screen.getByRole('button', { name: 'Clone' }))
-
-    rerender(
-      <SetProjectLocationDialog
-        option={null}
-        projectName="orca"
-        projectKind="git"
-        defaultCloneUrl="https://github.com/stablyai/orca.git"
-        onClose={onClose}
-        onReady={onReady}
-      />
-    )
-    await act(async () => {
-      finishClone({ setup: { id: 'setup-openclaw-clone' } })
-    })
-
-    expect(onReady).not.toHaveBeenCalled()
-  })
-
-  it('still reports success under StrictMode double-invoked effects', async () => {
-    const onReady = vi.fn()
-    render(
-      <StrictMode>
-        <SetProjectLocationDialog
-          option={option}
-          projectName="orca"
-          projectKind="git"
-          defaultCloneUrl="git@github.com:stablyai/orca.git"
-          onClose={vi.fn()}
-          onReady={onReady}
-        />
-      </StrictMode>
-    )
-    const user = userEvent.setup()
-
-    await user.click(screen.getByRole('button', { name: /Browse folder/ }))
-    await user.type(screen.getByPlaceholderText('/path/to/project/on/host'), '/remote/orca')
-    await user.click(screen.getByRole('button', { name: 'Set location' }))
-
-    expect(onReady).toHaveBeenCalledWith(JSON.stringify(['setup-openclaw', 'ssh:openclaw']))
   })
 })

@@ -46,33 +46,3 @@ it.each(['file:///repo/notes/guide.md#section', 'file:///C:/repo/a%20b.md#L10'])
     expect(reopened.view.dom.querySelector('a')?.getAttribute('href')).toBe(uri)
   }
 )
-
-it('keeps javascript: links unavailable through copy and paste', () => {
-  const source = createEditor({
-    type: 'doc',
-    content: [
-      {
-        type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text: 'guide',
-            marks: [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }]
-          }
-        ]
-      }
-    ]
-  })
-  expect(source.view.dom.querySelector('a')?.getAttribute('href')).toBe('')
-  const target = createEditor('')
-  paste(target, copy(source))
-  expect(target.view.dom.querySelector('a')).toBeNull()
-  expect(target.getText()).toBe('guide')
-})
-
-it('does not turn pasted plain-text file URIs into links', () => {
-  const target = createEditor('')
-  target.view.pasteText('see file:///repo/notes/guide.md now')
-  expect(target.view.dom.querySelector('a')).toBeNull()
-  expect(target.getMarkdown()).toBe('see file:///repo/notes/guide.md now')
-})

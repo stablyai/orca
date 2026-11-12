@@ -1,5 +1,6 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { labelFromModelId } from '../../model-id-label'
+import { legacyAgentModelIds } from '../../legacy-agent-models'
 import type {
   AgentSessionOptionCatalog,
   CatalogMidSessionApply,
@@ -88,7 +89,11 @@ function optionDescriptor(args: {
   const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
-    const choices = choiceWithCurrent(option.kind.choices, tracked)
+    // Speed offers only the tiers the model lists, as Codex does; a config-only tier still runs.
+    const choices =
+      option.id === 'serviceTier'
+        ? [...option.kind.choices]
+        : choiceWithCurrent(option.kind.choices, tracked)
     if (choices.length <= 1) {
       return null
     }
@@ -210,8 +215,12 @@ export type NativeChatShownModel = {
 /** The model descriptor, then the controls that apply, each showing the chat's value for it.
  *  Values and controls arrive apart, so a caller decides which model's controls apply. */
 export function nativeChatSessionOptionDescriptors(args: {
+  agent: string
   catalog: AgentSessionOptionCatalog
   models: readonly CatalogModel[]
+  /** Listed rows legacy folding classifies, so a stable catalog is classified once; defaults to models.
+   *  A tracked-only stand-in never marks listed rows legacy. */
+  legacyInventory?: readonly CatalogModel[]
   mode: NativeChatSessionOptionMode
   modelLabel: string
   liveTransport: NativeChatLiveOptionTransport
@@ -220,12 +229,15 @@ export function nativeChatSessionOptionDescriptors(args: {
   values: Readonly<Record<string, TrackedNativeChatSessionOption | undefined>>
   modelIsCliDefault: boolean
 }): SessionOptionDescriptor[] {
-  const { catalog, models, mode, modelLabel, liveTransport, model } = args
+  const { agent, catalog, models, mode, modelLabel, liveTransport, model } = args
   // Callers reconcile tracked models into choices first; the trigger must never show an unlisted selection.
+  // Legacy rows fold away like the launch picker's; a picker opens the section when the chat is on one.
+  const legacy = legacyAgentModelIds(agent, args.legacyInventory ?? models)
   const modelChoices = models.map(({ id, label, description }) => ({
     value: id,
     label,
-    ...(description ? { description } : {})
+    ...(description ? { description } : {}),
+    ...(legacy.has(id) ? { legacy: true as const } : {})
   }))
   const modelAction = actionForApply(catalog.modelApply, model.tracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [
@@ -264,6 +276,8 @@ export function nativeChatSessionOptionDescriptors(args: {
 export function buildNativeChatSessionOptionSnapshot(args: {
   catalog: AgentSessionOptionCatalog
   models: readonly CatalogModel[]
+  /** Discovered rows before tracked stand-ins are added; see nativeChatSessionOptionDescriptors. */
+  legacyInventory?: readonly CatalogModel[]
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   modelLabel: string
@@ -280,6 +294,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const model = models.find((candidate) => candidate.id === effectiveModelId)
   return nativeChatSessionOptionDescriptors({
     ...args,
+    agent: record.agent,
     model: {
       currentId: effectiveModelId,
       valueSource: record.model?.source ?? (defaultModelId ? 'default' : 'unknown'),

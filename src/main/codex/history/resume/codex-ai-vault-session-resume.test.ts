@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { linkSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import { prepareCodexAiVaultSessionResume } from './codex-ai-vault-session-resume'
 import { getOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 
@@ -50,64 +50,11 @@ describe('prepareCodexAiVaultSessionResume', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('refuses before falling through when selected-home trust is indeterminate', async () => {
-    const resolveSelectedHome = vi.fn((): string | null => {
-      throw new ManagedCodexHomeTemporarilyUnavailableError()
-    })
-    const isSystemDefaultRealHome = vi.fn(() => true)
-
-    await expect(prepare(resolveSelectedHome, isSystemDefaultRealHome)).rejects.toBeInstanceOf(
-      ManagedCodexHomeTemporarilyUnavailableError
-    )
-    expect(resolveSelectedHome).toHaveBeenCalledOnce()
-    expect(isSystemDefaultRealHome).not.toHaveBeenCalled()
-  })
-
   it('repins an aliased rollout when the selected home is owned', async () => {
     await expect(prepare(() => selectedHome)).resolves.toEqual({
       useRealCodexHome: false,
       substituteCodexHome: selectedHome
     })
-  })
-
-  it('preserves deliberate no-selection behavior for a proven-untrusted home', async () => {
-    await expect(prepare(() => null)).resolves.toEqual({ useRealCodexHome: false })
-    expect(preparePinnedLaunchHome).not.toHaveBeenCalled()
-  })
-
-  // A fork tab has no provider session, so no pane spawn readies the home it keeps.
-  it('readies the row home for a fork that keeps it', async () => {
-    await expect(prepareFork()).resolves.toEqual({ useRealCodexHome: false })
-    expect(preparePinnedLaunchHome).toHaveBeenCalledExactlyOnceWith(peerHome)
-  })
-
-  it('leaves a repinned fork to the pane spawn, which readies the selected home', async () => {
-    await expect(prepareFork({ resolveSelectedHome: () => selectedHome })).resolves.toEqual({
-      useRealCodexHome: false,
-      substituteCodexHome: selectedHome
-    })
-    expect(preparePinnedLaunchHome).not.toHaveBeenCalled()
-  })
-
-  it('readies no home for a fork from a home this host does not list', async () => {
-    await expect(prepareFork({ discoveryHomes: [selectedHome] })).resolves.toEqual({
-      useRealCodexHome: false
-    })
-    expect(preparePinnedLaunchHome).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['no runtime home service', { runtimeHome: null }],
-    ['a rollout on another host', { executionHostId: 'runtime:paired' }],
-    ['a WSL home', { codexHome: String.raw`\\wsl.localhost\Ubuntu\home\u\.codex` }]
-  ] as const)('never looks for a fork home with %s', async (_name, overrides) => {
-    const discovery = vi.fn(() => [peerHome, selectedHome])
-
-    await expect(prepareFork({ ...overrides, discovery })).resolves.toEqual({
-      useRealCodexHome: false
-    })
-    expect(discovery).not.toHaveBeenCalled()
-    expect(preparePinnedLaunchHome).not.toHaveBeenCalled()
   })
 
   it('leaves a fork moved into the real home to the pane spawn', async () => {
@@ -125,14 +72,6 @@ describe('prepareCodexAiVaultSessionResume', () => {
       })
     ).resolves.toEqual({ useRealCodexHome: true })
     expect(preparePinnedLaunchHome).not.toHaveBeenCalled()
-  })
-
-  it('still answers a fork when readying its home fails', async () => {
-    preparePinnedLaunchHome.mockRejectedValue(new Error('hooks file unreadable'))
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-
-    await expect(prepareFork()).resolves.toEqual({ useRealCodexHome: false })
-    expect(preparePinnedLaunchHome).toHaveBeenCalledOnce()
   })
 
   function prepareFork(

@@ -1,0 +1,316 @@
+import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
+import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
+import { useCallback } from 'react'
+import type React from 'react'
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { cn } from '@/lib/class-names'
+import {
+  AI_VAULT_SESSION_DRAG_END_EVENT,
+  AI_VAULT_SESSION_DRAG_START_EVENT,
+  writeAiVaultSessionDragData
+} from '@/lib/agent-session/resume/history/ai-vault-session-drag'
+import type {
+  AiVaultScope,
+  AiVaultSession
+} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
+import { useTranslate } from '@/i18n/use-translate'
+import { SessionInlineDetails } from './AiVaultSessionDetails'
+import { latestSessionConversationTurn } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-display'
+import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
+import { SessionRowTrailingActions } from './SessionRowTrailingActions'
+import { aiVaultSessionDeleteBlockedReason } from '../session-actions/ai-vault-session-deletability'
+import { useAiVaultSessionDeleteHost } from '../session-actions/ai-vault-session-delete-action'
+import type { AiVaultSessionResumeActions } from '../session-actions/ai-vault-session-resume'
+import type { AiVaultSessionWorktreeInfo } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
+import {
+  conversationRoleLabel,
+  getSessionDetailsId,
+  SessionMetadata
+} from './ai-vault-session-row-display'
+import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
+import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
+import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
+import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
+
+export function VaultSessionRow({
+  session,
+  liveState,
+  resumeStartup,
+  realHomeResumeStartup,
+  worktreeInfo,
+  vaultScope,
+  detailsExpanded,
+  resumeDisabled,
+  resumeHidden,
+  onToggleDetails,
+  originalPaneTarget,
+  onJumpToOriginalPane,
+  showJumpToWorktree,
+  onJumpToWorktree,
+  onResume,
+  onContinueInNewSession,
+  onResumeInNewChat,
+  onResumeInNewCli,
+  resumeLabel: defaultResumeLabel,
+  resumeActions,
+  onResumeInWorktree,
+  onResumeInNewTab,
+  subagentResume,
+  onCopyResume,
+  onCopyId,
+  onCopyPath,
+  onOpenLog,
+  onRevealLog,
+  onOpenCwd,
+  onRevealArtifacts,
+  onRequestDelete,
+  searchHit,
+  sourceHostLabel,
+  onPick
+}: {
+  session: AiVaultSession
+  liveState: AgentDotState | null
+  resumeStartup: AiVaultResumeStartup
+  realHomeResumeStartup: AiVaultResumeStartup
+  worktreeInfo: AiVaultSessionWorktreeInfo | null
+  vaultScope: AiVaultScope
+  detailsExpanded: boolean
+  resumeDisabled: boolean
+  resumeHidden?: boolean
+  onToggleDetails: () => void
+  originalPaneTarget?: AiVaultOriginalPaneTarget | null
+  onJumpToOriginalPane?: () => void
+  showJumpToWorktree: boolean
+  onJumpToWorktree?: () => void
+  onResume: () => void
+  onContinueInNewSession?: () => void
+  onResumeInNewChat?: () => void
+  onResumeInNewCli?: () => void
+  resumeLabel: string
+  resumeActions: AiVaultSessionResumeActions
+  onResumeInWorktree: () => void
+  onResumeInNewTab: () => void
+  subagentResume?: AiVaultSubagentResumeActions
+  onCopyResume?: () => void
+  onCopyId: () => void
+  onCopyPath?: () => void
+  onOpenLog?: () => void
+  onRevealLog?: () => void
+  onOpenCwd?: () => void
+  onRevealArtifacts?: () => void
+  onRequestDelete?: (session: AiVaultSession) => void
+  searchHit?: AiVaultSearchHit
+  /** The host a search hit came from, set when hits span several hosts. */
+  sourceHostLabel?: string
+  /** Set in `/resume`'s picker: a click resumes the row, and the row offers no other action. */
+  onPick?: () => void
+}) {
+  const t = useTranslate()
+  const resumeLabel = isAntigravityReferenceSession(session)
+    ? t('aiVault.continueInCli', 'Continue in CLI')
+    : defaultResumeLabel
+  const updatedAt = session.updatedAt ?? session.modifiedAt
+  const title = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
+  const detailsId = getSessionDetailsId(session.id)
+  const latestTurn = latestSessionConversationTurn(session)
+  const deleteHost = useAiVaultSessionDeleteHost(session)
+  const deleteBlockedReason = session.structuredSession
+    ? t(
+        'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
+        "This session can't be deleted from Orca."
+      )
+    : onRequestDelete
+      ? aiVaultSessionDeleteBlockedReason(session, deleteHost, t)
+      : t(
+          'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
+          'The transcript source is unavailable.'
+        )
+  const requestDelete = (): void => onRequestDelete?.(session)
+  const draggable = !resumeDisabled && !onPick
+  const detailsTooltip = detailsExpanded
+    ? t('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
+    : t('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
+  const startResumeDrag = useCallback(
+    (event: React.DragEvent<HTMLElement>): void => {
+      event.stopPropagation()
+      if (!draggable) {
+        event.preventDefault()
+        return
+      }
+      writeAiVaultSessionDragData(event.dataTransfer, {
+        agent: session.agent,
+        sessionId: session.sessionId,
+        ...(session.structuredSession ? { structuredSession: session.structuredSession } : {}),
+        title,
+        command: resumeStartup.command,
+        sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
+        codexHome: session.codexHome,
+        // Send null for missing cwd so consumers can distinguish absence from older payloads without repinning support.
+        sessionCwd: session.cwd ?? null,
+        ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
+        ...(resumeStartup.envToDelete ? { envToDelete: resumeStartup.envToDelete } : {}),
+        ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {}),
+        ...(session.structuredSession ? {} : { realHomeStartup: realHomeResumeStartup })
+      })
+      window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
+    },
+    [draggable, realHomeResumeStartup, session, resumeStartup, title]
+  )
+
+  const body = (
+    <div
+      className={cn(
+        'group/session-row flex w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
+        !detailsExpanded && 'min-h-[98px]'
+      )}
+      onClick={(event) => {
+        // Ignore portaled React clicks outside the row DOM so menu actions cannot expand the row.
+        const target = event.target
+        if (target instanceof Node && !event.currentTarget.contains(target)) {
+          return
+        }
+        if (onPick) {
+          onPick()
+        } else {
+          onToggleDetails()
+        }
+      }}
+    >
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
+        <div
+          className={cn(
+            'min-w-0 text-[13px] font-medium leading-5 text-foreground',
+            // Only the title drags; previews/details retain normal text selection.
+            draggable && 'cursor-grab active:cursor-grabbing',
+            detailsExpanded ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'line-clamp-1'
+          )}
+          draggable={draggable}
+          title={
+            !draggable
+              ? undefined
+              : t(
+                  'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
+                  'Drag to resume in a new tab'
+                )
+          }
+          onDragStart={startResumeDrag}
+          onDragEnd={() => {
+            window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
+          }}
+        >
+          {title}
+        </div>
+        <SessionRowTrailingActions
+          session={session}
+          detailsExpanded={detailsExpanded}
+          detailsId={detailsId}
+          detailsTooltip={detailsTooltip}
+          resumeDisabled={resumeDisabled}
+          resumeHidden={resumeHidden}
+          resumeLabel={resumeLabel}
+          worktreeInfo={worktreeInfo}
+          onToggleDetails={onToggleDetails}
+          onJumpToOriginalPane={onJumpToOriginalPane}
+          showJumpToWorktree={showJumpToWorktree}
+          onJumpToWorktree={onJumpToWorktree}
+          onResume={onResume}
+          onContinueInNewSession={onContinueInNewSession}
+          onResumeInNewChat={onResumeInNewChat}
+          onResumeInNewCli={onResumeInNewCli}
+          onCopyResume={onCopyResume}
+          onCopyId={onCopyId}
+          onCopyPath={onCopyPath}
+          onOpenLog={onOpenLog}
+          onRevealLog={onRevealLog}
+          onOpenCwd={onOpenCwd}
+          onRevealArtifacts={onRevealArtifacts}
+          deleteBlockedReason={deleteBlockedReason}
+          onRequestDelete={requestDelete}
+          actionsHidden={Boolean(onPick)}
+        />
+      </div>
+      {searchHit ? <AiVaultSearchEvidence hit={searchHit} /> : null}
+      {!detailsExpanded && !searchHit ? (
+        <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
+          {latestTurn ? (
+            <>
+              <span className="font-medium text-foreground/80">
+                {conversationRoleLabel(latestTurn.role, t)}
+              </span>
+              <span>: {latestTurn.text}</span>
+            </>
+          ) : (
+            t(
+              'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
+              'No conversation preview available'
+            )
+          )}
+        </div>
+      ) : null}
+      <SessionMetadata
+        session={session}
+        liveState={liveState}
+        updatedAt={updatedAt}
+        worktreeInfo={worktreeInfo}
+        vaultScope={vaultScope}
+        sourceHostLabel={sourceHostLabel}
+      />
+      {detailsExpanded ? (
+        <SessionInlineDetails
+          id={detailsId}
+          session={session}
+          worktreeInfo={worktreeInfo}
+          vaultScope={vaultScope}
+          resumeActions={resumeActions}
+          onResumeInWorktree={onResumeInWorktree}
+          onResumeInNewTab={onResumeInNewTab}
+          subagentResume={onPick ? null : subagentResume}
+          onContinueInNewSession={onContinueInNewSession}
+          onResumeInNewChat={onResumeInNewChat}
+          onResumeInNewCli={onResumeInNewCli}
+          // The unsaved notice's "open the log" hint needs the button the picker hides.
+          onOpenLog={onPick ? undefined : onOpenLog}
+          actionsHidden={Boolean(onPick)}
+        />
+      ) : null}
+    </div>
+  )
+  if (onPick) {
+    return body
+  }
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild className="block w-full min-w-0">
+        {body}
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <SessionActionMenuItems
+          menuKind="context"
+          resumeDisabled={resumeDisabled}
+          resumeHidden={resumeHidden}
+          resumeLabel={resumeLabel}
+          onJumpToOriginalPane={onJumpToOriginalPane}
+          showJumpToWorktree={showJumpToWorktree}
+          jumpWorkspaceId={worktreeInfo?.worktreeId}
+          onJumpToWorktree={onJumpToWorktree}
+          onResume={onResume}
+          onContinueInNewSession={onContinueInNewSession}
+          onResumeInNewChat={onResumeInNewChat}
+          onResumeInNewCli={onResumeInNewCli}
+          onCopyResume={onCopyResume}
+          onCopyId={onCopyId}
+          onCopyPath={onCopyPath}
+          onOpenLog={onOpenLog}
+          onRevealLog={onRevealLog}
+          onOpenCwd={onOpenCwd}
+          onRevealArtifacts={onRevealArtifacts}
+          deleteBlockedReason={deleteBlockedReason}
+          onDelete={requestDelete}
+        />
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+}

@@ -7,13 +7,13 @@ import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
-import { getHistorySessionDirName } from '../../daemon/history-paths'
+import { getHistorySessionDirName } from '../../daemon/history/storage/history-paths'
 import {
   durableWriteTempPath,
   syncDirectoryDurablySync,
   writeFileDurableSync
 } from '../../filesystem/durable-file-write'
-import { rewriteWslMoveOrchestrationHistoryFile } from '../../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
+import { rewriteWslMoveOrchestrationHistoryFile } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite'
 import Database from '../../sqlite/sync-database'
 import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 

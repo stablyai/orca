@@ -9,8 +9,8 @@ import {
   BrowserAgentActivity,
   type AgentCommandLease,
   type AgentPointerInput
-} from '../browser-agent-activity'
-import { BrowserPageEvents, type BrowserPageEvent } from '../browser-page-events'
+} from '../page-activity/browser-agent-activity'
+import { BrowserPageEvents, type BrowserPageEvent } from '../page-activity/browser-page-events'
 import { BrowserPageInputCredit } from '../../routing/input-ownership/browser-page-input-credit'
 import { browserPopupPageId } from '../popups/browser-popup-page-id'
 import type { RpcCallerIdentity } from '../../../runtime/rpc/rpc-caller-identity'
@@ -40,6 +40,11 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return this.agentActivity.beginCommand(browserPageId)
   }
 
+  /** Clears the agent marking from every page this SSH host was driving. */
+  endAgentCommandsFromHost(targetId: string): void {
+    this.agentActivity.endForController(targetId)
+  }
+
   /** Runs one queued page command so input it delivers is credited to its caller. */
   runPageCommand<T>(
     browserPageId: string,
@@ -56,10 +61,19 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (ownerTabId) {
-      const pageId =
-        this.tabIdByWebContentsId.get(guestWebContentsId) ?? browserPopupPageId(guestWebContentsId)
-      this.pageInputCredit.creditInput(ownerTabId, pageId)
+      this.pageInputCredit.creditInput(ownerTabId, this.pageIdForGuest(guestWebContentsId))
     }
+  }
+
+  /** An agent is driving the page this guest shows (a tab or a popup). */
+  isAgentUsingGuest(guestWebContentsId: number): boolean {
+    return this.isAgentUsingPage(this.pageIdForGuest(guestWebContentsId))
+  }
+
+  private pageIdForGuest(guestWebContentsId: number): string {
+    return (
+      this.tabIdByWebContentsId.get(guestWebContentsId) ?? browserPopupPageId(guestWebContentsId)
+    )
   }
 
   handOverAgentActivity(fromPageId: string, toPageId: string): void {

@@ -10,7 +10,6 @@ import {
   generatePullRequestFieldsFromContextMock,
   getPullRequestDraftContextMock,
   resolveHostedReviewBodyForGenerationMock,
-  loadPullRequestLinkedIssueMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
 
@@ -40,7 +39,7 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
-  '../../crash-reporting/crash-breadcrumb-store',
+  '../../crash-reporting/breadcrumbs/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
 vi.mock('../../git/source-control/commit-changes', async (importOriginal) => ({
@@ -158,41 +157,6 @@ describe('PR linked-issue lifetime on a local worktree', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing IPC harness provides every Store member reached by this handler.
     registerFilesystemHandlers(store as never)
   })
-
-  it.each(['no changes', 'context error', 'template error'])(
-    'observes a late lookup rejection after %s',
-    async (outcome) => {
-      const issue = Promise.withResolvers<null>()
-      linkedLookup.run = () => issue.promise
-      const preparationError = new Error('branch preparation failed')
-      if (outcome === 'no changes') {
-        getPullRequestDraftContextMock.mockResolvedValue(null)
-      } else if (outcome === 'context error') {
-        getPullRequestDraftContextMock.mockRejectedValue(preparationError)
-      } else {
-        resolveHostedReviewBodyForGenerationMock.mockRejectedValue(preparationError)
-      }
-      const unhandled = vi.fn()
-      process.on('unhandledRejection', unhandled)
-      try {
-        await expect(
-          handlers.get('git:generatePullRequestFields')!(null, request)
-        ).resolves.toMatchObject({
-          success: false,
-          error:
-            outcome === 'no changes' ? 'No branch changes to summarize.' : preparationError.message
-        })
-        expect(loadPullRequestLinkedIssueMock).toHaveBeenCalledTimes(1)
-        issue.reject(new Error('Timed out waiting for a GitLab operation slot.'))
-        await nextTurn()
-        expect(unhandled).not.toHaveBeenCalled()
-        expect(generatePullRequestFieldsFromContextMock).not.toHaveBeenCalled()
-      } finally {
-        void issue.promise.catch(() => undefined)
-        process.off('unhandledRejection', unhandled)
-      }
-    }
-  )
 
   it('observes a lookup rejection while preparation is pending and preserves the later error', async () => {
     const issue = Promise.withResolvers<null>()

@@ -8,11 +8,11 @@ import type { AppState } from '@/store/types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { i18n } from '@/i18n/i18n'
-import type { WorkItemsCacheSources } from '@/store/github/cache-model'
+import type { WorkItemsCacheSources } from '@/store/github/cache/cache-model'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getGitHubTaskKind } from '../../../../shared/task-github-search'
-import { parseTaskQuery } from '../../../../shared/task-query'
+import { getGitHubTaskKind } from '../../../../shared/work-items/task-github-search'
+import { parseTaskQuery } from '../../../../shared/work-items/task-query'
 import { useTaskPageStoreBindings } from './use-task-page-store-bindings'
 import { useTaskPageRepoSelection } from './use-task-page-repo-selection'
 import { useTaskPageRuntimeHosts } from './use-task-page-runtime-hosts'
@@ -23,6 +23,7 @@ import { useTaskPageGitHubDetail } from './github/use-task-page-github-detail'
 import { useTaskPageGitHubCacheReconciliation } from './github/use-task-page-github-cache-reconciliation'
 import { useTaskPageSourceDisplay } from './use-task-page-source-display'
 import { TaskPageGitHubFilters } from './github/Filters'
+import { useTaskPageSearchActions } from './use-task-page-search-actions'
 import { TaskPageGitHubList } from './github/List'
 import { useTaskPageGitHubListProjection } from './github/use-task-page-github-list-projection'
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
@@ -127,8 +128,13 @@ export function Harness({
   useLayoutEffect(() => {
     view = model
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the filter actions read the store bindings, search state and kind mounted here; modal and dialog fields only gate the find shortcut.
+  const searchInput = { ...model } as unknown as Parameters<typeof useTaskPageSearchActions>[0]
+  const searchActions = useTaskPageSearchActions(searchInput)
   const filtersFields = {
     ...model,
+    applyPRFilterChange: searchActions.applyPRFilterChange,
+    handleSetDefaultTaskPreset: searchActions.handleSetDefaultTaskPreset,
     setIssueSourcePreference: runRequests
       ? useAppStore.getState().setIssueSourcePreference
       : setIssueSourcePreference,

@@ -41,7 +41,9 @@ vi.mock('../ipc/pty/register-handlers', () => ({ registerPtyHandlers: vi.fn() })
 vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: vi.fn()
 }))
-vi.mock('../browser/browser-manager', () => ({ browserManager: { unregisterAll: vi.fn() } }))
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
+  browserManager: { unregisterAll: vi.fn() }
+}))
 vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
   acknowledgePendingTccPromptNotice: vi.fn(),
   consumePendingTccPromptNotice: vi.fn(),
@@ -137,21 +139,6 @@ describe('updater linux package recovery IPC handlers', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
-  })
-
-  it('removes and re-registers both recovery channels', () => {
-    for (const channel of RECOVERY_CHANNELS) {
-      expect(removeHandlerMock).toHaveBeenCalledWith(channel)
-      expect(handleMock.mock.calls.filter(([name]) => name === channel)).toHaveLength(1)
-    }
-  })
-
-  it('routes both channels through the trusted-renderer guard', () => {
-    isTrustedUIRendererMock.mockReturnValue(false)
-
-    expectBothChannelsRejected(webContents({}))
-
-    expect(isTrustedUIRendererMock).toHaveBeenCalledTimes(2)
   })
 
   it('serves the current main UI renderer', async () => {

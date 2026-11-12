@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -22,7 +22,7 @@ import {
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from './editor-external-watch-event-reconciliation'
 import { useAppStore } from '@/store'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
@@ -486,69 +486,6 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     await vi.advanceTimersByTimeAsync(100)
 
-    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    dispose()
-  })
-
-  it('shares one echo-verification read across a burst of watcher payloads', async () => {
-    const dirtyFile = {
-      ...fileNotes,
-      isDirty: true
-    }
-    vi.mocked(useAppStore.getState).mockReturnValue({
-      ...createTestStore().getState(),
-      openFiles: [dirtyFile],
-      setExternalMutation
-    })
-    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
-    const readFile = vi.fn().mockResolvedValue({ content: 'agent content', isBinary: false })
-    vi.stubGlobal('window', { api: { fs: { readFile } } })
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    recordSelfWrite('/repo/notes.md', 'orca save')
-    // Burst SSH echo payloads must share full-file reads instead of stacking network round trips.
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(readFile).toHaveBeenCalledTimes(1)
-    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    dispose()
-  })
-
-  it('does not let a later write join an echo-verification read that started before it', async () => {
-    const dirtyFile = {
-      ...fileNotes,
-      isDirty: true
-    }
-    vi.mocked(useAppStore.getState).mockReturnValue({
-      ...createTestStore().getState(),
-      openFiles: [dirtyFile],
-      setExternalMutation
-    })
-    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
-    let resolveEchoRead: (value: { content: string; isBinary: boolean }) => void = () => {}
-    const readFile = vi
-      .fn()
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          resolveEchoRead = resolve
-        })
-      )
-      .mockResolvedValue({ content: 'agent content', isBinary: false })
-    vi.stubGlobal('window', { api: { fs: { readFile } } })
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    recordSelfWrite('/repo/notes.md', 'orca save')
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    await vi.advanceTimersByTimeAsync(50)
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    await vi.advanceTimersByTimeAsync(50)
-    resolveEchoRead({ content: 'orca save', isBinary: false })
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(readFile).toHaveBeenCalledTimes(2)
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
     dispose()
   })

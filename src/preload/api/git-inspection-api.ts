@@ -12,6 +12,7 @@ import type {
 } from '../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type {
+  GitHistoryItemRef,
   GitHistoryOptions,
   GitHistoryResult
 } from '../../shared/git/history/git-history-types'
@@ -56,6 +57,11 @@ export type GitInspectionApi = {
     connectionId?: string
   }) => Promise<string[]>
   findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
+  refs: (args: {
+    worktreePath: string
+    connectionId?: string
+    query?: string
+  }) => Promise<GitHistoryItemRef[]>
   history: (
     args: {
       worktreePath: string

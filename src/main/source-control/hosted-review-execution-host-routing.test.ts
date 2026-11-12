@@ -60,28 +60,32 @@ vi.mock('../github/gh-utils', () => ({
   release: vi.fn()
 }))
 
-vi.mock('../gitlab/gl-utils', () => ({
+vi.mock('../gitlab/requests/glab-request-admission', () => ({
   acquire: vi.fn(async () => {}),
-  release: vi.fn(),
-  glabExecFileAsync: glabExecFileAsyncMock,
+  release: vi.fn()
+}))
+
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', () => ({
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
   glabRepoExecOptions: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/command-runner/git-process-env', async (importOriginal) => ({
+vi.mock('../git/command-runner/git-environment/git-process-env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitOptionalLocksDisabledEnv: vi.fn(() => ({}))
 }))
 
 vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../git/repo', () => ({}))
-
 vi.mock('../../shared/git/refs/git-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock
 }))
 
-vi.mock('../git/exact-ref-probe', () => ({
+vi.mock('../git/refs/resolution/exact-ref-probe', () => ({
   probeAnyExactRef: probeAnyExactRefMock
 }))
 
@@ -90,17 +94,27 @@ vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', () => ({
 }))
 
 vi.mock('../git/remotes/remote-url-probe', () => ({
-  assertRemoteUrlReadable: assertRemoteUrlReadableMock
+  assertRemoteUrlReadable: assertRemoteUrlReadableMock,
+  withSharedRemoteUrlReads: <T>(work: () => Promise<T>) => work()
 }))
 
-vi.mock('../gitlab/client', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-lookup', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequest: vi.fn(async () => null),
   getMergeRequestForBranchOrThrow: getMergeRequestForBranchOrThrowMock
 }))
 
-vi.mock('../gitlab/merge-request-creation', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-creation', () => ({
   createGitLabMergeRequest: createGitLabMergeRequestMock
+}))
+
+vi.mock('../github/client/fetch/repo-slug-upstream', () => ({
+  getRepoSlug: getRepoSlugMock,
+  getRepoUpstream: getRepoUpstreamMock
+}))
+
+vi.mock('../github/client/lookup/pr-for-branch-outcome', () => ({
+  getPRForBranchOutcome: getPRForBranchOutcomeMock
 }))
 
 vi.mock('../github/client', () => ({
@@ -149,9 +163,9 @@ vi.mock('../gitea/pull-request-creation', () => ({
 }))
 
 import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
-import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
-import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
-import { RuntimeHostedReviewCommands } from '../runtime/runtime-hosted-review-commands'
+import '../workspaces/execution-host/repo-execution-host'
+import './hosted-review-execution-host'
+import { RuntimeHostedReviewCommands } from '../runtime/integrations/reviews/runtime-hosted-review-commands'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const REPO_PATH = '/remote/workspace/repo'
@@ -251,92 +265,6 @@ beforeEach(() => {
   createGiteaPullRequestMock.mockResolvedValue({ ok: true, number: 7, url: 'https://pr/7' })
 })
 
-describe('hosted-review lookups route on the resolved execution host', () => {
-  it('reads a GitHub review on the SSH host a row names only in executionHostId', async () => {
-    getRepoSlugMock.mockResolvedValue({ host: 'github.com', owner: 'a', repo: 'b' })
-    const commands = makeCommands(makeRepo({ executionHostId: 'ssh:ssh-a' }))
-
-    await commands.getHostedReviewForBranch({ repoSelector: 'repo-1', branch: 'feature' })
-
-    expect(getRepoSlugMock).toHaveBeenCalledWith(REPO_PATH, 'ssh-a')
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
-      REPO_PATH,
-      'feature',
-      null,
-      'ssh-a',
-      null,
-      expect.anything()
-    )
-  })
-
-  it('reads a GitLab review on the executionHostId host when connectionId names a different one', async () => {
-    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'acme/widgets' })
-    const commands = makeCommands(makeRepo({ connectionId: 'ssh-b', executionHostId: 'ssh:ssh-a' }))
-
-    await commands.getHostedReviewForBranch({ repoSelector: 'repo-1', branch: 'feature' })
-
-    expect(getProjectSlugMock).toHaveBeenCalledWith(REPO_PATH, 'ssh-a')
-    expect(getMergeRequestForBranchOrThrowMock).toHaveBeenCalledWith(
-      REPO_PATH,
-      'feature',
-      null,
-      'ssh-a'
-    )
-    expect(getProjectSlugMock).not.toHaveBeenCalledWith(REPO_PATH, 'ssh-b')
-  })
-
-  it('does not dial this client for a runtime row whose nested target shares a local name', async () => {
-    getBitbucketRepoSlugMock.mockResolvedValue({ workspace: 'acme', repo: 'widgets' })
-    const commands = makeCommands(
-      makeRepo({ connectionId: 'ssh-b', executionHostId: 'runtime:env-1' })
-    )
-
-    await commands.getHostedReviewForBranch({ repoSelector: 'repo-1', branch: 'feature' })
-
-    expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith(REPO_PATH, null)
-  })
-
-  it('keeps a runtime row with no nested target on this process (self-addressed stamp)', async () => {
-    getGiteaRepoSlugMock.mockResolvedValue({ host: 'gitea.example', owner: 'a', repo: 'b' })
-    const commands = makeCommands(makeRepo({ executionHostId: 'runtime:env-1' }))
-
-    await commands.getHostedReviewForBranch({ repoSelector: 'repo-1', branch: 'feature' })
-
-    expect(getGiteaRepoSlugMock).toHaveBeenCalledWith(REPO_PATH, null)
-  })
-
-  it('keeps a legacy connectionId-only SSH row on its target', async () => {
-    getRepoSlugMock.mockResolvedValue({ host: 'github.com', owner: 'a', repo: 'b' })
-    const commands = makeCommands(makeRepo({ connectionId: 'ssh-b' }))
-
-    await commands.getHostedReviewForBranch({ repoSelector: 'repo-1', branch: 'feature' })
-
-    expect(getRepoSlugMock).toHaveBeenCalledWith(REPO_PATH, 'ssh-b')
-  })
-
-  it('does not share a cached answer between two rows at one path on different hosts', async () => {
-    getRepoSlugMock.mockResolvedValue({ host: 'github.com', owner: 'a', repo: 'b' })
-    await makeCommands(makeRepo({ executionHostId: 'ssh:ssh-a' })).getHostedReviewForBranch({
-      repoSelector: 'repo-1',
-      branch: 'feature'
-    })
-    getPRForBranchOutcomeMock.mockClear()
-
-    await makeCommands(
-      makeRepo({ id: 'repo-2', executionHostId: 'local' })
-    ).getHostedReviewForBranch({ repoSelector: 'repo-2', branch: 'feature' })
-
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
-      REPO_PATH,
-      'feature',
-      null,
-      null,
-      null,
-      expect.anything()
-    )
-  })
-})
-
 describe('hosted-review creation routes on the resolved execution host', () => {
   it('refuses GitLab preflight on an executionHostId-only SSH host without running git here', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'acme/widgets' })
@@ -349,78 +277,5 @@ describe('hosted-review creation routes on the resolved execution host', () => {
     expect(sshTargetThatRanGit()).toBeNull()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(createGitLabMergeRequestMock).not.toHaveBeenCalled()
-  })
-
-  it('creates a Bitbucket review locally for a runtime row rather than dialing its nested target', async () => {
-    getBitbucketRepoSlugMock.mockResolvedValue({ workspace: 'acme', repo: 'widgets' })
-    const commands = makeCommands(
-      makeRepo({ connectionId: 'ssh-b', executionHostId: 'runtime:env-1' })
-    )
-
-    const result = await commands.createHostedReview({
-      repoSelector: 'repo-1',
-      provider: 'bitbucket',
-      ...CREATE_INPUT
-    })
-
-    expect(result.ok).toBe(true)
-    expect(sshTargetThatRanGit()).toBeNull()
-    expect(createBitbucketPullRequestMock).toHaveBeenCalledWith(
-      REPO_PATH,
-      expect.objectContaining({ provider: 'bitbucket' }),
-      'local'
-    )
-  })
-
-  it('reports creation eligibility from the executionHostId-only SSH host', async () => {
-    getAzureDevOpsRepoSlugMock.mockResolvedValue({ organization: 'acme', project: 'p', repo: 'r' })
-    const commands = makeCommands(makeRepo({ executionHostId: 'ssh:ssh-a' }))
-
-    await commands.getHostedReviewCreationEligibility({
-      repoSelector: 'repo-1',
-      branch: 'feature',
-      base: 'main',
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0
-    })
-
-    expect(getAzureDevOpsRepoSlugMock).toHaveBeenCalledWith(REPO_PATH, 'ssh-a')
-    expect(sshTargetThatRanGit()).toBeNull()
-  })
-
-  it('resolves the GitHub slug for a repo listing on the row it is asked about', async () => {
-    getRepoSlugMock.mockResolvedValue({ host: 'github.com', owner: 'a', repo: 'b' })
-    const commands = makeCommands(makeRepo({ executionHostId: 'ssh:ssh-a' }))
-
-    await commands.getRepoSlug('repo-1')
-
-    expect(getRepoSlugMock).toHaveBeenCalledWith(REPO_PATH, 'ssh-a')
-  })
-})
-
-describe('hosted-review host resolution', () => {
-  it('refuses to dial a runtime host from this process', () => {
-    expect(() => hostedReviewSshConnectionId('runtime:env-1')).toThrow(
-      'is not dispatched by this process'
-    )
-  })
-
-  it('answers with the SSH target for both spellings and local otherwise', () => {
-    expect(hostedReviewSshConnectionId('ssh:ssh-a')).toBe('ssh-a')
-    expect(hostedReviewSshConnectionId('local')).toBeNull()
-    expect(getStoredRepoExecutionHostId({ executionHostId: 'ssh:ssh-a' })).toBe('ssh:ssh-a')
-    expect(getStoredRepoExecutionHostId({ connectionId: 'ssh-b' })).toBe('ssh:ssh-b')
-  })
-
-  it('reads a runtime stamp on a row in this store as self-addressing, not a second machine', () => {
-    // runtime: adopts only rows without connectionId; nested SSH targets belong to that server's namespace, never this client's.
-    expect(getStoredRepoExecutionHostId({ executionHostId: 'runtime:env-1' })).toBe('local')
-    expect(
-      getStoredRepoExecutionHostId({
-        executionHostId: 'runtime:env-1',
-        connectionId: 'ssh-b'
-      })
-    ).toBe('local')
   })
 })

@@ -61,6 +61,7 @@ describe('codex-specific resume behavior', () => {
       process.platform
     )
     expect(seeded?.title).toBe('codex seed question')
+    expect(seeded?.titleKind).toBe('fallback')
 
     // Index titles arrive independently of transcript writes.
     await writeFile(
@@ -75,6 +76,7 @@ describe('codex-specific resume behavior', () => {
     )
     expect(stats.reused).toBe(1)
     expect(renamed?.title).toBe('Indexed thread title')
+    expect(renamed?.titleKind).toBe('named')
     expect(renamed).toEqual(
       await parseAgentSessionFile(await candidateFor('codex', path, codexHome), process.platform)
     )

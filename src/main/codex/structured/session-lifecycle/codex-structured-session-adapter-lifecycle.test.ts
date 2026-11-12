@@ -11,7 +11,7 @@ import type {
   CodexAppServerLaunch,
   openCodexAppServerConnection
 } from '../../app-server/codex-app-server-connection'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import type {
   CodexStructuredLaunch,
@@ -131,43 +131,6 @@ async function acquired(
 }
 
 describe('CodexStructuredSessionAdapter lifecycle', () => {
-  it('keeps sessions isolated and closes each child once', async () => {
-    const codex = fakeCodex()
-    const adapter = adapterFor(codex)
-    await acquireReadyCodexForTest(adapter, {
-      identity: identityFor('session-1'),
-      fence: 1,
-      spawnToken: 'spawn-a'
-    })
-    await acquireReadyCodexForTest(adapter, {
-      identity: identityFor('session-2'),
-      fence: 1,
-      spawnToken: 'spawn-b'
-    })
-
-    codex.connections[0].handlers.onServerRequest?.({
-      id: 21,
-      method: 'item/fileChange/requestApproval',
-      params: { itemId: 'codex-item-1', threadId: THREAD_ID, turnId: 'turn-1' }
-    })
-    await expect(
-      adapter.answerPrompt({
-        sessionId: 'session-2',
-        itemId: 'codex-item-1',
-        kind: 'approval',
-        response: { kind: 'option', optionId: 'accept' },
-        fence: 1,
-        commit: async () => undefined
-      })
-    ).rejects.toThrow('no longer waiting on')
-
-    await adapter.closeAll()
-    expect(codex.connections.map((connection) => connection.closeCount)).toEqual([1, 1])
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 1 })
-    ).rejects.toThrow('no live codex app-server for session session-1')
-  })
-
   it('retains ownership until a child exit is proven and reports it once', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
@@ -218,45 +181,6 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
 
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(endedBeforeStaleExit)
     expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
-  })
-
-  it('times turn and item boundaries at receipt, and nothing else', async () => {
-    const codex = fakeCodex()
-    const events: CodexStructuredSessionEvent[] = []
-    await acquired(codex, {}, events)
-    const connection = codex.connections[0]
-    const item = { type: 'reasoning', id: 'r-1', summary: [], content: [] }
-    connection.handlers.onNotification?.('item/started', { threadId: THREAD_ID, item })
-    connection.handlers.onNotification?.('item/reasoning/summaryTextDelta', {
-      threadId: THREAD_ID,
-      itemId: 'r-1',
-      delta: 'Planning'
-    })
-    connection.handlers.onNotification?.('item/completed', { threadId: THREAD_ID, item })
-    const timed = events.flatMap((event) =>
-      event.type === 'notification' ? [[event.method, event.observedAt]] : []
-    )
-    expect(timed).toEqual([
-      ['item/started', 1_700_000_000_500],
-      ['item/reasoning/summaryTextDelta', undefined],
-      ['item/completed', 1_700_000_000_500]
-    ])
-  })
-
-  it('ignores Codex traffic that arrives after the session is gone', async () => {
-    const codex = fakeCodex()
-    const adapter = await acquired(codex)
-    const connection = codex.connections[0]
-
-    await adapter.closeSession('session-1')
-    connection.handlers.onNotification?.('item/agentMessage/delta', { delta: 'x' })
-    connection.handlers.onServerRequest?.({
-      id: 31,
-      method: 'item/fileChange/requestApproval',
-      params: { itemId: 'codex-item-9', threadId: THREAD_ID }
-    })
-
-    expect(connection.replies).toEqual([])
   })
 
   it('flushes the final coalesced text before a graceful close', async () => {

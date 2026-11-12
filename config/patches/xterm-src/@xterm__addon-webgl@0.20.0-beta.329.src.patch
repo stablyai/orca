@@ -1,5 +1,38 @@
+diff --git a/src/CellColorResolver.ts b/src/CellColorResolver.ts
+index 49fdf5b1bb4d6c1f602e36470248a10a690a3479..384f4db6f22d0691f66938d42333d1b0424ee513 100644
+--- a/src/CellColorResolver.ts
++++ b/src/CellColorResolver.ts
+@@ -18,6 +18,15 @@ let $isSelected = false;
+ let $colors: ReadonlyColorSet | undefined;
+ let $variantOffset = 0;
+ 
++function isTranslucentDefaultBackground(bg: number, colors: ReadonlyColorSet): boolean {
++  const mode = bg & Attributes.CM_MASK;
++  if (mode === Attributes.CM_DEFAULT || (colors.background.rgba & 0xFF) === 0xFF) {
++    return false;
++  }
++  const rgb = mode === Attributes.CM_RGB ? bg & Attributes.RGB_MASK : colors.ansi[bg & Attributes.PCOLOR_MASK].rgba >>> 8;
++  return rgb === colors.background.rgba >>> 8;
++}
++
+ export class CellColorResolver {
+   /**
+    * The shared result of the {@link resolve} call. This is only safe to use immediately after as
+@@ -59,6 +68,12 @@ export class CellColorResolver {
+     $colors = this._themeService.colors;
+     $variantOffset = 0;
+ 
++    // Orca: a translucent terminal paints its backdrop once; an explicit background equal to the
++    // default background is that backdrop, not an opaque fill. The buffer keeps the original color.
++    if (!(cell.fg & FgFlags.INVERSE) && this._optionService.rawOptions.allowTransparency && isTranslucentDefaultBackground(cell.bg, $colors)) {
++      this.result.bg &= ~(Attributes.CM_MASK | Attributes.RGB_MASK);
++    }
++
+     const code = cell.getCode();
+     if (code !== NULL_CELL_CODE && cell.extended.underlineStyle === UnderlineStyle.DOTTED) {
+       const lineWidth = Math.max(1, Math.floor(this._optionService.rawOptions.fontSize * this._coreBrowserService.dpr / 15));
 diff --git a/src/GlyphRenderer.ts b/src/GlyphRenderer.ts
-index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf935dd0eca 100644
+index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..21347443255cba3011e534248557239931ab7d47 100644
 --- a/src/GlyphRenderer.ts
 +++ b/src/GlyphRenderer.ts
 @@ -61,6 +61,8 @@ function createFragmentShaderSource(maxFragmentShaderTextureUnits: number): stri
@@ -20,8 +53,56 @@ index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf9
  }`);
  }
  
+@@ -102,6 +104,7 @@ export class GlyphRenderer extends Disposable {
+   private _atlas: ITextureAtlas | undefined;
+   private _lastSeenPageLayoutVersion: number = -1;
+   private _pageOverflowWarned: boolean = false;
++  private _uploadedTextureCount: number = 0;
+   private _activeBuffer: number = 0;
+   private readonly _vertices: IVertices = {
+     count: 0,
+@@ -387,6 +390,15 @@ export class GlyphRenderer extends Disposable {
+         this._bindAtlasPageTexture(gl, this._atlas, i);
+       }
+     }
++    // Merging or evicting pages shrinks the page list, release the textures of pages that no
++    // longer exist as they would otherwise keep their full size in GPU memory until reused.
++    for (let i = pageCount; i < this._uploadedTextureCount; i++) {
++      gl.activeTexture(gl.TEXTURE0 + i);
++      gl.bindTexture(gl.TEXTURE_2D, this._atlasTextures[i].texture);
++      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 0, 0, 255]));
++      this._atlasTextures[i].version = -1;
++    }
++    this._uploadedTextureCount = pageCount;
+ 
+     // Draw the viewport
+     gl.drawElementsInstanced(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_BYTE, 0, bufferLength / Constants.INDICES_PER_CELL);
+diff --git a/src/RectangleRenderer.ts b/src/RectangleRenderer.ts
+index eebfda3b3df9b4c8cefcc6a64692053ed5eaeefa..75e34767bd1e12802b72371fddb5fc9028814e11 100644
+--- a/src/RectangleRenderer.ts
++++ b/src/RectangleRenderer.ts
+@@ -226,7 +226,9 @@ export class RectangleRenderer extends Disposable {
+         inverse = !!(fg & FgFlags.INVERSE);
+         if (bg !== currentBg || (fg !== currentFg && (currentInverse || inverse))) {
+           // A rectangle needs to be drawn if going from non-default to another color
+-          if (currentBg !== 0 || (currentInverse && currentFg !== 0)) {
++          // Orca: style-only bg flags (dim, italic, extended) keep the default color, which the
++          // viewport clear already painted; filling it again ignored a translucent background.
++          if ((currentBg & Attributes.CM_MASK) !== Attributes.CM_DEFAULT || (currentInverse && currentFg !== 0)) {
+             offset = rectangleCount++ * INDICES_PER_RECTANGLE;
+             this._updateRectangle(vertices, offset, currentFg, currentBg, currentStartX, x, y);
+           }
+@@ -237,7 +239,7 @@ export class RectangleRenderer extends Disposable {
+         }
+       }
+       // Finish rectangle if it's still going
+-      if (currentBg !== 0 || (currentInverse && currentFg !== 0)) {
++      if ((currentBg & Attributes.CM_MASK) !== Attributes.CM_DEFAULT || (currentInverse && currentFg !== 0)) {
+         offset = rectangleCount++ * INDICES_PER_RECTANGLE;
+         this._updateRectangle(vertices, offset, currentFg, currentBg, currentStartX, terminal.cols, y);
+       }
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
-index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..b4fcff8c6be49b1868a17bcabfa3bb54689fb8b1 100644
+index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..1fb0b7a971e33e1dbd2dcf9841645ca464617af2 100644
 --- a/src/TextureAtlas.ts
 +++ b/src/TextureAtlas.ts
 @@ -3,6 +3,7 @@
@@ -99,6 +180,15 @@ index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..b4fcff8c6be49b1868a17bcabfa3bb54
    }
  
    private _createNewPage(): AtlasPage {
+@@ -164,7 +172,7 @@ export class TextureAtlas implements ITextureAtlas {
+       // Find the set of the largest 4 images, below the maximum size, with the highest
+       // percentages used
+       const pagesBySize = this._pages.filter(e => {
+-        return e.canvas.width * 2 <= (TextureAtlas.maxTextureSize || Constants.FORCED_MAX_TEXTURE_SIZE);
++        return e.canvas.width * 2 <= Math.min(TextureAtlas.maxTextureSize || Constants.FORCED_MAX_TEXTURE_SIZE, Constants.FORCED_MAX_TEXTURE_SIZE);
+       }).sort((a, b) => {
+         if (b.canvas.width !== a.canvas.width) {
+           return b.canvas.width - a.canvas.width;
 @@ -468,6 +476,36 @@ export class TextureAtlas implements ITextureAtlas {
      return this._config.colors.contrastCache;
    }
@@ -204,15 +294,78 @@ index 2d0f5a3a8ee7fc0765a0179cee0102edb9376e4b..92f1c7241e887cd907d21d91aa26c0de
      this._glyphRenderer.value.render(this._model);
      if (!this._cursorBlinkStateManager.value || this._cursorBlinkStateManager.value.isCursorVisible) {
 diff --git a/src/renderLayer/BaseRenderLayer.ts b/src/renderLayer/BaseRenderLayer.ts
-index 5b11615328957b6f5d41a174284c11e061910d91..1654e5ae39baf65a7243cbe7b1395c28824b269e 100644
+index 5b11615328957b6f5d41a174284c11e061910d91..00f299659106716258ad7b02c2bfdddcc53e91fe 100644
 --- a/src/renderLayer/BaseRenderLayer.ts
 +++ b/src/renderLayer/BaseRenderLayer.ts
-@@ -97,7 +97,7 @@ export abstract class BaseRenderLayer extends Disposable implements IRenderLayer
-     }
+@@ -3,8 +3,6 @@
+  * @license MIT
+  */
  
-     this._charAtlas = acquireTextureAtlas(terminal, this._optionsService.rawOptions, colorSet, this._deviceCellWidth, this._deviceCellHeight, this._deviceCharWidth, this._deviceCharHeight, this._coreBrowserService.dpr, 2048);
--    this._charAtlas.warmUp();
-+    this._charAtlas.warmUp(terminal.element);
+-import { ReadonlyColorSet } from 'browser/Types';
+-import { acquireTextureAtlas } from '../CharAtlasCache';
+ import { IRenderDimensions } from 'browser/renderer/shared/Types';
+ import { ICoreBrowserService, IThemeService } from 'browser/services/Services';
+ import { Disposable, toDisposable } from 'common/Lifecycle';
+@@ -14,7 +12,6 @@ import { Terminal } from '@xterm/xterm';
+ import { IRenderLayer } from './Types';
+ import { throwIfFalsy } from 'browser/renderer/shared/RendererUtils';
+ import { TEXT_BASELINE } from '../Constants';
+-import type { ITextureAtlas } from '../Types';
+ 
+ export abstract class BaseRenderLayer extends Disposable implements IRenderLayer {
+   private _canvas: HTMLCanvasElement;
+@@ -26,8 +23,6 @@ export abstract class BaseRenderLayer extends Disposable implements IRenderLayer
+   private _deviceCharLeft: number = 0;
+   private _deviceCharTop: number = 0;
+ 
+-  protected _charAtlas: ITextureAtlas | undefined;
+-
+   constructor(
+     terminal: Terminal,
+     private _container: HTMLElement,
+@@ -44,8 +39,7 @@ export abstract class BaseRenderLayer extends Disposable implements IRenderLayer
+     this._canvas.style.zIndex = zIndex.toString();
+     this._initCanvas();
+     this._container.appendChild(this._canvas);
+-    this._register(this._themeService.onChangeColors(e => {
+-      this._refreshCharAtlas(terminal, e);
++    this._register(this._themeService.onChangeColors(() => {
+       this.reset(terminal);
+     }));
+     this._register(toDisposable(() => {
+@@ -81,25 +75,10 @@ export abstract class BaseRenderLayer extends Disposable implements IRenderLayer
+     this._initCanvas();
+     this._container.replaceChild(this._canvas, oldCanvas);
+ 
+-    // Regenerate char atlas and force a full redraw
+-    this._refreshCharAtlas(terminal, this._themeService.colors);
++    // Force a full redraw
+     this.handleGridChanged(terminal, 0, terminal.rows - 1);
    }
  
+-  /**
+-   * Refreshes the char atlas, aquiring a new one if necessary.
+-   * @param terminal The terminal.
+-   * @param colorSet The color set to use for the char atlas.
+-   */
+-  private _refreshCharAtlas(terminal: Terminal, colorSet: ReadonlyColorSet): void {
+-    if (this._deviceCharWidth <= 0 && this._deviceCharHeight <= 0) {
+-      return;
+-    }
+-
+-    this._charAtlas = acquireTextureAtlas(terminal, this._optionsService.rawOptions, colorSet, this._deviceCellWidth, this._deviceCellHeight, this._deviceCharWidth, this._deviceCharHeight, this._coreBrowserService.dpr, 2048);
+-    this._charAtlas.warmUp();
+-  }
+-
    public resize(terminal: Terminal, dim: IRenderDimensions): void {
+     this._deviceCellWidth = dim.device.cell.width;
+     this._deviceCellHeight = dim.device.cell.height;
+@@ -116,8 +95,6 @@ export abstract class BaseRenderLayer extends Disposable implements IRenderLayer
+     if (!this._alpha) {
+       this._clearAll();
+     }
+-
+-    this._refreshCharAtlas(terminal, this._themeService.colors);
+   }
+ 
+   public abstract reset(terminal: Terminal): void;

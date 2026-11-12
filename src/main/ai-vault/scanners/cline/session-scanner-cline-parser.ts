@@ -135,7 +135,8 @@ export async function parseClineSessionDocuments(
       fields: ['session_id', 'cwd', 'workspace_root', 'model', 'started_at', 'prompt'],
       create: () => null,
       consume: () => {},
-      signal
+      signal,
+      drain: () => messages?.drain?.() ?? Promise.resolve()
     })
     if (!parsed) {
       return null
@@ -169,7 +170,8 @@ export async function parseClineSessionDocuments(
       fields: ['updated_at'],
       create,
       consume: consumeClineSessionMessage,
-      signal
+      signal,
+      drain: () => messages?.drain?.() ?? Promise.resolve()
     })
     if (parsed) {
       accumulator = parsed.state

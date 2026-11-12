@@ -1,4 +1,4 @@
-import { localAiVaultScanRoots } from '../cached-session-list'
+import { localAiVaultScanRoots } from '../ai-vault-scan-roots'
 import type { SessionSearchHostScope } from '../../ai-vault-search/session-search-service'
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'

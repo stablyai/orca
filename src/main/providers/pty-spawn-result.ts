@@ -1,3 +1,4 @@
+import type { DaemonLaunchNote } from '../daemon/protocol/daemon-launch-note-protocol'
 import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { TerminalLaunchResult } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
@@ -25,6 +26,8 @@ export type PtySpawnResult = TerminalLaunchResult & {
   pid?: number | null
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
   launchAgent?: TuiAgent
+  /** The unretired launch main armed before a restart, returned by daemon reattach. */
+  launchNote?: DaemonLaunchNote | null
   /** Local WSL context: null is native; undefined is unavailable/legacy. */
   wslDistro?: string | null
   /** Daemon reattach ANSI screen restore for xterm. */

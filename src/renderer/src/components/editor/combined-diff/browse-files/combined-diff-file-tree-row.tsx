@@ -1,13 +1,13 @@
 import { createElement, memo } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { STATUS_COLORS } from '@/components/right-sidebar/status-display'
+import { STATUS_COLORS } from '@/lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { cn } from '@/lib/utils'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
-import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
+import { cn } from '@/lib/class-names'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/files/drop/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/files/drop/workspace-file-drag-source'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitFileStatus,

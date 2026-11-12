@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
+import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import { notifyWorktreesChanged } from '../../worktree-remote'
@@ -12,7 +12,13 @@ import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
-import { teardownStops } from '../../../runtime/owned-session-teardown-policy'
+import { teardownStops } from '../../../runtime/workspaces/removal/owned-session-teardown-policy'
+import {
+  gateFolderWorkspaceRemovalOnArchiveHook,
+  removeFolderWorkspaceRunnerFiles
+} from '../../../workspaces/removal/folder-workspace-archive-hook'
+import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 
 export async function removeFolderWorkspace(
   context: WorktreeIpcContext,
@@ -25,6 +31,19 @@ export async function removeFolderWorkspace(
   if (args.worktreeId === getFolderWorkspaceRootId(repo)) {
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
+  // Archive failure must refuse before watcher, PTY or metadata teardown (#19334).
+  const archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
+    repo,
+    worktreeId: args.worktreeId,
+    displayName:
+      (
+        readWorktreeMetaForRepo(store, args.worktreeId, repo) ??
+        store.getWorktreeMeta(args.worktreeId)
+      )?.displayName ?? repo.displayName,
+    runArchive: !args.skipArchive,
+    allowFailure: args.allowFailedArchiveHook === true,
+    runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo)
+  })
   const ownerHost = parseExecutionHostId(removalHostId)
   const gate = await runtime.acquireFileWatcherRemoval(
     repo.path,
@@ -62,8 +81,9 @@ export async function removeFolderWorkspace(
     preservedBranchCleanupByScope.delete(
       preservedBranchCleanupScopeKey({ worktreeId: args.worktreeId, hostId: removalHostId })
     )
+    removeFolderWorkspaceRunnerFiles(repo, args.worktreeId)
     notifyWorktreesChanged(mainWindow, repoId)
-    return {}
+    return archiveHookOverride ? { archiveHookOverride } : {}
   } finally {
     await gate.finish(false)
   }

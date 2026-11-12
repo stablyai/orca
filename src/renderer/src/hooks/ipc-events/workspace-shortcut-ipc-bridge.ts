@@ -1,14 +1,14 @@
-import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/terminal/quick-commands/quick-commands-menu-events'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
-import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
-import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
+import { activateTabNumberShortcut } from '@/lib/keyboard/tab-number-shortcuts'
+import { emitCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { deleteHoveredWorkspaceImmediately } from '@/components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
-import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { deleteActiveWorkspaceFromShortcut } from '@/components/sidebar/workspace-actions/deletion/active-workspace-delete'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
-import { useAppStore } from '../../store'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { useAppStore } from '../../store/index'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
 
@@ -41,7 +41,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         if (isFloatingWorkspacePanelFocused()) {
           return
         }
-        deleteHoveredWorkspaceImmediately(useAppStore.getState())
+        deleteActiveWorkspaceFromShortcut(useAppStore.getState())
       })
     )
   }

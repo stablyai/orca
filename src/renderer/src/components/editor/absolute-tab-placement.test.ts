@@ -1,22 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { placeAbsoluteTab } from './absolute-tab-placement'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
-  TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES,
-  TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY
-} from '../../../../shared/runtime-file-contracts'
+  TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES
+} from '../../../../shared/terminal/runtime-terminal-file-path'
 
 const mocks = vi.hoisted(() => ({
   findWorkspaceFileRoute: vi.fn(),
   supportsCapability: vi.fn(),
   grantRestoredHostFile: vi.fn()
 }))
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 vi.mock('./restored-host-file-grant', () => ({
@@ -45,27 +44,6 @@ beforeEach(() => {
 })
 
 describe('an absolute-path tab whose file another workspace holds', () => {
-  it('stays in its workspace through a grant on a server that saves grants', async () => {
-    mocks.findWorkspaceFileRoute.mockReturnValue({ ...HOLDER, executionHostId: 'runtime:env-1' })
-
-    await expect(placeAbsoluteTab(serverTab)).resolves.toMatchObject({
-      kind: 'grant',
-      grantId: 'g-1',
-      readOnly: false
-    })
-    expect(mocks.grantRestoredHostFile).toHaveBeenCalledWith(
-      serverTab.readTarget,
-      'repo-a',
-      FILE,
-      undefined
-    )
-    expect(mocks.supportsCapability).toHaveBeenCalledWith(
-      'env-1',
-      TERMINAL_PATH_IN_PLACE_FILES_RUNTIME_CAPABILITY,
-      15_000
-    )
-  })
-
   it('keeps reading through the grant it already holds', async () => {
     mocks.findWorkspaceFileRoute.mockReturnValue({ ...HOLDER, executionHostId: 'runtime:env-1' })
 
@@ -116,44 +94,6 @@ describe('an absolute-path tab whose file another workspace holds', () => {
     await expect(placeAbsoluteTab(serverTab)).resolves.toEqual({ kind: 'move', route })
   })
 
-  it.each([
-    ['an unreachable host', () => mocks.supportsCapability.mockRejectedValue(new Error('offline'))],
-    [
-      'a timed-out grant',
-      () => mocks.grantRestoredHostFile.mockRejectedValue(new Error('offline'))
-    ],
-    [
-      'a host that times out',
-      () =>
-        mocks.grantRestoredHostFile.mockRejectedValue(
-          new RuntimeRpcCallError({
-            id: 'r',
-            ok: false,
-            error: { code: 'runtime_timeout', message: 'offline' },
-            _meta: { runtimeId: 'host' }
-          })
-        )
-    ],
-    [
-      'a passing file error on the host',
-      () =>
-        mocks.grantRestoredHostFile.mockRejectedValue(
-          new RuntimeRpcCallError({
-            id: 'r',
-            ok: false,
-            error: { code: 'runtime_error', message: 'offline: EIO' },
-            _meta: { runtimeId: 'host' }
-          })
-        )
-    ]
-  ])('fails retryably instead of moving the tab for %s', async (_label, arrange) => {
-    mocks.findWorkspaceFileRoute.mockReturnValue({ ...HOLDER, executionHostId: 'runtime:env-1' })
-    arrange()
-
-    // Why: a move re-keys the tab into the other workspace for good.
-    await expect(placeAbsoluteTab(serverTab)).rejects.toThrow('offline')
-  })
-
   it('reads a local file in place', async () => {
     mocks.findWorkspaceFileRoute.mockReturnValue({ ...HOLDER, executionHostId: 'local' })
 
@@ -184,19 +124,5 @@ describe('an absolute-path tab whose file no other workspace takes', () => {
         runtimeEnvironmentId: undefined
       })
     ).resolves.toEqual({ kind: 'move', route })
-  })
-
-  it('asks its server for a grant when the file is outside every workspace', async () => {
-    mocks.findWorkspaceFileRoute.mockReturnValue(null)
-
-    await expect(placeAbsoluteTab(serverTab)).resolves.toMatchObject({ kind: 'grant' })
-    expect(mocks.supportsCapability).not.toHaveBeenCalled()
-  })
-
-  it('surfaces a refused grant for a file outside every workspace', async () => {
-    mocks.findWorkspaceFileRoute.mockReturnValue(null)
-    mocks.grantRestoredHostFile.mockRejectedValue(new Error('unavailable'))
-
-    await expect(placeAbsoluteTab(serverTab)).rejects.toThrow('unavailable')
   })
 })

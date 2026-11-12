@@ -5,7 +5,7 @@
 // Older rewind replaces unknown turn/tool/resolution states with placeholders and blocks with raw-JSON text, retaining unknown bodies.
 // History pages lack row v: extensions must also remain safe for older clients.
 
-import { z } from 'zod'
+import * as z from 'zod'
 import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
@@ -16,6 +16,7 @@ import type {
   AgentJournalResolution,
   AgentJournalRenderItem
 } from './agent-session-journal-types'
+import { AGENT_JOURNAL_PROMPT_INTENTS } from './agent-session-journal-types'
 
 const BoundedPayload = z.object({
   head: z.string(),
@@ -116,7 +117,9 @@ const Block = openDiscriminatedUnion(
 const PromptOption = z.object({
   id: z.string(),
   label: z.string(),
-  description: z.string().optional()
+  description: z.string().optional(),
+  preview: z.string().optional(),
+  intent: z.enum(AGENT_JOURNAL_PROMPT_INTENTS).optional()
 })
 
 const FreeTextInput = z.object({
@@ -234,6 +237,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     blockedPath: z.string().optional(),
     matchedAskRule: ApprovalMatchedAskRule.optional(),
     subject: ApprovalSubject.optional(),
+    personOnly: z.literal(true).optional(),
     detail: z.string().nullable(),
     options: z.array(PromptOption),
     resolution: Resolution
@@ -263,7 +267,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     providerFrame: ProviderFrame.optional(),
     threadGoal: AgentJournalThreadGoalStateSchema.optional(),
     failure: AgentSessionFailureFactSchema.optional(),
-    orcaStop: z.object({ cause: z.string().min(1) }).optional()
+    orcaStop: z.object({ cause: z.string().min(1) }).optional(),
+    forkedFrom: z.object({ sessionId: z.string().min(1) }).optional()
   }),
   z.object({
     kind: z.literal('turn'),

@@ -1,16 +1,15 @@
 import type { Duplex } from 'node:stream'
-import type { BrowserNetworkExecutionRouteResolver } from '../../network/execution-routes/browser-network-execution-route'
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkExecutionRouteResolver } from '../../network/execution-routes/browser-network-execution-route-contract'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { SshTargetSummary } from '../../../../shared/ssh-types'
 import { openExecutionRouteSocketAsDuplex } from '../../network/tunnels/execution-route-socket-duplex'
 import { RemoteBrowserSocksServer } from '../../network/tunnels/remote-browser-socks-server'
 
+/** Any registered target may carry a route, including the runtime-owned ones recipes connect. */
 export function requireLocalSshBrowserRouteTarget(
-  targets: readonly Pick<SshTargetSummary, 'id' | 'generation'>[] | undefined,
-  targetId: string,
+  target: Pick<SshTargetSummary, 'generation'> | undefined,
   expectedGeneration?: unknown
 ): void {
-  const target = targets?.find((entry) => entry.id === targetId)
   if (!target) {
     throw new Error('browser_local_route_target_invalid')
   }
@@ -166,7 +165,7 @@ const routesByTargetId = new Map<string, LocalSshBrowserRoute>()
 async function defaultDependencies(): Promise<LocalSshBrowserRouteDependencies> {
   const [{ resolveBrowserNetworkExecutionRoute }, authority] = await Promise.all([
     import('../../network/execution-routes/browser-network-execution-route-dispatch'),
-    import('../../../ssh/ssh-provider-authority')
+    import('../../../ssh/connection/authority/ssh-provider-authority')
   ])
   return {
     resolveExecutionRoute: resolveBrowserNetworkExecutionRoute,

@@ -1,11 +1,12 @@
 import type { JSX } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function BrowserSignupStoryboard(): JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex animate-[browserViewIn_360ms_cubic-bezier(.2,.8,.2,1)_both] flex-col gap-3">
       <div className="text-[15px] font-bold leading-tight">
-        {translate(
+        {t(
           'auto.components.feature.wall.BrowserAnimatedVisual.46df009982',
           'Start your free trial'
         )}

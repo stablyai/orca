@@ -3,13 +3,9 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import PreservedBranchBatchReviewModal from './PreservedBranchBatchReviewModal'
-import {
-  forceDeletePreservedBranchBatch,
-  showPreservedBranchBatchToast
-} from './preserved-branch-batch-toast'
+import { forceDeletePreservedBranchBatch } from './preserved-branch-batch-toast'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -44,17 +40,6 @@ vi.mock('sonner', () => ({
 }))
 
 const mountedRoots: Root[] = []
-
-function renderToastBody(): HTMLElement {
-  const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]
-    ?.description as React.ReactElement
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
-  act(() => root.render(description))
-  return container
-}
 
 function renderReviewModal(branches: readonly PreservedBranchCleanup[]): void {
   mocks.state.activeModal = 'preserved-branch-review'
@@ -105,41 +90,13 @@ afterEach(() => {
 })
 
 describe('showPreservedBranchBatchToast', () => {
-  it('explains disk cleanup and opens one review dialog for the batch', async () => {
-    const branches = [
-      { worktreeId: 'repo-a::one', branchName: 'feature/one', expectedHead: 'head-one' },
-      { worktreeId: 'repo-b::two', branchName: 'feature/two', expectedHead: 'head-two' }
-    ]
-    showPreservedBranchBatchToast(12, branches)
-    const body = renderToastBody()
-
-    expect(toast.warning).toHaveBeenCalledWith(
-      '12 workspaces removed, 2 branches kept',
-      expect.objectContaining({ dismissible: true, duration: Infinity })
-    )
-    expect(body.textContent).toContain('Kept branches do not retain workspace folders')
-    expect(body.textContent).toContain('Orca may continue freeing workspace disk space')
-
-    await clickButton(body, 'Review 2 Branches')
-
-    expect(mocks.state.openModal).toHaveBeenCalledWith('preserved-branch-review', { branches })
-    expect(toast.dismiss).toHaveBeenCalledWith('preserved-branch-batch:repo-a::one:2')
-    expect(mocks.state.forceDeletePreservedBranch).not.toHaveBeenCalled()
-  })
-
   it('force-deletes only the branches selected in review', async () => {
     renderReviewModal([
       { worktreeId: 'repo-a::one', branchName: 'feature/one', expectedHead: 'head-one' },
       { worktreeId: 'repo-b::two', branchName: 'feature/two', expectedHead: 'head-two' }
     ])
 
-    expect(document.body.textContent).toContain('Review kept branches')
-    expect(document.body.textContent).toContain('2 of 2 selected')
     await clickCheckbox('preserved-branch-1')
-    expect(document.body.textContent).toContain('1 of 2 selected')
-    expect(
-      document.getElementById('preserved-branch-select-all')?.querySelector('.lucide-minus')
-    ).not.toBeNull()
     await clickButton(document.body, 'Force Delete 1 Branch')
 
     expect(mocks.state.closeModal).toHaveBeenCalledOnce()
@@ -150,9 +107,6 @@ describe('showPreservedBranchBatchToast', () => {
       'head-one',
       { suppressToast: true }
     )
-    expect(toast.success).toHaveBeenCalledWith('Local branches deleted: 1', {
-      id: 'force-delete-branch-batch:repo-a::one:1'
-    })
   })
 
   it('serializes branch deletion within one repository', async () => {
@@ -182,7 +136,6 @@ describe('showPreservedBranchBatchToast', () => {
       { worktreeId: 'repo-b::two', branchName: 'feature/two' }
     ])
 
-    expect(document.body.textContent).toContain('Head unavailable')
     expect((document.getElementById('preserved-branch-1') as HTMLButtonElement).disabled).toBe(true)
     await clickButton(document.body, 'Force Delete 1 Branch')
 

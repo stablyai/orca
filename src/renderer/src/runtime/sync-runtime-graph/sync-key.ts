@@ -1,5 +1,4 @@
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import type { AppState } from '@/store/types'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import {
   EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
   EMPTY_AGENT_STATUS_BY_PANE_KEY,
@@ -17,8 +16,9 @@ import {
   getBrowserTabsByWorktree
 } from './sync-projections'
 import { resolveMobileTerminalTheme } from './mobile-terminal-theme'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSyncKey } from './types'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 function getTerminalThemeSystemPrefersDark(
   state: Pick<AppState, 'settings'>,

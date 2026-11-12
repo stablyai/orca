@@ -2,7 +2,7 @@ import type {
   AgentLaunchIntent,
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
-import { workspaceKindForLaunchTarget } from '../../shared/workspace-launch-kind'
+import { workspaceKindForLaunchTarget } from '../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   decideAgentLaunchMode,
   readAgentLaunchModeSettings,

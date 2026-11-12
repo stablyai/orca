@@ -1,0 +1,374 @@
+import { ArrowUpCircle, RefreshCw, RotateCcw, ServerOff, Trash2, Wrench } from 'lucide-react'
+import type { OrcadManagedRuntimeStatus } from '../../../../../../shared/orcad-managed-runtime'
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { LoadingSpinner } from '../../../LoadingSpinner'
+import { Button } from '../../../ui/button'
+import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'
+import {
+  forceUpdateMessage,
+  managedServerOutcomeLabel,
+  migrationPhaseLabel,
+  recoveryLabel,
+  terminalCensusLabel
+} from './managed-server-copy'
+import type { ManagedServerLifecycle } from './use-managed-server-lifecycle'
+
+// Unloaded status means unknown; only loaded evidence can claim Not running.
+export function managedServerVersionLabel(
+  status: OrcadManagedRuntimeStatus | null,
+  statusError: string | null,
+  t: Translate = translate
+): string {
+  if (status) {
+    return (
+      status.activeAppVersion ??
+      status.activeVersion ??
+      t('auto.components.settings.managedServers.row.notRunning', 'Not running')
+    )
+  }
+  return statusError
+    ? t('auto.components.settings.managedServers.row.statusUnknown', 'Status unknown')
+    : t('auto.components.settings.managedServers.row.checking', 'Checking…')
+}
+
+export function getManagedServerSummary(
+  lifecycle: ManagedServerLifecycle,
+  t: Translate = translate
+): string | null {
+  const { status, recovery } = lifecycle
+  if (recovery) {
+    return recoveryLabel(recovery, t)
+  }
+  if (status?.migration) {
+    return t('auto.components.settings.managedServers.row.migration', 'Migration: {{phase}}', {
+      phase: migrationPhaseLabel(status.migration.phase, t)
+    })
+  }
+  if (status?.deferredUpdate) {
+    return t(
+      'auto.components.settings.managedServers.row.deferredVersion',
+      'Update to {{version}} deferred.',
+      { version: status.deferredUpdate.candidateVersion }
+    )
+  }
+  return null
+}
+
+export function ManagedServerDetailLines({
+  lifecycle
+}: {
+  lifecycle: ManagedServerLifecycle
+}): React.JSX.Element {
+  const t = useTranslate()
+  const { status, statusError, recovery } = lifecycle
+  return (
+    <div className="space-y-0.5 text-xs text-muted-foreground">
+      <p>
+        {t(
+          'auto.components.settings.managedServers.row.orcaVersion',
+          'Orca on this host: {{version}}',
+          {
+            version: managedServerVersionLabel(status, statusError, t)
+          }
+        )}
+      </p>
+      {statusError ? <p className="text-destructive">{statusError}</p> : null}
+      {status ? (
+        <>
+          <p>{terminalCensusLabel(status.terminals, t)}</p>
+          {recovery ? <p>{recoveryLabel(recovery, t)}</p> : null}
+          {status.migration ? (
+            <p>
+              {t('auto.components.settings.managedServers.row.migration', 'Migration: {{phase}}', {
+                phase: migrationPhaseLabel(status.migration.phase, t)
+              })}
+            </p>
+          ) : null}
+          {status.deferredUpdate ? (
+            <p>
+              {t(
+                'auto.components.settings.managedServers.row.deferredVersion',
+                'Update to {{version}} deferred.',
+                { version: status.deferredUpdate.candidateVersion }
+              )}{' '}
+              {managedServerOutcomeLabel(status.deferredUpdate, t)}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+// Why not during a migration: an update restarting the server would race its cutover.
+function managedServerUpdateOffered(lifecycle: ManagedServerLifecycle): boolean {
+  return (
+    lifecycle.recovery === null &&
+    !lifecycle.status?.migration &&
+    Boolean(lifecycle.status?.availableUpdate) &&
+    lifecycle.confirmingForceUpdate === null
+  )
+}
+
+export function managedServerHasPrimaryAction(lifecycle: ManagedServerLifecycle): boolean {
+  const { recovery } = lifecycle
+  return (
+    (recovery !== null &&
+      (recovery.operation === 'decommission' || !lifecycle.confirmingRestore)) ||
+    managedServerUpdateOffered(lifecycle)
+  )
+}
+
+/** Recovery takes the row's primary slot; Cancel stop wins while a stop is half done. */
+export function ManagedServerPrimaryAction({
+  lifecycle
+}: {
+  lifecycle: ManagedServerLifecycle
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const { recovery, busy, run } = lifecycle
+  if (!recovery && managedServerUpdateOffered(lifecycle)) {
+    return (
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        disabled={busy !== null}
+        onClick={() => void run('update')}
+      >
+        {busy === 'update' || busy === 'forceUpdate' ? <LoadingSpinner className="size-3" /> : null}
+        {t('auto.components.settings.managedServers.row.update', 'Update')}
+      </Button>
+    )
+  }
+  if (!recovery || !managedServerHasPrimaryAction(lifecycle)) {
+    return null
+  }
+  const cancelStop = recovery.operation === 'decommission'
+  return (
+    <Button
+      type="button"
+      size="xs"
+      variant="outline"
+      disabled={busy !== null}
+      onClick={() => void run(cancelStop ? 'cancelStop' : 'recover')}
+    >
+      {busy === 'recover' || busy === 'cancelStop' ? <LoadingSpinner className="size-3" /> : null}
+      {cancelStop
+        ? t('auto.components.settings.managedServers.row.cancelStop', 'Cancel stop')
+        : t('auto.components.settings.managedServers.row.recover', 'Recover')}
+    </Button>
+  )
+}
+
+function ConfirmStrip({
+  message,
+  confirmLabel,
+  keepLabel,
+  disabled,
+  tone = 'destructive',
+  onConfirm,
+  onKeep
+}: {
+  message: string | null
+  confirmLabel: string
+  keepLabel: string
+  disabled: boolean
+  tone?: 'destructive' | 'default'
+  onConfirm: () => void
+  onKeep: () => void
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+      {message ? <p className="min-w-0 flex-1 text-xs text-muted-foreground">{message}</p> : null}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <Button type="button" size="xs" variant="ghost" onClick={onKeep}>
+          {keepLabel}
+        </Button>
+        <Button type="button" size="xs" variant={tone} disabled={disabled} onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Forget unlinks without contacting the host, so it is offered only when the host can't be asked:
+ * it failed to answer, or it now runs a different server that refuses this computer's pairing.
+ */
+export function managedServerForgettable(
+  lifecycle: Pick<ManagedServerLifecycle, 'statusError'>,
+  serverReplaced: boolean
+): boolean {
+  return lifecycle.statusError !== null || serverReplaced
+}
+
+export function managedServerHasConfirmation(
+  lifecycle: ManagedServerLifecycle,
+  forgettable: boolean
+): boolean {
+  return (
+    lifecycle.confirmingForceUpdate !== null ||
+    lifecycle.confirmingStop ||
+    (forgettable && lifecycle.confirmingForget) ||
+    (lifecycle.recovery !== null && lifecycle.confirmingRestore)
+  )
+}
+
+export function ManagedServerConfirmations({
+  lifecycle,
+  forgettable
+}: {
+  lifecycle: ManagedServerLifecycle
+  forgettable: boolean
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const { recovery, busy, run } = lifecycle
+  const disabled = busy !== null
+  const forceUpdate = lifecycle.confirmingForceUpdate
+  if (forceUpdate) {
+    return (
+      <ConfirmStrip
+        message={forceUpdateMessage(t)}
+        confirmLabel={t(
+          'auto.components.settings.managedServers.row.updateAnyway',
+          'Update anyway'
+        )}
+        keepLabel={t('auto.components.settings.managedServers.row.notNow', 'Not now')}
+        disabled={disabled}
+        tone="default"
+        onConfirm={() => void run('forceUpdate')}
+        onKeep={() => lifecycle.setConfirmingForceUpdate(null)}
+      />
+    )
+  }
+  if (lifecycle.confirmingStop) {
+    return (
+      <ConfirmStrip
+        message={t(
+          'auto.components.settings.managedServers.row.stopOrcaDescription',
+          'Stops Orca on the SSH host and removes it from this list.'
+        )}
+        confirmLabel={t(
+          'auto.components.settings.managedServers.row.confirmStop',
+          'Stop and remove server'
+        )}
+        keepLabel={t('auto.components.settings.managedServers.row.keep', 'Keep running')}
+        disabled={disabled}
+        onConfirm={() => {
+          lifecycle.setConfirmingStop(false)
+          void run('stop')
+        }}
+        onKeep={() => lifecycle.setConfirmingStop(false)}
+      />
+    )
+  }
+  // A host that answers with its paired server is stopped, not forgotten.
+  if (forgettable && lifecycle.confirmingForget) {
+    return (
+      <ConfirmStrip
+        message={t(
+          'auto.components.settings.managedServers.row.forgetDescription',
+          'Unlinks this server here without contacting its host. If the host comes back, the server may still be running there.'
+        )}
+        confirmLabel={t(
+          'auto.components.settings.managedServers.row.confirmForget',
+          'Forget on this desktop'
+        )}
+        keepLabel={t('auto.components.settings.managedServers.row.keepLinked', 'Keep linked')}
+        disabled={disabled}
+        onConfirm={() => {
+          lifecycle.setConfirmingForget(false)
+          void run('forget')
+        }}
+        onKeep={() => lifecycle.setConfirmingForget(false)}
+      />
+    )
+  }
+  if (recovery && lifecycle.confirmingRestore) {
+    return (
+      <ConfirmStrip
+        message={recoveryLabel(recovery, t)}
+        confirmLabel={t(
+          'auto.components.settings.managedServers.row.confirmRestore',
+          'Restore snapshot and restart'
+        )}
+        keepLabel={t('auto.components.settings.managedServers.row.keepState', 'Keep state')}
+        disabled={disabled}
+        onConfirm={() => {
+          lifecycle.setConfirmingRestore(false)
+          void run('restoreSnapshot')
+        }}
+        onKeep={() => lifecycle.setConfirmingRestore(false)}
+      />
+    )
+  }
+  return null
+}
+
+export function ManagedServerMenuItems({
+  lifecycle,
+  forgettable
+}: {
+  lifecycle: ManagedServerLifecycle
+  forgettable: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  const { status, recovery, busy, run } = lifecycle
+  const disabled = busy !== null
+  return (
+    <>
+      <DropdownMenuItem disabled={disabled} onSelect={() => void lifecycle.loadStatus()}>
+        <RefreshCw />
+        {t('auto.components.settings.managedServers.row.refresh', 'Refresh status')}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={disabled} onSelect={() => void run('update')}>
+        <ArrowUpCircle />
+        {t(
+          'auto.components.settings.managedServers.row.updateOrcaOnHost',
+          'Update Orca on this host'
+        )}
+      </DropdownMenuItem>
+      {status?.rollbackAvailable ? (
+        <DropdownMenuItem disabled={disabled} onSelect={() => void run('rollback')}>
+          <RotateCcw />
+          {t('auto.components.settings.managedServers.row.rollback', 'Roll back')}
+        </DropdownMenuItem>
+      ) : null}
+      {/* Cancel stop owns the primary slot during decommission; keep Recover in the menu. */}
+      {recovery?.operation === 'decommission' ? (
+        <DropdownMenuItem disabled={disabled} onSelect={() => void run('recover')}>
+          <Wrench />
+          {t('auto.components.settings.managedServers.row.recover', 'Recover')}
+        </DropdownMenuItem>
+      ) : null}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        variant="destructive"
+        disabled={disabled}
+        onSelect={() => {
+          lifecycle.setConfirmingForget(false)
+          lifecycle.setConfirmingStop(true)
+        }}
+      >
+        <ServerOff />
+        {t('auto.components.settings.managedServers.row.stop', 'Stop…')}
+      </DropdownMenuItem>
+      {forgettable ? (
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={disabled}
+          onSelect={() => {
+            lifecycle.setConfirmingStop(false)
+            lifecycle.setConfirmingForget(true)
+          }}
+        >
+          <Trash2 />
+          {t('auto.components.settings.managedServers.row.forget', 'Forget…')}
+        </DropdownMenuItem>
+      ) : null}
+    </>
+  )
+}

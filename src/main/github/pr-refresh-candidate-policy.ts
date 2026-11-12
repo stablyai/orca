@@ -1,3 +1,4 @@
+import { shouldAcceptMergedFallbackPR } from '../../shared/github/pr-branch-fallback-rule'
 import { reviewRefreshIntervalMs } from '../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
@@ -7,6 +8,8 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import type { GitHubPRBranchLookupOptions } from './client'
+import { PR_CHECK_PAGE_LIMIT } from './client/check/pr-check-rollup'
+import { parsePRKey } from './pr-watch/pr-watch-types'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
 export const POST_PUSH_DELAY_MS = 2_500
@@ -16,18 +19,10 @@ type PRBranchLookupCandidate = Pick<
   'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'currentHeadOid'
 >
 
-function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
-  return (
-    candidate.linkedPRNumber == null &&
-    candidate.fallbackPRNumber != null &&
-    candidate.fallbackPRSource != null
-  )
-}
-
 export function hostedReviewOptionArgs(
   candidate: PRBranchLookupCandidate,
   reason: GitHubPRRefreshReason = 'visible',
-  requestOptions: { userRefresh?: boolean } = {}
+  requestOptions: { userRefresh?: boolean; watchPRKey?: string } = {}
 ): [] | [GitHubPRBranchLookupOptions] {
   const options: GitHubPRBranchLookupOptions =
     requestOptions.userRefresh === true ? { userRefresh: true } : {}
@@ -39,6 +34,19 @@ export function hostedReviewOptionArgs(
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
+  }
+  if (reason === 'watch') {
+    options.includeDerivedData = false
+    options.checkPageLimit = PR_CHECK_PAGE_LIMIT
+    // A watch knows its PR's repository; probing another remote by number could read another PR.
+    const pr = requestOptions.watchPRKey ? parsePRKey(requestOptions.watchPRKey) : null
+    if (pr) {
+      options.exactRepository = {
+        owner: pr.owner,
+        repo: pr.repo,
+        ...(pr.host === 'github.com' ? {} : { host: pr.host })
+      }
+    }
   }
   if (typeof candidate.currentHeadOid === 'string' && candidate.currentHeadOid.trim().length > 0) {
     options.currentHeadOid = candidate.currentHeadOid.trim()
@@ -93,7 +101,7 @@ export function isBackground(reason: GitHubPRRefreshReason): boolean {
 }
 
 export function isBudgetedBackground(reason: GitHubPRRefreshReason): boolean {
-  return reason === 'visible' || reason === 'swr'
+  return reason === 'visible' || reason === 'swr' || reason === 'watch'
 }
 
 export function shouldBroadcastQueued(reason: GitHubPRRefreshReason, dueAt: number): boolean {

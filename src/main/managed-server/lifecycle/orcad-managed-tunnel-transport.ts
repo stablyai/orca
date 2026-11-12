@@ -1,6 +1,6 @@
 // Fall back to the exec bridge when sshd refuses forwarding or standalone forward login fails.
 import { OrcadStdioBridgePortForwardProvider } from './orcad-stdio-bridge-provider'
-import { rememberOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
+import { rememberOrcadTunnelTransport } from './orcad-tunnel-transport-memo'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type {
   PortForwardStartOptions,
@@ -12,21 +12,24 @@ import {
   probeTcpForwarding,
   type ForwardChannelVerdict,
   type TcpForwardingVerdict
-} from '../../ssh/ssh-tcp-forwarding-probe'
+} from '../../ssh/port-forwarding/ssh-tcp-forwarding-probe'
 import { Ssh2PortForwardProvider } from '../../ssh/port-forwarding/ssh2-port-forward-provider'
 import {
   SystemSshPortForwardProvider,
   systemSshForwardBuildArgsOptions
 } from '../../ssh/port-forwarding/system-ssh-port-forward-provider'
-import { buildSystemSshPortForwardArgs } from '../../ssh/system-transport/system-ssh-forward-process'
-import { reserveLocalForwardPort } from '../../ssh/system-transport/system-ssh-forward-port-reservation'
-import { cancelMuxedLocalForward } from '../../ssh/system-transport/system-ssh-muxed-forward-cancel'
+import { buildSystemSshPortForwardArgs } from '../../ssh/system-transport/forwarding/system-ssh-forward-process'
+import { reserveLocalForwardPort } from '../../ssh/system-transport/forwarding/system-ssh-forward-port-reservation'
+import { cancelMuxedLocalForward } from '../../ssh/system-transport/forwarding/system-ssh-muxed-forward-cancel'
 
 type OrcadManagedTunnelTransportDependencies = {
   forwards: SshPortForwardProvider[]
   stdio: SshPortForwardProvider
   probe: (conn: SshConnection, port: number) => Promise<TcpForwardingVerdict>
-  checkForward: (forward: StartedPortForward) => Promise<ForwardChannelVerdict>
+  checkForward: (
+    forward: StartedPortForward,
+    options: { signal: AbortSignal }
+  ) => Promise<ForwardChannelVerdict>
   /** Release stale forwards left by earlier clients before binding the persisted port. */
   reserveLocalPort: (conn: SshConnection, options: PortForwardStartOptions) => Promise<unknown>
 }
@@ -81,6 +84,8 @@ export class OrcadManagedTunnelTransportProvider implements SshPortForwardProvid
   ): Promise<StartedPortForward | { failure: string }> {
     // Capture exits before manager ownership; abandoned forwards must not close replacement bridges.
     const exits: string[] = []
+    // A forward that exits can never listen; stop waiting on its login.
+    const exited = new AbortController()
     let abandoned = false
     let started: StartedPortForward
     try {
@@ -91,6 +96,7 @@ export class OrcadManagedTunnelTransportProvider implements SshPortForwardProvid
             return
           }
           exits.push(reason.kind === 'unexpected-exit' ? (reason.detail ?? 'exited') : 'closed')
+          exited.abort()
           options.onUnexpectedClose?.(entry, reason)
         }
       })
@@ -99,7 +105,7 @@ export class OrcadManagedTunnelTransportProvider implements SshPortForwardProvid
       return { failure: error instanceof Error ? error.message : String(error) }
     }
     // System SSH listens locally before requesting a host channel; listener readiness proves no route.
-    const verdict = await this.dependencies.checkForward(started)
+    const verdict = await this.dependencies.checkForward(started, { signal: exited.signal })
     // Prefer ssh's exit reason over a generic listener failure before handing off a dead forward.
     const failure =
       verdict === 'refused'

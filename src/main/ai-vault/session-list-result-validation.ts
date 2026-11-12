@@ -55,6 +55,7 @@ const aiVaultSessionSchema = z.object({
   agent: z.string().min(1),
   sessionId: z.string(),
   title: z.string(),
+  titleKind: z.enum(['named', 'fallback']).optional().catch(undefined),
   cwd: z.string().nullable(),
   // Malformed aliases must not discard the entire session.
   cwdAliases: z

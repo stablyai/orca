@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetStaleDocumentVisibilityForTesting } from '../../terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '../../terminal-pane/viewport/visibility/stale-document-visibility'
 import { WINDOW_STREAM_PARK_DELAY_MS } from '@/hooks/use-window-stream-visibility'
 import { useRemoteBrowserStreamActivation } from './use-remote-browser-stream-activation'
 

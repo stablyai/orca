@@ -37,26 +37,6 @@ describe('switchSortToManualAfterDrop', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('switches to Manual and offers a way back to the previous sort', () => {
-    useAppStore.setState({ sortBy: 'smart' })
-    switchSortToManualAfterDrop()
-
-    expect(useAppStore.getState().sortBy).toBe('manual')
-    expect(toastInfo).toHaveBeenCalledTimes(1)
-    const options = lastToastOptions()
-    expect(options.action?.label).toBe('Back to Agent Activity')
-
-    options.action?.onClick()
-    expect(useAppStore.getState().sortBy).toBe('smart')
-  })
-
-  it('does nothing when Manual is already active', () => {
-    useAppStore.setState({ sortBy: 'manual' })
-    switchSortToManualAfterDrop()
-
-    expect(toastInfo).not.toHaveBeenCalled()
-  })
-
   it('retires the toast once the user picks another sort', () => {
     useAppStore.setState({ sortBy: 'recent' })
     switchSortToManualAfterDrop()

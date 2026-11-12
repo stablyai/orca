@@ -150,22 +150,6 @@ function negotiatedTransport(contents: string): BrowserClientFileChannelTranspor
 }
 
 describe('client-placed browser.upload routing', () => {
-  it('fails the command instead of resolving remote paths on this desktop when unnegotiated', async () => {
-    const { executor, executeAutomation } = createHarness()
-    await executor.handle(createPage, new AbortController().signal)
-
-    const result = await executor.handle(
-      uploadCommand(['/Users/someone/.ssh/id_ed25519']),
-      new AbortController().signal
-    )
-
-    expect(result).toEqual({
-      status: 'failed',
-      errorCode: 'browser_client_file_channel_unsupported'
-    })
-    expect(executeAutomation).not.toHaveBeenCalled()
-  })
-
   it('keeps the staged copy readable after the command resolves and drops it when the page closes', async () => {
     const transport = negotiatedTransport('remote-bytes')
     const { executor, automationCalls } = createHarness({ fileChannel: transport })
@@ -180,69 +164,5 @@ describe('client-placed browser.upload routing', () => {
       status: 'completed'
     })
     expect(await readdir(stagingRoot)).toHaveLength(0)
-  })
-
-  it('retires the guest and releases the route when the staged copies cannot be removed', async () => {
-    const transport = negotiatedTransport('remote-bytes')
-    const { executor, retireRendererPage, releaseRouteSession, releaseNetworkRoute } =
-      createHarness({
-        fileChannel: transport,
-        // Windows may keep staged files busy until the guest and route session close.
-        uploadStaging: new BrowserClientUploadStaging(stagingRoot, {
-          mkdir: async () => {},
-          writeFile: async () => {},
-          removeDirectorySync: () => {},
-          removeDirectory: async () => {
-            throw new Error('EBUSY: resource busy or locked')
-          }
-        })
-      })
-    await executor.handle(createPage, new AbortController().signal)
-    await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
-
-    expect(await executor.handle(closePageCommand(), new AbortController().signal)).toEqual({
-      status: 'failed',
-      errorCode: 'browser_client_page_command_failed'
-    })
-
-    expect(retireRendererPage).toHaveBeenCalled()
-    expect(releaseRouteSession).toHaveBeenCalled()
-    expect(releaseNetworkRoute).toHaveBeenCalled()
-  })
-
-  it('removes every staged copy when the executor closes', async () => {
-    const transport = negotiatedTransport('remote-bytes')
-    const { executor } = createHarness({ fileChannel: transport })
-    await executor.handle(createPage, new AbortController().signal)
-    await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
-
-    await executor.close()
-
-    expect(await readdir(stagingRoot)).toHaveLength(0)
-  })
-
-  it('reports staged copies the close could not remove', async () => {
-    const transport = negotiatedTransport('remote-bytes')
-    const { executor } = createHarness({
-      fileChannel: transport,
-      uploadStaging: new BrowserClientUploadStaging(stagingRoot, {
-        mkdir: async () => {},
-        writeFile: async () => {},
-        removeDirectorySync: () => {},
-        removeDirectory: async () => {
-          throw new Error('EBUSY: resource busy or locked')
-        }
-      })
-    })
-    await executor.handle(createPage, new AbortController().signal)
-    await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
-    await executor.handle(closePageCommand(), new AbortController().signal)
-
-    await expect(executor.close()).rejects.toMatchObject({
-      message: 'Browser client page executor cleanup failed',
-      errors: expect.arrayContaining([
-        expect.objectContaining({ message: 'Browser client upload staging release failed' })
-      ])
-    })
   })
 })

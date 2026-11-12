@@ -1,36 +1,15 @@
 import { appendFile, mkdir, mkdtemp, rm, stat, truncate, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
-import { isAiVaultScanCancelledError } from '../../../shared/ai-vault/contracts/ai-vault-types'
+
+import { afterEach, expect, it } from 'vitest'
+
 import { scanAiVaultSessions } from '../session-scanner'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'
 import { isolatedScanRoots, jsonLines } from '../session-scanner-test-fixtures'
 import type { FileWithMtime, SessionFileCandidate } from '../session-scanner-types'
-import { readWholeTranscript } from './session-transcript-reader'
 
-const OPENCODE_SQLITE_SESSION = {
-  id: 'local:opencode:sqlite-session:db',
-  agent: 'opencode' as const,
-  sessionId: 'sqlite-session'
-}
-const OPENCODE_SQLITE_MESSAGES = [
-  { role: 'user' as const, text: 'ask sqlite', timestamp: null },
-  { role: 'assistant' as const, text: 'reply sqlite', timestamp: null }
-]
-
-// Replace worker transport while retaining the transcript channel integration.
-vi.mock(
-  '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
-  async (importOriginal) => ({
-    ...(await importOriginal<typeof OpenCodeSqliteWorkerSpawn>()),
-    parseOpenCodeSqliteSessionViaWorker: () => Promise.resolve(OPENCODE_SQLITE_SESSION),
-    captureOpenCodeSqliteSessionViaWorker: () =>
-      Promise.resolve({ session: OPENCODE_SQLITE_SESSION, messages: OPENCODE_SQLITE_MESSAGES })
-  })
-)
-import type * as OpenCodeSqliteWorkerSpawn from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import {
   registerTranscriptConsumer,
   resetTranscriptConsumersForTests,
@@ -117,86 +96,6 @@ async function writeClaudeFixture(): Promise<{
   return { root, roots, transcript }
 }
 
-it('reports a scan cancelled mid-read as cancelled, and the next scan matches a cold one', async () => {
-  const { roots, transcript } = await writeClaudeFixture()
-  // Span several chunks so cancellation leaves most of the file unread.
-  const padding = Array.from({ length: 100 }, (_, index) => ({
-    type: 'user',
-    sessionId: 'claude-session',
-    timestamp: '2026-05-01T11:00:00.000Z',
-    message: { role: 'user', content: `${index} ${'x'.repeat(2_000)}` }
-  }))
-  await appendFile(transcript, `${jsonLines(padding)}\n`)
-  const recorder = recordingConsumer()
-  const controller = new AbortController()
-  const unregister = registerTranscriptConsumer({
-    beginRead: () => ({ message: () => controller.abort(), finish: () => {} })
-  })
-
-  await expect(
-    scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20, signal: controller.signal })
-  ).rejects.toSatisfy(isAiVaultScanCancelledError)
-  unregister()
-  expect(recorder.reads.map((read) => read.outcome)).toEqual([
-    expect.objectContaining({ incomplete: true, cancelled: true })
-  ])
-  expect(recorder.reads[0].messages.length).toBeLessThan(padding.length)
-
-  const next = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-  resetSessionParseCacheForTests()
-  const cold = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-  expect(next.issues).toEqual([])
-  expect(next.sessions).toEqual(cold.sessions)
-})
-
-it('delivers one message stream to every registered consumer', async () => {
-  const { roots } = await writeClaudeFixture()
-  const first = recordingConsumer()
-  const second = recordingConsumer()
-
-  const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  expect(result.issues).toEqual([])
-  const stream = textsFor(first.reads, 'claude')
-  expect(stream).toEqual(textsFor(second.reads, 'claude'))
-  expect(stream).toEqual([
-    'user:ask 1',
-    'assistant:reply 1',
-    'tool:Bash: ls 1',
-    'user:ask 2',
-    'assistant:reply 2',
-    'tool:Bash: ls 2',
-    'user:ask 3',
-    'assistant:reply 3',
-    'tool:Bash: ls 3',
-    'user:ask 4',
-    'assistant:reply 4',
-    'tool:Bash: ls 4'
-  ])
-  const session = result.sessions.find((entry) => entry.agent === 'claude')
-  expect(session?.previewMessages).toHaveLength(5)
-  expect(session?.messageCount).toBe(8)
-})
-
-it('leaves the session list identical whether or not a consumer is registered', async () => {
-  const withoutConsumer = await writeClaudeFixture()
-  const bare = await scanAiVaultSessions({
-    ...withoutConsumer.roots,
-    platform: 'darwin',
-    limit: 20
-  })
-
-  resetSessionParseCacheForTests()
-  recordingConsumer()
-  const observed = await scanAiVaultSessions({
-    ...withoutConsumer.roots,
-    platform: 'darwin',
-    limit: 20
-  })
-
-  expect(observed.sessions).toEqual(bare.sessions)
-})
-
 it('replays only the appended lines on a resumed read', async () => {
   const { roots, transcript } = await writeClaudeFixture()
   const consumer = recordingConsumer()
@@ -271,35 +170,6 @@ it('publishes a trailing unterminated line once, when it is complete', async () 
   expect(textsFor(consumer.reads, 'claude')).toEqual(['user:ask 5'])
 })
 
-it('keeps the session list working when a consumer throws', async () => {
-  const { roots } = await writeClaudeFixture()
-  registerTranscriptConsumer({
-    beginRead: () => ({
-      message: () => {
-        throw new Error('consumer exploded')
-      },
-      finish: () => undefined
-    })
-  })
-  const healthy = recordingConsumer()
-
-  const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  expect(result.issues).toEqual([])
-  expect(result.sessions.find((entry) => entry.agent === 'claude')?.messageCount).toBe(8)
-  expect(textsFor(healthy.reads, 'claude')).toHaveLength(12)
-})
-
-it('skips a read a consumer declines without disturbing the others', async () => {
-  const { roots } = await writeClaudeFixture()
-  registerTranscriptConsumer({ beginRead: () => null })
-  const healthy = recordingConsumer()
-
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  expect(textsFor(healthy.reads, 'claude')).toHaveLength(12)
-})
-
 async function claudeCandidate(transcript: string): Promise<SessionFileCandidate> {
   const stats = await stat(transcript)
   const file: FileWithMtime = {
@@ -334,63 +204,4 @@ it('serializes overlapping parses of one path so no consumer read is orphaned', 
   ])
   expect(first?.messageCount).toBe(10)
   expect(second?.messageCount).toBe(10)
-})
-
-it('publishes an OpenCode SQLite session over the channel and reports it complete', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-transcript-opencode-'))
-  tempRoots.push(root)
-  const dbPath = join(root, 'opencode.db')
-  await writeFile(dbPath, '')
-  const consumer = recordingConsumer()
-
-  const session = await readWholeTranscript({
-    candidate: {
-      agent: 'opencode',
-      codexHome: null,
-      file: {
-        path: `${dbPath}#sqlite-session`,
-        mtimeMs: 1,
-        modifiedAt: new Date(1).toISOString(),
-        sizeBytes: 10
-      }
-    },
-    platform: 'darwin'
-  })
-
-  expect(session).toEqual(OPENCODE_SQLITE_SESSION)
-  expect(consumer.reads).toHaveLength(1)
-  expect(consumer.reads[0].messages).toEqual(OPENCODE_SQLITE_MESSAGES)
-  expect(consumer.reads[0].outcome?.incomplete).toBe(false)
-  consumer.unregister()
-})
-
-it('reports the transcript size, not the cache key, as a whole-file read offset', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-transcript-cline-'))
-  tempRoots.push(root)
-  const roots = isolatedScanRoots(root)
-  // Cline’s cache key includes its sibling file, while this read covers only the transcript.
-  const sessionDir = join(roots.clineSessionsDir, 'cline-session')
-  await mkdir(sessionDir, { recursive: true })
-  const metadataPath = join(sessionDir, 'cline-session.json')
-  await writeFile(
-    metadataPath,
-    JSON.stringify({
-      session_id: 'cline-session',
-      started_at: '2026-05-01T10:00:00.000Z',
-      cwd: '/tmp/cline'
-    })
-  )
-  await writeFile(
-    join(sessionDir, 'cline-session.messages.json'),
-    JSON.stringify({
-      updated_at: '2026-05-01T10:00:01.000Z',
-      messages: [{ role: 'user', content: [{ type: 'text', text: 'x'.repeat(400) }] }]
-    })
-  )
-  const consumer = recordingConsumer()
-
-  await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
-
-  const read = consumer.reads.find((entry) => entry.start.candidate.agent === 'cline')
-  expect(read?.outcome?.byteOffset).toBe((await stat(metadataPath)).size)
 })

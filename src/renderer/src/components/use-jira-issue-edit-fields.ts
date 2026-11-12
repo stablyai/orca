@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { jiraGetIssueEditFieldsForTarget } from '@/runtime/runtime-jira-client'
+import { jiraGetIssueEditFieldsForTarget } from '@/runtime/jira/runtime-jira-detail-client'
 import type { JiraEditField } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 

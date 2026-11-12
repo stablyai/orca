@@ -1,4 +1,4 @@
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CircleDot,
@@ -8,11 +8,11 @@ import {
   GitPullRequestDraft
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
-import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
+import { useAppStore } from '@/store/index'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
 import {
   clearGitHubLinkCopied,
   createGitHubLinkCopyState,
@@ -20,6 +20,7 @@ import {
   resolveGitHubLinkCopyState
 } from '@/components/github-link-copy-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { PullRequestPageProps } from '../page-types'
 import { GitHubWorkItemTargetContext } from '@/components/github-item-dialog/load-item-details/github-work-item-target-context'
@@ -47,12 +48,15 @@ function PullRequestPageItem({
   repoId,
   sourceContext,
   initialTab,
-  backLabel = translate('auto.components.TaskPage.backToPullRequests', 'Pull requests'),
+  backLabel: backLabelOverride,
   projectOrigin,
   onUse,
   onReviewRequestsChange,
   onClose
 }: PullRequestPageProps): React.JSX.Element {
+  const t = useTranslate()
+  const backLabel =
+    backLabelOverride ?? t('auto.components.TaskPage.backToPullRequests', 'Pull requests')
   const workItemId = workItem?.id
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
@@ -108,21 +112,34 @@ function PullRequestPageItem({
     onReviewRequestsChange
   })
 
-  // Why: reset lifted edit state on item switch or when the same item gets an optimistic cache patch from the table.
-  useEffect(() => {
-    if (workItemState && workItemLabels) {
+  const detailsState = details?.item.state
+  // Sync lifted edit state during render so each refresh commits once instead of twice.
+  const [syncedFrom, setSyncedFrom] = useState<{
+    workItemId: typeof workItemId
+    workItemState: typeof workItemState
+    workItemLabels: typeof workItemLabels
+    detailsState: typeof detailsState
+  } | null>(null)
+  const itemChanged = syncedFrom === null || syncedFrom.workItemId !== workItemId
+  const workItemChanged =
+    syncedFrom === null ||
+    itemChanged ||
+    syncedFrom.workItemState !== workItemState ||
+    syncedFrom.workItemLabels !== workItemLabels
+  const detailsChanged =
+    syncedFrom === null || itemChanged || syncedFrom.detailsState !== detailsState
+  if (workItemChanged || detailsChanged) {
+    setSyncedFrom({ workItemId, workItemState, workItemLabels, detailsState })
+    // Why: reset on item switch or when the same item gets an optimistic cache patch from the table.
+    if (workItemChanged && workItemState && workItemLabels) {
       setLocalState(workItemState)
       setLocalLabels(workItemLabels)
     }
-  }, [workItemId, workItemState, workItemLabels])
-
-  // Why: post-write rereads land in details, not the workItem prop; follow a changed details state so actions and header show what the host has (even after a failed write).
-  const detailsState = details?.item.state
-  useEffect(() => {
-    if (detailsState) {
+    // Why: post-write rereads land in details, not the workItem prop; follow a changed details state so actions and header show what the host has (even after a failed write).
+    if (detailsChanged && detailsState) {
       setLocalState(detailsState)
     }
-  }, [workItemId, detailsState])
+  }
 
   const handleUseWorkItem = useCallback((): void => {
     if (!workItem) {
@@ -305,6 +322,7 @@ function PullRequestPageItem({
             sourceContext={sourceContext}
             projectOrigin={projectOrigin}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             files={files}
             filesUnavailable={filesUnavailable}

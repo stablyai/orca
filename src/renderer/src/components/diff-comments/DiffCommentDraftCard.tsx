@@ -1,19 +1,23 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
+import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { toast } from 'sonner'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 
 export type DiffCommentDraftCardProps = {
   lineNumber: number
   startLine?: number
+  imageUploadAddress?: GitHubImageIntake['address']
   placeholder?: string
   submitLabel?: string
   submittingLabel?: string
@@ -34,6 +38,7 @@ function resizeDraftTextarea(textarea: HTMLTextAreaElement): boolean {
 export function DiffCommentDraftCard({
   lineNumber,
   startLine,
+  imageUploadAddress,
   placeholder,
   submitLabel,
   submittingLabel,
@@ -43,11 +48,26 @@ export function DiffCommentDraftCard({
   initialBody = '',
   onBodyChange
 }: DiffCommentDraftCardProps): React.JSX.Element {
+  const t = useTranslate()
   const [body, setBody] = useState(initialBody)
   const bodyRef = useRef(body)
   const [submitting, setSubmitting] = useState(false)
+  const imagePending = useGitHubImagePending()
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const images = useGitHubTextareaImages(
+    textareaRef,
+    body,
+    (next) => {
+      setBody(next)
+      onBodyChange?.(next)
+    },
+    {
+      address: imageUploadAddress,
+      onPending: imagePending.onPending,
+      enabled: !!imageUploadAddress && !submitting
+    }
+  )
   const cardRef = useRef<HTMLDivElement | null>(null)
   const onContentResizeRef = useRef(onContentResize)
 
@@ -62,21 +82,28 @@ export function DiffCommentDraftCard({
   const labelId = useId()
   const headerLabel =
     startLine && startLine !== lineNumber
-      ? translate(
+      ? t(
           'auto.components.diff.comments.DiffCommentPopover.c845170b3b',
           'Lines {{value0}}-{{value1}}',
           { value0: startLine, value1: lineNumber }
         )
-      : translate(
-          'auto.components.diff.comments.DiffCommentPopover.e05063cfc1',
-          'Line {{value0}}',
-          { value0: lineNumber }
-        )
+      : t('auto.components.diff.comments.DiffCommentPopover.e05063cfc1', 'Line {{value0}}', {
+          value0: lineNumber
+        })
 
-  const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
-    textareaRef.current = textarea
-    textarea?.focus()
-  }, [])
+  const { attachDrop } = images
+  const hasImageUpload = !!imageUploadAddress
+  const focusTextareaRef = useCallback(
+    (textarea: HTMLTextAreaElement | null): void => {
+      if (hasImageUpload) {
+        attachDrop(textarea)
+      } else {
+        textareaRef.current = textarea
+      }
+      textarea?.focus()
+    },
+    [attachDrop, hasImageUpload]
+  )
 
   useEffect(() => {
     const focusTextarea = (): void => textareaRef.current?.focus()
@@ -134,7 +161,7 @@ export function DiffCommentDraftCard({
   }, [onCancel])
 
   const handleSubmit = async (): Promise<void> => {
-    if (submitting) {
+    if (submitting || imagePending.pendingRef.current) {
       return
     }
     const bodyState = getCommentBodySubmitState(body)
@@ -143,7 +170,7 @@ export function DiffCommentDraftCard({
     }
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
-        translate(
+        t(
           'auto.components.diff.comments.DiffCommentPopover.commentTooLarge',
           'Comment is too large to submit safely.'
         )
@@ -161,9 +188,7 @@ export function DiffCommentDraftCard({
     } catch (err) {
       console.error('Failed to submit diff comment draft:', err)
       // A rejected save never reaches the caller's own failure toast, so report it here.
-      toast.error(
-        translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
-      )
+      toast.error(t('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
       if (mountedRef.current) {
         setSubmitting(false)
       }
@@ -194,7 +219,7 @@ export function DiffCommentDraftCard({
     }
   }
 
-  const canSubmit = !submitting && hasBoundedCommentBodyText(body)
+  const canSubmit = !imagePending.pending && !submitting && hasBoundedCommentBodyText(body)
 
   return (
     <div
@@ -216,16 +241,14 @@ export function DiffCommentDraftCard({
           className="orca-diff-comment-popover-textarea"
           placeholder={
             placeholder ??
-            translate(
-              'auto.components.diff.comments.DiffCommentPopover.f6c449191e',
-              'Add note for the AI'
-            )
+            t('auto.components.diff.comments.DiffCommentPopover.f6c449191e', 'Add note for the AI')
           }
-          value={body}
+          value={images.value}
+          onPaste={images.onPaste}
+          onBeforeInput={images.onBeforeInput}
           rows={3}
           onChange={(e) => {
-            setBody(e.target.value)
-            onBodyChange?.(e.target.value)
+            images.change(e.target.value)
             if (resizeDraftTextarea(e.currentTarget)) {
               onContentResizeRef.current?.()
             }
@@ -236,29 +259,23 @@ export function DiffCommentDraftCard({
         {/* Footer */}
         <div className="orca-diff-comment-popover-footer">
           <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
-            {translate('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
+            {t('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
           </Button>
           <Button
             type="button"
             size="sm"
             aria-label={
               submitLabel ??
-              translate('auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa', 'Add note')
+              t('auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa', 'Add note')
             }
             onClick={() => void handleSubmit()}
             disabled={!canSubmit}
           >
             {submitting
               ? (submittingLabel ??
-                translate(
-                  'auto.components.diff.comments.DiffCommentPopover.5e9b3d0c2e',
-                  'Adding...'
-                ))
+                t('auto.components.diff.comments.DiffCommentPopover.5e9b3d0c2e', 'Adding...'))
               : (submitLabel ??
-                translate(
-                  'auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa',
-                  'Add note'
-                ))}
+                t('auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa', 'Add note'))}
             {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
           </Button>
         </div>

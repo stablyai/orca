@@ -1,58 +1,34 @@
-import { selectWorktreesByRepo, selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { memo, useEffect, useId, useRef, useState, type ComponentProps } from 'react'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenuItem,
-  DropdownMenuShortcut,
-  useDropdownMenuClose
-} from '@/components/ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import {
-  AgentLaunchSetupButton,
-  retireAgentPickerDrafts,
-  type AgentPickerSetupIdentity
-} from './AgentLaunchSetupButton'
-import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
+import { Terminal } from 'lucide-react'
+import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
+import { AgentDefaultContextMenu } from './agent-combobox-items'
+import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { useTranslate } from '@/i18n/use-translate'
+import { retireAgentPickerDrafts, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
-import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
-import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from './use-agent-launch-picker-inventory'
-import { searchAgentPickerSetups } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import {
-  agentPickerDraft,
-  type AgentPickerDraft,
-  type AgentPickerEntry,
-  type AgentPickerSurface
+  filterAgentPickerEntries,
+  searchAgentPickerSetups
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
-export function pickerLaunchRow(
-  entry: AgentPickerEntry,
-  surface: AgentPickerSurface
-): NewTabAgentMenuRow {
-  return {
-    agent: entry.agent,
-    kind: surface === 'chat' ? 'chat' : 'cli',
-    executionHostId: entry.rows[0]?.executionHostId
-  }
-}
-
-type Launch = (
-  row: NewTabAgentMenuRow,
-  draft?: AgentPickerDraft,
-  entry?: AgentPickerEntry,
-  /** Select mode: the surface explicitly accepted by a named launch action. */
-  surface?: AgentPickerSurface
-) => boolean | void | Promise<boolean>
-
 export function AgentLaunchPickerMenu({
+  model,
   draftScope,
   shortcutLabels,
   disabled,
@@ -64,7 +40,12 @@ export function AgentLaunchPickerMenu({
   entries,
   hideSearch,
   initialQuery = '',
-  onSelectAgent
+  searchInputRef,
+  onSelectAgent,
+  defaultAgent,
+  onSetDefault,
+  onSelectBlankTerminal,
+  leadingItems
 }: {
   model?: NewTabAgentMenuModel
   draftScope?: object
@@ -74,14 +55,24 @@ export function AgentLaunchPickerMenu({
   mode?: 'launch' | 'select'
   value?: AgentPickerDraft
   draftForEntry?: (entry: AgentPickerEntry) => AgentPickerDraft
-  runLaunch: Launch
+  runLaunch: AgentPickerMenuLaunch
   entries: AgentPickerEntry[]
   hideSearch?: boolean
   /** Seeds the search field; read once when the menu mounts. */
   initialQuery?: string
+  /** A supplied ref gives the owning popup control of initial focus. */
+  searchInputRef?: Ref<HTMLInputElement>
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
+  defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
+  onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
+  onSelectBlankTerminal?: () => void
+  leadingItems?: ReactNode
 }) {
+  const t = useTranslate()
   useEffect(() => {
+    if (setupDisabled) {
+      return
+    }
     const state = useAppStore.getState()
     const workspaces = new Set([
       ...Object.values(selectWorktreesByRepo(state) ?? {})
@@ -105,8 +96,10 @@ export function AgentLaunchPickerMenu({
       },
       mode
     )
-  }, [entries, draftScope, mode])
+  }, [entries, draftScope, mode, setupDisabled])
+  const terminalBlocked = mode !== 'select' && model?.state === 'settled' && model.terminalPending
   const [query, setQuery] = useState(initialQuery)
+  const [searchFocused, setSearchFocused] = useState(false)
   const [activeSetup, setActiveSetup] = useState<{
     id: string
     agent: AgentPickerEntry['agent']
@@ -115,11 +108,8 @@ export function AgentLaunchPickerMenu({
   } | null>(null)
   const openSetup = activeSetup?.id ?? null
   const root = useRef<HTMLDivElement>(null)
-  const setups = searchAgentPickerSetups(entries, query)
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const visible = entries.filter((entry) =>
-    words.every((word) => `${entry.agent} ${entry.label}`.toLowerCase().includes(word))
-  )
+  const setups = setupDisabled ? [] : searchAgentPickerSetups(entries, query)
+  const visible = filterAgentPickerEntries(entries, query)
   // Filtering changes presentation; an active owner survives its result row disappearing.
   if (activeSetup) {
     const entry = entries.find((entry) => entry.agent === activeSetup.agent)
@@ -151,20 +141,34 @@ export function AgentLaunchPickerMenu({
       visible.push(entry)
     }
   }
+  // Why: Enter in the search picks the first enabled row, so show it highlighted like cmdk comboboxes.
+  const enabled = (entry: AgentPickerEntry) => !disabled && entry.surfaces.length > 0
+  const showBlankTerminal = !!onSelectBlankTerminal && agentPickerBlankTerminalMatches(query)
+  // Why: a query naming an agent ("codex") should surface that agent before other agents' model setups.
+  const firstEntry = showBlankTerminal ? undefined : visible.find(enabled)
+  const firstSetup =
+    showBlankTerminal || firstEntry ? undefined : setups.find((setup) => enabled(setup.entry))
+  const showSearchDefault = searchFocused && query.trim().length > 0
   return (
     <div ref={root} data-agent-launch-picker="true">
       {!hideSearch ? (
-        <div className="px-1 py-0.5">
+        <div className="px-1 pt-0.5 pb-1.5">
           <Input
+            ref={searchInputRef}
             value={query}
-            density="compact"
-            autoFocus
+            autoFocus={!searchInputRef}
+            onBlur={() => setSearchFocused(false)}
             onFocus={(event) => {
+              setSearchFocused(true)
               // Why: a seeded query must keep the caret after the typed key.
               const end = event.currentTarget.value.length
               event.currentTarget.setSelectionRange(end, end)
             }}
-            placeholder={translate('agentPicker.search', 'Search agents and setups…')}
+            placeholder={
+              setupDisabled
+                ? t('agentPicker.searchAgents', 'Search agents…')
+                : t('agentPicker.search', 'Search, e.g. Opus 5.5…')
+            }
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
@@ -173,8 +177,12 @@ export function AgentLaunchPickerMenu({
               event.stopPropagation()
               if (event.key === 'Enter' || event.key === 'ArrowDown') {
                 event.preventDefault()
+                const results =
+                  event.key === 'Enter'
+                    ? '[data-agent-picker-agent-results]'
+                    : '[data-agent-picker-results]'
                 const first = root.current?.querySelector<HTMLElement>(
-                  '[role="menuitem"]:not([data-disabled])'
+                  `${results} [role="menuitem"]:not([data-disabled])`
                 )
                 if (event.key === 'Enter') {
                   first?.click()
@@ -186,58 +194,81 @@ export function AgentLaunchPickerMenu({
           />
         </div>
       ) : null}
-      <div className="max-h-64 overflow-y-auto scrollbar-sleek">
-        {setups.map((setup) => {
-          const source = draftForEntry?.(setup.entry)
-          return (
-            <AgentPickerMenuRow
-              key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-              draftScope={draftScope}
-              draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-              initialModel={setup.model.id}
-              initialEffort={setup.choices.options?.effort}
-              entry={setup.entry}
-              mode={mode}
-              setupDisabled={setupDisabled}
-              openSetup={openSetup}
-              onSetupOpenChange={setActiveSetup}
-              label={setup.label}
-              source={source}
-              selected={value?.agent === setup.entry.agent ? value : undefined}
-              onSelectAgent={onSelectAgent}
-              disabled={disabled}
-              runLaunch={runLaunch}
-            />
-          )
-        })}
-        {visible.map((entry) => {
-          const source = draftForEntry?.(entry)
-          return (
-            <AgentPickerMenuRow
-              key={entry.agent}
-              draftScope={draftScope}
-              entry={entry}
-              mode={mode}
-              source={source}
-              selected={value?.agent === entry.agent ? value : undefined}
-              setupDisabled={setupDisabled}
-              openSetup={openSetup}
-              onSetupOpenChange={setActiveSetup}
-              disabled={disabled}
-              runLaunch={runLaunch}
-              onSelectAgent={onSelectAgent}
-              shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
-            />
-          )
-        })}
-        {!visible.length && !setups.length ? (
-          <DropdownMenuItem disabled>
-            {translate(
-              'auto.components.agent.AgentCombobox.579c768bde',
-              'No agents match your search.'
-            )}
-          </DropdownMenuItem>
-        ) : null}
+      <div data-agent-picker-results className="max-h-64 overflow-y-auto scrollbar-sleek">
+        {leadingItems}
+        <div data-agent-picker-agent-results>
+          {showBlankTerminal ? (
+            <AgentDefaultContextMenu
+              isDefault={defaultAgent === 'blank'}
+              onSetDefault={onSetDefault ? () => onSetDefault('blank') : undefined}
+            >
+              <DropdownMenuItem
+                variant="launch"
+                className="h-9"
+                disabled={disabled}
+                data-search-default={showSearchDefault || undefined}
+                onSelect={onSelectBlankTerminal}
+              >
+                <Terminal className="size-4" />
+                {t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+              </DropdownMenuItem>
+            </AgentDefaultContextMenu>
+          ) : null}
+          {visible.map((entry) => {
+            const source = draftForEntry?.(entry)
+            return (
+              <AgentPickerMenuRow
+                key={entry.agent}
+                draftScope={draftScope}
+                entry={entry}
+                mode={mode}
+                searchDefault={showSearchDefault && entry === firstEntry}
+                source={source}
+                selected={value?.agent === entry.agent ? value : undefined}
+                setupDisabled={setupDisabled}
+                openSetup={openSetup}
+                onSetupOpenChange={setActiveSetup}
+                disabled={disabled}
+                terminalBlocked={terminalBlocked}
+                runLaunch={runLaunch}
+                onSelectAgent={onSelectAgent}
+                isDefault={defaultAgent === entry.agent}
+                onSetDefault={onSetDefault}
+                shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+              />
+            )
+          })}
+          {setups.map((setup) => {
+            const source = draftForEntry?.(setup.entry)
+            return (
+              <AgentPickerMenuRow
+                key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                draftScope={draftScope}
+                draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                initialModel={setup.model.id}
+                initialEffort={setup.choices.options?.effort}
+                entry={setup.entry}
+                mode={mode}
+                setupDisabled={setupDisabled}
+                openSetup={openSetup}
+                onSetupOpenChange={setActiveSetup}
+                label={setup.label}
+                searchDefault={showSearchDefault && setup === firstSetup}
+                source={source}
+                selected={value?.agent === setup.entry.agent ? value : undefined}
+                onSelectAgent={onSelectAgent}
+                disabled={disabled}
+                terminalBlocked={terminalBlocked}
+                runLaunch={runLaunch}
+              />
+            )
+          })}
+          {!showBlankTerminal && !visible.length && !setups.length ? (
+            <DropdownMenuItem disabled>
+              {t('auto.components.agent.AgentCombobox.579c768bde', 'No agents match your search.')}
+            </DropdownMenuItem>
+          ) : null}
+        </div>
       </div>
     </div>
   )
@@ -253,144 +284,3 @@ export function SubscribedAgentLaunchPickerMenu({
   const entries = useAgentPickerInventoryEntries(inventory)
   return <AgentLaunchPickerMenu {...props} entries={entries} />
 }
-
-// Why: catalog and seed reads land one agent at a time after the menu opens; only that row re-renders.
-const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
-  entry,
-  draftScope,
-  draftId,
-  initialModel,
-  initialEffort,
-  openSetup,
-  onSetupOpenChange,
-  label = entry.label,
-  source,
-  selected,
-  mode,
-  setupDisabled,
-  disabled,
-  runLaunch,
-  shortcut,
-  onSelectAgent
-}: {
-  entry: AgentPickerEntry
-  draftScope?: object
-  draftId?: string
-  initialModel?: string
-  initialEffort?: string
-  openSetup: string | null
-  onSetupOpenChange: (
-    setup: {
-      id: string
-      agent: AgentPickerEntry['agent']
-      preset?: AgentPickerSetupIdentity
-      label: string
-    } | null
-  ) => void
-  label?: string
-  source?: AgentPickerDraft
-  selected?: AgentPickerDraft
-  mode?: 'launch' | 'select'
-  setupDisabled?: boolean
-  disabled?: boolean
-  runLaunch: Launch
-  shortcut?: string
-  onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
-}) {
-  useUiLanguageRevision()
-  const setupId = useId()
-  const preset = initialModel ? { model: initialModel, effort: initialEffort } : undefined
-  const initial = preset
-    ? applyAgentPickerEdit(entry, selected ?? source ?? agentPickerDraft(entry), {
-        kind: 'choice',
-        patch: {
-          model: preset.model,
-          ...(preset.effort ? { options: { effort: preset.effort } } : {})
-        }
-      })
-    : undefined
-  const closeMenu = useDropdownMenuClose()
-  const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
-  return (
-    <AgentLaunchSetupButton
-      submenu
-      draftScope={draftScope}
-      draftId={draftId}
-      preset={preset}
-      entry={entry}
-      initial={source}
-      seed={initial ?? selected ?? source}
-      surface={selected?.surface}
-      mode={mode}
-      open={openSetup === setupId}
-      replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
-      disabled={disabled || setupDisabled || !entry.surfaces.length}
-      onOpenChange={(next) => {
-        if (next || openSetup === setupId) {
-          onSetupOpenChange(next ? { id: setupId, agent: entry.agent, preset, label } : null)
-        }
-        if (next && openSetup !== setupId) {
-          onSelectAgent?.(entry.agent)
-        }
-      }}
-      onUse={(draft) => {
-        const chosen = mode === 'select' ? draft.surface : undefined
-        const result =
-          chosen === undefined
-            ? runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
-            : runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry, chosen)
-        if (result !== false) {
-          closeMenu()
-        }
-        return result
-      }}
-      renderAnchor={(trigger) => (
-        <div
-          data-agent-launch-row
-          onClick={(event) => {
-            event.preventDefault()
-            if (disabled || !entry.surfaces.length) {
-              return
-            }
-            const draft = initial ?? (mode === 'select' ? selected : undefined)
-            const surface = draft?.surface ?? entry.defaultSurface
-            const row = draft
-              ? pickerLaunchRow(entry, surface)
-              : (entry.rows.find((row) =>
-                  surface === 'chat'
-                    ? row.kind === 'chat'
-                    : row.kind === 'terminal' || row.kind === 'cli'
-                ) ?? pickerLaunchRow(entry, surface))
-            const result = draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)
-            if (result !== false) {
-              closeMenu()
-            }
-          }}
-          onKeyDown={(event) => {
-            if (
-              event.target === event.currentTarget &&
-              (event.key === 'Enter' || event.key === ' ')
-            ) {
-              event.preventDefault()
-              event.currentTarget.click()
-            }
-          }}
-        >
-          <Button asChild variant="menu-launch" size="menu">
-            <span>
-              <AgentIcon agent={entry.agent} size={14} />
-              <span className="min-w-0 flex-1 truncate">{label}</span>
-              {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-              {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-                <span className="text-xs text-muted-foreground">
-                  {chatUnavailableLabel(unavailable.reason)}
-                </span>
-              ) : null}
-            </span>
-          </Button>
-          {trigger}
-        </div>
-      )}
-    />
-  )
-})

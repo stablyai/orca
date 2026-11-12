@@ -23,6 +23,7 @@ export type ReadTranscriptResult =
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
       sourceEmpty?: boolean
+      forkTipItemIds?: string[]
     }
   // notFound is retryable: the agent may not have flushed its transcript yet.
   | { error: string; notFound?: true }

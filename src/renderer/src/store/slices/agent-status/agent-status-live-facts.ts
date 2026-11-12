@@ -5,7 +5,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isSmartSortRelevantAgentChange } from '../../../../../shared/sidebar-list/smart-sort-agent-change'
-import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
+import { recordHibernationBoundaryResolved } from '@/lib/agent-session/hibernation/agent-hibernation-pane-age'
 import {
   findAgentPaneWorktreeId,
   findTabForAgentEntry,

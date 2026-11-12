@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
-import {
-  CodexAppServerTimeoutError,
-  CodexAppServerUnsupportedError
-} from '../../app-server/codex-app-server-session'
+import { CodexAppServerTimeoutError } from '../../app-server/codex-app-server-session'
 import {
   acquiredCodexAdapter,
   codexTurnLifecycleRig,
@@ -53,73 +50,39 @@ const refusedSteer = (message: string): CodexAppServerRequestError =>
   )
 
 describe('a Codex send while a turn runs', () => {
-  it('steers into that turn by name, and that turn ending unechoed withdraws it', async () => {
-    const { connection, settlements, send, methods, endTurn } = await rig({
-      'turn/steer': () => ({ turnId: 'turn-1' }),
-      // Pre-0.148 turn/start replies can name a nonexistent turn for steered input.
-      'turn/start': () => ({ turn: { id: 'submission-7' } })
-    })
-    startTurn(connection, 'turn-1')
-
-    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
-    expect(methods()).toEqual(['thread/start', 'turn/steer'])
-    expect(connection.calls.at(-1)?.params).toEqual({
-      threadId: CODEX_TEST_THREAD_ID,
-      expectedTurnId: 'turn-1',
-      clientUserMessageId: 'client-1',
-      input: [{ type: 'text', text: 'ship it' }]
-    })
-
-    endTurn('turn-1', 'interrupted')
-
-    expect(settlements).toEqual([
-      expect.objectContaining({
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        state: 'rejected',
-        rejection: { kind: 'cancelled' }
+  it.each([true, false])(
+    'settles on its echo with client ID=%s when the turn completes with it',
+    async (tagged) => {
+      const { connection, settlements, send, endTurn } = await rig({
+        'turn/steer': () => ({ turnId: 'turn-1' })
       })
-    ])
-  })
+      startTurn(connection, 'turn-1')
 
-  it('settles on its echo when the turn completes with it', async () => {
-    const { connection, settlements, send, endTurn } = await rig({
-      'turn/steer': () => ({ turnId: 'turn-1' })
-    })
-    startTurn(connection, 'turn-1')
+      expect(await send('client-1')).toMatchObject({ state: 'admitted' })
+      if (tagged) {
+        echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
+      } else {
+        connection.handlers.onNotification?.('item/started', {
+          threadId: CODEX_TEST_THREAD_ID,
+          turn: { id: 'turn-1' },
+          item: {
+            type: 'userMessage',
+            id: 'item-u1',
+            clientId: null,
+            content: [{ type: 'text', text: 'ship it' }]
+          }
+        })
+      }
+      endTurn('turn-1', 'completed')
 
-    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
-    endTurn('turn-1', 'completed')
-
-    expect(settlements).toEqual([
-      expect.objectContaining({
-        clientMessageId: 'client-1',
-        providerIdentity: expect.objectContaining({ turnId: 'turn-1' })
-      })
-    ])
-  })
-
-  it.each([
-    ['the turn ended first', () => refusedSteer('no active turn to steer')],
-    [
-      'another turn is running',
-      () => refusedSteer('expected active turn id `turn-1` but found `turn-2`')
-    ],
-    ['this Codex has no turn/steer', () => new CodexAppServerUnsupportedError('method not found')]
-  ])('falls back to turn/start when Codex refuses the steer because %s', async (_case, error) => {
-    const { connection, send, methods } = await rig({
-      'turn/steer': () => {
-        throw error()
-      },
-      'turn/start': () => ({ turn: { id: 'turn-2' } })
-    })
-    startTurn(connection, 'turn-1')
-
-    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
-    expect(methods()).toEqual(['thread/start', 'turn/steer', 'turn/start'])
-    expect(connection.calls.at(-1)?.params).toMatchObject({ clientUserMessageId: 'client-1' })
-  })
+      expect(settlements).toEqual([
+        expect.objectContaining({
+          clientMessageId: 'client-1',
+          providerIdentity: expect.objectContaining({ turnId: 'turn-1' })
+        })
+      ])
+    }
+  )
 
   it('steers once more when Codex refuses because a turn Orca just heard of is running', async () => {
     let steers = 0
@@ -141,37 +104,7 @@ describe('a Codex send while a turn runs', () => {
     expect(connection.calls.at(-1)?.params).toMatchObject({ expectedTurnId: 'turn-2' })
     endTurn('turn-2', 'interrupted')
 
-    expect(settlements).toEqual([
-      expect.objectContaining({ clientMessageId: 'client-1', state: 'rejected' })
-    ])
-  })
-
-  it('is rejected in Codex words when Codex refuses the steer and the start', async () => {
-    const { connection, send, methods } = await rig({
-      'turn/steer': () => {
-        throw refusedSteer('active turn cannot be steered')
-      },
-      'turn/start': () => {
-        throw new CodexAppServerRequestError(
-          'turn/start',
-          -32600,
-          'codex app-server turn/start failed: thread not found',
-          'thread not found'
-        )
-      }
-    })
-    startTurn(connection, 'turn-1')
-
-    expect(await send('client-1')).toEqual({
-      state: 'rejected',
-      reason: "Codex didn't accept this message: thread not found.",
-      rejection: {
-        kind: 'providerRejected',
-        detail: { text: 'thread not found', audience: 'person' },
-        neverReachedAgent: true
-      }
-    })
-    expect(methods()).toEqual(['thread/start', 'turn/steer', 'turn/start'])
+    expect(settlements).toEqual([])
   })
 
   it('never re-sends a steer that may have landed, and keeps it armed for its echo', async () => {
@@ -187,17 +120,6 @@ describe('a Codex send while a turn runs', () => {
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
 
     expect(settlements).toEqual([expect.objectContaining({ clientMessageId: 'client-1' })])
-  })
-
-  it('starts a turn with no steer when none is running', async () => {
-    const { send, methods, endTurn, connection } = await rig({
-      'turn/start': () => ({ turn: { id: 'turn-1' } })
-    })
-    startTurn(connection, 'turn-0')
-    endTurn('turn-0', 'completed')
-
-    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
-    expect(methods()).toEqual(['thread/start', 'turn/start'])
   })
 })
 
@@ -215,7 +137,7 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
     return { ...rig, sending, methods }
   }
 
-  it('waits for that turn to open and steers it, so a Stop withdraws both', async () => {
+  it('waits for that turn to open and steers it, with no delivery verdict from Stop', async () => {
     const rig = await answeredUnopened()
 
     rig.turns.start()
@@ -226,12 +148,7 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
       cancelled: true,
       turnId: 'turn-1'
     })
-    await vi.waitFor(() =>
-      expect(rig.settlements.map(({ clientMessageId }) => clientMessageId).sort()).toEqual([
-        'client-1',
-        'client-2'
-      ])
-    )
+    expect(rig.settlements).toEqual([])
   })
 
   it('starts its own turn when that turn ends without opening', async () => {

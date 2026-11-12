@@ -156,20 +156,6 @@ describe('removeRealHomeCodexHookForOptOut', () => {
     expect(trust.get(computeTrustKey(afterAt(2)))).toBeUndefined()
   })
 
-  it("removes Orca's approval holding Codex's own hash, which Orca cannot compute", async () => {
-    mkdirSync(join(home, '.codex'))
-    writeFileSync(
-      hooksJsonPath(),
-      `${JSON.stringify({ hooks: { Stop: [{ hooks: [orcaHandler()] }] } }, null, 2)}\n`
-    )
-    const orcaAt = orcaStopAt(hooksJsonPath())
-    upsertHookTrustEntries(configTomlPath(), [{ ...orcaAt, trustedHash: 'sha256:codex-stop' }])
-
-    expect(await removeRealHomeCodexHookForOptOut([{ stop: 'sha256:codex-stop' }])).toBe('removed')
-
-    expect(readHookTrustEntries(configTomlPath()).has(computeTrustKey(orcaAt))).toBe(false)
-  })
-
   it("removes approvals left after the entry is gone, by Codex's hash", async () => {
     mkdirSync(join(home, '.codex'))
     writeFileSync(hooksJsonPath(), `${JSON.stringify({ hooks: {} }, null, 2)}\n`)

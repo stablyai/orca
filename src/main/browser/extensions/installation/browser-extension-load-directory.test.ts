@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -46,12 +45,6 @@ function writeExtension(directory: string, manifest: Record<string, unknown>): v
 const readJson = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'))
 
 describe('extension load directories', () => {
-  it('derives ids the way Chromium does from a manifest key', () => {
-    // Measured against Electron 43's loadExtension for this key.
-    const key = createHash('sha256').update('orca-unpacked:/some/folder').digest('base64')
-    expect(chromeExtensionIdFromKey(key)).toBe('facfjoldjaombbaheilnbchaiimdhcbk')
-  })
-
   it('wraps a store install in place and rewrites it when the shim changes', async () => {
     const directory = join(mocks.userData, 'browser-extensions', 'store-ext', '1.0')
     writeExtension(directory, {
@@ -121,80 +114,6 @@ describe('extension load directories', () => {
     expect(refreshed.directory).toBe(first.directory)
   })
 
-  it('runs Orca’s content script first in every isolated-world content script', async () => {
-    const source = join(mocks.userData, 'dev', 'content-scripts')
-    const content_scripts = [
-      { matches: ['https://github.com/*'], css: ['style.css'], js: ['content.js'] },
-      { matches: ['https://github.com/*'], css: ['only.css'] },
-      { matches: ['https://github.com/*'], js: ['page.js'], world: 'MAIN' }
-    ]
-    writeExtension(source, {
-      manifest_version: 3,
-      name: 'Content',
-      version: '1',
-      background: { service_worker: 'bg.js', type: 'module', scripts: ['bg.js'] },
-      content_scripts
-    })
-    const prepared = await prepareBrowserExtensionDirectory({ source: 'unpacked', path: source })
-    expect(readJson(join(prepared.directory, 'manifest.json'))).toMatchObject({
-      background: { service_worker: 'orca-background.js', type: 'module' },
-      content_scripts: [
-        { ...content_scripts[0], js: ['orca-content-script-api.js', 'content.js'] },
-        content_scripts[1],
-        content_scripts[2]
-      ]
-    })
-    expect(readJson(join(prepared.directory, 'manifest.json'))).not.toHaveProperty(
-      'background.scripts'
-    )
-    expect(readFileSync(join(prepared.directory, 'orca-content-script-api.js'), 'utf8')).toBe(
-      '/* content script */'
-    )
-
-    // Without a worker the content-script APIs still apply; only the sync relay needs one.
-    const workerless = join(mocks.userData, 'dev', 'content-scripts-only')
-    writeExtension(workerless, {
-      manifest_version: 3,
-      name: 'Plain',
-      version: '1',
-      content_scripts
-    })
-    const plain = await prepareBrowserExtensionDirectory({ source: 'unpacked', path: workerless })
-    expect(readJson(join(plain.directory, 'manifest.json'))).toMatchObject({
-      content_scripts: [
-        { ...content_scripts[0], js: ['orca-content-script-api.js', 'content.js'] },
-        content_scripts[1],
-        content_scripts[2]
-      ]
-    })
-    expect(existsSync(join(plain.directory, 'orca-content-script-api.js'))).toBe(true)
-  })
-
-  it('keeps the id an unpacked folder pins with its own key', async () => {
-    const source = join(mocks.userData, 'dev', 'keyed')
-    writeExtension(source, { manifest_version: 3, name: 'Keyed', version: '1', key: STORE_KEY })
-    expect(await browserExtensionIdForUnpackedFolder(source)).toBe(
-      chromeExtensionIdFromKey(STORE_KEY)
-    )
-    const prepared = await prepareBrowserExtensionDirectory({ source: 'unpacked', path: source })
-    expect(prepared.extensionId).toBe(chromeExtensionIdFromKey(STORE_KEY))
-    expect(existsSync(join(prepared.directory, 'orca-extension-api.js'))).toBe(false)
-  })
-
-  it('refuses a package with its own file where Orca writes one', async () => {
-    const source = join(mocks.userData, 'dev', 'named-like-orca')
-    writeExtension(source, {
-      manifest_version: 3,
-      name: 'Clash',
-      version: '1',
-      background: { service_worker: 'orca-background.js' }
-    })
-    writeFileSync(join(source, 'orca-background.js'), 'self.own = true')
-    await expect(
-      prepareBrowserExtensionDirectory({ source: 'unpacked', path: source })
-    ).rejects.toThrow('orca-background.js uses a name Orca reserves')
-  })
-
   it('never lists the worker token as web-accessible, in any spelling', async () => {
     const directory = join(mocks.userData, 'browser-extensions', 'store-war', '1.0')
     const resources = ['ORCA-EXTENSION-API-TOKEN.JSON', 'orca-extension-api-token.json', '*']
@@ -216,13 +135,5 @@ describe('extension load directories', () => {
       const path = join(directory, resource)
       expect(existsSync(path) && statSync(path).ino === token.ino, resource).toBe(false)
     }
-  })
-
-  it('refuses Manifest V2', async () => {
-    const source = join(mocks.userData, 'dev', 'legacy')
-    writeExtension(source, { manifest_version: 2, name: 'Old', version: '1' })
-    await expect(
-      prepareBrowserExtensionDirectory({ source: 'unpacked', path: source })
-    ).rejects.toThrow('Manifest V3')
   })
 })

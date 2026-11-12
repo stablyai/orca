@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { CodexAppServerExitError } from '../../app-server/codex-app-server-exit-error'
-import { claudeAndCodexRouter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexRouter } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import { adapterFor, fakeCodex, identityFor } from './codex-structured-session-adapter-fixture'
 
 it("keeps a start's ending only while that start can still read it", async () => {

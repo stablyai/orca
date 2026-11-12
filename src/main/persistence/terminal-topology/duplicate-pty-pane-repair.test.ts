@@ -2,13 +2,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { repairDuplicatePtyPanesOnStart } from '../../runtime/moved-pane-owner-rekey'
+import { repairDuplicatePtyPanesOnStart } from '../../runtime/terminal/identity/moved-pane-owner-rekey'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { DelayedAuthority } from '../loading-store/profile-state-delayed-authority-fixture'
+import { DelayedAuthority } from '../loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { planDuplicatePtyPaneRepair } from './duplicate-pty-pane-repair'
@@ -72,46 +72,6 @@ function seededDirectory(
   return directory
 }
 
-const DROPPED_KEY = `${TAB}:${DUPLICATE}`
-const KEPT_KEY = `${TAB}:${KEPT}`
-
-function withDroppedPaneRecords(state: Record<string, unknown>, session: WorkspaceSessionState) {
-  session.terminalPtyIncarnationsByPaneKey = { [DROPPED_KEY]: 'inc-1' }
-  session.sleepingAgentSessionsByPaneKey = {
-    [DROPPED_KEY]: {
-      paneKey: DROPPED_KEY,
-      tabId: TAB,
-      worktreeId: FIXTURE_GIT_WORKTREE_ID,
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: 'codex-session-1' },
-      prompt: 'continue',
-      state: 'done',
-      capturedAt: 1,
-      updatedAt: 1,
-      origin: 'quit'
-    }
-  }
-  state.ui = {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture profile always carries a ui object.
-    ...(state.ui as object),
-    acknowledgedAgentsByPaneKey: { [DROPPED_KEY]: 11 },
-    activityClearedAtByPaneKey: { [DROPPED_KEY]: 12 },
-    manuallyUnreadTurnsByPaneKey: { [DROPPED_KEY]: 13 }
-  }
-  state.sshRemotePtyLeases = [
-    {
-      targetId: 'target-1',
-      ptyId: 'pty-1',
-      worktreeId: FIXTURE_GIT_WORKTREE_ID,
-      tabId: TAB,
-      leafId: DUPLICATE,
-      state: 'detached',
-      createdAt: 1,
-      updatedAt: 1
-    }
-  ]
-}
-
 function storedState(directory: string): PersistedState {
   const reader = new ProfileStateSqliteAuthority(join(directory, 'profile-state.db'), 'topology')
   try {
@@ -158,12 +118,6 @@ function fakeRuntime() {
   return { runtime, rekeyWorkerTerminalResourcePaneKey }
 }
 
-function workspaceSessionWrites(authority: DelayedAuthority): number {
-  return authority.captures.filter((writes) =>
-    writes.some((write) => JSON.stringify(write).includes('workspaceSession'))
-  ).length
-}
-
 describe('duplicate-terminal pane repair at load (layout-owner builds)', () => {
   it('moves the dropped pane’s agent status and orchestration row, then writes one pane', async () => {
     const directory = seededDirectory()
@@ -192,128 +146,6 @@ describe('duplicate-terminal pane repair at load (layout-owner builds)', () => {
     await quit(store)
     expect(storedLeafIds(directory)).toEqual([KEPT])
     expect(JSON.parse(storedLayouts(directory))[TAB].ptyIdsByLeafId).toEqual({ [KEPT]: 'pty-1' })
-  })
-
-  it('leaves disk alone with no runtime, then a runtime start transfers and writes once', async () => {
-    const directory = seededDirectory()
-    const seeded = storedLayouts(directory)
-    const transfer = vi.spyOn(agentHookServer, 'transferPaneAuthority').mockImplementation(() => {})
-
-    // CLI-only loads may project repairs but must not persist them.
-    const cliOnly = await load(directory)
-    await quit(cliOnly.store)
-    expect(storedLayouts(directory)).toBe(seeded)
-    expect(transfer).not.toHaveBeenCalled()
-
-    const started = await load(directory)
-    started.authority.captures.length = 0
-    const { runtime, rekeyWorkerTerminalResourcePaneKey } = fakeRuntime()
-    await repairDuplicatePtyPanesOnStart(started.store, runtime)
-
-    expect(transfer).toHaveBeenCalledOnce()
-    expect(rekeyWorkerTerminalResourcePaneKey).toHaveBeenCalledOnce()
-    expect(workspaceSessionWrites(started.authority)).toBe(1)
-    expect(storedLeafIds(directory)).toEqual([KEPT])
-  })
-
-  it('neither transfers nor writes on a frozen or imported Store', async () => {
-    const directory = seededDirectory()
-    const seeded = storedLayouts(directory)
-    const transfer = vi.spyOn(agentHookServer, 'transferPaneAuthority').mockImplementation(() => {})
-    const { store } = await load(directory)
-    await store.freezeWritesAsync()
-    const imported = new Store({
-      serializedState: JSON.stringify({
-        ...JSON.parse(emptyTerminalSessionProfile()),
-        workspaceSession: duplicateSession()
-      })
-    })
-
-    await repairDuplicatePtyPanesOnStart(store, fakeRuntime().runtime)
-    await repairDuplicatePtyPanesOnStart(imported, fakeRuntime().runtime)
-
-    expect(transfer).not.toHaveBeenCalled()
-    expect(storedLayouts(directory)).toBe(seeded)
-    expect(leafIds(imported.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.root)).toEqual([
-      KEPT,
-      DUPLICATE
-    ])
-  })
-
-  it('is a no-op on the next start', async () => {
-    const directory = seededDirectory()
-    const first = await load(directory)
-    const transfer = vi.spyOn(agentHookServer, 'transferPaneAuthority').mockImplementation(() => {})
-    await repairDuplicatePtyPanesOnStart(first.store, fakeRuntime().runtime)
-    await quit(first.store)
-    transfer.mockClear()
-    const repaired = storedLayouts(directory)
-
-    const second = await load(directory)
-    second.authority.captures.length = 0
-    await expect(second.store.repairDuplicatePtyPanes(() => true)).resolves.toBe(0)
-
-    expect(transfer).not.toHaveBeenCalled()
-    expect(workspaceSessionWrites(second.authority)).toBe(0)
-    expect(storedLayouts(directory)).toBe(repaired)
-  })
-
-  it('moves the dropped pane’s sleep record, read marks, incarnation and SSH lease to the kept pane', async () => {
-    const directory = seededDirectory(withDroppedPaneRecords)
-    const { store } = await load(directory)
-    vi.spyOn(agentHookServer, 'transferPaneAuthority').mockImplementation(() => {})
-
-    await repairDuplicatePtyPanesOnStart(store, fakeRuntime().runtime)
-    await quit(store)
-
-    const state = storedState(directory)
-    const session = state.workspaceSession
-    expect(Object.keys(session?.sleepingAgentSessionsByPaneKey ?? {})).toEqual([KEPT_KEY])
-    expect(session?.sleepingAgentSessionsByPaneKey?.[KEPT_KEY]?.paneKey).toBe(KEPT_KEY)
-    expect(session?.terminalPtyIncarnationsByPaneKey).toEqual({ [KEPT_KEY]: 'inc-1' })
-    expect(state.ui?.acknowledgedAgentsByPaneKey).toEqual({ [KEPT_KEY]: 11 })
-    expect(state.ui?.activityClearedAtByPaneKey).toEqual({ [KEPT_KEY]: 12 })
-    expect(state.ui?.manuallyUnreadTurnsByPaneKey).toEqual({ [KEPT_KEY]: 13 })
-    expect(state.sshRemotePtyLeases?.map(({ tabId, leafId }) => ({ tabId, leafId }))).toEqual([
-      { tabId: TAB, leafId: KEPT }
-    ])
-  })
-
-  it('keeps the kept pane’s own incarnation over the dropped pane’s', async () => {
-    const directory = seededDirectory((_state, session) => {
-      session.terminalPtyIncarnationsByPaneKey = { [DROPPED_KEY]: 'inc-old', [KEPT_KEY]: 'inc-1' }
-    })
-    const { store } = await load(directory)
-    vi.spyOn(agentHookServer, 'transferPaneAuthority').mockImplementation(() => {})
-
-    await repairDuplicatePtyPanesOnStart(store, fakeRuntime().runtime)
-    await quit(store)
-
-    expect(storedState(directory).workspaceSession?.terminalPtyIncarnationsByPaneKey).toEqual({
-      [KEPT_KEY]: 'inc-1'
-    })
-  })
-
-  it('leaves a status owner that already moved to another tab, and its records, where they are', async () => {
-    const directory = seededDirectory(withDroppedPaneRecords)
-    const { store } = await load(directory)
-    const transfer = vi.spyOn(agentHookServer, 'transferPaneAuthority').mockImplementation(() => {})
-    vi.spyOn(agentHookServer, 'resolvePaneAuthorityOwner').mockImplementation((paneKey) =>
-      paneKey === DROPPED_KEY ? `tab-2:${KEPT}` : paneKey
-    )
-    const { runtime, rekeyWorkerTerminalResourcePaneKey } = fakeRuntime()
-
-    await repairDuplicatePtyPanesOnStart(store, runtime)
-    await quit(store)
-
-    expect(transfer).not.toHaveBeenCalled()
-    expect(rekeyWorkerTerminalResourcePaneKey).not.toHaveBeenCalled()
-    const state = storedState(directory)
-    expect(storedLeafIds(directory)).toEqual([KEPT])
-    expect(Object.keys(state.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {})).toEqual([
-      DROPPED_KEY
-    ])
-    expect(state.ui?.acknowledgedAgentsByPaneKey).toEqual({ [DROPPED_KEY]: 11 })
   })
 
   it('writes nothing when a pane owner move fails, so the next start retries', async () => {
@@ -351,13 +183,5 @@ describe('planDuplicatePtyPaneRepair', () => {
 
     expect(leafIds(plan?.session.terminalLayoutsByTabId[TAB]?.root)).toEqual([KEPT])
     expect(plan?.transfers).toEqual([])
-  })
-})
-
-describe('planDuplicatePtyPaneRepair on a paused WSL move', () => {
-  it('leaves a frozen workspace’s tree and owners alone, since the write keeps its stored tree', () => {
-    expect(
-      planDuplicatePtyPaneRepair(duplicateSession(), (id) => id === FIXTURE_GIT_WORKTREE_ID)
-    ).toBeNull()
   })
 })

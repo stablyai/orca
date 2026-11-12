@@ -17,7 +17,8 @@ const EDITOR_VIEW_MODES: ReadonlySet<unknown> = new Set<EditorTabView['mode']>([
   'diff',
   'markdown-preview',
   'conflict-review',
-  'check-details'
+  'check-details',
+  'git-graph'
 ])
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

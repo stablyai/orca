@@ -76,7 +76,16 @@ vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
 vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
-  MobileNativeChatComposerMenu: 'Suggestions'
+  MobileNativeChatComposerSuggestions: 'Suggestions'
 }))
 vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
+vi.mock('../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
 vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

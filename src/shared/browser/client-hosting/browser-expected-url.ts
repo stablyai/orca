@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const BROWSER_EXPECTED_URL_MISMATCH_CODE = 'browser_expected_url_mismatch'
 export const BROWSER_EXPECT_URL_UNSUPPORTED_CODE = 'browser_expect_url_unsupported'

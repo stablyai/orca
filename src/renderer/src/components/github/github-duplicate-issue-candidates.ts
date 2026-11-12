@@ -4,7 +4,7 @@ import { githubRepoIdentityKey } from '../../../../shared/github/repository-iden
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getGitHubWorkItemRowHostId } from '@/store/github/work-item-routing'
+import { getGitHubWorkItemRowHostId } from '@/store/github/work-items/work-item-routing'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
 // Reuse the empty result to avoid allocating on every store write while the picker is closed.

@@ -1,12 +1,12 @@
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readRunRemovedWork } from '../../../../orchestration/db/reset/removed-orchestration-work-read'
 import { boundRunWorkerNext } from '../../../../orchestration/db/runs/worker-run-binding'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
-import type { RunRow } from '../../../../orchestration/types'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,
@@ -48,8 +48,9 @@ export function createBoundRun(
 }
 
 export const ORCHESTRATION_RUN_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.runCreate',
+    access: { kind: 'localOnly', caller: 'from', targets: {} },
     permission: 'workspace',
     params: RunCreateParams,
     handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
@@ -62,8 +63,9 @@ export const ORCHESTRATION_RUN_METHODS = [
       return { run: exposeRun(createBoundRun(runtime, caller, params.from, params.objective)) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.runUse',
+    access: { kind: 'localOnly', caller: 'from', targets: { id: 'run' } },
     permission: 'workspace',
     params: RunUseParams,
     handler: (
@@ -128,8 +130,9 @@ export const ORCHESTRATION_RUN_METHODS = [
       return { run: exposeRun(run) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.runCurrent',
+    access: { kind: 'reads', caller: 'from', targets: {} },
     permission: 'workspace',
     params: RunCurrentParams,
     handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
@@ -148,8 +151,9 @@ export const ORCHESTRATION_RUN_METHODS = [
       return { run: exposeRun(run), ...(next ? { next } : {}) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.runList',
+    access: { kind: 'reads', targets: {}, collection: true },
     permission: 'workspace',
     params: RunListParams,
     handler: (params, { runtime }) => {
@@ -157,8 +161,9 @@ export const ORCHESTRATION_RUN_METHODS = [
       return { ...listed, runs: listed.runs.map(exposeRun) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.runShow',
+    access: { kind: 'reads', targets: { id: 'run' } },
     permission: 'workspace',
     params: RunShowParams,
     handler: (params, { runtime }) => {

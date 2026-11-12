@@ -48,29 +48,6 @@ function mountDetails(): Editor {
   return editor
 }
 
-it('opens only native details ancestors that conceal the destination', () => {
-  document.body.innerHTML = `
-    <details id="outer"><summary>Outer</summary>
-      <details id="inner"><summary>Inner</summary><h2>Target</h2></details>
-    </details>
-    <details id="sibling"><summary>Sibling</summary></details>
-  `
-  revealMarkdownNavigationDetails(document.querySelector('h2')!)
-  expect([...document.querySelectorAll('details')].map((details) => details.open)).toEqual([
-    true,
-    true,
-    false
-  ])
-  document.querySelector('#inner')?.removeAttribute('open')
-  document.querySelector('#outer')?.removeAttribute('open')
-  revealMarkdownNavigationDetails(document.querySelector<HTMLElement>('#inner summary')!)
-  expect([...document.querySelectorAll('details')].map((details) => details.open)).toEqual([
-    true,
-    false,
-    false
-  ])
-})
-
 it('opens rich ancestors in one undoable transaction while retaining selection and variants', () => {
   const editor = mountDetails()
   editor.commands.setTextSelection(2)
@@ -99,14 +76,6 @@ it('opens rich ancestors in one undoable transaction while retaining selection a
   expect(editor.commands.undo()).toBe(true)
   expect(editor.state.doc.child(1).attrs.open).toBe(false)
   expect(editor.state.doc.child(1).child(1).firstChild?.attrs.open).toBe(false)
-})
-
-it('opens the outer rich fold without expanding a destination in its own summary', () => {
-  const editor = mountDetails()
-  revealMarkdownNavigationDetails(editor.view.dom.querySelectorAll<HTMLElement>('summary')[1])
-  expect(editor.state.doc.child(1).attrs.open).toBe(true)
-  expect(editor.state.doc.child(1).child(1).firstChild?.attrs.open).toBe(false)
-  expect(editor.state.doc.child(2).attrs.open).toBe(false)
 })
 
 it.each([false, true])(

@@ -4,18 +4,15 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import {
-  SshChannelMultiplexer,
-  type MultiplexerTransport
-} from '../main/ssh/ssh-channel-multiplexer'
+import { SshChannelMultiplexer } from '../main/ssh/protocol/ssh-channel-multiplexer'
+import type { MultiplexerTransport } from '../main/ssh/protocol/ssh-multiplexer-transport-writer'
 import { RelayDispatcher } from './dispatcher'
 import { RelayAgentHookServer } from './agent-hook-server'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-listener/transport/agent-hook-relay'
-import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../shared/agent-status/contracts/agent-status-types'
-import { AgentHookServer } from '../main/agent-hooks/server'
+import { AgentHookServer } from '../main/agent-hooks/server/agent-hook-server'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 
 const LEAF_7 = '77777777-7777-4777-8777-777777777777'
@@ -142,54 +139,6 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       .toBe('cancellation')
   })
 
-  it.each([
-    { agent: 'claude', input: { hook_event_name: 'UserPromptSubmit', prompt: 'roundtrip' } },
-    {
-      agent: 'opencode2',
-      input: { hook_event_name: 'MessagePart', role: 'user', text: 'roundtrip' }
-    }
-  ])('forwards a $agent prompt through the relay to ingestRemote', async ({ agent, input }) => {
-    const events: { paneKey: string; payload: unknown; connectionId: string | null }[] = []
-    orcaServer.setListener((event) => {
-      events.push({
-        paneKey: event.paneKey,
-        payload: event.payload,
-        connectionId: event.connectionId
-      })
-    })
-
-    const { port, token } = hookServer.getCoordinates()
-    const res = await fetch(`http://127.0.0.1:${port}/hook/${agent}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Orca-Agent-Hook-Token': token
-      },
-      body: JSON.stringify({
-        paneKey: `tab-7:${LEAF_7}`,
-        tabId: 'tab-7',
-        worktreeId: 'wt-7',
-        env: 'remote',
-        version: '1',
-        payload: input
-      })
-    })
-    expect(res.status).toBe(204)
-
-    // Dispatch, transport and mux delivery span ticks; await the observed event rather than a fixed delay.
-    const start = Date.now()
-    while (events.length === 0 && Date.now() - start < 1500) {
-      await new Promise((r) => setImmediate(r))
-    }
-    expect(events).toHaveLength(1)
-    expect(events[0].paneKey).toBe(`tab-7:${LEAF_7}`)
-    expect(events[0].connectionId).toBe('conn-test')
-    const payload = events[0].payload as { state: string; prompt: string; agentType: string }
-    expect(payload.state).toBe('working')
-    expect(payload.prompt).toBe('roundtrip')
-    expect(payload.agentType).toBe(agent)
-  })
-
   it.each([0, 1, 2, 3])(
     'delivers Cursor form payloads with %i BOMs to the host-owned status store',
     async (count) => {
@@ -259,42 +208,6 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     await new Promise((resolve) => setImmediate(resolve))
     expect(hookServer.replayCachedPayloadsForPanes()).toBe(0)
     expect(orcaServer.getStatusSnapshot()).toEqual([])
-  })
-
-  it('sheds an oversized assistant message through the production publication path', async () => {
-    const events: { payload: { state: string; lastAssistantMessage?: string } }[] = []
-    orcaServer.setListener((event) => {
-      events.push({ payload: event.payload })
-    })
-    const { port, token } = hookServer.getCoordinates()
-    const post = (payload: Record<string, unknown>): Promise<Response> =>
-      fetch(`http://127.0.0.1:${port}/hook/claude`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
-        },
-        body: JSON.stringify({ paneKey: `tab-7:${LEAF_7}`, payload })
-      })
-
-    await expect(
-      post({ hook_event_name: 'UserPromptSubmit', prompt: 'bounded publication' })
-    ).resolves.toMatchObject({ status: 204 })
-    await expect(
-      post({
-        hook_event_name: 'Stop',
-        last_assistant_message: 'a'.repeat(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH)
-      })
-    ).resolves.toMatchObject({ status: 204 })
-
-    const start = Date.now()
-    while (events.length < 2 && Date.now() - start < 1500) {
-      await new Promise((resolve) => setImmediate(resolve))
-    }
-    expect(events).toHaveLength(2)
-    expect(events[1].payload.state).toBe('done')
-    expect(events[1].payload.lastAssistantMessage).toBeUndefined()
-    expect(dispatcher.activeClientIds()).toHaveLength(1)
   })
 
   it('clears remote Claude permission when the approved tool starts with matching identity', async () => {

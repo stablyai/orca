@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
 import { triggerMediumImpact } from '../platform/haptics'
@@ -20,18 +20,14 @@ import { HostKindIcon } from './HostKindIcon'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
+import { PrStateIcon } from './PrStateIcon'
+import { WorktreeUnsavedName } from './WorktreeUnsavedName'
 import { WORKTREE_ROW_LAYOUT } from './worktree-list-row-layout'
-
-// Match desktop formatBranchName by hiding refs/heads/ prefix.
-function displayBranch(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
 
 type Props = {
   item: Worktree
   view: WorktreeRowView
   isReadOnly: boolean
-  now: number
   repoColor: string
   repoIcon?: MobileRenderableRepoIcon | null
   // Grouped repo header already identifies project; omit duplicate icon/name on each row.
@@ -39,19 +35,21 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeStatus
+  /** Null until a live read says (rows from the phone's store carry no agent state). */
+  status: WorktreeStatus | null
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean
   onLongPress?: (item: Worktree) => void
   onToggleLineage?: (item: WorkspaceListItem) => void
+  /** A rename the desktop hasn't taken yet; the row keeps its real name and points to this one. */
+  unsavedName?: string
 }
 
 function WorktreeListRowComponent({
   item,
   view,
   isReadOnly,
-  now,
   repoColor,
   repoIcon,
   hideRepo = false,
@@ -62,14 +60,16 @@ function WorktreeListRowComponent({
   onAgentPress,
   statusLive,
   onLongPress,
-  onToggleLineage
+  onToggleLineage,
+  unsavedName
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta =
     item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
-  const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
+  // Match desktop formatBranchName by hiding refs/heads/ prefix.
+  const metaText = isFolderWorkspace ? folderMeta : item.branch.replace(/^refs\/heads\//, '')
   const lineageDepth = Math.max(0, view.lineageDepth ?? 0)
   const indent = projectGroupRowIndent(item, view) + lineageDepth * 18
   const count = view.lineageChildCount ?? 0
@@ -77,11 +77,19 @@ function WorktreeListRowComponent({
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
   const hostId = view.hostContextHostId ?? item.hostId
+  const prState = item.linkedPR?.state ?? ''
+  const prColor = prStateColor(prState)
   const hostAccessibilityLabel = [view.hostContextLabel, view.hostContextHealthLabel]
     .filter(Boolean)
     .join(', ')
   // Why: the desktop's compact card keeps an icon-only glyph for remote projects after the host badge goes.
   const showHostGlyph = !cardDetails.metaRow && isRemoteExecutionHostId(hostId)
+  const showHostBadge =
+    cardDetails.host && Boolean(view.hostContextLabel || view.hostContextHealthLabel)
+  // Why: like the desktop, skip a blank meta lane when every part of it is off.
+  const showMetaRow =
+    cardDetails.metaRow &&
+    (lineageDepth > 0 || showHostBadge || showRepoInMetaRow || cardDetails.identity)
   // Agent rows take their own taps, so they share the card's long-press menu.
   const openActions = onLongPress
     ? () => {
@@ -148,10 +156,8 @@ function WorktreeListRowComponent({
           </Text>
           {cardDetails.pr && item.linkedPR && (
             <View style={styles.prBadge}>
-              <GitPullRequest size={10} color={prStateColor(item.linkedPR.state)} />
-              <Text style={[styles.prNumber, { color: prStateColor(item.linkedPR.state) }]}>
-                #{item.linkedPR.number}
-              </Text>
+              <PrStateIcon state={prState} size={10} color={prColor} />
+              <Text style={[styles.prNumber, { color: prColor }]}>#{item.linkedPR.number}</Text>
             </View>
           )}
           {isFolderWorkspace && (
@@ -166,7 +172,7 @@ function WorktreeListRowComponent({
             <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
           ) : null}
         </View>
-        {cardDetails.metaRow && (
+        {showMetaRow && (
           <View style={styles.worktreeMetaRow}>
             {lineageDepth > 0 && (
               <View style={styles.childBadge}>
@@ -176,7 +182,7 @@ function WorktreeListRowComponent({
                 </Text>
               </View>
             )}
-            {cardDetails.host && (view.hostContextLabel || view.hostContextHealthLabel) ? (
+            {showHostBadge ? (
               <View
                 style={[styles.childBadge, styles.hostBadge]}
                 accessibilityLabel={hostAccessibilityLabel}
@@ -206,16 +212,18 @@ function WorktreeListRowComponent({
                 </Text>
               </>
             )}
-            <Text style={styles.branchName} numberOfLines={1}>
-              {metaText}
-            </Text>
+            {cardDetails.identity && (
+              <Text style={styles.branchName} numberOfLines={1}>
+                {metaText}
+              </Text>
+            )}
           </View>
         )}
+        {unsavedName ? <WorktreeUnsavedName name={unsavedName} /> : null}
         {/* Match desktop agent activity only; plain terminal shell-output tails stay hidden. */}
         {cardDetails.inlineAgents && item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList
             agents={item.agents}
-            now={now}
             unvisited={item.unread}
             statusLive={statusLive}
             isReadOnly={isReadOnly}

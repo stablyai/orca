@@ -1,10 +1,9 @@
 import {
   getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  type ExecutionHostId
+  parseExecutionHostId
 } from '../execution-host'
-import { buildExecutionHostRegistry } from '../execution-host-registry'
+import { buildExecutionHostRegistry } from '../execution-host/execution-host-registry'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import {
   getRepoHostIdentity,
@@ -28,6 +27,11 @@ import {
 import { sortWorktreesByStamps, type SortBy } from './smart-sort'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
 import type { WorkspaceRow } from './workspace-rows'
+import {
+  resolveFeedLineageParentIdentities,
+  type FeedLineagePolicy
+} from './sidebar-feed-lineage-parents'
+import type { SidebarLineageParentIdentities } from './worktree-lineage-projection'
 
 // By row object: a feed snapshot keeps an unchanged row's object, so only a changed row is read again.
 type FeedRow = WorkspaceRow | PairedServerWorkspaceRow
@@ -63,6 +67,20 @@ function readFeedWorkspaces(domains: SidebarFeedDomains): SidebarFeedWorkspace[]
   ]
 }
 
+/** This desktop's own device id on each paired server, by environment id. */
+export function feedPairedDeviceIdsByEnvironment(
+  domains: Pick<SidebarFeedDomains, 'pairedServerHosts'>
+): Map<string, string> {
+  return new Map(
+    [...domains.pairedServerHosts].flatMap(([hostId, { host }]) => {
+      const environmentId = parseExecutionHostId(hostId)
+      return environmentId?.kind === 'runtime' && host?.pairedDeviceId
+        ? [[environmentId.environmentId, host.pairedDeviceId] as const]
+        : []
+    })
+  )
+}
+
 /** The host sections a feed reader lists, labelled from the feed's SSH and paired-server facts. */
 export function buildFeedHostOptions(
   domains: SidebarFeedDomains,
@@ -73,9 +91,6 @@ export function buildFeedHostOptions(
     const parsed = parseExecutionHostId(hostId)
     return parsed?.kind === 'runtime' && host ? [{ parsed, host }] : []
   })
-  const serverLabelByHostId = new Map<ExecutionHostId, string>(
-    servers.map(({ parsed, host }) => [parsed.id, host.label])
-  )
   const focused = parseExecutionHostId(view.defaultHostId)
   return buildExecutionHostRegistry({
     repos,
@@ -93,10 +108,8 @@ export function buildFeedHostOptions(
       name: host.label
     })),
     hostLabelOverrides: view.hostLabelOverrides,
-    localHostLabel: view.localHostLabel
-  }).map((host) => {
-    const label = serverLabelByHostId.get(host.id)
-    return label ? { ...host, label } : host
+    localHostLabel: view.localHostLabel,
+    localHostLabelIsDefault: true
   })
 }
 
@@ -110,6 +123,8 @@ export type SidebarFeedIndex = {
   repoMap: Map<string, Repo>
   /** The registration a workspace belongs to; the same repo id may be registered on several hosts. */
   repoOf: (worktree: Pick<Worktree, 'repoId' | 'hostId'>) => Repo | undefined
+  /** Nesting parents over every store, set only while some row carries a cross-store record. */
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined
 }
 
 /** Prefer the row host’s registration; missing same-ID registrations use repoMap fallback like the window. */
@@ -137,7 +152,8 @@ export function createHostScopedRepoOf(
 
 export function indexSidebarFeed(
   domains: SidebarFeedDomains,
-  repos: readonly Repo[]
+  repos: readonly Repo[],
+  lineagePolicy: FeedLineagePolicy = {}
 ): SidebarFeedIndex {
   const workspaces = readFeedWorkspaces(domains)
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
@@ -146,7 +162,8 @@ export function indexSidebarFeed(
     worktrees: workspaces.flatMap((entry) => (entry.folderWorkspace ? [] : [entry.worktree])),
     folderWorkspaces: workspaces.flatMap((entry) => entry.folderWorkspace ?? []),
     repoMap,
-    repoOf: createHostScopedRepoOf(repos, repoMap)
+    repoOf: createHostScopedRepoOf(repos, repoMap),
+    lineageParentIdentities: resolveFeedLineageParentIdentities(domains, workspaces, lineagePolicy)
   }
 }
 

@@ -1,23 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import {
-  coerceWorktreeCardVisibleTitle,
-  getWorktreeCardTitleDisplay
-} from './worktree-card-title-display'
+import { getWorktreeCardTitleDisplay } from './worktree-card-title-display'
 
-describe('worktree card title display', () => {
-  it('keeps the stored title while linked titles are still loading', () => {
+describe('getWorktreeCardTitleDisplay', () => {
+  it('keeps a user-set name that matches the branch over a linked task title', () => {
     expect(
       getWorktreeCardTitleDisplay({
-        storedDisplayName: 'feature/local-branch',
-        branchName: 'feature/local-branch',
-        reviewTitle: 'Loading PR...'
+        storedDisplayName: 'release/rc-11',
+        displayNameMode: 'fixed',
+        branchName: 'release/rc-11',
+        jiraIssueTitle: 'Refactor billing export'
       })
-    ).toBe('feature/local-branch')
-  })
-
-  it('coerces legacy visible titles before downstream title operations', () => {
-    expect(coerceWorktreeCardVisibleTitle(undefined).trim()).toBe('')
-    expect(coerceWorktreeCardVisibleTitle(null).trim()).toBe('')
-    expect(coerceWorktreeCardVisibleTitle('  Custom workspace  ')).toBe('  Custom workspace  ')
+    ).toBe('release/rc-11')
   })
 })

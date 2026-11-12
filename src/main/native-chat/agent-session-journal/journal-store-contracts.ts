@@ -1,4 +1,6 @@
-import type { JournalItemEcho } from './journal-item-echo'
+import type { JournalRow } from './durable-rows/journal-row-schema'
+import type Database from '../../sqlite/sync-database'
+import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalAnsweredTurnIdentity,
@@ -16,15 +18,15 @@ import type {
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
-import type { JournalHostDatabase } from './journal-host-database'
-import type { JournalLifecycleMutationInput } from './journal-row-builders'
-import type { JournalRowsRead } from './journal-read-row'
-import type { JournalReducerState } from './journal-reducer'
-import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import type { JournalHostDatabase } from './database/journal-host-database'
+import type { JournalLifecycleMutationInput } from './writing/journal-lifecycle-mutation'
+import type { JournalRowsRead } from './replay/journal-read-row'
+import type { JournalReducerState } from './projection/journal-reducer'
+import type { JournalOperationReceipt, JournalRowWriter } from './writing/journal-row-writer'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import type { JournalAttachmentClaim } from './journal-submission-hook'
-import type { JournalWriteBody } from './journal-write-queue'
-import type { QueuedMessageOwed } from './queued-message-consume-error'
+import type { JournalAttachmentClaim } from './submissions/journal-submission-hook'
+import type { JournalWriteBody } from './writing/journal-write-queue'
+import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
@@ -33,6 +35,9 @@ export type AgentSessionJournalOptions = {
   mintEpoch?: () => string
   /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
   withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
+  /** Runs in every write's transaction with the rows, the commit clock and each item's prior body;
+   *  must not throw. */
+  captureCommittedRows?: JournalCommittedRowsCapture
 }
 
 export type JournalReadSince =
@@ -68,6 +73,14 @@ export type JournalAppendResult = {
   revision: number
 }
 
+export type JournalCommittedRowsCapture = (
+  db: Database.Database,
+  sessionId: string,
+  rows: readonly JournalRow[],
+  committedAt: number,
+  previous: (itemId: string) => AgentJournalItemBody | undefined
+) => void
+
 export type JournalItemAppendOptions = AgentJournalRowAttribution & {
   echoOf?: JournalItemEcho['echoOf']
   fence: number
@@ -98,12 +111,13 @@ export type JournalLifecycleBatchInput = {
   dispatches?: readonly ResolveDispatchInput[]
   /** Atomically reject queued sends before the batch; skip the batch when none remain. */
   rejectsQueued?: AgentJournalDispatchRejection
+  keepFailedStart?: boolean
 }
 
 /** Plan after preceding writes, including answers and Stops. */
 export type JournalPlannedLifecycleBatchInput = Pick<
   JournalLifecycleBatchInput,
-  'settlementId' | 'fence' | 'recovered'
+  'settlementId' | 'fence' | 'recovered' | 'keepFailedStart'
 > & {
   plan: () => {
     mutations: readonly JournalLifecycleMutationInput[]

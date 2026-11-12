@@ -11,8 +11,8 @@ import type { DurableProfileStateMutation } from '../loading-store/store-runtime
 import {
   keepPartitionEditorViews,
   partitionEditorViewsOf
-} from '../loading-store/layout-editor-views'
-import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
+} from '../loading-store/workspace-sessions/layout-editor-views'
+import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/terminal-state/wsl-move-session-freeze'
 import {
   applyCommandToSession,
   type LayoutLiveContext,
@@ -46,7 +46,8 @@ export function keepFrozen(
 export function commitWindowPaneDetach(
   hostIds: readonly ExecutionHostId[],
   command: WindowPaneDetachCommand,
-  context: TerminalTopologyCommitContext
+  context: TerminalTopologyCommitContext,
+  run: LayoutCommandRun = {}
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
   const resolved = resolveWindowPaneDetach(
     context.hostIds().map((hostId) => ({ hostId, session: context.getSession(hostId) })),
@@ -56,7 +57,7 @@ export function commitWindowPaneDetach(
   if (resolved && 'code' in resolved) {
     return { value: { ok: false, code: resolved.code }, persist: false }
   }
-  const committed = commitLayoutCommand(hostIds, resolved?.command ?? command, context)
+  const committed = commitLayoutCommand(hostIds, resolved?.command ?? command, context, run)
   if (!resolved || !committed.value.ok || committed.persist === false) {
     return committed
   }

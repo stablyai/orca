@@ -1,8 +1,9 @@
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
+import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { ClientWorktreeCreateSettings } from './client-worktree-create-settings'
 import {
@@ -20,28 +21,44 @@ export async function createWorktreeOnRuntimeHost(
   attempt: WorktreeCreateAttempt,
   clientCreateSettings: ClientWorktreeCreateSettings
 ): Promise<CreatedWorktreeResult> {
-  const clientAutomationProvenance = request.options?.clientAutomationProvenance
-  // Why: only a capable host accepts the field; older ones create the same plain workspace as before.
-  const provenanceParams =
-    clientAutomationProvenance &&
-    (await hostSupportsCapability(
-      environmentId,
-      WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY
-    ))
-      ? { clientAutomationProvenance }
-      : {}
-  const call = (launch?: HostAgentLaunch): Promise<CreateWorktreeResult> =>
+  const call = (
+    launch?: HostAgentLaunch,
+    creationLaunch?: NonNullable<WorktreeCreateRequest['options']>['creationAgentLaunch']
+  ): Promise<CreateWorktreeResult> =>
     callRuntimeRpc<CreateWorktreeResult>(
       { kind: 'environment', environmentId },
       'worktree.create',
       {
-        ...buildRuntimeWorktreeCreateParams(request, attempt, launch),
-        ...provenanceParams,
+        ...buildRuntimeWorktreeCreateParams(request, attempt, launch, creationLaunch),
         // Why: the host's own store defaults would otherwise override the user's choices.
         ...clientCreateSettings
       },
       { timeoutMs: 10 * 60_000 }
     )
+  const creationLaunch = request.options?.creationAgentLaunch
+  if (
+    creationLaunch &&
+    (await hostSupportsCapability(environmentId, WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY))
+  ) {
+    try {
+      return await call(undefined, creationLaunch)
+    } catch (error) {
+      if (!isUnknownAgentRefusal(error)) {
+        throw error
+      }
+    }
+  }
+  if (request.options?.legacyStartup) {
+    const startup = request.options.legacyStartup()
+    request = {
+      ...request,
+      startup,
+      options: {
+        ...request.options,
+        startupDraft: startup ? undefined : request.options.startupDraft
+      }
+    }
+  }
   const launch = request.options?.hostAgentLaunch
   if (!launch || !(await hostSupportsCapability(environmentId, AGENT_LAUNCH_RUNTIME_CAPABILITY))) {
     return call()

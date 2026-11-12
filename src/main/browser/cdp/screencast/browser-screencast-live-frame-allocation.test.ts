@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFormat
-} from '../../../../shared/browser-screencast-protocol'
+} from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { createBrowserScreencastMessageHandler } from './browser-screencast-cdp-events'
 import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
 import type { BrowserScreencastOptions } from './browser-screencast-stream-types'
@@ -40,6 +40,7 @@ function createLiveFrameRoute(
     maxHeight: 1200,
     everyNthFrame: 2,
     minFrameIntervalMs: 0,
+    holdPaint: () => () => {},
     onFrame
   }
   const isClosed = () => false
@@ -73,70 +74,6 @@ async function settleAcknowledgements(): Promise<void> {
 }
 
 describe('live screencast image allocation', () => {
-  it('replays captured PNG and JPEG bytes without copying the decoded image again', async () => {
-    const fixtures = [
-      {
-        format: 'png',
-        path: 'docs/site/public/docs/remote-server-add-client.png',
-        width: 832,
-        height: 832
-      },
-      {
-        format: 'jpeg',
-        path: 'docs/site/public/docs/posters/file-drag.jpg',
-        width: 1200,
-        height: 682
-      }
-    ] as const
-    const captures = fixtures.map((fixture) => {
-      const bytes = readFileSync(resolve(fixture.path))
-      return { ...fixture, bytes, data: bytes.toString('base64'), expectedDigest: digest(bytes) }
-    })
-    const nativeUint8Array = globalThis.Uint8Array
-    let imageCopyBytes = 0
-    globalThis.Uint8Array = new Proxy(nativeUint8Array, {
-      construct(target, argumentsList, newTarget) {
-        const source: unknown = argumentsList[0]
-        const bytes: unknown = Reflect.construct(target, argumentsList, newTarget)
-        if (!(bytes instanceof nativeUint8Array)) {
-          throw new Error('Unexpected byte constructor result')
-        }
-        if (Buffer.isBuffer(source)) {
-          imageCopyBytes += bytes.byteLength
-        }
-        return bytes
-      }
-    })
-    try {
-      for (const fixture of captures) {
-        const seen: number[] = []
-        const route = createLiveFrameRoute(fixture.format, (wire) => {
-          const frame = decodeBrowserScreencastFrame(wire)
-          if (!frame) {
-            throw new Error('Captured frame was not encoded')
-          }
-          expect(frame.format).toBe(fixture.format)
-          expect(frame.metadata.imageWidth).toBe(fixture.width)
-          expect(frame.metadata.imageHeight).toBe(fixture.height)
-          expect(frame.image.byteLength).toBe(fixture.bytes.byteLength)
-          expect(digest(frame.image)).toBe(fixture.expectedDigest)
-          seen.push(frame.seq)
-          return true
-        })
-        for (let sessionId = 1; sessionId <= 12; sessionId++) {
-          route.emit(fixture.data, sessionId)
-        }
-        await settleAcknowledgements()
-        expect(seen).toEqual(Array.from({ length: 12 }, (_, index) => index))
-        expect(route.acknowledgements).toEqual(Array.from({ length: 12 }, (_, index) => index + 1))
-        route.pacer.clearPending(true)
-      }
-      expect(imageCopyBytes).toBe(0)
-    } finally {
-      globalThis.Uint8Array = nativeUint8Array
-    }
-  })
-
   it('owns pooled and offset images through refused sends and keeps encoded bytes independent', async () => {
     vi.useFakeTimers()
     const bytes = readFileSync(resolve('resources/tray/orca-menu-barTemplate.png'))

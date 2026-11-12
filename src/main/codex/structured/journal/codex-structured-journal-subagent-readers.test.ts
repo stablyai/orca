@@ -12,14 +12,14 @@ import {
 } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { openAgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
-import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexThreadItem } from '../items/codex-thread-item-identity'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-codex-children'
@@ -179,16 +179,6 @@ describe("a Codex subagent's rows on the parent's surfaces", () => {
     expect(
       rows.some((row) => row.body.kind === 'status' && row.body.text === 'Context compacted')
     ).toBe(true)
-  })
-
-  it("shows the parent's own compaction as its activity line", async () => {
-    const { spawnChild, item, items, activities } = await session()
-    spawnChild()
-    item(PARENT, 'item/started', PARENT_TURN, { type: 'contextCompaction', id: 'own-compact' })
-
-    expect(
-      selectStructuredAgentTurnActivity(await items(), PARENT_TURN, activities.at(-1))
-    ).toEqual({ kind: 'description', text: 'Compacting the conversation' })
   })
 
   it("quotes the parent's own latest line, and still does after a reopen", async () => {

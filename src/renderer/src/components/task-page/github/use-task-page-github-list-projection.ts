@@ -1,32 +1,20 @@
+import { useCallback, useMemo } from 'react'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page/github/task-page-github-work-item-mutation-keys'
-import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
-import { deriveAdvertisedTotalPages } from '../../../../../shared/work-item-empty-page'
-import {
-  GITHUB_PR_TASK_GRID_CLASS,
-  GITHUB_TASK_GRID_CLASS,
-  PR_CHECKS_EAGER_PREFETCH_LIMIT
-} from '../task-page-source-context'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
-import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
+import { deriveAdvertisedTotalPages } from '../../../../../shared/work-items/work-item-empty-page'
+import { GITHUB_PR_TASK_GRID_CLASS, GITHUB_TASK_GRID_CLASS } from '../task-page-source-context'
 import { useTaskPageGitHubListPending } from './use-task-page-github-list-pending'
+import { useTaskPagePRCheckHydration } from './use-task-page-pr-check-hydration'
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
-    repos,
-    fetchPRChecks,
-    taskSource,
-    githubMode,
     tasksFiltering,
     githubPageSize,
     pages,
     currentPage,
     countedTotalPages,
     provenPageLimit,
-    patchTaskPageWorkItemRows,
     perRepoSourceState,
     activeGithubTaskKind,
     githubWorkItemMutation
@@ -101,56 +89,11 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   const githubTaskGridClass = showPRManagementColumns
     ? GITHUB_PR_TASK_GRID_CLASS
     : GITHUB_TASK_GRID_CLASS
-  const ensurePRChecksLoaded = useCallback(
-    (item: GitHubWorkItem): void => {
-      if (item.type !== 'pr' || item.checksSummary) {
-        return
-      }
-      const repo = getWorkItemRepo(repos, item)
-      if (!repo) {
-        return
-      }
-      const requestedHeadSha = item.headSha
-      const requestedPRRepo = item.prRepo ?? null
-      void fetchPRChecks(
-        repo.path,
-        item.number,
-        item.branchName,
-        item.headSha,
-        item.prRepo ?? null,
-        {
-          repoId: repo.id,
-          sourceContext: getTaskPageRepoSourceContext(repo, 'github')
-        }
-      ).then((checks) => {
-        const checksSummary = deriveTaskPagePRCheckSummary(checks)
-        patchTaskPageWorkItemRows(
-          {
-            id: item.id,
-            repoId: item.repoId
-          },
-          {
-            checksSummary
-          },
-          (currentItem) =>
-            currentItem.type === 'pr' &&
-            currentItem.headSha === requestedHeadSha &&
-            sameOptionalGitHubOwnerRepo(currentItem.prRepo, requestedPRRepo) &&
-            (currentItem.checksSummary?.cancelled === undefined ||
-              currentItem.checksSummary.state !== checksSummary.state)
-        )
-      })
-    },
-    [fetchPRChecks, patchTaskPageWorkItemRows, repos]
+  const ensurePRChecksLoaded = useTaskPagePRCheckHydration(
+    model,
+    filteredWorkItems,
+    showPRManagementColumns
   )
-  useEffect(() => {
-    if (taskSource !== 'github' || githubMode !== 'items' || !showPRManagementColumns) {
-      return
-    }
-    for (const item of filteredWorkItems.slice(0, PR_CHECKS_EAGER_PREFETCH_LIMIT)) {
-      ensurePRChecksLoaded(item)
-    }
-  }, [ensurePRChecksLoaded, filteredWorkItems, githubMode, showPRManagementColumns, taskSource])
   let lastLoadedPageIndex = 0
   for (let index = 0; index < pages.length; index += 1) {
     if (pages[index] !== null) {
