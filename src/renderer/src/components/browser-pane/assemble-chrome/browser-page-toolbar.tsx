@@ -198,6 +198,7 @@ export function BrowserPageToolbar({
                 <ArtifactPublishButton
                   sourceKey={shareableArtifactFile.filePath}
                   size="icon-xs"
+                  variant="muted-field-icon"
                   createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
                 />
               ) : null}
