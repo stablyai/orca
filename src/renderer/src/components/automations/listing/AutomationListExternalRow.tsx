@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   ExternalAutomationAction,
   ExternalAutomationJob,
@@ -36,8 +36,11 @@ import {
   LIST_TABLE_ROW_CLASS,
   LIST_TABLE_ROW_SELECTED_CLASS,
   LIST_TABLE_STICKY_ROW_CELL_CLASS
-} from '@/lib/list-table-layout'
-import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
+} from '@/lib/list-interaction/list-table-layout'
+import {
+  isPortaledRowMenuClick,
+  isRowActivationKey
+} from '@/lib/list-interaction/list-row-interaction'
 import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { AutomationListStatusCell } from './AutomationListStatusCell'

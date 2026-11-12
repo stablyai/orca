@@ -4,7 +4,7 @@ import React, { useRef, useEffect } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { CheckCircle2, AlertCircle, Clock3, Minus } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getChecksPillTone, getChecksLabel } from '../task-page-checks-pill'
 export function PRChecksCell({
   item,

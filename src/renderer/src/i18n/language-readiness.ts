@@ -4,7 +4,7 @@ import {
   setRendererLanguageDetection,
   type UiLanguageDetection
 } from '../../../shared/ui-locale'
-import { isWebClientLocation } from '../lib/web-client-location'
+import { isWebClientLocation } from '../app-shell/platform/web-client-location'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 export const useLanguageReadiness = create<{

@@ -48,7 +48,9 @@ vi.mock('../../store', () => ({
     subscribe: () => () => {}
   }
 }))
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
 

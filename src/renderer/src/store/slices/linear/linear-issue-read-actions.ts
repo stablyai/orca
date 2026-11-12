@@ -1,5 +1,5 @@
 import type { LinearIssueData } from './linear-issue-read'
-import type { LinearIssueRequest } from './linear-issue-publication'
+import type { LinearIssueRequest } from './linear-issue-read-lifecycle'
 import { openLinearIssueRead } from './linear-issue-read'
 import {
   canPublishLinearScopeCache,

@@ -4,7 +4,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { CommandGroup, CommandItem } from '@/components/ui/command'
@@ -133,9 +133,16 @@ export function LandingAgentResults({
   if (model.state !== 'settled') {
     return null
   }
-  const matches = model.rows.filter(
-    (row) => row.kind !== 'chat-unavailable' && landingQueryMatches(rowLabel(row, t), query)
-  )
+  const catalog = getAgentCatalog()
+  const matches = model.rows.filter((row) => {
+    if (row.kind === 'chat-unavailable') {
+      return false
+    }
+    const entry = catalog.find((candidate) => candidate.id === row.agent)
+    return [rowLabel(row, t), ...(entry?.searchAliases ?? [])].some((candidate) =>
+      landingQueryMatches(candidate, query)
+    )
+  })
   if (matches.length === 0) {
     return null
   }

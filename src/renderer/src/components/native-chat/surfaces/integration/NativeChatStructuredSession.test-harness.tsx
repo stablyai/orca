@@ -292,7 +292,8 @@ export function createStructuredSessionMocks() {
         mocks.retryLaunch(worktreeId, sessionId)
         mocks.relaunchWithMessage(worktreeId, sessionId, text)
         return new Promise(() => {})
-      }
+      },
+      sendMessageToStartingStructuredAgentSession: () => null
     }),
     useNativeChatFontSize: () => ({
       useNativeChatFontSize: () => undefined

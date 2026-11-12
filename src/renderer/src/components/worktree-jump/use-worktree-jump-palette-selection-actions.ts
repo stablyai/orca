@@ -14,7 +14,7 @@ import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tab
 import type { CmdJActionResult, CmdJSettingsResult } from '@/components/cmd-j/palette-results'
 import type { CmdJProjectSearchResult } from '@/components/cmd-j/palette-project-results'
 import { getUnavailableQuickActionMessage } from '../cmd-j/quick-action-context'
-import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import type { SettingsNavTarget } from '@/components/settings/navigation/settings-navigation-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'

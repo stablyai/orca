@@ -17,7 +17,7 @@ import type {
   AutomationUpdateInput
 } from '../../../../../shared/automations/automation-definition'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { ensureHooksApproved } from '@/lib/ensure-hooks-confirmed'
+import { ensureHooksApproved } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'

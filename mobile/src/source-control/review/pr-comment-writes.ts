@@ -8,7 +8,7 @@ import {
   isRpcDeliveryUnknown,
   markRpcDeliveryUnknown
 } from '../../transport/rpc/rpc-delivery-ambiguity'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   fetchAddIssueComment,
@@ -73,7 +73,7 @@ export function prCommentTarget(queries: PrQueryScope | null): PrCommentTarget {
 }
 
 function sendWrite(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   vars: PrCommentWriteVars
 ): Promise<GitHubPrMutationOutcome> {
   const { worktreeId, prRepo, write } = vars

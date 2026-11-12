@@ -7,105 +7,105 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserKeyRow.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserKeyRow.tsx",
     "kind": "jsx-expression",
     "text": "Esc",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Alt",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Cmd",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Shift",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Claude limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Codex limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Host Codex accounts cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Host rate-limit targets cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Inactive Claude limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Inactive Codex limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "WSL Codex accounts require an exact distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "WSL rate-limit targets require an exact distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/codex-reset-credit-reply-schema.ts",
+    "filePath": "mobile/src/accounts/usage/codex-reset-credit-reply-schema.ts",
     "kind": "object-property:message",
     "text": "Host reset scopes cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/codex-reset-credit-reply-schema.ts",
+    "filePath": "mobile/src/accounts/usage/codex-reset-credit-reply-schema.ts",
     "kind": "object-property:message",
     "text": "WSL reset scopes require an exact distro",
     "dynamic": false,
@@ -560,21 +560,21 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/hosts/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Expected exactly one endpoint for configured relay metadata",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/hosts/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Relay host identity mismatch",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/transport/hosts/mobile-relay-host-overlay.ts",
+    "filePath": "mobile/src/host-catalog/mobile-relay-host-overlay.ts",
     "kind": "object-property:message",
     "text": "Relay identity and endpoint must coexist",
     "dynamic": false,

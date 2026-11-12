@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'
 

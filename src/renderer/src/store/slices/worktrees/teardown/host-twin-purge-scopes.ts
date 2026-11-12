@@ -3,13 +3,14 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  type ExecutionHostId
+  type ExecutionHostId,
+  getRepoExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { WorktreePurgeTarget } from './worktree-purge-target'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import { getProjectGroupHostId } from '../../../project-groups/project-group-owner-routing'
+import '../../../project-groups/project-group-owner-routing'
 import { getRepoHostSummaries } from '../listing/worktree-host-ownership'
 import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
 import {
@@ -68,7 +69,7 @@ function resolvePurgedPublishers(
       .flatMap((folder) => {
         const groupHosts = groups
           .filter((group) => group.id === folder.projectGroupId)
-          .map(getProjectGroupHostId)
+          .map(getRepoExecutionHostId)
         // Why every group host: an unstamped folder under a group two hosts publish may be either's.
         return folder.executionHostId || folder.connectionId || groupHosts.length === 0
           ? [getFolderWorkspaceHostId(folder, groups)]

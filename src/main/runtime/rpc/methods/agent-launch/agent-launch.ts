@@ -42,7 +42,7 @@ import {
 import {
   agentLaunchCallerNavigationId,
   callerRendersLaunchedChat,
-  selectAgentLaunchTabForCaller
+  selectLaunchedTab
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 import {
@@ -89,9 +89,7 @@ async function runAgentLaunch(
       }
       view.early?.surfacePublished(surface)
       replaySafe?.recordSurface(withPlacement(surface, view))
-      if (callerNavigationId !== null && view.presentation !== 'background') {
-        selectAgentLaunchTabForCaller(context.runtime, surface, callerNavigationId)
-      }
+      selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
     }
   })
   return withPlacement(result, view)

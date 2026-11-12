@@ -7,8 +7,11 @@ import { getRuntimeGitConflictOperation } from '@/runtime/source-control/git/run
 import {
   createCoalescedPollRunner,
   type SlowTaskBackoffOptions
-} from '../../../../lib/repository-refresh/coalesced-poll-runner'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
+} from '../../../../lib/source-control/refresh/coalesced-poll-runner'
+import {
+  installWindowVisibilityInterval,
+  isWindowVisible
+} from '@/lib/window-activity/window-visibility-interval'
 import { getWorktreeGitOwnerTarget } from './worktree-git-owner-target'
 
 const CONFLICT_POLL_INTERVAL_MS = 3000

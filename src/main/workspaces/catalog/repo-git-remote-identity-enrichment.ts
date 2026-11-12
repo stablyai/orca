@@ -14,7 +14,7 @@ import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import { getProjectRuntimeReadGitOptions } from '../execution-host/project-runtime-git-options'
 import { isLocalGitRuntimeRouterInstalled } from '../../git/command-runner/local-git-runtime-route'
 import type { ProjectRuntimeResolutionStore } from '../execution-host/local-project-runtime-resolution'
-import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000

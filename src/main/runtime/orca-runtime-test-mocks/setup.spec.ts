@@ -78,7 +78,9 @@ export function acknowledgeAgentPromptSubmit(
   }
 }
 
-const electronMocks = vi.hoisted(() => {
+const electronMocks = await vi.hoisted(async () => {
+  const { fakeAppEnvironment } =
+    await import('../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   type Listener = (...args: unknown[]) => void
   const listeners = new Map<string, Set<Listener>>()
   const ipcMain = {
@@ -103,7 +105,7 @@ const electronMocks = vi.hoisted(() => {
     BrowserWindow: { fromId: vi.fn((_id: number): unknown => null) },
     webContents: { fromId: vi.fn((_id: number): unknown => null) },
     ipcMain,
-    app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
+    app: { getPath: vi.fn(() => fakeAppEnvironment().getPath('userData')), isPackaged: false }
   }
 })
 

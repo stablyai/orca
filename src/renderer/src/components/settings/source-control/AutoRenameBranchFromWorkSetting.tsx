@@ -11,7 +11,7 @@ import {
   resolveSourceControlActionCommandTemplate,
   setSourceControlActionDefault
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
 import { SourceControlActionVariableChips } from '../../source-control/SourceControlActionVariableChips'
