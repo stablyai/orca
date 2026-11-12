@@ -37,8 +37,8 @@ type RuntimeDelegateSource = Omit<
   'listAgentStatuses' | 'listAgentTaskTitles' | 'callRuntime' | 'resolveCommandWorkspace'
 > &
   Partial<PluginCommandWorkspaceSource> & {
-  listAgentTasksByPaneKey(): Readonly<Record<string, PluginAgentTask>>
-}
+    listAgentTasksByPaneKey(): Readonly<Record<string, PluginAgentTask>>
+  }
 
 type PluginAgentTask = Pick<AgentStatusOrchestrationContext, 'taskTitle' | 'dispatchStatus'>
 
