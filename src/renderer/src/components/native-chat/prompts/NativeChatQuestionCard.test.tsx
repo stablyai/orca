@@ -126,4 +126,84 @@ describe('NativeChatQuestionCard', () => {
     pressKey({ key: 'Enter' }, rows[1]!)
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
+
+  it('preserves equivalent prompt answers but clears replacement answers and pending advance', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    const render = (prompt: AskPrompt): void => {
+      act(() =>
+        root.render(
+          <NativeChatQuestionCard prompt={prompt} onAnswer={onAnswer} onCancel={() => {}} />
+        )
+      )
+    }
+    render(tabsOrSpaces)
+    act(() => container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]!.click())
+    render({ questions: [...tabsOrSpaces.questions] })
+    expect(
+      container.querySelectorAll('button[aria-pressed]')[1]?.getAttribute('aria-pressed')
+    ).toBe('true')
+    render({
+      questions: [{ ...tabsOrSpaces.questions[0]!, question: 'Replacement question' }]
+    })
+    expect(
+      container.querySelectorAll('button[aria-pressed]')[1]?.getAttribute('aria-pressed')
+    ).toBe('false')
+    act(() => vi.runAllTimers())
+    expect(onAnswer).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Replacement question')
+  })
+
+  it('clears old multiline input and returns to the first question when a prompt shrinks', () => {
+    const onAnswer = vi.fn()
+    const render = (prompt: AskPrompt): void => {
+      act(() =>
+        root.render(
+          <NativeChatQuestionCard prompt={prompt} onAnswer={onAnswer} onCancel={() => {}} />
+        )
+      )
+    }
+    render({
+      questions: [
+        ...tabsOrSpaces.questions,
+        { ...tabsOrSpaces.questions[0]!, question: 'Second question' }
+      ]
+    })
+    const field = container.querySelector('textarea')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+        field,
+        'stale answer'
+      )
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const next = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Next'
+    )!
+    act(() => next.click())
+    expect(container.textContent).toContain('Second question')
+    render({ questions: [{ ...tabsOrSpaces.questions[0]!, question: 'Only question' }] })
+    expect(container.textContent).toContain('Only question')
+    expect(container.querySelector('textarea')?.value).toBe('')
+    expect(onAnswer).not.toHaveBeenCalled()
+    render({ questions: [] })
+    expect(container.textContent).toBe('')
+  })
+
+  it('submits retained selections after a structurally equivalent rerender', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    const render = (prompt: AskPrompt): void => {
+      act(() =>
+        root.render(
+          <NativeChatQuestionCard prompt={prompt} onAnswer={onAnswer} onCancel={() => {}} />
+        )
+      )
+    }
+    render(tabsOrSpaces)
+    act(() => container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[1]!.click())
+    render({ questions: tabsOrSpaces.questions.map((question) => ({ ...question })) })
+    act(() => vi.runAllTimers())
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+  })
 })

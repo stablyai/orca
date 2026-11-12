@@ -12,7 +12,7 @@ import type { AgentSessionUnavailable } from '../../../../../../shared/agent-ses
 import type { AgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { NativeChatApprovalCardProps } from '../../prompts/NativeChatApprovalCard'
 
-import type { NativeChatQuestionCardProps } from '../../prompts/NativeChatQuestionCard'
+import type { NativeChatQuestionCardProps } from '../../prompts/native-chat-question-card-props'
 import type { NativeChatLaunchSeed } from '../../drafts/native-chat-launch-seed'
 import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 
