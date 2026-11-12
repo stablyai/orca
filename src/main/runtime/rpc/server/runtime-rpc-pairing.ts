@@ -1,9 +1,9 @@
-import type { RuntimeDeviceGrant } from '../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../callers/rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import type { TokenDeviceEntry } from './pairing/device-entry'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
-import type { MobileSocketWiring } from '../mobile-socket-wiring'
+import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type {
   RelayDeviceBinding,
   RelayRevokeOutbox

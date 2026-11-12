@@ -2,7 +2,7 @@ import { initializeMainProcessI18nAndMenu } from './main-process-i18n-menu'
 import { mainProcessState as state } from './main-process-state'
 import { initializeReadyFoundation } from './main-process-ready-foundation'
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
-import { releaseDesktopActivationAfter } from './serve-desktop-activation'
+import { releaseDesktopActivationAfter } from './serve-launch/serve-desktop-activation'
 import {
   initializeMainProcessRuntimeLaunch,
   type MainProcessRuntimeLaunchOptions

@@ -1,4 +1,4 @@
-import { throwIfAiVaultScanCancelled } from '../../ai-vault/ai-vault-scan-cancellation'
+import { throwIfAiVaultScanCancelled } from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,

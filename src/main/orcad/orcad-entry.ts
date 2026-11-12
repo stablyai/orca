@@ -27,7 +27,7 @@ import { orcadWsPortOptions } from './orcad-ws-port-policy'
 import { createOrcadStartupTiming } from './orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
-import { installOrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readiness'
+import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
 import { activateBackendServices } from '../backend/service-composition'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -226,7 +226,8 @@ async function activateOrcadRuntime(
   paneGridsForShutdown = runtime
 
   accountLaunch?.attachToRuntime(runtime)
-  const { wireGitHubIssueLinkTitleFill } = await import('../github/github-issue-link-title-wiring')
+  const { wireGitHubIssueLinkTitleFill } =
+    await import('../github/workspace-links/github-issue-link-title-wiring')
   registerCleanup(wireGitHubIssueLinkTitleFill(profileStore, runtime))
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)

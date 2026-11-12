@@ -2,7 +2,7 @@ import {
   remoteSessionContentLines,
   type RemoteSessionContent
 } from '../../transcripts/remote-session-content-lines'
-import { consumeCompleteJsonlLines } from '../../session-scanner-jsonl-reader'
+import { consumeCompleteJsonlLines } from '../../parsing/session-scanner-jsonl-reader'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../../transcripts/session-transcript-record-budget'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -11,8 +11,8 @@ import {
   createAccumulator,
   timestampIso,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionText } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionText } from '../../parsing/session-scanner-messages'
 import { antigravityConversationIdFromTranscriptPath } from './session-scanner-antigravity-paths'
 import { antigravityHistoryPromptHash } from './antigravity-history-prompt'
 import type {
@@ -21,8 +21,9 @@ import type {
   SessionAccumulator
 } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId

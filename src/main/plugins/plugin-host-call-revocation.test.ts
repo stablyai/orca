@@ -36,6 +36,7 @@ async function createSavingPlugin() {
   const dialog = gate()
   const writes: string[] = []
   const desktop: PluginDesktopFrameServices = {
+    confirm: async () => 'allowed',
     openExternal: async () => ({ opened: true }),
     async saveFile(pluginId, _input, scope) {
       await dialog.opened

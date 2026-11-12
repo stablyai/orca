@@ -1,4 +1,4 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
+import '../../../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { settledWriteStub } from '../../../../providers/settled-pty-write-stub'
 
 import { mkdtempSync, rmSync } from 'node:fs'

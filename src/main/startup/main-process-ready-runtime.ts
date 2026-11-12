@@ -5,7 +5,10 @@ import { StarNagService } from '../star-nag/service'
 import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
+import {
+  DESKTOP_RPC_CALLER,
+  LOCAL_CLI_RPC_CALLER
+} from '../runtime/rpc/callers/rpc-caller-identity'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { BrowserExpectedUrlMismatch } from '../../shared/browser/client-hosting/browser-expected-url'
@@ -13,7 +16,7 @@ import { BrowserClientPageCommandError } from '../browser/client-pages/execution
 import { startPreGoneCrashSampling } from '../crash-reporting/process-exits/process-gone-diagnostics'
 import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-realtime-scheduling-guard'
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
-import { handleGpuChildCrash } from './gpu-lifecycle'
+import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'

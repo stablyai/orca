@@ -21,7 +21,7 @@ vi.mock('./main-process-runtime-launch', () => ({
 
 const { initializeMainProcessReady } = await import('./main-process-ready')
 const { mainProcessState: state } = await import('./main-process-state')
-const { createServeDesktopActivationGate } = await import('./serve-desktop-activation')
+const { createServeDesktopActivationGate } = await import('./serve-launch/serve-desktop-activation')
 
 const activateWindow = vi.fn()
 const launchOptions: MainProcessRuntimeLaunchOptions = {

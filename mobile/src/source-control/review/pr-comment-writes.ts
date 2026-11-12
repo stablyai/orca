@@ -1,6 +1,6 @@
 import { hashKey, type QueryClient, type QueryKey } from '@tanstack/react-query'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import { defineHostMutation } from '../../query/host-mutation'
 import { translate } from '../../i18n/mobile-i18n'
 import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'

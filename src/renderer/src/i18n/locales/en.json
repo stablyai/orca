@@ -228,6 +228,30 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "hiddenProjects": {
+      "hidden": "{{name}} hidden",
+      "hiddenDescription": "Its terminals and agents keep running. Show it again from Hidden projects below the list.",
+      "undo": "Undo",
+      "hideFailed": "Couldn't hide {{name}}. Its host may need an Orca update.",
+      "showFailed": "Couldn't show {{name}} again.",
+      "listLabel": "Hidden projects",
+      "show": "Show",
+      "showAriaLabel": "Show {{name}} in the sidebar",
+      "settingsTitle": "Hide from sidebar",
+      "settingsDescription": "Hides this host's copy of the project from the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running. On a paired Orca server, this hides it for everyone connected to that server.",
+      "settingsToggleLabel": "Hide {{name}} from the sidebar",
+      "keywordHide": "hide",
+      "keywordHidden": "hidden",
+      "keywordSidebar": "sidebar",
+      "hideFromSidebar": "Hide from Sidebar",
+      "sectionTitle": "Hidden projects ({{count}})",
+      "allHidden": "Every project is hidden. Show one from Hidden projects below.",
+      "undoGone": "{{name}} was removed from Orca.",
+      "settingsGroup": "Sidebar",
+      "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
+      "keywordShow": "show",
+      "keywordUnhide": "unhide"
     }
   },
   "app": {
@@ -12780,7 +12804,8 @@
           "title": "Remove {{value0}}?",
           "description": "Its data is removed too.",
           "cancel": "Cancel",
-          "remove": "Remove"
+          "remove": "Remove",
+          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again."
         },
         "PluginRollbackDialog": {
           "title": "Roll back {{value0}}?",
@@ -13926,7 +13951,8 @@
           "dataLoadFailed": "Couldn’t load its files"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Plugins are off"
+          "offTitle": "Plugins are off",
+          "offAutomations": "Automations plugins created are paused, and stay paused when plugins are turned back on."
         },
         "PluginFilterPopover": {
           "kind": "Category",
@@ -18509,7 +18535,10 @@
           "missedRunGrace": "Missed-run grace",
           "execution": "Execution",
           "notRunYet": "Not run yet",
-          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported"
+          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
+          "createdBy": "Created by",
+          "createdByPluginTitle": "Plugin {{plugin}}",
+          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -25190,6 +25219,20 @@
       "cancel": "Cancel",
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
+    },
+    "actionConfirmation": {
+      "cancel": "Cancel",
+      "deleteAutomation": "{{plugin}} wants to delete the automation “{{automation}}”",
+      "deleteAutomationDetail": "The plugin did not create it. Its schedule stops and it is removed from Automations.",
+      "delete": "Delete",
+      "changeAutomation": "{{plugin}} wants to change the automation “{{automation}}”",
+      "changeAutomationDetail": "The plugin did not create it. It would change: {{fields}}.",
+      "change": "Change",
+      "changeElevatedAutomationDetail": "It runs its agent with extra settings you chose (arguments, a permission mode or a precheck command). It would change: {{fields}}.",
+      "newPrompt": "New prompt: “{{prompt}}”",
+      "unknownProject": "an unknown project",
+      "automationNewWorkspaces": "Automation {{id}}: a new workspace of {{project}} each run, on {{schedule}}.",
+      "automationInWorkspace": "Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}."
     }
   },
   "checks": {

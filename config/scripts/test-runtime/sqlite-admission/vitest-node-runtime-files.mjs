@@ -12,14 +12,13 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
   'src/main/ai-vault-search/storage/session-search-index-writer.test.ts',
-  'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
+  'src/main/ai-vault/parsing/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
-  'src/main/ai-vault/session-scanner-scope-cwd-facts.test.ts',
-  'src/main/ai-vault/session-scanner-scope-walk.test.ts',
+  'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
   // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
-  'src/main/github/rate-limit.test.ts',
+  'src/main/github/api/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
@@ -126,10 +125,9 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
-  'src/main/runtime/rpc/ws-transport.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
-  'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
+  'src/main/runtime/rpc/transports/websocket/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime/remote-runtime-client.test.ts',
   'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',
   // Bun's built-in ws client ignores maxPayload; the product opener only runs on Node.

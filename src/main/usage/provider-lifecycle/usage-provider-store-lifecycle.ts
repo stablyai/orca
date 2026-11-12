@@ -1,5 +1,4 @@
 import { readFileSync, statSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { AgentTokenUsageReporter } from '../reporting/token-usage/agent-token-usage-reporter'
 import { join, parse } from 'node:path'
 import {
@@ -194,22 +193,17 @@ export abstract class UsageProviderStoreLifecycle<
           // Preserve usage history when the worker cannot start.
           console.warn(`${this.config.logTag} Reading the usage cache on the main thread:`, error)
           fallback = true
-          if (!this.config.providerId) {
-            fallbackState = await readUsageCacheJson<State>(cacheFile)
-            if (!fallbackState) {
-              throw new Error('Saved usage cache is invalid')
-            }
-            const { [this.config.sourceKey]: _sources, ...report } = fallbackState
-            return {
-              reportText: JSON.stringify(report),
-              migrated: false,
-              reportIntegrityVerified: false
-            }
+          const loaded = this.config.readFallbackCache
+            ? await this.config.readFallbackCache(cacheFile)
+            : { state: await readUsageCacheJson<State>(cacheFile), integrityVerified: false }
+          fallbackState = loaded.state
+          if (!fallbackState) {
+            throw new Error('Saved usage cache is invalid')
           }
           return {
-            reportText: await readFile(cacheFile, 'utf-8'),
+            reportText: '',
             migrated: false,
-            reportIntegrityVerified: false
+            reportIntegrityVerified: loaded.integrityVerified
           }
         })
       if (reportText === null) {
@@ -221,7 +215,7 @@ export abstract class UsageProviderStoreLifecycle<
         !('usageIntegrity' in parsed) &&
         Array.isArray(parsed[this.config.sourceKey]) &&
         parsed[this.config.sourceKey].length > 0
-      await this.applyReport(reportText, parsed, !fallback && reportIntegrityVerified === true)
+      await this.applyReport(reportText, parsed, reportIntegrityVerified === true)
       if (migrated) {
         // Future launches can read the compact report synchronously.
         await this.writeToDisk().catch(() => {})

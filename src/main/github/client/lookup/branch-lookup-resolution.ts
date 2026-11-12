@@ -1,17 +1,17 @@
-import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
-import type { ghRepoExecOptions, OwnerRepo } from '../../gh-utils'
-import {
-  isCommitPartOfMergedPR,
-  type MergedPRCommitMembership
-} from '../../merged-pr-commit-membership'
+import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { ghRepoExecOptions } from '../../repositories/github-repository-identity'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { isCommitPartOfMergedPR } from '../../pull-requests/refresh/merged-pr-commit-membership'
+import type { MergedReviewCommitMembership as MergedPRCommitMembership } from '../../../source-control/merged-review-membership-memo'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../../../source-control/repo-default-branch'
-import {
-  getGitHubApiRepositoryForRemote,
-  resolveGitHubApiRepositoryCandidates
-} from '../../github-api-repository'
+import { getGitHubApiRepositoryForRemote } from '../../repositories/github-api-repository-remote-probe'
+import { resolveGitHubApiRepositoryCandidates } from '../../repositories/github-api-repository'
 import { exactRepositoryCandidates } from '../pull-request-lookup-candidates'
-import { mapPRState } from '../../mappers'
-import { ownerRepoFromPullRequestUrl } from './../github-exec-scope'
+import { mapPRState } from '../../api/github-read-response'
+import {
+  ownerRepoFromPullRequestUrl,
+  type HostedReviewLocalGitOptions
+} from './../github-exec-scope'
 import { prRefreshUpstreamError } from './../gh-error-predicates'
 import {
   isMergedImplicitPR,
@@ -32,7 +32,7 @@ import {
   createImplicitDefaultBranchPRPolicy,
   type ImplicitDefaultBranchPRContext
 } from './implicit-default-branch-pr'
-import type { HostedReviewLocalGitOptions } from './../github-exec-scope'
+
 export async function resolvePRForBranchOutcome(input: {
   repoPath: string
   branchName: string

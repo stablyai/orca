@@ -1,8 +1,8 @@
 import {
   GITHUB_OWNER_NUMBER_SHORTHAND_RE,
   GITHUB_OWNER_SLUG_RE
-} from '../../../../shared/github/owner-slug'
-import { isGitHubProjectRefInputTooLarge } from '../../../../shared/github/project-ref-input'
+} from '../../../../shared/github/repositories/owner-slug'
+import { isGitHubProjectRefInputTooLarge } from '../../../../shared/github/projects/project-ref-input'
 
 export function parseProjectInput(
   input: string
