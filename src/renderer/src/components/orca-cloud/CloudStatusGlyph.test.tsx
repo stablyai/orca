@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { HostGlyph } from '@/components/host-row-icon'
-import { CLOUD_GLYPH_SHAPE, type CloudGlyphState } from './CloudStatusGlyph'
+import { CLOUD_GLYPH_SHAPE } from './CloudStatusGlyph'
 
 describe('cloud status glyph', () => {
   it('shows a cloud workspace state in the cloud itself, with no dot badge', () => {
@@ -17,10 +17,10 @@ describe('cloud status glyph', () => {
   })
 
   it('keeps one cloud shape for every state but Archived (dashed) and unknown (dotted edge)', () => {
-    const groups = new Map<string, CloudGlyphState[]>()
+    const groups = new Map<string, string[]>()
     for (const [state, shape] of Object.entries(CLOUD_GLYPH_SHAPE)) {
       const key = `${shape.fill}/${shape.outline}`
-      groups.set(key, [...(groups.get(key) ?? []), state as CloudGlyphState])
+      groups.set(key, [...(groups.get(key) ?? []), state])
     }
     // Option A: colour carries state (and the row and accessible name say it); Archived is B's.
     expect(Object.fromEntries(groups)).toEqual({
