@@ -6593,7 +6593,6 @@
       "src/shared/plugins/contributions/plugin-content-pack-contributions.test.ts": 227,
       "src/shared/plugins/contributions/plugin-custom-editor-contribution.test.ts": 238,
       "src/shared/plugins/contributions/plugin-panel-contribution.test.ts": 240,
-      "src/shared/plugins/contributions/plugin-status-bar-item-contribution.test.ts": 232,
       "src/shared/plugins/declarative/plugin-declarative-catalog-rich.test.ts": 147,
       "src/shared/plugins/declarative/plugin-declarative-example.test.ts": 198,
       "src/shared/plugins/declarative/plugin-declarative-tree.test.ts": 168,
