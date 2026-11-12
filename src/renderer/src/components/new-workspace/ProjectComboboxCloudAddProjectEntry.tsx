@@ -30,6 +30,26 @@ function FromGitHubItem({ onSelect }: { onSelect: () => void }): React.JSX.Eleme
 }
 
 /**
+ * The "Orca Cloud" group for any Add project menu: the combobox's Add project row and the folder+
+ * button beside the Project label. Undefined without Orca Cloud's access link (Run on isn't Orca Cloud).
+ */
+export function cloudAddProjectExtraItems(
+  onMoreCloudAccess: (() => void) | undefined
+): ((closeMenus: () => void) => React.ReactNode) | undefined {
+  if (!onMoreCloudAccess) {
+    return undefined
+  }
+  return (closeMenus) => (
+    <FromGitHubItem
+      onSelect={() => {
+        closeMenus()
+        onMoreCloudAccess()
+      }}
+    />
+  )
+}
+
+/**
  * With an Add project menu and Orca Cloud's access link, the link becomes that menu's last entry and
  * leaves the list. Without the menu (the plain Add project row), the list keeps it.
  */
@@ -44,17 +64,7 @@ export function withCloudAddProjectEntry(
     return { addProjectMenu, listMoreAccess: onMoreCloudAccess }
   }
   return {
-    addProjectMenu: {
-      ...addProjectMenu,
-      extraItems: (closeMenus) => (
-        <FromGitHubItem
-          onSelect={() => {
-            closeMenus()
-            onMoreCloudAccess()
-          }}
-        />
-      )
-    },
+    addProjectMenu: { ...addProjectMenu, extraItems: cloudAddProjectExtraItems(onMoreCloudAccess) },
     listMoreAccess: undefined
   }
 }
