@@ -603,6 +603,11 @@ def wayland_compositor():
     return None
 
 
+def wayland_session():
+    # Why: Sway launched from a TTY leaves XDG_SESSION_TYPE=tty, where GDK root readback has nothing to read.
+    return os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland" or wayland_compositor() is not None
+
+
 def screenshot_failure(message):
     return {"error": {"code": "screenshot_failed", "message": message}}
 
@@ -667,7 +672,7 @@ def wayland_window_rect(compositor, app, window):
     return Rect(*values), None
 
 
-def capture_wayland_png(app, window):
+def capture_wayland_png(bounds, app, window):
     compositor = wayland_compositor()
     if compositor is None:
         return screenshot_failure("Wayland screenshots are supported on Hyprland and Sway only; use --no-screenshot or an X11 session")
@@ -680,6 +685,9 @@ def capture_wayland_png(app, window):
     rect, error = wayland_window_rect(compositor, app, window)
     if rect is None:
         return screenshot_failure(f"Wayland screenshot skipped: {error}")
+    # Why: element frames are AT-SPI coordinates; a crop of another size (e.g. CSD shadows) would misplace them.
+    if bounds is None or abs(bounds.width - rect.width) > 2 or abs(bounds.height - rect.height) > 2:
+        return screenshot_failure("Wayland screenshot skipped: the compositor window size differs from the accessibility bounds")
     x, y = math.floor(rect.x), math.floor(rect.y)
     width, height = math.ceil(rect.x + rect.width) - x, math.ceil(rect.y + rect.height) - y
     if width > 16384 or height > 16384 or width * height > 67_108_864:
@@ -705,8 +713,8 @@ def capture_wayland_png(app, window):
 
 
 def capture_png(rect, app=None, window=None):
-    if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
-        return capture_wayland_png(app, window)
+    if wayland_session():
+        return capture_wayland_png(rect, app, window)
     if Gdk is None or GdkPixbuf is None or rect is None:
         return None
     screen = Gdk.Screen.get_default()
@@ -897,7 +905,7 @@ def handshake_response():
     has_hotkey = shutil.which("xdotool") is not None and not is_wayland
     has_clipboard = any(shutil.which(command) for command in ("wl-copy", "xclip", "xsel"))
     has_screenshot = GdkPixbuf is not None and (
-        bool(shutil.which("grim") and wayland_compositor()) if is_wayland else Gdk is not None
+        bool(shutil.which("grim") and wayland_compositor()) if wayland_session() else Gdk is not None
     )
     return {
         "platform": "linux",

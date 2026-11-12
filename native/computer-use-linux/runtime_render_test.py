@@ -238,6 +238,7 @@ class WaylandScreenshotTest(unittest.TestCase):
     def test_ambiguous_missing_and_hidden_windows_never_capture_another_region(self):
         for clients in ([], self.clients * 2, [{**self.clients[0], "hidden": True}],
                         [{**self.clients[0], "workspace": {"id": 3}}],
+                        [{**self.clients[0], "size": [700, 480]}],
                         [{**self.clients[0], "pid": 43}], [{**self.clients[0], "size": [0, 480]}]):
             with self.subTest(clients=clients):
                 self.clients = clients
@@ -281,7 +282,7 @@ class WaylandScreenshotTest(unittest.TestCase):
         root = object()
         screen = types.SimpleNamespace(get_root_window=lambda: root)
         pixbuf = types.SimpleNamespace(get_width=lambda: 640, get_height=lambda: 480)
-        with patch.dict(runtime.os.environ, {"XDG_SESSION_TYPE": "x11"}), \
+        with patch.dict(runtime.os.environ, {"XDG_SESSION_TYPE": "x11", "HYPRLAND_INSTANCE_SIGNATURE": ""}), \
              patch.object(runtime.Gdk, "Screen", types.SimpleNamespace(get_default=lambda: screen), create=True), \
              patch.object(runtime.Gdk, "pixbuf_get_from_window", return_value=pixbuf, create=True) as capture, \
              patch.object(runtime, "png_bytes", return_value=b"png"):
