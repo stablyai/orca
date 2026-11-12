@@ -28413,6 +28413,9 @@
       "setUpNotStarted": "{{agent}} is set up. Open the workspace to start it.",
       "notStartedRow": "{{agent}} hasn’t started"
     },
+    "chatSend": {
+      "renewAbove": "Renew {{agent}} sign-in above to send"
+    },
     "chatSignIn": {
       "renewAbove": "Your {{agent}} sign-in for Orca Cloud didn’t work. Renew it above, then send your message again."
     },

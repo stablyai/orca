@@ -22,16 +22,19 @@ function tabStillOpen(tabId: string): boolean {
 export function CloudStructuredChatBanners({
   tabId,
   paneKey,
-  statusKey
+  statusKey,
+  agent
 }: {
   tabId: string
   /** The launch-hold key (from the session id). */
   paneKey: string
   /** The agent-status key (tab and session): the running strip (B2) reads the agent through it. */
   statusKey: string
+  /** The chat's agent, for an idle chat with no status yet. */
+  agent?: string
 }): React.JSX.Element {
   const { key, active, strip } = useCloudHeldStrip(paneKey, null, { chat: true })
-  const running = useCloudChatRunningStrip({ tabId, statusKey, holdKey: paneKey })
+  const running = useCloudChatRunningStrip({ tabId, statusKey, holdKey: paneKey, agent })
   const shown = strip ?? running
   useEffect(() => {
     if (!active) {
