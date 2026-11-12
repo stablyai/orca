@@ -1,7 +1,6 @@
 import { app } from 'electron'
 import type {
   ToknConnectResult,
-  ToknSyncErrorCode,
   ToknSyncStatus,
   ToknUploadPreview
 } from '../../shared/tokn-sync-status'
@@ -21,7 +20,7 @@ import {
   uploadToknUsage
 } from './tokn-api-client'
 import { getToknOrigin, toknSignInFlowConfig } from './tokn-service-config'
-import { buildToknUploadBody, readToknTracking, type ToknUsageSources } from './tokn-upload-body'
+import { buildToknUploadBody, type ToknUsageReader } from './tokn-upload-body'
 
 // tokn's board refreshes hourly; uploading more often only costs both sides work.
 const AUTO_SYNC_INTERVAL_MS = 60 * 60_000
@@ -50,7 +49,7 @@ export class ToknSyncService {
   // tokn revoked this computer from its account page; say so until the next connect.
   private signedOutRemotely = false
 
-  constructor(private readonly usage: ToknUsageSources) {
+  constructor(private readonly usage: ToknUsageReader) {
     this.loaded = loadToknAccountRecord(getToknOrigin()).then(
       (record) => {
         this.record = record
@@ -80,7 +79,11 @@ export class ToknSyncService {
   }
 
   async getStatus(): Promise<ToknSyncStatus> {
-    const [tracking] = await Promise.all([readToknTracking(this.usage), this.loaded])
+    const [tracking] = await Promise.all([
+      // Unknown while the usage service restarts; never claim tracking is off without knowing.
+      this.usage.readTracking().catch(() => ({ claude: true, codex: true })),
+      this.loaded
+    ])
     const record = this.record
     return {
       connected: record !== null,
@@ -225,15 +228,6 @@ export class ToknSyncService {
     if (!record) {
       return
     }
-    const tracking = await readToknTracking(this.usage)
-    if (!tracking.claude && !tracking.codex) {
-      this.saveRecord(record, {
-        ...record,
-        lastSyncError: 'tracking-off',
-        lastSyncErrorDetail: null
-      })
-      return
-    }
     if (
       record.lastSyncError === null &&
       record.lastSyncAt !== null &&
@@ -245,6 +239,15 @@ export class ToknSyncService {
     this.syncAbort = abort
     let next: ToknAccountRecord
     try {
+      const tracking = await this.usage.readTracking()
+      if (!tracking.claude && !tracking.codex) {
+        this.saveRecord(record, {
+          ...record,
+          lastSyncError: 'tracking-off',
+          lastSyncErrorDetail: null
+        })
+        return
+      }
       const body = await buildToknUploadBody(this.usage, app.getVersion())
       // Disconnecting while the logs were read withdraws consent for this upload.
       const token = this.record === record ? readToknAccessToken() : null
@@ -271,7 +274,12 @@ export class ToknSyncService {
         // Disconnect or quit cancelled it; neither is a sync failure to report.
         return
       }
-      if (error instanceof ToknRequestError && error.code === 'signed-out') {
+      if (!(error instanceof ToknRequestError)) {
+        // Orca's usage service failed before tokn was reached; Stats shows why, so retry next hour.
+        console.warn('[tokn] Could not read tracked usage', error)
+        return
+      }
+      if (error.code === 'signed-out') {
         // The token was revoked on tokn; keeping it would fail every hour.
         if (this.record === record) {
           this.record = null
@@ -280,9 +288,7 @@ export class ToknSyncService {
         }
         return
       }
-      const code: ToknSyncErrorCode = error instanceof ToknRequestError ? error.code : 'server'
-      const detail = error instanceof ToknRequestError ? error.detail : null
-      next = { ...record, lastSyncError: code, lastSyncErrorDetail: detail }
+      next = { ...record, lastSyncError: error.code, lastSyncErrorDetail: error.detail }
     } finally {
       if (this.syncAbort === abort) {
         this.syncAbort = null

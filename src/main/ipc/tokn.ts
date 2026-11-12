@@ -1,8 +1,8 @@
 import { app, ipcMain } from 'electron'
 import { ToknSyncService } from '../tokn/tokn-sync-service'
-import type { ToknUsageSources } from '../tokn/tokn-upload-body'
+import type { ToknUsageReader } from '../tokn/tokn-upload-body'
 
-export function registerToknHandlers(usage: ToknUsageSources): void {
+export function registerToknHandlers(usage: ToknUsageReader): void {
   const service = new ToknSyncService(usage)
   ipcMain.handle('tokn:getStatus', () => service.getStatus())
   ipcMain.handle('tokn:connect', () => service.connect())

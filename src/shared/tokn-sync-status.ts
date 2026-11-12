@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 /** Why the last upload to tokn did not land; the renderer owns the copy for each. */
 export type ToknSyncErrorCode =
   | 'tracking-off'
@@ -21,7 +23,7 @@ export type ToknSyncStatus = {
   lastSyncAccepted: number | null
   lastSyncRejected: number | null
   /** Usage tracking Orca must have on for that tool's totals to be published. */
-  tracking: { claude: boolean; codex: boolean }
+  tracking: ToknTracking
 }
 
 export type ToknConnectResult = {
@@ -30,20 +32,28 @@ export type ToknConnectResult = {
   status: ToknSyncStatus
 }
 
-/** One uploaded row: a (day, tool, model) total, never anything naming a project. */
-export type ToknSyncRow = {
-  day: string
-  tool: 'claude-code' | 'codex'
-  model: string
-  requests: number
-  input: number
-  output: number
-  cacheWrite5m: number
-  cacheWrite1h: number
-  cacheRead: number
-  costUsd: number
-  fast: boolean
-}
+const count = z.number().nonnegative()
+
+/** One uploaded row: a (day, tool, model) total. Strict, so a field naming a project cannot pass. */
+export const ToknSyncRowSchema = z
+  .object({
+    day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    tool: z.enum(['claude-code', 'codex']),
+    model: z.string().min(1).max(120),
+    requests: count,
+    input: count,
+    output: count,
+    cacheWrite5m: count,
+    cacheWrite1h: count,
+    cacheRead: count,
+    costUsd: count,
+    fast: z.boolean()
+  })
+  .strict()
+export type ToknSyncRow = z.infer<typeof ToknSyncRowSchema>
+
+export const ToknTrackingSchema = z.object({ claude: z.boolean(), codex: z.boolean() }).strict()
+export type ToknTracking = z.infer<typeof ToknTrackingSchema>
 
 /** Exactly what the next upload would send. */
 export type ToknUploadPreview = {

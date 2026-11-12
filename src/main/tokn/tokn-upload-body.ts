@@ -1,54 +1,38 @@
-import type { ToknUploadPreview } from '../../shared/tokn-sync-status'
-import type { ClaudeUsageDailyAggregate } from '../claude-usage/types'
-import type { CodexUsageDailyAggregate } from '../codex-usage/types'
-import { buildToknSyncRows } from './tokn-sync-rows'
+import {
+  ToknSyncRowSchema,
+  ToknTrackingSchema,
+  type ToknSyncRow,
+  type ToknTracking,
+  type ToknUploadPreview
+} from '../../shared/tokn-sync-status'
 
-type ToknUsageSource<Aggregate> = {
-  whenLoaded(): Promise<void>
-  getScanState(): { enabled: boolean }
-  refresh(force?: boolean): Promise<unknown>
-  getDailyAggregates(): readonly Aggregate[]
+/** What tokn publishing reads from the usage service, which runs in its own process. */
+export type ToknUsageReader = {
+  readTracking(): Promise<ToknTracking>
+  readRows(): Promise<ToknSyncRow[]>
 }
 
-export type ToknUsageSources = {
-  claude: ToknUsageSource<ClaudeUsageDailyAggregate>
-  codex: ToknUsageSource<CodexUsageDailyAggregate>
-}
+type PrivilegedUsageCall = (method: string, params: unknown, explicit: boolean) => Promise<unknown>
 
-/** Tracking flags are defaults until both stores have read their saved state. */
-export async function readToknTracking(
-  usage: ToknUsageSources
-): Promise<{ claude: boolean; codex: boolean }> {
-  await Promise.all([usage.claude.whenLoaded(), usage.codex.whenLoaded()])
+export function createToknUsageReader(call: PrivilegedUsageCall): ToknUsageReader {
   return {
-    claude: usage.claude.getScanState().enabled,
-    codex: usage.codex.getScanState().enabled
+    // Status polls must not force a restart of a failing backend; only uploads ask for one.
+    readTracking: async () =>
+      ToknTrackingSchema.parse(await call('tokn:getTracking', undefined, false)),
+    readRows: async () =>
+      ToknSyncRowSchema.array()
+        .max(20_000)
+        .parse(await call('tokn:getRows', undefined, true))
   }
-}
-
-async function readAggregates<Aggregate>(
-  source: ToknUsageSource<Aggregate>
-): Promise<readonly Aggregate[]> {
-  await source.whenLoaded()
-  if (!source.getScanState().enabled) {
-    return []
-  }
-  // Reuses a scan from the last few minutes; otherwise rescans the local logs.
-  await source.refresh(false)
-  return source.getDailyAggregates()
 }
 
 /** The exact request body, shared by the upload and its preview. */
 export async function buildToknUploadBody(
-  usage: ToknUsageSources,
+  usage: ToknUsageReader,
   appVersion: string
 ): Promise<ToknUploadPreview['body']> {
-  const [claude, codex] = await Promise.all([
-    readAggregates(usage.claude),
-    readAggregates(usage.codex)
-  ])
   return {
-    rows: buildToknSyncRows({ claude, codex }),
+    rows: await usage.readRows(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     scannedAt: new Date().toISOString(),
     cliVersion: appVersion

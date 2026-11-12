@@ -29,6 +29,7 @@ import {
   configureRuntimeServices
 } from './main-process-runtime-service'
 import { initializeMainProcessAutomations } from './main-process-automations'
+import { initializeMainProcessTokn } from './main-process-tokn'
 import { initializeMainProcessPlugins } from './main-process-plugins'
 import {
   collectWorktreeTrashSweepRoots,
@@ -63,6 +64,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
+  initializeMainProcessTokn()
   configureRuntimeServices(runtime)
   installFirstWorkRenameHookSubscription()
   await initializeMainProcessPlugins(runtime)
