@@ -70,7 +70,7 @@
 1 src/main/runtime/terminal/driver/terminal-driver-resources.ts
 4 src/main/runtime/terminal/identity/workspace-session-worktree-id.ts
 2 src/main/runtime/terminal/launch/runtime-pane-admission.ts
-3 src/main/runtime/terminal/stop/worktree-terminal-stop.ts
+3 src/main/runtime/terminal/stop/worktree-terminal-close.ts
 3 src/main/runtime/terminal/surface/mobile-session-layout-projection.ts
 1 src/main/runtime/workspaces/session-hosts/get-runtime-id.ts
 1 src/main/runtime/workspaces/session-hosts/runtime-workspace-session-controller.ts

@@ -12,6 +12,7 @@ import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
 } from '../../shared/worktree-runtime-capabilities'
 
+// Seven real CLI processes share this budget, including their runtime startup.
 it('real CLI folder removal preserves explicit archive approval and refuses unsupported hosts', async () => {
   const manifest = createRequire(resolve('package.json')).resolve('bun/package.json')
   const { bin } = z
