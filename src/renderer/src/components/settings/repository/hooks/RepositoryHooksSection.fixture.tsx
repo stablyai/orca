@@ -35,3 +35,23 @@ export const sharedAndLocal = defineFixture({
     />
   )
 })
+
+export const localScriptsIgnored = defineFixture({
+  width: 760,
+  render: () => (
+    <RepositoryHooksSection
+      repo={{
+        ...repo,
+        hookSettings: { ...repo.hookSettings, commandSourcePolicy: 'shared-only' as const }
+      }}
+      yamlHooks={{ scripts: { setup: 'pnpm install' } }}
+      hasHooksFile
+      hooksInspectionReady
+      mayNeedUpdate={false}
+      copiedTemplate={false}
+      forceVisible
+      onCopyTemplate={() => {}}
+      onUpdateHookSettings={() => {}}
+    />
+  )
+})

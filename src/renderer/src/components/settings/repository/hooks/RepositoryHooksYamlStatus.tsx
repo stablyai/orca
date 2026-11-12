@@ -13,20 +13,11 @@ const EXAMPLE_TEMPLATE = `scripts:
 issueCommand: |
   Complete {{artifact_url}}`
 
-const YAML_STATE_STYLES: Record<string, { card: string; titleClassName: string }> = {
-  loaded: {
-    card: 'border-emerald-500/20 bg-emerald-500/5',
-    titleClassName: 'text-emerald-700 dark:text-emerald-300'
-  },
-  'update-available': {
-    card: 'border-amber-500/20 bg-amber-500/5',
-    titleClassName: 'text-amber-700 dark:text-amber-300'
-  },
-  invalid: {
-    card: 'border-amber-500/20 bg-amber-500/5',
-    titleClassName: 'text-amber-700 dark:text-amber-300'
-  },
-  missing: { card: 'border-border/50 bg-muted/20', titleClassName: 'text-foreground' }
+const YAML_STATE_TITLE_CLASS_NAMES: Record<string, string> = {
+  loaded: 'text-emerald-700 dark:text-emerald-300',
+  'update-available': 'text-amber-700 dark:text-amber-300',
+  invalid: 'text-amber-700 dark:text-amber-300',
+  missing: 'text-foreground'
 }
 
 function getYamlStateCopy(
@@ -150,9 +141,9 @@ export function RepositoryHooksYamlStatus({
   const copy = getYamlStateCopy(yamlState, t)
   const parseErrorFixes = getParseErrorFixes(t)
   return (
-    <div className={`space-y-3 rounded-xl border p-3 ${YAML_STATE_STYLES[yamlState].card}`}>
+    <div className="space-y-3">
       <div className="space-y-1">
-        <p className={`text-sm font-medium ${YAML_STATE_STYLES[yamlState].titleClassName}`}>
+        <p className={`text-sm font-medium ${YAML_STATE_TITLE_CLASS_NAMES[yamlState]}`}>
           {copy.heading}
         </p>
         <p className="text-xs text-muted-foreground">{copy.description}</p>
@@ -163,7 +154,7 @@ export function RepositoryHooksYamlStatus({
         </pre>
       ) : yamlState === 'invalid' ? (
         <div className="space-y-4">
-          <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-background/60 p-3">
+          <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
             <div className="space-y-2 text-xs text-muted-foreground">
               <p>

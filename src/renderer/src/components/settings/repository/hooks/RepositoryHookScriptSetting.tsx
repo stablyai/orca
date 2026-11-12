@@ -218,7 +218,7 @@ export function LocalCommandSourceNotice({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+    <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
         <div className="space-y-1">
