@@ -5,6 +5,7 @@ import {
   CircleX,
   Ellipsis,
   Eye,
+  EyeOff,
   FolderInput,
   FolderTree,
   Plus,
@@ -38,6 +39,7 @@ import {
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../../../shared/worktree/ownership'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
+import { setProjectHidden } from '../../hidden-projects/set-project-hidden'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
@@ -181,6 +183,10 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
         ) : null}
         <WslMoveProjectMenuItem repo={repo} />
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => void setProjectHidden(repo, true)}>
+          <EyeOff className="size-3.5" />
+          {t('sidebar.hiddenProjects.hideProject', 'Hide Project')}
+        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.c83968f87f', 'Remove Project')}

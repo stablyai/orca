@@ -60,6 +60,7 @@ vi.mock('./worktree-list/listing/WorktreeList', () => ({
 }))
 
 vi.mock('./WslMovedProjectsSection', () => ({ default: () => null }))
+vi.mock('./hidden-projects/HiddenProjectsSection', () => ({ default: () => null }))
 
 vi.mock('./SidebarToolbar', () => ({
   default: () => <div data-testid="sidebar-toolbar" />

@@ -32,7 +32,7 @@ export type VisibleSidebarWorktreeInputs = {
 /** The sidebar's visible worktrees, in display order, before grouping. */
 export function selectVisibleSidebarWorktrees({
   rows,
-  ancestorByIdentity,
+  ancestorByIdentity: everyAncestorByIdentity,
   rankOf,
   filters,
   facts,
@@ -45,6 +45,8 @@ export function selectVisibleSidebarWorktrees({
 }: VisibleSidebarWorktreeInputs): Worktree[] {
   // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
   const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
+  // Hidden projects are no filter: neither a reveal nor a child's lineage brings their rows back.
+  const ancestorByIdentity = withoutHiddenProjectRows(everyAncestorByIdentity, facts)
 
   let all = filterWorkspaceRows(rows, filters, facts)
 
@@ -85,6 +87,20 @@ export function selectVisibleSidebarWorktrees({
         selectedRepoIds,
         lineageParentIdentities
       )
+}
+
+function withoutHiddenProjectRows(
+  rows: ReadonlyMap<string, Worktree>,
+  facts: WorkspaceRowFactReader<Worktree>
+): ReadonlyMap<string, Worktree> {
+  let kept: Map<string, Worktree> | null = null
+  for (const [identity, worktree] of rows) {
+    if (facts.isInHiddenProject(worktree)) {
+      kept ??= new Map(rows)
+      kept.delete(identity)
+    }
+  }
+  return kept ?? rows
 }
 
 function addVisibleLineageAncestors(

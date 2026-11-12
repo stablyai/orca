@@ -1,4 +1,5 @@
 import type { Repo } from '../repo-types'
+import { isRepoHidden } from '../hidden-projects'
 import type { Worktree } from '../worktree/types'
 import type { WorktreeGroupBy } from './row-types'
 
@@ -19,7 +20,11 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
   const visibleRepoIds = new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
   const placeholderRepoIds = new Set<string>()
   for (const repo of args.repos) {
-    if ((filterSet && !filterSet.has(repo.id)) || args.pendingVmRepoIds?.has(repo.id)) {
+    if (
+      (filterSet && !filterSet.has(repo.id)) ||
+      args.pendingVmRepoIds?.has(repo.id) ||
+      isRepoHidden(repo)
+    ) {
       continue
     }
     const hasNoWorktrees = (args.worktreesByRepo[repo.id]?.length ?? 0) === 0

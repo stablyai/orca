@@ -228,6 +228,25 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "hiddenProjects": {
+      "hideProject": "Hide Project",
+      "hidden": "{{name}} hidden",
+      "hiddenDescription": "Its terminals and agents keep running. Show it again from Hidden projects below the list.",
+      "undo": "Undo",
+      "hideFailed": "Couldn't hide {{name}}. Its host may need an Orca update.",
+      "showFailed": "Couldn't show {{name}} again.",
+      "count_one": "{{count}} hidden project",
+      "count_other": "{{count}} hidden projects",
+      "listLabel": "Hidden projects",
+      "show": "Show",
+      "showAriaLabel": "Show {{name}} in the sidebar",
+      "settingsTitle": "Hide from sidebar",
+      "settingsDescription": "Keeps this project out of the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running.",
+      "settingsToggleLabel": "Hide {{name}} from the sidebar",
+      "keywordHide": "hide",
+      "keywordHidden": "hidden",
+      "keywordSidebar": "sidebar"
     }
   },
   "app": {

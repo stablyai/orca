@@ -27,6 +27,7 @@ import {
   rowKeyMatchesRenderRow
 } from './render-row-lookup'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
+import { isWorktreeInHiddenProject } from '@/lib/workspace/activation/worktree-activation-sidebar-filters'
 
 export const MAX_REVEAL_RETRIES = 8
 
@@ -117,6 +118,19 @@ export function resolvePendingSidebarReveal(args: {
   return args.targetWorktreeStillExists ? 'keep-pending' : 'clear'
 }
 
+// A hidden project's rows never render, so waiting for one would hold the request until unhide.
+function isRevealTargetInHiddenProject(
+  worktrees: readonly Worktree[],
+  request: PendingSidebarWorktreeReveal
+): boolean {
+  const target = worktrees.find(
+    (worktree) =>
+      worktree.id === request.worktreeId &&
+      (!request.executionHostId || !worktree.hostId || worktree.hostId === request.executionHostId)
+  )
+  return target !== undefined && isWorktreeInHiddenProject(target)
+}
+
 export function resolvePendingWorktreeRevealTarget(
   args: Pick<
     PendingSidebarRevealArgs,
@@ -144,12 +158,13 @@ export function resolvePendingWorktreeRevealTarget(
       : 'scroll-and-clear'
     : resolvePendingSidebarReveal({
         targetIndex,
-        targetWorktreeStillExists: sidebarWorkspaceStillExists(
-          request.worktreeId,
-          args.worktrees,
-          selectFolderWorkspaces(args),
-          request.executionHostId
-        )
+        targetWorktreeStillExists:
+          sidebarWorkspaceStillExists(
+            request.worktreeId,
+            args.worktrees,
+            selectFolderWorkspaces(args),
+            request.executionHostId
+          ) && !isRevealTargetInHiddenProject(args.worktrees, request)
       })
   return { targetIndex, outcome }
 }

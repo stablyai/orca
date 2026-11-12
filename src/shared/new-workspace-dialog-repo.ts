@@ -5,6 +5,7 @@ import {
   type ExecutionHostScope
 } from './execution-host'
 import { isGitRepoKind } from './repo-kind'
+import { isRepoHidden } from './hidden-projects'
 import type { Repo } from './repo-types'
 
 type NewWorkspaceDialogRepo = Pick<
@@ -12,11 +13,14 @@ type NewWorkspaceDialogRepo = Pick<
   'id' | 'path' | 'kind' | 'connectionId' | 'executionHostId'
 >
 
-export function getNewWorkspaceDialogEligibleRepos<T extends Pick<Repo, 'path' | 'connectionId'>>(
-  repos: readonly T[]
-): T[] {
+export function getNewWorkspaceDialogEligibleRepos<
+  T extends Pick<Repo, 'path' | 'connectionId'> & Partial<Pick<Repo, 'hiddenAt'>>
+>(repos: readonly T[]): T[] {
   // Runtime-owned SSH repos are hidden plumbing. Selecting them after VM creation seeds a recipe-less repo and hides Run on in the next create.
-  return repos.filter((repo) => Boolean(repo.path) && !isRuntimeOwnedSshTargetId(repo.connectionId))
+  return repos.filter(
+    (repo) =>
+      Boolean(repo.path) && !isRuntimeOwnedSshTargetId(repo.connectionId) && !isRepoHidden(repo)
+  )
 }
 
 export function resolveNewWorkspaceDialogRepoId({

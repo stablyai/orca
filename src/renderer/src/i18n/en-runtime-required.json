@@ -2528,6 +2528,10 @@
         "targetNotFolder": "\"{{name}}\" already exists at this location and is not a folder."
       }
     },
+    "hiddenProjects": {
+      "count_one": "{{count}} hidden project",
+      "count_other": "{{count}} hidden projects"
+    },
     "wslHosts": {
       "addErrors": {
         "alreadyAdded": "{{distro}} is already a host.",

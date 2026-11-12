@@ -17,6 +17,7 @@ import {
 } from '../workspace-creator-visibility'
 import type { WorkspaceRowFilters } from '../workspace-view/workspace-row-filters'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { isRepoHidden } from '../hidden-projects'
 import { collectActiveRowKeys } from './active-workspace'
 import {
   buildFeedHostOptions,
@@ -157,6 +158,7 @@ export function planSidebarFeedRows(
     filters: view.filters,
     facts: {
       isArchived: (worktree) => worktree.isArchived,
+      isInHiddenProject: (worktree) => isRepoHidden(index.repoOf(worktree)),
       isFolderWorkspace: () => false,
       repoId: (worktree) => worktree.repoId,
       hostId: (worktree) => {

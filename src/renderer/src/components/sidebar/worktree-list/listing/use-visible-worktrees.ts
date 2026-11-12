@@ -1,4 +1,5 @@
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import { indexHiddenRepoRows } from '../../../../../../shared/hidden-projects'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
@@ -80,6 +81,7 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const repos = useAppStore((s) => s.repos)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   // Opt-out lists must skip the clock so they cannot evict the sample shared by live lists.
   const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
@@ -142,6 +144,7 @@ export function useVisibleSidebarWorktrees(args: {
       pairedDeviceIdsByEnvironment,
       alwaysShowDefaultBranchWorkspace,
       repoMap,
+      hiddenRepoRows: indexHiddenRepoRows(repos, defaultHostId),
       workspaceHostScope,
       visibleWorkspaceHostIds,
       defaultHostId,
@@ -172,6 +175,7 @@ export function useVisibleSidebarWorktrees(args: {
     visibleWorkspaceHostIds,
     defaultHostId,
     repoMap,
+    repos,
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,

@@ -19,6 +19,7 @@ import {
   getPairedDeviceIdsByEnvironment
 } from '../../../../shared/workspace-creator-visibility'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { indexHiddenRepoRows } from '../../../../shared/hidden-projects'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from './worktree-jump-palette-document-index'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
@@ -105,6 +106,7 @@ export function useWorktreeJumpPaletteWorktrees({
       },
       buildDesktopWorkspaceRowFactReader({
         repoMap,
+        hiddenRepoRows: indexHiddenRepoRows(repos, defaultHostId),
         defaultHostId,
         pairedDeviceIdsByEnvironment,
         tabsByWorktree,
@@ -128,6 +130,7 @@ export function useWorktreeJumpPaletteWorktrees({
     pairedDeviceIdsByEnvironment,
     ptyIdsByTabId,
     repoMap,
+    repos,
     defaultHostId,
     showSleepingWorkspaces,
     tabsByWorktree,

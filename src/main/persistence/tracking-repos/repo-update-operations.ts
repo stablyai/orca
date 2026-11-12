@@ -122,6 +122,7 @@ export class RepoUpdatePersistenceOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
     }
   ): Repo | null {
@@ -232,6 +233,13 @@ export class RepoUpdatePersistenceOperations {
     ) {
       delete repo.externalWorktreeDiscoverySuppressedAt
       delete sanitizedUpdates.externalWorktreeDiscoverySuppressedAt
+    }
+    if (
+      'hiddenAt' in sanitizedUpdates &&
+      (sanitizedUpdates.hiddenAt === undefined || sanitizedUpdates.hiddenAt === null)
+    ) {
+      delete repo.hiddenAt
+      delete sanitizedUpdates.hiddenAt
     }
     if (
       'sourceControlAi' in sanitizedUpdates &&

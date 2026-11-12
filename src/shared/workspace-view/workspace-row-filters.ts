@@ -51,6 +51,8 @@ export const NO_WORKSPACE_ROW_FILTERS: WorkspaceRowFilters = {
 /** Desktop derives facts from worktrees/tabs; mobile reads host-stamped facts. Missing older-host facts read false to keep rows visible. */
 export type WorkspaceRowFactReader<Row> = {
   isArchived: (row: Row) => boolean
+  /** The row's own host copy of its project is hidden; not a filter, so Clear filters never lifts it. */
+  isInHiddenProject: (row: Row) => boolean
   /** A folder workspace follows only the host and other-client filters (useSidebarHostVisibleScope). */
   isFolderWorkspace: (row: Row) => boolean
   repoId: (row: Row) => string
@@ -91,7 +93,7 @@ function buildWorkspaceRowPredicate<Row>(
   const repoIds = filters.filterRepoIds.length > 0 ? new Set(filters.filterRepoIds) : null
   const hostIds = filters.visibleHostIds ? new Set(filters.visibleHostIds) : null
   return (row) => {
-    if (read.isArchived(row)) {
+    if (read.isArchived(row) || read.isInHiddenProject(row)) {
       return false
     }
     if (filters.hideWorkspacesFromOtherDevices && read.isOtherClient(row)) {

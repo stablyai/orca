@@ -9,12 +9,14 @@ import {
   getPairedDeviceIdsByEnvironment
 } from '../../../../../../shared/workspace-creator-visibility'
 import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
+import { indexHiddenRepoRows } from '../../../../../../shared/hidden-projects'
 
 /** Isolate store reads so sidebar, palette and keyboard shortcuts can share the pure visibility filter. */
 export function buildVisibleWorktreeOptionsFromState(
   state: ReturnType<typeof useAppStore.getState>,
   repoMap: Map<string, Repo>
 ): VisibleWorktreeOptions {
+  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   return {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
@@ -43,9 +45,10 @@ export function buildVisibleWorktreeOptionsFromState(
       : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
     repoMap,
+    hiddenRepoRows: indexHiddenRepoRows(state.repos, defaultHostId),
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
-    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
+    defaultHostId,
     worktreeLineageById: state.worktreeLineageById,
     lineageParentIdentities: selectSidebarLineageParentIdentities(state),
     preserveLineageParentOrder: state.sortBy === 'manual'

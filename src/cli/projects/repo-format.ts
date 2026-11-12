@@ -7,7 +7,12 @@ export function formatRepoList(result: RuntimeRepoList): string {
   if (result.repos.length === 0) {
     return 'No repos found.'
   }
-  return result.repos.map((repo) => `${repo.id}  ${repo.displayName}  ${repo.path}`).join('\n')
+  return result.repos
+    .map(
+      (repo) =>
+        `${repo.id}  ${repo.displayName}  ${repo.path}${typeof repo.hiddenAt === 'number' ? '  (hidden)' : ''}`
+    )
+    .join('\n')
 }
 
 export function formatRepoShow(result: { repo: Record<string, unknown> }): string {
