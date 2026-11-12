@@ -25,7 +25,17 @@ function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
   return false
 }
 
+const scanGenerationBumpListeners = new Set<(repoPath: string) => void>()
+
+/** Settled catalog owners outlive in-flight scans, so mutations must reach them too. */
+export function onWorktreeScanGenerationBump(listener: (repoPath: string) => void): void {
+  scanGenerationBumpListeners.add(listener)
+}
+
 export function bumpWorktreeScanGeneration(repoPath: string): void {
+  for (const listener of scanGenerationBumpListeners) {
+    listener(repoPath)
+  }
   // Retain generations only while a pre-mutation scan can still be joined.
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     return

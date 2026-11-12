@@ -14,7 +14,6 @@ import { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus
 import { RuntimeNativeChatDraftResolutions } from '../agent-session/launch/runtime-native-chat-draft-resolutions'
 import { RuntimeWorktreeLifecycleEvents } from '../workspaces/lifecycle/runtime-worktree-lifecycle-events'
 import type { RuntimeWorktreeLifecycleEvent } from '../workspaces/lifecycle/worktree-lifecycle-event'
-import type * as WorktreeScan from '../workspaces/catalog/runtime-worktree-scan-state'
 import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
@@ -99,12 +98,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected emulatorBridge: EmulatorBridge | null = null
 
   protected readonly resolvedWorktrees = new RuntimeResolvedWorktreeCache()
-
-  protected worktreeScanGenerations = new Map<string, number>()
-
-  protected worktreeScanCache = new Map<string, WorktreeScan.RuntimeWorktreeScanCache>()
-
-  protected worktreeScanInFlight = new Map<string, WorktreeScan.RuntimeWorktreeScanInFlight>()
 
   /** Bound abandoned Git-admin filesystem probes to one per repo. */
   protected worktreeAdminFingerprintProbes = new Set<string>()

@@ -1,7 +1,4 @@
-import {
-  getRepoExecutionHostId,
-  getRepoRoutingConnectionId
-} from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { composeWorktreeId } from '../../../../shared/worktree/id'
@@ -12,6 +9,10 @@ export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetSt
   abstract invalidateResolvedWorktreeCache(): void
 
   abstract invalidateWorktreeScanCacheForRepo(repoId: string): void
+
+  protected abstract peekRepoWorktreeListing(
+    repo: Repo
+  ): { worktrees: { path: string }[] } | undefined
 
   // Renderer meta writes skip its notifier after optimistic updates; remote clients still need invalidation.
   notifyWorktreesChangedForRemoteClients(repoId: string): void {
@@ -56,9 +57,8 @@ export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetSt
 
   // Ids spelled as clients listed them; an unlisted path may be another spelling of any checkout, so name none.
   private listedWorktreeIds(repo: Repo, paths: readonly string[]): string[] | null {
-    const scan = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
     const listed = new Map(
-      (scan?.listing ?? scan?.result)?.worktrees.map((worktree) => [
+      this.peekRepoWorktreeListing(repo)?.worktrees.map((worktree) => [
         normalizeRuntimePathForComparison(worktree.path),
         worktree.path
       ])

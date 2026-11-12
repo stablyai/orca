@@ -9,12 +9,19 @@ import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution
 import type { Store } from '../../../persistence/loading-store/store'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
+import {
+  claimRuntimeLineagePrune,
+  observationForRuntimeResult
+} from './runtime-worktree-catalog-read'
+import { claimWorktreeCatalogHygiene } from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
 
 export type WitnessedRuntimeWorktreeScan = RuntimeWorktreeScanResult & {
   /** A concurrent worktree change made these scan rows stale. */
   superseded: boolean
   scanGeneration: number
   metadataPruneExpectation: NativeLocalWorktreeMetadataScanExpectation | undefined
+  /** Lineage prunes once per observation; null when another read of these rows already did. */
+  lineagePrune: { scanGeneration: number } | null
 }
 
 /** Refuse destructive pruning on unresolved routes or WSL, whose Linux paths v1 cannot equate with stored UNC aliases. */
@@ -42,20 +49,37 @@ async function scanRuntimeWorktreesWithMutationWitness(
   scanRepo: (repo: Repo) => Promise<RuntimeWorktreeScanResult>
 ): Promise<WitnessedRuntimeWorktreeScan> {
   // Capture before listing can mutate metadata synchronously; pruning revalidates the original rows.
-  const scanGeneration = getLocalWorktreeScanGeneration(repo.id)
-  const metadataPruneExpectation = captureLocalMetadataPruneExpectation(store, repo)
+  let scanGeneration = getLocalWorktreeScanGeneration(repo.id)
+  let metadataPruneExpectation: NativeLocalWorktreeMetadataScanExpectation | undefined
+  let lineagePrune: { scanGeneration: number } | null = null
   let scan: RuntimeWorktreeScanResult
   try {
     scan = await scanRepo(repo)
   } catch {
     scan = { ok: false, worktrees: [] }
   }
+  const observation = observationForRuntimeResult(scan)
+  if (observation) {
+    // Shared observations carry their own pre-scan witness; older rows never get today's expectations.
+    scanGeneration = observation.generation
+    const claim = isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration)
+      ? claimWorktreeCatalogHygiene(observation)
+      : null
+    metadataPruneExpectation = claim?.expectation as
+      | NativeLocalWorktreeMetadataScanExpectation
+      | undefined
+    lineagePrune = claimRuntimeLineagePrune(scan)
+  } else {
+    metadataPruneExpectation = captureLocalMetadataPruneExpectation(store, repo)
+    lineagePrune = { scanGeneration }
+  }
   return {
     ...scan,
     // Failed scans are already non-authoritative.
     superseded: scan.ok && !isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration),
     scanGeneration,
-    metadataPruneExpectation
+    metadataPruneExpectation,
+    lineagePrune
   }
 }
 

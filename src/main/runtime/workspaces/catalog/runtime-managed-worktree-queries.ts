@@ -173,9 +173,9 @@ export class RuntimeManagedWorktreeQueries {
           scanGeneration: scan.scanGeneration
         })
       }
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, {
-        scanGeneration: scan.scanGeneration
-      })
+      if (scan.lineagePrune) {
+        pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, scan.lineagePrune)
+      }
     }
     const matcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
