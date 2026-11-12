@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { structuredAgentSessionDomainFingerprint } from './lifecycle/structured-agent-session-mutation'
 
 export const agentSessionAdvisoryPolicySchema = z

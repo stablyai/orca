@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 const text = z.string().trim().min(1).max(8_192)
 
