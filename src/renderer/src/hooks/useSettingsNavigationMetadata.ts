@@ -33,7 +33,9 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 import {
   buildOrcaCloudSettingsSections,
-  gatherOrcaCloudSettingsGroup
+  gatherOrcaCloudSettingsGroup,
+  hasOrcaBillingAccount,
+  labelAccountBilling
 } from './settings-navigation-orca-cloud-sections'
 import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
 import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
@@ -177,7 +179,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     hostPlatform: windowsTerminalCapabilities.hostPlatform
   })
 
-  return useMemo(
+  const sections = useMemo(
     () =>
       buildSettingsNavigationMetadata(
         {
@@ -220,4 +222,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       t
     ]
   )
+  // Orca Cloud: "Account & billing" only when there is billing to show (Neil).
+  const hasOrcaBilling = useAppStore(hasOrcaBillingAccount)
+  return useMemo(() => labelAccountBilling(sections, hasOrcaBilling), [sections, hasOrcaBilling])
 }

@@ -1423,8 +1423,10 @@
     },
     "accountBilling": {
       "account": "Account",
-      "title": "Account + Billing",
-      "description": "Your Orca account, plan, sandbox hours and payment."
+      "description": "Your Orca account, plan, sandbox hours and payment.",
+      "title2": "Account & billing",
+      "accountOnly": "Account",
+      "accountOnlyDescription": "Your Orca account and what’s included with it."
     }
   },
   "menu": {
