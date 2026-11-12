@@ -2,10 +2,15 @@ import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
+import { z } from 'zod'
 import * as reader from '../../shared/file-content/node-bounded-file-reader'
 import fixture from '../acp/fixtures/antigravity-v1.4.1-options.json'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
 import { antigravityChatRulesMeta } from './antigravity-chat-rules'
+
+const rulesMeta = z.object({
+  antigravity: z.object({ systemPrompt: z.object({ append: z.string() }) })
+})
 
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof fs>()
@@ -40,10 +45,7 @@ async function workspace() {
       cwd,
       env: { HOME: home, USERPROFILE: home }
     })
-    return (
-      (meta?.antigravity as { systemPrompt: { append: string } } | undefined)?.systemPrompt
-        .append ?? ''
-    )
+    return meta ? rulesMeta.parse(meta).antigravity.systemPrompt.append : ''
   }
   return { root, home, repo, read }
 }
