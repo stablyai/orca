@@ -22,6 +22,7 @@ import { useCloudRecoveryContext } from '@/lib/orca-cloud/use-cloud-recovery-con
 import { CloudAsleepTerminalNotice } from '@/components/orca-cloud/offline/CloudAsleepTerminalNotice'
 import { CloudWokeProcessesNotice } from '@/components/orca-cloud/offline/CloudWokeProcessesNotice'
 import { CloudWokeAgentNotice } from '@/components/orca-cloud/offline/CloudWokeAgentNotice'
+import { CloudPaneBannerPortal } from '@/components/agent-sign-in-strip/CloudPaneBannerPortal'
 import {
   dismissWakeProcessHint,
   endsAtShellPrompt,
@@ -324,30 +325,37 @@ export function TerminalPaneRecoveryPortals({
         // An agent pane: the host relaunches its agent; Restart only if that never comes (RA-WAKE).
         if (wokeHint && 'restartAgent' in wokeHint) {
           const wokeAction = cloudWokeActionFor(wokeHint)
-          return createPortal(
-            <CloudWokeAgentNotice
-              paneKey={makePaneKey(tabId, pane.leafId)}
-              paneLeafId={pane.leafId}
-              agentName={wokeAction.kind === 'restart' ? wokeAction.agent : ''}
-              capturedAt={getWakeCaptureTime(pane.leafId) ?? 0}
-              paneAtShellPrompt={() => endsAtShellPrompt(readTerminalTail(pane.terminal, 40))}
-              subscribeScreen={(onChange) => {
-                const subscription = pane.terminal.onWriteParsed(onChange)
-                return () => subscription.dispose()
-              }}
-              onRestart={() => {
-                dismissWakeProcessHint(pane.leafId)
-                runCloudWokeAction(wokeHint, {
-                  tabId,
-                  leafId: pane.leafId,
-                  worktreeId: controller.worktreeId,
-                  sendInput: () => undefined
-                })
-              }}
-              onDismiss={() => dismissWakeProcessHint(pane.leafId)}
-            />,
-            pane.container,
-            `cloud-woke-${pane.id}`
+          const paneKey = makePaneKey(tabId, pane.leafId)
+          // CHAT-BANNERS: an open chat view shows this one (Restart only); the Rerun notice stays here.
+          return (
+            <CloudPaneBannerPortal
+              key={pane.id}
+              pane={pane}
+              paneKey={paneKey}
+              portalKey={`cloud-woke-${pane.id}`}
+            >
+              <CloudWokeAgentNotice
+                paneKey={paneKey}
+                paneLeafId={pane.leafId}
+                agentName={wokeAction.kind === 'restart' ? wokeAction.agent : ''}
+                capturedAt={getWakeCaptureTime(pane.leafId) ?? 0}
+                paneAtShellPrompt={() => endsAtShellPrompt(readTerminalTail(pane.terminal, 40))}
+                subscribeScreen={(onChange) => {
+                  const subscription = pane.terminal.onWriteParsed(onChange)
+                  return () => subscription.dispose()
+                }}
+                onRestart={() => {
+                  dismissWakeProcessHint(pane.leafId)
+                  runCloudWokeAction(wokeHint, {
+                    tabId,
+                    leafId: pane.leafId,
+                    worktreeId: controller.worktreeId,
+                    sendInput: () => undefined
+                  })
+                }}
+                onDismiss={() => dismissWakeProcessHint(pane.leafId)}
+              />
+            </CloudPaneBannerPortal>
           )
         }
         if (wokeHint) {

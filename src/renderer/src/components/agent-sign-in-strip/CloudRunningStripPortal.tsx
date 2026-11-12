@@ -3,7 +3,6 @@
 // running and refits below it, so its scrollback stays readable and selectable.
 import type React from 'react'
 import { useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -33,10 +32,10 @@ import {
 } from '@/lib/orca-cloud/cloud-agent-restart-attempt'
 import {
   CloudAgentSignInStrip,
-  CloudStripLayer,
   cloudStripWidth,
   type CloudStripActions
 } from './CloudAgentSignInStrip'
+import { CloudPaneBannerPortal } from './CloudPaneBannerPortal'
 import { startCloudPaneAgentRestart } from '@/lib/orca-cloud/cloud-pane-agent-restart'
 import {
   cloudRestartAttemptModel,
@@ -124,17 +123,20 @@ export function CloudRunningStripPortal({
   }
   // RA-11e: a resume that found no conversation started fresh; say so for a moment, then clear.
   if (cloud && cloudAgentRestartStartedFresh(paneKey, revision)) {
-    return createPortal(
-      <CloudStripLayer>
+    return (
+      <CloudPaneBannerPortal
+        pane={pane}
+        paneKey={paneKey}
+        portalKey={`cloud-running-strip-${pane.id}`}
+        stripLayer
+      >
         <CloudAgentSignInStrip
           model={cloudRestartFreshModel(agent ?? 'claude', t)}
           prompt={null}
           width={cloudStripWidth(pane.container.clientWidth)}
           actions={NO_ACTIONS}
         />
-      </CloudStripLayer>,
-      pane.container,
-      `cloud-running-strip-${pane.id}`
+      </CloudPaneBannerPortal>
     )
   }
   // A Restart in flight (or failed) owns the strip even while the pane has no agent status.
@@ -151,17 +153,20 @@ export function CloudRunningStripPortal({
       useApiKey: () => undefined,
       cancel: () => (attempt.phase === 'failed' ? dismissCloudAgentRestart(paneKey) : undefined)
     }
-    return createPortal(
-      <CloudStripLayer>
+    return (
+      <CloudPaneBannerPortal
+        pane={pane}
+        paneKey={paneKey}
+        portalKey={`cloud-running-strip-${pane.id}`}
+        stripLayer
+      >
         <CloudAgentSignInStrip
           model={cloudRestartAttemptModel(attempt, t)}
           prompt={null}
           width={cloudStripWidth(pane.container.clientWidth)}
           actions={attemptActions}
         />
-      </CloudStripLayer>,
-      pane.container,
-      `cloud-running-strip-${pane.id}`
+      </CloudPaneBannerPortal>
     )
   }
   if (!running) {
@@ -195,16 +200,19 @@ export function CloudRunningStripPortal({
     // State 2's ×; state 1 has none (Renew is the action) and Escape leaves it showing.
     cancel: () => (strip.phase === 'renewed' ? clearCloudRunningSignout(paneKey) : undefined)
   }
-  return createPortal(
-    <CloudStripLayer>
+  return (
+    <CloudPaneBannerPortal
+      pane={pane}
+      paneKey={paneKey}
+      portalKey={`cloud-running-strip-${pane.id}`}
+      stripLayer
+    >
       <CloudAgentSignInStrip
         model={cloudRunningStripModel(strip, t)}
         prompt={null}
         width={cloudStripWidth(pane.container.clientWidth)}
         actions={actions}
       />
-    </CloudStripLayer>,
-    pane.container,
-    `cloud-running-strip-${pane.id}`
+    </CloudPaneBannerPortal>
   )
 }
