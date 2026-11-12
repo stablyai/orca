@@ -40,11 +40,12 @@ export function computerTreeElementsMatching(
   return elements.filter((element) => elementText(element).toLowerCase().includes(needle))
 }
 
-// Providers render traits right after the role: `12 push button (selected, disabled) Save`.
-const TRAITS = /^\t*\d+(?: [^(,]*?)? \(([^()]*)\)/u
+// Providers render traits after the role, whose own text may hold parentheses: `12 button (selected, disabled) Save`.
+const DISABLED_TRAIT =
+  /\((?:(?:selected|expanded|settable), )*disabled(?:, (?:selected|expanded|settable))*\)/u
 
 export function isComputerTreeElementDisabled(element: ComputerTreeElement): boolean {
-  return TRAITS.exec(element.lines[0])?.[1].split(', ').includes('disabled') ?? false
+  return DISABLED_TRAIT.test(element.lines[0])
 }
 
 function elementText(element: ComputerTreeElement): string {

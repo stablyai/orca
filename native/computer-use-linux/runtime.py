@@ -135,8 +135,11 @@ def pid_of(node):
 
 
 def has_state(node, state):
-    state_set = attempt(node.get_state_set)
-    return bool(state_set is not None and attempt(lambda: state_set.contains(state), False))
+    return state_set_contains(attempt(node.get_state_set), state)
+
+
+def state_set_contains(state_set, state, default=False):
+    return bool(state_set is not None and attempt(lambda: state_set.contains(state), default))
 
 
 class GeometryReader:
@@ -401,17 +404,17 @@ def accessible_id(node):
     return str(attempt(node.get_accessible_id, "") or "")
 
 
-def is_disabled(node):
+def is_disabled(state_set):
     # Why: toolkits set ENABLED and SENSITIVE on usable nodes; a node whose states can't be read is not called disabled.
     usable = [getattr(Atspi.StateType, name, None) for name in ("ENABLED", "SENSITIVE")]
-    state_set = attempt(node.get_state_set)
     if state_set is None or None in usable:
         return False
-    return not any(attempt(lambda state=state: state_set.contains(state), True) for state in usable)
+    return not any(state_set_contains(state_set, state, True) for state in usable)
 
 
 def record(node, index, path):
     role = role_of(node)
+    state_set = attempt(node.get_state_set)
     return {
         "index": index,
         "runtimeId": path,
@@ -421,8 +424,8 @@ def record(node, index, path):
         "localizedControlType": role,
         "className": str(attempt(node.get_toolkit_name, "") or ""),
         "value": string_value(node),
-        "isSelected": has_state(node, Atspi.StateType.SELECTED),
-        "isDisabled": is_disabled(node),
+        "isSelected": state_set_contains(state_set, Atspi.StateType.SELECTED),
+        "isDisabled": is_disabled(state_set),
         "nativeWindowHandle": 0,
         "frame": None,
         "actions": action_labels(node),

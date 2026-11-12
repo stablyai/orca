@@ -47,10 +47,11 @@ export async function waitForComputerSnapshot(
   params: Record<string, unknown>,
   timeoutMs: number
 ): Promise<RuntimeRpcSuccess<ComputerWaitSnapshotResult>> {
+  const startedAt = Date.now()
   if (condition.kind === 'enabled') {
-    await assertDisabledStateSupported(client)
+    await assertDisabledStateSupported(client, Math.max(timeoutMs, MIN_READ_TIMEOUT_MS))
   }
-  const { response, elapsedMs } = await pollUntil(condition, timeoutMs, {
+  const { response, elapsedMs } = await pollUntil(condition, startedAt, timeoutMs, {
     call: (readTimeoutMs) =>
       client.call<ComputerSnapshotResult>(
         'computer.getAppState',
@@ -79,7 +80,7 @@ export async function waitForComputerWindowTitle(
   app: string,
   timeoutMs: number
 ): Promise<RuntimeRpcSuccess<ComputerWaitWindowsResult>> {
-  const { response, elapsedMs } = await pollUntil(condition, timeoutMs, {
+  const { response, elapsedMs } = await pollUntil(condition, Date.now(), timeoutMs, {
     call: (readTimeoutMs) =>
       client.call<ComputerListWindowsResult>(
         'computer.listWindows',
@@ -137,8 +138,15 @@ function matchingWindows(
   return windows.filter((window) => window.title.toLowerCase().includes(needle))
 }
 
-async function assertDisabledStateSupported(client: RuntimeClient): Promise<void> {
-  const { result } = await client.call<ComputerProviderCapabilities>('computer.capabilities', {})
+async function assertDisabledStateSupported(
+  client: RuntimeClient,
+  readTimeoutMs: number
+): Promise<void> {
+  const { result } = await client.call<ComputerProviderCapabilities>(
+    'computer.capabilities',
+    {},
+    { timeoutMs: readTimeoutMs }
+  )
   if (result.supports.observation.disabledState !== true) {
     // Why: without the trait every element reads as enabled, so the wait would pass at once.
     throw new RuntimeClientError(
@@ -150,10 +158,10 @@ async function assertDisabledStateSupported(client: RuntimeClient): Promise<void
 
 async function pollUntil<T>(
   condition: ComputerWaitCondition,
+  startedAt: number,
   timeoutMs: number,
   poll: Poll<T>
 ): Promise<{ response: RuntimeRpcSuccess<T>; elapsedMs: number }> {
-  const startedAt = Date.now()
   for (;;) {
     let miss: string
     try {
