@@ -347,8 +347,22 @@ it('traverses retired chains with at most two visits per vertex and edge at N an
       })
     )
     const rows = new Map(nodes.map((row) => [row.id, row]))
-    const lineage = Object.fromEntries(
-      nodes.slice(1).map((row, index) => [row.id, edge(row, nodes[index], index)])
+    let catalogEnumerations = 0
+    let catalogReads = 0
+    const lineage = new Proxy(
+      Object.fromEntries(
+        nodes.slice(1).map((row, index) => [row.id, edge(row, nodes[index], index)])
+      ),
+      {
+        ownKeys: (target) => {
+          catalogEnumerations++
+          return Reflect.ownKeys(target)
+        },
+        get: (target, key, receiver) => {
+          catalogReads++
+          return Reflect.get(target, key, receiver)
+        }
+      }
     )
     // The existing index is shared; count the two required reachability/emission passes over it.
     const adjacency = getProjectedWorktreeLineageChildrenByParentId(lineage, rows)
@@ -366,13 +380,28 @@ it('traverses retired chains with at most two visits per vertex and edge at N an
       }
     }
     const vertexVisits = vi.spyOn(adjacency, 'get')
+    const rowValues = vi.spyOn(rows, 'values')
+    const rowIterator = vi.spyOn(rows, Symbol.iterator)
+    const rowReads = vi.spyOn(rows, 'get')
+    catalogEnumerations = 0
+    catalogReads = 0
     try {
       const result = getLineageChildrenByParentId(lineage, rows, new Set([nodes[0].id]))
       expect([...result.values()].flat().map((row) => row.id)).toEqual([`node-${size - 1}`])
+      expect(vertexVisits.mock.calls.length).toBeGreaterThanOrEqual(size)
       expect(vertexVisits.mock.calls.length).toBeLessThanOrEqual(2 * size)
+      expect(edgeVisits).toBeGreaterThanOrEqual(size - 1)
       expect(edgeVisits).toBeLessThanOrEqual(2 * (size - 1))
+      expect(catalogEnumerations).toBe(0)
+      expect(catalogReads).toBe(0)
+      expect(rowValues).not.toHaveBeenCalled()
+      expect(rowIterator).not.toHaveBeenCalled()
+      expect(rowReads.mock.calls.length).toBeLessThanOrEqual(size)
     } finally {
       vertexVisits.mockRestore()
+      rowValues.mockRestore()
+      rowIterator.mockRestore()
+      rowReads.mockRestore()
     }
   }
 })
