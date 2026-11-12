@@ -1,5 +1,5 @@
 import type { CanUseTool, OnUserDialog } from '@anthropic-ai/claude-agent-sdk'
-import type { ClaudeControlSurface } from './claude-agent-sdk-control-requests'
+import type { ClaudeControlSurface } from './sdk-transport/claude-agent-sdk-control-requests'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
 import type { ClaudeStructuredSdkOptions } from './structured/launch/claude-structured-launch-resolution'

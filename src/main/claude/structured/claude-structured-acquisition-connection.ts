@@ -1,6 +1,6 @@
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import type { ClaudeStreamJsonConnectionHandlers } from '../claude-stream-json-connection-types'
-import { claudeConfigDirEnvPatch } from '../claude-config-dir-pin'
+import { claudeConfigDirEnvPatch } from './launch/claude-config-dir-pin'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 import { launchPreparationFailure } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { readdir } from 'node:fs/promises'

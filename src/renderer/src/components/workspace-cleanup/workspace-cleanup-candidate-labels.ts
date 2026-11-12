@@ -2,6 +2,8 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupBlocker } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
+import type { WorktreeAtRiskLocalFiles } from '../../../../shared/worktree/at-risk-local-files'
+import { formatAtRiskLocalFileNames } from '@/lib/workspace/display/at-risk-local-files-label'
 
 type ContextDetailKind = 'terminal' | 'editor' | 'browser' | 'diff' | 'agent'
 
@@ -39,11 +41,6 @@ export function getWorkspaceCleanupBlockerLabel(blocker: WorkspaceCleanupBlocker
         'auto.components.workspace.cleanup.candidateRow.dirtyEditorBufferBlocker',
         'Unsaved editor buffer'
       )
-    case 'volatile-local-context':
-      return translate(
-        'auto.components.workspace.cleanup.candidateRow.volatileLocalContextBlocker',
-        'Volatile local context'
-      )
     case 'recent-visible-context':
       return translate(
         'auto.components.workspace.cleanup.candidateRow.recentVisibleContextBlocker',
@@ -69,6 +66,11 @@ export function getWorkspaceCleanupBlockerLabel(blocker: WorkspaceCleanupBlocker
         'auto.components.workspace.cleanup.candidateRow.dirtyFilesBlocker',
         'Changed files'
       )
+    case 'ignored-files':
+      return translate(
+        'components.workspace.cleanup.candidateRow.ignoredFilesBlocker',
+        'Ignored local files'
+      )
     case 'unpushed-commits':
       return getUnpushedCommitsLabel()
     case 'unknown-base':
@@ -79,6 +81,27 @@ export function getWorkspaceCleanupBlockerLabel(blocker: WorkspaceCleanupBlocker
     case 'dismissed':
       return translate('auto.components.workspace.cleanup.candidateRow.dismissedBlocker', 'Ignored')
   }
+}
+
+export function formatWorkspaceCleanupIgnoredFilesLabel(
+  files: WorktreeAtRiskLocalFiles | null | undefined,
+  t: Translate = translate
+): string {
+  const names = files ? formatAtRiskLocalFileNames(files, t) : null
+  if (names) {
+    return t(
+      'components.workspace.cleanup.candidateRow.ignoredFilesNamed',
+      'Ignored files: {{value0}}',
+      { value0: names }
+    )
+  }
+  if (files && !files.complete) {
+    return t(
+      'components.workspace.cleanup.candidateRow.ignoredFilesUnchecked',
+      'Ignored files not fully checked'
+    )
+  }
+  return getWorkspaceCleanupBlockerLabel('ignored-files')
 }
 
 export function formatWorkspaceCleanupGitStatusLabel(

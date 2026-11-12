@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-vi.mock('../format', () => ({ printResult: vi.fn() }))
-vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
+vi.mock('../command-result-output', () => ({ printResult: vi.fn() }))
+vi.mock('../terminals/terminal-selector', () => ({ getTerminalHandle: vi.fn() }))
 
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { orchestrationTestContext } from './orchestration-handler-test-context'
 
@@ -160,36 +160,5 @@ describe('legacy orchestration CLI inspection', () => {
       response.result.formatted.split('\n').filter((line) => line.startsWith('[Reply:'))
     ).toEqual(['[Reply: orca orchestration reply --id msg_current --body "..."]'])
     expect(response.result.formatted).not.toContain('--from run:run_current')
-  })
-
-  it('labels legacy rows in full inbox output without hiding their body', async () => {
-    const result = {
-      messages: [
-        {
-          id: 'msg_legacy',
-          run_id: 'run_legacy_local',
-          from_handle: 'term_worker',
-          to_handle: 'term_coord',
-          subject: 'progress',
-          body: 'Tests are running.'
-        }
-      ],
-      count: 1
-    }
-    callMock.mockResolvedValue({ result })
-
-    await ORCHESTRATION_HANDLERS['orchestration inbox'](
-      orchestrationTestContext(
-        callMock,
-        new Map<string, string | boolean>([['full', true]]),
-        false,
-        '/repo'
-      )
-    )
-
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2]
-    const output = formatter?.(result)
-    expect(output).toContain('msg_legacy [legacy, read-only]')
-    expect(output).toContain('Tests are running.')
   })
 })

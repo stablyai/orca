@@ -18,6 +18,8 @@ import { buildHostFeedSections, buildPreFeedSections } from './host-sidebar-feed
 import { useHostRepoIconDataUrls } from './use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from './use-host-sidebar-feed'
 import type { HostScreenState } from './use-host-screen-state'
+import { indexHiddenProjects } from '../../../src/shared/hidden-projects'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 
 export type HostListSectionsInputs = {
   client: RpcClient | null
@@ -160,12 +162,14 @@ function useFeedHostListSections({
               view: state.view,
               search: state.search,
               repoHostIdByRepoId: state.repoHostIdByRepoId,
-              lastVisited
+              lastVisited,
+              hiddenProjects: indexHiddenProjects(catalog.repos, LOCAL_EXECUTION_HOST_ID)
             })
           : NO_SECTIONS,
     [
       built,
       preFeed,
+      catalog,
       displayWorktrees,
       hostContextOf,
       state.view,

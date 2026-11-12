@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { printOrchestrationReceipt, printOrchestrationResult } from './agent-view'
 import { WORKER_SHOW_VIEW, type WorkerShowResult } from './worker-agent-views'
 import {

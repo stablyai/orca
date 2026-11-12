@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import * as sessionCreate from '../../../rpc/methods/structured-sessions/creation/structured-agent-session-create'
-import { resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   COORDINATOR,
   call,

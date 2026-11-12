@@ -1,10 +1,5 @@
 import type { Store } from '../persistence/loading-store/store'
-import { CodexRuntimeHomeAuthSync } from './runtime-home-service-auth-sync'
-
-export type {
-  CodexMirroredHomeStatus,
-  CodexRateLimitHomeResolution
-} from './runtime-home-service-types'
+import { CodexRuntimeHomeAuthSync } from './runtime-home/credentials/runtime-home-service-auth-sync'
 
 export class CodexRuntimeHomeService extends CodexRuntimeHomeAuthSync {
   constructor(store: Store) {

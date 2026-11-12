@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { printOrchestrationResult } from './agent-view'
 import { remoteHost, WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
 import {
@@ -51,9 +51,10 @@ const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
   printResult(result, json, formatWorkerRelease)
 }
 
-export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
-  'orchestration deny': async ({ flags, client, cwd, json }) => {
+function approvalAnswerHandler(decision: 'allow' | 'deny'): CommandHandler {
+  return async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const reason = getRequiredStringFlag(flags, 'reason')
     const result = await callOrchestrationMutation<WorkerApprovalAnswerView>(
       client,
       flags,
@@ -61,21 +62,29 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       {
         dispatch: getRequiredStringFlag(flags, 'dispatch'),
         prompt: getRequiredStringFlag(flags, 'prompt'),
-        decision: 'deny',
-        reason: getRequiredStringFlag(flags, 'reason'),
+        decision,
+        reason,
         from
       }
     )
     printOrchestrationResult(result, json, {
       fields: (value) => ({
         approvalId: value.approvalId,
-        denied: value.option,
-        reason: value.reasonMessageId
-          ? `sent to the worker as message ${value.reasonMessageId}`
-          : undefined
+        [decision === 'allow' ? 'allowed' : 'denied']: value.option,
+        reason:
+          decision === 'allow'
+            ? reason
+            : value.reasonMessageId
+              ? `sent to the worker as message ${value.reasonMessageId}`
+              : undefined
       })
     })
-  },
+  }
+}
+
+export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration approve': approvalAnswerHandler('allow'),
+  'orchestration deny': approvalAnswerHandler('deny'),
   'orchestration worker-stop': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<WorkerStopReceipt>(
       client,

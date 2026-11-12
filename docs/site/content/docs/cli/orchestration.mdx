@@ -104,6 +104,12 @@ When a worker stops at a permission prompt, the escalation names the prompt. Onl
 orca orchestration deny --dispatch <dispatchId> --prompt <approvalId> --reason "<what to do instead>"
 ```
 
+If the user turns on **Let coordinators approve worker permission prompts** in Orca's orchestration settings, the coordinator may also allow it with a reason. The user still sees Allow and Deny, and the first answer wins. The machine running the worker applies its own setting:
+
+```bash
+orca orchestration approve --dispatch <dispatchId> --prompt <approvalId> --reason "<reason>"
+```
+
 Do not leave completed worker terminals open just to re-read output — use `worker-read` after `worker-release`. Do not substitute a broad `terminal close` when release returns `release_pending` or `release_unknown`; follow the receipt's recovery action.
 
 ## Federated workers (optional)

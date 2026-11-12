@@ -165,7 +165,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/)?plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
       'src\\/main\\/plugins\\/plugin-content-hash',
       'src\\/shared\\/plugins\\/frames\\/plugin-frame-source-modules',
-      'src\\/cli\\/plugin-authoring\\/plugin-(?:type-files|components-template)',
+      'src\\/cli\\/plugins\\/authoring\\/plugin-(?:type-files|components-template)',
       'examples\\/plugins\\/hello-tsx\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -218,7 +218,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/(?:main\\/plugins\\/view\\/(?!plugin-view-replay)|shared\\/plugins\\/view\\/)',
       'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
       // Every `plugin shot` checks for a chrome region and resolves the default shots folder.
-      'src\\/cli\\/(?:handlers\\/plugin-(?:view|shot-chrome|shot-default-dir)|specs\\/plugin-view)',
+      'src\\/cli\\/(?:plugins\\/view\\/plugin-(?:view|shot-chrome|shot-default-dir)|specs\\/plugin-view)',
       'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panels\\/health\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report)|right-sidebar-panel-content)'
     ].join('|'),
@@ -233,14 +233,14 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${STORE}shot-replay`,
       'src\\/main\\/plugins\\/view\\/plugin-view-replay',
       'src\\/main\\/plugins\\/testing\\/plugin-test-(?:hooks|register)',
-      'src\\/cli\\/(?:handlers|specs)\\/plugin-shot-scenario',
-      'src\\/cli\\/plugin-authoring\\/plugin-(?:panel-check|test-runner|test-node)'
+      'src\\/cli\\/(?:plugins\\/view|specs)\\/plugin-shot-scenario',
+      'src\\/cli\\/plugins\\/authoring\\/plugin-(?:panel-check|test-runner|test-node)'
     ].join('|')
   ),
   pluginRoute(
     'plugins.view-shot-editor',
     ['plugin-shot-editor'],
-    'src\\/cli\\/handlers\\/plugin-shot-editor'
+    'src\\/cli\\/plugins\\/view\\/plugin-shot-editor'
   ),
   pluginRoute(
     'plugins.startup-and-manifest',

@@ -314,7 +314,13 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isWaitingForMail: (mailbox) => (this.messageWaiters.get(mailbox)?.size ?? 0) > 0,
     notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
     isChatMailbox: (mailbox) =>
-      typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object'
+      typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object',
+    coordinatorApprovals: () => this.coordinatorApprovalsEnabled()
+  }
+
+  /** This machine's own setting: it runs the worker, so it decides whether an agent may allow its prompts. */
+  coordinatorApprovalsEnabled(): boolean {
+    return this.store?.getSettings?.()?.orchestrationCoordinatorApprovalsEnabled === true
   }
 
   protected readonly lostWorkerReport: LostWorkerReport = {

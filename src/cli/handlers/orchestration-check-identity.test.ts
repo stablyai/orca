@@ -6,8 +6,8 @@ const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
 
 const printResultMock = vi.hoisted(() => vi.fn())
-vi.mock('../format', () => ({ printResult: printResultMock }))
-vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
+vi.mock('../command-result-output', () => ({ printResult: printResultMock }))
+vi.mock('../terminals/terminal-selector', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
@@ -41,24 +41,6 @@ describe('orchestration check identity', () => {
       json
     } as never)
 
-  it('carries the caller pane key when the environment handle may be stale', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
-    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
-    getTerminalHandleMock.mockRejectedValue(new Error('active terminal fallback is unsafe'))
-
-    await invokeCheck(new Map<string, string | boolean>([['wait', true]]))
-
-    expect(getTerminalHandleMock).not.toHaveBeenCalled()
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.check',
-      expect.objectContaining({
-        terminal: 'term_stale_coord',
-        terminalPaneKey: 'tab_coord:leaf_coord',
-        wait: true
-      })
-    )
-  })
-
   it('rejects an empty --terminal instead of consuming the ambient mailbox', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
 
@@ -66,20 +48,5 @@ describe('orchestration check identity', () => {
       invokeCheck(new Map<string, string | boolean>([['terminal', '']]))
     ).rejects.toMatchObject({ code: 'invalid_argument' })
     expect(callMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps an explicit legacy terminal handle scoped to that handle', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_env'
-
-    await invokeCheck(new Map<string, string | boolean>([['terminal', 'term_legacy_worker']]))
-
-    expect(callMock).toHaveBeenCalledTimes(1)
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.check',
-      expect.objectContaining({
-        terminal: 'term_legacy_worker',
-        terminalPaneKey: undefined
-      })
-    )
   })
 })

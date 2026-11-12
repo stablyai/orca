@@ -4,13 +4,13 @@ import { claudeLaunchPermissions } from './claude-structured-inbound-control'
 import {
   resolveClaudeReplayTurn,
   withClaudeReplaySettlements
-} from '../claude-replay-turn-resolution'
-import { claudeStartedUnechoedSend } from '../claude-command-lifecycle'
-import { claudeSessionStateEndsTurn } from '../claude-session-state-turn-over'
-import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
+} from './turns/claude-replay-turn-resolution'
+import { claudeStartedUnechoedSend } from './turns/claude-command-lifecycle'
+import { claudeSessionStateEndsTurn } from './turns/claude-session-state-turn-over'
+import { settleClaudeTurnEndWaiters } from './turns/claude-request-end-wait'
 import * as proof from './claude-structured-init-proof'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
-import { ClaudePromptRegistry } from '../claude-prompt-registry'
+import { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from './launch/claude-structured-spawn-options'
 import { observeClaudeFrameModels } from './claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from './launch/claude-structured-session-options'
@@ -22,13 +22,13 @@ import {
 import type * as sessionState from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import { claudeStartupError, claudeStartupExit } from './claude-structured-session-startup-exit'
-import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
+import { readClaudeTranscriptEntryUuid } from '../transcripts/claude-transcript-entry-uuid'
 import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
 import * as acquisitionLaunch from './launch/claude-structured-acquisition-launch'
 import * as journal from './journal/claude-structured-session-journal-control'
-import { isRootClaudeFrame } from '../claude-turn-opening'
+import { isRootClaudeFrame } from './turns/claude-turn-opening'
 import { createClaudeStartupOutcome, endsClaudeStartup } from './claude-structured-startup-outcome'
-import { claudeStartupResultError } from '../claude-stream-json-exit-error'
+import { claudeStartupResultError } from '../sdk-transport/claude-stream-json-exit-error'
 import {
   claudePluginUiRecovery,
   ignoresClaudeRetiredConnection

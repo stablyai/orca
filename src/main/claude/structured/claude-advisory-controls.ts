@@ -4,7 +4,7 @@ import { createClaudeAdvisoryArtifactServer } from './claude-advisory-artifacts'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAdvisoryReporter } from '../../../shared/agent-session/agent-session-advisory-report'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection-types'
-import { claudeUnwrittenUserMessageError } from '../claude-agent-sdk-user-message-queue'
+import { claudeUnwrittenUserMessageError } from '../sdk-transport/claude-agent-sdk-user-message-queue'
 
 const TOOLS = new Set(['mcp__orca_advisor__read_artifact', 'mcp__orca_advisor__search_artifacts'])
 

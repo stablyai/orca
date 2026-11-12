@@ -11,6 +11,8 @@ export type PickedMobileImage = {
   readonly uri?: string
   // Non-image Files-app picks keep their name so the host saves the file under it.
   readonly fileName?: string
+  // Decode hint for formats with no byte signature the phone recognizes (SVG, HEIC).
+  readonly mime?: string
 }
 
 export type PickedMobileFile = {

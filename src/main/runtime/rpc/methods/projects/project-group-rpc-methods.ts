@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { projectRepoVisibilityForClient } from '../../repo-visibility-projection'
+import { projectRepoVisibilityForClient } from '../../workspace-client-views/repo-visibility-projection'
 import {
   ProjectGroupCreate,
   ProjectGroupImportNested,

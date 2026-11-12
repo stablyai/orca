@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
+import { isMobileTuiAgentEnabled } from '../agents/mobile-tui-agents'
 import {
   NEW_WORKTREE_AGENT_OPTIONS,
   NEW_WORKTREE_BLANK_AGENT,

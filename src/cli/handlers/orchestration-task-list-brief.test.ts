@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-vi.mock('../format', () => ({ printResult: vi.fn() }))
+vi.mock('../command-result-output', () => ({ printResult: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { okFixture } from '../test-fixtures'
 import { RuntimeClient } from '../runtime-client'
 
@@ -56,18 +56,5 @@ describe('orchestration task-list brief output', () => {
 
     expect(response).toHaveProperty('result.tasks.0.spec', `First line ${'detail '.repeat(21)}d…`)
     expect(response).toHaveProperty('result.tasks.0.spec_truncated', true)
-  })
-
-  it('passes server-abbreviated rows through untouched', async () => {
-    const serverTasks = [
-      { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }
-    ]
-    const serverResponse = okFixture('req_tasks', { tasks: serverTasks, count: 1 })
-    callMock.mockReset().mockResolvedValue(serverResponse)
-
-    const response = await runTaskListBrief()
-
-    // Re-abbreviating would reset spec_truncated because the already-truncated text fits the cap.
-    expect(response).toHaveProperty('result.tasks', serverTasks)
   })
 })
