@@ -79,9 +79,9 @@ function Probe() {
         onKeyUp={navigation.handleContainerKeyUp}
         onBlur={navigation.handleContainerBlur}
       >
-        {items.map((item, index) => (
+        {items.map((item) => (
           <div
-            key={index}
+            key={`${item.hostId ?? 'local'}|${item.id}`}
             role="option"
             onClick={(e) => selected.updateSelectionForGesture(e, item)}
           >
@@ -175,8 +175,8 @@ it('deletes the clicked host-qualified row while hover and active workspace diff
 })
 it('leaves prompt and rename keys untouched, even with an existing selection', () => {
   click(1)
-  for (const field of container.querySelectorAll('textarea, input')) {
-    act(() => (field as HTMLElement).focus())
+  for (const field of container.querySelectorAll<HTMLElement>('textarea, input')) {
+    act(() => field.focus())
     expect(key(field).defaultPrevented).toBe(false)
   }
   expect(deleteOne).not.toHaveBeenCalled()
