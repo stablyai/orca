@@ -139,7 +139,12 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     scannedAt: number
   ): Promise<RuntimeWorktreeScanRefresh> {
     const result = dropRepeatedWorktreeRows(
-      await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
+      await withRepositoryGitCause(
+        repo.path,
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime),
+        { family: 'catalog', reason: 'runtime-catalog', cache: 'refresh' },
+        () => this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
+      )
     )
     return { result, adminFingerprint: null, adminFingerprintProbe: probe, scannedAt }
   }
@@ -265,3 +270,4 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     this.notifyReposChanged()
   }
 }
+import { withRepositoryGitCause } from '../../../git/repository-git-cause'

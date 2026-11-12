@@ -36,6 +36,7 @@ import {
 } from './status-branch-line-total-input'
 import { reconcileDriveCheckoutSuspects } from './drive-checkout-suspect-status'
 import { markRecursiveSubmoduleRestores } from './submodule-restore-recurse'
+import { withRepositoryGitCause } from '../repository-git-cause'
 
 export async function getStatus(
   worktreePath: string,
@@ -44,7 +45,12 @@ export async function getStatus(
   // Reads preserve diff caches; mutations invalidate them and settled entries also validate input stamps.
   const cacheKey = getStatusReadKey(worktreePath, options)
   return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
-    runGetStatus(worktreePath, { ...options, signal: sharedSignal })
+    withRepositoryGitCause(
+      worktreePath,
+      options,
+      { family: 'status', reason: 'status-read', cache: 'miss' },
+      () => runGetStatus(worktreePath, { ...options, signal: sharedSignal })
+    )
   )
 }
 

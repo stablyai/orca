@@ -8,6 +8,7 @@ import {
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
 import { resolveGitAdmissionTier } from '../../command-runner/admission/git-operation-executor'
+import { withRepositoryGitCause } from '../../repository-git-cause'
 
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
@@ -63,7 +64,12 @@ function shareWorktreeScan(
   run: (repoPath: string, options: GitWorktreeExecOptions) => Promise<GitWorktreeInfo[]>
 ): Promise<GitWorktreeInfo[]> {
   if (options.signal) {
-    return run(repoPath, options)
+    return withRepositoryGitCause(
+      repoPath,
+      options,
+      { family: 'catalog', reason: 'worktree-scan', cache: 'bypass-signal' },
+      () => run(repoPath, options)
+    )
   }
   const generation = worktreeScanGenerations.get(repoPath) ?? 0
   const timeout = options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
@@ -73,7 +79,12 @@ function shareWorktreeScan(
   if (inFlight) {
     return inFlight
   }
-  const scan = run(repoPath, options).finally(() => {
+  const scan = withRepositoryGitCause(
+    repoPath,
+    options,
+    { family: 'catalog', reason: 'worktree-scan', cache: 'miss' },
+    () => run(repoPath, options)
+  ).finally(() => {
     if (inFlightWorktreeScans.get(key) === scan) {
       inFlightWorktreeScans.delete(key)
     }

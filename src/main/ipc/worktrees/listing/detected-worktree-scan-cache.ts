@@ -4,6 +4,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { withRepositoryGitCause } from '../../../git/repository-git-cause'
 import { listRepoWorktreesForDetectedScan } from '../../../workspaces/catalog/repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
@@ -182,7 +183,12 @@ export async function listDetectedGitWorktrees(
       : undefined
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listUnlessWslDistroStopped(repo, localWorktreeGitOptions),
+    promise: withRepositoryGitCause(
+      repo.path,
+      localWorktreeGitOptions,
+      { family: 'catalog', reason: 'desktop-catalog', cache: cached ? 'expired' : 'miss' },
+      () => listUnlessWslDistroStopped(repo, localWorktreeGitOptions)
+    ),
     sideEffectToken: { generation, authorizedRootsRevision, ...localWorktreeGitOptions },
     hygieneDue,
     ...(metadataPruneExpectation

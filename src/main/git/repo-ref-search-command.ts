@@ -7,6 +7,7 @@ import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-re
 import { getLocalGitCapabilityCache } from './command-runner/host-routing/git-capability-state'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './command-runner/git-exec-file'
+import { withRepositoryGitCause } from './repository-git-cause'
 
 const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
 const REF_SEARCH_LEGACY_HEADROOM = 100
@@ -118,27 +119,33 @@ export async function runSearchBaseRefsGit(
   }
 ): Promise<{ stdout: string }> {
   const execOptions = gitExecOptions(path, options.git)
-  return getLocalGitCapabilityCache(execOptions).runWithFallback(
-    'for-each-ref-exclude',
+  return withRepositoryGitCause(
+    path,
+    execOptions,
+    { family: 'refs', reason: 'branch-search', cache: 'uncached' },
     () =>
-      gitExecFileAsync(
-        buildSearchBaseRefsArgv(normalizedQuery, limit, {
-          namespace: options.namespace,
-          remoteNames: options.remoteNames,
-          patternGroup: options.patternGroup
-        }),
-        execOptions
-      ),
-    () =>
-      gitExecFileAsync(
-        buildSearchBaseRefsArgv(normalizedQuery, limit, {
-          excludeRemoteHead: false,
-          namespace: options.namespace,
-          remoteNames: options.remoteNames,
-          patternGroup: options.patternGroup
-        }),
-        execOptions
-      ),
-    isForEachRefExcludeUnsupportedError
+      getLocalGitCapabilityCache(execOptions).runWithFallback(
+        'for-each-ref-exclude',
+        () =>
+          gitExecFileAsync(
+            buildSearchBaseRefsArgv(normalizedQuery, limit, {
+              namespace: options.namespace,
+              remoteNames: options.remoteNames,
+              patternGroup: options.patternGroup
+            }),
+            execOptions
+          ),
+        () =>
+          gitExecFileAsync(
+            buildSearchBaseRefsArgv(normalizedQuery, limit, {
+              excludeRemoteHead: false,
+              namespace: options.namespace,
+              remoteNames: options.remoteNames,
+              patternGroup: options.patternGroup
+            }),
+            execOptions
+          ),
+        isForEachRefExcludeUnsupportedError
+      )
   )
 }

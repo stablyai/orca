@@ -10,10 +10,12 @@ vi.mock('./command-runner/git-exec-file', async (importOriginal) => ({
 import {
   _resetCanonicalRepoKeyCacheForTests,
   getCanonicalRepoKey,
+  peekGitCommonDir,
   readGitCommonDir
 } from './canonical-repo-key'
 
 beforeEach(() => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
   _resetCanonicalRepoKeyCacheForTests()
   gitExecFileAsyncMock.mockReset()
 })
@@ -33,12 +35,23 @@ describe('readGitCommonDir', () => {
 })
 
 describe('getCanonicalRepoKey', () => {
-  it('caches so repeated arming costs no subprocess', async () => {
+  it('exposes only verified common-directory answers to diagnostics', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '/repo/.git\n', stderr: '' })
 
-    await getCanonicalRepoKey('/repo')
-    await getCanonicalRepoKey('/repo')
+    expect(peekGitCommonDir('/repo')).toBeUndefined()
+    expect(await getCanonicalRepoKey('/repo')).toBe('local::/repo/.git')
+    expect(peekGitCommonDir('/repo')).toBe('/repo/.git')
+    gitExecFileAsyncMock.mockRejectedValue(new Error('not a repository'))
+    expect(await getCanonicalRepoKey('/missing')).toBe('local::/missing')
+    expect(peekGitCommonDir('/missing')).toBeUndefined()
+  })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  it('leaves ambiguous Windows drive identities unknown while retaining UNC provenance', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '/repo/.git\n', stderr: '' })
+    await getCanonicalRepoKey('C:/repo')
+    expect(peekGitCommonDir('C:/repo')).toBeUndefined()
+    await getCanonicalRepoKey('//wsl$/Ubuntu/home/dev/repo')
+    expect(peekGitCommonDir('//wsl$/Ubuntu/home/dev/repo')).toBe('/repo/.git')
   })
 })
