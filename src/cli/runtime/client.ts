@@ -38,7 +38,7 @@ import {
   ORCHESTRATION_CONTRACT_VERSION
 } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
-import { OrchestrationRequestEvidence } from './orchestration-compatibility-envelope'
+import { OrchestrationRequestEvidence } from '../orchestration/identity/orchestration-compatibility-envelope'
 import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -49,7 +49,7 @@ import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
-} from './orchestration-recovery-command'
+} from '../orchestration/recovery/orchestration-recovery-command'
 
 const LONG_POLL_CLIENT_GRACE_MS = 10_000
 // The host records the launched agent in the caller's chat; older hosts ignore the evidence.

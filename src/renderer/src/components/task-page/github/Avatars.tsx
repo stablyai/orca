@@ -1,8 +1,8 @@
-import type { GitHubPRPrimaryReviewer } from '../../../../../shared/github/pr-reviewer-display'
+import type { GitHubPRPrimaryReviewer } from '../../../../../shared/github/pull-requests/pr-reviewer-display'
 import React from 'react'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { Users } from 'lucide-react'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 export function ReviewChipAvatar({
   reviewer,
   avatarHost

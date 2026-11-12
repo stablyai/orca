@@ -1,6 +1,10 @@
+import { ZodError } from 'zod'
 import { getBoundPluginHostMethod, type PluginHostServices } from './plugin-host-method-bindings'
 import { isQualifiedPluginKey } from '../../../../shared/plugins/manifest/plugin-manifest'
-import { gatePluginHostCall as decidePluginHostCall } from '../../../../shared/plugins/capabilities/plugin-capability-gate'
+import {
+  gatePluginHostCall as decidePluginHostCall,
+  missingPluginParamCapability
+} from '../../../../shared/plugins/capabilities/plugin-capability-gate'
 import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
 import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
 import type {
@@ -9,7 +13,9 @@ import type {
 } from '../../../../shared/plugins/frames/plugin-protocol'
 import type { PluginAuditLog } from '../../plugin-audit-log'
 import {
+  PLUGIN_RUNTIME_FAILURE_CODES_SINCE,
   PluginHostCallError,
+  PluginRuntimeCallError,
   UNSCOPED_PLUGIN_HOST_CALL,
   type PluginHostCallScope
 } from './plugin-host-call-scope'
@@ -30,6 +36,8 @@ export type ExecutePluginHostCallInput = {
   surface: PluginSurface
   /** Consented capability kinds; null = unknown/disabled/consent-stale. */
   grantedCapabilities: readonly PluginCapabilityKind[] | null
+  /** A development plugin, which may call proposed methods. */
+  allowProposed?: boolean
   services: PluginHostServices | null
   audit?: Pick<PluginAuditLog, 'record'>
   /** Re-checked right before the side effect; absent only in tests and the relay suite. */
@@ -43,7 +51,11 @@ export async function executePluginHostCall(
     return { ok: false, code: 'invalid_request', error: 'invalid qualified plugin key' }
   }
   const gate = decidePluginHostCall(
-    { grantedCapabilities: input.grantedCapabilities, surface: input.surface },
+    {
+      grantedCapabilities: input.grantedCapabilities,
+      surface: input.surface,
+      allowProposed: input.allowProposed
+    },
     input.method
   )
   if (!gate.granted) {
@@ -56,6 +68,18 @@ export async function executePluginHostCall(
   const prepared = bound.prepare(input.params)
   if (!prepared.ok) {
     return { ok: false, code: 'invalid_params', error: prepared.issue }
+  }
+  const missing = missingPluginParamCapability(
+    bound.spec,
+    prepared.params,
+    input.grantedCapabilities ?? []
+  )
+  if (missing) {
+    return {
+      ok: false,
+      code: 'capability_denied',
+      error: `${missing.param} needs the "${missing.capability}" capability`
+    }
   }
   const services = input.services
   if (!services) {
@@ -95,7 +119,12 @@ export async function executePluginHostCall(
   try {
     // The audit write awaited: approval may have been revoked meanwhile.
     scope.assertActive()
-    const validated = await prepared.execute({ pluginId: input.pluginId, services, scope })
+    const validated = await prepared.execute({
+      pluginId: input.pluginId,
+      surface: input.surface,
+      services,
+      scope
+    })
     if (!validated) {
       await auditMutation('error').catch(() => undefined)
       // Malformed host results must not leak unvalidated shapes through any plugin transport.
@@ -109,8 +138,25 @@ export async function executePluginHostCall(
     return { ok: true, value: validated.value }
   } catch (error) {
     await auditMutation('error').catch(() => undefined)
+    if (error instanceof ZodError) {
+      // A runtime answer Orca's own binding did not expect; its shape is internal.
+      scope.log?.(`${input.method}: unexpected runtime answer: ${error.message}`)
+      return {
+        ok: false,
+        code: 'action_failed',
+        error: `internal: malformed ${input.method} answer`
+      }
+    }
     if (error instanceof PluginHostCallError) {
-      const { code, message, retryAfterMs } = error
+      if (error.detail) {
+        scope.log?.(`${input.method}: ${error.detail}`)
+      }
+      const { message, retryAfterMs } = error
+      const code =
+        error instanceof PluginRuntimeCallError &&
+        bound.spec.since < PLUGIN_RUNTIME_FAILURE_CODES_SINCE
+          ? 'action_failed'
+          : error.code
       return {
         ok: false,
         code,
@@ -133,6 +179,23 @@ function summarizeParams(method: string, params: unknown): string {
       const text = typeof record.text === 'string' ? record.text : ''
       return `terminal=${String(record.terminalId)} bytes=${Buffer.byteLength(text, 'utf8')} enter=${record.enter === true}`
     }
+    case 'terminal.focus':
+    case 'terminal.close':
+      return `terminal=${String(record.terminalId)}`
+    case 'workspace.create':
+      return `project=${String(record.projectId)} agent=${String(record.agent ?? 'none')} promptChars=${textLength(record.prompt)} setup=${String(record.setup ?? 'default')} open=${record.open === true}`
+    case 'project.setHidden':
+      return `project=${String(record.projectId)} host=${String(record.hostId ?? 'any')} hidden=${record.hidden === true}`
+    case 'agent.resume':
+      return `workspace=${String(record.workspaceId)} agent=${String(record.agent)} session=${String(record.sessionId)}`
+    case 'automation.create':
+      return `${record.workspaceId ? `workspace=${String(record.workspaceId)}` : `project=${String(record.projectId)}`} agent=${String(record.agent)} promptChars=${textLength(record.prompt)}`
+    case 'automation.update':
+      return `automation=${String(record.automationId)} fields=${Object.keys(record)
+        .filter((key) => key !== 'automationId')
+        .join(',')}`
+    case 'automation.delete':
+      return `automation=${String(record.automationId)}`
     case 'notifications.show': {
       const title = typeof record.title === 'string' ? record.title : ''
       return `titleChars=${title.length}`
@@ -146,4 +209,8 @@ function summarizeParams(method: string, params: unknown): string {
     default:
       return ''
   }
+}
+
+function textLength(value: unknown): number {
+  return typeof value === 'string' ? value.length : 0
 }

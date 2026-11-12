@@ -10,9 +10,12 @@ import {
 import type { Repo } from '../../../shared/repo-types'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
-import { getRepoName } from '../../git/repo'
-import { inspectGitRepoForRegistrationAsync } from '../../git/repo-detection'
-import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../../git/repo-clone-path'
+import { getRepoName } from '../../git/repositories/repository-name'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+import {
+  getClonePathComparisonKey,
+  getSavedProjectPathKeys
+} from '../../git/repositories/cloning/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'

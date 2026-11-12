@@ -1,7 +1,7 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { hasActiveTraceSink } from '../observability/tracer'
 import { runWithGitCause, type GitOperationCause } from '../observability/git-operation-cause'
-import { peekGitCommonDir } from './canonical-repo-key'
+import { peekGitCommonDir } from './repositories/canonical-repo-key'
 
 /** Diagnostics only reuse identity already resolved by a repository owner. */
 export function withRepositoryGitCause<T>(

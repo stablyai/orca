@@ -8,6 +8,7 @@ import { federationRelayRetryDelayMs } from '../relay/federation-relay-scheduler
 import { HeldPeerConversations } from './held-peer-conversations'
 import type { OrchestrationEnvironmentTransport } from '../environment-transport'
 import { peerMailLocalRecipient } from './peer-mail-delivery'
+import { peerMailRelayEnvironments, peerMailRelayWants } from './peer-mail-relay-environments'
 import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
@@ -15,7 +16,6 @@ import {
   closeRemoteRunLinksOfRemovedServer,
   dueRemoteResendsNow,
   getRemoteRunLink,
-  listLiveRemoteRunLinkEnvironments,
   noteRemoteRunLinkError,
   remoteServerPin
 } from '../../db/remote-owned/remote-run-links'
@@ -71,11 +71,7 @@ export class PeerMailRelay {
       return
     }
     const db = this.runtime.getOrchestrationDb()
-    const environments = new Set([
-      ...db.listHomePeerMailEnvironments(),
-      ...listLiveRemoteRunLinkEnvironments(db)
-    ])
-    for (const environmentId of environments) {
+    for (const environmentId of peerMailRelayEnvironments(db)) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
         continue
@@ -109,7 +105,8 @@ export class PeerMailRelay {
     let failures = 0
     // Named while it is still paired, so a removal can say which server went.
     const serverName = remoteServerName(this.runtime, environmentId)
-    while (this.isCurrent(environmentId, loop)) {
+    // Ends with its last reason to pull; a later conversation or link starts a new loop through ensure().
+    while (this.isCurrent(environmentId, loop) && peerMailRelayWants(loop.db, environmentId)) {
       try {
         await this.pullOnce(environmentId, loop)
         if (failures > 0) {

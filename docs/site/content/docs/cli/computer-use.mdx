@@ -37,7 +37,19 @@ orca computer click --app com.spotify.client --element-index 42 --json
 
 Element indexes are scoped to the latest `get-app-state` result and may be **sparse**. In `--json` output, read the tree from `result.snapshot.treeText`. Do not invent indexes from `elementCount`. Refresh state after navigation, focus changes, scrolling, or any app re-render before reusing an index.
 
-Action results return only the accessibility-tree lines that changed since the last state for that window (`~` changed, `+` added, `-` removed), marked by `snapshot.treeDiff`; pass `--full-tree` to get the whole tree. To find one control in a large window, `get-app-state --query <text>` prints only matching elements and their ancestors, and `--max-elements <n>` caps the output.
+Action results return only the accessibility-tree lines that changed since the last state for that window (`~` changed, `+` added, `-` removed), marked by `snapshot.treeDiff`; pass `--full-tree` to get the whole tree. To find one control in a large window, `get-app-state --query <text>` prints only matching elements and their ancestors, and `--max-elements <n>` caps the output. A window larger than the snapshot limit shows `... N more not shown (snapshot limit)` where the tree was cut; `get-app-state --element-index <n>` reads only that element's subtree, so pass the cut-off children's parent to see them.
+
+## Waiting for the app
+
+Instead of sleeping between actions, wait for what the app should show next. `wait` returns as soon as the condition holds, prints the matching elements or windows, and fails with `wait_timeout` after `--timeout` milliseconds (default 10000, at most 120000):
+
+```bash
+orca computer wait --app com.apple.TextEdit --text "Saved" --json
+orca computer wait --app com.apple.TextEdit --enabled "Continue" --json
+orca computer wait --app com.apple.TextEdit --window-title "Save As" --json
+```
+
+`--text` matches element lines the same way as `get-app-state --query`. `--enabled` holds once elements containing the text exist and none of them is disabled. `--window-title` checks the window titles `list-windows` reports (on Windows, only the main window's). `wait` only reads the app and keeps checking while the app or window doesn't exist yet. `--enabled` needs a runtime whose provider marks disabled elements (`supports.observation.disabledState` in `capabilities`).
 
 ## Multi-window apps
 
@@ -75,6 +87,8 @@ orca computer perform-secondary-action --app <app> --element-index <i> --action 
 
 Prefer semantic actions (`click`, `set-value`, `perform-secondary-action`) over raw `type-text` or `press-key` — they target accessibility elements directly and survive focus changes that keyboard input doesn't.
 
+`hotkey` and `press-key` refuse shortcuts that quit or close the app, log out, lock the screen, force-quit or end the session, such as `Cmd+Q`, `Shift+Cmd+Q`, `Ctrl+Cmd+Q` and `Option+Cmd+Esc` on macOS, `Alt+F4` and `Win+L` on Windows, and `Ctrl+Q`, `Alt+F4`, `Super+L` and `Ctrl+Alt+Delete` on Linux. The error code is `system_shortcut_blocked`. Pass `--allow-system-shortcut` to send one anyway.
+
 On macOS, actions run in the background: the target app isn't brought forward, your frontmost app and key window stay put, and the pointer doesn't move, so you can keep working while an agent drives another window. Each action result reports `action.delivery` (`background` or `foreground`). Pass `--restore-window` only when an app ignores background input, such as drags in Chromium or Electron apps or games; it brings the app forward and uses the real pointer and keyboard. Popup menus and web `<select>` controls are set with `set-value` instead of a click. On Linux and Windows, clicks, scrolling, drags and keyboard input still bring the window forward.
 
 When accessibility targeting fails, fall back carefully to coordinates:
@@ -100,6 +114,12 @@ On Linux and Windows, action payloads also pass briefly through a local operatio
 ## Screenshots
 
 `get-app-state` returns an accessibility tree and, by default, a screenshot. With `--json`, the image bytes are written to disk and the path is returned in `screenshot.path` rather than embedded in the response. Pass `--no-screenshot` when pixels aren't needed (faster, smaller payload). Pass `--restore-window` to bring a hidden or minimized window into view before capture.
+
+On Wayland, screenshots work on KDE Plasma, Hyprland and Sway. On Hyprland and Sway they need `grim`, GdkPixbuf, and `hyprctl` or `swaymsg`; Orca finds the target window by process ID and title and captures its region, so overlapping windows can show in the image.
+
+On KDE Plasma, Orca asks KWin where the window is, takes a screenshot of the desktop through `xdg-desktop-portal` (with `xdg-desktop-portal-kde`), and crops it to the window. The portal saves that screenshot in your Pictures folder; Orca reads it and deletes it. The first screenshot makes the desktop ask whether apps may take screenshots. Answer the prompt, then run `get-app-state` again. If the prompt is answered after `get-app-state` gave up waiting, the portal may leave that one screenshot in Pictures. If you deny it, screenshots keep failing until you allow them again in the desktop's permission settings. A KDE window that another window covers returns a screenshot error instead of an image of the other window.
+
+GNOME doesn't tell apps where windows are, so it returns a screenshot error. On any Wayland desktop, when the window is minimized or on another workspace, matches more than one window, or has a different size than its accessibility bounds, `get-app-state` returns the accessibility tree with a screenshot error.
 
 ## Use it from an agent
 

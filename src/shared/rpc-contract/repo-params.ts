@@ -11,7 +11,7 @@ import {
   requiredString
 } from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
-import { RepoSelector } from './github-repo-target-params'
+import { RepoSelector, RepoShow } from './github-repo-target-params'
 
 export const RepoPath = z.object({
   path: requiredString('Missing repo path'),
@@ -37,6 +37,11 @@ export const RepoSetBaseRef = z.object({
 })
 
 export const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
+
+/** `repo.setHidden`: sidebar-only; `repoHostId` picks one host's copy of a repo id set up on several. */
+export const RepoSetHidden = RepoShow.extend({
+  hidden: z.boolean()
+})
 
 /** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
 export const RepoHooksCheck = RepoSelector.extend({

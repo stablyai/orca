@@ -19,10 +19,12 @@ import { registerFilesystemGitHistoryHandlers } from './filesystem-git-history-h
 import { isGitWorktreeMutationInFlight } from '../../git/command-runner/git-worktree-mutation-state'
 import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../git/source-control/check-ignored-paths'
+import { readWorktreeAtRiskLocalFiles } from '../../git/worktrees/removal/worktree-at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/at-risk-local-files'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
-} from '../../git/huge-folder-ignore'
+} from '../../git/source-control/huge-folder-ignore'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { validateGitRelativeFilePath } from './access/filesystem-path-containment'
 import {
@@ -167,6 +169,29 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
             args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p)),
             gitOptions
           )
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'git:atRiskLocalFiles',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<WorktreeAtRiskLocalFiles> => {
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      return readWorktreeGitUnlessWslStopped(
+        store,
+        args.worktreePath,
+        false,
+        (worktreePath, gitOptions) =>
+          readWorktreeAtRiskLocalFiles({
+            worktreePath,
+            mainCheckoutPath:
+              getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)?.path ??
+              null,
+            gitOptions
+          })
       )
     }
   )

@@ -11,7 +11,7 @@ import {
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
 import { projectSourceControlActionLaunch } from '../../../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { translate } from '../../i18n/mobile-i18n'
-import { readAgentLaunchNotice } from '../../tasks/agent-launch-request'
+import { readAgentLaunchNotice } from '../../session/agent-launch/agent-launch-request'
 
 // Have the host launch and deliver AI prompts; mobile must never type them into a shell.
 

@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal-visibility'
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react'
@@ -68,11 +69,10 @@ type ComposerParentWorktreePickerProps = {
   activeFolderWorkspaceId?: string | null
 }
 
-type ParentWorktreeCandidateListProps = {
-  repoId: string
-  executionHostId?: ExecutionHostId | null
-  projectId?: string | null
-  value: string | null
+type ParentWorktreeCandidateListProps = Omit<
+  ComposerParentWorktreePickerProps,
+  'onChange' | 'disabled' | 'activeFolderWorkspaceId'
+> & {
   activeFolderWorkspaceId: string | null
   onSelect: (id: string | null) => void
 }
@@ -104,7 +104,9 @@ function ComposerParentWorktreePickerImpl({
           (row) => getWorktreeHostIdentity(row) === value
         )
       : getIndexedWorktreeById(selectWorktreesByRepo(s), value)
-    return parent && !parent.isArchived ? parent.displayName : null
+    return parent && !parent.isArchived && !isWorktreeRetiredByRemoval(parent)
+      ? parent.displayName
+      : null
   })
 
   // Close during render when the drawer disables its trigger; portaled content would otherwise linger through a stale-open frame.
@@ -251,6 +253,7 @@ function ParentWorktreeCandidateList({
       .filter(
         (candidate) =>
           !candidate.isArchived &&
+          !isWorktreeRetiredByRemoval(candidate) &&
           ((folderSubtreeIds === null && isCrossStoreCandidate(candidate)) ||
             (sharesWorktreeLineageBoundary(childBoundary, {
               ...candidate,

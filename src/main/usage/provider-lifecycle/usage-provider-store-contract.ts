@@ -37,6 +37,7 @@ export type UsageProviderStoreLifecycleConfig<
     integrityVerified?: boolean
   ) => State | Promise<State>
   serializeReport?: (state: State) => string
+  readFallbackCache?: (path: string) => Promise<{ state: State; integrityVerified: boolean }>
   providerId?: 'claude'
   sourceKey: SourceKey
   dataPresenceKey: DataPresenceKey

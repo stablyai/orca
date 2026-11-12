@@ -3,7 +3,7 @@ import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/
 import {
   normalizeTerminalLayoutPtyOwnership,
   resolveTerminalLayoutPtyOwnershipTransfers
-} from '../../../shared/workspace-layout/terminal-layout-pty-ownership'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
