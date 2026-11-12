@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { reviewHeadRemoteRefComponent } from './review-head-tracking-ref'
+import {
+  isGithubPullRequestHeadLocalRefForNumber,
+  isGitlabMergeRequestHeadLocalRefForNumber,
+  reviewHeadRemoteRefComponent,
+  selectReviewHeadLocalRefsToPrune
+} from './review-head-tracking-ref'
 
 describe('reviewHeadRemoteRefComponent', () => {
   it('separates same-named remotes pointing at different projects', () => {
@@ -7,5 +12,34 @@ describe('reviewHeadRemoteRefComponent', () => {
     const a = reviewHeadRemoteRefComponent('origin', 'git@github.com:org/repo.git')
     const b = reviewHeadRemoteRefComponent('origin', 'git@github.com:other/repo.git')
     expect(a).not.toBe(b)
+  })
+})
+
+describe('review-head ref prune matching (#10431)', () => {
+  it('matches PR/MR refs by trailing number only', () => {
+    expect(isGithubPullRequestHeadLocalRefForNumber('refs/orca/pull/origin-abc/42', 42)).toBe(true)
+    expect(isGithubPullRequestHeadLocalRefForNumber('refs/orca/pull/origin-abc/420', 42)).toBe(
+      false
+    )
+    expect(
+      isGitlabMergeRequestHeadLocalRefForNumber('refs/orca/merge-requests/origin-abc/15', 15)
+    ).toBe(true)
+    expect(isGitlabMergeRequestHeadLocalRefForNumber('refs/orca/pull/origin-abc/15', 15)).toBe(
+      false
+    )
+  })
+
+  it('selects only the requested PR/MR refs', () => {
+    expect(
+      selectReviewHeadLocalRefsToPrune(
+        [
+          'refs/orca/pull/a/42',
+          'refs/orca/pull/b/42',
+          'refs/orca/pull/a/7',
+          'refs/orca/merge-requests/a/42'
+        ],
+        { githubPrNumber: 42 }
+      )
+    ).toEqual(['refs/orca/pull/a/42', 'refs/orca/pull/b/42'])
   })
 })

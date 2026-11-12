@@ -33,6 +33,7 @@ import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/remova
 import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import { removeOrphanOrFolderWorktree } from './workspace-registration-removal'
+import { maybePruneReviewHeadRefsAfterWorktreeDelete } from '../../../worktree-review-head-prune'
 import {
   assertWslMoveWorkspaceWritable,
   isWslMoveSourceHost
@@ -204,6 +205,15 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
                 allowUnverifiedStop: allowUnverifiedPtyStop
               }),
             finishRemoval: async () => {
+              await maybePruneReviewHeadRefsAfterWorktreeDelete({
+                store,
+                repoPath: repo!.path,
+                repoId: removalTarget.repoId,
+                worktreeId: removalTarget.id,
+                hostId: removalHostId,
+                meta: removedMeta,
+                localGitOptions: localWorktreeGitOptions
+              })
               this.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
               await purgeRemovedWorktree()
               this.notifyWorktreesChanged(repo!.id)
@@ -241,6 +251,15 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
             registeredWorktree.head,
             removedPushTarget
           )
+          await maybePruneReviewHeadRefsAfterWorktreeDelete({
+            store,
+            repoPath: repo!.path,
+            repoId: removalTarget.repoId,
+            worktreeId: removalTarget.id,
+            hostId: removalHostId,
+            meta: removedMeta,
+            localGitOptions: localWorktreeGitOptions
+          })
           await purgeRemovedWorktree()
           this.notifyWorktreesChanged(repo!.id)
           return removalResult ?? {}
@@ -279,6 +298,15 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
             } else {
               this.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
             }
+            await maybePruneReviewHeadRefsAfterWorktreeDelete({
+              store,
+              repoPath: repo!.path,
+              repoId: removalTarget.repoId,
+              worktreeId: removalTarget.id,
+              hostId: removalHostId,
+              meta: removedMeta,
+              localGitOptions: localWorktreeGitOptions
+            })
             await purgeRemovedWorktree()
           },
           onRemoved: emitRemoved,

@@ -4,7 +4,10 @@ import type {
   RuntimeWorktreeRemovalTarget
 } from './catalog/runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './removal/runtime-worktree-removal-target'
-import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+import {
+  getLocalProjectWorktreeGitOptions,
+  type LocalProjectWorktreeGitOptions
+} from '../../workspaces/execution-host/project-runtime-git-options'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
@@ -33,6 +36,7 @@ import {
   waitForPendingWorktreeRemoval
 } from '../../workspaces/removal/worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from './removal/runtime-interrupted-local-worktree-removal'
+import { maybePruneReviewHeadRefsAfterWorktreeDelete } from '../../worktree-review-head-prune'
 import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
@@ -122,8 +126,21 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
       acquireWatcherRemoval: this.acquireFileWatcherRemoval,
       closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
       preservedBranchCleanup: this.preservedBranchCleanup,
-      purge: ({ worktreeId, repoId }) =>
-        this.purgeRemovedWorktree(store, worktreeId, repoId, LOCAL_EXECUTION_HOST_ID),
+      purge: async ({ worktreeId, repoId }) => {
+        const repo = store.getRepo(repoId)
+        if (repo) {
+          await maybePruneReviewHeadRefsAfterWorktreeDelete({
+            store,
+            repoPath: repo.path,
+            repoId,
+            worktreeId,
+            hostId: LOCAL_EXECUTION_HOST_ID,
+            meta: store.getWorktreeMeta(worktreeId),
+            localGitOptions: getLocalProjectWorktreeGitOptions(store, repo)
+          })
+        }
+        this.purgeRemovedWorktree(store, worktreeId, repoId, LOCAL_EXECUTION_HOST_ID)
+      },
       onRemoved: ({ worktreeId, worktreePath }) =>
         this.emitWorktreeLifecycle({ kind: 'removed', worktreeId, path: worktreePath }),
       publish: (repoId) => this.publishWorktreeRemovalChange(repoId)
