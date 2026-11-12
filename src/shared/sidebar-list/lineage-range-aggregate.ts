@@ -1,5 +1,7 @@
 export type LineageRangeAggregate<T> = {
   update: (index: number, value: T) => void
+  /** Replace a contiguous run of leaves, recombining each shared ancestor once: O(k + log N). */
+  updateRun: (start: number, values: readonly T[]) => void
   read: (start: number, end: number) => T
 }
 
@@ -24,6 +26,23 @@ export function createLineageRangeAggregate<T>(
       while (node > 1) {
         node = Math.floor(node / 2)
         segments[node] = combine(segments[node * 2]!, segments[node * 2 + 1]!)
+      }
+    },
+    updateRun(start, values) {
+      if (values.length === 0) {
+        return
+      }
+      let low = size + start
+      let high = low + values.length - 1
+      values.forEach((value, offset) => {
+        segments[low + offset] = value
+      })
+      while (low > 1) {
+        low = Math.floor(low / 2)
+        high = Math.floor(high / 2)
+        for (let node = low; node <= high; node++) {
+          segments[node] = combine(segments[node * 2]!, segments[node * 2 + 1]!)
+        }
       }
     },
     read(start, end) {

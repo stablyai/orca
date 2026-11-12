@@ -66,6 +66,13 @@ function latest(lines: readonly SlotLineSignal[]): number | null {
   return at
 }
 
+function maxAt(a: number | null, b: number | null): number | null {
+  if (a === null) {
+    return b
+  }
+  return b === null || a >= b ? a : b
+}
+
 export type SlotException = Extract<
   SlotSignal,
   { kind: 'needs' } | { kind: 'failed' } | { kind: 'unread' } | { kind: 'working' }
@@ -164,11 +171,28 @@ export function titleRowSlot(args: {
       return { kind: 'status', exceptions, at: exception.at }
     }
   }
-  const ownAt = latest(args.lines) ?? args.lastActivityAt
-  const lineageAt = args.lineageLatestAt ?? null
+  // Quiet fallback: the newest of agent lines, workspace activity, and lineage, so a card
+  // never shows an older time than its own workspace (or its rollup parent) reports.
   return {
     kind: 'status',
     exceptions,
-    at: ownAt === null || (lineageAt !== null && lineageAt > ownAt) ? lineageAt : ownAt
+    at: maxAt(maxAt(latest(args.lines), args.lastActivityAt), args.lineageLatestAt ?? null)
   }
+}
+
+/**
+ * Whether the card shows the unread dot: any of its agent lines (shown or hidden), the workspace's
+ * own unread, or a collapsed child's. Read from the sources rather than the title slot, because an
+ * offline slot carries no exceptions and a disconnected parent must still surface an unread child.
+ */
+export function titleRowUnread(args: {
+  lines: readonly SlotLineSignal[]
+  collapsedLineage: readonly SlotException[]
+  workspaceUnread: boolean
+}): boolean {
+  return (
+    args.workspaceUnread ||
+    args.lines.some((line) => line.kind === 'unread') ||
+    args.collapsedLineage.some((exception) => exception.kind === 'unread')
+  )
 }

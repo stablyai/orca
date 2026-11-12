@@ -18,20 +18,28 @@ import {
   changedSlotWorkspaces,
   type SlotSnapshot
 } from './worktree-card-slot-invalidation'
+import { createStaleSlotSet, type StaleSlotSet } from './worktree-card-slot-stale-set'
 
 export type WorkspaceSlot = {
   targets: SlotTarget[]
   record: LineageSlotRecord
   latestAt: number | null
 }
+/**
+ * Lineage rollups read one parent's preorder descendant range. Slots refresh lazily: a structural
+ * change only marks the tree stale, and each read projects just the stale slots inside the range
+ * it asks for, so a parent with one child costs one projection even in a thousand-row section.
+ */
 export function createLineageSlotReader(
   ownSlot: (state: AppState, identity: HostScopedWorktreeKey, fallback?: Worktree) => WorkspaceSlot
 ) {
   type SlotAggregate = { record: LineageSlotRecord; latestAt: number | null }
   type TreeSlots = {
     snapshot: SlotSnapshot
-    own: WorkspaceSlot[]
+    own: (WorkspaceSlot | undefined)[]
     aggregate: LineageRangeAggregate<SlotAggregate>
+    /** Slots to re-project before reading; reads find them without scanning their range. */
+    stale: StaleSlotSet
     indicesById: Map<string, number[]>
   }
   const treeSlots = new WeakMap<WorktreeLineageTree, TreeSlots>()
@@ -41,34 +49,31 @@ export function createLineageSlotReader(
     mergeRecord(record, right.record)
     return { record, latestAt: Math.max(left.latestAt ?? 0, right.latestAt ?? 0) || null }
   }
-  function updateTreeSlot(slots: TreeSlots, index: number, own: WorkspaceSlot): void {
-    slots.own[index] = own
-    slots.aggregate.update(index, own)
-  }
-  function slotsForTree(state: AppState, tree: WorktreeLineageTree): TreeSlots {
+
+  /** Brings the tree's bookkeeping up to the current snapshot without projecting any slot. */
+  function syncTree(state: AppState, tree: WorktreeLineageTree): TreeSlots {
     const snapshot = slotSnapshot(state)
     const cached = treeSlots.get(tree)
     if (cached?.snapshot === snapshot) {
       return cached
     }
-    const changed = cached && changedSlotWorkspaces(state, cached.snapshot, snapshot)
-    if (cached && changed) {
-      for (const id of changed) {
-        for (const index of cached.indicesById.get(id) ?? []) {
-          updateTreeSlot(
-            cached,
-            index,
-            ownSlot(state, tree.identities[index]!, tree.worktrees[index])
-          )
+    if (cached) {
+      const changed = changedSlotWorkspaces(state, cached.snapshot, snapshot)
+      if (changed) {
+        for (const id of changed) {
+          for (const index of cached.indicesById.get(id) ?? []) {
+            cached.stale.mark(index)
+          }
         }
+      } else {
+        cached.stale.markAll()
       }
       cached.snapshot = snapshot
       return cached
     }
-    const own = tree.identities.map((identity, index) =>
-      ownSlot(state, identity, tree.worktrees[index])
-    )
-    const aggregate = createLineageRangeAggregate(own, emptyAggregate, combineSlots)
+    const size = tree.identities.length
+    const stale = createStaleSlotSet(size)
+    stale.markAll()
     const indicesById = new Map<string, number[]>()
     tree.identities.forEach((identity, index) => {
       const id = getWorktreeIdFromHostIdentity(identity)
@@ -76,9 +81,69 @@ export function createLineageSlotReader(
       indices.push(index)
       indicesById.set(id, indices)
     })
-    const result = { snapshot, own, aggregate, indicesById }
+    const result: TreeSlots = {
+      snapshot,
+      own: Array.from<WorkspaceSlot | undefined>({ length: size }),
+      aggregate: createLineageRangeAggregate(
+        Array.from({ length: size }, emptyAggregate),
+        emptyAggregate,
+        combineSlots
+      ),
+      stale,
+      indicesById
+    }
     treeSlots.set(tree, result)
     return result
+  }
+
+  /**
+   * Re-projects only the stale slots in [start, end), batching each contiguous run into one
+   * aggregate update. Finding them costs O(k log N) for k stale slots, independent of range size.
+   */
+  function refreshRange(
+    state: AppState,
+    tree: WorktreeLineageTree,
+    start: number,
+    end: number
+  ): TreeSlots {
+    const slots = syncTree(state, tree)
+    const staleIndices: number[] = []
+    slots.stale.forEachStale(start, end, (index) => staleIndices.push(index))
+    let runStart = -1
+    let run: WorkspaceSlot[] = []
+    const flush = (): void => {
+      if (run.length > 0) {
+        slots.aggregate.updateRun(runStart, run)
+        run = []
+      }
+    }
+    for (const index of staleIndices) {
+      if (run.length > 0 && index !== runStart + run.length) {
+        flush()
+      }
+      if (run.length === 0) {
+        runStart = index
+      }
+      const own = ownSlot(state, tree.identities[index]!, tree.worktrees[index])
+      slots.own[index] = own
+      slots.stale.clear(index)
+      run.push(own)
+    }
+    flush()
+    return slots
+  }
+
+  /** The descendants' own slots, fresh for the current snapshot. */
+  function descendantSlots(
+    state: AppState,
+    tree: WorktreeLineageTree,
+    index: number
+  ): WorkspaceSlot[] {
+    const end = tree.ends[index]!
+    if (end <= index + 1) {
+      return []
+    }
+    return refreshRange(state, tree, index + 1, end).own.slice(index + 1, end) as WorkspaceSlot[]
   }
 
   /** Range queries and localized updates merge O(log N) records, without reprojecting siblings. */
@@ -91,8 +156,8 @@ export function createLineageSlotReader(
     if (end <= index + 1) {
       return emptyAggregate()
     }
-    return slotsForTree(state, tree).aggregate.read(index + 1, end)
+    return refreshRange(state, tree, index + 1, end).aggregate.read(index + 1, end)
   }
 
-  return { slotsForTree, descendantSlot }
+  return { descendantSlots, descendantSlot }
 }

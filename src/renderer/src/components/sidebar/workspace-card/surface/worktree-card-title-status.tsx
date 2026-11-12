@@ -10,9 +10,6 @@ import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
 } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { AppState } from '@/store/types'
-import type { Worktree } from '../../../../../../shared/worktree/types'
-import { worktreeAgentProjectionInputs } from '../activity/worktree-agent-rows-projection'
 import { selectAgentRowsUnread } from '../activity/worktree-card-agent-ack-inputs'
 import { selectSendTargetControlInputs } from '../activity/worktree-card-send-target-inputs'
 import { useWorktreeAgentExpansionState } from '../activity/worktree-card-agents-expansion-state'
@@ -26,7 +23,7 @@ import {
   buildSlotAgentSignals,
   type SlotAgentSignals
 } from '../../worktree-card-slot-agent-signals'
-import { titleRowSlot, type SlotException } from '../../worktree-card-slot-signal'
+import { titleRowSlot, titleRowUnread, type SlotException } from '../../worktree-card-slot-signal'
 import {
   expandWorkspaceUnreadTargets,
   slotTargetsFromAgentLines,
@@ -35,6 +32,7 @@ import {
   workspaceUnreadTargetsOutsideAgentRows,
   type SlotTarget
 } from '../../worktree-card-slot-targets'
+import { createWorkspaceUnreadSelector } from './worktree-card-workspace-unread-selector'
 import {
   WorktreeCardSlot,
   WorktreeCardTitlePills,
@@ -62,31 +60,6 @@ function useSlotAgentSignals(agents: DashboardAgentRow[]): SlotAgentSignals {
   // Same acknowledgement records the agent rows read, so unread means the same in both places.
   const unread = useAppStore(useShallow((s) => selectAgentRowsUnread(s, agents)))
   return useMemo(() => buildSlotAgentSignals(agents, unread), [agents, unread])
-}
-
-function createWorkspaceUnreadSelector(worktree: Worktree, visibleAgents: readonly SlotTarget[]) {
-  const target = workspaceUnreadTarget(
-    worktree.id,
-    worktree.lastActivityAt || null,
-    worktree.hostId
-  )
-  let inputs: readonly unknown[] = []
-  let unread = false
-  return (state: AppState) => {
-    const next = [
-      ...worktreeAgentProjectionInputs(state),
-      state.unreadTerminalTabs,
-      state.unreadAgentCompletionPanes,
-      state.workspacesMarkedUnreadByUser
-    ]
-    if (!next.every((value, index) => value === inputs[index])) {
-      inputs = next
-      unread =
-        worktree.isUnread &&
-        workspaceUnreadTargetsOutsideAgentRows(state, target, visibleAgents).length > 0
-    }
-    return unread
-  }
 }
 
 /**
@@ -121,7 +94,6 @@ export function WorktreeCardTitleStatusProvider({
   const hiddenDescendants = lineageCollapsed ? descendants : NO_DESCENDANTS
   const collapsedLineage = useCollapsedLineageSlots(hiddenDescendants)
   const lineageLatestAt = useLineageLatestAt(descendants)
-  const agentUnread = signals.allSignals.some((signal) => signal.kind === 'unread')
   const lastActivityAt = worktree.lastActivityAt > 0 ? worktree.lastActivityAt : null
   const visibleAgentTargets = useMemo(
     () => (linesShown ? slotTargetsFromAgentLines(worktree.id, signals, worktree.hostId) : []),
@@ -176,7 +148,7 @@ export function WorktreeCardTitleStatusProvider({
   const at = slot.kind === 'status' ? slot.at : null
   // Why: a collapsed parent rolls up its children's unread agent lines, so each child must show
   // the same dot even when the line is visible, or expanding hides where the unread came from.
-  const unread = agentUnread || exceptions.some((exception) => exception.kind === 'unread')
+  const unread = titleRowUnread({ lines: signals.allSignals, collapsedLineage, workspaceUnread })
   const lineageStatus = lineageLaneStatus(collapsedLineage)
   const value = useMemo<TitleStatus>(
     () => ({ offline, exceptions, unread, lineageStatus, at, resolveTargets }),

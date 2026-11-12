@@ -113,8 +113,31 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
   }
 }
 
-/** Structural changes can alter agent ownership; live status and acknowledgements invalidate only their owners. */
-export function worktreeAgentStructureInputs(state: AppState): readonly unknown[] {
+const sharedSelectors = new Map<string, ReturnType<typeof createWorktreeAgentRowsSelector>>()
+const SHARED_SELECTOR_LIMIT = 2048
+
+/**
+ * One live-store row selector per workspace and host, shared by the card's own rows and the
+ * lineage rollup so a status change projects the rows once. Least recently used is evicted, so
+ * workspaces still being read keep their memo above the cap.
+ */
+export function getSharedWorktreeAgentRowsSelector(worktreeId: string, hostId?: ExecutionHostId) {
+  const key = `${hostId ?? ''}\n${worktreeId}`
+  let selector = sharedSelectors.get(key)
+  if (selector) {
+    sharedSelectors.delete(key)
+  } else {
+    selector = createWorktreeAgentRowsSelector(worktreeId, hostId)
+    if (sharedSelectors.size >= SHARED_SELECTOR_LIMIT) {
+      sharedSelectors.delete(sharedSelectors.keys().next().value!)
+    }
+  }
+  sharedSelectors.set(key, selector)
+  return selector
+}
+
+/** Tab and pane layout inputs; a change here can move any agent between workspaces. */
+export function worktreeAgentLayoutInputs(state: AppState): readonly unknown[] {
   return [
     state.tabsByWorktree,
     state.unifiedTabsByWorktree,
@@ -123,7 +146,14 @@ export function worktreeAgentStructureInputs(state: AppState): readonly unknown[
     state.ptyIdsByTabId,
     state.terminalLayoutsByTabId,
     state.runtimeAgentOrchestrationByPaneKey,
-    state.paneForegroundAgentByPaneKey,
+    state.paneForegroundAgentByPaneKey
+  ]
+}
+
+/** Structural changes can alter agent ownership; live status and acknowledgements invalidate only their owners. */
+export function worktreeAgentStructureInputs(state: AppState): readonly unknown[] {
+  return [
+    ...worktreeAgentLayoutInputs(state),
     selectWorktreesByRepo(state),
     ...structuredAgentSessionOwnerInputs(state)
   ]

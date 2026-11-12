@@ -25,6 +25,54 @@ export function paneKeyTabId(paneKey: string): string | null {
   return separator > 0 ? paneKey.slice(0, separator) : null
 }
 
+const completionKeysByTabCache = new WeakMap<MarkerRecord, ReadonlyMap<string, readonly string[]>>()
+let previousCompletionKeysByTab: ReadonlyMap<string, readonly string[]> = new Map()
+
+function sameKeys(left: readonly string[], right: readonly string[] | undefined): boolean {
+  return (
+    right !== undefined &&
+    left.length === right.length &&
+    left.every((key, index) => key === right[index])
+  )
+}
+
+/**
+ * Completion pane keys grouped by owning tab. Cached per record snapshot (store updates replace the
+ * record) so every mounted card shares one O(C) pass instead of rescanning all markers per tab.
+ * A tab whose keys did not change keeps its previous array, so per-workspace readers can compare
+ * by identity and ignore completions elsewhere.
+ */
+export function completionPaneKeysByTabId(
+  completions: MarkerRecord
+): ReadonlyMap<string, readonly string[]> {
+  const cached = completionKeysByTabCache.get(completions)
+  if (cached) {
+    return cached
+  }
+  const byTab = new Map<string, string[]>()
+  for (const key of Object.keys(completions)) {
+    const tabId = paneKeyTabId(key)
+    if (tabId === null) {
+      continue
+    }
+    const keys = byTab.get(tabId)
+    if (keys) {
+      keys.push(key)
+    } else {
+      byTab.set(tabId, [key])
+    }
+  }
+  for (const [tabId, keys] of byTab) {
+    const previous = previousCompletionKeysByTab.get(tabId)
+    if (previous !== keys && sameKeys(keys, previous)) {
+      byTab.set(tabId, previous as string[])
+    }
+  }
+  completionKeysByTabCache.set(completions, byTab)
+  previousCompletionKeysByTab = byTab
+  return byTab
+}
+
 /** The tabs of a workspace that can own a marker. */
 export function workspaceMarkerTabs(sources: LiveMarkerSources, workspaceId: string): MarkerTab[] {
   const tabs: MarkerTab[] = (sources.tabsByWorktree?.[workspaceId] ?? []).map((tab) => ({
@@ -51,9 +99,7 @@ export function workspaceLiveMarkerTabIds(
   sources: LiveMarkerSources & { unreadAgentCompletionPanes: MarkerRecord },
   workspaceId: string
 ): string[] {
-  const completionTabIds = new Set(
-    Object.keys(sources.unreadAgentCompletionPanes).map(paneKeyTabId)
-  )
+  const completionTabIds = completionPaneKeysByTabId(sources.unreadAgentCompletionPanes)
   return workspaceMarkerTabs(sources, workspaceId)
     .filter(
       (tab) =>

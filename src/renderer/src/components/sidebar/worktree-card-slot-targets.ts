@@ -13,6 +13,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { workspaceMarkerTabIdsForHost } from '@/store/slices/workspace-attention/workspace-marker-host'
 import {
+  completionPaneKeysByTabId,
   paneKeyTabId,
   workspaceLiveMarkerTabIds
 } from '@/store/slices/workspace-attention/workspace-live-markers'
@@ -102,7 +103,7 @@ export function expandWorkspaceUnreadTargets(
       ]
     )
     const ownedTabs = workspaceMarkerTabIdsForHost(state, target.worktreeId, target.executionHostId)
-    const completionKeys = Object.keys(state.unreadAgentCompletionPanes)
+    const completionKeysByTab = completionPaneKeysByTabId(state.unreadAgentCompletionPanes)
     const representedTabs = getStructuredAgentSessionTabsByPaneKey(
       state.unifiedTabsByWorktree[target.worktreeId]
     )
@@ -113,16 +114,23 @@ export function expandWorkspaceUnreadTargets(
         ...target,
         tabId,
         terminalBell: state.unreadTerminalTabs[tabId] === 'terminal-bell',
-        unreadPaneKeys: completionKeys.filter(
-          (key) =>
-            paneKeyTabId(key) === tabId &&
-            (!structuredKeysByTabId.has(tabId) || structuredKeysByTabId.get(tabId) === key)
+        unreadPaneKeys: unreadPaneKeysForTab(
+          completionKeysByTab.get(tabId) ?? [],
+          structuredKeysByTabId.get(tabId)
         )
       }))
     return tabTargets.length === 0 || markedByUser
       ? [...tabTargets, { ...target, markedByUser }]
       : tabTargets
   })
+}
+
+/** A structured chat tab owns only its current session's key; a terminal tab owns all of its panes. */
+function unreadPaneKeysForTab(
+  tabKeys: readonly string[],
+  structuredKey: string | undefined
+): readonly string[] {
+  return structuredKey === undefined ? tabKeys : tabKeys.filter((key) => key === structuredKey)
 }
 
 function workspaceKey(target: SlotTarget) {

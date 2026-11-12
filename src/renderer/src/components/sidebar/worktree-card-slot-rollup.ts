@@ -24,7 +24,7 @@ import {
   type WorktreeLineageSource
 } from '../../../../shared/sidebar-list/worktree-lineage-range'
 import {
-  createWorktreeAgentRowsSelector,
+  getSharedWorktreeAgentRowsSelector,
   worktreeAgentProjectionInputs
 } from './workspace-card/activity/worktree-agent-rows-projection'
 import { selectAgentRowsUnread } from './workspace-card/activity/worktree-card-agent-ack-inputs'
@@ -46,11 +46,6 @@ function worktreeForIdentity(
   ).find((row) => getWorktreeHostIdentity(row) === identity)
 }
 
-const ownSelectors = new Map<
-  HostScopedWorktreeKey,
-  ReturnType<typeof createWorktreeAgentRowsSelector>
->()
-
 const ownSlots = new Map<
   HostScopedWorktreeKey,
   {
@@ -68,18 +63,10 @@ function ownSlot(
 ): WorkspaceSlot {
   const cached = ownSlots.get(identity)
   const worktree = worktreeForIdentity(state, identity) ?? fallback ?? cached?.worktree
-  let selector = ownSelectors.get(identity)
-  if (!selector) {
-    selector = createWorktreeAgentRowsSelector(
-      getWorktreeIdFromHostIdentity(identity),
-      getExecutionHostIdFromWorktreeHostIdentity(identity)
-    )
-    ownSelectors.set(identity, selector)
-    if (ownSelectors.size > 2048) {
-      ownSelectors.delete(ownSelectors.keys().next().value!)
-    }
-  }
-  const agents = selector(state)
+  const agents = getSharedWorktreeAgentRowsSelector(
+    getWorktreeIdFromHostIdentity(identity),
+    getExecutionHostIdFromWorktreeHostIdentity(identity)
+  )(state)
   const unread = selectAgentRowsUnread(state, agents)
   if (
     cached &&
@@ -88,6 +75,9 @@ function ownSlot(
     unread.length === cached.unread.length &&
     unread.every((value, index) => value === cached.unread[index])
   ) {
+    // Refresh recency so the cap evicts least recently used, not oldest inserted.
+    ownSlots.delete(identity)
+    ownSlots.set(identity, cached)
     return cached.slot
   }
   const signals = buildSlotAgentSignals(agents, unread)
@@ -118,7 +108,7 @@ function ownSlot(
   return result
 }
 
-const { slotsForTree, descendantSlot } = createLineageSlotReader(ownSlot)
+const { descendantSlots, descendantSlot } = createLineageSlotReader(ownSlot)
 
 /** What the card shows as unread: its flag, or an agent result the user hasn't read. */
 export function selectWorkspaceShowsUnread(state: AppState, worktree: Worktree): boolean {
@@ -138,12 +128,7 @@ export function collectLineageSlotTargets(
     if (source.length === 0) {
       return []
     }
-    const slots = slotsForTree(state, source.tree)
-    const result: SlotTarget[] = []
-    for (let i = source.index + 1; i < source.tree.ends[source.index]!; i++) {
-      result.push(...slots.own[i]!.targets)
-    }
-    return result
+    return descendantSlots(state, source.tree, source.index).flatMap((slot) => slot.targets)
   }
   return source.flatMap((identity) => ownSlot(state, identity).targets)
 }

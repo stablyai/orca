@@ -62,6 +62,7 @@ export function WorktreeCardSecondaryRows({
       {showInlineAgentList && (
         <WorktreeCardAgents
           worktreeId={worktree.id}
+          executionHostId={worktree.hostId}
           agents={inlineAgentRows}
           className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
         />

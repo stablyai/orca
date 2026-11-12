@@ -4,6 +4,7 @@ import { useNow } from '@/hooks/use-now'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/class-names'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
@@ -15,33 +16,49 @@ import { useWorktreeAgentListModel } from './use-worktree-agent-list-model'
 
 type Props = {
   worktreeId: string
+  /** The card's host; local and remote copies can share a workspace ID, so activation must name it. */
+  executionHostId?: ExecutionHostId
   agents?: DashboardAgentRowData[]
   className?: string
 }
 
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
+  executionHostId,
   agents: precomputedAgents,
   className
 }: Props) {
   useUiLanguageRevision()
-  const selectedAgents = useWorktreeAgentRows(worktreeId, precomputedAgents === undefined)
+  const selectedAgents = useWorktreeAgentRows(
+    worktreeId,
+    precomputedAgents === undefined,
+    executionHostId
+  )
   const agents = precomputedAgents ?? selectedAgents
   if (agents.length === 0) {
     return null
   }
   // Only non-empty bodies mount the 30s clock, avoiding timer cost for idle worktrees.
-  return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
+  return (
+    <WorktreeCardAgentsBody
+      worktreeId={worktreeId}
+      executionHostId={executionHostId}
+      agents={agents}
+      className={className}
+    />
+  )
 })
 
 type BodyProps = {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   agents: DashboardAgentRowData[]
   className?: string
 }
 
 const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   worktreeId,
+  executionHostId,
   agents,
   className
 }: BodyProps) {
@@ -67,7 +84,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     toggleIdleChildGroup,
     isLineageExpanded,
     isFocusedOrHidesFocus
-  } = useWorktreeAgentListModel(worktreeId, agents)
+  } = useWorktreeAgentListModel(worktreeId, agents, executionHostId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
   const now = useNow(30_000)
 
