@@ -1756,10 +1756,13 @@ private func rawStringAttribute(_ element: AXUIElement, _ attribute: String) -> 
 }
 
 /// Reads the value until `settled` accepts it: Chromium answers from a cache that trails a successful write by about 100 ms.
-private func settledValueReadback(_ element: AXUIElement, settled: (CFTypeRef?) -> Bool) -> CFTypeRef? {
+private func settledValueReadback(_ element: AXUIElement, settled: (CFTypeRef) -> Bool) -> CFTypeRef? {
     var readback: CFTypeRef?
+    // Why: settle counts only its sleeps, and one slow or failed AX read can take the full 3 s timeout.
+    let deadline = CFAbsoluteTimeGetCurrent() + 0.5
     _ = PermissionTrustSettling.settle(timeoutMs: 500, intervalMs: 25) {
         readback = rawAttributeValue(element, kAXValueAttribute as String)
+        guard let readback, CFAbsoluteTimeGetCurrent() < deadline else { return true }
         return settled(readback)
     }
     return readback
@@ -2974,7 +2977,8 @@ private enum TextInput {
             return nil
         }
         setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
-        let readback = settledValueReadback(element) { ($0 as? String) == next } as? String
+        // Why: a stale Chromium cache only ever shows the old value, so any other value is final.
+        let readback = settledValueReadback(element) { next == current || ($0 as? String) != current } as? String
         guard readback == next else {
             // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
             if readback == current {
