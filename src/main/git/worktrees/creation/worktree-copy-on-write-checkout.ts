@@ -14,6 +14,7 @@ import {
   STAT_CONCURRENCY,
   transferCleanIndexStats
 } from './worktree-index-stat-transfer'
+import { readGitConfigValue } from './git-config-value'
 import { canReflinkIntoDirectory } from './worktree-reflink-probe'
 
 /** `git config orca.copyOnWriteCheckout false` (repo or global) turns cloned checkouts off. */
@@ -43,14 +44,11 @@ export async function resolveCopyOnWriteCheckout(
   if (options.wslDistro || (process.platform !== 'darwin' && process.platform !== 'linux')) {
     return null
   }
-  const disabled = await gitExecFileAsync(
-    ['config', '--bool', '--get', COPY_ON_WRITE_CHECKOUT_CONFIG_KEY],
-    gitExecOptions(repoPath, options)
-  ).then(
-    ({ stdout }) => stdout.trim() === 'false',
-    () => false
-  )
-  if (disabled) {
+  // A failed read could hide an explicit opt-out, so it disables cloning too.
+  const optOut = await readGitConfigValue(repoPath, COPY_ON_WRITE_CHECKOUT_CONFIG_KEY, options, [
+    '--bool'
+  ]).catch(() => 'false')
+  if (optOut === 'false') {
     return null
   }
   if (process.platform === 'linux') {
@@ -107,13 +105,6 @@ async function listCloneableFiles(
   )
 }
 
-async function readConfig(key: string, worktreePath: string, options: GitWorktreeExecOptions) {
-  return gitExecFileAsync(['config', '--get', key], gitExecOptions(worktreePath, options)).then(
-    ({ stdout }) => stdout.trim().toLowerCase(),
-    () => ''
-  )
-}
-
 const CHECKED_ATTRIBUTES = [...CHECKOUT_CONVERSION_ATTRIBUTES, ...LINE_ENDING_ATTRIBUTES]
 
 /** Each path's values of CHECKED_ATTRIBUTES; `cached` reads the index instead of the worktree. */
@@ -155,10 +146,11 @@ async function withoutCheckoutConversion(
     // --cached reads the attributes of the base commit that read-tree just staged.
     readAttributes(worktreePath, paths, true, options),
     readAttributes(repoPath, paths, false, options),
-    readConfig('core.autocrlf', worktreePath, options),
-    readConfig('core.eol', worktreePath, options)
+    // A failed read rejects, so the clone phase falls back rather than assume no conversion.
+    readGitConfigValue(worktreePath, 'core.autocrlf', options),
+    readGitConfigValue(worktreePath, 'core.eol', options)
   ])
-  const crlfByConfig = GIT_TRUE.has(autocrlf) || eol === 'crlf'
+  const crlfByConfig = GIT_TRUE.has(autocrlf ?? '') || eol === 'crlf'
   return paths.filter((path) => {
     const values = target.get(path)
     const sourceValues = source.get(path)

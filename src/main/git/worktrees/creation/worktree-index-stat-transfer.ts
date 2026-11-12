@@ -4,6 +4,7 @@ import { lstat, open, readFile, rename, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { readGitConfigValue } from './git-config-value'
 import { gitExecOptions, type GitWorktreeExecOptions } from '../worktree-operation-options'
 
 const LIST_MAX_BUFFER = 512 * 1024 * 1024
@@ -175,13 +176,14 @@ export async function transferCleanIndexStats(
   options: GitWorktreeExecOptions = {}
 ): Promise<number> {
   const [worktreeConfig, objectFormat, sourceIndexPath, indexPath] = await Promise.all([
-    git(repoPath, ['config', '--bool', 'extensions.worktreeConfig'], options).catch(() => ''),
+    // A failed read rejects, skipping the transfer rather than the per-worktree config guard.
+    readGitConfigValue(repoPath, 'extensions.worktreeConfig', options, ['--bool']),
     git(worktreePath, ['rev-parse', '--show-object-format'], options),
     git(repoPath, ['rev-parse', '--path-format=absolute', '--git-path', 'index'], options),
     git(worktreePath, ['rev-parse', '--path-format=absolute', '--git-path', 'index'], options)
   ])
   // Per-worktree config could change how files convert on checkout.
-  if (worktreeConfig.trim() === 'true') {
+  if (worktreeConfig === 'true') {
     return 0
   }
   // Git's own handshake: whoever creates index.lock owns the index until it renames it.
