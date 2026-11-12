@@ -19,7 +19,10 @@ import {
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import { readTestJournalSnapshot } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import { readAgentSessionHistory } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page'
-import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
+import {
+  readQueuePublication,
+  structuredQueueSendGate
+} from '../../../src/main/native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   editReleasedCard,
@@ -58,9 +61,28 @@ const byPosition = <T extends Card>(cards: readonly T[]): T[] =>
   [...cards].sort((a, b) => a.position - b.position)
 
 /** This build's chat and its live cards; a withdrawn card is no longer listed. */
-const view = async (journal: AgentSessionJournal) => ({
+const view = async (journal: AgentSessionJournal, now: () => number) => ({
   snapshot: await readTestJournalSnapshot(journal),
-  cards: byPosition(await journal.queuedMessages.list())
+  cards: byPosition(await journal.queuedMessages.list()),
+  publishedCards: (
+    await readQueuePublication(
+      journal,
+      structuredQueueSendGate(
+        {
+          store: {
+            getConversation: () => null,
+            getRecord: () => null,
+            replacedRuntime: () => undefined
+          },
+          sessions: new Map([
+            [journal.identity.sessionId, { journal, child: null, operationalRevision: 0 }]
+          ])
+        },
+        journal.identity.sessionId,
+        now
+      )
+    )
+  ).queuedMessages
 })
 
 /** A release's chat and its live cards, as that release reads them. */
@@ -111,7 +133,7 @@ async function carryOn(
   const carried = await opener
     .open(options)
     .then(async (journal) => {
-      const opened = await view(journal)
+      const opened = await view(journal, written.now)
       await editReleasedCard(journal)
       if (prefix) {
         // The release's rows stay byte for byte; this build's writes go to its own store.
@@ -119,7 +141,7 @@ async function carryOn(
         expect(liveTestJournalRows(database.db, options.identity.sessionId)).toEqual(prefix)
       }
       await sendAfterUpgrade(journal)
-      const sent = await view(journal)
+      const sent = await view(journal, written.now)
       expect(sent.snapshot.submissions).toContainEqual(
         expect.objectContaining({ clientMessageId: 'after-upgrade', dispatchState: 'accepted' })
       )
@@ -139,7 +161,7 @@ async function carryOn(
           cursor: beforeRewind
         })
       ).toMatchObject({ ok: false, reset: 'epoch_changed' })
-      const seen = await view(journal)
+      const seen = await view(journal, written.now)
       // The rewind keeps every message the release wrote and every card not taken back, the edit
       // included.
       expect(kept(seen.snapshot.items)).toEqual(kept(opened.snapshot.items))
@@ -148,9 +170,7 @@ async function carryOn(
       )
       expect(seen.cards).toHaveLength(1)
       expect(seen.cards).toEqual(sent.cards)
-      expect((await readPublishedQueuedMessages(journal)).map((card) => card.messageId)).toEqual([
-        'card-2'
-      ])
+      expect(seen.publishedCards.map((card) => card.messageId)).toEqual(['card-2'])
       for (const result of [sent, seen]) {
         expect(result.cards.find((card) => card.messageId === 'card-2')?.body.blocks).toEqual([
           { type: 'text', text: 'second, edited after the upgrade' }
@@ -162,10 +182,9 @@ async function carryOn(
   const reopened = await opener
     .open(options)
     .then(async (journal) => {
-      expect((await readPublishedQueuedMessages(journal)).map((card) => card.messageId)).toEqual([
-        'card-2'
-      ])
-      return view(journal)
+      const reopened = await view(journal, written.now)
+      expect(reopened.publishedCards.map((card) => card.messageId)).toEqual(['card-2'])
+      return reopened
     })
     .finally(() => opener.closeAll())
   expect(reopened).toEqual(carried.seen)
