@@ -18,7 +18,12 @@ import {
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
-import type { FileContent, ReloadContentOptions } from './editor-panel-content-types'
+import {
+  HOST_STARTED,
+  USER_RETRY,
+  type FileContent,
+  type ReloadContentOptions
+} from './editor-panel-content-types'
 import { CustomEditorExternalChangeBanner } from './external-changes/CustomEditorExternalChangeBanner'
 import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
 import { BinaryFileDefaultAppButton } from './BinaryFileDefaultAppButton'
@@ -31,8 +36,6 @@ import PluginCustomEditorFrame from './PluginCustomEditorFrame'
 import PluginBytesCustomEditorSurface from './PluginBytesCustomEditorSurface'
 
 // Retry is a user act: it may start a stopped WSL distro.
-const USER_RETRY = { wakeWslDistro: true }
-const HOST_STARTED = { onlyIfFailed: true }
 
 const noopEditorContentChange = (_content: string): void => {}
 const noopEditorSave = async (_content: string): Promise<boolean> => false

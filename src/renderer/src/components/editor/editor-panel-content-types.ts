@@ -29,6 +29,11 @@ export type ReloadContentOptions = {
   onlyIfFailed?: boolean
 }
 
+/** A user's Retry may boot a stopped WSL distro. */
+export const USER_RETRY: ReloadContentOptions = { wakeWslDistro: true }
+/** After Start: the host is already up, and the editor's retry may have reloaded the file. */
+export const HOST_STARTED: ReloadContentOptions = { onlyIfFailed: true }
+
 export type FileContent = {
   mediaUrl?: string
   size?: number

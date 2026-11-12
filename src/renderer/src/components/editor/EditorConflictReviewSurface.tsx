@@ -9,13 +9,16 @@ import type { GitStatusEntry } from '../../../../shared/git/status/git-status-ty
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import { ImageViewer, MonacoEditor } from './editor-lazy-views'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
-import type { FileContent, ReloadContentOptions } from './editor-panel-content-types'
+import {
+  HOST_STARTED,
+  USER_RETRY,
+  type FileContent,
+  type ReloadContentOptions
+} from './editor-panel-content-types'
 import { useTranslate } from '@/i18n/use-translate'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 
 // Retry is a user act: it may start a stopped WSL distro.
-const USER_RETRY = { wakeWslDistro: true }
-const HOST_STARTED = { onlyIfFailed: true }
 
 export function EditorConflictReviewSurface({
   activeFile,

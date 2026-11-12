@@ -228,8 +228,16 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad)
     expect(latestFileContents[activeFile.id]?.content).toBe('# notes')
 
+    // A non-retryable failure keeps the editor's own retry out of the count.
+    mocks.readRuntimeFileContent.mockRejectedValueOnce(new Error('ENOENT: no such file'))
     await act(async () => latestReload(activeFile))
     await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(latestFileContents[activeFile.id]?.loadError).toContain('ENOENT')
     expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad + 1)
+
+    await act(async () => latestReload(activeFile, { onlyIfFailed: true }))
+    await advanceTimers(HOST_READ_LATENCY_MS)
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(readsAfterLoad + 2)
+    expect(latestFileContents[activeFile.id]?.content).toBe('# notes')
   })
 })
