@@ -228,7 +228,6 @@
 6 src/renderer/src/components/native-chat/messages/actions/use-native-chat-fork.ts
 4 src/renderer/src/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-source.ts
 6 src/renderer/src/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts.ts
-1 src/renderer/src/components/native-chat/pane/actions/NativeChatCopyOrcaSessionIdMenuItem.tsx
 1 src/renderer/src/components/native-chat/pane/actions/use-native-chat-hand-off.tsx
 1 src/renderer/src/components/native-chat/pane/actions/use-native-chat-session-context-actions.tsx
 1 src/renderer/src/components/native-chat/paste/native-chat-paste-destination.ts

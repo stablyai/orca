@@ -11,6 +11,27 @@ export type CopyOrcaIdMenuItemCopy = {
   failed: string
 }
 
+// Module level: React Compiler can't lower try/catch/finally inside a component.
+async function copyOrcaId(
+  resolveOrcaSessionId: () => Promise<string | null>,
+  copy: CopyOrcaIdMenuItemCopy,
+  onSettled: (() => void) | undefined
+): Promise<void> {
+  try {
+    const orcaSessionId = await resolveOrcaSessionId()
+    if (orcaSessionId) {
+      await window.api.ui.writeClipboardText(orcaSessionId)
+      toast.success(copy.copied)
+    } else {
+      toast.error(copy.failed)
+    }
+  } catch {
+    toast.error(copy.failed)
+  } finally {
+    onSettled?.()
+  }
+}
+
 /** Copies an Orca id the host resolves at click, `orca_session_id:<id>`; null resolves as a failure. */
 export function CopyOrcaIdMenuItem({
   resolveOrcaSessionId,
@@ -21,24 +42,10 @@ export function CopyOrcaIdMenuItem({
   copy: CopyOrcaIdMenuItemCopy
   onSettled?: () => void
 }): React.JSX.Element {
-  const copyOrcaSessionId = async (): Promise<void> => {
-    try {
-      const orcaSessionId = await resolveOrcaSessionId()
-      if (!orcaSessionId) {
-        throw new Error('no Orca session ID')
-      }
-      await window.api.ui.writeClipboardText(orcaSessionId)
-      toast.success(copy.copied)
-    } catch {
-      toast.error(copy.failed)
-    } finally {
-      onSettled?.()
-    }
-  }
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <DropdownMenuItem onSelect={() => void copyOrcaSessionId()}>
+        <DropdownMenuItem onSelect={() => void copyOrcaId(resolveOrcaSessionId, copy, onSettled)}>
           <Copy />
           {copy.label}
         </DropdownMenuItem>

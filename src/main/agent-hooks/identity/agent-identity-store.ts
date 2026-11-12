@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import SyncDatabase from '../../sqlite/sync-database'
@@ -46,10 +45,13 @@ export function agentIdentityDatabasePath(lastStatusPath: string): string {
  *  hook server's thread, so lock waits stay short. */
 export class AgentIdentityStore {
   private readonly db: SyncDatabase
+  /** A newer build's file: existing ids resolve, nothing is minted. */
+  readonly readOnly: boolean
 
   constructor(path: string, busyTimeoutMs = 25) {
-    mkdirSync(dirname(path), { recursive: true })
-    this.db = openIdentityDatabase(path, busyTimeoutMs)
+    const opened = openIdentityDatabase(path, busyTimeoutMs)
+    this.db = opened.db
+    this.readOnly = opened.readOnly
     hardenSqliteDatabaseFiles(path)
   }
 
@@ -59,11 +61,12 @@ export class AgentIdentityStore {
     return typeof id === 'string' && isOrcaSessionId(id) ? id : null
   }
 
-  /** The key's id, minting one on first sighting; concurrent first sightings converge on the
+  /** The key's id, minting one on first sighting (null only for an unlinked key in a read-only
+   *  file); concurrent first sightings converge on the
    *  committed link. Throws on lock or I/O failure so callers retry later. */
-  identify(key: AgentProviderKey): OrcaSessionId {
+  identify(key: AgentProviderKey): OrcaSessionId | null {
     const existing = this.lookup(key)
-    if (existing) {
+    if (existing || this.readOnly) {
       return existing
     }
     const minted = createStructuredAgentSessionId(key.agent, randomUUID)
@@ -109,7 +112,10 @@ export class AgentIdentityStore {
 }
 
 /** Like the chat journal: migrate older files additively, open newer ones read-only. */
-function openIdentityDatabase(path: string, busyTimeoutMs: number): SyncDatabase {
+function openIdentityDatabase(
+  path: string,
+  busyTimeoutMs: number
+): { db: SyncDatabase; readOnly: boolean } {
   const busyTimeout = `busy_timeout = ${Math.max(0, Math.trunc(busyTimeoutMs))}`
   const db = new SyncDatabase(path)
   let stored: number
@@ -124,7 +130,7 @@ function openIdentityDatabase(path: string, busyTimeoutMs: number): SyncDatabase
     db.close()
     const readOnly = new SyncDatabase(path, { readonly: true, fileMustExist: true })
     readOnly.pragma(busyTimeout)
-    return readOnly
+    return { db: readOnly, readOnly: true }
   }
   try {
     db.pragma('journal_mode = WAL')
@@ -143,7 +149,7 @@ function openIdentityDatabase(path: string, busyTimeoutMs: number): SyncDatabase
         throw error
       }
     }
-    return db
+    return { db, readOnly: false }
   } catch (error) {
     db.close()
     throw error

@@ -10,14 +10,17 @@ import {
 import type { AgentStatusStore } from '../../../shared/agent-status/store/agent-status-store'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import type { ProgramStatusFacetStore } from './program-status/facet-store'
+import type { RowAgentIdentity } from '../identity/pane-agent-identities'
 
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export function combinedAgentStatusEntries(
   source: {
     state: HookListenerState
-    /** Runtime-only decorations every published row carries. */
-    publication: { stitch(row: EnrichedAgentHookEventPayload): EnrichedAgentHookEventPayload }
+    programStatusFacets: Pick<ProgramStatusFacetStore, 'stitch'>
+    /** A canonical terminal status's id, assigned when it was committed. */
+    canonicalIdentity: (subjectKey: string) => RowAgentIdentity | undefined
     canonicalStatusStore: Pick<AgentStatusStore, 'getParents' | 'getParent'>
     canonicalSubjectsByPane: ReadonlyMap<string, ReadonlyMap<string, AgentStatusSubject>>
     canonicalListingOrder: ReadonlyMap<string, number>
@@ -34,7 +37,7 @@ export function combinedAgentStatusEntries(
   for (const [paneKey, entry] of legacy) {
     rows.push({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
-      entry: source.publication.stitch(entry as EnrichedAgentHookEventPayload),
+      entry: source.programStatusFacets.stitch(entry as EnrichedAgentHookEventPayload),
       order: getLegacyStatusListingOrder(source.state, paneKey) ?? UNORDERED_STATUS_ROW
     })
   }
@@ -48,11 +51,12 @@ export function combinedAgentStatusEntries(
     if (!parent.status || isTmuxInnerSubject(parent.subject)) {
       continue
     }
+    const subjectKey = serializeAgentStatusSubject(parent.subject)
+    const entry = structuredStatusLegacyEvent(parent.status)
+    const agentIdentity = entry.structuredHost ? undefined : source.canonicalIdentity(subjectKey)
     rows.push({
-      entry: structuredStatusLegacyEvent(parent.status),
-      order:
-        source.canonicalListingOrder.get(serializeAgentStatusSubject(parent.subject)) ??
-        UNORDERED_STATUS_ROW
+      entry: agentIdentity ? { ...entry, agentIdentity } : entry,
+      order: source.canonicalListingOrder.get(subjectKey) ?? UNORDERED_STATUS_ROW
     })
   }
   return rows.sort((a, b) => a.order - b.order).map(({ entry }) => entry)

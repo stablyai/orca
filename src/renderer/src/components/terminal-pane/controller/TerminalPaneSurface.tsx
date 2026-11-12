@@ -87,7 +87,7 @@ export function TerminalPaneSurface({
     keybindings,
     managedPanes,
     managerRef,
-    menuAgentSessionId,
+    menuAgentIds,
     menuPaneHasCustomTitle,
     openDiskSpaceAnalyzer,
     openQuickCommandEditor,
@@ -319,7 +319,7 @@ export function TerminalPaneSurface({
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
-        {...terminalPaneMenuAgentIdProps(contextMenu, menuAgentSessionId)}
+        {...terminalPaneMenuAgentIdProps(contextMenu, menuAgentIds)}
       />
       <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
       {quickCommandEditorOpen ? (

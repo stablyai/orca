@@ -139,12 +139,14 @@ function terminalAgentRefusal(
   sessionId: OrcaSessionId,
   noEffect = 'No message was sent.'
 ): SessionRecipientRefusal | null {
-  const rows = agentHookServer.terminalAgentRows(sessionId)
-  if (!rows) {
+  const running = agentHookServer.terminalAgentPlaces(sessionId)
+  if (!running) {
     return null
   }
-  const places = rows.map((row) =>
-    row.worktreeId ? `pane ${row.paneKey} in workspace ${row.worktreeId}` : `pane ${row.paneKey}`
+  const places = running.map((place) =>
+    place.worktreeId
+      ? `pane ${place.paneKey} in workspace ${place.worktreeId}`
+      : `pane ${place.paneKey}`
   )
   const where = places.length > 0 ? `, running in ${places.join('; ')}` : ''
   return {

@@ -1,4 +1,5 @@
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
+import type { RowAgentIdentity } from '../identity/pane-agent-identities'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -54,8 +55,9 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   programStatus?: ProgramStatusFacet
   /** Facet-only publication; state readers must not infer a transition. */
   programStatusOnly?: true
-  /** The pane's terminal agent id on this host, stamped at publication; never persisted. */
-  orcaSessionId?: string
+  /** The conversation's terminal agent id on this host, named when the row's provider key
+   *  changed; publication copies it. Never persisted. */
+  agentIdentity?: RowAgentIdentity
   /** The lead's full final reply for the turn `leadTurnKey` names; main-process only, never persisted or published. */
   acceptedReply?: { text: string; leadTurnKey: number }
 }

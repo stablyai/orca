@@ -20,6 +20,7 @@ import { AgentHookServerLifecycle } from './server-lifecycle'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import { agentSightingOf } from '../identity/pane-agent-identities'
 
 export class AgentHookServer extends AgentHookServerLifecycle {
   private readonly presenceChecks = new WeakMap<
@@ -221,46 +222,68 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     }
   }
 
-  /** The rows now published with terminal agent `id`; null when this host never minted it. */
-  terminalAgentRows(id: string): AgentStatusIpcPayload[] | null {
+  /** Panes confirmed to run terminal agent `id`, read through the identity's reverse index;
+   *  null when this host never minted it. */
+  terminalAgentPlaces(id: string): { paneKey: string; worktreeId?: string }[] | null {
     if (!this.agentIdentities.isTerminalIdentity(id)) {
       return null
     }
-    return this.getStatusSnapshot().filter((row) => row.orcaSessionId === id)
+    const places: { paneKey: string; worktreeId?: string }[] = []
+    for (const place of this.agentIdentities.placesOf(id)) {
+      const subject = place.canonical
+        ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
+        : undefined
+      const row = subject
+        ? this.canonicalStatusStore.getParent(subject)?.status
+        : this.state.lastStatusByPaneKey.get(place.key)
+      // Resume seeds, exited agents and unconfirmed restored rows prove no running agent.
+      if (
+        row &&
+        row.providerSessionOnly !== true &&
+        row.restoredUnconfirmed !== true &&
+        !('agentPresence' in row && row.agentPresence?.ended === true)
+      ) {
+        places.push({
+          paneKey: place.paneKey,
+          ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
+        })
+      }
+    }
+    return places
   }
 
   /** The pane's terminal agent id, keyed as Copy Session ID picks its id: a confirmed live row
-   *  wins even without a provider session; only an absent or unconfirmed row falls back to the
-   *  pane's sleeping record. */
+   *  (legacy or tmux-selected) wins even without a provider session; only an absent or
+   *  unconfirmed row falls back to the pane's sleeping record. An explicit request: a failed
+   *  commit is retried even during the failure backoff. */
   resolvePaneAgentId(
     paneKey: string,
-    sleeping: Pick<SleepingAgentSessionRecord, 'agent' | 'providerSession'> | undefined
+    sleeping:
+      | Pick<SleepingAgentSessionRecord, 'agent' | 'providerSession' | 'connectionId'>
+      | undefined
   ): OrcaSessionId | null {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
-    const live = this.state.lastStatusByPaneKey.get(resolved) as
+    const legacy = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
+    const live = legacy ?? this.getTmuxSelectedStatus(resolved)
     if (live && live.restoredUnconfirmed !== true) {
-      return live.structuredHost
-        ? null
-        : this.agentIdentities.identify(
-            {
-              agent: live.payload.agentType,
-              providerSession: live.providerSession,
-              connectionId: live.connectionId
-            },
-            resolved
-          )
+      if (live.structuredHost) {
+        return null
+      }
+      return live.agentIdentity?.id ?? this.agentIdentities.identify(agentSightingOf(live))
     }
-    // Sleeping records carry no WSL distro; a woken agent's own hook names it.
+    // Sleeping records carry no WSL distro; a woken agent's own hook names it. A record from a
+    // foreign connection (a direct SSH relay) names no conversation on this host.
     if (!sleeping || process.platform === 'win32') {
       return null
     }
-    return this.agentIdentities.identify(
-      { agent: sleeping.agent, providerSession: sleeping.providerSession, connectionId: null },
-      resolved
-    )
+    return this.agentIdentities.identify({
+      agent: sleeping.agent,
+      providerSession: sleeping.providerSession,
+      connectionId: sleeping.connectionId ?? null
+    })
   }
 
   /** The last report of this pane's local agent, restored from disk or replayed from the offline

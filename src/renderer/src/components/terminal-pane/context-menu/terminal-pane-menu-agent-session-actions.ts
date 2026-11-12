@@ -83,21 +83,22 @@ export function createTerminalPaneMenuAgentSessionActions({
   return { onForkAgentSession, onContinueAgentSessionInNewSession, onCopyAgentSessionContext }
 }
 
-/** Copy Agent ID shows exactly when Copy Session ID does: both name the pane's current agent. */
+/** Copy Session ID shows whenever the pane names a provider session; Copy Agent ID only where
+ *  the pane's host can answer (see `canPaneOfferAgentId`). */
 export function terminalPaneMenuAgentIdProps(
   contextMenu: {
     onCopyAgentSessionId: () => Promise<void>
     agentIdCopy: TerminalPaneAgentIdCopy
   },
-  menuAgentSessionId: string | null
+  menuAgentIds: { sessionId: string | null; agentIdAvailable: boolean }
 ): {
   canCopyAgentSessionId: boolean
   onCopyAgentSessionId: () => void
   agentIdCopy?: TerminalPaneAgentIdCopy
 } {
   return {
-    canCopyAgentSessionId: menuAgentSessionId !== null,
+    canCopyAgentSessionId: menuAgentIds.sessionId !== null,
     onCopyAgentSessionId: () => void contextMenu.onCopyAgentSessionId(),
-    ...(menuAgentSessionId !== null ? { agentIdCopy: contextMenu.agentIdCopy } : {})
+    ...(menuAgentIds.agentIdAvailable ? { agentIdCopy: contextMenu.agentIdCopy } : {})
   }
 }

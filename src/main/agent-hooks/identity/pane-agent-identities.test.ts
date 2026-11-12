@@ -1,9 +1,10 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
+import SyncDatabase from '../../sqlite/sync-database'
 import { AgentIdentityStore } from './agent-identity-store'
 import {
   agentProviderKeyOf,
@@ -57,20 +58,14 @@ function key(options: Parameters<typeof sighting>[0]) {
 }
 
 describe('PaneAgentIdentities', () => {
-  it('gives sequential runs in one pane distinct ids and keeps each conversation on its own', () => {
+  it('gives distinct conversations distinct ids and never relinks a named one', () => {
     const identities = service(databasePath())
-    const first = identities.identify(sighting({ id: 'S1' }), 'tab:pane')
-    const second = identities.identify(sighting({ id: 'S2' }), 'tab:pane')
+    const first = identities.identify(sighting({ id: 'S1' }))
+    const second = identities.identify(sighting({ id: 'S2' }))
     expect(first).not.toBeNull()
     expect(isOrcaSessionId(first!)).toBe(true)
     expect(second).not.toBe(first)
-    expect(identities.identify(sighting({ id: 'S1' }), 'tab:pane')).toBe(first)
-  })
-
-  it('names one conversation the same from any pane', () => {
-    const identities = service(databasePath())
-    const original = identities.identify(sighting({ id: 'S1' }), 'tab-a:pane')
-    expect(identities.identify(sighting({ id: 'S1' }), 'tab-b:pane')).toBe(original)
+    expect(identities.identify(sighting({ id: 'S1' }))).toBe(first)
   })
 
   it('separates distros and locators only where resume uses them', () => {
@@ -84,23 +79,57 @@ describe('PaneAgentIdentities', () => {
     expect(
       identities.identify(sighting({ agent: 'pi', id: 'P', transcriptPath: '/b.jsonl' }))
     ).not.toBe(pi)
-    expect(
-      agentProviderKeyOf({
-        agent: 'claude',
-        providerSession: { key: 'session_id', id: 'S1' },
-        connectionId: 'ssh-target'
-      })
-    ).toBeNull()
+    expect(identities.identify(sighting({ id: 'S1', connectionId: 'ssh-target' }))).toBeNull()
   })
 
-  it('converges concurrent first sightings and survives a new service instance', () => {
+  it('converges concurrent first sightings and survives a reopen', () => {
     const path = databasePath()
     const left = new AgentIdentityStore(path)
     const right = new AgentIdentityStore(path)
     opened.push(left, right)
     const id = left.identify(key({ id: 'S1' }))
     expect(right.identify(key({ id: 'S1' }))).toBe(id)
-    expect(service(path).identify(sighting({ id: 'S1' }), 'tab:pane')).toBe(id)
-    expect(right.has(id)).toBe(true)
+    expect(service(path).identify(sighting({ id: 'S1' }))).toBe(id)
+  })
+
+  it('never mints in a read-only file and backs off a failing one', () => {
+    const path = databasePath()
+    new AgentIdentityStore(path).close()
+    const newer = new SyncDatabase(path)
+    newer.exec('PRAGMA user_version = 9')
+    newer.close()
+    const readOnly = service(path)
+    // A write on a read-only connection would throw and start the backoff (undefined); a
+    // lookup-only miss settles as "no id" every time.
+    for (let publication = 0; publication < 100; publication++) {
+      expect(readOnly.assign(sighting({ id: 'unlinked' }), undefined)).toEqual({
+        key: key({ id: 'unlinked' }),
+        id: null
+      })
+    }
+
+    vi.useFakeTimers()
+    try {
+      const writes = vi.fn(() => {
+        throw new Error('database is locked')
+      })
+      const failing = new PaneAgentIdentities(
+        () => 'failing.db',
+        () => ({ readOnly: false, identify: writes, has: () => false, close() {} })
+      )
+      for (let publication = 0; publication < 100; publication++) {
+        expect(failing.assign(sighting({ id: `S${publication}` }), undefined)).toBeUndefined()
+      }
+      expect(writes).toHaveBeenCalledTimes(1)
+      // A Copy click retries once inside the window; publications stay quiet.
+      expect(failing.identify(sighting({ id: 'S0' }))).toBeNull()
+      failing.assign(sighting({ id: 'S1' }), undefined)
+      expect(writes).toHaveBeenCalledTimes(2)
+      vi.advanceTimersByTime(30_001)
+      failing.assign(sighting({ id: 'S1' }), undefined)
+      expect(writes).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -9,7 +9,11 @@ import type { TerminalPaneMobileController } from '../controller/use-terminal-pa
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
+import {
+  canPaneOfferAgentId,
+  resolvePaneAgentSessionId
+} from '../../../lib/agent-session/identity/pane-agent-session-id'
+import { tryRuntimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
 import { canPaneOfferResumeInNewChat } from '../../tab-bar/tab-session-history-switch'
 
 export function useTerminalPaneChatProjection({
@@ -130,12 +134,20 @@ export function useTerminalPaneChatProjection({
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const { menuAgentSessionId, activePaneCanResumeInChat } = useAppStore(
+  const { menuAgentSessionId, menuAgentIdAvailable, activePaneCanResumeInChat } = useAppStore(
     useShallow((state) => ({
       menuAgentSessionId:
         contextMenu.open && contextMenuLeafId
           ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
           : null,
+      menuAgentIdAvailable:
+        contextMenu.open &&
+        contextMenuLeafId !== null &&
+        canPaneOfferAgentId(
+          state,
+          makePaneKey(tabId, contextMenuLeafId),
+          tryRuntimeTargetForWorktreeOwner(state, worktreeId)?.kind === 'local'
+        ),
       // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
       activePaneCanResumeInChat:
         !activePaneIsChatLeaf &&
@@ -156,6 +168,7 @@ export function useTerminalPaneChatProjection({
   }, [getContextMenuLeafId, toggleNativeChatForLeaf])
   return {
     menuAgentSessionId,
+    menuAgentIdAvailable,
     chatLeafStillMounted,
     chatPane,
     chatPanePtyId,

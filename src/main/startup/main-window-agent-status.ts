@@ -36,7 +36,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       structuredHost,
       programStatus,
       programStatusOnly,
-      orcaSessionId,
+      agentIdentity,
       agentPresence
     }) => {
       if (state.mainWindow?.isDestroyed()) {
@@ -85,7 +85,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
         ...pickHostTurnEnd({ turnEndedAt, turnEndDisposition }),
         ...(providerSession ? { providerSession } : {}),
-        ...(orcaSessionId ? { orcaSessionId } : {}),
+        ...(agentIdentity?.id ? { orcaSessionId: agentIdentity.id } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),

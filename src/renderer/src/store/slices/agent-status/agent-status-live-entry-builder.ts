@@ -197,10 +197,15 @@ export function buildAgentStatusLiveEntry(
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
-  // A clockless OSC write names no conversation; it keeps the id while the conversation stays.
+  // Only the host names conversations: keep its id only for the very same agent, owner and
+  // provider key (locator included); any other key waits for the host's own stamp.
   const orcaSessionId =
     metadata?.orcaSessionId ??
-    (providerSession && existing?.providerSession?.id === providerSession.id
+    (existing?.orcaSessionId &&
+    existing.agentType === identity.agentType &&
+    (routing?.connectionId === undefined ||
+      routing.connectionId === (existing.connectionId ?? null)) &&
+    agentProviderSessionsEqual(identity.agentType, existing.providerSession, providerSession)
       ? existing.orcaSessionId
       : undefined)
   const entry: AgentStatusEntry = {

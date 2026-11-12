@@ -15,15 +15,13 @@ import type {
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
-import { AgentHookServerState } from './server-state'
 import { combinedAgentStatusEntries } from './combined-agent-status-entries'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { PaneAgentIdentities } from '../identity/pane-agent-identities'
-import { agentIdentityDatabasePath } from '../identity/agent-identity-store'
+import { AgentHookServerAgentIdentities } from './server-agent-identities'
 
-export abstract class AgentHookServerListeners extends AgentHookServerState {
+export abstract class AgentHookServerListeners extends AgentHookServerAgentIdentities {
   protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
   protected statusChangeNotificationVersion = 0
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
@@ -45,18 +43,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     this.clearStartupPromptClaims = clear
   }
 
-  protected readonly agentIdentities = new PaneAgentIdentities(() =>
-    this.lastStatusFilePath ? agentIdentityDatabasePath(this.lastStatusFilePath) : null
-  )
-
-  /** Runtime-only decorations every published row carries: its facet and its agent id. */
-  private readonly publication = {
-    stitch: (row: EnrichedAgentHookEventPayload): EnrichedAgentHookEventPayload =>
-      this.agentIdentities.stamp(this.programStatusFacets.stitch(row))
-  }
-
   protected emitEnrichedStatus(row: EnrichedAgentHookEventPayload): void {
-    const enriched = this.publication.stitch(row)
+    const enriched = this.programStatusFacets.stitch(row)
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
       try {
@@ -77,6 +65,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   protected override resetCanonicalStatus(): void {
     super.resetCanonicalStatus()
+    this.agentIdentities.dropCanonical()
     this.providerRowsByTab = null
   }
 
@@ -84,7 +73,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return combinedAgentStatusEntries(
       {
         state: this.state,
-        publication: this.publication,
+        programStatusFacets: this.programStatusFacets,
+        canonicalIdentity: (subjectKey) => this.agentIdentities.canonicalIdentity(subjectKey),
         canonicalStatusStore: this.canonicalStatusStore,
         canonicalSubjectsByPane: this.canonicalSubjectsByPane,
         canonicalListingOrder: this.canonicalListingOrder
@@ -253,13 +243,16 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     if (legacy) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
       const row = legacy as EnrichedAgentHookEventPayload
-      return [toAgentStatusIpcPayload(this.publication.stitch(row))]
+      return [toAgentStatusIpcPayload(this.programStatusFacets.stitch(row))]
     }
     const rows: AgentStatusIpcPayload[] = []
-    for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
+    for (const [subjectKey, subject] of this.canonicalSubjectsByPane.get(paneKey) ?? []) {
       const status = this.canonicalStatusStore.getParent(subject)?.status
+      const id = status?.structuredHost
+        ? undefined
+        : this.agentIdentities.canonicalIdentity(subjectKey)?.id
       if (status) {
-        rows.push(status)
+        rows.push(id ? { ...status, orcaSessionId: id } : status)
       }
     }
     return rows
