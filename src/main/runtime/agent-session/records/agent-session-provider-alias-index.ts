@@ -4,6 +4,7 @@ import {
   listAgentSessionConversations,
   type AgentSessionStoreState
 } from './agent-session-store-state'
+import { AgentSessionDraftRecords } from './agent-session-store-draft'
 
 /** Provider-native session ids of the loaded chats, mapped to the chats whose handle chains name
  *  them: built once per store authority, then kept by committed record writes, so a recipient's
@@ -11,18 +12,43 @@ import {
 export class AgentSessionProviderAliasIndex {
   private readonly owners = new Map<string, Set<string>>()
   private readonly aliasesBySession = new Map<string, readonly string[]>()
+  /** Each chat's place in listing order (readable records, then unreadable ones), mirrored from
+   *  the store's maps so a shared alias picks its owner among its owners alone. */
+  private readonly readableOrder = new Map<string, number>()
+  private readonly unreadableOrder = new Map<string, number>()
+  private nextReadable = 0
 
   constructor(state: AgentSessionStoreState) {
+    for (const sessionId of state.records.keys()) {
+      this.readableOrder.set(sessionId, this.nextReadable++)
+    }
+    for (const sessionId of state.unreadableRecords.keys()) {
+      this.unreadableOrder.set(sessionId, this.unreadableOrder.size)
+    }
     for (const view of listAgentSessionConversations(state)) {
       this.add(view)
     }
   }
 
-  /** Follows one committed transaction: only the written records' old and new aliases move. */
+  /** Follows one committed transaction: only the written records' places and aliases move. */
   applyCommitted(
     draft: AgentSessionStoreState,
     records: { upsert: readonly (readonly [string, string])[]; remove: readonly string[] }
   ): void {
+    // Keys the draft appended take the end, in its order; every other key keeps its place.
+    const appended =
+      draft.records instanceof AgentSessionDraftRecords
+        ? draft.records.appended
+        : records.upsert.map(([id]) => id).filter((id) => !this.readableOrder.has(id))
+    for (const sessionId of appended) {
+      this.readableOrder.delete(sessionId)
+      if (draft.records.has(sessionId)) {
+        this.readableOrder.set(sessionId, this.nextReadable++)
+      }
+    }
+    for (const sessionId of records.remove) {
+      this.readableOrder.delete(sessionId)
+    }
     for (const sessionId of [...records.upsert.map(([id]) => id), ...records.remove]) {
       this.remove(sessionId)
       const view = getAgentSessionConversation(draft, sessionId)
@@ -33,25 +59,23 @@ export class AgentSessionProviderAliasIndex {
   }
 
   /** The chat naming `nativeId`; with several, the first in listing order, as a full scan picks. */
-  owner(nativeId: string, state: AgentSessionStoreState): string | null {
-    const owners = this.owners.get(nativeId)
-    if (!owners || owners.size === 0) {
-      return null
-    }
-    if (owners.size === 1) {
-      return owners.values().next().value ?? null
-    }
-    for (const sessionId of state.records.keys()) {
-      if (owners.has(sessionId)) {
-        return sessionId
+  owner(nativeId: string): string | null {
+    let first: string | null = null
+    for (const sessionId of this.owners.get(nativeId) ?? []) {
+      if (first === null || this.precedes(sessionId, first)) {
+        first = sessionId
       }
     }
-    for (const [sessionId, row] of state.unreadableRecords) {
-      if (row.conversation && owners.has(sessionId)) {
-        return sessionId
-      }
+    return first
+  }
+
+  private precedes(a: string, b: string): boolean {
+    const readableA = this.readableOrder.get(a)
+    const readableB = this.readableOrder.get(b)
+    if (readableA !== undefined || readableB !== undefined) {
+      return readableB === undefined || (readableA !== undefined && readableA < readableB)
     }
-    return null
+    return (this.unreadableOrder.get(a) ?? Infinity) < (this.unreadableOrder.get(b) ?? Infinity)
   }
 
   private add(view: AgentSessionConversationView): void {

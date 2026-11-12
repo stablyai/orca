@@ -138,7 +138,7 @@ export class AgentSessionStoreTransactions {
   /** The chat whose provider handle chain names `nativeId`, from the commit-kept alias index. */
   providerAliasOwner(nativeId: string): string | null {
     this.providerAliases ??= new AgentSessionProviderAliasIndex(this.published)
-    return this.providerAliases.owner(nativeId, this.published)
+    return this.providerAliases.owner(nativeId)
   }
 
   get readOnly(): boolean {
