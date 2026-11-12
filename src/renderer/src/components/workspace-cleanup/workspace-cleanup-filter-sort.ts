@@ -1,3 +1,4 @@
+import { compareDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import {
   isWorkspaceCleanupHeadLanded,
   type WorkspaceCleanupCandidate
@@ -94,7 +95,7 @@ export function sortWorkspaceCleanupCandidates(
       primary ||
       left.lastActivityAt - right.lastActivityAt ||
       left.repoName.localeCompare(right.repoName) ||
-      left.displayName.localeCompare(right.displayName)
+      compareDisplayName(left.displayName, right.displayName)
     )
   })
 }
@@ -125,11 +126,11 @@ function compareWorkspaceCleanupCandidates(
     case 'activity':
       return left.lastActivityAt - right.lastActivityAt
     case 'name':
-      return left.displayName.localeCompare(right.displayName)
+      return compareDisplayName(left.displayName, right.displayName)
     case 'repo':
       return (
         left.repoName.localeCompare(right.repoName) ||
-        left.displayName.localeCompare(right.displayName)
+        compareDisplayName(left.displayName, right.displayName)
       )
     case 'review':
       return (

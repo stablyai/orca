@@ -118,7 +118,7 @@ export function buildWorkspaceCleanupFacets(
     identity: hostIdentity,
     repoId: candidate.repoId,
     repoName: candidate.repoName,
-    displayName: candidate.displayName,
+    displayName: candidate.displayName ?? '',
     path: candidate.path,
     branch,
     hostId: worktree?.hostId ?? getWorkspaceCleanupCandidateHostId(candidate),
