@@ -644,7 +644,7 @@ invalid (`plugin_invalid`), and `3` approval is needed.
 2. Commit the new `version` in `orca-plugin.json`, then tag that commit and push the tag:
    `git tag -a v1.2.0 -m v1.2.0 && git push origin v1.2.0`.
 3. Add the `orca-plugin` topic to the repository: `gh repo edit <owner>/<repo> --add-topic orca-plugin`.
-4. Check its listing at `https://www.onorca.dev/plugins/<owner>/<repo>`.
+4. Check its listing at `https://orca.dev/plugins/<owner>/<repo>`.
 
 ## 5. Publish to a catalog
 

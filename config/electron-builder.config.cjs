@@ -348,7 +348,9 @@ module.exports = {
     'out/main/filesystem/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
-    'out/main/plugins/plugin-authoring-checks.js',
+    'out/main/plugins/plugin-artifact-validation.js',
+    'out/main/plugins/plugin-content-hash.js',
+    'out/main/plugins/plugin-catalog-release-entry.js',
     'out/main/environment-doctor/environment-doctor.js',
     'out/main/environment-doctor/environment-doctor-host.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.

@@ -1607,6 +1607,10 @@
             "secrets:own",
             "settings:own",
             "appearance:write",
+            "workspace:create",
+            "automation:read",
+            "automation:write",
+            "history:read",
             "tasks:provide"
           ],
           "description": "Capability granted on user consent.",
@@ -1623,6 +1627,10 @@
             "secrets:own": "1.4.245",
             "settings:own": "1.4.160",
             "appearance:write": "1.4.249",
+            "workspace:create": "1.4.258",
+            "automation:read": "1.4.258",
+            "automation:write": "1.4.258",
+            "history:read": "1.4.258",
             "tasks:provide": "1.4.245"
           }
         }

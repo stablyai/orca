@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import { getClaudeProfileRouter } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import {
   directoryTranscriptImport,

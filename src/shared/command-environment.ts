@@ -1,3 +1,5 @@
+import { processEnvWithoutAgentSession } from './agent-launch/startup/parent-agent-session-env'
+
 /** Leading assignments are data, never shell expressions. */
 export function extractLeadingEnvAssignments(tokens: string[]): {
   env?: Record<string, string>
@@ -30,7 +32,10 @@ export function mergeCommandEnvironment(
   if (!overrides) {
     return base
   }
-  const entries = [...Object.entries(base ?? process.env), ...Object.entries(overrides)]
+  const entries = [
+    ...Object.entries(base ?? processEnvWithoutAgentSession()),
+    ...Object.entries(overrides)
+  ]
   // Windows keys share one spelling so guards cannot retain differently cased aliases.
   return Object.fromEntries(
     platform === 'win32' ? entries.map(([key, value]) => [key.toUpperCase(), value]) : entries

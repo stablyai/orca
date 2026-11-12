@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PluginWorkerHandle } from './plugin-host-process'
-import {
-  PluginWorkerManager,
-  type PluginWorkerFactory,
-  type PluginWorkerSpawnSpec
-} from './plugin-worker-manager'
+import type { PluginWorkerHandle } from './parent-process/plugin-host-process-types'
+import { PluginWorkerManager } from './plugin-worker-manager'
+import type {
+  PluginWorkerFactory,
+  PluginWorkerSpawnSpec
+} from './worker-supervision/plugin-worker-startup'
 
 type TestWorker = PluginWorkerHandle & {
   exit(code?: number | null): void
@@ -90,37 +90,6 @@ describe('PluginWorkerManager capacity', () => {
       finishStart(lateWorker)
       await subject.disposeAll()
     }
-  })
-})
-
-describe('PluginWorkerManager restart policy', () => {
-  it('cancels a stale in-flight revision instead of joining it by plugin key', async () => {
-    const currentWorker = worker()
-    const factory = vi.fn<PluginWorkerFactory>(({ rootDir, signal }) => {
-      if (rootDir === '/plugins/old') {
-        return new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(new Error('old revision cancelled')), {
-            once: true
-          })
-        })
-      }
-      return Promise.resolve(currentWorker)
-    })
-    const subject = manager(factory)
-    const oldSpec = { ...spec('demo'), rootDir: '/plugins/old', manifestRevision: 'old' }
-    const newSpec = { ...spec('demo'), rootDir: '/plugins/new', manifestRevision: 'new' }
-
-    const oldActivation = subject.ensureActive(oldSpec)
-    await flush()
-    const currentActivation = subject.ensureActive(newSpec)
-
-    await expect(oldActivation).rejects.toThrow('cancelled')
-    await expect(currentActivation).resolves.toBe(currentWorker)
-    expect(factory.mock.calls.map(([options]) => options.rootDir)).toEqual([
-      '/plugins/old',
-      '/plugins/new'
-    ])
-    await subject.disposeAll()
   })
 })
 

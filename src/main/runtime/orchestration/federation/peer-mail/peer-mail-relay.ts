@@ -5,8 +5,10 @@ import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestr
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
 import { federationRelayRetryDelayMs } from '../relay/federation-relay-scheduler'
+import { HeldPeerConversations } from './held-peer-conversations'
 import type { OrchestrationEnvironmentTransport } from '../environment-transport'
 import { peerMailLocalRecipient } from './peer-mail-delivery'
+import { peerMailRelayEnvironments, peerMailRelayWants } from './peer-mail-relay-environments'
 import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
 import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
@@ -14,7 +16,6 @@ import {
   closeRemoteRunLinksOfRemovedServer,
   dueRemoteResendsNow,
   getRemoteRunLink,
-  listLiveRemoteRunLinkEnvironments,
   noteRemoteRunLinkError,
   remoteServerPin
 } from '../../db/remote-owned/remote-run-links'
@@ -50,6 +51,7 @@ type Loop = {
   db: OrchestrationDb
   stopped: boolean
   resending: boolean
+  held: HeldPeerConversations
 }
 
 /** One pull loop per paired server this Orca opened conversations with or coordinates Runs on. The
@@ -69,16 +71,12 @@ export class PeerMailRelay {
       return
     }
     const db = this.runtime.getOrchestrationDb()
-    const environments = new Set([
-      ...db.listHomePeerMailEnvironments(),
-      ...listLiveRemoteRunLinkEnvironments(db)
-    ])
-    for (const environmentId of environments) {
+    for (const environmentId of peerMailRelayEnvironments(db)) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
         continue
       }
-      const loop: Loop = { db, stopped: false, resending: false }
+      const loop: Loop = { db, stopped: false, resending: false, held: new HeldPeerConversations() }
       this.loops.set(environmentId, loop)
       void this.run(environmentId, loop)
     }
@@ -107,7 +105,8 @@ export class PeerMailRelay {
     let failures = 0
     // Named while it is still paired, so a removal can say which server went.
     const serverName = remoteServerName(this.runtime, environmentId)
-    while (this.isCurrent(environmentId, loop)) {
+    // Ends with its last reason to pull; a later conversation or link starts a new loop through ensure().
+    while (this.isCurrent(environmentId, loop) && peerMailRelayWants(loop.db, environmentId)) {
       try {
         await this.pullOnce(environmentId, loop)
         if (failures > 0) {
@@ -164,11 +163,12 @@ export class PeerMailRelay {
       (handle, type) => this.runtime.notifyMessageArrived(handle, type)
     )
     this.resendOwed(environmentId, loop)
+    const { holdBack, waitMs } = loop.held.forPull(Date.now(), PULL_WAIT_MS)
     const response = await this.runtime
       .callOrchestrationWorkerServer(
         environmentId,
         'orchestration.peerMailPull',
-        { waitMs: PULL_WAIT_MS },
+        { waitMs, ...(holdBack.length > 0 ? { holdBack } : {}) },
         PULL_TIMEOUT_MS
       )
       .catch((error: unknown) => {
@@ -191,11 +191,21 @@ export class PeerMailRelay {
     }
     const through = new Map<string, number>()
     const stuck = new Map<string, unknown>()
+    // One clock for the batch, and a held conversation stays skipped to its end: none of its later
+    // items is imported, so the ack never passes the item it is waiting to retry.
+    const now = Date.now()
+    const heldBack = new Set<string>()
+    let onlyHeldBack = true
     for (const item of items) {
       // An item that cannot be read holds back its own conversation only; the others keep moving.
-      if (stuck.has(item.conversationId)) {
+      if (stuck.has(item.conversationId) || heldBack.has(item.conversationId)) {
         continue
       }
+      if (loop.held.isWaiting(item.conversationId, now)) {
+        heldBack.add(item.conversationId)
+        continue
+      }
+      onlyHeldBack = false
       try {
         const stored = this.importItem(loop.db, environmentId, item)
         // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
@@ -204,9 +214,11 @@ export class PeerMailRelay {
         }
       } catch (error) {
         stuck.set(item.conversationId, error)
+        loop.held.failed(item.conversationId, now)
         noteRemoteRunLinkError(loop.db, item.conversationId, error)
         continue
       }
+      loop.held.read(item.conversationId)
       through.set(
         item.conversationId,
         Math.max(through.get(item.conversationId) ?? 0, item.sequence)
@@ -228,11 +240,13 @@ export class PeerMailRelay {
     const [failure] = stuck.values()
     if (failure !== undefined) {
       console.warn(
-        `[orchestration] Stopped reading ${stuck.size} conversation(s) from ${environmentId}:`,
+        `[orchestration] Holding back ${stuck.size} conversation(s) from ${environmentId}:`,
         failure instanceof Error ? failure.message : failure
       )
-      // Backs the loop off, so a server that keeps returning the same unreadable item is not re-pulled hot.
-      throw failure
+    }
+    if (onlyHeldBack) {
+      // Only conversations still waiting came back (an older server, or past the cap): no hot re-pull.
+      await loop.held.untilFirstDue(heldBack, now, PULL_WAIT_MS)
     }
   }
 

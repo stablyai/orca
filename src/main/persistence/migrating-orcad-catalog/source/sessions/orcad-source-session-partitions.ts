@@ -1,4 +1,4 @@
-import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import type { PersistedState } from '../../../../../shared/persisted-state-types'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../../shared/workspace-scope'

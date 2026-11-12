@@ -349,7 +349,7 @@
               "notifications:show"
             ]
           ],
-          "maxItems": 12,
+          "maxItems": 16,
           "type": "array",
           "items": {
             "type": "string",
@@ -365,6 +365,10 @@
               "secrets:own",
               "settings:own",
               "appearance:write",
+              "workspace:create",
+              "automation:read",
+              "automation:write",
+              "history:read",
               "tasks:provide"
             ]
           }

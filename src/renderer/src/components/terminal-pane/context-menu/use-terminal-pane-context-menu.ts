@@ -11,6 +11,7 @@ import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-
 import { useTerminalPaneSplitActions } from '../layout/split/use-terminal-pane-split-actions'
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
 import { resetTerminalInputModes } from '../input/terminal-input-mode-reset'
+import { focusPaneIfFocusUnclaimed } from '@/lib/pane-manager/pane-focus/pane-overlay-focus'
 
 type TerminalMenuState = {
   open: boolean
@@ -20,6 +21,7 @@ type TerminalMenuState = {
   paneCount: number
   menuPaneId: number | null
   menuPane: ManagedPane | null
+  onRestoreTerminalFocus: () => void
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
@@ -201,6 +203,8 @@ export function useTerminalPaneContextMenu({
     paneCount,
     menuPaneId,
     menuPane,
+    // Escape or an item that skips refocus (e.g. an empty paste) unmounts the focused menu onto <body>.
+    onRestoreTerminalFocus: () => focusPaneIfFocusUnclaimed(resolveMenuPane()),
     onContextMenuCapture,
     onMouseDownCapture,
     onPaneTitleContextMenu,

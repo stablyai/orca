@@ -153,7 +153,7 @@ export const ISSUE_QUERY = `
       }
       project @include(if: $includeDrawerFields) { url }
       children(first: 25) @include(if: $includeDrawerFields) {
-        nodes { id identifier title url }
+        nodes { id identifier title url state { name type color } }
       }
     }
   }

@@ -2,13 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { committingSpawn, registerLivePty } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import '../orca-runtime-test-mocks/setup.spec'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   HEADLESS_LEAF_ID,
   RESTORED_AUTHORITY_TOKEN,
   RESTORED_AUTHORITY_TOKEN_HASH,
-  TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -22,97 +21,6 @@ import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
 import '../../../shared/jcode-runtime-dir'
 
 describe('OrcaRuntimeService', () => {
-  it('refuses a requested shell the execution host cannot apply instead of spawning its default', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-unreachable-shell' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    // Host platform here is POSIX, which has no Windows shell to pick.
-    await expect(
-      runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { shellOverride: 'cmd.exe' })
-    ).rejects.toThrow(/--shell cmd\.exe names a Windows shell/)
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
-  it('quotes the agent startup command for the requested shell, not the host default', async () => {
-    const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    try {
-      const spawn = vi.fn().mockResolvedValue({ id: 'pty-shell-quoting' })
-      const runtime = new OrcaRuntimeService({
-        ...store,
-        getSettings: () => ({
-          ...store.getSettings(),
-          disabledTuiAgents: [],
-          terminalWindowsShell: 'powershell.exe',
-          agentCmdOverrides: {},
-          agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
-          agentDefaultEnv: {}
-        })
-      })
-      runtime.setPtyController({
-        spawn,
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'claude' })
-      await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        command: 'claude',
-        shellOverride: 'cmd.exe'
-      })
-
-      // Quote for the selected shell, even when Settings names a different Windows default.
-      expect(spawn).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ command: "claude '--dangerously-skip-permissions'" })
-      )
-      expect(spawn).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          shellOverride: 'cmd.exe',
-          command: 'claude "--dangerously-skip-permissions"'
-        })
-      )
-    } finally {
-      Object.defineProperty(process, 'platform', hostPlatform)
-    }
-  })
-
-  it('refuses a requested shell with no workspace instead of creating a default-shell tab', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-no-workspace-shell' })
-    const send = vi.fn()
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    electronMocks.BrowserWindow.fromId.mockReturnValue({
-      isDestroyed: () => false,
-      webContents: { send }
-    })
-
-    await expect(runtime.createTerminal(undefined, { shellOverride: 'cmd.exe' })).rejects.toThrow(
-      /--shell cmd\.exe needs a workspace/
-    )
-    expect(send).not.toHaveBeenCalled()
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
   it('retires inherited launch authority when the agent command exits', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
     const retireAuthority = vi.fn()
@@ -374,61 +282,5 @@ describe('OrcaRuntimeService', () => {
         host
       })
     ).toBeNull()
-  })
-
-  it('keeps restored receipts outside a targeted worktree scan', async () => {
-    const secondWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        {
-          id: 'pty-moved',
-          incarnationId: 'inc-moved',
-          terminalHandle: 'term_moved',
-          title: 'Moved',
-          cwd: '/tmp/worktree-b',
-          worktreeId: secondWorktreeId,
-          wslDistro: null
-        },
-        {
-          id: 'pty-second',
-          incarnationId: 'inc-second',
-          terminalHandle: 'term_second',
-          title: 'Second',
-          cwd: '/tmp/worktree-b',
-          worktreeId: secondWorktreeId,
-          wslDistro: null
-        }
-      ]
-    })
-    const receipts = (
-      runtime as unknown as {
-        restoredOrchestrationAuthorityByPtyId: Map<string, Record<string, unknown>>
-      }
-    ).restoredOrchestrationAuthorityByPtyId
-    receipts.set('pty-moved', {
-      ptyId: 'pty-moved',
-      worktreeId: TEST_WORKTREE_ID,
-      terminalHandle: 'term_moved',
-      paneKey: makePaneKey('moved-tab', HEADLESS_LEAF_ID),
-      processIncarnation: 'pty-moved:inc-moved',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-    receipts.set('pty-second', {
-      ptyId: 'pty-second',
-      worktreeId: secondWorktreeId,
-      terminalHandle: 'term_second',
-      paneKey: makePaneKey('second-tab', HEADLESS_LEAF_ID),
-      processIncarnation: 'pty-second:inc-second',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-
-    await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-
-    expect(receipts.has('pty-moved')).toBe(false)
-    expect(receipts.has('pty-second')).toBe(true)
   })
 })

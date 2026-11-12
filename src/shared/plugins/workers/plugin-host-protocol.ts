@@ -50,7 +50,9 @@ export const pluginWorkerInitSchema = z.object({
   pluginRoot: z.string().min(1),
   mainEntry: z.string().min(1),
   /** Worker-side early refusals only; host rechecks every call regardless of declared grants. */
-  grantedCapabilities: z.array(z.enum(PLUGIN_CAPABILITY_KINDS))
+  grantedCapabilities: z.array(z.enum(PLUGIN_CAPABILITY_KINDS)),
+  /** A development plugin: `host.has` also answers for proposed methods. */
+  allowProposed: z.boolean().optional()
 })
 
 export const pluginWorkerInvokeParamsSchema = z.object({

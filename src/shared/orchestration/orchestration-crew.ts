@@ -1,9 +1,16 @@
 import { z } from 'zod'
 import { isPublicOrchestrationAddress } from './mailbox/orchestration-agent-reference'
 import { WorkerApprovalPayloadSchema } from './approvals/worker-approval-payload'
+import { parseOrcaSessionAddress } from '../orca-session-address'
 
 export const CrewParty = z.string().refine(isPublicOrchestrationAddress)
 export const CrewSubscribeParams = z.object({ party: CrewParty })
+const CrewRowApproval = z.object({
+  approval: WorkerApprovalPayloadSchema,
+  at: z.string(),
+  /** When the worker asked: where its card sits in the chat, open or answered. */
+  askedAt: z.string().optional()
+})
 export const CrewRow = z.object({
   partyKey: z.string(),
   role: z.enum(['manager', 'worker', 'peer']),
@@ -23,9 +30,7 @@ export const CrewRow = z.object({
     .optional(),
   pendingQuestion: z.object({ preview: z.string(), at: z.string() }).optional(),
   /** This worker's permission prompts addressed to the viewing party, each as its newest message: open ones, and recent receipts. */
-  approvals: z
-    .array(z.object({ approval: WorkerApprovalPayloadSchema, at: z.string() }))
-    .optional(),
+  approvals: z.array(CrewRowApproval).optional(),
   sendAddress: CrewParty.optional(),
   openTarget: z
     .discriminatedUnion('kind', [
@@ -56,6 +61,23 @@ export const CrewFrame = z.discriminatedUnion('type', [
   z.object({ type: z.literal('end') })
 ])
 export type OrchestrationCrewFrame = z.infer<typeof CrewFrame>
+
+/** A chat coordinator's worker approvals alone, so a chat need not follow its whole crew. */
+export const WorkerApprovalsSubscribeParams = z.object({
+  party: CrewParty.refine((party) => parseOrcaSessionAddress(party) !== null)
+})
+export const WorkerApprovalEntry = CrewRowApproval.extend({
+  worker: CrewRow.omit({ approvals: true })
+})
+export type OrchestrationWorkerApprovalEntry = z.infer<typeof WorkerApprovalEntry>
+export const WorkerApprovalsFrame = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('begin') }),
+  // One approval per frame: a frame stays small whatever the count.
+  z.object({ type: z.literal('approval'), entry: WorkerApprovalEntry }),
+  z.object({ type: z.literal('complete') }),
+  z.object({ type: z.literal('end') })
+])
+export type OrchestrationWorkerApprovalsFrame = z.infer<typeof WorkerApprovalsFrame>
 export function emptyCrew(status: 'ok' | 'unknown'): OrchestrationCrewSnapshot {
   return { status, sections: { managedBy: [], managing: [], talkingWith: [] } }
 }

@@ -10,7 +10,7 @@ import {
   getRepoDefaultBranchName,
   shouldHideNonOpenReviewOnDefaultBranch
 } from '../../source-control/repo-default-branch'
-import { extractExecError } from '../../git/exec-error'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { classifyGlabError } from '../requests/glab-error-classification'
 import type { MRInfo } from '../../../shared/gitlab-types'
 import { derivePipelineStatus, mapMRInfo } from '../requests/gitlab-response-mapping'
@@ -21,7 +21,7 @@ import {
   glabHostnameArgs,
   glabRepoExecOptions
 } from '../projects/gitlab-project-ref-resolution'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
 import {
@@ -80,6 +80,10 @@ export async function getMergeRequest(
     const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
       head_pipeline?: { status?: string } | null
       pipeline?: { status?: string } | null
+    }
+    // glab serializes GitLab's null changes_count as ''.
+    if (data.changes_count === '') {
+      data.changes_count = null
     }
     // Why: older GitLab instances expose `pipeline` instead of `head_pipeline`; try both.
     const pipelineStatus = derivePipelineStatus(data.head_pipeline ?? data.pipeline ?? null)

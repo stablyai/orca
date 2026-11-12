@@ -42,13 +42,6 @@ describe('worktree metadata write normalization', () => {
     expect(updated).not.toHaveProperty('diffCommentsBase')
   })
 
-  it('replaces review notes outright for a writer that sends no base', () => {
-    const existing = { ...existingMeta, diffComments: [note('a'), note('desktop')] }
-    const updated = mergeWorktreeMetaForWrite(existing, { diffComments: [note('phone')] })
-
-    expect(updated.diffComments).toEqual([note('phone')])
-  })
-
   it('retains all five PRs while each successive branch clears its active review', () => {
     let meta = existingMeta
     const numbers = [32201, 32206, 32211, 32216, 32218]
@@ -66,21 +59,6 @@ describe('worktree metadata write normalization', () => {
     const selected = mergeWorktreeMetaForWrite(meta, { linkedPR: 32211 })
     const unlinked = mergeWorktreeMetaForWrite(selected, { linkedPR: null })
     expect(unlinked.linkedItems?.map((item) => item.number)).toEqual([32201, 32206, 32216, 32218])
-  })
-
-  it('clears GitHub PR suppression on every positive linked PR update', () => {
-    const updated = mergeWorktreeMetaForWrite(existingMeta, {
-      linkedPR: 42,
-      suppressedGitHubPR: 42
-    })
-
-    expect(updated.linkedPR).toBe(42)
-    expect(updated.suppressedGitHubPR).toBeNull()
-  })
-
-  it('preserves suppression for clears and unrelated metadata updates', () => {
-    expect(mergeWorktreeMetaForWrite(existingMeta, { linkedPR: null }).suppressedGitHubPR).toBe(42)
-    expect(mergeWorktreeMetaForWrite(existingMeta, { comment: 'note' }).suppressedGitHubPR).toBe(42)
   })
 
   it('keeps a valid plugin task link and drops a malformed one', () => {

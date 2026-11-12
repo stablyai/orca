@@ -107,6 +107,9 @@ export type PluginMarketplaceHostListing = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** Estimated listing date (ISO 8601): a community plugin's oldest dated release. Absent for
+   *  official plugins and undated releases. */
+  addedAt?: string
   /** The release record a v2 catalog vouches for; absent for v1 catalogs. */
   release?: PluginCatalogRelease
   /** The offered release's images, verified and cached by main; never hotlinked. */

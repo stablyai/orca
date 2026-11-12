@@ -12,7 +12,7 @@ import { cloneTerminalLayoutSnapshot } from '../terminal/surface/mobile-session-
 import {
   sameStringRecord,
   terminalLayoutNodeEqual
-} from '../../../shared/workspace-layout/terminal-layout-equality'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 
 type HeadlessPaneLayoutEdit = {
   tabId: string

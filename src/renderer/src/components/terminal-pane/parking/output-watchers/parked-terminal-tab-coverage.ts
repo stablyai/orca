@@ -16,7 +16,7 @@ import '../../layout/terminal-layout-leaf-traversal'
 import {
   collectLayoutLeafIdsInOrder,
   resolveRootlessTerminalLayoutLeafId
-} from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
 import { launchAgentTabIds } from './parked-tab-agent-owner-index'
 

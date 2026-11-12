@@ -35,6 +35,8 @@ type MobileNativeChatSendArgs = {
   // Share this deadline across all heal/paste/text or selector writes in one user action.
   deadline?: number
   requireWriteSettlement?: true
+  /** A startup-dialog card's choice: the host refuses it unless its screen still reads as this card. */
+  requireStartupDialog?: string
 }
 
 // Unknown delivery must not be called definite failure; structured queued drafts render as cards, not transcript echoes.
@@ -131,6 +133,9 @@ export async function sendMobileNativeChatMessageWithOutcome(
         text: args.text,
         enter: args.enter ?? true,
         ...(args.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
+        ...(args.requireStartupDialog !== undefined
+          ? { requireStartupDialog: args.requireStartupDialog }
+          : {}),
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
         ...(args.mobileClient ? { client: args.mobileClient } : {})
       },

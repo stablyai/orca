@@ -33,7 +33,7 @@ export async function stopRemoteAttachment(
       lastError: attachment.last_error
     }
   }
-  await archiveWorkerOutputBeforeStop({
+  archiveWorkerOutputBeforeStop({
     runtime,
     db,
     dispatchId: params.dispatchId,

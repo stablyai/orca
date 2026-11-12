@@ -63,7 +63,7 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `images` | [CatalogImages](#catalogimages) | no | 1.4.245 | Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon PNG, WEBP, static, at least 128×128, square, at most 256 KB. Cover PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB. Screenshots PNG, JPEG, WEBP, static, at least 1280×800, at most 1536 KB. Images must not imitate Orca's trust badges. |
 | `themePreview` | [CatalogThemePreview](#catalogthemepreview)[] | no | 1.4.245 | Up to 4 theme palettes for listing art. Display only; the installed theme files decide the real colors. |
 | `contributes` | [CatalogContribution](#catalogcontribution)[] | no | 1.4.245 | What the release adds, as the listing shows it. Generate it with the catalog tooling; Orca refuses an install whose manifest says otherwise. |
-| `capabilities` | (`"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` \| `"tasks:provide"`)[] | no | 1.4.245 | Every capability the release asks for. Orca refuses an install whose manifest asks for different ones. Example: `["notifications:show"]` |
+| `capabilities` | (`"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` \| `"workspace:create"` \| `"automation:read"` \| `"automation:write"` \| `"history:read"` \| `"tasks:provide"`)[] | no | 1.4.245 | Every capability the release asks for. Orca refuses an install whose manifest asks for different ones. Example: `["notifications:show"]` |
 | `fileTypes` | string[] | no | 1.4.245 | Extensions, without the dot, that this release opens. Orca suggests the plugin when such a file has no viewer. |
 | `editorFileTypes` | string[] | no | 1.4.245 | The `fileTypes` this release opens in a custom editor. Orca suggests the plugin for such a file even when it already opens it as text. |
 
@@ -146,12 +146,12 @@ orca://plugins/<publisher>.<id>?catalog=<official | community | catalog Git URL>
 
 - `catalog` defaults to `official`. `community` is Orca's community catalog. Any other value must be an HTTPS or SSH Git URL of at most 512 characters, read at its `main` branch, without a password or token. Orca asks **Add catalog …?** before fetching a catalog the user hasn't added, and that includes `community`.
 - Reserved publishers (above) are accepted only with the official catalog. A link longer than 2048 characters, with another query parameter, or with an id that isn't `<publisher>.<id>` shows a short error and does nothing else. Repeats of the same link within a few seconds are ignored.
-- Browsers and README viewers often block custom schemes, so link to the directory page instead. It opens the `orca://` link and shows install steps when Orca is missing: `https://onorca.dev/plugins/<publisher>.<id>?catalog=<same value>`.
+- Browsers and README viewers often block custom schemes, so link to the directory page instead. It opens the `orca://` link and shows install steps when Orca is missing: `https://orca.dev/plugins/<publisher>.<id>?catalog=<same value>`.
 
 For a README:
 
 ```md
-[Open in Orca](https://onorca.dev/plugins/acme.gleam-syntax?catalog=community)
+[Open in Orca](https://orca.dev/plugins/acme.gleam-syntax?catalog=community)
 ```
 
 ## Clients before format 2
