@@ -16793,6 +16793,14 @@
                     "logins": {
                       "title": "保持登录状态",
                       "body": "把现有登录信息导入 Orca，立即保持登录状态"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 扩展程序",
+                        "body": "从 Chrome 应用商店安装扩展程序，并将其固定在地址栏旁。",
+                        "action": "打开应用商店",
+                        "secondaryAction": "知道了"
+                      }
                     }
                   },
                   "tasks": {
@@ -20898,7 +20906,8 @@
       "remove": "移除…",
       "empty": "此配置文件未启用任何扩展程序",
       "visitWebStore": "访问 Chrome 应用商店",
-      "manage": "管理扩展程序"
+      "manage": "管理扩展程序",
+      "openWebStoreFailed": "无法打开 Chrome 应用商店。"
     },
     "history": {
       "clear": "清除浏览记录",

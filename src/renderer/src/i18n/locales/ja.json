@@ -16505,6 +16505,14 @@
                     "logins": {
                       "title": "ログイン状態を保つ",
                       "body": "既存のログイン情報を Orca に取り込んで、すぐにログイン状態を保ちます。"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 拡張機能",
+                        "body": "Chrome ウェブストアからインストールし、アドレスバーの横に固定できます。",
+                        "action": "ウェブストアを開く",
+                        "secondaryAction": "了解"
+                      }
                     }
                   },
                   "tasks": {
@@ -20577,7 +20585,8 @@
       "remove": "削除…",
       "empty": "このプロファイルで有効な拡張機能はありません",
       "visitWebStore": "Chrome ウェブストアにアクセス",
-      "manage": "拡張機能を管理"
+      "manage": "拡張機能を管理",
+      "openWebStoreFailed": "Chrome ウェブストアを開けませんでした。"
     },
     "viewport": {
       "mobile-s": "モバイル S — 320 × 568",

@@ -449,7 +449,8 @@
       "open": "Открыть",
       "pin": "Закрепить на панели инструментов",
       "unpin": "Открепить от панели инструментов",
-      "visitWebStore": "Открыть Chrome Web Store"
+      "visitWebStore": "Открыть Chrome Web Store",
+      "openWebStoreFailed": "Не удалось открыть Chrome Web Store."
     },
     "history": {
       "clear": "Очистить историю браузера",
@@ -17701,6 +17702,14 @@
                     "logins": {
                       "title": "Сохраните авторизацию на сайтах",
                       "body": "Перенесите существующие сессии входа в Orca, чтобы сразу пользоваться своими учётными записями."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Расширения Chrome",
+                        "body": "Установите расширения из Chrome Web Store и закрепите их рядом с адресной строкой.",
+                        "action": "Открыть Chrome Web Store",
+                        "secondaryAction": "Понятно"
+                      }
                     }
                   },
                   "tasks": {
