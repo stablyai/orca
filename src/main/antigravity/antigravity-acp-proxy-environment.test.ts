@@ -148,7 +148,7 @@ it.each([10, 100])(
   async (count) => {
     const pending = Promise.withResolvers<Awaited<ReturnType<typeof runProcess>>>()
     vi.mocked(runProcess).mockReturnValueOnce(pending.promise)
-    const envs = Array.from({ length: count }, () => ({}) as Record<string, string>)
+    const envs: Record<string, string>[] = Array.from({ length: count }, () => ({}))
     const burst = Promise.all(envs.map((env) => prepareAntigravityAcpProxyEnvironment(env, {})))
     // One host-wide snapshot supplies the entire concurrent burst, independent of its caller count.
     expect(runProcess).toHaveBeenCalledTimes(1)
