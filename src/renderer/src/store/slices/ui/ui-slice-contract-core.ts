@@ -14,7 +14,11 @@ import type { LaunchSource } from '../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
-import type { AutomationRunPageOrigin, AutomationsPageLocation } from './automations-page-location'
+import type {
+  AutomationRunPageOrigin,
+  AutomationsPageLocation,
+  AutomationsPageVisitMode
+} from './automations-page-location'
 
 /** Open an automation (runId null) or one of its runs once its host's list has loaded. */
 export type PendingAutomationRunNavigation = {
@@ -200,6 +204,9 @@ export type UISliceCore = {
   setAutomationsPageLocationRequest: (location: AutomationsPageLocation | null) => void
   /** Record a settled Automations sub-page in back/forward history. */
   recordAutomationsPageVisit: (location: AutomationsPageLocation) => void
+  /** How the next recorded sub-page enters history; consumed by the next record. */
+  automationsPageNextVisitMode: AutomationsPageVisitMode
+  setAutomationsPageNextVisitMode: (mode: AutomationsPageVisitMode) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
   openSpacePage: () => void

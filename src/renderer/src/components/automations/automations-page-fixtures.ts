@@ -278,6 +278,8 @@ export function makeStoreState(): AutomationsPageStoreFixtures {
       automationsPageLocationRequest: null,
       setAutomationsPageLocationRequest: noop,
       recordAutomationsPageVisit: noop,
+      automationsPageNextVisitMode: 'push',
+      setAutomationsPageNextVisitMode: noop,
       hydratePersistedUI: noop,
       recordFeatureInteraction: noop,
       allWorktrees: () => [worktree],

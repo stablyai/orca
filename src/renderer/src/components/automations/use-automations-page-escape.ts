@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useAppStore } from '@/store/index'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
@@ -64,6 +65,9 @@ export function useAutomationsPageEscape({
       }
 
       event.preventDefault()
+      // Why: Escape goes to the parent page; when that is the previous history entry, step
+      // back to it rather than adding a new one, so Forward still returns here.
+      useAppStore.getState().setAutomationsPageNextVisitMode('return')
       // Escape undoes the last step: a run returns where it was opened from.
       if (pageView === 'run') {
         if (runNotFound) {

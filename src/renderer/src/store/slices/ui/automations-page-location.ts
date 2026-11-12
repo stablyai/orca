@@ -19,6 +19,9 @@ export type AutomationsPageLocation =
     }
   | { page: 'external'; externalKey: string }
 
+/** How the next recorded sub-page enters history: a new step, or a step back to its parent. */
+export type AutomationsPageVisitMode = 'push' | 'return'
+
 /** Identity for de-duplication; the run origin is how the user got there, not where they are. */
 export function automationsPageLocationKey(location: AutomationsPageLocation): string {
   switch (location.page) {

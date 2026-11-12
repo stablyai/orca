@@ -27,10 +27,16 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     recordAutomationsPageVisit: (location) => {
       // Why: replaying an entry must not record it again and truncate the forward stack.
       if (get().isNavigatingHistory) {
+        set({ automationsPageNextVisitMode: 'push' })
         return
       }
-      set((state) => appendAutomationsPageEntry(state, location))
+      set((state) => ({
+        ...appendAutomationsPageEntry(state, location, state.automationsPageNextVisitMode),
+        automationsPageNextVisitMode: 'push'
+      }))
     },
+    automationsPageNextVisitMode: 'push',
+    setAutomationsPageNextVisitMode: (mode) => set({ automationsPageNextVisitMode: mode }),
     openAutomationsPage: () => {
       const state = get()
       // Why: an open page already recorded its sub-page; a second sentinel would be a dead Back step.
@@ -40,6 +46,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       ) {
         state.recordViewVisit('automations')
       }
+      set({ automationsPageNextVisitMode: 'push' })
       set((state) => ({
         activeView: 'automations',
         previousViewBeforeAutomations:

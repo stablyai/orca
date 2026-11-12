@@ -72,6 +72,26 @@ describe('automations page history', () => {
     expect(next).toBe(s)
   })
 
+  it('Escape to the previous entry steps back and keeps the left page as Forward', () => {
+    const next = appendAutomationsPageEntry(
+      { worktreeNavHistory: ['skills', page(detail), page(run)], worktreeNavHistoryIndex: 2 },
+      detail,
+      'return'
+    )
+    expect(next.worktreeNavHistory).toEqual(['skills', page(detail), page(run)])
+    expect(next.worktreeNavHistoryIndex).toBe(1)
+  })
+
+  it('Escape to a parent that is not the previous entry appends it', () => {
+    const next = appendAutomationsPageEntry(
+      { worktreeNavHistory: ['skills', page(run)], worktreeNavHistoryIndex: 1 },
+      detail,
+      'return'
+    )
+    expect(next.worktreeNavHistory).toEqual(['skills', page(run), page(detail)])
+    expect(next.worktreeNavHistoryIndex).toBe(2)
+  })
+
   it('keys locations by host so same-id automations on two hosts stay distinct', () => {
     expect(automationsPageLocationKey(detail)).not.toBe(
       automationsPageLocationKey({ ...detail, hostId: 'runtime:env-1' })
