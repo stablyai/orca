@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { extractAllOscTitles } from '../../shared/osc-title-extraction'
-import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
+import { extractAllOscTitles } from '../../shared/agent-status/title/osc-title-extraction'
+import { readRuntimeFixture } from './terminal/wait/agent-transcript-replay-test-harness'
 
 describe('Kiro titles from captured terminal bytes', () => {
   it('sets OSC titles only before its first paint, never through a turn', () => {

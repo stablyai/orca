@@ -8,21 +8,31 @@ import {
 } from './terminal-subscribe-json-and-lease'
 import type { TerminalSubscriptionArgs } from './terminal-subscribe-types'
 import { registerTerminalSubscription } from './terminal-subscription-registration'
+import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-telemetry'
 
 export const TERMINAL_SUBSCRIBE_METHODS = [
-  // Streams live terminal output over WebSocket; mobile clients pass client+viewport for server-side auto-fit.
   defineStreamingMethod({
     name: 'terminal.subscribe',
     permission: 'workspace',
     params: TerminalSubscribe,
     handler: async (
       params,
-      { runtime, connectionId, requestId, sendBinary, registerBinaryStreamHandler, signal },
+      {
+        runtime,
+        connectionId,
+        requestId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal,
+        clientKind,
+        pairedDeviceId,
+        clientId: viewerDeviceId
+      },
       emit
     ) => {
       const isMobile = params.client?.type === 'mobile'
       const useBinaryStream = params.capabilities?.terminalBinaryStream === 1 && Boolean(sendBinary)
-      // Why: validated before registering, so a request that can never stream can't evict the slot's live stream.
+      // Validate before registration so impossible requests cannot evict a live stream.
       if (isMobile && !useBinaryStream) {
         throw new Error('binary_terminal_stream_required')
       }
@@ -35,8 +45,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
         : 0
       let rendererMountRequestedBeforePty = false
       const clientId = params.client?.id
-      // Why: register before the pty wait so an unsubscribe, a same-slot replacement or a closed socket can end a pending stream.
-      // Client-scoped keys also let a hidden watcher and a visible pane subscribe to one terminal.
+      // Register before PTY wait so unsubscribe, replacement and socket close cancel it; client-scoped keys allow sibling watchers.
       const registration = registerTerminalSubscription({
         runtime,
         subscriptionId: clientId ? `${params.terminal}:${clientId}` : params.terminal,
@@ -55,6 +64,10 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
             return
           }
           leaf = { ptyId }
+        }
+        if (isMobile && leaf?.ptyId) {
+          // Opening a terminal counts as workspace use for cleanup.
+          runtime.sidebarFacts?.terminalUse.noteTerminalUse(leaf.ptyId, Date.now())
         }
         if (!leaf?.ptyId) {
           const read = await runtime.readTerminal(params.terminal)
@@ -87,9 +100,21 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           emit,
           ptyId,
           clientId,
+          viewerDeviceId,
+          pairedDeviceId,
           isMobile,
           supportsDesktopViewportClaims: params.capabilities?.desktopViewportClaims === 1,
           supportsWriteUnavailable: params.capabilities?.writeUnavailable === 1,
+          // Only a full stream that published its snapshot counts; the lease under a chat view never does.
+          onEstablished: () =>
+            recordMobileViewOpened(
+              { clientKind, pairedDeviceId },
+              {
+                surface: 'terminal',
+                viewKey: `terminal:${ptyId}`,
+                agent: () => runtime.getPaneTerminalAgent(ptyId)
+              }
+            ),
           rendererMountRequestedBeforePty,
           missingHeadlessStateBeforeMobileFit,
           serializerGenerationBeforeMobileFit: missingHeadlessStateBeforeMobileFit
@@ -108,7 +133,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
         }
         await runTerminalBinarySubscription(args)
       } catch (error) {
-        // Why: a released stream already sent `end`; an error frame after it would contradict it.
+        // Release already sent end; a later error would contradict it.
         if (registration.released) {
           return
         }

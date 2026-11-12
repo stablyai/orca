@@ -1,55 +1,56 @@
 import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'react'
-import { useWorktreeGitOwnerTarget } from '../worktree-git-owner-target'
-import { useAppStore, type AppState } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { useChecksPanelTerminalWorktree } from '../use-checks-panel-terminal-worktree'
-import { getConnectionId } from '@/lib/connection-context'
-import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { useWorktreeGitOwnerTarget } from '../source-control/sync/worktree-git-owner-target'
+import { useWorktreeGitCopyHostId } from '@/lib/workspace/ownership/worktree-git-copy'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { selectReviewRepositoryForWorkspace } from '@/store/slices/hosted-review/workspace-review-repository'
+import { useChecksPanelTerminalWorktree } from './refresh/use-checks-panel-terminal-worktree'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { readDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/git-identity-display'
-import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/project-execution-runtime'
-import {
-  saveSourceControlActionRecipe,
-  type SourceControlAiWriteTarget
-} from '../../../../../shared/source-control-ai-recipe-save'
+import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/execution-host/project-runtime-preference'
+import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import { saveSourceControlAiActionRecipeForTarget } from '../source-control/ai/recipe-persistence'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'
 import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
-import type { PRCommentsListSelectionClearRequest } from '../pr-comments-list-selection'
+import type { PRCommentsListSelectionClearRequest } from './comments/pr-comments-list-selection'
 import {
   buildChecksPanelGitStatusContextKey,
   type ChecksPanelGitStatusSnapshot
-} from '../checks-panel-git-status-snapshot'
+} from './refresh/checks-panel-git-status-snapshot'
 import type { ChecksAgentComposerState, HostedReviewCreationSnapshot } from './panel-state-types'
 
 export function useChecksPanelControllerState() {
-  // Why: the sidebar stays mounted when closed (perf); gate polling on visibility so we don't fetch checks/comments or poll cwd while hidden.
+  // The sidebar remains mounted while closed; stop hidden checks/comments/cwd polling.
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
 
-  // Follow the active terminal's cwd so linked-PR/checks track the worktree it's operating in (e.g. across a stack), else the sidebar selection.
+  // Follow terminal cwd across worktrees/stacks, falling back to sidebar selection.
   const defaultActiveWorktree = useActiveWorktree()
   const { worktree: activeWorktree } = useChecksPanelTerminalWorktree({
     defaultActiveWorktree,
     isPanelVisible
   })
   const activeWorktreeId = activeWorktree?.id ?? null
-  const repo = useRepoById(activeWorktree?.repoId ?? null)
+  const repo = useAppStore((s) => selectReviewRepositoryForWorkspace(s, activeWorktree))
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? repo?.connectionId ?? null)
     : null
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -91,12 +92,18 @@ export function useChecksPanelControllerState() {
   )
 
   const [checks, setChecksState] = useState<PRCheckDetail[]>([])
-  // Why: a failed read keeps its own state so the list says so instead of "No checks configured".
+  // The GitLab parent pipeline from the same reply as its jobs; every other checks write clears it.
+  const [gitLabPipelineCheck, setGitLabPipelineCheck] = useState<PRCheckDetail | null>(null)
+  // Distinguish failed reads from No checks configured.
   const [checksError, setChecksError] = useState<string | null>(null)
-  const setChecks = useCallback((next: SetStateAction<PRCheckDetail[]>) => {
-    setChecksError(null)
-    setChecksState(next)
-  }, [])
+  const setChecks = useCallback(
+    (next: SetStateAction<PRCheckDetail[]>, pipelineCheck: PRCheckDetail | null = null) => {
+      setChecksError(null)
+      setChecksState(next)
+      setGitLabPipelineCheck(pipelineCheck)
+    },
+    []
+  )
   const [checksLoading, setChecksLoading] = useState(false)
   const [comments, setCommentsState] = useState<PRComment[]>([])
   const [commentsError, setCommentsError] = useState<string | null>(null)
@@ -123,17 +130,16 @@ export function useChecksPanelControllerState() {
   const [agentComposerState, setAgentComposerState] = useState<ChecksAgentComposerState | null>(
     null
   )
-  // Why: submit-after-ready outlives dialog close; keep the payload until launch is accepted.
+  // Submit-after-ready outlives dialog close; retain the payload until launch acceptance.
   const pendingCommentResolutionRef = useRef<NonNullable<
     ChecksAgentComposerState['commentResolution']
   > | null>(null)
-  // Why: an accepted launch parks its payload here so panel churn cannot drop it while
-  // submit-after-ready is still running; nothing is posted until delivery succeeds.
+  // Park accepted payloads through panel churn; posting still waits for successful prompt delivery.
   const claimedCommentResolutionRef = useRef<NonNullable<
     ChecksAgentComposerState['commentResolution']
   > | null>(null)
   const commentResolutionLaunchAcceptedRef = useRef(false)
-  // Why: a second launch while the first ack is still landing would double-post fixing replies.
+  // Block duplicate fixing replies while the first launch/ack is pending.
   const [commentResolutionAckBusy, setCommentResolutionAckBusy] = useState(false)
   const commentResolutionAckBusyRef = useRef(false)
   const setCommentResolutionAckBusyNow = useCallback((busy: boolean): void => {
@@ -142,7 +148,7 @@ export function useChecksPanelControllerState() {
   }, [])
   const [hostedReviewCreationSnapshot, setHostedReviewCreationSnapshot] =
     useState<HostedReviewCreationSnapshot | null>(null)
-  // Sticky record of the latest hard refresh error so Create can't flap back until a qualifying eligibility request clears it.
+  // Retain hard errors until qualifying eligibility clears them so retries cannot reenable Create.
   const [hardRefreshError, setHardRefreshError] = useState<{
     observedAt: number
     errorType: PRRefreshErrorType
@@ -151,12 +157,12 @@ export function useChecksPanelControllerState() {
   const [gitStatusSnapshot, setGitStatusSnapshot] = useState<ChecksPanelGitStatusSnapshot | null>(
     null
   )
-  // Context key whose git-status probe failed with no snapshot, so the empty state can distinguish "checking branch status" from "could not check".
+  // Name failed snapshot probes so the empty state cannot remain Checking branch status indefinitely.
   const [gitStatusProbeErrorContextKey, setGitStatusProbeErrorContextKey] = useState<string | null>(
     null
   )
   const [gitStatusRefreshNonce, setGitStatusRefreshNonce] = useState(0)
-  // Bumped by manual Retry/Refresh so eligibility re-runs even when Git state is unchanged (e.g. an auth fix must still clear the hard error).
+  // Manual retry must rerun eligibility even without Git changes, for example after fixing authentication.
   const [eligibilityRefreshNonce, setEligibilityRefreshNonce] = useState(0)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -167,8 +173,7 @@ export function useChecksPanelControllerState() {
   const mountedRef = useMountedRef()
   const confirm = useConfirmationDialog()
   const prevChecksRef = useRef<string>('')
-  // Why: a fork MR's pipeline lives in the source project, so job traces must be
-  // fetched against the MR's own project rather than this repo's default remote.
+  // Fork MR pipelines live in the source project; fetch job traces from the MR project rather than the repo remote.
   const gitLabProjectRefRef = useRef<GitLabProjectRef | null>(null)
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
   commentsRef.current = comments
@@ -185,29 +190,16 @@ export function useChecksPanelControllerState() {
       actionId: SourceControlLaunchActionId,
       recipe: SourceControlActionRecipe
     ): Promise<void> => {
-      const state = useAppStore.getState()
-      const latestSettings = state.settings
-      if (!latestSettings) {
-        throw new Error('Settings are not loaded.')
-      }
-      const latestRepo =
-        target.type === 'repo'
-          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
-          : null
-      const result = saveSourceControlActionRecipe({
+      await saveSourceControlAiActionRecipeForTarget({
+        getStoreState: useAppStore.getState,
+        updateSettings: updateSettingsOrThrow,
+        updateRepo,
         target,
-        settings: latestSettings,
-        repo: latestRepo,
         actionId,
         recipe
       })
-      if ('sourceControlAi' in result) {
-        await updateSettings({ sourceControlAi: result.sourceControlAi })
-        return
-      }
-      await updateRepo(result.target.repoId, result.update)
     },
-    [updateRepo, updateSettings]
+    [updateRepo, updateSettingsOrThrow]
   )
   const asyncResultKeyRef = useRef<string>('')
   const refreshRequestKeyRef = useRef<string | null>(null)
@@ -218,15 +210,13 @@ export function useChecksPanelControllerState() {
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const activeWorktreePath = activeWorktree?.path ?? null
   const activeWorktreePushTarget = activeWorktree?.pushTarget ?? null
-  const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
-    connectionId: activeConnectionId,
-    worktreePath: activeWorktreePath,
-    projectRuntime: activeConnectionId
-      ? undefined
-      : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
-  })
+  // Quote for the workspace owner's OS, where the agent actually runs (#27971).
+  const activeSourceControlLaunchPlatform =
+    activeWorktree && repo
+      ? resolveRepoWorktreeLaunchPlatform(useAppStore.getState(), repo, activeWorktree)
+      : undefined
   const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
   const ownerSettings = useMemo<AppState['settings']>(
     () =>
@@ -237,10 +227,11 @@ export function useChecksPanelControllerState() {
           : { ...settings, activeRuntimeEnvironmentId: null },
     [runtimeEnvironmentId, settings]
   )
-  // Why: git calls route by the worktree's owner rows, never the focused server.
+  // Route Git by workspace ownership rather than focused server.
   const ownerTarget = useWorktreeGitOwnerTarget(activeWorktreeId)
+  const ownerCopyHostId = useWorktreeGitCopyHostId(activeWorktreeId)
   const repoConnectionId = repo?.connectionId?.trim() || null
-  // Local execution host variant (wsl:{distro} vs host); applies only when local — remote contexts are scoped by runtimeEnvironmentId/connectionId.
+  // Separate local host/WSL distros; remote IDs already scope SSH/runtime contexts.
   const localExecutionScope = useMemo<string | null>(() => {
     if (runtimeEnvironmentId != null || repoConnectionId != null) {
       return null
@@ -307,6 +298,7 @@ export function useChecksPanelControllerState() {
     resolveReviewThread,
     detectedAgentIds,
     checks,
+    gitLabPipelineCheck,
     setChecks,
     checksLoading,
     setChecksLoading,
@@ -393,6 +385,7 @@ export function useChecksPanelControllerState() {
     runtimeEnvironmentId,
     ownerSettings,
     ownerTarget,
+    ownerCopyHostId,
     repoConnectionId,
     localExecutionScope,
     sshConnectionStatus,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import * as mainProtocol from '../main/ssh/relay-protocol'
+import * as mainProtocol from '../main/ssh/protocol/remote-frame-protocol'
 import {
   HEADER_LENGTH,
   MAX_MESSAGE_SIZE,

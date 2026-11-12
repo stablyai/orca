@@ -33,8 +33,7 @@ function requestEditorHotExitBackup(eventTarget: EventTarget): Promise<void> {
       })
     )
 
-    // Why: restart paths can run before the editor autosave controller mounts.
-    // With no claimant, there are no renderer-owned dirty buffers to back up.
+    // Before autosave mounts, no claimant means no renderer-owned dirty buffers to back up.
     if (!claimed) {
       resolve()
     }
@@ -67,8 +66,7 @@ export async function prepareRendererForAppRestart(
       )
     }
     if (checkpointFailed) {
-      // Why: the guard publishes the swallowed persist error out-of-band; naming it
-      // here is the only way the update-error dialog can say what actually failed.
+      // The guard swallows persist errors; its out-of-band reason gives the update dialog the actual cause.
       const reason = consumeShutdownCheckpointFailureReason()
       throw new Error(
         reason
@@ -76,12 +74,10 @@ export async function prepareRendererForAppRestart(
           : 'Renderer shutdown checkpoint was not completed.'
       )
     }
-    // Why: the checkpoint only stages synchronously. Navigating before that
-    // write lands loses the session snapshot to a crash or power loss.
+    // Await durability: synchronous checkpoint staging alone cannot survive a crash or power loss.
     await awaitCheckpoint()
   } catch (error) {
-    // A checkpoint failure ends the current restart without abandoning the
-    // retry-then-degrade budget that the next user attempt must consume.
+    // Preserve the retry-then-degrade budget for the next user restart attempt.
     eventTarget.dispatchEvent(
       new Event(
         checkpointFailed ? ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT : abortedEventName
@@ -116,8 +112,7 @@ export function createUpdaterQuitAbortRelay(
     },
     abort,
     handleStatus(status): void {
-      // Why: quitAndInstall IPC resolves after scheduling; a later updater
-      // error is the authoritative signal that the app will remain open.
+      // quitAndInstall only schedules work; a later updater error means the app remains open.
       if (status.state === 'error') {
         abort()
       }

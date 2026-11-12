@@ -1,10 +1,40 @@
 {
   "name": "@orca-cloud/push-contract",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./device-registration-messages": {
+      "types": "./dist/device-registration-messages.d.ts",
+      "default": "./dist/device-registration-messages.js"
+    },
+    "./host-auth-messages": {
+      "types": "./dist/host-auth-messages.d.ts",
+      "default": "./dist/host-auth-messages.js"
+    },
+    "./push-host-proof-transcript": {
+      "types": "./dist/push-host-proof-transcript.d.ts",
+      "default": "./dist/push-host-proof-transcript.js"
+    },
+    "./push-limits": {
+      "types": "./dist/push-limits.d.ts",
+      "default": "./dist/push-limits.js"
+    },
+    "./send-messages": {
+      "types": "./dist/send-messages.d.ts",
+      "default": "./dist/send-messages.js"
+    },
+    "./wire-scalars": {
+      "types": "./dist/wire-scalars.d.ts",
+      "default": "./dist/wire-scalars.js"
+    }
+  },
   "scripts": {
     "build": "pnpm clean && tsc -p tsconfig.build.json",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
@@ -13,11 +43,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^24.19.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
   }
 }

@@ -1,11 +1,24 @@
-import { OrcaRuntimeWithVisibleSnapshotPreview } from './terminal-visible-state'
-import type { TerminalOscLinkRange } from '../../../../shared/terminal-osc-link-ranges'
-import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kitty-keyboard-flags'
-import type { OrchestrationCompatibilitySshAttachmentAuthority } from '../../runtime-terminal-contracts'
+import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
+import { OrcaRuntimeWithRestoredAgentDialogScreen } from './restored-agent-dialog-screen'
+import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
+import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
+import type {
+  OrchestrationCompatibilitySshAttachmentAuthority,
+  OrchestrationCompatibilitySshTerminal
+} from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import { randomUUID } from 'node:crypto'
+import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
 
-export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithVisibleSnapshotPreview {
-  protected abstract getLeafKey(tabId: string, leafId: string): string
+export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithRestoredAgentDialogScreen {
+  /** Keyed by the attachment that carries each one, so releasing it forgets the terminal. */
+  protected readonly orchestrationCompatibilitySshTerminals = new Map<
+    string,
+    OrchestrationCompatibilitySshTerminal
+  >()
+  private readonly headlessExitHolds = new Map<
+    string,
+    { count: number; exited: RuntimeHeadlessTerminal | null }
+  >()
 
   protected async serializeHeadlessTerminalBuffer(
     ptyId: string,
@@ -23,12 +36,15 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     scrollbackAnsi?: string
     kittyKeyboardFlags?: number
     terminalOwner?: 'shell'
-    // Why: dangling mid-escape tail the restorer must write LAST, after any
-    // reset, so the next live chunk completes it instead of rendering it
-    // literally (Bug E / #7329).
+    // Restore dangling escapes last, after resets, so the next live chunk completes them (#7329).
     pendingEscapeTailAnsi?: string
   } | null> {
-    const state = this.headlessTerminals.get(ptyId)
+    // An exited PTY's held model answers only while no live PTY has taken its id.
+    const state =
+      this.headlessTerminals.get(ptyId) ??
+      (this.ptysById.get(ptyId)?.connected === true
+        ? undefined
+        : this.headlessExitHolds.get(ptyId)?.exited)
     if (!state) {
       return null
     }
@@ -52,9 +68,7 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
           source: 'headless' as const,
           oscLinks: snapshot.oscLinks,
           scrollbackAnsi: snapshot.scrollbackAnsi,
-          // Why beside outputSequence and never re-read later: the flags must
-          // describe the same stream position as the image, or replay would
-          // apply push/pop transitions twice or out of order.
+          // Capture flags at the image's stream position to prevent duplicate/out-of-order replay pushes and pops.
           ...(parseTerminalKittyKeyboardFlags(snapshot.modes?.kittyKeyboardFlags) !== undefined
             ? { kittyKeyboardFlags: snapshot.modes.kittyKeyboardFlags }
             : {}),
@@ -62,16 +76,50 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
             ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
             : {}),
           ...(terminalOwner ? { terminalOwner } : {}),
-          // Why: lets the renderer skip the destructive scrollback clear when
-          // restoring an alt-screen snapshot — clearing wipes xterm's own
-          // history that the TUI relies on for scroll-up after a tab return.
+          // Alt snapshots must preserve xterm history used for TUI scroll-up after tab return.
           alternateScreen: snapshot.modes?.alternateScreen ?? state.emulator.isAlternateScreen,
-          // Why NOT folded into data: the renderer writes its post-replay
-          // reset after data, and any ESC after a dangling partial aborts it.
-          // The restorer writes this last (Bug E fix).
+          // Do not fold into data: the restorer's later reset would abort this partial escape.
           pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi
         })
       : null
+  }
+
+  /** Keeps the PTY's model readable through its exit until released, so a stream mid-publication can still serialize it. */
+  holdHeadlessTerminalThroughExit(ptyId: string): () => void {
+    const hold = this.headlessExitHolds.get(ptyId) ?? { count: 0, exited: null }
+    this.headlessExitHolds.set(ptyId, hold)
+    hold.count += 1
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      hold.count -= 1
+      if (hold.count > 0) {
+        return
+      }
+      this.headlessExitHolds.delete(ptyId)
+      if (hold.exited) {
+        disposeHeadlessEmulator(hold.exited)
+      }
+    }
+  }
+
+  protected disposeHeadlessTerminalOnExit(ptyId: string): void {
+    const hold = this.headlessExitHolds.get(ptyId)
+    const state = this.headlessTerminals.get(ptyId)
+    if (!hold || !state) {
+      this.disposeHeadlessTerminal(ptyId)
+      return
+    }
+    this.headlessHydrationState.delete(ptyId)
+    // Out of the live map, so a same-id PTY starts fresh; the last hold's release disposes the emulator.
+    this.detachHeadlessTerminal(ptyId, state)
+    if (hold.exited) {
+      disposeHeadlessEmulator(hold.exited)
+    }
+    hold.exited = state
   }
 
   protected disposeHeadlessTerminal(ptyId: string): void {
@@ -80,13 +128,15 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     if (!state) {
       return
     }
+    this.detachHeadlessTerminal(ptyId, state)
+    disposeHeadlessEmulator(state)
+  }
+
+  private detachHeadlessTerminal(ptyId: string, state: RuntimeHeadlessTerminal): void {
     this.headlessTerminals.delete(ptyId)
-    // Why: queued chain links still parse below before the emulator disposes;
-    // sever the reply sink now so they cannot write to a respawned PTY that
-    // reused this id (belt to the sink's state-identity check).
+    // Sever reply forwarding before queued writes finish so reused PTY ids cannot receive stale replies.
     state.emulator.disableQueryReplyForwarding()
     state.ownership.dispose()
-    state.writeChain.finally(() => state.emulator.dispose()).catch(() => state.emulator.dispose())
   }
 
   resolveLeafForHandle(handle: string): { ptyId: string | null } | null {
@@ -104,15 +154,13 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     return { ptyId: leaf.ptyId }
   }
 
-  // Why: remote clients hold handles across transport reconnects. A handle
-  // minted for a concrete PTY must never silently adopt a different PTY that
-  // later occupies the same pane — that misroutes keystrokes (#7718). Handles
-  // still awaiting their first PTY (ptyId null) may adopt it, which preserves
-  // the mobile pre-spawn subscribe flow.
-  resolveLiveLeafForHandle(handle: string): { ptyId: string | null } | null {
-    // Why the discarded call: it re-links a runtime-owned handle whose `handles` record a renderer
-    // reload cleared, so the lookup below sees it; without it a phone's held handle inspects nothing.
-    this.getLivePtyForHandle(handle)
+  // Concrete-PTY handles cannot adopt later pane occupants; only pre-spawn handles may bind their first PTY (#7718).
+  resolveLiveLeafForHandle(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): { ptyId: string | null } | null {
+    // Repair runtime-owned handles cleared by renderer reload before reading their records.
+    this.getLivePtyForHandle(handle, context)
     const record = this.handles.get(handle)
     if (!record) {
       return null
@@ -139,7 +187,8 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
 
   registerOrchestrationCompatibilitySshAttachment(
     targetId: string,
-    connectionIncarnation: string
+    connectionIncarnation: string,
+    terminal?: OrchestrationCompatibilitySshTerminal
   ): OrchestrationCompatibilitySshAttachmentAuthority {
     const authority = Object.freeze({
       kind: 'ssh' as const,
@@ -148,10 +197,60 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
       attachmentId: randomUUID()
     })
     this.orchestrationCompatibilitySshAttachments.set(authority.attachmentId, authority)
+    if (terminal) {
+      this.orchestrationCompatibilitySshTerminals.set(
+        authority.attachmentId,
+        Object.freeze({ ...terminal })
+      )
+    }
+    if (terminal) {
+      this.crewChanges.notify()
+    }
     return authority
   }
 
   releaseOrchestrationCompatibilitySshAttachment(attachmentId: string): void {
     this.orchestrationCompatibilitySshAttachments.delete(attachmentId)
+    if (this.orchestrationCompatibilitySshTerminals.delete(attachmentId)) {
+      this.crewChanges.notify()
+    }
   }
+
+  /**
+   * Only while an attachment holds it, and only for a handle this runtime does not host. Two hosts
+   * claiming one handle name nobody: neither may borrow the other's pane or process.
+   */
+  protected getOrchestrationCompatibilitySshTerminal(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): OrchestrationCompatibilitySshTerminal | undefined {
+    let found: { targetId: string; terminal: OrchestrationCompatibilitySshTerminal } | undefined
+    const candidates = context
+      ? context.sshAttachmentIds(handle)
+      : this.orchestrationCompatibilitySshTerminals.keys()
+    for (const attachmentId of candidates) {
+      const terminal = this.orchestrationCompatibilitySshTerminals.get(attachmentId)
+      if (!terminal) {
+        continue
+      }
+      const targetId = this.orchestrationCompatibilitySshAttachments.get(attachmentId)?.targetId
+      if (terminal.handle !== handle || !targetId) {
+        continue
+      }
+      if (
+        found &&
+        (found.targetId !== targetId ||
+          found.terminal.paneKey !== terminal.paneKey ||
+          found.terminal.processIncarnation !== terminal.processIncarnation)
+      ) {
+        return undefined
+      }
+      found = { targetId, terminal }
+    }
+    return found?.terminal
+  }
+}
+
+function disposeHeadlessEmulator(state: RuntimeHeadlessTerminal): void {
+  state.writeChain.finally(() => state.emulator.dispose()).catch(() => state.emulator.dispose())
 }

@@ -1,27 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ArrowUpRight, Plus, Save, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getRepositoryLocalCommandsSectionId } from '../settings/repository-settings-targets'
+import { getRepositoryLocalCommandsSectionId } from '../settings/repository/repository-settings-targets'
 import {
   requestContextualTourWhenReady,
   type RequestContextualTourWhenReadyArgs
 } from '../contextual-tours/request-contextual-tour-when-ready'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
-export const SETUP_GUIDE_PROJECT_PROMPT = "First add a project you'd like to work on."
+export function setupGuideProjectPrompt(): string {
+  return translate(
+    'auto.components.feature.wall.FeatureWallSetupWorkflowActions.addProjectFirst',
+    "First add a project you'd like to work on."
+  )
+}
 
 export function promptForSetupGuideProject(openModal: (modal: 'add-repo') => void): void {
   openModal('add-repo')
-  toast.message(SETUP_GUIDE_PROJECT_PROMPT)
+  toast.message(setupGuideProjectPrompt())
 }
 
 export function getSetupGuideGitRepo(
@@ -35,19 +41,18 @@ export function getSetupGuideGitRepo(
 }
 
 export function AddReposAction(): React.JSX.Element {
+  const t = useTranslate()
   const openModal = useAppStore((s) => s.openModal)
   return (
     <Button type="button" size="sm" className="w-fit gap-2" onClick={() => openModal('add-repo')}>
       <Plus className="size-3.5" />
-      {translate(
-        'auto.components.feature.wall.FeatureWallSetupWorkflowActions.522cce9e33',
-        'Add project'
-      )}
+      {t('auto.components.feature.wall.FeatureWallSetupWorkflowActions.522cce9e33', 'Add project')}
     </Button>
   )
 }
 
 export function WorkspacesAction(props: { done: boolean }): React.JSX.Element | null {
+  const t = useTranslate()
   const openModal = useAppStore((s) => s.openModal)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const repos = useAppStore((s) => s.repos)
@@ -83,15 +88,13 @@ export function WorkspacesAction(props: { done: boolean }): React.JSX.Element | 
       }}
     >
       <ArrowUpRight className="size-3.5" />
-      {translate(
-        'auto.components.feature.wall.FeatureWallSetupWorkflowActions.f0bbf7da77',
-        'Try it out'
-      )}
+      {t('auto.components.feature.wall.FeatureWallSetupWorkflowActions.f0bbf7da77', 'Try it out')}
     </Button>
   )
 }
 
 export function SetupScriptAction(): React.JSX.Element {
+  const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -103,13 +106,11 @@ export function SetupScriptAction(): React.JSX.Element {
   const canConfigure = repo !== null
   const [setupScript, setSetupScript] = useState('pnpm install')
 
-  useEffect(() => {
-    if (!canConfigure) {
-      setSetupScript('pnpm install')
-      return
-    }
-    setSetupScript(repo.hookSettings?.scripts?.setup?.trim() || 'pnpm install')
-  }, [canConfigure, repo])
+  const [seededFromRepo, setSeededFromRepo] = useState<typeof repo | undefined>(undefined)
+  if (seededFromRepo !== repo) {
+    setSeededFromRepo(repo)
+    setSetupScript(repo?.hookSettings?.scripts?.setup?.trim() || 'pnpm install')
+  }
 
   const openLocalCommandSettings = useCallback(() => {
     if (!repo || !isGitRepoKind(repo)) {
@@ -166,7 +167,7 @@ export function SetupScriptAction(): React.JSX.Element {
     return (
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.feature.wall.FeatureWallSetupWorkflowActions.486c2f4d8d',
             'Add a git project first, then configure the setup script for that repository.'
           )}
@@ -182,11 +183,11 @@ export function SetupScriptAction(): React.JSX.Element {
         <Input
           value={setupScript}
           onChange={(event) => setSetupScript(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.feature.wall.FeatureWallSetupWorkflowActions.5c5b65044e',
             'pnpm install'
           )}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.feature.wall.FeatureWallSetupWorkflowActions.88469e926b',
             'Setup script'
           )}
@@ -200,10 +201,7 @@ export function SetupScriptAction(): React.JSX.Element {
           onClick={() => void handleSaveSetupScript()}
         >
           <Save className="size-3.5" />
-          {translate(
-            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.14327073cc',
-            'Save'
-          )}
+          {t('auto.components.feature.wall.FeatureWallSetupWorkflowActions.14327073cc', 'Save')}
         </Button>
       </div>
       <Button
@@ -214,7 +212,7 @@ export function SetupScriptAction(): React.JSX.Element {
         onClick={openLocalCommandSettings}
       >
         <Settings className="size-3.5" />
-        {translate(
+        {t(
           'auto.components.feature.wall.FeatureWallSetupWorkflowActions.00078a6134',
           'View in settings'
         )}

@@ -1,44 +1,54 @@
 import React, { useMemo } from 'react'
-import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
+import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
-// Why: raw digits, not the grouped display string — screen readers announce
-// "8,259" as two numbers in several locales.
-function buildAccessibleLabel(added: number, removed: number): string {
+// Use raw digits for accessibility; some screen-reader locales split grouped numbers into separate values.
+function buildAccessibleLabel(added: number, removed: number, t: Translate = translate): string {
   if (added > 0 && removed > 0) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.source.control.branch.line.total.chip.daa8e8e59b',
       '{{value0}} lines added, {{value1}} lines deleted',
       { value0: added, value1: removed }
     )
   }
   if (added > 0) {
-    return translate(
+    return t(
       'auto.components.right.sidebar.source.control.branch.line.total.chip.8a9b97b666',
       '{{value0}} lines added',
       { value0: added }
     )
   }
-  return translate(
+  return t(
     'auto.components.right.sidebar.source.control.branch.line.total.chip.52c366d88d',
     '{{value0}} lines deleted',
     { value0: removed }
   )
 }
 
-// The chip takes no focus; the split still reaches assistive tech through the
-// label rather than the hover-only panel.
-function appendTestSplitToLabel(label: string, testAdded: number, testRemoved: number): string {
-  return translate(
+// Expose the split in the label because the unfocusable chip's hover panel is inaccessible to keyboard users.
+function appendTestSplitToLabel(
+  label: string,
+  testAdded: number,
+  testRemoved: number,
+  t: Translate = translate
+): string {
+  return t(
     'auto.components.right.sidebar.source.control.branch.line.total.chip.4c1f70ba92',
     '{{value0}} — test code: {{value1}} lines added, {{value2}} lines deleted',
     { value0: label, value1: testAdded, value2: testRemoved }
   )
 }
 
-function appendGeneratedSplitToLabel(label: string, added: number, removed: number): string {
-  return translate(
+function appendGeneratedSplitToLabel(
+  label: string,
+  added: number,
+  removed: number,
+  t: Translate = translate
+): string {
+  return t(
     'auto.components.right.sidebar.source.control.branch.line.total.chip.7f3e1a9c24',
     '{{value0}} — generated: {{value1}} lines added, {{value2}} lines deleted',
     { value0: label, value1: added, value2: removed }
@@ -75,17 +85,18 @@ function CodeBreakdownPanel({
   rows: LineTotalSplitRow[]
   locale: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="min-w-[14rem]" data-testid="source-control-branch-line-total-breakdown">
       <div className="border-b border-border/60 px-3 py-2.5">
         <div className="text-sm font-semibold text-popover-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.source.control.branch.line.total.chip.a1b2c3d4e5',
             'Code breakdown'
           )}
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.source.control.branch.line.total.chip.b2c3d4e5f6',
             'Lines of code'
           )}
@@ -103,33 +114,29 @@ function CodeBreakdownPanel({
   )
 }
 
-// Genuinely-empty (`+0 -0`), not-yet-published and unknown-after-timeout all
-// render as nothing: no reserved width, no placeholder. There is no loading
-// state because a null total is indistinguishable from permanent absence (old
-// host, failed diff, cooldown), and the store now keeps the last published
-// total across a soft miss so the slot rarely empties once filled.
-// Not clickable — `openBranchAllDiffs` is narrower.
+// Hide empty/absent totals: older hosts and failures may never send one. No click action because openBranchAllDiffs has narrower scope.
 export const SourceControlBranchLineTotalChip = React.memo(
   function SourceControlBranchLineTotalChip({
     branchLineTotal
   }: {
     branchLineTotal: GitBranchLineTotal | null | undefined
   }): React.JSX.Element | null {
+    const intlLocale = useIntlLocale()
+    const t = useTranslate()
+    const languageRevision = useUiLanguageRevision()
     const added = branchLineTotal?.added ?? 0
     const removed = branchLineTotal?.removed ?? 0
     const hasAdded = added > 0
     const hasRemoved = removed > 0
-    // Why: hosts predating either split omit the field; inventing a zero share
-    // there would be confidently wrong, so the breakdown is dropped per field.
+    // Older hosts omit splits; absent fields cannot claim measured zero shares.
     const testTotal = branchLineTotal?.test
     const testAdded = testTotal?.added
     const testRemoved = testTotal?.removed
     const generatedTotal = branchLineTotal?.generated
     const generatedAdded = generatedTotal?.added
     const generatedRemoved = generatedTotal?.removed
-    // Full precision and app-locale-aware; a status tick that leaves the counts
-    // alone must not rebuild these strings.
-    const locale = getIntlLocale()
+    // Memoize locale-formatted counts so unchanged status polls do not rebuild strings.
+    const locale = intlLocale
     const addedText = useMemo(() => added.toLocaleString(locale), [added, locale])
     const removedText = useMemo(() => removed.toLocaleString(locale), [removed, locale])
     const accessibleLabel = useMemo(() => {
@@ -148,8 +155,7 @@ export const SourceControlBranchLineTotalChip = React.memo(
       return label
     }, [added, removed, testAdded, testRemoved, generatedAdded, generatedRemoved])
     const splitRows = useMemo<LineTotalSplitRow[]>(() => {
-      // Why: the fields ship together today but the type is independent so a
-      // host can gain one before the other; either alone is enough to render.
+      // Splits can arrive independently across host versions; render either one alone.
       const hasTest = testAdded != null && testRemoved != null
       const hasGenerated = generatedAdded != null && generatedRemoved != null
       if (!hasTest && !hasGenerated) {
@@ -159,20 +165,19 @@ export const SourceControlBranchLineTotalChip = React.memo(
       const rows: LineTotalSplitRow[] = [
         {
           key: 'source',
-          // Only "Source" once both splits are known — with one missing the
-          // remainder still contains the other bucket, so name what was taken out.
+          // Call the remainder Source only with both splits; an omitted bucket may still be included.
           label:
             hasTest && hasGenerated
-              ? translate(
+              ? t(
                   'auto.components.right.sidebar.source.control.branch.line.total.chip.c8d5b21e07',
                   'Source'
                 )
               : hasTest
-                ? translate(
+                ? t(
                     'auto.components.right.sidebar.source.control.branch.line.total.chip.9e4a3c5081',
                     'Non-test'
                   )
-                : translate(
+                : t(
                     'auto.components.right.sidebar.source.control.branch.line.total.chip.3d7e9b1042',
                     'Non-generated'
                   ),
@@ -183,7 +188,7 @@ export const SourceControlBranchLineTotalChip = React.memo(
       if (hasTest) {
         rows.push({
           key: 'test',
-          label: translate(
+          label: t(
             'auto.components.right.sidebar.source.control.branch.line.total.chip.6b2d0f14a7',
             'Tests'
           ),
@@ -191,12 +196,11 @@ export const SourceControlBranchLineTotalChip = React.memo(
           removed: testRemoved
         })
       }
-      // Why: "no tests in this branch" is worth showing as +0 -0; "nothing was
-      // generated" is the normal case, so that row is dropped instead.
+      // Show measured zero tests, but omit zero generated lines because that is the normal case.
       if (hasGenerated && (generatedAdded > 0 || generatedRemoved > 0)) {
         rows.push({
           key: 'generated',
-          label: translate(
+          label: t(
             'auto.components.right.sidebar.source.control.branch.line.total.chip.7a04c6f8b3',
             'Generated'
           ),
@@ -205,15 +209,23 @@ export const SourceControlBranchLineTotalChip = React.memo(
         })
       }
       return rows
-    }, [added, removed, testAdded, testRemoved, generatedAdded, generatedRemoved])
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    }, [
+      added,
+      removed,
+      testAdded,
+      testRemoved,
+      generatedAdded,
+      generatedRemoved,
+      languageRevision,
+      t
+    ])
 
     if (!hasAdded && !hasRemoved) {
       return null
     }
 
-    // Why: no fixed `ch` width — that clips at 5+ digits; `tabular-nums` alone
-    // keeps digits from jittering between refreshes.
-    // `cursor-help` signals hover detail without implying a click target.
+    // Use tabular digits without fixed width so large totals fit; cursor-help promises hover detail rather than clicking.
     const hasBreakdown = splitRows.length > 0
     const chip = (
       <span

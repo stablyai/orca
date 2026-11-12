@@ -1,6 +1,6 @@
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 
-const CONNECTION_DIAGNOSTICS_ENDPOINT = 'https://www.onorca.dev/v1/feedback'
+const CONNECTION_DIAGNOSTICS_ENDPOINT = 'https://orca.dev/v1/feedback'
 const SUBMISSION_TIMEOUT_MS = 10_000
 const MAX_SUBMISSION_BYTES = 64 * 1024
 
@@ -15,7 +15,7 @@ export type ConnectionDiagnosticsSubmissionResult = { ok: true } | { ok: false; 
 /** Sends only the already-redacted, bounded report after an explicit user tap. */
 export async function submitConnectionDiagnostics(
   submission: ConnectionDiagnosticsSubmission,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: (url: string, init: RequestInit) => Promise<Response> = fetch
 ): Promise<ConnectionDiagnosticsSubmissionResult> {
   const report = boundConnectionDiagnosticsReport(submission.report)
   const controller = new AbortController()

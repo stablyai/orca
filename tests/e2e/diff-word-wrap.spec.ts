@@ -17,7 +17,7 @@ async function toggleWordWrap(page: Page, surface: DiffSurface): Promise<void> {
     await page.getByRole('button', { name: /^Wrap (On|Off)$/ }).click()
     return
   }
-  await page.getByRole('button', { name: 'More actions', exact: true }).click()
+  await page.getByRole('button', { name: 'File actions', exact: true }).click()
   await page.getByRole('menuitemcheckbox', { name: 'Word Wrap', exact: true }).click()
 }
 

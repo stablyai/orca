@@ -1,0 +1,9 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Разрешите Orca использовать камеру для сканирования QR-кодов.",
+    "NSLocalNetworkUsageDescription": "Orca подключается к настольному приложению в вашей локальной сети.",
+    "NSMicrophoneUsageDescription": "Разрешите Orca использовать микрофон для голосовой диктовки. Речь распознаётся на этом телефоне или на связанном компьютере.",
+    "NSPhotoLibraryAddUsageDescription": "Разрешите Orca сохранять изображения из ваших сессий в Фото.",
+    "NSPhotoLibraryUsageDescription": "Разрешите Orca прикреплять фотографии из медиатеки к сессии терминала на связанном компьютере."
+  }
+}

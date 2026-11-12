@@ -1,9 +1,61 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
+import {
+  localAiVaultScanProgress,
+  onLocalAiVaultScanProgress,
+  resetLocalAiVaultScanProgressForTests,
+  startLocalAiVaultScanProgress,
+  type LocalAiVaultScanProgressHandle
+} from './ai-vault-local-scan-progress'
 
 const EMPTY_RESULT = { sessions: [], issues: [], scannedAt: '2026-07-27T00:00:00.000Z' }
 
 describe('AiVaultScanCoordinator', () => {
+  it('keeps the replacement finding while the old scan aborts before root preparation ends', async () => {
+    const coordinator = new AiVaultScanCoordinator()
+    const stages: (string | null)[] = []
+    onLocalAiVaultScanProgress(({ progress }) => stages.push(progress?.stage ?? null))
+    try {
+      const earlier = startLocalAiVaultScanProgress('scope', 'earlier', () => 500)
+      earlier.finish(null)
+      let old: LocalAiVaultScanProgressHandle | null = null
+      const first = coordinator.run({
+        key: 'scope',
+        onCreate: (id) => {
+          old = startLocalAiVaultScanProgress('scope', id, () => 1_000)
+        },
+        onError: () => old?.fail(),
+        start: (signal) =>
+          new Promise<typeof EMPTY_RESULT>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })
+          })
+      })
+      await Promise.resolve()
+      let finishPreparation: ((result: typeof EMPTY_RESULT) => void) | undefined
+      const replacement = coordinator.run({
+        key: 'scope',
+        force: true,
+        onCreate: (id) => {
+          startLocalAiVaultScanProgress('scope', id, () => 2_000)
+        },
+        start: () =>
+          new Promise<typeof EMPTY_RESULT>((resolve) => {
+            finishPreparation = resolve
+          })
+      })
+      await Promise.resolve()
+      expect(localAiVaultScanProgress('scope')).toMatchObject({
+        stage: 'finding',
+        startedAt: 2_000
+      })
+      expect(stages).not.toContain(null)
+      finishPreparation?.(EMPTY_RESULT)
+      await expect(Promise.all([first, replacement])).resolves.toEqual([EMPTY_RESULT, EMPTY_RESULT])
+    } finally {
+      resetLocalAiVaultScanProgressForTests()
+    }
+  })
+
   it('keeps a shared scan alive when only one caller cancels', async () => {
     const coordinator = new AiVaultScanCoordinator()
     let resolveScan: ((result: typeof EMPTY_RESULT) => void) | undefined
@@ -53,8 +105,6 @@ describe('AiVaultScanCoordinator', () => {
     expect(signals[0]?.aborted).toBe(true)
     expect(start).toHaveBeenCalledTimes(2)
     resolveForced?.(EMPTY_RESULT)
-    // The first caller never asked to cancel, so someone else's Refresh must
-    // hand it the replacement's result instead of a spurious cancellation.
     await expect(Promise.all([first, forced, joined])).resolves.toEqual([
       EMPTY_RESULT,
       EMPTY_RESULT,
@@ -82,7 +132,6 @@ describe('AiVaultScanCoordinator', () => {
 
       expect(start).toHaveBeenCalledTimes(1)
       resolveScan?.(EMPTY_RESULT)
-      // Both callers settle off the single shared scan instead of preempting it.
       await expect(Promise.all([first, second])).resolves.toEqual([EMPTY_RESULT, EMPTY_RESULT])
     } finally {
       vi.useRealTimers()
@@ -113,8 +162,6 @@ describe('AiVaultScanCoordinator', () => {
       expect(signals[0]?.aborted).toBe(true)
       expect(start).toHaveBeenCalledTimes(2)
       resolveSecond?.(EMPTY_RESULT)
-      // The caller stranded on the hung scan rides the replacement out rather
-      // than being told its own refresh was cancelled.
       await expect(Promise.all([stuck, retry])).resolves.toEqual([EMPTY_RESULT, EMPTY_RESULT])
     } finally {
       vi.useRealTimers()

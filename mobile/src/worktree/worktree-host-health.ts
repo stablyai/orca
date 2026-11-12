@@ -3,14 +3,11 @@ import {
   getExecutionHostHealthLabel,
   getSshConnectionHealth,
   type ExecutionHostHealth
-} from '../../../src/shared/execution-host-health'
+} from '../../../src/shared/execution-host/execution-host-health'
 import { sshTargetSummaryHostId } from '../../../src/shared/worktree/host-context-labels'
-import { isSshConnectionStatus } from '../transport/ssh-connection-status-arms'
+import { isSshConnectionStatus } from '../transport/connection/ssh-connection-status-arms'
 
-/**
- * Health per SSH host, derived exactly as the desktop sidebar derives it. A desktop that predates
- * `connected` reports no lifecycle, and an unknown status is no verdict: both leave the host out.
- */
+// Mirror desktop SSH health; older hosts without lifecycle and unknown statuses provide no verdict.
 export function buildSshHostHealthById(
   sshTargets: readonly { id: string; connected?: boolean; connectionStatus?: string }[]
 ): Map<ExecutionHostId, ExecutionHostHealth> {

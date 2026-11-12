@@ -3,26 +3,28 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
-import { branchName } from '@/lib/git-utils'
-import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
-import { getWorkspaceAttachmentTerminalOrigin } from '@/lib/workspace-attachment-terminal-origin'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments'
-import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachment-normalization'
+import { branchName } from '@/lib/source-control/branches/branch-name'
+import {
+  getWorkspaceAttachmentObservedOrigin,
+  resolveWorkspaceReferenceObservationOwner
+} from '@/lib/workspace/attachments/workspace-attachment-observed-origin'
+import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   getWorkspaceAttachmentOriginKey,
   mergeWorkspaceAttachmentOrigins
-} from '../../../../../../shared/workspace-attachment-origins'
+} from '../../../../../../shared/workspace-attachments/workspace-attachment-origins'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
-import { findRepoForHost } from '../../repo-host-identity'
-import { readHostedReviewForRepo } from '@/lib/hosted-review-repo-read'
-import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
-import { buildTaskSourceContextFromRepo } from '../../../../../../shared/task-source-context'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
+import { readHostedReviewForRepo } from '@/lib/source-control/review/hosted-review-repo-read'
+import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
+import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
 import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
 
 function terminalReviewSourceKey(repo: Repo | null | undefined): string {
@@ -46,9 +48,12 @@ export function createObserveTerminalGitHubPullRequestLink(
   const confirmations = new PrioritySemaphore(3)
   return (worktreeId, link, context) => {
     const state = get()
-    const owner = context ? resolveTerminalNotificationOwner(state, worktreeId, context) : null
+    const owner = context
+      ? resolveWorkspaceReferenceObservationOwner(state, worktreeId, context)
+      : null
     const hostId = owner?.executionHostId ?? undefined
-    if (context && (!hostId || (context.executionHostId && context.executionHostId !== hostId))) {
+    const contextHostId = context?.kind === 'agent-session' ? undefined : context?.executionHostId
+    if (context && (!hostId || (contextHostId && contextHostId !== hostId))) {
       return
     }
     const worktree = findKnownWorktreeById(state, worktreeId, hostId)
@@ -75,7 +80,7 @@ export function createObserveTerminalGitHubPullRequestLink(
     const pushBranch = worktree.pushTarget?.branchName
     let confirmedPushBranch: string | undefined
     const origin = context
-      ? getWorkspaceAttachmentTerminalOrigin(state, worktreeId, context, hostId)
+      ? getWorkspaceAttachmentObservedOrigin(state, worktreeId, context, hostId)
       : undefined
     if (context && !origin) {
       return
@@ -85,8 +90,8 @@ export function createObserveTerminalGitHubPullRequestLink(
         return true
       }
       const latest = get()
-      const latestOwner = resolveTerminalNotificationOwner(latest, worktreeId, context)
-      const latestOrigin = getWorkspaceAttachmentTerminalOrigin(latest, worktreeId, context, hostId)
+      const latestOwner = resolveWorkspaceReferenceObservationOwner(latest, worktreeId, context)
+      const latestOrigin = getWorkspaceAttachmentObservedOrigin(latest, worktreeId, context, hostId)
       return (
         latestOwner?.executionHostId === hostId &&
         Boolean(

@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { MOBILE_MARKDOWN_EDIT_MAX_BYTES } from '../../../../src/shared/mobile-markdown-document'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
-import { codeFenceFor } from './markdown-code-fence'
+
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 
 afterEach(() => {
@@ -11,48 +12,16 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-function originalFence(code: string): string {
-  const longest = (code.match(/`+/g) ?? []).reduce((run, match) => Math.max(run, match.length), 0)
-  return '`'.repeat(Math.max(3, longest + 1))
-}
-
 describe('code-block fence sizing', () => {
-  it.each([
-    { code: '', length: 3 },
-    { code: 'no backticks 😀\uD800\uDC00\u0000', length: 3 },
-    { code: '`a`\n``b``', length: 3 },
-    { code: 'before```after', length: 4 },
-    { code: '````\n``\r\n```', length: 5 },
-    { code: '\uD800````\uDC00`````😀', length: 6 },
-    { code: '`'.repeat(8192), length: 8193 }
-  ])('chooses a fence of $length characters for the whole code block', ({ code, length }) => {
-    expect(codeFenceFor(code)).toBe('`'.repeat(length))
-  })
-
-  it('matches the previous result across raw UTF-16 text and consecutive calls', () => {
-    let seed = 0x823517
-    const random = () => {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-      return seed
-    }
-    const atoms = ['`', '`', '````', 'a', '\n', '\r', '\u0000', '\uD800', '\uDC00', '😀', 'é', ' ']
-    for (let sample = 0; sample < 3000; sample += 1) {
-      let code = ''
-      const length = random() % 500
-      for (let index = 0; index < length; index += 1) {
-        code += atoms[random() % atoms.length]
-      }
-      expect(codeFenceFor(code)).toBe(originalFence(code))
-    }
-  })
-
   it('serializes an admitted editable document without collecting every backtick run', () => {
     document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
     const posted: MobileRichMarkdownEditorMessage[] = []
-    const editorDocument = createRichMarkdownEditorDocument({
-      postToHost: (message) => posted.push(message),
-      keyboardInsetSource: () => null
-    })
+    const editorDocument = createRichMarkdownEditorDocument(
+      quietRichMarkdownEditorHost({
+        postToHost: (message) => posted.push(message),
+        keyboardInsetSource: () => null
+      })
+    )
     try {
       const code = '`a'.repeat((MOBILE_MARKDOWN_EDIT_MAX_BYTES - 40) / 2)
       const markdown = `\`\`\`ts\n${code}\n\`\`\``

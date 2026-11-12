@@ -6,9 +6,11 @@
 import { test } from './helpers/orca-app'
 import {
   runAgentClicksScenario,
+  runAgentCrossSiteFrameScenario,
   runAgentKeysScenario,
   runAgentShortcutsScenario
 } from './helpers/browser-agent-focus-scenarios'
+import { runAgentClickDuringUserCompositionScenario } from './helpers/browser-agent-composition-scenario'
 
 test('agent keys and text reach the page without leaving the user’s terminal', async ({
   orcaPage
@@ -29,4 +31,18 @@ test('agent shortcut keys stay in the page instead of running Orca shortcuts', a
 }) => {
   test.setTimeout(120_000)
   await runAgentShortcutsScenario(orcaPage)
+})
+
+test('agent keys and text reach a focused cross-site frame without moving the user’s focus', async ({
+  orcaPage
+}) => {
+  test.setTimeout(120_000)
+  await runAgentCrossSiteFrameScenario(orcaPage)
+})
+
+test('an agent click is refused while the user composes with an IME in the terminal', async ({
+  orcaPage
+}) => {
+  test.setTimeout(120_000)
+  await runAgentClickDuringUserCompositionScenario(orcaPage)
 })

@@ -1,8 +1,10 @@
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
-import { publicKeyFromBase64 } from './e2ee-crypto'
-import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
-import { isDeviceProofB64, verifyDeviceProof } from '../../../shared/device-key-proof'
-import { INSECURE_WEB_ORIGIN_AUTH_CODE } from '../../../shared/web-origin-security'
+import { publicKeyFromBase64 } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
+import {
+  isDeviceProofB64,
+  verifyDeviceProof
+} from '../../../shared/remote-runtime/pairing/device-key-proof'
 
 export type ClassifiedE2EEAuth =
   | { kind: 'token'; deviceToken: string; clientCapabilities?: unknown }
@@ -15,7 +17,9 @@ const V2_DEVICE_KEY_KEYS = new Set(['clientCapabilities', 'deviceId', 'devicePro
 /** The one parser for e2ee_auth: every accepted shape, nothing mixed. */
 export function classifyE2EEAuth(
   plaintext: string,
-  v2Session: DesktopMobileE2EEV2Session | null
+  v2Session: DesktopMobileE2EEV2Session | null,
+  // Direct sockets only: Relay token auth stays the exact mobile shape.
+  v2TokenCapabilities = false
 ): ClassifiedE2EEAuth {
   let auth: Record<string, unknown>
   try {
@@ -49,13 +53,16 @@ export function classifyE2EEAuth(
     return { kind: 'invalid' }
   }
   const keys = Object.keys(auth).sort()
-  // Why: mobile v2 token auth stays exact-key; capabilities ride only on key auth.
-  if (
-    keys.join(',') === V2_TOKEN_KEYS &&
-    typeof auth.deviceToken === 'string' &&
-    auth.deviceToken
-  ) {
-    return { kind: 'token', deviceToken: auth.deviceToken }
+  // Why: runtime clients (desktop, CLI, web) carry capabilities on v2 token auth as on legacy.
+  const tokenKeys = keys
+    .filter((key) => !(v2TokenCapabilities && key === 'clientCapabilities'))
+    .join(',')
+  if (tokenKeys === V2_TOKEN_KEYS && typeof auth.deviceToken === 'string' && auth.deviceToken) {
+    return {
+      kind: 'token',
+      deviceToken: auth.deviceToken,
+      ...('clientCapabilities' in auth ? { clientCapabilities: auth.clientCapabilities } : {})
+    }
   }
   const rest = keys.filter((key) => key !== 'type' && key !== 'v' && key !== 'transcriptHashB64')
   if (
@@ -81,10 +88,6 @@ export type MobileE2EEAuthFailureCode =
   | 'device_revoked'
   | 'registry_unavailable'
   | 'bad_proof'
-  | typeof INSECURE_WEB_ORIGIN_AUTH_CODE
-
-// The token matched, but this transport may not claim it (e.g. a first pairing from an insecure page).
-export type DeviceTokenRefusal = { refused: typeof INSECURE_WEB_ORIGIN_AUTH_CODE }
 
 export type DeviceKeyResolution<TDevice> =
   | { kind: 'found'; device: TDevice; devicePublicKeyB64: string }
@@ -97,18 +100,16 @@ export type DeviceKeyResolution<TDevice> =
 export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>(args: {
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
-  resolveDevice: (token: string) => TDevice | DeviceTokenRefusal | null
+  v2TokenCapabilities?: boolean
+  resolveDevice: (token: string) => TDevice | null
   // Absent on a host that does not accept device keys: key auth is then bad_auth, as before.
   resolveDeviceKey?: (deviceId: string) => DeviceKeyResolution<TDevice>
 }):
   | { ok: true; device: TDevice; clientCapabilities: unknown }
   | { ok: false; code: MobileE2EEAuthFailureCode; deviceId?: string } {
-  const auth = classifyE2EEAuth(args.plaintext, args.v2Session)
+  const auth = classifyE2EEAuth(args.plaintext, args.v2Session, args.v2TokenCapabilities)
   if (auth.kind === 'token') {
     const device = args.resolveDevice(auth.deviceToken)
-    if (device && 'refused' in device) {
-      return { ok: false, code: device.refused }
-    }
     // Why: a keyed row has no token, so presenting one can never match it.
     return device?.deviceToken === auth.deviceToken
       ? { ok: true, device, clientCapabilities: auth.clientCapabilities }
@@ -141,8 +142,7 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
     : { ok: false, code: 'bad_proof' }
 }
 
-// Why: sealed, so only the pinned host can tell a client its key is revoked (it then deletes it);
-// 'Unauthorized' marks an unpaired device for the re-pair prompt, storage trouble is not one.
+// Seal revocation so only the pinned host can make clients delete keys; storage failures must not become Unauthorized re-pair prompts.
 export function describeMobileE2EEAuthFailure(failure: {
   code: MobileE2EEAuthFailureCode
   deviceId?: string
@@ -152,9 +152,7 @@ export function describeMobileE2EEAuthFailure(failure: {
       ? 'Unauthorized'
       : failure.code === 'registry_unavailable'
         ? 'Device registry unavailable'
-        : failure.code === INSECURE_WEB_ORIGIN_AUTH_CODE
-          ? 'Insecure web origin'
-          : 'Invalid e2ee_auth'
+        : 'Invalid e2ee_auth'
   return {
     sealedError: {
       type: 'e2ee_error',

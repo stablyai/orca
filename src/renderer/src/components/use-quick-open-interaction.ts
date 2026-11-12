@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getFileExplorerOperationOwnerFromState } from './right-sidebar/file-explorer-operation-owner'
+import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
+import { getFileExplorerOperationOwnerFromState } from './right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useQuickOpenInteraction(worktreeId: string | null): {
   opening: boolean
@@ -15,9 +21,9 @@ export function useQuickOpenInteraction(worktreeId: string | null): {
   }, [])
   useEffect(() => {
     const currentGeneration = generation.current
-    let rootPath = useAppStore.getState().getKnownWorktreeById(worktreeId ?? '')?.path
+    let rootPath = selectFileListWorktree(useAppStore.getState(), worktreeId)?.path
     const unsubscribe = useAppStore.subscribe((state, previous) => {
-      const nextRootPath = state.getKnownWorktreeById(worktreeId ?? '')?.path
+      const nextRootPath = selectFileListWorktree(state, worktreeId)?.path
       if (
         nextRootPath !== rootPath ||
         state.activeModal !== previous.activeModal ||
@@ -25,11 +31,11 @@ export function useQuickOpenInteraction(worktreeId: string | null): {
         state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId ||
         ((state.settings !== previous.settings ||
           state.repos !== previous.repos ||
-          state.worktreesByRepo !== previous.worktreesByRepo ||
-          state.detectedWorktreesByRepo !== previous.detectedWorktreesByRepo ||
+          selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous) ||
+          selectDetectedWorktreesByRepo(state) !== selectDetectedWorktreesByRepo(previous) ||
           state.restoredRuntimeHostIdByWorkspaceSessionKey !==
             previous.restoredRuntimeHostIdByWorkspaceSessionKey ||
-          state.folderWorkspaces !== previous.folderWorkspaces ||
+          selectFolderWorkspaces(state) !== selectFolderWorkspaces(previous) ||
           state.projectGroups !== previous.projectGroups) &&
           JSON.stringify(getFileExplorerOperationOwnerFromState(state, worktreeId)) !==
             JSON.stringify(getFileExplorerOperationOwnerFromState(previous, worktreeId)))

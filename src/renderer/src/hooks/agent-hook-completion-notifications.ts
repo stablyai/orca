@@ -1,35 +1,35 @@
 import { useAppStore } from '@/store'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
 import type {
   AgentCompletionCoordinator,
   AgentCompletionStatusSnapshot
-} from '@/components/terminal-pane/agent-completion-coordinator-types'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
-import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
-import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-hook-terminal-lifecycle'
+} from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
+import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { dispatchTerminalNotification } from '../components/terminal-pane/notifications/dispatch-terminal-notification'
+import '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { getPtyIdForPaneKey } from './pane-key-pty-id'
+import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle'
+import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '../components/terminal-pane/notifications/agent-task-complete-policy'
 import {
-  isAgentHookCompletionTrackingEnabled,
   shouldSyncAgentHookCompletionForStoreUpdate,
   type AgentHookCompletionStoreSnapshot
 } from './agent-hook-completion-store-sync'
-
-type CoordinatorEntry = {
-  worktreeId: string
-  coordinator: AgentCompletionCoordinator
-}
-
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
-type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
-// Why: a paneKey resolves to a tab by id. Prebuilding this index once per prune
-// pass avoids re-flattening tabsByWorktree per coordinator (O(coordinators x
-// tabs)) when a liveness or notification-setting update requires a prune.
-type TabIndex = ReadonlyMap<string, WorktreeTab>
-type PaneCoordinatorLivenessSnapshot = Pick<
+import { hookTurnEndEvidence } from './agent-hook-turn-end-capability'
+import {
+  discardHookLaneCompletionRequests,
+  submitHookLaneCompletion
+} from './agent-hook-completion-revision-hold'
+import { getFirstTerminalTab } from '@/store/terminals/terminal-tab-owner-index'
+import * as finishDrops from '@/attention/agent-finish-drop-breadcrumb'
+import type {
+  CoordinatorEntry,
   StoreSnapshot,
-  'tabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'suppressedPtyExitIds'
->
+  PaneCoordinatorLivenessSnapshot
+} from './agent-hook-completion-notification-types'
+
+const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
@@ -40,26 +40,12 @@ let lastPrunedLivenessSnapshot: PaneCoordinatorLivenessSnapshot | null = null
 function disposeCoordinatorForPaneKey(paneKey: string): void {
   coordinatorsByPaneKey.get(paneKey)?.coordinator.dispose()
   coordinatorsByPaneKey.delete(paneKey)
+  discardHookLaneCompletionRequests(paneKey)
   paneKeysRequiringFreshWorking.delete(paneKey)
 }
 
-function buildTabIndex(tabsByWorktree: StoreSnapshot['tabsByWorktree']): TabIndex {
-  const index = new Map<string, WorktreeTab>()
-  for (const tabs of Object.values(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      // Why: first-wins to match the previous Array.flat().find() semantics
-      // exactly, even in the degenerate case of a tab id shared across worktrees.
-      if (!index.has(tab.id)) {
-        index.set(tab.id, tab)
-      }
-    }
-  }
-  return index
-}
-
 function pruneClosedPaneCoordinators(): void {
-  // Why: hook-completion coordinators are module-scoped and may outlive a pane
-  // unless liveness changes from close/sleep paths evict them here.
+  // Module-scoped coordinators outlive panes unless close/sleep liveness changes prune them.
   if (coordinatorsByPaneKey.size === 0 && paneKeysRequiringFreshWorking.size === 0) {
     lastPrunedLivenessSnapshot = null
     return
@@ -80,16 +66,14 @@ function pruneClosedPaneCoordinators(): void {
     return
   }
   lastPrunedLivenessSnapshot = livenessSnapshot
-  // Why: build the paneKey->tab index once for the whole pass instead of
-  // re-flattening tabsByWorktree inside paneCanReceiveHookCompletion per entry.
-  const tabIndex = buildTabIndex(livenessSnapshot.tabsByWorktree)
-  for (const paneKey of coordinatorsByPaneKey.keys()) {
-    if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
+  for (const [paneKey, entry] of coordinatorsByPaneKey) {
+    if (!paneCanReceiveHookCompletion(paneKey)) {
+      finishDrops.recordPrunedPendingFinish(entry.worktreeId, paneKey, entry.coordinator)
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
   for (const paneKey of paneKeysRequiringFreshWorking) {
-    if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
+    if (!paneCanReceiveHookCompletion(paneKey)) {
       paneKeysRequiringFreshWorking.delete(paneKey)
     }
   }
@@ -128,8 +112,7 @@ export function syncAgentHookCompletionNotificationsForStoreUpdate(
   current: AgentHookCompletionStoreSnapshot,
   previous: AgentHookCompletionStoreSnapshot
 ): boolean {
-  // Why: Zustand also publishes high-rate title/status writes that cannot make
-  // module-scoped completion coordinators stale.
+  // Title/status writes cannot invalidate coordinator liveness; avoid pruning on that high-rate path.
   if (!shouldSyncAgentHookCompletionForStoreUpdate(current, previous)) {
     return false
   }
@@ -140,95 +123,41 @@ export function syncAgentHookCompletionNotificationsForStoreUpdate(
   return true
 }
 
-function getPtyIdForPaneKey(paneKey: string): string | null {
-  const parsed = parsePaneKey(paneKey)
-  if (!parsed) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const tabPtyIds = state.ptyIdsByTabId?.[parsed.tabId]
-  if (!tabPtyIds || tabPtyIds.length === 0) {
-    return null
-  }
-  // Why: split-pane leaves share one tab-level pty list, so a tab-level lookup
-  // would return a sibling's pty for an already-closed leaf and let a late
-  // 'done' hook event fire a spurious notification. Resolve liveness through
-  // the leaf-keyed binding maintained by syncPanePtyLayoutBinding, which
-  // deletes the entry when the leaf closes.
-  const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
-  const ptyIdsByLeafId = layout?.ptyIdsByLeafId
-  if (ptyIdsByLeafId) {
-    const leafPtyId = ptyIdsByLeafId[parsed.leafId]
-    if (leafPtyId && tabPtyIds.includes(leafPtyId)) {
-      return leafPtyId
-    }
-    if (!layout?.root) {
-      // Why: inactive worktree switches can temporarily preserve only tab-level
-      // PTY liveness; do not drop hook completions just because layout metadata
-      // is at the empty snapshot.
-      return tabPtyIds[0] ?? null
-    }
-    // Why: switching worktrees can unmount the terminal pane and clear the
-    // leaf binding before the hook completion arrives, while the tab PTY is
-    // still live. Keep closed leaves suppressed by requiring the leaf in layout.
-    return collectLeafIdsInOrder(layout.root).includes(parsed.leafId)
-      ? (tabPtyIds[0] ?? null)
-      : null
-  }
-  return tabPtyIds[0] ?? null
-}
-
 function paneHasLivePty(paneKey: string): boolean {
   return getPtyIdForPaneKey(paneKey) !== null
 }
 
-function resolveTabById(
-  state: StoreSnapshot,
-  tabId: string,
-  tabIndex?: TabIndex
-): WorktreeTab | undefined {
-  if (tabIndex) {
-    return tabIndex.get(tabId)
-  }
-  for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
-    const found = tabs.find((candidate) => candidate.id === tabId)
-    if (found) {
-      return found
-    }
-  }
-  return undefined
-}
-
-function paneKeyHasUnsuppressedPtyHint(
-  state: StoreSnapshot,
-  paneKey: string,
-  tabIndex?: TabIndex
-): boolean {
+function paneKeyHasUnsuppressedPtyHint(state: StoreSnapshot, paneKey: string): boolean {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
     return false
   }
-  const tab = resolveTabById(state, parsed.tabId, tabIndex)
+  const tab = getFirstTerminalTab(state.tabsByWorktree ?? emptyTerminalTabs, parsed.tabId)
   if (!tab) {
     return false
   }
   const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
-  if (layout?.root && !collectLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
+  if (layout?.root && !collectLayoutLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
     return false
   }
   const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
-  // Why: sleep/shutdown preserves tab records while marking their PTYs
-  // suppressed. Missing hints are allowed because inactive-worktree hydration
-  // can accept hook status before the renderer restores tab PTY metadata.
+  // Sleep/shutdown preserves tabs but suppresses PTYs; absent hints remain valid during inactive-worktree hydration.
   const ptyHints = [tab.ptyId, leafPtyId].filter((ptyId): ptyId is string => Boolean(ptyId))
   return ptyHints.length === 0 || ptyHints.some((ptyId) => !state.suppressedPtyExitIds?.[ptyId])
 }
 
-function paneCanReceiveHookCompletion(paneKey: string, tabIndex?: TabIndex): boolean {
+function paneCanReceiveHookCompletion(paneKey: string): boolean {
   const state = useAppStore.getState()
-  // Why: native hook IPC is itself a live status signal. Inactive worktrees can
-  // have accepted hook updates before their renderer PTY map catches up.
-  return paneKeyHasUnsuppressedPtyHint(state, paneKey, tabIndex) || paneHasLivePty(paneKey)
+  // Native hooks prove live status even before inactive-worktree PTY maps hydrate.
+  return paneKeyHasUnsuppressedPtyHint(state, paneKey) || paneHasLivePty(paneKey)
+}
+
+function hookLaneDispatchEnabled(paneKey: string): boolean {
+  return isAgentTaskCompleteTrackingEnabled() && !paneKeysRequiringFreshWorking.has(paneKey)
+}
+
+function hookLaneOwnsTurnEnd(paneKey: string, snapshot: AgentCompletionStatusSnapshot): boolean {
+  return hookTurnEndEvidence(getPtyIdForPaneKey(paneKey), snapshot) === 'identified'
 }
 
 function createCoordinator(paneKey: string, worktreeId: string): AgentCompletionCoordinator {
@@ -236,28 +165,39 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
     paneKey,
     statusLane: 'hook',
     getPtyId: () => getPtyIdForPaneKey(paneKey),
+    usesHookTurnEnds: (snapshot) => hookLaneOwnsTurnEnd(paneKey, snapshot),
     inspectProcess: async (): Promise<RuntimeTerminalProcessInspection> => ({
       foregroundProcess: null,
       hasChildProcesses: false
     }),
     dispatchHookLifecycle: (payload) => dispatchAgentHookTerminalLifecycle(paneKey, payload),
     dispatchCompletion: (title, meta) => {
-      if (!isAgentTaskCompleteTrackingEnabled() || paneKeysRequiringFreshWorking.has(paneKey)) {
+      if (!hookLaneDispatchEnabled(paneKey)) {
+        finishDrops.recordHookLaneDisabled(worktreeId, paneKey)
         return
       }
-      dispatchTerminalNotification(worktreeId, {
-        source: 'agent-task-complete',
-        terminalTitle: title,
-        paneKey,
-        ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
+      const snapshot = meta?.agentStatus
+      submitHookLaneCompletion(paneKey, snapshot, {
+        keepsAuthority: () =>
+          hookLaneDispatchEnabled(paneKey) &&
+          coordinatorsByPaneKey.has(paneKey) &&
+          snapshot !== undefined &&
+          hookLaneOwnsTurnEnd(paneKey, snapshot),
+        submit: (onDispatchResult) =>
+          dispatchTerminalNotification(worktreeId, {
+            source: 'agent-task-complete',
+            terminalTitle: title,
+            paneKey,
+            ...(snapshot ? { agentStatusSnapshot: snapshot } : {}),
+            onDispatchResult
+          })
       })
     },
     dispatchAttention: (title, meta) => {
-      if (!isAgentTaskCompleteTrackingEnabled() || paneKeysRequiringFreshWorking.has(paneKey)) {
+      if (!hookLaneDispatchEnabled(paneKey)) {
         return
       }
-      // Why: native notification settings still label this channel as "agent
-      // task complete"; the snapshot state makes the banner read "needs input".
+      // Native settings call this task complete, but snapshot state must label the alert needs input.
       dispatchTerminalNotification(worktreeId, {
         source: 'agent-task-complete',
         terminalTitle: title,
@@ -284,6 +224,7 @@ export function observeAgentHookCompletionForNotification({
   if (seedOnly !== true) {
     pruneClosedPaneCoordinators()
     if (!paneCanReceiveHookCompletion(paneKey)) {
+      finishDrops.recordFinishOnPaneNotLive(worktreeId, paneKey, payload.state)
       return
     }
   }
@@ -298,6 +239,7 @@ export function observeAgentHookCompletionForNotification({
   let entry = coordinatorsByPaneKey.get(paneKey)
   if (!entry || entry.worktreeId !== worktreeId) {
     entry?.coordinator.dispose()
+    discardHookLaneCompletionRequests(paneKey)
     entry = {
       worktreeId,
       coordinator: createCoordinator(paneKey, worktreeId)
@@ -307,21 +249,39 @@ export function observeAgentHookCompletionForNotification({
       paneKeysRequiringFreshWorking.add(paneKey)
     }
   }
-  // Why: notification preferences may suppress alerts, but accepted hooks must
-  // still release pane-owned cursor/cache effects after the quiet window.
+  // Suppressed alerts still require accepted hooks to release pane-owned cursor/cache effects after quiet time.
   if (payload.state === 'working' && payload.turnCompletedAt === undefined && trackingEnabled) {
     paneKeysRequiringFreshWorking.delete(paneKey)
   }
+  // Why: on a legacy pane the host's end facts must not change main's done identity or replay guard.
+  const { turnEndedAt: _turnEndedAt, turnEndDisposition: _disposition, ...legacyPayload } = payload
+  const observed =
+    hookTurnEndEvidence(getPtyIdForPaneKey(paneKey), payload) === 'legacy' ? legacyPayload : payload
   if (seedOnly === true) {
-    entry.coordinator.seedHookStatus(payload)
+    entry.coordinator.seedHookStatus(observed)
   } else {
-    entry.coordinator.observeHookStatus(payload)
+    entry.coordinator.observeHookStatus(observed)
   }
 }
 
+// Why: asked of the lane itself so title lanes defer only where it would announce: live, agent evidence, not re-arming.
+export function hookLaneCanAnnouncePaneTurnEnd(paneKey: string): boolean {
+  const coordinator = coordinatorsByPaneKey.get(paneKey)?.coordinator
+  return coordinator?.canAnnounceCompletion() === true && hookLaneDispatchEnabled(paneKey)
+}
+
+export function hasPendingHookLaneCompletion(paneKey: string, ptyId: string | null): boolean {
+  return (
+    coordinatorsByPaneKey.get(paneKey)?.coordinator.hasPendingHookDoneCompletion() === true &&
+    hookTurnEndEvidence(ptyId, useAppStore.getState().agentStatusByPaneKey[paneKey]) ===
+      'identified'
+  )
+}
+
 export function resetAgentHookCompletionNotificationCoordinators(): void {
-  for (const entry of coordinatorsByPaneKey.values()) {
+  for (const [paneKey, entry] of coordinatorsByPaneKey) {
     entry.coordinator.dispose()
+    discardHookLaneCompletionRequests(paneKey)
   }
   coordinatorsByPaneKey.clear()
   paneKeysRequiringFreshWorking.clear()

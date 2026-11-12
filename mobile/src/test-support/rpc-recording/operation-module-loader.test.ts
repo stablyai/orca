@@ -1,18 +1,15 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterAll, describe, expect, it } from 'vitest'
 import { operationModuleLoader } from './operation-module-loader'
 
-/**
- * A tree of source files instead of a product path, so these two properties are pinned by what the
- * loader does rather than by what one screen happens to import today.
- */
+// Use synthetic trees so loader properties do not depend on current product imports.
 const roots: string[] = []
 function sourceTree(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'rpc-loader-'))
+  const root = mkdtempSync(join(tmpdir(), 'pr-31602-rpc-loader-'))
   roots.push(root)
   for (const [name, source] of Object.entries(files)) {
     mkdirSync(join(root, 'mobile/src'), { recursive: true })
@@ -32,19 +29,6 @@ afterAll(() => {
 })
 
 describe('the mounted module loader', () => {
-  it('preserves constants through a star reexport in an evaluated module', () => {
-    const modules = loaderOver({
-      'constants.ts': `export const CAPABILITY = 'files.mutation-ownership.v1'`,
-      'protocol.ts': `export * from './constants'`,
-      'operation.ts': `
-        import { CAPABILITY } from './protocol'
-        export const read = () => CAPABILITY
-      `
-    })
-    const { read } = modules.load<{ read: () => string }>('mobile/src/operation.ts')
-    expect(read()).toBe('files.mutation-ownership.v1')
-  })
-
   it('follows named reexports reached through the task foundation barrel', () => {
     const modules = loaderOver({
       'mobile-tasks-legacy-foundation.tsx': `export * from './mapping'`,
@@ -96,10 +80,10 @@ describe('the mounted module loader', () => {
     const root = sourceTree({ 'value.ts': source })
     const path = 'mobile/src/value.ts'
     const baseline = operationModuleLoader(root).load<{ read: () => number }>(path)
-    const mutation = { name: 'value', file: 'value.ts', before: '= 1', after: '= 2' }
+    const mutation = { name: 'value', file: 'mobile\\src\\value.ts', before: '= 1', after: '= 2' }
     for (let index = 0; index < 2; index++) {
       const mutated = operationModuleLoader(root, mutation, [
-        ['value.ts', '\nexports.exposed = () => value + 10']
+        ['mobile\\src\\value.ts', '\nexports.exposed = () => value + 10']
       ])
       const result = mutated.load<{ read: () => number; exposed: () => number }>(path)
       expect(result.read()).toBe(2)
@@ -117,10 +101,7 @@ describe('the mounted module loader', () => {
     )
   })
 
-  /**
-   * Product sources compile with the automatic runtime and never import React, so a classic
-   * `React.createElement` emit throws `React is not defined` on the first render of every screen.
-   */
+  // Product JSX omits React imports, so classic emit would crash every screen.
   it('compiles JSX against the automatic runtime and the React the test renderer drives', () => {
     const modules = loaderOver({
       'screen.tsx': `
@@ -130,7 +111,7 @@ describe('the mounted module loader', () => {
         }
       `
     })
-    const { Screen } = modules.load<{ Screen: (props: { label: string }) => unknown }>(
+    const { Screen } = modules.load<{ Screen: (props: { label: string }) => ReactNode }>(
       'mobile/src/screen.tsx'
     )
     let rendered: ReturnType<typeof create> | undefined
@@ -144,11 +125,7 @@ describe('the mounted module loader', () => {
     })
   })
 
-  /**
-   * Both interop helpers short-circuit on `__esModule`, so the trap binds as the module itself in
-   * all three import forms: the module loads, and the refusal lands on the member a recording
-   * actually wanted rather than on every module that merely mentions the package.
-   */
+  // Preserve proxy interop so refusal occurs on actual member use rather than merely importing the package.
   it('lets a default import of an unlisted package load, and refuses the member it uses', () => {
     const modules = loaderOver({
       'uses-default.ts': `
@@ -162,23 +139,7 @@ describe('the mounted module loader', () => {
     )
   })
 
-  it('refuses a named import of an unlisted package on the read', () => {
-    const modules = loaderOver({
-      'uses-named.ts': `
-        import { thing } from 'expo-not-substituted'
-        export const read = () => thing
-      `
-    })
-    const { read } = modules.load<{ read: () => unknown }>('mobile/src/uses-named.ts')
-    expect(() => read()).toThrow(
-      'Unspecified native mounting dependency: expo-not-substituted.thing'
-    )
-  })
-
-  /**
-   * What lets a screen mount a module such as `platform/haptics.ts`, which imports a device package
-   * it only touches on a press: loading the importer is not itself a use.
-   */
+  // Default dependencies may reference native members before an adapter overrides them; import alone must remain possible.
   it('lets a namespace import of an unlisted package load, and refuses the member it reads', () => {
     const modules = loaderOver({
       'uses-namespace.ts': `

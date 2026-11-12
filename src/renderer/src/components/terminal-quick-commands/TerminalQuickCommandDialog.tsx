@@ -2,16 +2,17 @@ import { useRef, useState } from 'react'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../shared/terminal-quick-command-types'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getTerminalQuickCommandAction,
   getTerminalQuickCommandScope,
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   Dialog,
   DialogContent,
@@ -20,9 +21,12 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { getAgentCatalog } from '@/lib/agent-catalog'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { isSelectAllShortcut } from '@/lib/editable-target'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
+import { isSelectAllShortcut } from '@/lib/text-input/focus/editable-target'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
 import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvancedSection'
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'
@@ -32,7 +36,7 @@ import {
   createTerminalQuickCommandDialogDraftMemory,
   switchTerminalQuickCommandDialogAction
 } from './terminal-quick-command-dialog-draft'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
 
@@ -44,8 +48,11 @@ type TerminalQuickCommandDialogProps = {
   /** Settings has no ambient workspace to imply scope from, so it opens the
    *  Advanced section up front. In-workspace entry points leave it collapsed. */
   defaultAdvancedOpen?: boolean
+  /** An older target host's agent-prompt character cap; `null` (the default) means none. */
+  agentPromptMaxLength?: number | null
   onOpenChange: (open: boolean) => void
-  onSave: (command: TerminalQuickCommand) => void
+  /** Resolves whether the save landed; the dialog closes only then, so a refusal keeps the text. */
+  onSave: (command: TerminalQuickCommand) => Promise<boolean> | boolean
 }
 
 const EMPTY_REPOS: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[] = []
@@ -68,13 +75,17 @@ export function TerminalQuickCommandDialog({
   command,
   repos = EMPTY_REPOS,
   defaultAdvancedOpen = false,
+  agentPromptMaxLength = null,
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const fallbackAgent: TuiAgent =
     getAgentCatalog().find((entry) => supportsTerminalAgentQuickCommand(entry.id))?.id ?? 'claude'
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
   const wasOpenRef = useRef(open)
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
   const syncedCommandRef = useRef(command)
   const draftMemoryRef = useRef<ReturnType<typeof createTerminalQuickCommandDialogDraftMemory>>(
     undefined!
@@ -109,6 +120,13 @@ export function TerminalQuickCommandDialog({
 
   const selectedAgent =
     isAgentAction && supportsTerminalAgentQuickCommand(draft.agent) ? draft.agent : fallbackAgent
+  const bodySize = getTerminalQuickCommandBodySize(
+    selectedAction,
+    isAgentAction ? draft.prompt : draft.command,
+    agentPromptMaxLength
+  )
+  // Why: past the limit the host refuses the save, so block it instead of losing the text.
+  const bodyTooLong = bodySize.used > bodySize.max
 
   const setAction = (action: 'terminal-command' | 'agent-prompt'): void => {
     setDraft((current) => {
@@ -133,7 +151,10 @@ export function TerminalQuickCommandDialog({
     )
   }
 
-  const saveDraft = (): void => {
+  const saveDraft = async (): Promise<void> => {
+    if (savingRef.current) {
+      return
+    }
     const next: TerminalQuickCommand = isTerminalAgentQuickCommand(draft)
       ? {
           id: draft.id,
@@ -153,25 +174,42 @@ export function TerminalQuickCommandDialog({
         }
     if (
       !next.label ||
+      bodyTooLong ||
       (isTerminalAgentQuickCommand(next)
         ? !next.prompt.trim() || !supportsTerminalAgentQuickCommand(next.agent)
         : !next.command.trim())
     ) {
       return
     }
-    onSave(next)
-    onOpenChange(false)
+    savingRef.current = true
+    setSaving(true)
+    try {
+      if (await onSave(next)) {
+        onOpenChange(false)
+      }
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
+  const changeOpen = (nextOpen: boolean): void => {
+    if (!savingRef.current) {
+      onOpenChange(nextOpen)
+    }
   }
 
   const canSave =
+    !saving &&
     draft.label.trim().length > 0 &&
+    !bodyTooLong &&
     (isAgentAction
       ? draft.prompt.trimEnd().length > 0 && supportsTerminalAgentQuickCommand(draft.agent)
       : draft.command.trimEnd().length > 0)
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       {/* Why: fixed large width so Terminal ↔ Agent content swaps never reflow the shell. */}
       <DialogContent
         className="flex max-h-[min(90vh,52rem)] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
@@ -180,26 +218,34 @@ export function TerminalQuickCommandDialog({
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="text-sm">
             {mode === 'edit'
-              ? translate(
+              ? t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.f9b184fc16',
                   'Edit Quick Command'
                 )
-              : translate(
+              : t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.5b3f634a55',
                   'Add Quick Command'
                 )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ed04233b3e',
               'Saved items appear in the tab bar menu for one-click run.'
             )}
           </DialogDescription>
         </DialogHeader>
 
-        <div
-          className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
+        <fieldset
+          disabled={saving}
+          className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
           onKeyDown={(event) => {
+            if (
+              event.defaultPrevented ||
+              !(event.target instanceof Node) ||
+              !event.currentTarget.contains(event.target)
+            ) {
+              return
+            }
             if (
               isSelectAllShortcut(event) &&
               (event.target instanceof HTMLInputElement ||
@@ -212,7 +258,7 @@ export function TerminalQuickCommandDialog({
             }
             if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
-              saveDraft()
+              void saveDraft()
             }
           }}
         >
@@ -220,7 +266,7 @@ export function TerminalQuickCommandDialog({
             <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
             <div className="space-y-2">
               <Label>
-                {translate(
+                {t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ec8f081919',
                   'Action'
                 )}
@@ -233,15 +279,18 @@ export function TerminalQuickCommandDialog({
           </div>
 
           <TerminalQuickCommandContentSection
+            disabled={saving}
             draft={draft}
             isAgentAction={isAgentAction}
             selectedAgent={selectedAgent}
+            bodySize={bodySize}
             draftMemoryRef={draftMemoryRef}
             setDraft={setDraft}
             toggleAppendEnter={toggleAppendEnter}
           />
 
           <TerminalQuickCommandAdvancedSection
+            disabled={saving}
             repos={repos}
             advancedOpen={advancedOpen}
             selectedScope={selectedScope}
@@ -252,13 +301,14 @@ export function TerminalQuickCommandDialog({
             setAdvancedOpen={setAdvancedOpen}
             setDraft={setDraft}
           />
-        </div>
+        </fieldset>
 
         <TerminalQuickCommandDialogFooter
           canSave={canSave}
+          saving={saving}
           submitShortcutLabel={submitShortcutLabel}
-          onCancel={() => onOpenChange(false)}
-          onSave={saveDraft}
+          onCancel={() => changeOpen(false)}
+          onSave={() => void saveDraft()}
         />
       </DialogContent>
     </Dialog>

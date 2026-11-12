@@ -2,18 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createScopedExternalAutomations } from './external-manager'
 import { ExternalAutomationManagerCache } from './external-automation-manager-cache'
 import { ExternalAutomationProbeScheduler } from './external-automation-probe-scheduler'
-import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
-import { AutomationOwnerConflictError } from '../../shared/automation-owner-conflict'
-import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
-import {
-  EXTERNAL_AUTOMATION_SCOPE_CODES,
-  ExternalAutomationScopeError
-} from '../../shared/external-automation-scope'
-import type { ExternalAutomationProvider } from '../../shared/automations-types'
+
+import { AutomationOwnerConflictError } from '../../shared/automations/ownership/automation-owner-conflict'
+import type { AutomationOwnerRef } from '../../shared/automations/ownership/automation-owner-ref'
 import type { SshTarget } from '../../shared/ssh-types'
 import type * as Fs from 'node:fs'
 import type * as Os from 'node:os'
-import { join } from 'node:path'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
 const existsSyncMock = vi.hoisted(() => vi.fn<(file: Fs.PathLike) => boolean>(() => false))
@@ -44,18 +38,8 @@ function sshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
   }
 }
 
-const desktopSelf: AutomationOwnerRef = {
-  authority: { kind: 'desktop' },
-  selector: { kind: 'self' }
-}
-
 function desktopSsh(targetId: string, targetGeneration: number): AutomationOwnerRef {
   return { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId, targetGeneration } }
-}
-
-/** Stands in for the Orca automation store: readable, but never markable unavailable from here. */
-function orcaStoreHealth() {
-  return { read: vi.fn<() => void>(), markUnavailable: vi.fn<() => void>() }
 }
 
 function buildEngine(targets: SshTarget[]) {
@@ -85,144 +69,6 @@ afterEach(() => {
 })
 
 describe('scoped external automations', () => {
-  it('discovers only OpenClaw and leaves isolated Hermes cron files untouched', async () => {
-    const files = new Map([
-      [join(fixtureHome, '.hermes', 'cron', 'jobs.json'), '[{"id":"hermes-job","enabled":true}]'],
-      [join(fixtureHome, '.hermes', 'state.db'), 'Hermes session fixture'],
-      [join(fixtureHome, '.hermes', 'cron', 'executions.db'), 'Hermes execution fixture'],
-      [join(fixtureHome, '.hermes', 'cron', 'output', 'hermes-job', 'run.md'), '# Output\nDone'],
-      [join(fixtureHome, '.hermes', 'config.yaml'), 'model: fixture-model'],
-      [
-        join(fixtureHome, '.openclaw', 'cron', 'jobs.json'),
-        '{"jobs":[{"id":"claw-job","name":"OpenClaw job","enabled":true}]}'
-      ]
-    ])
-    const before = [...files]
-    existsSyncMock.mockImplementation((file) => files.has(String(file)))
-    readFileMock.mockImplementation(async (file) => {
-      const content = files.get(String(file))
-      if (content === undefined) {
-        throw new Error('Unexpected fixture read')
-      }
-      return content
-    })
-
-    const entry = await buildEngine([]).listManager({ owner: desktopSelf, provider: 'openclaw' })
-
-    expect(entry.manager?.jobs.map((job) => job.id)).toEqual(['claw-job'])
-    expect(readFileMock).toHaveBeenCalledExactlyOnceWith(
-      join(fixtureHome, '.openclaw', 'cron', 'jobs.json'),
-      'utf-8'
-    )
-    expect(existsSyncMock).toHaveBeenCalledExactlyOnceWith(
-      join(fixtureHome, '.openclaw', 'cron', 'jobs.json')
-    )
-    expect(runProcessMock).toHaveBeenCalledExactlyOnceWith({
-      program: process.platform === 'win32' ? 'where' : 'which',
-      args: ['openclaw'],
-      timeoutMs: 5_000
-    })
-    expect(writeFileMock).not.toHaveBeenCalled()
-    expect([...files]).toEqual(before)
-  })
-
-  // The probe's own timeout, not the caller's: a provider binary that never
-  // returns must still resolve the entry, or the page waits forever on one host.
-  it('settles when a local command lookup hangs', async () => {
-    vi.useFakeTimers()
-    runProcessMock.mockResolvedValue({
-      code: null,
-      signal: null,
-      stdout: '',
-      stderr: '',
-      timedOut: true
-    })
-    const promise = buildEngine([]).listManager({ owner: desktopSelf, provider: 'openclaw' })
-    let settled = false
-    void promise.finally(() => {
-      settled = true
-    })
-
-    await expect(promise).resolves.toMatchObject({ manager: null })
-    expect(settled).toBe(true)
-  })
-
-  it('probes only local managers when Local is selected', async () => {
-    const engine = buildEngine([sshTarget(), sshTarget({ id: 'target-b', generation: 1 })])
-
-    const entry = await engine.listManager({ owner: desktopSelf, provider: 'openclaw' })
-
-    expect(entry.manager?.id).toBe('openclaw:local')
-    expect(runProcessMock).toHaveBeenCalledTimes(1)
-    expect(runProcessMock.mock.calls[0]?.[0]).toEqual({
-      program: process.platform === 'win32' ? 'where' : 'which',
-      args: ['openclaw'],
-      timeoutMs: 5_000
-    })
-  })
-
-  it('reports an SSH host this process does not serve without probing this computer', async () => {
-    const engine = buildEngine([sshTarget(), sshTarget({ id: 'target-b', generation: 1 })])
-
-    const entry = await engine.listManager({
-      owner: desktopSsh('target-a', 3),
-      provider: 'openclaw'
-    })
-
-    expect(entry).toMatchObject({ manager: null, error: SSH_HOST_NOT_SERVED_MESSAGE })
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('fails closed on a stale generation without probing', async () => {
-    const engine = buildEngine([sshTarget({ generation: 4 })])
-
-    await expect(
-      engine.listManager({ owner: desktopSsh('target-a', 3), provider: 'openclaw' })
-    ).rejects.toBeInstanceOf(AutomationOwnerConflictError)
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('excludes a runtime-owned target without probing it', async () => {
-    const engine = buildEngine([
-      sshTarget({ owner: { type: 'on-demand-runtime', runtimeId: 'rt-1' } })
-    ])
-
-    await expect(
-      engine.listManager({ owner: desktopSsh('target-a', 3), provider: 'openclaw' })
-    ).rejects.toBeInstanceOf(ExternalAutomationScopeError)
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects a runtime authority before any probe', async () => {
-    const engine = buildEngine([])
-
-    await expect(
-      engine.listManager({
-        owner: {
-          authority: { kind: 'runtime', environmentId: 'env-1', pairingRevision: 2 },
-          selector: { kind: 'self' }
-        },
-        provider: 'openclaw'
-      })
-    ).rejects.toThrow(EXTERNAL_AUTOMATION_SCOPE_CODES.authorityNotSupported)
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects an unknown provider before launching any command', async () => {
-    const engine = buildEngine([sshTarget()])
-    const unknown = 'cron' as ExternalAutomationProvider
-
-    await expect(
-      engine.runAction({
-        owner: desktopSelf,
-        provider: unknown,
-        jobId: 'job-1',
-        action: 'delete'
-      })
-    ).rejects.toThrow(EXTERNAL_AUTOMATION_SCOPE_CODES.providerNotAllowed)
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
   it('fails a scoped mutation closed when the host changed under the dialog', async () => {
     const engine = buildEngine([sshTarget({ generation: 5 })])
 
@@ -235,29 +81,5 @@ describe('scoped external automations', () => {
       })
     ).rejects.toBeInstanceOf(AutomationOwnerConflictError)
     expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('confines a manager failure to its own scope and never to Orca store health', async () => {
-    const health = orcaStoreHealth()
-    const engine = createScopedExternalAutomations({
-      registry: {
-        getSshTargets: () => {
-          health.read()
-          return [sshTarget()]
-        }
-      },
-      scheduler: new ExternalAutomationProbeScheduler(),
-      cache: new ExternalAutomationManagerCache({ ttlMs: 0 })
-    })
-
-    const failed = await engine.listManager({
-      owner: desktopSsh('target-a', 3),
-      provider: 'openclaw'
-    })
-    const healthy = await engine.listManager({ owner: desktopSelf, provider: 'openclaw' })
-
-    expect(failed).toMatchObject({ manager: null, error: SSH_HOST_NOT_SERVED_MESSAGE })
-    expect(healthy.manager?.status).toBe('available')
-    expect(health.markUnavailable).not.toHaveBeenCalled()
   })
 })

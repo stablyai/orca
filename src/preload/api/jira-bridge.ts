@@ -1,10 +1,10 @@
-import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
+import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation
-} from '../../shared/jira-issue-summary-generation'
+} from '../../shared/jira/jira-issue-summary-generation'
 import { ipcRenderer } from 'electron'
-import type { JiraIssueListFilters, JiraProjectStatusOrder } from '../../shared/jira-types'
+import type { JiraIssueListFilters, JiraProjectStatusOrder } from '../../shared/jira/jira-types'
 import type { PreloadApi } from '../api-types'
 
 export const jiraApi = {
@@ -80,6 +80,9 @@ export const jiraApi = {
     ipcRenderer.invoke('jira:issueComments', args),
 
   listProjects: (args?: { siteId?: string }) => ipcRenderer.invoke('jira:listProjects', args),
+
+  listFavouriteFilters: (args: { siteId: string }) =>
+    ipcRenderer.invoke('jira:listFavouriteFilters', args),
 
   listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) =>
     ipcRenderer.invoke('jira:listIssueTypes', args),

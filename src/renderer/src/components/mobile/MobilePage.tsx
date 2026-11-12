@@ -3,8 +3,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { Platform, StepIndex } from './MobileHero'
-import type { IosChannel } from './mobile-platform-copy'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { translate } from '@/i18n/i18n'
 import { useMobilePageEscape } from './use-mobile-page-escape'
 import { MobilePageContent } from './MobilePageContent'
@@ -12,13 +11,14 @@ import { useMobileInstallQr } from './use-mobile-install-qr'
 import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
-} from '../../../../shared/mobile-pairing-connection-mode'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import { useMobilePairingConnectionMode } from './use-mobile-pairing-connection-mode'
 import { useMobilePairingGeneration } from './use-mobile-pairing-generation'
 import { useMobilePairingQrInvalidation } from './use-mobile-pairing-qr-invalidation'
 import { useMobileInstallActions } from './use-mobile-install-actions'
 import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import { usePairingOfferExpiry } from './use-pairing-offer-expiry'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import {
   type MobilePairingAddressChange,
   useMobilePairingAddressPreference
@@ -28,20 +28,18 @@ export default function MobilePage(): React.JSX.Element {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
 
   const [platform, setPlatform] = useState<Platform>('ios')
-  // Default iOS users to the preview track — it ships daily, so newcomers land
-  // on the freshest build unless they deliberately pick the public release.
-  const [iosChannel, setIosChannel] = useState<IosChannel>('preview')
 
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairQrSize, setPairQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [pairExpiresAt, setPairExpiresAt] = useState<number | null>(null)
   const [pairingQrError, setPairingQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
   const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
-  const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
+  const [networkInterfaces, setNetworkInterfaces] = useState<PairingNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
   const notifyPairingAddressChange = useCallback(
     (change: MobilePairingAddressChange): void => pairingAddressChangeRef.current(change),
@@ -62,9 +60,7 @@ export default function MobilePage(): React.JSX.Element {
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const hasGeneratedRef = useRef(false)
   const pairingRequestIdRef = useRef(0)
-  // Why: each flow entry starts its own address lookup. Gating the Step 2 mint on
-  // "has this visit's lookup settled" is false until it answers, where "is a lookup
-  // running" cannot tell overlapping lookups apart and clears on the first to land.
+  // Gate minting on this visit’s settled lookup; a shared busy flag cannot distinguish overlapping requests.
   const [pairingFlowVisit, setPairingFlowVisit] = useState(0)
   const [addressedFlowVisit, setAddressedFlowVisit] = useState<number | null>(null)
   const pairingAddressSettled = addressedFlowVisit === pairingFlowVisit
@@ -83,11 +79,9 @@ export default function MobilePage(): React.JSX.Element {
     showPairedDevices,
     stage
   } = useMobilePagePairedDevices({ stepIdx, setStepIdx })
-  const installQrUrl = useMobileInstallQr(stage, platform, iosChannel)
-  const { copyInstallUrl, openAndroidInstallGuide, openInstallUrl } = useMobileInstallActions(
-    platform,
-    iosChannel
-  )
+  const installQrUrl = useMobileInstallQr(stage, platform)
+  const { copyInstallUrl, openAndroidInstallGuide, openInstallUrl } =
+    useMobileInstallActions(platform)
 
   const { generatePairing } = useMobilePairingGeneration({
     connectionMode,
@@ -99,6 +93,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairQrDataUrl,
     setPairQrSize,
     setPairingUrl,
+    setPairExpiresAt,
     setPairingQrError,
     setPairLoading,
     setRelayMintFailure,
@@ -139,9 +134,7 @@ export default function MobilePage(): React.JSX.Element {
       if (nextMode === connectionMode) {
         return
       }
-      // Why: persist the pick and update local state. The QR invalidation +
-      // rotate-regenerate is handled centrally by useMobilePairingQrInvalidation
-      // (below), which also covers cross-window preference syncs.
+      // Central invalidation handles QR replacement for both this pick and cross-window preference changes.
       setRelayMintFailure(null)
       setConnectionMode(nextMode)
       void updateSettings({ mobilePairingConnectionMode: nextMode })
@@ -202,8 +195,7 @@ export default function MobilePage(): React.JSX.Element {
     }
     try {
       const result = await window.api.mobile.listNetworkInterfaces()
-      // Why: a superseded lookup must not move the selection a newer one already
-      // resolved — that address change remints over the offer just advertised.
+      // Only the latest lookup may move the address; stale selection changes would remint over the advertised offer.
       if (mountedRef.current && requestId === networkInterfacesRequestIdRef.current) {
         setNetworkInterfaces(result.interfaces)
         selectAddressAfterRefresh(result.interfaces)
@@ -211,11 +203,7 @@ export default function MobilePage(): React.JSX.Element {
     } catch {
       // Network list is non-critical; the QR will still mint with default routing.
     } finally {
-      // Why: only the newest lookup may report a completion — a superseded one
-      // marking its visit addressed releases the mint against an address its own
-      // replacement is about to change. Plain assignment is safe because entering
-      // a flow bumps the visit and starts its own lookup, so the newest request
-      // always carries the highest visit.
+      // Only the newest request can settle its visit; older completions must not release minting or roll the marker back.
       if (mountedRef.current && requestId === networkInterfacesRequestIdRef.current) {
         setAddressedFlowVisit(visit)
         setRefreshingNetworkInterfaces(false)
@@ -266,32 +254,28 @@ export default function MobilePage(): React.JSX.Element {
     }
   }, [mountedRef, pairingUrl])
 
-  // Why: when Step 2 first becomes visible, mint a pairing offer so the
-  // user sees a real QR immediately. Subsequent visits keep the existing
-  // token unless they hit Regenerate.
+  // Auto-mint on Step 2 once its prerequisites settle; explicit regeneration owns subsequent mints.
   const canGenerate = canMintMobilePairingOffer({ connectionMode, signedIn })
   useEffect(() => {
     if (stage !== 'flow' || stepIdx !== 1 || hasGeneratedRef.current) {
       return
     }
-    // Why: signed-out Anywhere cannot serve Relay; auto-minting here would show a
-    // scannable local-only QR under the Relay label. Wait for sign-in or a switch
-    // to LAN (both flip canGenerate and re-run this effect) instead.
+    // Wait for sign-in or LAN; signed-out Relay must not advertise a local-only QR under the Relay label.
     if (!canGenerate) {
       return
     }
-    // Why: entering Step 2 also starts this visit's address lookup, and minting
-    // before it settles advertises an address the lookup is about to replace — the
-    // replacement then rotates away the credential this mint just created, so one
-    // Continue runs two overlapping offers through main for one pending token.
+    // Wait for this visit’s address before minting or its replacement could rotate away the just-created credential.
     if (!pairingAddressSettled) {
       return
     }
     void generatePairing(false)
   }, [stage, stepIdx, canGenerate, generatePairing, pairingAddressSettled])
 
-  // Why: entering the flow must mint a fresh pairing token — clear stale QR
-  // state so we never flash an expired code from a previous session.
+  // Refresh only a code on screen; the old one stays valid for a phone mid-scan.
+  const pairingCodeShown = stage === 'flow' && stepIdx === 1 && pairingUrl != null
+  usePairingOfferExpiry(pairingCodeShown ? pairExpiresAt : null, () => void generatePairing(false))
+
+  // Clear prior QR state on entry so expired codes cannot flash during the fresh visit.
   const beginPairingVisit = (): void => {
     pairingRequestIdRef.current += 1
     setPairLoading(false)
@@ -309,8 +293,6 @@ export default function MobilePage(): React.JSX.Element {
     showFirstPairingFlow()
   }
 
-  // Why: from the paired summary, "Pair another device" jumps straight to
-  // Step 2 since the app is presumably already installed on the user's phone.
   const pairAnotherDevice = (): void => {
     beginPairingVisit()
     showPairAnotherDeviceFlow()
@@ -337,11 +319,7 @@ export default function MobilePage(): React.JSX.Element {
 
   useMobilePageEscape(closeMobilePage)
 
-  // Why: while the deferred first mint waits on the address, Step 2 would
-  // otherwise read "Generate a pairing code to continue" — a prompt for work it
-  // is already about to do on the user's behalf. Kept separate from pairLoading:
-  // that one feeds the invalidation hook's shouldRegenerate, so folding this into
-  // it would let a mode switch mint before the address settles.
+  // Show address waiting as busy separately from pairLoading, or a mode switch could regenerate before address resolution.
   const awaitingPairingAddress =
     stage === 'flow' && stepIdx === 1 && canGenerate && !pairingAddressSettled
 
@@ -363,8 +341,6 @@ export default function MobilePage(): React.JSX.Element {
       handleBack={handleBack}
       handleContinue={handleContinue}
       installQrUrl={installQrUrl}
-      iosChannel={iosChannel}
-      setIosChannel={setIosChannel}
       loadNetworkInterfaces={() => void loadNetworkInterfaces()}
       networkInterfaces={networkInterfaces}
       openAndroidInstallGuide={openAndroidInstallGuide}

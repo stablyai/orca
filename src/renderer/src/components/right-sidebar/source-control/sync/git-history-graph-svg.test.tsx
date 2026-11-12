@@ -1,110 +1,78 @@
+// @vitest-environment happy-dom
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
-import {
-  buildDefaultGitHistoryColorMap,
-  buildGitHistoryViewModels,
-  type GitHistoryItemViewModel
-} from '../../../../../../shared/git-history-graph'
-import type { GitHistoryItem } from '../../../../../../shared/git-history'
+import { expect, it } from 'vitest'
+import type { GitHistoryItemViewModel } from '../../../../../../shared/git/history/git-history-graph'
 import { GitHistoryGraphSvg } from './git-history-graph-svg'
 
-function item(id: string, parentIds: string[]): GitHistoryItem {
-  return { id, parentIds, subject: id, message: id }
+const node = (id: string) => ({ id, color: 'git-graph-lane-1' as const })
+function draw(viewModel: GitHistoryItemViewModel, visibleWidth?: number) {
+  const host = document.createElement('div')
+  host.innerHTML = renderToStaticMarkup(
+    <GitHistoryGraphSvg viewModel={viewModel} visibleWidth={visibleWidth} />
+  )
+  return host
+}
+const paths = (host: HTMLElement) =>
+  Array.from(host.querySelectorAll('path'), (path) => path.getAttribute('d'))
+const wide: GitHistoryItemViewModel = {
+  historyItem: { id: 'current', parentIds: ['parent'], subject: '', message: '' },
+  inputSwimlanes: [node('current'), ...Array.from({ length: 23 }, (_, i) => node(`lane-${i}`))],
+  outputSwimlanes: [node('parent'), ...Array.from({ length: 23 }, (_, i) => node(`lane-${i}`))],
+  kind: 'node'
 }
 
-function renderGraph(viewModel: GitHistoryItemViewModel): string {
-  return renderToStaticMarkup(<GitHistoryGraphSvg viewModel={viewModel} />)
-}
+it('preserves converging arcs whose strokes enter the graph column', () => {
+  const view: GitHistoryItemViewModel = {
+    ...wide,
+    historyItem: { ...wide.historyItem, parentIds: [] },
+    inputSwimlanes: [
+      ...Array.from({ length: 11 }, (_, i) => node(`lane-${i}`)),
+      node('current'),
+      node('tail')
+    ],
+    outputSwimlanes: [...Array.from({ length: 11 }, (_, i) => node(`lane-${i}`)), node('tail')]
+  }
+  expect(paths(draw(view, 131.5))).toContain(
+    'M 143 0 V 6 A 5 5 0 0 1 138 12 H 137 A 5 5 0 0 0 132 17 V 24'
+  )
+  const crossing = {
+    ...view,
+    inputSwimlanes: [node('current'), node('tail')],
+    outputSwimlanes: [node('tail')]
+  }
+  expect(paths(draw(crossing, 11))).toContain(
+    'M 22 0 V 6 A 5 5 0 0 1 17 12 H 16 A 5 5 0 0 0 11 17 V 24'
+  )
+})
 
-describe('Git history graph rendering', () => {
-  it('shifts a surviving lane past a root to its left without changing the root color', () => {
-    const markup = renderGraph({
-      historyItem: item('root', []),
-      kind: 'node',
-      inputSwimlanes: [
-        { id: 'root', color: 'git-graph-lane-1' },
-        { id: 'other', color: 'git-graph-lane-2' }
-      ],
-      outputSwimlanes: [{ id: 'other', color: 'git-graph-lane-2' }]
-    })
+it('keeps off-column merge connections and uses the last duplicate parent lane color', () => {
+  const view: GitHistoryItemViewModel = {
+    ...wide,
+    historyItem: { ...wide.historyItem, parentIds: ['parent', 'side'] },
+    outputSwimlanes: [
+      ...wide.outputSwimlanes,
+      node('side'),
+      { id: 'side', color: 'git-graph-lane-2' }
+    ]
+  }
+  const host = draw(view, 132)
+  const merge = Array.from(host.querySelectorAll('path')).find(
+    (path) => path.getAttribute('d') === 'M 275 12 A 11 11 0 0 1 286 24 M 275 12 H 11'
+  )
+  expect(merge?.getAttribute('stroke')).toBe('var(--git-graph-lane-2)')
+})
 
-    expect(markup).toContain('d="M 22 0 V 6')
-    expect(markup).toContain('cx="11" cy="12" r="3.5" fill="var(--git-graph-lane-1)"')
-  })
-
-  it('draws a surviving lane straight past a root to its right', () => {
-    const markup = renderGraph({
-      historyItem: item('root', []),
-      kind: 'node',
-      inputSwimlanes: [
-        { id: 'other', color: 'git-graph-lane-1' },
-        { id: 'root', color: 'git-graph-lane-2' }
-      ],
-      outputSwimlanes: [{ id: 'other', color: 'git-graph-lane-1' }]
-    })
-
-    expect(markup).toContain('d="M 11 0 V 24"')
-    expect(markup).toContain('cx="22" cy="12" r="3.5" fill="var(--git-graph-lane-2)"')
-  })
-
-  it('retains a lane in the rendered production model through an unrelated root', () => {
-    const rows = buildGitHistoryViewModels([
-      item('merge', ['root', 'other']),
-      item('root', []),
-      item('other', ['base']),
-      item('base', [])
-    ])
-    expect(renderGraph(rows[1]!)).toContain('d="M 22 0 V 6')
-    expect(renderGraph(rows[2]!)).toContain('d="M 11 0 V 12"')
-  })
-
-  it('connects duplicate lanes to one root while shifting the other history', () => {
-    const rows = buildGitHistoryViewModels([
-      item('merge', ['step', 'other', 'root']),
-      item('step', ['root']),
-      item('root', []),
-      item('other', [])
-    ])
-    const markup = renderGraph(rows[2]!)
-
-    expect(markup).toContain('d="M 22 0 V 6')
-    expect(markup).toContain('d="M 33 0 A 11 11 0 0 1 22 12 H 11"')
-    expect(markup).toContain('cx="11" cy="12" r="3.5" fill="var(--git-graph-lane-1)"')
-    expect(renderGraph(rows[3]!)).toContain('d="M 11 0 V 12"')
-  })
-
-  it('keeps the normal parent edge when history is truncated before the parent', () => {
-    const [row] = buildGitHistoryViewModels([item('tip', ['outside-page'])])
-    expect(renderGraph(row!)).toContain('d="M 11 12 V 24"')
-  })
-
-  it('keeps incoming and outgoing boundary colors and rings', () => {
-    const currentRef = { id: 'refs/heads/feature', name: 'feature', revision: 'tip' }
-    const remoteRef = {
-      id: 'refs/remotes/origin/feature',
-      name: 'origin/feature',
-      revision: 'remote'
-    }
-    const rows = buildGitHistoryViewModels(
-      [item('tip', ['base']), item('remote', ['base']), item('base', [])],
-      buildDefaultGitHistoryColorMap({ currentRef, remoteRef }),
-      currentRef,
-      remoteRef,
-      undefined,
-      true,
-      true,
-      'base'
-    )
-
-    for (const [kind, color] of [
-      ['incoming-changes', 'git-graph-remote-ref'],
-      ['outgoing-changes', 'git-graph-ref']
-    ]) {
-      const boundary = rows.find((row) => row.kind === kind)!
-      const markup = renderGraph(boundary)
-      expect(markup).toContain(`fill="var(--${color})"`)
-      expect(markup).toContain('stroke-dasharray="4 2"')
-      expect(markup).toContain('V 24"')
-    }
-  })
+it('keeps partially clipped HEAD and boundary rings until their complete stroke is outside', () => {
+  const view: GitHistoryItemViewModel = {
+    historyItem: { id: 'current', parentIds: [], subject: '', message: '' },
+    inputSwimlanes: [...Array.from({ length: 12 }, (_, i) => node(`lane-${i}`)), node('current')],
+    outputSwimlanes: [],
+    kind: 'HEAD'
+  }
+  expect(draw(view, 135.75).querySelector('circle[r="6.5"]')?.getAttribute('cx')).toBe('143')
+  expect(draw(view, 135.74).querySelector('circle')).toBeNull()
+  const boundary = { ...view, kind: 'incoming-changes' as const }
+  expect(draw(boundary, 135.75).querySelector('circle[stroke-dasharray]')).not.toBeNull()
+  expect(draw(boundary).querySelector('circle[stroke-dasharray]')).not.toBeNull()
+  expect(draw(boundary, 135.74).querySelector('circle')).toBeNull()
 })

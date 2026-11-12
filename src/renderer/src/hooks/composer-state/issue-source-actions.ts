@@ -33,30 +33,29 @@ type IssueSourceActionsInput = Pick<
 
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
-  toLinearLinkedWorkItem,
-  getLinkedItemDisplayName,
-  getSmartNameSelection as getFolderSmartNameSelection
-} from '@/components/sidebar/folder-workspace-composer-helpers'
-import {
-  buildLinearIssueLinkedWorkItem,
-  getLinearLinkedWorkItemBranchName
-} from '@/lib/linear-linked-work-item'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
-import {
-  getLinkedWorkItemSuggestedName,
-  getLinkedWorkItemWorkspaceName,
-  type LinkedWorkItemSummary
-} from '@/lib/new-workspace'
-import {
+  buildLinearWorkspaceSource as toLinearLinkedWorkItem,
   buildJiraWorkspaceSource,
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../shared/new-workspace/workspace-source'
+import {
+  getLinkedItemDisplayName,
+  getSmartNameSelection as getFolderSmartNameSelection
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
+import { getLinearLinkedWorkItemBranchName } from '@/lib/work-items/linear/linear-linked-work-item'
+import {
+  getLinearIssueWorkspaceName,
+  getLinkedWorkItemSuggestedName,
+  getLinkedWorkItemWorkspaceName
+} from '../../../../shared/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import '@/lib/workspace/creation/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
   const {
@@ -120,10 +119,10 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
       setLinkedTaskSourceContext(null)
-      const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
+      const linkedLinearIssue = toLinearLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
-      // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed Linear identifier ("STA-123") that matched this issue.
+      // Treat typed Linear identifiers as lookup text too, rather than user-owned names.
       if (
         shouldApplyWorkspaceSourceAutoName({
           currentName: name,
@@ -140,7 +139,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
       setForkPushWarning(null)
       branchAutoNameRef.current = linearBranchName ?? ''
-      // Why: don't prefill the note for a Linear pick — that would turn a source selection into user-authored instructions (matches the GitHub flow).
+      // Source selection must not inject user instructions through note prefill; match GitHub behavior.
     },
     [
       isProjectGroupTarget,

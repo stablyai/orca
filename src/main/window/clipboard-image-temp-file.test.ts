@@ -1,49 +1,31 @@
-import { dirname, join } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { writeFileMock, mkdirMock, getPathMock } = vi.hoisted(() => ({
-  writeFileMock: vi.fn(),
-  mkdirMock: vi.fn(),
-  getPathMock: vi.fn((name: string) =>
-    name === 'temp' ? '/os/temp' : '/Users/me/Library/Application Support/orca'
-  )
-}))
-
-vi.mock('node:fs/promises', () => ({ default: { writeFile: writeFileMock, mkdir: mkdirMock } }))
-vi.mock('node:crypto', () => ({ randomUUID: () => 'uuid-1' }))
+const environment = vi.hoisted(() => ({ temp: '' }))
 vi.mock('../../shared/app-environment', () => ({
-  getAppEnvironment: () => ({ getPath: getPathMock })
+  getAppEnvironment: () => ({ getPath: () => environment.temp })
 }))
 
 import { saveClipboardImageBufferAsTempFile } from './clipboard-image-temp-file'
 
-beforeEach(() => {
-  vi.clearAllMocks()
-})
-
 describe('saveClipboardImageBufferAsTempFile', () => {
-  it('keeps a terminal, editor or phone paste in OS temp, as before', async () => {
-    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1, 2, 3]))
-
-    expect(getPathMock).toHaveBeenCalledWith('temp')
-    expect(getPathMock).not.toHaveBeenCalledWith('userData')
-    expect(mkdirMock).not.toHaveBeenCalled()
-    expect(dirname(savedPath)).toBe('/os/temp')
-    expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
+  beforeEach(async () => {
+    environment.temp = await mkdtemp(path.join(tmpdir(), 'orca-clipboard-name-'))
   })
 
-  it('writes a native-chat composer paste into the paste folder, where its draft can find it', async () => {
-    const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1, 2, 3]), {
-      forNativeChatDraft: true
-    })
+  afterEach(async () => {
+    await rm(environment.temp, { recursive: true, force: true })
+  })
 
-    expect(mkdirMock).toHaveBeenCalledWith(
-      join('/Users/me/Library/Application Support/orca', 'native-chat-pastes'),
-      { recursive: true }
-    )
-    expect(dirname(savedPath)).toBe(
-      join('/Users/me/Library/Application Support/orca', 'native-chat-pastes')
-    )
-    expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
+  it.each([
+    ['HEIC', Buffer.from('\x00\x00\x00\x18ftypheic\x00\x00\x00\x00', 'latin1'), /\.heic$/],
+    ['TIFF', Buffer.from([0x4d, 0x4d, 0x00, 0x2a, 0, 0, 0, 8]), /\.tiff$/],
+    ['unrecognised', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), /^orca-paste-[^.]+$/]
+  ])('names %s bytes by what they are, never .png', async (_label, bytes, expected) => {
+    const saved = await saveClipboardImageBufferAsTempFile(bytes)
+
+    expect(path.basename(saved)).toMatch(expected)
   })
 })

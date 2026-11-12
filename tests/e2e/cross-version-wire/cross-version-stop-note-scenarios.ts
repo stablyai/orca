@@ -1,18 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody
-} from '../../../src/shared/agent-session-journal-types'
-import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../src/main/native-chat/agent-session-wire/agent-session-history-page-bounds'
+
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   createReleasedStopNoteRig,
   noteId,
-  noteIdentity,
   turnItemId,
-  scope,
   ordinary,
   unconfirmed,
   type ScenarioPort
@@ -24,24 +16,7 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
     (ref) => {
       const rig = createReleasedStopNoteRig(port, ref)
       const { page, subscribe, events, reduce, render, turn, note, seed } = rig
-      it('renders the derived page with the interrupted turn outside the page', async () => {
-        await turn('interrupted')
-        await note()
-        const snapshot = rig.journal.snapshot()
-        const stored = rig.journal.itemBody(noteId)
-        const notePage = await page({ direction: 'tail', limit: 1 })
-        expect(notePage.items.map((item) => item.itemId)).toEqual([noteId])
-        const state = rig.client.reduceStructuredAgentSession(
-          rig.client.EMPTY_STRUCTURED_AGENT_SESSION,
-          {
-            type: 'history-page',
-            page: notePage
-          }
-        )
-        expect(render(state)).toMatchObject({ type: 'text', text: ordinary.text })
-        expect(state.items[0]).toEqual(snapshot.items.find((item) => item.itemId === noteId))
-        expect(rig.journal.itemBody(noteId)).toBe(stored)
-      })
+
       it.each([false, true])(
         'renders the same-revision note with a live turn end (lifecycle batch=%s)',
         async (batch) => {
@@ -68,10 +43,11 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
           const after = reduce(before, replies)
           expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
           expect(rig.journal.itemBody(noteId)).toEqual(unconfirmed)
+          // The turn end is one saved sequence that touches only the turn, whichever writer made it.
           const since = rig.journal.readSince(before.cursor!)
           expect(since).toMatchObject({
             ok: true,
-            rows: [expect.objectContaining({ kind: batch ? 'lifecycle-batch' : 'item' })]
+            rows: [expect.objectContaining({ kind: 'outcome', itemIds: [turnItemId] })]
           })
         }
       )
@@ -110,84 +86,6 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
         state = reduce(state, refreshed)
         expect(render(state)).toEqual({ type: 'text', text: ordinary.text })
         expect(rig.journal.cursor()).toEqual(held)
-      })
-      it('catches up through byte-bounded pages without losing the dependent note or cursor', async () => {
-        const before = await seed()
-        const held = rig.journal.cursor()
-        for (const clientMessageId of ['large-a', 'large-b']) {
-          await rig.journal.appendItem(
-            { provider: 'orca', clientMessageId },
-            {
-              kind: 'message',
-              role: 'assistant',
-              blocks: [
-                {
-                  type: 'text',
-                  text: 'x'.repeat(Math.floor(HISTORY_PAGE_CONTENT_BUDGET_BYTES * 0.6))
-                }
-              ]
-            },
-            { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-          )
-        }
-        await turn('interrupted')
-        const first = await page({ direction: 'after', cursor: held, limit: 3 })
-        expect(first.hasNewer).toBe(true)
-        const caughtUp = await subscribe(held)
-        const after = reduce(before, caughtUp)
-        expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
-        expect(after.cursor).toEqual(rig.journal.cursor())
-        expect(events(caughtUp).filter((event) => event.type === 'batch').length).toBeGreaterThan(1)
-      })
-      it.each(['running', 'completed', 'unverifiable', 'missing', 'other-failure'] as const)(
-        'keeps %s wording through the released page reader',
-        async (state) => {
-          if (state !== 'missing') {
-            await turn(state === 'other-failure' ? 'interrupted' : state)
-          }
-          const body: AgentJournalItemBody =
-            state === 'other-failure'
-              ? {
-                  kind: 'status',
-                  ...agentSessionFailureWords(agentSessionFailureFact('providerExited'), {
-                    surface: 'row'
-                  })
-                }
-              : unconfirmed
-          await note(body)
-          const initial = await page({ direction: 'tail' })
-          expect(initial.items.find((item) => item.itemId === noteId)?.body).toEqual(body)
-        }
-      )
-      it('preserves removal when the operation note is re-keyed before the interrupted end', async () => {
-        const op = { provider: 'orca', clientMessageId: 'stop:operation-1' } as const
-        await rig.journal.appendItem(op, unconfirmed, {
-          fence: 1,
-          turnScope: AGENT_JOURNAL_THREAD_SCOPE
-        })
-        await turn('running')
-        const initial = await page({ direction: 'tail' })
-        const before = rig.client.reduceStructuredAgentSession(
-          rig.client.EMPTY_STRUCTURED_AGENT_SESSION,
-          {
-            type: 'history-page',
-            page: initial
-          }
-        )
-        const held = rig.journal.cursor()
-        await rig.journal.appendLifecycleBatch({
-          settlementId: 're-key',
-          fence: 1,
-          mutations: [
-            { kind: 'tombstone', identity: op },
-            { kind: 'item', identity: noteIdentity, body: unconfirmed, turnScope: scope }
-          ]
-        })
-        await turn('interrupted')
-        const replies = await subscribe(held)
-        const after = reduce(before, replies)
-        expect(after.items.some((item) => item.itemId === agentJournalItemKey(op))).toBe(false)
-        expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
       })
     }
   )

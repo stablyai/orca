@@ -1,22 +1,6 @@
 name: Homebrew Cask Bump
 
-# Why: keep the stablyai/homebrew-orca tap in sync with GitHub Releases.
-# Triggers:
-#   - workflow_call → release-cut.yml finished publishing a stable tag
-#   - workflow_dispatch → manual backfill for a specific tag
-#
-# The job computes the sha256 of orca-macos-arm64.dmg + orca-macos-x64.dmg
-# from the release, templates the channel-specific cask in this repo with the
-# new version and hashes, then PRs the result into stablyai/homebrew-orca.
-# Stable tags update Casks/orca.rb; RC tags update Casks/orca@rc.rb.
-#
-# Why no `release.published` trigger: other products shipped from this repo
-# (e.g. mobile under `mobile-v*`) also publish GitHub Releases. A blanket
-# `release.published` trigger would fire this workflow for any of them and
-# attempt to download `orca-macos-*.dmg` from a non-desktop release, at
-# best 404ing and at worst (if the filter were weaker) rewriting the cask
-# to a non-desktop version. The tap is only ever bumped by the desktop
-# release pipeline calling this workflow directly.
+# Update desktop stable/RC casks in stablyai/homebrew-orca with release DMG hashes through release-cut workflow_call or manual backfill. Avoid release.published because mobile/non-desktop releases lack those DMGs and must never rewrite casks.
 
 on:
   workflow_call:
@@ -132,10 +116,7 @@ jobs:
           print(src)
           PY
 
-      # Why: reuse the existing buf0-bot GitHub App instead of minting a new
-      # PAT. The app is installed org-wide, so it has access to
-      # stablyai/homebrew-orca automatically. GITHUB_TOKEN cannot push
-      # cross-repo; a short-lived installation token can.
+      # Use org-installed buf0-bot’s short-lived App token for cross-repo pushes; GITHUB_TOKEN is repo-scoped.
       - name: Generate buf0-bot token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -166,8 +147,7 @@ jobs:
           cp "$CASK_PATH" "tap/$CASK_PATH"
 
           cd tap
-          # Why: commit author must match the buf0-bot app so commits are
-          # attributed to the bot in the tap's history / PR UI.
+          # Match the buf0-bot App’s commit author for tap history/PR attribution.
           git config user.name  "buf0-bot[bot]"
           git config user.email "252831055+buf0-bot[bot]@users.noreply.github.com"
 
@@ -182,8 +162,7 @@ jobs:
           git commit -m "$TITLE"
           git push -u origin "$branch" --force
 
-          # Why: repeated backfills can race an existing PR branch, so edit
-          # the PR title if creation reports that one already exists.
+          # Backfills can race an existing branch; update its PR title when creation finds one.
           gh pr create \
             --title "$TITLE" \
             --body "Automated bump of $CASK_PATH from stablyai/orca release $TAG." \
@@ -191,8 +170,5 @@ jobs:
             --head "$branch" \
             || gh pr edit "$branch" --title "$TITLE"
 
-          # Why: squash-merge immediately rather than --auto. The tap has no
-          # required checks or branch protection, and `gh pr merge --auto`
-          # only activates when there's something to wait on — on a repo
-          # with no gates it silently no-ops, leaving the PR open forever.
+          # Squash immediately: this tap has no gates, so gh pr merge --auto silently no-ops.
           gh pr merge "$branch" --squash --delete-branch

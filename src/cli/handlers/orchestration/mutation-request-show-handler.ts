@@ -1,17 +1,19 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
-import { getRequiredStringFlag } from '../../flags'
+import { printOrchestrationReceipt } from './agent-view'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
-import type { OrchestrationMutationRequestShowResult } from '../../../shared/orchestration-mutation-request'
+import type { OrchestrationMutationRequestShowResult } from '../../../shared/orchestration/orchestration-mutation-request'
 
 export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> = {
   'orchestration request-show': async ({ flags, client, json }) => {
     const request = getRequiredStringFlag(flags, 'request')
+    const on = getOptionalStringFlag(flags, 'on')
     const result = await client
-      .call<OrchestrationMutationRequestShowResult>('orchestration.requestShow', { request })
+      .call<OrchestrationMutationRequestShowResult>('orchestration.requestShow', {
+        request,
+        ...(on ? { on } : {})
+      })
       .catch((error: unknown) => {
-        // Why: an Orca server older than request-show answers method_not_found, which reads
-        // as a bug rather than a version gap on the very path a lost response sends you down.
         if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
           throw new RuntimeClientError(
             'incompatible_runtime',
@@ -20,9 +22,9 @@ export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> 
         }
         throw error
       })
-    printResult(
+    printOrchestrationReceipt(
       result,
-      json,
+      { flags, json },
       (value) =>
         `${value.requestId} [${value.state}]${value.method ? ` ${value.method}` : ''}\n${value.interpretation}`
     )

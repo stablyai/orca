@@ -6,13 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import { SCHEMA_VERSION } from '../contract-constants'
 
-/**
- * A pre-v39 database: the narrow archive CHECK, stamped at 38 so ONLY v39 runs.
- *
- * Seeding lower would still pass while exercising the whole v13->v39 chain instead, which
- * would mask a broken rebuild. `createTables` supplies every other table before migration, so
- * a 38 stamp survives the completeness check and the migration start resolves to 38.
- */
+/** Stamp the narrow archive schema at v38 to isolate v39; a lower version could hide a broken rebuild. */
 function seedLegacyDatabase(path: string): void {
   const db = new Database(path)
   db.exec(`
@@ -31,9 +25,7 @@ function seedLegacyDatabase(path: string): void {
 }
 
 describe('structured pointer schema migration', () => {
-  // Why a real temp dir and a teardown: `$TMPDIR` is unset on Windows CI, so the interpolated
-  // `/tmp/...` opened as `SQLITE_CANTOPEN`, and nothing removed the file on the platforms where it
-  // did open.
+  // Use and clean a real temp directory: TMPDIR is absent on Windows CI.
   const tempRoots: string[] = []
 
   afterEach(() => {
@@ -66,22 +58,52 @@ describe('structured pointer schema migration', () => {
     }
   })
 
-  it('creates the structured pointer operation store', () => {
-    const db = new OrchestrationDb(':memory:')
+  it('keeps sends an unreleased build saved with a fence, and takes new ones', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-structured-migration-'))
+    tempRoots.push(root)
+    const path = join(root, 'orchestration.db')
+    const seeded = new Database(path)
+    seeded.exec(`
+      CREATE TABLE structured_mail_sends (
+        mailbox_handle TEXT NOT NULL,
+        message_id     TEXT NOT NULL,
+        session_id     TEXT NOT NULL,
+        operation_id   TEXT NOT NULL,
+        minted_at_ms   INTEGER NOT NULL,
+        fence          INTEGER NOT NULL,
+        PRIMARY KEY (mailbox_handle, message_id)
+      );
+      INSERT INTO structured_mail_sends VALUES ('dispatch:d1', 'm1', 's1', 'op-saved', 1, 3);
+    `)
+    seeded.pragma(`user_version = ${SCHEMA_VERSION}`)
+    seeded.close()
+    const db = new OrchestrationDb(path)
     try {
-      expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
-      db.putStructuredPointerOperation({
-        mailbox_handle: 'dispatch:d1',
-        session_id: 's1',
-        operation_id: '1757030400000-0123456789abcdef0123456789abcdef',
-        batch_fingerprint: 'fp',
-        minted_at_ms: 1_757_030_400_000
-      })
-      expect(db.getStructuredPointerOperation('dispatch:d1')?.operation_id).toBe(
-        '1757030400000-0123456789abcdef0123456789abcdef'
-      )
-      db.deleteStructuredPointerOperation('dispatch:d1')
-      expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
+      expect(
+        db.reserveStructuredMailSend({
+          mailbox_handle: 'dispatch:d1',
+          message_id: 'm2',
+          session_id: 's1',
+          operation_id: 'op-new',
+          minted_at_ms: 2
+        })
+      ).toBe(true)
+      expect(db.getStructuredMailSends('dispatch:d1')).toEqual([
+        {
+          mailbox_handle: 'dispatch:d1',
+          message_id: 'm1',
+          session_id: 's1',
+          operation_id: 'op-saved',
+          minted_at_ms: 1
+        },
+        {
+          mailbox_handle: 'dispatch:d1',
+          message_id: 'm2',
+          session_id: 's1',
+          operation_id: 'op-new',
+          minted_at_ms: 2
+        }
+      ])
     } finally {
       db.close()
     }

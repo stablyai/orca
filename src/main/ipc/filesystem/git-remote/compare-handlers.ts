@@ -2,15 +2,17 @@ import { ipcMain } from 'electron'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult
-} from '../../../../shared/git-diff-compare-types'
-import { getBranchCompare, getCommitCompare } from '../../../git/status'
-import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
+} from '../../../../shared/git/diff/git-diff-compare-types'
+import { getBranchCompare } from '../../../git/source-control/branch-compare'
+import { getCommitCompare } from '../../../git/source-control/commit-compare'
+import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { validateFullGitObjectId } from '../../filesystem-path-containment'
+import { validateFullGitObjectId } from '../access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
-import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerGitRemoteCompareHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -27,12 +29,15 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
       }
     ): Promise<GitBranchCompareResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      // A 30 s poll while Source Control shows the branch: its Git would boot a stopped WSL distro (E9).
+      await assertWslUncPathRunning(args.worktreePath)
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+      await assertWslUncPathRunning(worktreePath, gitOptions.wslDistro)
       return getBranchCompare(worktreePath, args.baseRef, {
         ...gitOptions,
         ...(args.admissionTier ? { admissionTier: args.admissionTier } : {})

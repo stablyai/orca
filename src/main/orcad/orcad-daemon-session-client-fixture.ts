@@ -1,44 +1,12 @@
-// Test fixture: a terminal client that talks to a profile's terminal daemon directly, the way a
-// paired client's terminal does, so a test can prove a session outlives a serve-host switch.
 import { build } from 'esbuild'
 
 export type DaemonSessionClientResult = { pid: number; isReattach: boolean; output: boolean }
 
-/** Bundles the client to `outfile`; run it with Node as `<op: create|attach> <daemonDir> <sessionId> <marker> <cwd>`. */
+/** Run bundled client with Node: <create|attach> <daemonDir> <sessionId> <marker> <cwd>. */
 export async function buildDaemonSessionClient(outfile: string): Promise<void> {
   await build({
     stdin: {
-      contents: `
-        import { DaemonPtyAdapter } from './src/main/daemon/daemon-pty-adapter'
-        import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './src/main/daemon/daemon-spawner'
-        import { setAppEnvironment } from './src/shared/app-environment'
-        const [op, runtimeDir, sessionId, marker, cwd] = process.argv.slice(2)
-        setAppEnvironment({
-          getPath: () => cwd, getAppPath: () => cwd, getVersion: () => 'test', isPackaged: () => true,
-          onWillQuit() {}, exit: code => process.exit(code), getAppMetrics: () => []
-        })
-        const adapter = new DaemonPtyAdapter({
-          socketPath: getDaemonSocketPath(runtimeDir), tokenPath: getDaemonTokenPath(runtimeDir),
-          pidPath: getDaemonPidPath(runtimeDir), profileScope: runtimeDir, runtimeDir
-        })
-        let output = ''
-        adapter.onData(event => { if (event.id === sessionId) output += event.data })
-        const deadline = setTimeout(() => { console.error('timed out; output: ' + output); process.exit(98) }, 20_000)
-        ;(async () => {
-          const win32 = process.platform === 'win32'
-          const spawned = await adapter.spawn(op === 'create'
-            ? { sessionId, cols: 80, rows: 24, cwd, shellOverride: win32 ? 'cmd.exe' : '/bin/sh' }
-            : { sessionId, cols: 80, rows: 24 })
-          // Both shells echo what is typed, so the typed form must not already read as the marker.
-          const typed = win32 ? 'echo ORCA_^SERVE_' + marker : "printf 'ORCA_SERVE_%s\\\\n' " + marker
-          adapter.write(spawned.id, typed + "\\r")
-          while (!output.includes('ORCA_SERVE_' + marker)) await new Promise(r => setTimeout(r, 50))
-          clearTimeout(deadline)
-          await adapter.disconnectOnly()
-          console.log(JSON.stringify({ pid: spawned.pid, isReattach: spawned.isReattach === true, output: true }))
-          process.exit(0)
-        })().catch(error => { console.error(error); process.exit(1) })
-      `,
+      contents: `\n        import { DaemonPtyAdapter } from './src/main/daemon/providers/adapter/daemon-pty-adapter'\n        import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './src/main/daemon/launch/daemon-spawner'\n        import { setAppEnvironment } from './src/shared/app-environment'\n        const [op, runtimeDir, sessionId, marker, cwd] = process.argv.slice(2)\n        setAppEnvironment({\n          getPath: () => cwd, getAppPath: () => cwd, getVersion: () => 'test', isPackaged: () => true,\n          onWillQuit() {}, exit: code => process.exit(code), getAppMetrics: () => []\n        })\n        const adapter = new DaemonPtyAdapter({\n          socketPath: getDaemonSocketPath(runtimeDir), tokenPath: getDaemonTokenPath(runtimeDir),\n          pidPath: getDaemonPidPath(runtimeDir), profileScope: runtimeDir, runtimeDir\n        })\n        let output = ''\n        adapter.onData(event => { if (event.id === sessionId) output += event.data })\n        const deadline = setTimeout(() => { console.error('timed out; output: ' + output); process.exit(98) }, 20_000)\n        ;(async () => {\n          const win32 = process.platform === 'win32'\n          const spawned = await adapter.spawn(op === 'create'\n            ? { sessionId, cols: 80, rows: 24, cwd, shellOverride: win32 ? 'cmd.exe' : '/bin/sh' }\n            : { sessionId, cols: 80, rows: 24 })\n          // Both shells echo what is typed, so the typed form must not already read as the marker.\n          const typed = win32 ? 'echo ORCA_^SERVE_' + marker : "printf 'ORCA_SERVE_%s\\\\n' " + marker\n          adapter.write(spawned.id, typed + "\\r")\n          while (!output.includes('ORCA_SERVE_' + marker)) await new Promise(r => setTimeout(r, 50))\n          clearTimeout(deadline)\n          await adapter.disconnectOnly()\n          console.log(JSON.stringify({ pid: spawned.pid, isReattach: spawned.isReattach === true, output: true }))\n          process.exit(0)\n        })().catch(error => { console.error(error); process.exit(1) })\n      `,
       resolveDir: process.cwd(),
       loader: 'ts'
     },

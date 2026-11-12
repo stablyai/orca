@@ -41,7 +41,7 @@ const localRepos = [
 ]
 const windowsRepo = hostRepo('win-orca', 'C:/Users/jinwo/orca/orca')
 
-// Jinwoo's shape: several local checkouts of stablyai/orca, plus the project on two servers.
+// Several local checkouts plus copies of the same project on two servers.
 export const PROJECT_SECTION_PARITY_HOSTS: readonly ParityHostAnswer[] = [
   {
     target: { kind: 'local' },
@@ -106,20 +106,21 @@ export const PROJECT_SECTION_PARITY_ROWS: readonly {
   { id: 'wt-m4', repoId: 'm4-orca', lastActivityAt: 10 }
 ]
 
+// Same-host checkouts still need path prefixes; other machines do not.
 const STABLY = {
   key: 'project:github:stablyai/orca::setup:local-stably',
-  label: 'jinwoo/stably/orca'
+  label: 'stably/orca'
 }
 const WORKSPACE = {
   key: 'project:github:stablyai/orca::setup:local-workspace',
-  label: 'workspaces/orca/orca'
+  label: 'orca/orca'
 }
 // Why 'orca', not the server's 'Orca': the later host's derived project name wins the merge.
-const WINDOWS = { key: 'project:github:stablyai/orca', label: 'jinwo/orca/orca' }
-const M4 = { key: 'project:github:stablyai/orca::setup:m4-orca', label: 'm4air/orca/orca' }
+const WINDOWS = { key: 'project:github:stablyai/orca', label: 'orca' }
+const M4 = { key: 'project:github:stablyai/orca::setup:m4-orca', label: 'orca/orca' }
 const M4_TWO = {
   key: 'project:github:stablyai/orca::setup:m4-orca-two',
-  label: 'm4air/orca-two/orca'
+  label: 'orca-two/orca'
 }
 const ASSETS = { key: 'project:repo:local-assets', label: 'design-assets' }
 

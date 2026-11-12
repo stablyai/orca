@@ -2,7 +2,7 @@ import type { PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-ag
 import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Settles the SDK's `canUseTool` promise; `null` writes no provider response. */
 export type ClaudePromptSettle = (response: PermissionResult | null) => void
@@ -15,6 +15,7 @@ export type ClaudePromptPresentation = {
   blockedPath?: string
   matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
+  personOnly?: true
 }
 
 export type ClaudePendingPrompt = ClaudePromptPresentation & {
@@ -69,7 +70,6 @@ function questionId(question: Record<string, unknown>, index: number): string {
 /** Session-local callback ownership; none of this state is reconstructed from the transcript. */
 export class ClaudePromptRegistry {
   private readonly prompts = new Map<string, ClaudePendingPrompt>()
-  /** Journal item id to the prompt key it shows. */
   private readonly journalBindings = new Map<string, string>()
   private readonly claims = new Map<ClaudePendingPrompt, ClaudePromptClaim>()
 
@@ -97,6 +97,7 @@ export class ClaudePromptRegistry {
       ...(registration.blockedPath ? { blockedPath: registration.blockedPath } : {}),
       ...(registration.matchedAskRule ? { matchedAskRule: registration.matchedAskRule } : {}),
       ...(registration.subject ? { subject: registration.subject } : {}),
+      ...(registration.personOnly ? { personOnly: true } : {}),
       questionIds: questions.map(questionId),
       settle: registration.settle,
       ...(agentId ? { agentId } : {})
@@ -105,13 +106,12 @@ export class ClaudePromptRegistry {
     return prompt
   }
 
-  /** The request is still open and nobody is answering it yet. */
   awaitsAnswer(promptKey: string): boolean {
     const prompt = this.prompts.get(promptKey)
     return prompt !== undefined && !this.claims.has(prompt)
   }
 
-  /** True only if the prompt was still pending; lets abort and answer settle once. */
+  /** Prevent abort and answer from settling the same pending request twice. */
   forgetIfPending(prompt: ClaudePendingPrompt): boolean {
     if (!this.prompts.has(prompt.promptKey)) {
       return false

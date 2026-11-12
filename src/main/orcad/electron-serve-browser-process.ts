@@ -1,20 +1,35 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { createServer, type AddressInfo } from 'node:net'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import {
+  BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
+  BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
+} from '../../shared/browser/runtime/browser-runtime-capabilities'
+import {
+  BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
+  BrowserExpectedUrlMismatch
+} from '../../shared/browser/client-hosting/browser-expected-url'
+import { browserExpectedUrlMismatchError } from '../browser/cdp/input/browser-expected-page-url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'
-import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
-import type { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
+import type { RuntimeBrowserCommandHost } from '../runtime/browser/commands/browser-command-contracts'
+import type { RuntimeBrowserCommands } from '../runtime/browser/commands/browser-commands'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
-import { readRuntimeMetadata } from '../runtime/runtime-metadata'
+import { readRuntimeMetadata } from '../runtime/rpc/server/runtime-metadata'
 import { spawnProcess } from '@orca/process-host'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser-sidecar-lifetime'
 import { electronIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
+import { browserWaitRequestTimeoutMs } from '../../shared/browser-wait-timeout'
+import { electronServeEnvironment } from './electron-serve-browser-environment'
+import { reserveLoopbackPort } from './loopback-port-reservation'
+import {
+  createElectronSidecarProfile,
+  removeLeftoverElectronSidecarProfile,
+  stopElectronSidecar
+} from './electron-sidecar-profile'
 import {
   ElectronSidecarTabRegistry,
   ElectronSidecarTabSchema,
@@ -26,80 +41,28 @@ import {
 } from './electron-sidecar-method-routing'
 
 const START_TIMEOUT_MS = 120_000
-const STOP_TIMEOUT_MS = 5_000
 const BrowserPageResult = z.object({ browserPageId: z.string() }).passthrough()
 const BrowserCloseResult = z.object({ closed: z.boolean() }).passthrough()
 const BrowserTabListResult = z.object({ tabs: z.array(ElectronSidecarTabSchema) }).passthrough()
 const RuntimeStatusResult = z.object({ capabilities: z.array(z.string()).optional() }).passthrough()
 
-async function reserveLoopbackPort(): Promise<number> {
-  const server = createServer()
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      server.removeListener('error', reject)
-      resolve()
-    })
-  })
-  const address = server.address() as AddressInfo
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error)
-      } else {
-        resolve()
-      }
-    })
-  })
-  return address.port
-}
-function electronServeEnvironment(userDataPath: string): NodeJS.ProcessEnv {
-  const environment = { ...process.env }
-  for (const key of [
-    'ORCA_E2E_USER_DATA_DIR',
-    'ORCA_USER_DATA',
-    'ORCA_USER_DATA_PATH',
-    'AGENT_BROWSER_ARGS',
-    'AGENT_BROWSER_AUTO_CONNECT',
-    'AGENT_BROWSER_CDP',
-    'AGENT_BROWSER_ENGINE',
-    'AGENT_BROWSER_EXECUTABLE_PATH',
-    'AGENT_BROWSER_HEADED',
-    'AGENT_BROWSER_PROFILE',
-    'AGENT_BROWSER_PROVIDER',
-    'AGENT_BROWSER_SESSION',
-    'AGENT_BROWSER_SESSION_NAME',
-    'AGENT_BROWSER_STATE'
-  ]) {
-    delete environment[key]
-  }
-  // Keep Electron's native home override active in isolated sidecars.
-  if (process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR) {
-    environment.ORCA_E2E_USER_DATA_DIR = userDataPath
-  }
-  return environment
-}
-
-function signalProcess(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(pid, signal)
-  } catch {
-    // The sidecar already exited.
-  }
-}
-
 export class ElectronServeBrowserProcess {
   private child: ReturnType<typeof spawnProcess> | null = null
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
+  private sidecarCapabilities: readonly string[] = []
   private sidecarDataPath: string | null = null
 
-  constructor(private readonly executablePath: string) {}
+  constructor(
+    private readonly executablePath: string,
+    private readonly orcadUserDataPath: string
+  ) {}
 
   async start(signal?: AbortSignal): Promise<void> {
+    this.sidecarCapabilities = []
     signal?.throwIfAborted()
-    const temporaryRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
-    const userDataPath = await mkdtemp(join(temporaryRoot, 'orcad-browser-'))
+    await removeLeftoverElectronSidecarProfile(this.orcadUserDataPath)
+    const userDataPath = await createElectronSidecarProfile(this.orcadUserDataPath)
     this.sidecarDataPath = userDataPath
     const port = await reserveLoopbackPort()
     signal?.throwIfAborted()
@@ -112,6 +75,7 @@ export class ElectronServeBrowserProcess {
         '--serve-json',
         '--serve-no-pairing',
         ...electronIsolatedProfileSwitches(process.env),
+        ...headlessServeOzonePlatformSwitches(process.platform),
         `--user-data-dir=${userDataPath}`
       ],
       env: { ...electronServeEnvironment(userDataPath), [BROWSER_SIDECAR_OWNER_ENV]: '1' },
@@ -119,6 +83,11 @@ export class ElectronServeBrowserProcess {
       serialization: 'json'
     })
     this.child = child
+    let spawnError: unknown = null
+    // Bundle swaps can race restart; report ENOENT as start failure without crashing orcad.
+    child.on('error', (error) => {
+      spawnError = error
+    })
     for (const stream of [child.stdout, child.stderr]) {
       stream?.on('error', () => undefined)
       stream?.resume()
@@ -135,6 +104,7 @@ export class ElectronServeBrowserProcess {
           )
           signal?.throwIfAborted()
           if (status.capabilities?.includes('browser.headless.v1')) {
+            this.sidecarCapabilities = status.capabilities
             this.metadata = metadata
             return
           }
@@ -142,6 +112,10 @@ export class ElectronServeBrowserProcess {
         } catch (error) {
           lastError = error
         }
+      }
+      if (spawnError) {
+        lastError = spawnError
+        break
       }
       if (child.exitCode !== null || child.signalCode !== null) {
         break
@@ -157,19 +131,31 @@ export class ElectronServeBrowserProcess {
 
   createCommands(host: RuntimeBrowserCommandHost): RuntimeBrowserCommands {
     return new Proxy({} as RuntimeBrowserCommands, {
+      // Startup checks membership before resolving commands dynamically.
+      has: (_target, property) => typeof property === 'string' && property !== 'then',
       get: (_target, property) => {
-        if (property === 'then') {
-          return undefined
-        }
-        if (typeof property !== 'string') {
+        if (property === 'then' || typeof property !== 'string') {
           return undefined
         }
         return (...args: unknown[]) => this.invoke(host, property, args)
       }
     })
   }
+  supportsGoogleCookieClear(): boolean {
+    return (
+      this.isAvailable() &&
+      this.sidecarCapabilities.includes(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY)
+    )
+  }
+
   isAvailable(): boolean {
     return this.metadata !== null && isProcessAlive(this.metadata.pid)
+  }
+
+  /** Read child exit state so recycled PIDs cannot identify an unrelated process. */
+  pid(): number | null {
+    const child = this.child
+    return child?.pid && child.exitCode === null && child.signalCode === null ? child.pid : null
   }
 
   async stop(): Promise<void> {
@@ -178,20 +164,17 @@ export class ElectronServeBrowserProcess {
     const sidecarDataPath = this.sidecarDataPath
     this.child = null
     this.metadata = null
+    this.sidecarCapabilities = []
     this.sidecarDataPath = null
     this.tabs.clear()
     if (sidecarPid) {
-      signalProcess(sidecarPid, 'SIGTERM')
-      const deadline = Date.now() + STOP_TIMEOUT_MS
-      while (isProcessAlive(sidecarPid) && Date.now() < deadline) {
-        await delay(50)
-      }
-      if (isProcessAlive(sidecarPid)) {
-        signalProcess(sidecarPid, 'SIGKILL')
-      }
+      await stopElectronSidecar(sidecarPid)
     }
     if (sidecarDataPath) {
-      await rm(sidecarDataPath, { recursive: true, force: true })
+      // Windows helpers may briefly hold this temp profile; cleanup failure must not strand the instance lock.
+      await removeTree(sidecarDataPath).catch((error: unknown) =>
+        console.warn('[orcad] Electron browser sidecar data was not removed:', error)
+      )
     }
   }
 
@@ -214,9 +197,19 @@ export class ElectronServeBrowserProcess {
       )
     }
     const original = (args[0] ?? {}) as Record<string, unknown>
+    // The sidecar is the installed app, which can be older and would drop the field.
+    if (
+      original.expectUrl !== undefined &&
+      !this.sidecarCapabilities.includes(BROWSER_EXPECT_URL_RUNTIME_CAPABILITY)
+    ) {
+      throw new BrowserError(
+        BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
+        'The installed Orca app that runs this server’s browser cannot check --expect-url. Update it or drop the flag.'
+      )
+    }
     const worktreeId =
       typeof original.worktree === 'string'
-        ? (await host.resolveWorktreeSelector(original.worktree)).id
+        ? (await host.resolveBrowserWorkspace(original.worktree)).id
         : undefined
     const params: Record<string, unknown> = { ...original, worktree: undefined }
     const requestedPageId = typeof original.page === 'string' ? original.page : undefined
@@ -229,7 +222,7 @@ export class ElectronServeBrowserProcess {
         this.tabs.require(requestedPageId, worktreeId)
         return { browserPageId: requestedPageId }
       }
-      // The sidecar mints its own tab id; adopt the caller's provisional id after creating it.
+      // Sidecars mint their own IDs; adopt the caller’s provisional ID after creation.
       delete params.page
     }
 
@@ -259,7 +252,12 @@ export class ElectronServeBrowserProcess {
 
     let result: unknown
     try {
-      result = await sendOrcadSidecarRequest(metadata, rpcMethod, params)
+      result = await sendOrcadSidecarRequest(
+        metadata,
+        rpcMethod,
+        params,
+        method === 'browserWait' ? browserWaitRequestTimeoutMs(params.timeout) : undefined
+      )
     } catch (error) {
       if (
         targetPage &&
@@ -268,7 +266,12 @@ export class ElectronServeBrowserProcess {
       ) {
         this.tabs.delete(targetPage)
       }
-      throw error
+      // The sidecar named its own page id, which the caller's --page can't use.
+      const mismatch =
+        error instanceof BrowserError
+          ? BrowserExpectedUrlMismatch.safeParse(this.tabs.rewriteResult(error.data))
+          : null
+      throw mismatch?.success ? browserExpectedUrlMismatchError(mismatch.data) : error
     }
     if (method === 'browserTabCreate') {
       const created = BrowserPageResult.parse(result)

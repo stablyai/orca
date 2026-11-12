@@ -17,7 +17,6 @@ const INSTALL_DETAIL_CHARS = 4000
 const VENV_TIMEOUT_MS = 2 * 60_000
 const PYVENV_CFG_MAX_BYTES = 64 * 1024
 
-/** `.venv`/`.conda` interpreters from the notebook's folder up to the workspace root, nearest first. */
 export function findWorkspaceInterpreters(
   notebookPath: string,
   rootPath: string | null,
@@ -28,7 +27,7 @@ export function findWorkspaceInterpreters(
   for (let dir = dirname(notebookPath); ; dir = dirname(dir)) {
     for (const envDir of WORKSPACE_ENV_DIRS.map((name) => join(dir, name))) {
       const venvInterpreter = join(envDir, ...venvInterpreterSegments(platform === 'win32'))
-      // Windows conda envs keep python.exe at the env root.
+      // Windows conda keeps python.exe at the environment root.
       const candidates =
         platform === 'win32' ? [venvInterpreter, join(envDir, 'python.exe')] : [venvInterpreter]
       const interpreter = candidates.find(exists)
@@ -63,22 +62,18 @@ async function probe(
   }
 }
 
-/** The environment folder an interpreter lives in, when it lives in one. */
 function environmentDir(executable: string): string | undefined {
-  // venvs keep python in bin/ or Scripts\; Windows conda envs keep it at the env root.
   return [dirname(dirname(executable)), dirname(executable)].find(
     (dir) => existsSync(join(dir, 'pyvenv.cfg')) || existsSync(join(dir, 'conda-meta'))
   )
 }
 
-/** Names an interpreter after its environment folder when it lives in one. */
 function environmentName(executable: string): string {
   return basename(environmentDir(executable) ?? executable)
 }
 
-/** The head of a regular file, read once into a fixed buffer. */
 function readFileHead(path: string, maxBytes: number): string | undefined {
-  // Why not a FIFO or device: opening one can block; a symlinked procfs file passes and reports size 0.
+  // Reject blocking devices/FIFOs; regular procfs files may still report size zero.
   if (!existsSync(path) || !statSync(path).isFile()) {
     return undefined
   }
@@ -91,10 +86,9 @@ function readFileHead(path: string, maxBytes: number): string | undefined {
   }
 }
 
-/** The Python version an environment records on disk: venv `pyvenv.cfg`, else conda's `conda-meta`. */
 function recordedVersion(envDir: string): string | undefined {
   try {
-    // Why bounded, not size-checked: a hostile repo can point pyvenv.cfg at an endless file.
+    // Bound bytes even when stat lies: repositories can link pyvenv.cfg to endless files.
     const cfg = readFileHead(join(envDir, 'pyvenv.cfg'), PYVENV_CFG_MAX_BYTES)
     const match = cfg && /^\s*version(?:_info)?\s*=\s*(\d+\.\d+(?:\.\d+)?)/m.exec(cfg)
     if (match) {
@@ -109,13 +103,10 @@ function recordedVersion(envDir: string): string | undefined {
         }
       }
     }
-  } catch {
-    // Unreadable metadata just leaves the version unknown.
-  }
+  } catch {}
   return undefined
 }
 
-/** Describes a workspace interpreter from its files alone, without running it. */
 function describeWithoutRunning(interpreter: string): PythonEnvironment {
   const envDir = environmentDir(interpreter)
   const version = envDir === undefined ? undefined : recordedVersion(envDir)
@@ -127,10 +118,7 @@ export function describePython(path: string): Promise<PythonEnvironment | null> 
   return probe(path, [], environmentName)
 }
 
-/**
- * Pythons a notebook can use. `runWorkspaceInterpreters` is false until the notebook is trusted:
- * a repo can ship its own `.venv/bin/python`, so those are then read from disk, never run.
- */
+/** Untrusted repositories may ship interpreter binaries; inspect files without executing them until trusted. */
 export async function listPythonEnvironments(
   notebookPath: string,
   rootPath: string | null,
@@ -176,14 +164,13 @@ function errorDetail(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** `pip install -U ipykernel` into the interpreter's environment, bootstrapping pip if it has none. */
 export async function installIpykernel(python: string): Promise<{ ok: boolean; detail: string }> {
   const run = (args: string[], timeoutMs = INSTALL_TIMEOUT_MS) =>
     runProcess({ program: python, args, timeoutMs })
   const pipInstall = ['-m', 'pip', 'install', '-U', 'ipykernel']
   try {
     let installed = await run(pipInstall)
-    // Why: uv-created venvs ship without pip; the stdlib's ensurepip bootstraps it.
+    // uv environments may omit pip; bootstrap it with stdlib ensurepip.
     if (installed.code !== 0 && installed.stderr.includes('No module named pip')) {
       await run(['-m', 'ensurepip'])
       installed = await run(pipInstall)
@@ -191,7 +178,7 @@ export async function installIpykernel(python: string): Promise<{ ok: boolean; d
     if (installed.code !== 0) {
       return { ok: false, detail: failureDetail(installed) }
     }
-    // Why: pip can succeed while a dependency such as pyzmq still fails to import.
+    // Successful pip does not prove native dependencies like pyzmq can import.
     const imported = await run(['-c', 'import ipykernel, jupyter_client.manager'], PROBE_TIMEOUT_MS)
     return imported.code === 0
       ? { ok: true, detail: '' }
@@ -201,14 +188,13 @@ export async function installIpykernel(python: string): Promise<{ ok: boolean; d
   }
 }
 
-/** Creates `<parent>/.venv` from `python` unless it exists, then installs ipykernel into it. */
 export async function createNotebookVenv(
   python: string,
   parent: string
 ): Promise<CreateVenvResult> {
   const venvPath = join(parent, '.venv')
   const interpreter = join(venvPath, ...venvInterpreterSegments(process.platform === 'win32'))
-  // Why: re-running venv over an existing one can repoint it to another Python and strand its packages.
+  // Recreating an existing venv can switch Python and strand installed packages.
   if (!existsSync(interpreter)) {
     try {
       const created = await runProcess({

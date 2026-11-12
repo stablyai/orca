@@ -1,6 +1,8 @@
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { driveCheckoutSuspectsWithin } from './drive-checkout-suspect-status'
 import { bulkPathspecCommands } from './git-pathspec'
 
@@ -22,11 +24,7 @@ async function listMergedTrackedPaths(
     worktreePath,
     options
   )) {
-    const { stdout } = await gitExecFileAsync(args, {
-      ...gitOptionsForWorktree(worktreePath, options),
-      // Why: buffered NUL records must not carry the WSL login shell's rc banner.
-      captureWslLoginShellOutput: true
-    })
+    const { stdout } = await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
     for (const record of stdout.split('\0')) {
       const match = /^\d+ [0-9a-f]+ 0\t(.+)$/s.exec(record)
       if (match) {
@@ -37,13 +35,7 @@ async function listMergedTrackedPaths(
   return [...tracked]
 }
 
-/**
- * Redoes a path write with default checkStat for the drive-checkout suspects inside `pathspecs`.
- *
- * Why: under minimal stat, `add` and `restore` treat a same-size rewrite that kept its mtime as
- * unchanged, while status rechecks suspects with default stat and shows it modified; the write
- * would silently do nothing. Only suspects pay the drvfs rehash, so the main write stays minimal.
- */
+/** Redo suspect writes with default stat: minimal-stat add/restore can silently miss paths status already reports dirty. */
 export async function redoWriteForDriveCheckoutSuspects(
   worktreePath: string,
   pathspecs: readonly string[],

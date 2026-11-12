@@ -6,19 +6,15 @@ import {
 import {
   getWorkspaceAttachments,
   normalizeWorkspaceAttachmentUpdate
-} from '../../../../../../shared/workspace-attachments'
+} from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { normalizeGitHubPRSuppressionUpdate } from '../../../../../../shared/worktree/github-pr-suppression'
-import type { WorktreeSlice } from '../../worktree-helpers'
-import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
-import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
+import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
-import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../github-cache-key'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
-  applyDetectedWorktreeUpdates,
   findKnownWorktreeById,
   getFolderWorkspaceMetaUpdates
 } from '../listing/detected-worktree-meta'
@@ -32,16 +28,22 @@ import {
   resolveGitHubReviewPushTarget
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
+import { buildWorktreeMetaStateUpdate } from './worktree-meta-state-update'
+import { withPendingSidebarRowWrites } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'
+import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 
-import { findRepoForHost } from '../../repo-host-identity'
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeMeta'] {
-  return async (worktreeId, updates, options) => {
+  const update: WorktreeSlice['updateWorktreeMeta'] = async (worktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
     const requestedHostId = options?.executionHostId
     const existingWorktree = findKnownWorktreeById(get(), worktreeId, requestedHostId)
@@ -69,8 +71,7 @@ export function createUpdateWorktreeMeta(
         return { ok: true }
       }
       try {
-        // Why: a rejected folder update reconciles the optimistic write away, so
-        // reporting ok would show the dialog a save that silently undid itself.
+        // Rejected folder updates revert optimistic state; report failure or the dialog closes on an undone save.
         const updated = await get().updateFolderWorkspace(
           workspaceScope.folderWorkspaceId,
           folderUpdates,
@@ -119,7 +120,8 @@ export function createUpdateWorktreeMeta(
       return { ok: true }
     }
     normalizedUpdates = normalizeGitHubPRSuppressionUpdate(
-      normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates)
+      normalizeWorkspaceAttachmentUpdate(worktreeForUpdate, mutationUpdates),
+      worktreeForUpdate?.linkedPR
     )
     const currentResolvedPushTarget =
       normalizedUpdates.linkedPR === linkedPrForPushTarget ? resolvedPushTarget : undefined
@@ -139,12 +141,10 @@ export function createUpdateWorktreeMeta(
     const shouldRefreshHostedReview = Boolean(
       worktreeForUpdate && hasChangedHostedReviewLinkUpdates(normalizedUpdates, worktreeForUpdate)
     )
-    const reviewRepo = shouldRefreshHostedReview
-      ? (findRepoForHost(get().repos, worktreeForUpdate?.repoId ?? '', {
-          hostId: executionHostId,
-          settings: get().settings
-        }) ?? undefined)
-      : undefined
+    const reviewRepo =
+      shouldRefreshHostedReview && worktreeForUpdate
+        ? (resolveReviewRepository(get().repos, worktreeForUpdate) ?? undefined)
+        : undefined
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
@@ -165,11 +165,18 @@ export function createUpdateWorktreeMeta(
             firstAgentMessageRenameError: null
           }
         : targetEnriched
+    // Switch point: a comment edit is not a Recent event once the host owns the stamps.
     const enriched =
-      'comment' in renameCleared ? { ...renameCleared, lastActivityAt: Date.now() } : renameCleared
+      'comment' in renameCleared && !ORCA_SIDEBAR_INPUTS_IS_MAIN
+        ? { ...renameCleared, lastActivityAt: Date.now() }
+        : renameCleared
 
+    // A failed save must leave the error visible even when the recovery fetch also fails.
+    const deferUpdate =
+      mutationUpdates.firstAgentMessageRenameError === null &&
+      mutationUpdates.displayName === undefined
     let didApply = false
-    set((s) => {
+    const buildUpdate = (s: ReturnType<WorktreeSliceGet>) => {
       if (
         shouldApplyUpdate &&
         !shouldApplyUpdate(findKnownWorktreeById(s, worktreeId, executionHostId))
@@ -177,97 +184,22 @@ export function createUpdateWorktreeMeta(
         return s
       }
       didApply = true
-      const nextWorktrees = applyWorktreeUpdates(
-        s.worktreesByRepo,
+      return buildWorktreeMetaStateUpdate(s, {
         worktreeId,
-        enriched,
-        executionHostId
-      )
-      const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
-        s.detectedWorktreesByRepo,
-        worktreeId,
-        enriched,
-        executionHostId
-      )
-      const cacheKey =
-        reviewRepo && reviewBranch
-          ? getHostedReviewCacheKey(
-              reviewRepo.path,
-              reviewBranch,
-              s.settings,
-              reviewRepo.id,
-              reviewRepo.connectionId,
-              reviewRepo.executionHostId,
-              true
-            )
-          : null
-      const prCacheKey =
-        reviewRepo && reviewBranch
-          ? getGitHubPRCacheKey(
-              reviewRepo.path,
-              reviewRepo.id,
-              reviewBranch,
-              s.settings,
-              reviewRepo.connectionId,
-              reviewRepo.executionHostId,
-              true
-            )
-          : null
-      const prCacheKeys =
-        reviewRepo && reviewBranch
-          ? [
-              prCacheKey,
-              getLegacyGitHubPRCacheKey(reviewRepo.path, reviewRepo.id, reviewBranch),
-              getLegacyGitHubPRCacheKey(reviewRepo.path, undefined, reviewBranch)
-            ].filter((key): key is string => Boolean(key))
-          : []
-      const hostedReviewCache = s.hostedReviewCache ?? {}
-      const prCache = s.prCache ?? {}
-      if (
-        nextWorktrees === s.worktreesByRepo &&
-        nextDetectedWorktrees === s.detectedWorktreesByRepo &&
-        !cacheKey &&
-        !prCacheKey
-      ) {
-        return s
-      }
-
-      const nextHostedReviewCache =
-        cacheKey && hostedReviewCache[cacheKey]
-          ? (() => {
-              const next = { ...hostedReviewCache }
-              delete next[cacheKey]
-              return next
-            })()
-          : hostedReviewCache
-      const nextPRCache = prCacheKeys.some((key) => prCache[key])
-        ? (() => {
-            const next = { ...prCache }
-            for (const key of prCacheKeys) {
-              delete next[key]
-            }
-            return next
-          })()
-        : prCache
-
-      return {
-        ...(nextWorktrees !== s.worktreesByRepo
-          ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
-          : {}),
-        ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
-          ? { detectedWorktreesByRepo: nextDetectedWorktrees }
-          : {}),
-        ...(nextHostedReviewCache !== hostedReviewCache
-          ? { hostedReviewCache: nextHostedReviewCache }
-          : {}),
-        ...(nextPRCache !== prCache ? { prCache: nextPRCache } : {})
-      }
-    })
-    if (shouldApplyUpdate && !didApply) {
+        updates: enriched,
+        executionHostId,
+        reviewRepo,
+        reviewBranch
+      })
+    }
+    if (!deferUpdate) {
+      set(buildUpdate)
+    }
+    if (!deferUpdate && shouldApplyUpdate && !didApply) {
       return { ok: true }
     }
     if (hasHostedReviewLinkUpdates(enriched)) {
-      bumpHostedReviewLinkMutationGeneration(worktreeId)
+      bumpHostedReviewLinkMutationGeneration(worktreeId, worktreeForUpdate)
     }
 
     try {
@@ -278,16 +210,24 @@ export function createUpdateWorktreeMeta(
         executionHostId ?? existingWorktree?.hostId,
         worktreeForUpdate?.identity?.key
       )
+      if (deferUpdate) {
+        set(buildUpdate)
+      }
       if (
         !options?.suppressHostedReviewRefresh &&
         reviewRepo &&
+        hasUniqueIndexedRepositoryHost(
+          get().repos,
+          reviewRepo.id,
+          getRepoExecutionHostId(reviewRepo)
+        ) &&
         reviewBranch &&
         typeof get().fetchHostedReviewForBranch === 'function'
       ) {
         // Why: refetch against post-update links so a cache entry from the previous provider link can't keep showing the removed review.
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
-          repoOwnerExecutionHostId: executionHostId ?? worktreeForUpdate?.hostId,
+          repoOwnerExecutionHostId: getRepoExecutionHostId(reviewRepo),
           ...getWorkspaceReviewRefreshHints(targetEnriched, worktreeForUpdate),
           force: true
         })
@@ -305,10 +245,24 @@ export function createUpdateWorktreeMeta(
       }
       console.error('Failed to update worktree meta:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-      // Why: the refetch above reverts the optimistic write, so a caller that
-      // closes its surface on this path shows the user a save that undid itself.
+      // Refetch reverted the optimistic write; report failure so callers do not close on an undone save.
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
     return { ok: true }
   }
+  // A conditional write may not apply, so only an unconditional one shows ahead of main.
+  return (worktreeId, updates, options) =>
+    options?.shouldApply
+      ? update(worktreeId, updates, options)
+      : withPendingSidebarRowWrites(
+          () => [
+            {
+              worktreeId,
+              updates,
+              executionHostId:
+                options?.executionHostId ?? findKnownWorktreeById(get(), worktreeId)?.hostId
+            }
+          ],
+          () => update(worktreeId, updates, options)
+        )
 }

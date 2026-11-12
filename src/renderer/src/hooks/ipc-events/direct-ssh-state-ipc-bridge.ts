@@ -1,14 +1,13 @@
 import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
-import type { DirectSshAuthority, SshConnectionState } from '../../../../shared/ssh-types'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { directSshAuthoritiesEqual } from '../../store/slices/worktrees/listing/direct-ssh-authority'
-import {
-  directSshAuthorityFromConnectionState,
-  registerDirectSshWakeRouting,
-  type DirectSshConnectedStateOrigin
-} from '../direct-ssh-state-routing'
+import { directSshAuthorityFromConnectionState } from '../direct-ssh-state-routing'
+import type { DirectSshConnectedStateOrigin } from '../direct-ssh-state-routing'
 import { hydrateDirectSshInitialState } from './direct-ssh-initial-state-hydration'
+import { syncSshConfigTargetsPassively } from '../../runtime/hosts/ssh/ssh-config-passive-sync'
 import { applySshManagedServerTransition } from './ssh-managed-server-state-effects'
+import { createDirectSshUnrestoredForwardSync } from './direct-ssh-unrestored-forward-sync'
+import type { DirectSshAuthority, SshConnectionState } from '../../../../shared/ssh-types'
 
 type AuthorityDeadline = { timer: ReturnType<typeof setTimeout>; settle: () => void }
 
@@ -22,6 +21,7 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
     return state ? directSshAuthorityFromConnectionState(targetId, state) : null
   }
   const sshStateWatermarkByTargetId = new Map<string, number>()
+  const unrestoredForwards = createDirectSshUnrestoredForwardSync(isStopped)
   const pendingPortHydrationByTargetId = new Map<
     string,
     { receivedForwardPush: boolean; receivedDetectedPush: boolean }
@@ -34,6 +34,7 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
     pendingPortHydrationByTargetId.set(targetId, pendingPortHydration)
     const isHydrationAuthorityCurrent = (): boolean =>
       !isStopped() && directSshAuthoritiesEqual(currentAuthority(targetId), authority)
+    unrestoredForwards.refresh(targetId)
     const forwardHydration = window.api.ssh.listPortForwards({ targetId }).then((forwards) => {
       if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedForwardPush) {
         useAppStore.getState().setPortForwards(targetId, forwards)
@@ -55,9 +56,18 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
     state: SshConnectionState,
     origin: DirectSshConnectedStateOrigin
   ) => void
-  void hydrateDirectSshInitialState(isStopped, sshStateWatermarkByTargetId, (targetId, state) =>
-    applySshConnectionStateChange(targetId, state, 'initial-hydration')
-  )
+  void hydrateDirectSshInitialState(
+    isStopped,
+    sshStateWatermarkByTargetId,
+    (targetId, state) => applySshConnectionStateChange(targetId, state, 'initial-hydration'),
+    // A host that never connects publishes no state, but its saved forwards stay removable.
+    (targetIds) => targetIds.forEach((targetId) => unrestoredForwards.refresh(targetId))
+  ).then(() => {
+    // Why: after the saved list paints, so a slow config parse never delays the first host list.
+    if (!isStopped()) {
+      void syncSshConfigTargetsPassively()
+    }
+  })
   unsubs.push(
     window.api.ssh.onCredentialRequest((data) => {
       useAppStore.getState().enqueueSshCredentialRequest(data)
@@ -70,12 +80,20 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
   )
 
   unsubs.push(
-    window.api.ssh.onPortForwardsChanged(({ targetId, forwards }) => {
+    window.api.ssh.onTargetRemoved(({ targetId }) => {
+      // Stop deferred reconnects and drop live state whichever client removed the target.
+      useAppStore.getState().clearRemovedSshTargetState(targetId)
+    })
+  )
+
+  unsubs.push(
+    window.api.ssh.onPortForwardsChanged(({ targetId, forwards, unrestored }) => {
       const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)
       if (pendingPortHydration) {
         pendingPortHydration.receivedForwardPush = true
       }
       useAppStore.getState().setPortForwards(targetId, forwards)
+      unrestoredForwards.applyPush(targetId, unrestored ?? [])
     })
   )
 
@@ -161,8 +179,8 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
 
       store.clearPortForwards(targetId)
       store.setDetectedPorts(targetId, [])
-
-      store.clearDirectSshTargetPtyBindings(targetId)
+      // Saved forwards stay listed while offline, so one that can't start is still removable.
+      unrestoredForwards.refresh(targetId)
       return
     }
 
@@ -173,10 +191,6 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
     if (!authority) {
       reconcileSshAuthority(targetId, state, origin, sshStateWatermarkByTargetId.get(targetId) ?? 0)
       return
-    }
-    // Why: no pane binds an `ssh:` PTY, so every binding a newly pushed connection finds is stale.
-    if (origin === 'push') {
-      store.clearDirectSshTargetPtyBindings(targetId)
     }
     if (origin === 'initial-hydration') {
       hydrateSshPorts(targetId, authority)
@@ -232,17 +246,6 @@ export function registerDirectSshStateIpcBridge(unsubs: (() => void)[]): () => v
   }
 
   unsubs.push(window.api.ssh.onStateChanged(handleSshStateChangedEvent))
-  unsubs.push(
-    registerDirectSshWakeRouting({
-      getConnectionStates: () => useAppStore.getState().sshConnectionStates ?? [],
-      wakeAuthority: (authority) => {
-        useAppStore.getState().clearDirectSshTargetPtyBindings(authority.targetId)
-      },
-      ...(typeof window.api.ui.onSystemResumed === 'function'
-        ? { onSystemResumed: (callback: () => void) => window.api.ui.onSystemResumed(callback) }
-        : {})
-    })
-  )
   return () => {
     stopped = true
     for (const deadline of deadlines) {

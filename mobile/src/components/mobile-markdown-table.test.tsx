@@ -15,6 +15,7 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 /** Each rendered table row's cell styles, header row first. */
 function renderTableCellStyles(content: string): unknown[][] {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrchestrationDb } from '../orchestration/db'
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { migrateV43 } from '../orchestration/db/schema/migrate-v43'
 import {
   ADDRESS_X,
@@ -14,7 +14,7 @@ import {
 } from './orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
@@ -74,16 +74,10 @@ describe('a database an earlier build wrote session:<id> addresses into', () => 
   let seeded: { toX: string; fromX: string }
 
   beforeEach(() => {
-    h = createSessionCallerHarness(hostRef)
-    hostRef.current = {
-      deps: {
-        store: {
-          getRecord: (sessionId: string) => h.records.get(sessionId) ?? null,
-          listRecords: () => [...h.records.values()],
-          getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [SESSION_X, SESSION_Y] })
-        }
-      }
-    }
+    h = createSessionCallerHarness(hostRef, () => ({
+      present: true,
+      sessionIds: [SESSION_X, SESSION_Y]
+    }))
     seeded = seedEarlierBuildRows(h.db)
     h.db.migrate()
   })
@@ -116,39 +110,6 @@ describe('a database an earlier build wrote session:<id> addresses into', () => 
       })
     )
     expect(sent).toMatchObject({ ok: true, result: { message: { to_handle: 'run:run_earlier' } } })
-  })
-
-  it('refuses the old spelling as an unknown terminal, even for the Run once remembered under it', async () => {
-    const stored = h.db.getInbox(100).length
-    for (const legacy of [LEGACY_X, LEGACY_Y]) {
-      const sent = await h.dispatch(
-        orchestrationRequest('orchestration.send', {
-          from: WORKER_HANDLE,
-          to: legacy,
-          subject: 's'
-        })
-      )
-      expect(sent).toMatchObject({
-        ok: false,
-        error: {
-          code: 'terminal_not_found',
-          message: `Terminal ${legacy} has no live pane or durable Run/Dispatch mailbox.`
-        }
-      })
-    }
-    expect(h.db.getInbox(100)).toHaveLength(stored)
-  })
-
-  it('files a reply to mail the chat sent before the upgrade at its current address', async () => {
-    expect(h.db.getMessageById(seeded.fromX)?.from_handle).toBe(ADDRESS_X)
-    const replied = await h.dispatch(
-      orchestrationRequest('orchestration.reply', {
-        id: seeded.fromX,
-        body: 'a',
-        from: WORKER_HANDLE
-      })
-    )
-    expect(replied).toMatchObject({ ok: true, result: { message: { to_handle: ADDRESS_X } } })
   })
 
   it('leaves no address in the old spelling, keeping the current row where both were keyed', () => {

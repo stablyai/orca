@@ -169,13 +169,19 @@ test('board drops cross preload, settle optimistically, and roll back failures',
         host: 'github.com',
         itemId: 'row',
         fieldId: 'status',
+        wakeWslDistro: true,
         value: { kind: 'single-select', optionId: 'done' }
       }
     ])
   await done.getByRole('listitem').dragTo(done)
+  // Scrolling the board after mouse-down moves the card off the press point, so no drag starts.
+  await empty.scrollIntoViewIfNeeded()
   await done.getByRole('listitem').dragTo(empty)
   await expect(empty.getByRole('button', { name: title })).toBeVisible()
-  await expect(orcaPage.getByText('Board verification: offline', { exact: true })).toBeVisible()
+  // network_error toasts its localized copy, not the host's English message (#34621).
+  await expect(
+    orcaPage.getByText('Network error — check your connection.', { exact: true })
+  ).toBeVisible()
   await expect(done.getByRole('button', { name: title })).toBeVisible()
   await expect(empty.getByRole('button', { name: title })).toHaveCount(0)
   await expect
@@ -186,9 +192,16 @@ test('board drops cross preload, settle optimistically, and roll back failures',
         host: 'github.com',
         itemId: 'row',
         fieldId: 'status',
+        wakeWslDistro: true,
         value: { kind: 'single-select', optionId: 'done' }
       },
-      { projectId: 'project', host: 'github.com', itemId: 'row', fieldId: 'status' }
+      {
+        projectId: 'project',
+        host: 'github.com',
+        itemId: 'row',
+        fieldId: 'status',
+        wakeWslDistro: true
+      }
     ])
   await orcaPage.screenshot({ path: testInfo.outputPath('board-rollback.png') })
   await orcaPage.evaluate(() => document.documentElement.classList.remove('dark'))

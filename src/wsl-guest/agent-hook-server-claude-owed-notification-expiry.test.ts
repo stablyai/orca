@@ -1,12 +1,11 @@
-// The relay owns a remote pane's Claude records, so it — not the desktop — must restate a pane
-// that was held working by a task notification Claude never sent.
+// The relay owns remote Claude records and must restate status when an owed task notification never arrives.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
-import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../shared/claude-owed-task-notifications'
-import { makePaneKey } from '../shared/stable-pane-id'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../shared/agent-hook-listener/providers/claude-owed-task-notifications'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 import { RelayAgentHookServer } from './agent-hook-server'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')

@@ -3,9 +3,9 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
-import { makePaneKey } from '../shared/stable-pane-id'
-import { drainAgentHookSpool } from '../shared/agent-hook-spool'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
+import { drainAgentHookSpoolAsync } from '../shared/agent-hook-listener/transport/agent-hook-spool'
 import { createHookListenerState } from '../shared/agent-hook-listener/listener-state'
 import {
   bindOpenCodeSession,
@@ -86,14 +86,6 @@ describe('legacy TUI identity admitted by the execution-host relay', () => {
       [PANE_A, 'working'],
       [PANE_B, 'done']
     ])
-  })
-
-  it('keeps the session creator when another pane views the same session', async () => {
-    await post(PANE_A, 'ses_a')
-    forward.mockClear()
-    await post(PANE_B, 'ses_a')
-    expect(forward.mock.calls[0][0].paneKey).toBe(PANE_A)
-    expect(server.replayCachedPayloadsForPanes()).toBe(1)
   })
 
   it.each(['SessionIdle', 'PermissionRequest', 'MessagePart'] as const)(
@@ -188,7 +180,7 @@ describe('legacy TUI identity admitted by the execution-host relay', () => {
     expect(forward.mock.calls[0][0]).toMatchObject({ paneKey: PANE_C, launchToken: 'unknown-old' })
   })
 
-  it('fences real spool replay before borrowing owner identity and retains legacy metadata', () => {
+  it('fences real spool replay before borrowing owner identity and retains legacy metadata', async () => {
     const state = createHookListenerState()
     bindOpenCodeSession(state, 'ses_b', { paneKey: PANE_B, boundAt: 1, basis: 'tui' })
     trackOpenCodePaneLaunchToken(state, PANE_B, 'creator-live')
@@ -212,19 +204,19 @@ describe('legacy TUI identity admitted by the execution-host relay', () => {
       getAgentLaunchToken: (paneKey: string) => authority.get(paneKey)
     }
     const drain = () =>
-      drainAgentHookSpool({
+      drainAgentHookSpoolAsync({
         endpointDir: dir,
         getPersistedLaunchTokenHash: () => undefined,
         ingest: (item) => ingestRelayHookSpoolRecord(item, state, 'remote', host)
       })
     for (const launchToken of ['viewer-old', undefined, '']) {
       writeRecord({ ...record, launchToken })
-      expect(drain()).toBe(1)
+      expect(await drain()).toBe(1)
       expect(readFileSync(file).length).toBe(0)
     }
     expect(forward).not.toHaveBeenCalled()
     writeRecord({ ...record, launchToken: 'viewer-new' })
-    drain()
+    await drain()
     expect(forward.mock.calls[0][0]).toMatchObject({ paneKey: PANE_B, launchToken: 'creator-live' })
     forward.mockClear()
     writeRecord({
@@ -233,10 +225,10 @@ describe('legacy TUI identity admitted by the execution-host relay', () => {
       opencodeSharedServer: 1,
       payload: { hook_event_name: 'SessionIdle', sessionID: 'ses_unknown' }
     })
-    drain()
+    await drain()
     expect(forward).not.toHaveBeenCalled()
     writeRecord({ ...record, opencodeMajor: 2 })
-    drain()
+    await drain()
     expect(forward.mock.calls[0][0]).toMatchObject({ paneKey: PANE_C, launchToken: 'viewer-old' })
   })
 

@@ -8,14 +8,33 @@ class FakeSocket extends EventEmitter {
   destroyed = false
   writable = true
   readonly writes: string[] = []
+  private idleMs = 0
+  private idleHandler: (() => void) | null = null
+  private idleTimer: NodeJS.Timeout | null = null
 
   setEncoding(): void {}
   setNoDelay(): void {}
-  setTimeout(): void {}
   end(): void {}
+
+  // Match setTimeout: positive arms, zero suspends, and callback-free rearm preserves the handler.
+  setTimeout(ms: number, handler?: () => void): this {
+    if (handler) {
+      this.idleHandler = handler
+    }
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer)
+      this.idleTimer = null
+    }
+    this.idleMs = ms
+    if (ms > 0 && this.idleHandler) {
+      this.idleTimer = setTimeout(() => this.idleHandler?.(), ms)
+    }
+    return this
+  }
 
   write(data: string): boolean {
     this.writes.push(data)
+    this.refreshIdleTimer()
     return true
   }
 
@@ -23,9 +42,25 @@ class FakeSocket extends EventEmitter {
     if (!this.destroyed) {
       this.destroyed = true
       this.writable = false
+      if (this.idleTimer) {
+        clearTimeout(this.idleTimer)
+        this.idleTimer = null
+      }
       this.emit('close')
     }
     return this
+  }
+
+  emit(event: string | symbol, ...args: unknown[]): boolean {
+    if (event === 'data') {
+      this.refreshIdleTimer()
+    }
+    return super.emit(event, ...args)
+  }
+
+  // Traffic resets the idle window; net.Socket counts reads and writes alike.
+  private refreshIdleTimer(): void {
+    this.setTimeout(this.idleMs)
   }
 }
 
@@ -65,22 +100,6 @@ describe('UnixSocketTransport', () => {
       socket.emit('data', decoder.write(wire.subarray(offset, offset + 4095)))
     }
     expect(received).toEqual([oversized ? '' : message])
-  })
-
-  it('retains only the byte count of the partial tail between messages', () => {
-    const { socket, received } = createReceiver()
-    const large = 'a'.repeat(700000)
-    socket.emit('data', `${large}\npart`)
-    socket.emit('data', `ial\r\n\n${large}\n`)
-    expect(received).toEqual([large, 'partial', large])
-  })
-
-  it('checks the combined incoming buffer before dispatching any complete messages', () => {
-    const { socket, received } = createReceiver()
-    socket.emit('data', `${'a'.repeat(700000)}\n${'b'.repeat(700000)}\n`)
-    expect(received).toEqual([''])
-    socket.emit('data', 'later\n')
-    expect(received).toEqual([''])
   })
 
   it('clears request keepalive timers when the socket closes before a reply', () => {

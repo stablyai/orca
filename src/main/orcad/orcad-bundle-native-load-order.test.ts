@@ -18,7 +18,9 @@ it('loads a fresh production import graph before requiring native PTY code', () 
   const directory = mkdtempSync(join(tmpdir(), 'orcad-load-order-'))
   directories.push(directory)
   const bundle = join(directory, 'orcad.js')
-  const builder = pathToFileURL(join(REPO_ROOT, 'config/scripts/orcad-entry-build.mjs')).href
+  const builder = pathToFileURL(
+    join(REPO_ROOT, 'config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs')
+  ).href
   const built = runProcessSync({
     program: process.execPath,
     args: [
@@ -52,7 +54,6 @@ it('loads a fresh production import graph before requiring native PTY code', () 
   const run = (extraArgs: string[] = []) =>
     runProcessSync({
       program: process.execPath,
-      // The production load-check exits after module evaluation, before runtime handoff or probes.
       args: ['--require', preload, ...extraArgs, bundle, '--orcad-smoke-load-check'],
       env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
       timeoutMs: 30_000
@@ -62,7 +63,6 @@ it('loads a fresh production import graph before requiring native PTY code', () 
   expect(loaded.code, loaded.stderr.slice(0, 2_000)).toBe(0)
   expect(existsSync(marker)).toBe(false)
 
-  // Prove the interception works without relying on minified source echoed in an error.
   const eagerNative = join(directory, 'eager-native.cjs')
   writeFileSync(eagerNative, "require('node-pty')")
   expect(run(['--require', eagerNative]).code).not.toBe(0)

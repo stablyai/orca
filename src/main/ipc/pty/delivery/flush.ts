@@ -1,8 +1,9 @@
 import {
   recordHiddenRendererPtyDataDrop,
   shouldDropHiddenRendererPtyData
-} from '../../pty-hidden-delivery-gate'
-import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
+} from './pty-hidden-delivery-gate'
+import { advanceEscapeBoundary } from './pty-escape-boundary'
+import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import { activeRendererPtys } from './visibility-state'
 import {
   PTY_BATCH_DRAIN_CONTINUE_MS,
@@ -10,8 +11,8 @@ import {
   PTY_BATCH_FLUSH_MAX_WRITES,
   PTY_DISPATCHER_READY_WATCHDOG_MS
 } from './constants'
-import { getDroppedMode2031RendererData, getDroppedSynchronizedOutputRendererData } from './pending'
-import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
+import { makeDroppedOutputPayload } from './pending'
+import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import { makePtyDataPayload, sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import type { PtyIpcSession } from '../session'
@@ -49,7 +50,7 @@ export function armDispatcherReadyWatchdog(session: PtyIpcSession): void {
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     return
   }
-  // Why: one-shot self-heal — force the gate open if the reloaded page never signals ready, so a dropped handshake can't hold it forever. Unref'd so it can't keep the process alive.
+  // A lost readiness handshake must not hold output forever; unref the recovery watchdog.
   session.dispatcherReadyWatchdogTimer = setTimeout(() => {
     session.dispatcherReadyWatchdogTimer = null
     if (
@@ -78,7 +79,7 @@ export function clearFlushTimerIfIdle(session: PtyIpcSession): void {
 export function flushPendingData(session: PtyIpcSession): void {
   session.flushTimer = null
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
-    // Why release now: bookkeeping is being wiped, so no future drain can resume these producers — local shells would wedge.
+    // Resume before wiping bookkeeping; no later drain can release these producers.
     session.producerFlowControl.releaseAll()
     session.clearDeliveryResyncProbe()
     session.clearPendingPtyData()
@@ -103,7 +104,7 @@ export function flushPendingData(session: PtyIpcSession): void {
         break
       }
       const { id, pending } = selection
-      // Why drop, never re-queue: the model already ingested hidden-gated bytes; reveal restores from the snapshot+seq machinery.
+      // The model already owns hidden bytes; discard delivery and restore from its snapshot on reveal.
       if (shouldDropHiddenRendererPtyData(id, settings)) {
         session.pendingData.remove(selection)
         session.pendingOverflowMarkedPtys.delete(id)
@@ -115,7 +116,8 @@ export function flushPendingData(session: PtyIpcSession): void {
             session,
             id,
             'hidden-drop',
-            session.runtime?.getPtyOutputSequence(id)
+            session.runtime?.getPtyOutputSequence(id),
+            drop.hiddenDropEpisode
           )
         }
         continue
@@ -127,19 +129,8 @@ export function flushPendingData(session: PtyIpcSession): void {
       if (pending.droppedOutput === true) {
         session.pendingData.remove(selection)
         session.updateProducerFlowControl(id)
-        // Why droppedOutput sentinel: pending-cap drop means the pane must repaint from the snapshot, not continue a gapped stream (data = carved query bytes only).
-        if (
-          !sendPtyDataToRenderer(session, id, {
-            id,
-            // 2026 release before the 2031 data: that payload ends with a retained
-            // partial private-mode sequence an ESC after it would abort.
-            data:
-              pending.data +
-              getDroppedSynchronizedOutputRendererData(pending) +
-              getDroppedMode2031RendererData(pending),
-            droppedOutput: true
-          })
-        ) {
+        // A pending-cap gap requires snapshot repaint; only salvaged query bytes remain in data.
+        if (!sendPtyDataToRenderer(session, id, makeDroppedOutputPayload(id, pending))) {
           sendFailed = true
           break
         }
@@ -148,9 +139,7 @@ export function flushPendingData(session: PtyIpcSession): void {
       }
       const { data } = pending
       const indivisible = pending.transformed === true
-      // Why not a blind offset: splitting inside an open DEC 2026 frame strands
-      // the closing \x1b[?2026l on a later flush, and xterm stops repainting until
-      // it arrives or its 1000ms timeout fires.
+      // Keep synchronized frames intact or xterm holds painting until the closing escape or its timeout.
       const splitAt = indivisible
         ? data.length
         : resolveSynchronizedOutputSafeSplit(data, PTY_BATCH_FLUSH_CHUNK_CHARS)
@@ -163,6 +152,13 @@ export function flushPendingData(session: PtyIpcSession): void {
         }
         if (pending.containsBackgroundOutput === true) {
           nextPending.containsBackgroundOutput = true
+        }
+        const remainderEscapeBoundary = advanceEscapeBoundary(
+          pending.startEscapeBoundary === undefined ? '' : pending.startEscapeBoundary,
+          chunk
+        )
+        if (remainderEscapeBoundary !== '') {
+          nextPending.startEscapeBoundary = remainderEscapeBoundary
         }
         session.pendingData.replaceWithRemainder(selection, nextPending)
       } else {
@@ -179,7 +175,8 @@ export function flushPendingData(session: PtyIpcSession): void {
           pending.startSeq,
           pending.containsBackgroundOutput,
           pending.rawLength,
-          pending.transformed
+          pending.transformed,
+          pending.startEscapeBoundary
         )
       )
       if (!sent) {
@@ -211,7 +208,7 @@ export function flushPendingData(session: PtyIpcSession): void {
     return
   }
   if (session.pendingData.size > 0 && (writes > 0 || creditReleasedDuringFlush)) {
-    // Why yield between slices: a background terminal can dump megabytes at once, and keystroke writes must not stall behind one flush.
+    // Yield between slices so background floods do not delay keystroke writes.
     schedulePendingDataFlush(session, writes > 0 ? PTY_BATCH_DRAIN_CONTINUE_MS : 0)
   }
 }

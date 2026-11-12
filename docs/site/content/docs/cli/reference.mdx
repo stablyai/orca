@@ -63,29 +63,43 @@ List every machine the current Orca host can target and the selector for each on
 orca host list --json
 ```
 
-The result includes this machine, its registered [SSH targets](/docs/ssh), and paired [Remote Orca Servers](/docs/remote-servers). Use `--host local` for this machine, `--host ssh:<target-id>` for an SSH target, and `--environment <server-name>` for a paired server. SSH rows include the detected remote platform (`linux`, `darwin`, or `win32`) after the target connects; older or disconnected targets report `platform unknown`. They also include `connected` and, when known, the SSH lifecycle `connectionStatus`. SSH labels and paired-server names also resolve when they are unique; use the IDs from `host list` when names collide. If you put a machine name on the wrong selector, Orca reports the matching machine and the flag to use instead of returning an empty result.
+The result includes this machine, its registered [SSH targets](/docs/ssh), and paired [Remote Orca Servers](/docs/remote-servers). Use `--host local` for this machine, `--host ssh:<target-id>` for an SSH target, and `--environment <server-name>` for a paired server. SSH rows include the detected remote platform (`linux`, `darwin`, or `win32`) after the target connects; older or disconnected targets report `platform unknown`. They also include `connected` and, when known, the SSH lifecycle `connectionStatus`. If you put a machine name on the wrong selector, Orca reports the matching machine and the flag to use instead of returning an empty result.
+
+`--host` also takes the bare name shown in the `name` column, on either axis — `--host trader-local` reaches the same machine as `--host ssh:ssh-1783599077486-fyasux`. Names resolve only when they are unique: a name held by two SSH targets, by two paired servers, or by one of each is refused, and the error hands back the id form for each candidate — `--host ssh:<target-id>` for an SSH target and `--host runtime:<environment-id>` for a paired server. Use those to settle it, since `--environment <server-name>` cannot separate two servers sharing a name.
+
+Remove a saved SSH target with the id `orca host list` prints:
+
+```bash
+orca host rm --host ssh:<target-id> --json
+```
+
+It removes the target the same way Settings does, so the passive `~/.ssh/config` import does not add the alias back on the next launch. It takes only the `ssh:<target-id>` form, not the bare name, because it deletes data. It refuses `--host local`, paired servers (use `orca environment rm`), and an id this Orca host does not have.
 
 ## Runtime commands
 
 ```bash
 orca open --json
 orca status --json
-orca serve --port 6768 --pairing-address 100.64.1.20 --json
+orca serve --port 6768 --bind 100.64.1.20 --pairing-address 100.64.1.20 --json
 ```
 
-`orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`.
+`orca serve` starts a runtime server in the foreground without opening the desktop window. Use it for [Remote Orca Servers](/docs/remote-servers) or headless environments, and stop it with `Ctrl-C`. It accepts clients from localhost, LAN and Tailscale addresses; add `--allow-public` to accept public internet addresses too.
+Use `--bind <literal-ip>` to choose the listening interface; `--pairing-address` changes the address advertised to clients.
 
 ## Repos
 
 ```bash
 orca repo list --json
 orca repo add --path /abs/path/to/repo --json
+orca repo add --path /abs/path/to/folder --kind folder --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ```
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
+
+`repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 
 ## Worktrees
 
@@ -102,6 +116,8 @@ orca worktree rm --worktree id:<worktreeId> --force --json
 ```
 
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
+
+Pass `--branch DAT-111-fix-login` to name the Git branch yourself instead of applying the configured branch prefix. `--name` still sets the workspace name and `--base-branch` the starting ref. If that branch already exists and cannot be reused, or the workspace path is already taken, Orca appends a numeric suffix to both, as it does in the new-workspace composer, so `--name task --branch exact` can produce branch `exact-2` even when `exact` is free.
 
 `worktree set --unread` puts the unread dot on the workspace in the sidebar, the same one Orca shows when an agent finishes; `--read` clears it.
 
@@ -130,6 +146,16 @@ orca worktree set --worktree active --pr null --gitlab-mr null --json
 Omitting a flag leaves its link unchanged. On `set`, literal `null` clears only the named link; `create` refuses `null`. Each provider has separate fields, so setting a GitLab issue or merge request preserves GitHub and Linear links.
 
 Folder-based repositories can store numeric links through these commands, but a number does not supply a provider host or project. Without existing source context or a stored remote, pasted GitLab URLs are refused and provider details or clickable links may be unavailable. These flags use fields already supported by the runtime; an older runtime that predates a field may ignore it, so check `worktree show --json` after writing to an older host.
+
+## Ports
+
+```bash
+orca ports --json
+orca ports --worktree branch:feature/login --json
+orca ports --all
+```
+
+`ports` lists the listening ports Orca tied to a workspace, from the host the workspace runs on. It defaults to the workspace that contains the current directory. Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, how Orca matched it (`owner.confidence`: `cwd` or `command`), and `advertisedUrl` when the dev server printed one in an Orca terminal. `--all` lists every listener on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. If `unavailableReason` is set, the scan could not run on that host; SSH workspaces opened directly from the desktop report this for now, while a workspace on a managed Orca server is scanned on that server.
 
 ## References
 
@@ -172,6 +198,7 @@ orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 orca terminal create --worktree active --title "tests" --command "npm test" --json
 orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
 orca terminal rename --terminal <handle> --title "runner" --json
+orca terminal set-pane-title --terminal <handle> --title "reviewer" --json
 orca terminal switch --terminal <handle> --json
 orca terminal close --terminal <handle> --json
 orca terminal close --worktree active --all --json
@@ -196,6 +223,15 @@ close returns a failing `unverifiable` result rather than claiming the processes
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
+
+## Chats
+
+```bash
+orca chat rename --session <sessionId> --name "Release notes" --json
+orca chat rename --name "Migrate auth"
+```
+
+Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
 
 ## Files
 
@@ -224,6 +260,8 @@ orca screenshot --worktree active --json
 ```
 
 Refs such as `@e3` come from `snapshot`. Re-snapshot after navigation, tab switches, clicks that change the page, and any stale-ref error.
+
+`snapshot --interactive` lists only controls and links, `--delta` returns only what changed since the last `--delta` snapshot, and `--selector <css>` or `--depth <n>` narrow the tree. `screenshot` and `full-screenshot` save the image where the CLI runs and print its path; `screenshot` is in CSS pixels in Orca's desktop browser.
 
 Tab and capture commands:
 
@@ -346,7 +384,7 @@ orca skills install --all --dry-run
 orca skills update --all
 ```
 
-`install` / `update` shell out to the same `npx skills` commands Settings uses. They do not contact the Orca runtime. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
+`install` / `update` run Orca's own skill installer on the machine that runs them, the same planner the app's **Update skills** uses. They do not contact the Orca runtime or need `npx`. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
 
 ## Account (host-local runtime)
 
@@ -360,9 +398,21 @@ orca account add --agent codex
 
 `account add` runs `claude login` / `codex login` in **this** terminal on the host, then registers the captured credentials with the local runtime. Codex uses device authorization so the browser can finish on another machine. Run these on the machine that owns the accounts — not through a client-only remote session.
 
+Switch which saved account new agents launch with, for any provider with saved accounts (Claude, Codex, OpenCode, Devin, Antigravity):
+
+```bash
+orca account list                                               # ids, emails/labels, and the active one
+orca account select --agent claude --account you@example.com    # id, email or label
+orca worktree create --name task --agent claude --prompt "..."
+orca account select --agent claude --account system             # back to your own sign-in
+orca account rm --agent codex --account old@example.com         # forget a saved account
+```
+
+A selection applies to every agent of that provider launched on the host after it — the same switch as the status-bar account menu — not to a single workspace. An email shared by several accounts (one sign-in in two organizations) is refused; pass the id instead. Antigravity has no `system` default, and `account rm` never removes system credentials.
+
 ## Artifacts
 
-Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. **Publishing is off by default** — a human must enable **Settings → Artifacts → Allow publishing public artifact links** on the device. There is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
+Publish HTML or Markdown through the signed-in Orca account. Viewing a public link does not require sign-in; create/list/update/delete do. Publishing follows **Settings → Artifacts → Allow publishing public artifact links** on the device: on by default for new profiles, while profiles created before this default keep their previous setting. Only a human can change it; there is no CLI flag that grants the gate. `list`, `unshare`, and `delete` stay available so you can audit or revoke links after turning publishing off.
 
 ```bash
 orca artifacts share ./report.html --json
@@ -379,6 +429,7 @@ orca artifacts delete <id> --json
 - `list` is paged (`nextCursor` → `--cursor`). `delete` takes the artifact id from `list` and does not need the original file.
 - Relative HTML assets are not uploaded — share self-contained HTML or absolute asset URLs.
 - Denied publish/update fails with `artifact_sharing_disabled`; fix Settings instead of retrying.
+- Headless Orca servers have no Orca cloud sign-in, so artifact and skill-sharing commands there fail with `sharing_unavailable_on_host`; share from the desktop app.
 - Desktop: open a local HTML or Markdown file and use **Share as artifact**, or manage links from the sidebar **Artifacts** page.
 
 ## Automations, environments, and hooks

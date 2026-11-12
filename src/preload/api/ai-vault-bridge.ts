@@ -1,19 +1,28 @@
-import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
-import type { AiVaultSearchRequest, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
+import { createSessionSearchClient } from '../../shared/ai-vault/search/ai-vault-search-client'
+import type {
+  AiVaultSearchRequest,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
 import { ipcRenderer } from 'electron'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import type {
   AiVaultFirstUserPromptArgs,
   AiVaultListArgs,
   AiVaultSubagentListArgs
-} from '../../shared/ai-vault-types'
-import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault-session-title'
-import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault/contracts/ai-vault-session-title'
+import type { AiVaultPrepareSessionResumeRequest } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { AiVaultSessionHandoffArgs } from '../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import type { PreloadApi } from '../api-types'
+import {
+  AI_VAULT_SCAN_PROGRESS_CHANNEL,
+  type AiVaultScanProgress,
+  type AiVaultScanProgressUpdate
+} from '../../shared/ai-vault/scanning/ai-vault-scan-progress'
 
 function searchClient(
   executionHostScope?: ExecutionHostScope
@@ -44,8 +53,10 @@ export const aiVaultApi = {
     ipcRenderer.invoke('aiVault:resolveSessionTitles', args),
   cancelListSessions: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('aiVault:cancelListSessions', args),
-  prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>
+  prepareSessionResume: (args: AiVaultPrepareSessionResumeRequest) =>
     ipcRenderer.invoke('aiVault:prepareSessionResume', args),
+  prepareSessionHandoff: (args: AiVaultSessionHandoffArgs) =>
+    ipcRenderer.invoke('aiVault:prepareSessionHandoff', args),
   listSubagentSessions: (args: AiVaultSubagentListArgs) =>
     ipcRenderer.invoke('aiVault:listSubagentSessions', args),
   getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) =>
@@ -56,5 +67,13 @@ export const aiVaultApi = {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('aiVault:windowFocused', listener)
     return () => ipcRenderer.removeListener('aiVault:windowFocused', listener)
+  },
+  getScanProgress: (scanKey: string): Promise<AiVaultScanProgress | null> =>
+    ipcRenderer.invoke('aiVault:getScanProgress', scanKey),
+  onScanProgress: (callback: (update: AiVaultScanProgressUpdate) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, update: AiVaultScanProgressUpdate) =>
+      callback(update)
+    ipcRenderer.on(AI_VAULT_SCAN_PROGRESS_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(AI_VAULT_SCAN_PROGRESS_CHANNEL, listener)
   }
 } satisfies PreloadApi['aiVault']

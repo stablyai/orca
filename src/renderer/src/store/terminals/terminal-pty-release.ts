@@ -1,10 +1,12 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   consumePendingActivationSpawn,
   getPendingActivationSpawnCount
 } from './terminal-pty-identities'
+import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalPtyReleaseActions(
   set: TerminalStoreSet,
@@ -23,7 +25,9 @@ export function createTerminalPtyReleaseActions(
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
         const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
         let nextTabsByWorktree = s.tabsByWorktree
-        for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const ownerId = getFirstTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        for (const wId of ownerId ? [ownerId] : []) {
+          const tabs = s.tabsByWorktree[wId] ?? []
           const index = tabs.findIndex((t) => t.id === tabId)
           if (index === -1) {
             continue
@@ -55,50 +59,43 @@ export function createTerminalPtyReleaseActions(
                 : {}),
               ptyId: nextTabPtyId
             }
-            nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+            nextTabsByWorktree = replaceTabBuckets(s.tabsByWorktree, [[wId, nextTabs]])
           }
           break
         }
-        const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-        if (worktreeId) {
-          nextPtyIdsByTabId[tabId] = remainingPtyIds
-        } else {
-          // Why: repo purge can retire the owning tab before its async exit arrives; don't resurrect an orphan PTY index.
-          delete nextPtyIdsByTabId[tabId]
-        }
-        const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+        // Repo purge can retire the tab before exit; a missing owner must not regain bindings.
+        const nextPtyIdsByTabId = replaceRecordEntries(s.ptyIdsByTabId, [
+          [tabId, worktreeId ? remainingPtyIds : null]
+        ])
+        const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         if (ptyId) {
-          delete nextPendingCodexPaneRestartIds[ptyId]
+          delete nextPendingPaneAccountRestarts[ptyId]
           delete nextCodexRestartNoticeByPtyId[ptyId]
         } else {
           for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
-            delete nextPendingCodexPaneRestartIds[currentPtyId]
+            delete nextPendingPaneAccountRestarts[currentPtyId]
             delete nextCodexRestartNoticeByPtyId[currentPtyId]
           }
         }
         // Why: an explicit exit drops the dead relay ID; bulk clears retain it for relay grace.
-        const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
-        if (ptyId && nextLastKnownRelay[tabId] === ptyId) {
-          // Why: the relay slot holds ONE id per tab (the last pane to bind). If
-          // that pane exits, promote a surviving pane instead of clearing — else the
-          // survivor is left visible only in the layout leaf map, and a later
-          // relay-drop bulk-clear lets the orphan sweep delete the still-live tab
-          // (the orphan predicate reads this map but not layout leaves) (#9911).
-          const survivingPtyId = remainingPtyIds.at(-1)
-          if (survivingPtyId) {
-            nextLastKnownRelay[tabId] = survivingPtyId
-          } else {
-            delete nextLastKnownRelay[tabId]
-          }
+        const relayReplacements: [string, string | null][] = []
+        if (ptyId && s.lastKnownRelayPtyIdByTabId[tabId] === ptyId) {
+          // If last-bound relay slot exits, promote a survivor or later bulk relay clearing makes orphan sweep delete the still-live split tab (#9911).
+          relayReplacements.push([tabId, remainingPtyIds.at(-1) || null])
         }
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
-            ? { tabsByWorktree: nextTabsByWorktree }
+            ? {
+                tabsByWorktree: nextTabsByWorktree
+              }
             : {}),
           ptyIdsByTabId: nextPtyIdsByTabId,
-          lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
-          pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
+          lastKnownRelayPtyIdByTabId: replaceRecordEntries(
+            s.lastKnownRelayPtyIdByTabId,
+            relayReplacements
+          ),
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }
       })

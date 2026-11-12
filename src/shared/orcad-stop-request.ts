@@ -1,10 +1,4 @@
-/**
- * Stop requests for a running orcad, as files beside the process they address.
- *
- * Why files and not signals: a PID can be reused once its process exits, so a signal sent
- * from a stale record can stop an unrelated process. A file in the slot or data root reaches
- * only the orcad that watches it.
- */
+/** Stop files reach only the watching orcad; signals from stale PID records could stop an unrelated reused process. */
 import { z } from 'zod'
 import { openEnum } from './zod-salvage'
 
@@ -29,8 +23,7 @@ export const OrcadManagedStopInstanceSchema = z.object({
   lockPath: z.string().min(1).max(4096)
 })
 
-// Not strict: the slot's own (possibly older) build parses what a newer client wrote, so an
-// unknown optional field is dropped rather than refusing the stop.
+// Older slots drop newer optional request fields rather than refuse the stop.
 export const OrcadManagedStopRequestSchema = z.object({
   schemaVersion: z.literal(1),
   transactionId: z.uuid(),
@@ -106,10 +99,7 @@ export const ORCAD_CANCEL_MANAGED_STOP_FLAG = '--cancel-managed-stop'
 /** Readiness `health.stopRequests`: this build consumes stop files and both commands above. */
 export const ORCAD_STOP_REQUESTS_CAPABILITY = 1
 
-/**
- * Which side won a managed request: the running orcad acting on it, or a client cancelling it.
- * Created exclusively once per transaction, so the two can never both believe they won.
- */
+/** Exclusive per-transaction creation ensures only orcad dispatch or client cancellation can win. */
 export const OrcadManagedStopDecisionSchema = z.strictObject({
   schemaVersion: z.literal(1),
   kind: z.literal('orcad_managed_stop_decision'),

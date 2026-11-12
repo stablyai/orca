@@ -4,14 +4,7 @@ import type { RecordingScheduler } from './recording-scenario'
 
 const RECORDING_EPOCH = new Date('2026-01-01T00:00:00Z')
 
-/**
- * React's `enqueueTask` resolves its implementation by reading `module['require' + Math.random()]`
- * and memoizes the result, so it draws exactly one `Math.random()` the first time a process awaits
- * `act`. Drawn inside a recording, that draw ate the seeded sequence's first value and only the
- * first recording in the process saw it, so a family recording a `Math.random()`-derived param got
- * one value alone and a different one after any other family. Primed here, before the spy is
- * installed, so the draw is real and every recording starts at the same seeded value.
- */
+// Prime act before seeding: React lazily draws Math.random once per process, which would shift only the first recording’s ids.
 let priming: Promise<void> | undefined
 function primeReactActQueue(): Promise<void> {
   priming ??= (async () => {
@@ -25,7 +18,19 @@ export function reactActQueuePrimed(): boolean {
   return priming !== undefined
 }
 
-export function vitestRecordingScheduler(): RecordingScheduler {
+type RecordingMode = 'native' | 'page'
+
+export function vitestRecordingScheduler(identity?: {
+  producer: string
+  scenario: string
+  mode: RecordingMode
+}): RecordingScheduler {
+  let baseline: number | undefined
+  let stopCount: number | undefined
+  let started = false
+  let stopAttempted = false
+  let clockRestored = false
+  let spiesRestored = false
   async function flush() {
     await act(async () => {
       // Drain promise continuations and due timers without advancing request deadlines.
@@ -45,6 +50,8 @@ export function vitestRecordingScheduler(): RecordingScheduler {
           'performance'
         ]
       })
+      started = true
+      baseline = vi.getTimerCount()
       vi.setSystemTime(RECORDING_EPOCH)
       let seed = 1
       const random = () => {
@@ -77,10 +84,57 @@ export function vitestRecordingScheduler(): RecordingScheduler {
         await vi.advanceTimersByTimeAsync(ms)
       })
     },
+    timerEvidence() {
+      if (!started || baseline === undefined) {
+        throw new Error('Recording clock never started')
+      }
+      if (stopAttempted && stopCount === undefined) {
+        throw new Error('Pre-restore timer residual unavailable')
+      }
+      return {
+        baseline,
+        residual: stopCount ?? vi.getTimerCount(),
+        stopped: stopAttempted && clockRestored && spiesRestored,
+        stopAttempted,
+        clockRestored,
+        spiesRestored
+      }
+    },
     stop() {
-      vi.clearAllTimers()
-      vi.useRealTimers()
-      vi.restoreAllMocks()
+      if (stopAttempted) {
+        throw new Error('Recording scheduler stop already attempted')
+      }
+      stopAttempted = true
+      const errors: unknown[] = []
+      try {
+        stopCount = vi.getTimerCount()
+        if (stopCount !== 0) {
+          const named = identity
+            ? `${identity.producer}/${identity.scenario} (${identity.mode}): `
+            : ''
+          errors.push(new Error(`${named}Recording cleanup retained ${stopCount} actual timers`))
+        }
+      } catch (error) {
+        errors.push(error)
+      }
+      try {
+        vi.useRealTimers()
+        clockRestored = true
+      } catch (error) {
+        errors.push(error)
+      }
+      try {
+        vi.restoreAllMocks()
+        spiesRestored = true
+      } catch (error) {
+        errors.push(error)
+      }
+      if (errors.length === 1) {
+        throw errors[0]
+      }
+      if (errors.length) {
+        throw new AggregateError(errors, 'Recording scheduler stop failed')
+      }
     }
   }
 }

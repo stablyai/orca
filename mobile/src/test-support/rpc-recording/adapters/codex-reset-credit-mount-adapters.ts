@@ -1,16 +1,13 @@
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { AccountsSnapshot } from '../../../components/accounts-snapshot'
+import type { AccountsSnapshot } from '../../../accounts/accounts-snapshot'
+import type * as AccountsSnapshotModule from '../../../accounts/accounts-snapshot'
+import type * as CodexResetCreditModule from '../../../accounts/usage/codex-reset-credit'
 
-const HOST = 'host-1'
 const ACCOUNT_REVISION = 1_700_000_000_000
 
-/**
- * The offer the scenario confirms against. Recorded rather than invented: the expected scope the
- * request carries is derived from this by the product's own `getCodexResetCreditScope`, so the
- * bytes on the wire are the ones a screen holding this snapshot would send.
- */
+// Derive request scope from this offer through product code instead of inventing expected wire params.
 const CODEX_ACCOUNTS = mountFixture<AccountsSnapshot>({
   claude: { accounts: [], activeAccountId: null },
   codex: {
@@ -34,19 +31,16 @@ const CODEX_ACCOUNTS = mountFixture<AccountsSnapshot>({
   }
 })
 
-/** Redeeming a Codex rate-limit reset credit, and the attempt journal that makes it idempotent. */
 export function codexResetCreditMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'accounts.codex-reset-credit': ({ client }) => {
-      const credit = modules.load<typeof import('../../../components/codex-reset-credit')>(
-        'mobile/src/components/codex-reset-credit.ts'
+      const credit = modules.load<typeof CodexResetCreditModule>(
+        'mobile/src/accounts/usage/codex-reset-credit.ts'
       )
       const snapshot = modules
-        .load<typeof import('../../../components/accounts-snapshot')>(
-          'mobile/src/components/accounts-snapshot.ts'
-        )
+        .load<typeof AccountsSnapshotModule>('mobile/src/accounts/accounts-snapshot.ts')
         .decodeAccountsSnapshot(CODEX_ACCOUNTS)
       let settled: unknown = null
       return {
@@ -58,17 +52,10 @@ export function codexResetCreditMountAdapters(
           if (!expectedScope) {
             throw new Error('The recorded snapshot offers no reset credit to confirm')
           }
-          const pending = credit.requestCodexResetCredit(client, {
-            hostId: HOST,
-            expectedScope,
-            createIdempotencyKey: () => globalThis.crypto.randomUUID()
-          })
+          const pending = credit.requestCodexResetCredit(client, expectedScope)
           void pending.then(
             (result) => {
-              settled = {
-                outcome: 'outcome' in result ? result.outcome : result.status,
-                attemptJournalRetained: result.attemptJournalRetained
-              }
+              settled = { outcome: 'outcome' in result ? result.outcome : result.status }
             },
             () => undefined
           )

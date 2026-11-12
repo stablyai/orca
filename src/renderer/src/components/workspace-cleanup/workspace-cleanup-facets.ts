@@ -1,28 +1,31 @@
-import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import {
+  getWorkspaceCleanupCandidateIdentity,
+  getWorkspaceCleanupCandidateHostId,
+  getWorkspaceCleanupHostIdentity
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import {
   canQueueWorkspaceCleanupCandidate,
   WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupGitState } from './workspace-cleanup-filter-sort'
 import type {
   WorkspaceCleanupAgentState,
   WorkspaceCleanupGitState,
   WorkspaceCleanupReviewState,
   WorkspaceCleanupTicketSource
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
-import {
-  getWorkspaceCleanupCandidateHostId,
-  getWorkspaceCleanupHostIdentity,
-  type WorkspaceCleanupWorktreeFacts
-} from './workspace-cleanup-host-identity'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
+
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
+import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
+import type { Translate } from '@/i18n/use-translate'
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupFacetSources = {
@@ -90,7 +93,8 @@ const EMPTY_REVIEW_INFO: WorkspaceCleanupReviewInfo = {
 
 export function buildWorkspaceCleanupFacets(
   candidate: WorkspaceCleanupCandidate,
-  sources: WorkspaceCleanupFacetSources = {}
+  sources: WorkspaceCleanupFacetSources = {},
+  t?: Translate
 ): WorkspaceCleanupFacets {
   const hostIdentity = getWorkspaceCleanupHostIdentity(
     getWorkspaceCleanupCandidateHostId(candidate),
@@ -162,7 +166,7 @@ export function buildWorkspaceCleanupFacets(
     isCompletelyEmpty:
       localContextCount === 0 && !review.hasReview && ticketSources.length === 0 && !hasComment
   }
-  return { ...facets, searchText: buildSearchText(facets) }
+  return { ...facets, searchText: buildSearchText(facets, t) }
 }
 
 export function buildWorkspaceCleanupFacetList(
@@ -176,8 +180,7 @@ export function countWorkspaceCleanupMeasuredRows(rows: readonly WorkspaceCleanu
   return rows.reduce((count, row) => count + (row.sizeBytes === null ? 0 : 1), 0)
 }
 
-// Why: monitoring is still registered background work, so it filters as active — offering
-// such a workspace as idle would invite cleaning up a running dev server (#10997).
+// Registered monitoring is active work; classifying it idle could invite deleting a live dev server (#10997).
 function toWorkspaceCleanupAgentState(
   status: LiveAgentWorktreeStatus | undefined
 ): WorkspaceCleanupAgentState {
@@ -217,7 +220,10 @@ function getTicketSources(
   return sources
 }
 
-function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): string {
+function buildSearchText(
+  facets: Omit<WorkspaceCleanupFacets, 'searchText'>,
+  t?: Translate
+): string {
   return [
     facets.displayName,
     facets.repoName,
@@ -230,6 +236,7 @@ function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): st
     facets.review.title,
     facets.review.provider,
     facets.gitState,
+    getWorkspaceCleanupGitChipLabel(facets.gitState, t),
     ...facets.ticketSources,
     ...facets.blockers
   ]

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
-// Why: defaults export reads live prefs (on-disk plist lags cfprefsd); xml1 dodges plutil's json abort on macOS 15 input-source arrays; absolute paths so a minimal PATH can't shadow the tools.
+// Export live cfprefsd settings; xml1 avoids macOS 15 plutil JSON crashes, and absolute tool paths prevent PATH shadowing.
 const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
   `/usr/bin/defaults export ${MAC_HITOOLBOX_DOMAIN} -`,
   '/usr/bin/plutil -extract AppleSelectedInputSources xml1 -o - -',
@@ -18,7 +18,7 @@ export function readCommandStdout(
     let settled = false
     let child: ReturnType<typeof spawn> | undefined
 
-    // Why: killing only the shell orphans pipeline stages; detached spawn lets one negative-pid SIGKILL reap the whole group.
+    // Kill the detached process group so pipeline children cannot outlive the shell.
     const killTree = (): void => {
       if (!child?.pid) {
         return
@@ -30,7 +30,7 @@ export function readCommandStdout(
       }
     }
 
-    // Why: short timeout so a wedged macOS probe never hangs; this timer owns the process-group kill.
+    // Bound the probe and own the whole process-group kill.
     const timer = setTimeout(() => {
       if (settled) {
         return
@@ -60,7 +60,7 @@ export function readCommandStdout(
         killTree()
         settle(() => reject(error))
       }
-      // Why: an unhandled Readable 'error' would crash the main process; treat stdout errors like spawn errors.
+      // Treat stdout errors as probe failure instead of unhandled errors that crash main.
       child.stdout?.on('error', failWith)
       child.on('error', failWith)
       child.on('close', (code, signal) => {

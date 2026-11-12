@@ -1,24 +1,19 @@
 import { app, powerMonitor, type Event } from 'electron'
 import { isProcessQuitRequested, markProcessQuitRequested } from './process-quit-request'
 
-/**
- * On macOS, Dock > Quit, Cmd-Q from the app switcher and Activity Monitor's Quit reach before-quit
- * as a native terminate. On a serve host that would drop every paired client (#15537), so an
- * unmarked quit only closes the desktop windows. Signals, supervisors, relaunches and update
- * installs mark their quit first; logout and shutdown mark it through powerMonitor.
- */
+/** macOS native Quit must close serve windows without disconnecting paired clients (#15537). Signals/supervisor/updates mark process quit; shutdown/logout do too so they remain allowed. */
 export function installServeNativeQuitGuard(deps: {
   platform: NodeJS.Platform
   isQuittingForUpdate: () => boolean
   closeDesktopWindows: () => void
 }): void {
-  // Why macOS only: elsewhere every before-quit comes from an app.quit() call this code owns.
+  // Only macOS delivers native termination outside our owned app.quit calls.
   if (deps.platform !== 'darwin') {
     return
   }
-  // Why: macOS sends logout/shutdown as the same terminate; vetoing it would cancel the logout.
+  // Native logout/shutdown uses the same terminate path; allow it or logout is canceled.
   powerMonitor.on('shutdown', markProcessQuitRequested)
-  // Why prepend: veto before the updater guard and before startup listeners begin teardown.
+  // Veto before updater/startup listeners begin teardown.
   app.prependListener('before-quit', (event: Event) => {
     if (isProcessQuitRequested() || deps.isQuittingForUpdate()) {
       return

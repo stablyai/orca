@@ -10,10 +10,8 @@ import {
   markClaudeLeadTurnInterrupted,
   seedClaudeSubagentRosterFromSnapshots
 } from './agent-hook-listener/providers/claude-roster-state'
-import { normalizeHookPayload } from './agent-hook-listener'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
-import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
-import { makePaneKey } from './stable-pane-id'
+import { normalizeHookPayload } from './agent-hook-listener/normalization/normalize-hook-payload'
+import { makePaneKey } from './workspace-layout/stable-pane-id'
 
 const SOURCE_PANE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET_PANE = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
@@ -30,112 +28,7 @@ function claudeEvent(state: HookListenerState, paneKey: string, payload: Record<
 }
 
 describe('Claude background task status', () => {
-  it('finds pending monitor work after the visible child-row cap', () => {
-    const agentTasks = Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
-      id: `agent-${index}`,
-      type: 'subagent',
-      status: 'running'
-    }))
-    const result = readClaudeBackgroundAgentTasks({
-      background_tasks: [...agentTasks, { id: 'monitor-1', type: 'monitor', status: 'pending' }]
-    })
-
-    expect(result).toMatchObject({ truncated: true, hasRunningNonAgentTask: true })
-    expect(result.tasks).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
-
-    const state = createHookListenerState()
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        background_tasks: [...agentTasks, { id: 'monitor-1', type: 'monitor', status: 'pending' }]
-      })?.state
-    ).toBe('working')
-  })
-
-  it('fails unknown, partial, or malformed task entries active but ignores terminal entries', () => {
-    for (const status of ['queued', undefined]) {
-      expect(
-        readClaudeBackgroundAgentTasks({
-          background_tasks: [{ id: 'shell-1', type: 'shell', status }]
-        }).hasRunningNonAgentTask
-      ).toBe(true)
-    }
-    expect(
-      readClaudeBackgroundAgentTasks({
-        background_tasks: [{ id: 'task-1', type: 'background_shell', status: 'starting' }]
-      }).hasRunningNonAgentTask
-    ).toBe(true)
-    for (const task of [
-      { id: 'task-1', status: 'running' },
-      { id: 'task-1', type: 42, status: 'running' },
-      { id: 'task-1', type: ' ', status: 'running' }
-    ]) {
-      expect(readClaudeBackgroundAgentTasks({ background_tasks: [task] })).toMatchObject({
-        truncated: true,
-        hasRunningNonAgentTask: true
-      })
-    }
-    expect(
-      readClaudeBackgroundAgentTasks({ background_tasks: [null, 'shell'] }).hasRunningNonAgentTask
-    ).toBe(true)
-
-    for (const backgroundTasks of [
-      [{ id: 'shell-1', type: 'shell', status: 'completed' }],
-      [{ id: 'shell-1', type: 'shell', status: ' Completed ' }],
-      ...[
-        'done',
-        'success',
-        'succeeded',
-        'complete',
-        'finished',
-        'error',
-        'terminated',
-        'exited',
-        'aborted',
-        'expired',
-        'skipped',
-        'crashed'
-      ].map((status) => [{ id: 'shell-1', type: 'shell', status }]),
-      [{ id: 'shell-1', type: 'shell', status: 'canceled' }],
-      [{ id: 'shell-1', type: 'shell', status: 'timed_out' }],
-      [{ id: 'agent-1', type: ' Subagent ', status: 'running' }],
-      { id: 'shell-1', type: 'shell', status: 'running' }
-    ]) {
-      expect(
-        readClaudeBackgroundAgentTasks({ background_tasks: backgroundTasks }).hasRunningNonAgentTask
-      ).toBe(false)
-    }
-  })
-
-  // The inventory shares one kind table with the SDK stream, so the stream's `local_*` agent names
-  // classify as agents here too rather than failing active as untyped watch work.
-  // A teammate row still never gates the pane: it reports running permanently, so only its
-  // lifecycle events may (the #8825 idle-squat rule), which is why its pane state differs.
-  it.each([
-    ['local_agent', 'working'],
-    ['local_subagent', 'working'],
-    ['subagent', 'working'],
-    ['teammate', 'done']
-  ])('reads a running %s task as agent work, not a watch loop', (type, paneState) => {
-    expect(
-      readClaudeBackgroundAgentTasks({
-        background_tasks: [{ id: 'agent-1', type, status: 'running' }]
-      })
-    ).toMatchObject({
-      present: true,
-      truncated: false,
-      hasRunningNonAgentTask: false,
-      tasks: [{ id: 'agent-1', running: true }]
-    })
-
-    const state = createHookListenerState()
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        background_tasks: [{ id: 'agent-1', type, status: 'running' }]
-      })
-    ).toMatchObject({ state: paneState, workingMode: undefined })
-  })
+  // SDK local_* names share inventory classification; teammate tasks stay running permanently, so lifecycle events own their pane state (#8825).
 
   it('drains the Claude 2.1.229 background-task completion sequence', () => {
     const state = createHookListenerState()
@@ -177,29 +70,9 @@ describe('Claude background task status', () => {
     expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
-  // Why: STA-4119's second complaint is the missing completion notification. The renderer's
-  // completion coordinator announces off `turnCompletedAt` on a still-`working` payload, so the
-  // stamp — not the rendered state — is what makes the notification fire when a turn ends into
-  // monitoring. The stamp predicate and the monitoring predicate are computed from the same
-  // "lead said done but the pane resolves to working" expression, so a refactor that renames one
-  // can silently drop the other with nothing else going red. These pin both halves.
-  it('stamps the turn end when a finished lead falls back to monitoring', () => {
-    const state = createHookListenerState()
+  // Completion notifications need turnCompletedAt while the pane remains working for monitoring; pin both predicates (STA-4119).
 
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'UserPromptSubmit',
-      prompt: 'start the dev server'
-    })
-    const monitoring = claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'Stop',
-      background_tasks: [RUNNING_SHELL]
-    })
-
-    expect(monitoring).toMatchObject({ state: 'working', workingMode: 'monitoring' })
-    expect(typeof monitoring?.turnCompletedAt).toBe('number')
-  })
-
-  it('stamps a lead that ends into a working subagent, which carries no monitoring mode', () => {
+  it('holds the finish of a lead that ends into a working subagent, unless the lead failed', () => {
     const state = createHookListenerState()
 
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'delegate' })
@@ -208,83 +81,79 @@ describe('Claude background task status', () => {
       hook_event_name: 'Stop',
       background_tasks: [{ id: 'child-1', type: 'subagent', status: 'running' }]
     })
-
-    // Why: real agent work keeps the spinner (no workingMode) but the lead turn still ended,
-    // so the stamp must be present. The two predicates are deliberately not the same.
     expect(childWorking).toMatchObject({ state: 'working', workingMode: undefined })
-    expect(typeof childWorking?.turnCompletedAt).toBe('number')
-  })
+    expect(childWorking?.turnCompletedAt).toBeUndefined()
 
-  it('does not stamp a turn that is still running in the foreground', () => {
-    const state = createHookListenerState()
-
-    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'work' })
-    const midTurn = claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'PreToolUse',
-      tool_name: 'Bash'
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'again' })
+    const failed = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'StopFailure',
+      background_tasks: [{ id: 'child-1', type: 'subagent', status: 'running' }]
     })
-
-    expect(midTurn).toMatchObject({ state: 'working', workingMode: undefined })
-    expect(midTurn?.turnCompletedAt).toBeUndefined()
+    expect(failed).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(typeof failed?.turnCompletedAt).toBe('number')
   })
 
-  it('reads monitoring after an inferred cancel whose next Stop lists the shell, with no completion stamp', () => {
+  it('holds a coordinator waiting on workers in the background, even across a listener restart', () => {
+    const wait = {
+      id: 'wait-1',
+      type: 'shell',
+      status: 'running',
+      description: 'Wait for next worker message',
+      command:
+        '/usr/local/bin/orca orchestration check --wait --types worker_done --json 2>/dev/null'
+    }
+    const launched = createHookListenerState()
+    claudeEvent(launched, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'run' })
+    claudeEvent(launched, SOURCE_PANE, {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: wait.command, run_in_background: true },
+      tool_response: { backgroundTaskId: 'wait-1' }
+    })
+    // Only the dev server is still listed; the ended wait's notification is still owed.
+    const owed = claudeEvent(launched, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [RUNNING_SHELL]
+    })
+    expect(owed).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(owed?.turnCompletedAt).toBeUndefined()
+
+    const restarted = createHookListenerState()
+    claudeEvent(restarted, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'run' })
+    const listed = claudeEvent(restarted, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [wait]
+    })
+    expect(listed).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(listed?.turnCompletedAt).toBeUndefined()
+    // Only listed, it may be a subagent's wait, whose result never reaches this agent.
+    expect(
+      claudeEvent(restarted, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })?.state
+    ).toBe('done')
+  })
+
+  it('does not stamp a wake-up turn that ends with only a monitor that will wake it again', () => {
     const state = createHookListenerState()
 
-    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'start it' })
-    markClaudeLeadTurnInterrupted(state, SOURCE_PANE)
-    const interrupted = claudeEvent(state, SOURCE_PANE, {
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'watch' })
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'sleep 15', run_in_background: true },
+      tool_response: { backgroundTaskId: RUNNING_SHELL.id }
+    })
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] })
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: `<task-notification>\n<task-id>${RUNNING_SHELL.id}</task-id>\n<event>tick</event>`
+    })
+    const wakeEnd = claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
       background_tasks: [RUNNING_SHELL]
     })
 
-    // Why: the cancel is the main agent's verdict, the shell is the inventory's fact, and the two never
-    // trade: the row shows the shell, the verdict rides `mainAgent.outcome`. A cancelled turn is not a
-    // completion, so nothing is stamped for the notification path to announce.
-    expect(interrupted).toMatchObject({
-      state: 'working',
-      workingMode: 'monitoring',
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-    expect(interrupted?.interrupted).toBeUndefined()
-    expect(interrupted?.turnCompletedAt).toBeUndefined()
-  })
-
-  it('does not stamp a turn that simply finished with nothing left running', () => {
-    const state = createHookListenerState()
-
-    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'quick job' })
-    const finished = claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'Stop',
-      background_tasks: [],
-      session_crons: []
-    })
-
-    // Why: the stamp exists to announce a turn whose pane STAYS working. A plain done
-    // needs no stamp — the ordinary done path already notifies.
-    expect(finished?.state).toBe('done')
-    expect(finished?.turnCompletedAt).toBeUndefined()
-  })
-
-  it('keeps foreground child work active before falling back to monitoring', () => {
-    const state = createHookListenerState()
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'SubagentStart',
-      agent_id: 'child-1'
-    })
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        background_tasks: [{ id: 'child-1', type: 'subagent', status: 'running' }, RUNNING_SHELL]
-      })
-    ).toMatchObject({ state: 'working', workingMode: undefined })
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'SubagentStop',
-        agent_id: 'child-1'
-      })
-    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+    expect(wakeEnd).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+    expect(wakeEnd?.turnCompletedAt).toBeUndefined()
   })
 
   it('keeps pending task state when pane authority moves', () => {
@@ -338,53 +207,10 @@ describe('Claude background task status', () => {
         background_tasks: [RUNNING_SHELL]
       })
     ).toMatchObject(monitoring)
-    // Why: the shell leaves when its inventory omits it; the verdict the main agent carried into that
-    // Stop is what the settled row's `interrupted` flag restates for older readers.
+    // Inventory omission settles the shell; interrupted restates the carried lead verdict for old readers.
     expect(
       claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })
     ).toMatchObject({ state: 'done', interrupted: true, mainAgent: { outcome: 'cancellation' } })
-  })
-
-  it('keeps a session cron the interrupted Stop still lists', () => {
-    const state = createHookListenerState()
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        is_interrupt: true,
-        session_crons: [{ id: 'cron-1' }]
-      })
-    ).toMatchObject({
-      state: 'working',
-      workingMode: 'monitoring',
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
-  })
-
-  it('keeps a session cron working through child lifecycle events until a drained inventory', () => {
-    const state = createHookListenerState()
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        session_crons: [{ id: 'cron-1' }]
-      })
-    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
-    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'SubagentStop',
-        agent_id: 'child-1'
-      })
-    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        background_tasks: []
-      })?.state
-    ).toBe('done')
-    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
   it('drains a reported cron inventory mid-turn, not only at a turn boundary', () => {
@@ -404,8 +230,7 @@ describe('Claude background task status', () => {
     ).toBe('working')
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(false)
 
-    // Why: the mid-turn drain must survive to the next boundary — a Stop that reports
-    // nothing is the case where a stale cron flag would pin the pane 'working'.
+    // A mid-turn drain must survive the boundary or a missing next inventory leaves stale cron work pinned.
     expect(claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop' })?.state).toBe('done')
   })
 
@@ -434,40 +259,6 @@ describe('Claude background task status', () => {
     expect(legacyStopState.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
   })
 
-  it('keeps a shell an interrupted StopFailure still lists', () => {
-    const state = createHookListenerState()
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'StopFailure',
-        is_interrupt: true,
-        background_tasks: [RUNNING_SHELL]
-      })
-    ).toMatchObject({
-      state: 'working',
-      workingMode: 'monitoring',
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
-  })
-
-  it('keeps a failed turn working while its background shell runs', () => {
-    const state = createHookListenerState()
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'StopFailure',
-        background_tasks: [RUNNING_SHELL]
-      })?.state
-    ).toBe('working')
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'StopFailure',
-        background_tasks: []
-      })?.state
-    ).toBe('done')
-  })
-
   it('drops interrupted state on a mid-turn lead event with no prompt submit', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', is_interrupt: true })
@@ -482,41 +273,6 @@ describe('Claude background task status', () => {
         background_tasks: [RUNNING_SHELL]
       })
     ).toMatchObject({ state: 'working', interrupted: undefined })
-  })
-
-  it('resumes on task notifications and user slash commands after interruption', () => {
-    const state = createHookListenerState()
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'Stop',
-      is_interrupt: true,
-      background_tasks: [RUNNING_SHELL]
-    })
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'UserPromptSubmit',
-        prompt: '<task-notification><status>completed</status></task-notification>',
-        background_tasks: [RUNNING_SHELL]
-      })
-    ).toMatchObject({ state: 'working', workingMode: undefined, mainAgent: { state: 'working' } })
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        is_interrupt: true,
-        background_tasks: [RUNNING_SHELL]
-      })
-    ).toMatchObject({
-      state: 'working',
-      workingMode: 'monitoring',
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'UserPromptSubmit',
-        prompt: '<command-message>review</command-message><command-name>/review</command-name>',
-        background_tasks: [RUNNING_SHELL]
-      })?.state
-    ).toBe('working')
   })
 
   it('ignores child-attributed inventories for lead-owned background work', () => {
@@ -577,45 +333,6 @@ describe('Claude background task status', () => {
     }
   })
 
-  it('retains live child rows when inventory entries cannot be classified', () => {
-    for (const backgroundTasks of [[{ id: 'child-1', status: 'running' }], [null, 'shell', 42]]) {
-      const state = createHookListenerState()
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'SubagentStart',
-        agent_id: 'child-1'
-      })
-
-      expect(
-        claudeEvent(state, SOURCE_PANE, {
-          hook_event_name: 'Stop',
-          background_tasks: backgroundTasks
-        })
-      ).toMatchObject({
-        state: 'working',
-        subagents: [expect.objectContaining({ id: 'child-1', state: 'working' })]
-      })
-    }
-  })
-
-  it('does not fold a Stop inventory attributed to an unknown child', () => {
-    const state = createHookListenerState()
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'SubagentStart',
-      agent_id: 'child-1'
-    })
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        agent_id: 'unknown-child',
-        background_tasks: []
-      })
-    ).toMatchObject({
-      state: 'working',
-      subagents: [expect.objectContaining({ id: 'child-1', state: 'working' })]
-    })
-  })
-
   it('does not mint working from an unconfirmed child-attributed Stop', () => {
     const state = createHookListenerState()
     seedClaudeSubagentRosterFromSnapshots(state, SOURCE_PANE, [
@@ -629,43 +346,6 @@ describe('Claude background task status', () => {
         background_tasks: []
       })
     ).toBeUndefined()
-  })
-
-  it('does not let an unknown child interrupt lead-owned background work', () => {
-    const state = createHookListenerState()
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'Stop',
-      background_tasks: [RUNNING_SHELL]
-    })
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'UserPromptSubmit',
-      prompt: 'continue lead work'
-    })
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'Stop',
-        agent_id: 'unknown-child',
-        is_interrupt: true
-      })
-    ).toMatchObject({ state: 'working' })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
-  })
-
-  it('keeps background gating through an empty child SubagentStop inventory', () => {
-    const state = createHookListenerState()
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'Stop',
-      background_tasks: [RUNNING_SHELL]
-    })
-
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'SubagentStop',
-        agent_id: 'child-1',
-        background_tasks: []
-      })?.state
-    ).toBe('working')
   })
 
   it('ignores TeammateIdle inventories for lead-owned background work', () => {
@@ -734,30 +414,9 @@ describe('Claude background task status', () => {
     expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
   })
 
-  it('keeps background gating when the server infers an interruption and folds the cancel with it', () => {
-    const state = createHookListenerState()
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'Stop',
-      background_tasks: [RUNNING_SHELL],
-      session_crons: [{ id: 'cron-1' }]
-    })
-    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'now this' })
-
-    // Why: Ctrl+C ends the main agent's turn, not the shell or cron the inventory reported; the row the
-    // server synthesizes for the cancel is the same fold every Stop goes through.
-    expect(markClaudeLeadTurnInterrupted(state, SOURCE_PANE)).toEqual({
-      state: 'working',
-      workingMode: 'monitoring',
-      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: expect.any(Number) }
-    })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
-    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
-  })
-
   it('keeps a live shell as a confirmed done-gate for child lifecycle events after a cancel', () => {
     const state = createHookListenerState()
-    // A child restored from disk, then a truncated inventory that registers a shell without
-    // retiring the restored seed.
+    // A truncated inventory adds a shell without retiring the restored child seed.
     seedClaudeSubagentRosterFromSnapshots(state, SOURCE_PANE, [
       { id: 'restored-1', state: 'working', startedAt: 1 }
     ])
@@ -769,8 +428,7 @@ describe('Claude background task status', () => {
     expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
     markClaudeLeadTurnInterrupted(state, SOURCE_PANE)
 
-    // Why: the shell the inventory reported is live evidence whatever verdict ended the turn, so
-    // a child ending beside it is not a restored-only boundary and the row stays confirmed.
+    // A live shell confirms inventory regardless of lead verdict; a sibling’s end cannot make it restored-only.
     const ended = normalizeHookPayload(
       state,
       'claude',

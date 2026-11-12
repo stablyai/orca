@@ -1,11 +1,4 @@
-/**
- * Probe and scenarios for agent browser input vs. the user's keyboard focus (#20595).
- *
- * The user's stand-in is the focused terminal; the agent drives a browser page behind it.
- * Chromium routes <webview> input by the window's focus, so the failure shows up as host
- * keydowns (agent keys landing in the terminal) or a host focus change.
- * See docs/reference/agent-browser-focus-isolation.md.
- */
+// Keep agent browser input away from the user’s terminal focus; observe host keydowns and focus changes (#20595).
 
 import { createServer, type Server } from 'node:http'
 import type { Page } from '@stablyai/playwright-test'
@@ -27,7 +20,16 @@ const PAGE_HTML = `<!doctype html>
     <form id="form"><input id="probe" /></form>
     <textarea id="notes"></textarea>
     <button id="target" style="position:absolute;left:40px;top:80px;width:200px;height:60px">target</button>
+    <iframe id="frame" src="__FRAME_URL__" style="position:absolute;left:40px;top:200px;width:300px;height:80px"></iframe>
     <script>
+      window.__frameValue = ''
+      window.__frameKeys = []
+      window.__frameReady = false
+      addEventListener('message', (event) => {
+        if (typeof event.data?.frameValue === 'string') window.__frameValue = event.data.frameValue
+        if (typeof event.data?.frameKey === 'string') window.__frameKeys.push(event.data.frameKey)
+        if (event.data?.frameReady) window.__frameReady = true
+      })
       window.__keys = []
       window.__submits = 0
       window.__clicks = 0
@@ -43,10 +45,39 @@ const PAGE_HTML = `<!doctype html>
   </body>
 </html>`
 
-async function startProbeServer(): Promise<{ url: string; close: () => Promise<void> }> {
-  const server: Server = createServer((_request, response) => {
+// Serve this frame cross-site so Chromium isolates it in the process widget input cannot reach.
+const FRAME_HTML = `<!doctype html>
+<html>
+  <body>
+    <input id="field" style="position:absolute;left:0;top:0;width:280px;height:60px" />
+    <script>
+      const field = document.getElementById('field')
+      // Why: a cross-site frame cannot focus itself without user activation, so the field takes
+      // focus on the first key the frame receives.
+      addEventListener(
+        'keydown',
+        (event) => {
+          if (document.activeElement !== field) field.focus()
+          parent.postMessage({ frameKey: event.key }, '*')
+        },
+        true
+      )
+      field.addEventListener('input', () => parent.postMessage({ frameValue: field.value }, '*'))
+      parent.postMessage({ frameReady: true }, '*')
+    </script>
+  </body>
+</html>`
+
+export async function startProbeServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  const server: Server = createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-    response.end(PAGE_HTML)
+    const address = server.address()
+    const port = address !== null && typeof address === 'object' ? address.port : 0
+    response.end(
+      request.url === '/frame'
+        ? FRAME_HTML
+        : PAGE_HTML.replace('__FRAME_URL__', `http://localhost:${port}/frame`)
+    )
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
@@ -56,19 +87,25 @@ async function startProbeServer(): Promise<{ url: string; close: () => Promise<v
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>
-      new Promise<void>((resolve, reject) =>
+      new Promise<void>((resolve, reject) => {
+        // Close keep-alive sockets or Windows server.close waits until the suite times out.
+        server.closeAllConnections()
         server.close((error) => (error ? reject(error) : resolve()))
-      )
+      })
   }
 }
 
-function readProperty(value: unknown, key: string): unknown {
+export function readProperty(value: unknown, key: string): unknown {
   return value !== null && typeof value === 'object' && key in value
     ? Object.getOwnPropertyDescriptor(value, key)?.value
     : undefined
 }
 
-async function rpc(page: Page, method: string, params: Record<string, unknown>): Promise<unknown> {
+export async function rpc(
+  page: Page,
+  method: string,
+  params: Record<string, unknown>
+): Promise<unknown> {
   const response: unknown = await page.evaluate(
     ({ targetMethod, targetParams }) =>
       window.api.runtime.call({ method: targetMethod, params: targetParams }),
@@ -123,12 +160,12 @@ export async function readHost(page: Page): Promise<{ log: string[]; terminalFoc
 }
 
 /** Opens the probe in a browser tab, then puts the terminal back in front of it. */
-async function openBackgroundProbeTab(page: Page, url: string): Promise<string> {
+export async function openBackgroundProbeTab(page: Page, url: string): Promise<string> {
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   const worktreeId = await getActiveWorktreeId(page)
   expect(worktreeId).toBeTruthy()
-  // Why: shown once so the page gets a viewport; a tab never shown can stay 0x0, and clicks miss.
+  // Mount once to establish a viewport; never-shown tabs can stay 0×0 and miss clicks.
   const pageId = await page.evaluate(
     ({ targetWorktreeId, targetUrl }) =>
       window.__store?.getState().createBrowserTab(targetWorktreeId, targetUrl, {
@@ -140,7 +177,7 @@ async function openBackgroundProbeTab(page: Page, url: string): Promise<string> 
   if (!pageId) {
     throw new Error('Failed to create the probe browser page')
   }
-  // Why: the title exists before the probe's script runs; input sent earlier goes unrecorded.
+  // Wait for script readiness too; the title can exist before input logging starts.
   const readiness = `document.readyState === 'complete' && innerWidth > 0 && 'clicks' + window.__clicks`
   await expect.poll(() => evalInPage(page, pageId, readiness), { timeout: 20_000 }).toBe('clicks0')
   await ensureTerminalVisible(page)
@@ -179,8 +216,8 @@ export async function runAgentKeysScenario(
           `JSON.stringify({ submits: window.__submits, keys: window.__keys })`
         )
       )
-      // Why: `type` inserts text without key events, so only the keypresses log keydowns.
-      .toBe(JSON.stringify({ submits: 1, keys: ['Z', 'Enter'] }))
+      // Why: `type` presses real keys, so its characters log keydowns like the keypresses.
+      .toBe(JSON.stringify({ submits: 1, keys: ['Z', 'q', 'r', 'Enter'] }))
     await afterAgentInput?.(pageId)
   } finally {
     await server.close()
@@ -220,7 +257,7 @@ export async function runAgentClicksScenario(
       .toBe(JSON.stringify({ active: 'probe', focused: true, blurs: 0 }))
     expect((await readHost(page)).terminalFocused).toBe(true)
 
-    // Why: text with a newline cannot be typed as key events; CDP delivers it with focus borrowed.
+    // Why: fill writes multiline values straight into the field, never through the user's focus.
     await rpc(page, 'browser.fill', { page: pageId, element: '#notes', value: 'a\nb' })
     await expect
       .poll(() => evalInPage(page, pageId, `document.getElementById('notes').value`))
@@ -239,7 +276,6 @@ export async function runAgentClicksScenario(
     expect(host.terminalFocused).toBe(true)
     await expect
       .poll(() => evalInPage(page, pageId, 'JSON.stringify(window.__keys)'))
-      // Why: only the agent's Tab; the user's x must not reach the page.
       .toBe('["Tab"]')
     await afterAgentInput?.(pageId)
   } finally {
@@ -267,6 +303,38 @@ export async function runAgentShortcutsScenario(
     expect(await getActiveTabId(page)).toBe(activeTabBefore)
     const host = await readHost(page)
     expect(host.log.filter((entry) => entry.startsWith('key:'))).toEqual([])
+    expect(host.terminalFocused).toBe(true)
+    await afterAgentInput?.(pageId)
+  } finally {
+    await server.close()
+  }
+}
+
+export async function runAgentCrossSiteFrameScenario(
+  page: Page,
+  afterAgentInput?: AfterAgentInput
+): Promise<void> {
+  const server = await startProbeServer()
+  try {
+    const pageId = await openBackgroundProbeTab(page, server.url)
+    await focusTerminalAndWatchHost(page)
+    await expect.poll(() => evalInPage(page, pageId, 'String(window.__frameReady)')).toBe('true')
+    await evalInPage(page, pageId, `document.getElementById('frame').focus()`)
+    await expect
+      .poll(() => evalInPage(page, pageId, 'document.activeElement && document.activeElement.id'))
+      .toBe('frame')
+    const hostLogBeforeTyping = (await readHost(page)).log.length
+
+    // Cross-site-frame input must use its own session without borrowing the user’s focus.
+    await rpc(page, 'browser.keypress', { page: pageId, key: 'Z' })
+    await expect
+      .poll(() => evalInPage(page, pageId, 'JSON.stringify(window.__frameKeys)'))
+      .toBe('["Z"]')
+    await rpc(page, 'browser.type', { page: pageId, input: 'qr' })
+    await expect.poll(() => evalInPage(page, pageId, 'window.__frameValue')).toContain('qr')
+
+    const host = await readHost(page)
+    expect(host.log.slice(hostLogBeforeTyping)).toEqual([])
     expect(host.terminalFocused).toBe(true)
     await afterAgentInput?.(pageId)
   } finally {

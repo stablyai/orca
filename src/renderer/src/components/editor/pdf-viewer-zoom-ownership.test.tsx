@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render } from '@testing-library/react'
+import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import PdfViewer from './PdfViewer'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
-import { requestPdfZoom } from './pdf-zoom-request'
-import { readPdfScalePreference } from './pdf-scale-preference-storage'
+import { requestViewerZoom } from './viewer-zoom-request'
 
 type PdfDocumentFixture = { name: string }
 
@@ -48,30 +47,24 @@ function renderPdf(isCommandOwner: boolean): void {
 }
 
 describe('PdfViewer app zoom ownership', () => {
-  it('zooms the PDF in the command-owning editor pane', () => {
+  it('leaves zoom unclaimed when text in the floating workspace has focus', () => {
     renderPdf(true)
-
-    let claimed = false
-    act(() => {
-      claimed = requestPdfZoom('in')
-    })
-
-    expect(claimed).toBe(true)
-    expect(viewers[0].currentScale).toBe(1.25)
-    expect(readPdfScalePreference('report')).toBe(1.25)
-
-    viewers[0].currentScaleValue = '1.25'
-    act(() => {
-      requestPdfZoom('reset')
-    })
-    expect(viewers[0].currentScaleValue).toBe('page-width')
-    expect(readPdfScalePreference('report')).toBe('page-width')
+    const floating = document.createElement('textarea')
+    floating.dataset.floatingTerminalPanel = ''
+    document.body.appendChild(floating)
+    try {
+      floating.focus()
+      expect(requestViewerZoom('in')).toBe(false)
+      expect(viewers[0].currentScale).toBe(1)
+    } finally {
+      floating.remove()
+    }
   })
 
   it('leaves zoom to the focused pane when this PDF is in an unfocused split or hidden worktree', () => {
     renderPdf(false)
 
-    expect(requestPdfZoom('in')).toBe(false)
+    expect(requestViewerZoom('in')).toBe(false)
     expect(viewers[0].currentScale).toBe(1)
   })
 })

@@ -1,227 +1,196 @@
 import { OrcaRuntimeWithBindPtyIncarnationHandle } from '../identity/terminal-handle-bindings'
-import type {
-  RuntimeLeafRecord,
-  RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import {
   buildPtyTerminalWaitBlockedResult,
-  buildPtyTerminalWaitResult,
-  buildTerminalWaitBlockedResult,
-  buildTerminalWaitResult
-} from '../../terminal-wait-results'
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import { detectExplicitIdleStatusFromTitle } from '../../terminal-wait-detection'
-import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
+  buildPtyTerminalWaitExitError,
+  buildPtyTerminalWaitResult
+} from './terminal-wait-results'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
+import { terminalDeliveryRefusal } from './terminal-delivery-refusal'
+import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
+import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
+import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
 import {
-  evaluateTuiIdle,
-  isTuiIdleReadyVerdict,
-  type TuiIdleVerdict
-} from '../../tui-idle-evidence'
-import { leafTuiIdleEvidence, ptyTuiIdleEvidence } from '../../tui-idle-evidence-source'
-import { TUI_IDLE_QUIESCENCE_MS } from '../../orca-runtime-postlude'
+  readTerminalComposerTypedText,
+  type TerminalCursorContext
+} from '../../../../shared/terminal/input/terminal-composer-draft'
+import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
+import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 
-import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
-import type { OrcaRuntimeWithDeliverPendingMessages } from '../../orca-runtime-deliver-pending-messages'
+const DIALOG_HOLD_RECHECK_MS = 2000
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
-  protected abstract resolveWaiter(
-    ...args: Parameters<OrcaRuntimeWithResolveWaiter['resolveWaiter']>
-  ): ReturnType<OrcaRuntimeWithResolveWaiter['resolveWaiter']>
-
-  protected abstract removeWaiter(
-    ...args: Parameters<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-  ): ReturnType<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-
-  protected abstract deliverPendingMessages(
-    ...args: Parameters<OrcaRuntimeWithDeliverPendingMessages['deliverPendingMessages']>
-  ): ReturnType<OrcaRuntimeWithDeliverPendingMessages['deliverPendingMessages']>
-
-  protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
-    const handle = this.issueHandle(leaf)
-    if (!handle) {
-      return
-    }
-    const waiters = this.terminalWaiters.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    for (const waiter of Array.from(waiters)) {
+  protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
+    for (const waiter of this.terminalWaiters.forPty(ptyId)) {
       if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'exit', leaf))
+        this.terminalWaiters.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
       } else {
         // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
-        this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
-      }
-    }
-  }
-
-  protected resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
-    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    const candidateHandle =
-      this.handleByLeafKey.get(leafKey) ??
-      (leaf.ptyId
-        ? (this.handleByPtyId.get(leaf.ptyId) ??
-          this.handleByPtyIncarnation.get(leaf.ptyId)?.handle)
-        : undefined)
-    if (!candidateHandle || !this.terminalWaiters.get(candidateHandle)?.size) {
-      return
-    }
-    const handle = candidateHandle
-    const waiters = this.terminalWaiters.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    // Why re-rank rather than resolve outright: the transition that brought us here is only a
-    // title sample. Weak ready (a name-only title, #6011) cannot see a dialog the tail lost,
-    // so it is left to the poll, which settles it only after a rendered-screen read.
-    const verdict = this.evaluateTuiIdleForLeaf(leaf)
-    for (const waiter of Array.from(waiters)) {
-      if (waiter.condition !== 'tui-idle') {
-        continue
-      }
-      if (verdict.kind === 'blocked') {
-        this.resolveWaiter(
-          waiter,
-          buildTerminalWaitBlockedResult(handle, 'tui-idle', leaf, verdict.reason)
-        )
-      } else if (verdict.kind === 'ready-strong') {
-        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
-      }
-    }
-  }
-
-  protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
-    const handle = this.handleByPtyId.get(ptyId)
-    if (!handle) {
-      return
-    }
-    const waiters = this.terminalWaiters.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    for (const waiter of Array.from(waiters)) {
-      if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'exit', pty))
-      } else {
-        this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
+        this.terminalWaiters.remove(waiter)
+        waiter.reject(buildPtyTerminalWaitExitError(pty))
       }
     }
   }
 
   protected resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
-    const handle = this.handleByPtyId.get(ptyId)
-    if (!handle) {
+    const waiters = this.terminalWaiters
+      .forPty(ptyId)
+      .filter((waiter) => waiter.condition === 'tui-idle')
+    if (waiters.length === 0) {
       return
     }
-    const waiters = this.terminalWaiters.get(handle)
-    if (!waiters || waiters.size === 0) {
-      return
-    }
-    // Why: same re-ranking as resolveTuiIdleWaiters above.
+    // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
     const verdict = this.evaluateTuiIdleForPty(pty)
-    for (const waiter of Array.from(waiters)) {
-      if (waiter.condition !== 'tui-idle') {
-        continue
-      }
+    for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
-        this.resolveWaiter(
+        this.terminalWaiters.resolve(
           waiter,
-          buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, verdict.reason)
+          buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, verdict.reason)
         )
       } else if (verdict.kind === 'ready-strong') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
+        this.terminalWaiters.resolve(
+          waiter,
+          buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
+        )
       }
     }
   }
 
-  protected evaluateTuiIdleForLeaf(leaf: RuntimeLeafRecord): TuiIdleVerdict {
-    return evaluateTuiIdle(
-      leafTuiIdleEvidence(this.tuiIdleEvidenceSource, leaf, () =>
-        buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-      )
-    )
+  /** Point a terminal at its mail once it takes input and is settled; refusal re-arms the recheck. */
+  protected deliverPendingMessagesForPty(ptyId: string): void {
+    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    if (
+      terminal &&
+      isMailboxTerminalTakingInput(terminal) &&
+      this.checkDeliverySettledAndArmRecheck(ptyId)
+    ) {
+      this.orchestrationMailboxNotifications.deliverForTerminal(terminal)
+    }
   }
 
-  /**
-   * Settled-enough-to-type check that also arms a retry when it says no.
-   *
-   * Why the retry: the wait path POLLS, so weak evidence that only becomes valid with the
-   * passage of time (a pane going quiet) eventually satisfies it. Delivery is edge-driven —
-   * a title transition, a graph sync, a new message — with no poll behind it, so a refusal
-   * at an edge is final unless another edge happens to arrive. A hookless Codex pane never
-   * emits an explicit `X ready`, so the refusal below would strand the queued message
-   * permanently once the pane fell quiet. One-shot timer, armed only for a leaf that
-   * actually refused, cleared as soon as any path delivers.
-   */
-  protected checkDeliverySettledAndArmRecheck(leaf: { tabId: string; leafId: string }): boolean {
-    const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    if (this.isAgentSettledForDelivery(leaf)) {
-      this.clearDeliveryRecheck(leafKey)
+  /** Edge-driven delivery needs a one-shot recheck when quiet evidence may later settle; otherwise hookless agents can strand queued mail without another title/graph/message edge. */
+  protected checkDeliverySettledAndArmRecheck(ptyId: string): boolean {
+    if (this.isAgentSettledForDelivery(ptyId)) {
+      this.clearDeliveryRecheck(ptyId)
       return true
     }
-    this.armDeliveryRecheck(leafKey)
+    this.armDeliveryRecheck(ptyId)
     return false
   }
 
-  protected clearDeliveryRecheck(leafKey: string): void {
-    const timer = this.deliveryRecheckTimersByLeafKey.get(leafKey)
+  protected clearDeliveryRecheck(ptyId: string): void {
+    const timer = this.deliveryRecheckTimersByPtyId.get(ptyId)
     if (timer) {
       clearTimeout(timer)
-      this.deliveryRecheckTimersByLeafKey.delete(leafKey)
+      this.deliveryRecheckTimersByPtyId.delete(ptyId)
     }
   }
 
-  private armDeliveryRecheck(leafKey: string): void {
-    if (this.deliveryRecheckTimersByLeafKey.has(leafKey)) {
+  private armDeliveryRecheck(ptyId: string): void {
+    if (this.deliveryRecheckTimersByPtyId.has(ptyId)) {
       return
     }
-    const live = this.leaves.get(leafKey)
-    // Why this delay: the only refusal that time alone can lift is tier 3 waiting on the
-    // stream to go quiet, so wake just after the window could have elapsed. A pane that is
-    // still producing output re-arms from its own fresher timestamp rather than spinning.
-    const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
-    const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
+    // Refusal can lift without another edge (hook deadlines, foreground recognition), but only waiting work needs the retry.
+    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
+      return
+    }
+    // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
+    const outputAt = this.readOutputClockAt(ptyId)
+    const quietRemainingMs =
+      outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
+    // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
+    const delay =
+      this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
+        ? DIALOG_HOLD_RECHECK_MS
+        : quietRemainingMs + 50
     const timer = setTimeout(() => {
-      this.deliveryRecheckTimersByLeafKey.delete(leafKey)
-      const current = this.leaves.get(leafKey)
-      if (!current) {
-        return
-      }
-      // Why the gate again here: delivery sites gate at the CALL, not inside
-      // deliverPendingMessagesForLeaf, so firing straight into it would hand the retry the
-      // very injection the gate exists to prevent. A pane that went busy again re-arms.
-      if (this.checkDeliverySettledAndArmRecheck(current)) {
-        this.deliverPendingMessagesForLeaf(current)
-      }
+      this.deliveryRecheckTimersByPtyId.delete(ptyId)
+      // Delivery rechecks settlement first; the agent may have become busy again.
+      this.deliverPendingMessagesForPty(ptyId)
     }, delay)
     timer.unref?.()
-    this.deliveryRecheckTimersByLeafKey.set(leafKey, timer)
+    this.deliveryRecheckTimersByPtyId.set(ptyId, timer)
   }
 
-  /**
-   * Whether this pane is settled enough to TYPE INTO.
-   *
-   * Why the same ranking as the wait path: mailbox delivery writes the pointer plus Enter
-   * into the pane, so acting on a name-only `Codex` title mid-turn injects keystrokes into
-   * a running agent's session. That is the #6011 mis-settlement in a path with a worse
-   * failure mode than a racing script. Liveness stays a separate requirement — callers
-   * keep their own `lastAgentStatusObservedLive` checks.
-   */
-  protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
-    const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!live) {
-      return false
+  /** Pointer plus Enter takes the waits' readiness ranking, plus a working verdict: agents queue or
+   *  steer text sent mid-turn, so only dialogs, drafts and unsettled terminals hold mail. Callers
+   *  separately require live status evidence. */
+  protected isAgentSettledForDelivery(ptyId: string): boolean {
+    return this.deliveryRefusal(ptyId) === null
+  }
+
+  /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
+  readTerminalMailHold(terminalHandle: string): MailboxDeliveryHold | null {
+    const ptyId = this.getOrchestrationMailboxTerminalForHandle(terminalHandle)?.ptyId
+    const refusal = ptyId ? this.deliveryRefusal(ptyId) : null
+    return refusal === 'no-terminal' ? null : refusal
+  }
+
+  private deliveryRefusal(ptyId: string): MailboxDeliveryHold | 'no-terminal' | null {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
+      return 'no-terminal'
     }
-    const evidence = leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
-      buildTerminalWaitText(live.tailBuffer, live.tailPartialLine, live.preview)
+    const hold = this.ptyDeliveryHold(ptyId)
+    if (hold) {
+      return { kind: hold }
+    }
+    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty)
+    return terminalDeliveryRefusal({
+      verdict,
+      recognizedAgent: !!this.getPaneTerminalAgent(ptyId),
+      readScreenInputVeto
+    })
+  }
+
+  private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord) {
+    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
+      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
-    return isTuiIdleReadyVerdict(
-      evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
+    const verdict = evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
+    return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
+  }
+
+  /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
+   *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
+  private ptyDeliveryHold(ptyId: string): 'prompt' | 'draft' | 'restoring' | null {
+    if (this.isPtyAwaitingUserInput(ptyId)) {
+      return 'prompt'
+    }
+    const facts = this.terminalRunFacts
+    const state = this.readWholeScreenModel(ptyId)
+    const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
+    const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
+    const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
+    // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
+    // launch text; a process it attached to, as after a restart, may hold one typed before, which a
+    // screen still restoring cannot rule out yet.
+    const restoring = !state && this.headlessHydrationState.get(ptyId) === 'pending'
+    const unattributedSince = facts.noteUnattributedDraft(
+      ptyId,
+      unattributed && (draft || restoring)
     )
+    const holdSince = drivingInputAt ?? unattributedSince
+    const holding =
+      (draft || (unattributed && restoring)) &&
+      holdSince !== null &&
+      Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
+    return holding ? (draft ? 'draft' : 'restoring') : null
+  }
+
+  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+  private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
+    const agent = this.getPaneTerminalAgent(ptyId)
+    return (agent === 'opencode' || agent === 'opencode2') && context
+      ? openCodeComposerHoldsDraft(context)
+      : !!readTerminalComposerTypedText(context)
   }
 
   protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {
@@ -249,26 +218,5 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return title
     }
     return null
-  }
-
-  protected settlePendingMessageDelivery(
-    ptyId: string,
-    flight: { enterTimer: ReturnType<typeof setTimeout> | null }
-  ): void {
-    if (this.messageDeliveryFlightsByPtyId.get(ptyId) !== flight) {
-      return
-    }
-    this.messageDeliveryFlightsByPtyId.delete(ptyId)
-    const parked = this.parkedMessageRedeliveriesByPtyId.get(ptyId)
-    if (!parked) {
-      return
-    }
-    this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
-    for (const [mailboxHandle, delivery] of parked) {
-      this.deliverPendingMessages(delivery.leaf, {
-        mailboxHandle,
-        reservedTypes: delivery.reservedTypes
-      })
-    }
   }
 }

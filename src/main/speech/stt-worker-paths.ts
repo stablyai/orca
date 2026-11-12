@@ -1,28 +1,49 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import {
+  hasSpeechEnginePackage,
+  SPEECH_RECOGNIZER_DIR_ENV
+} from '../../shared/speech-recognizer-package'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
+
+/** Mobile maps voice_model_not_ready: to host-supported model setup, including hosts with no recognizer. */
+export const LOCAL_SPEECH_UNAVAILABLE_ERROR = 'voice_model_not_ready:unavailable'
 
 export function getSttWorkerPath(): string {
-  if (getAppEnvironment().isPackaged()) {
-    return join(process.resourcesPath, 'app.asar', 'out', 'main', 'stt-worker.js')
-  }
-  return join(__dirname, 'stt-worker.js')
+  return resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), 'stt-worker.js')
 }
 
-export function getSherpaModulePath(): string {
-  const nativePackage =
-    process.platform === 'win32' && process.arch === 'x64'
-      ? 'sherpa-onnx-win-x64'
-      : `sherpa-onnx-${process.platform}-${process.arch}`
-
-  if (getAppEnvironment().isPackaged()) {
-    const resourcesNodeModule = join(process.resourcesPath, 'node_modules', nativePackage)
-    if (existsSync(resourcesNodeModule)) {
-      return resourcesNodeModule
-    }
-    return join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', nativePackage)
+function speechNodeModulesDirCandidates(): string[] {
+  const resourcesPath =
+    'resourcesPath' in process && typeof process.resourcesPath === 'string'
+      ? process.resourcesPath
+      : undefined
+  if (getAppEnvironment().isPackaged() && resourcesPath) {
+    return [join(resourcesPath, 'node_modules')]
   }
+  if (getAppEnvironment().isPackaged()) {
+    // orcad: only the installed app's copy, which `orca serve` names.
+    const handed = process.env[SPEECH_RECOGNIZER_DIR_ENV]
+    return handed ? [handed] : []
+  }
+  return require.resolve.paths('transcribe-cpp') ?? []
+}
 
-  const resolved = require.resolve(nativePackage)
-  return join(resolved, '..')
+// The app's engine packages don't change while it runs, so they are looked up once.
+let speechEngineModulesDir: string | null | undefined
+
+/** The node_modules directory holding transcribe-cpp, or null on hosts without it. */
+export function getSpeechEngineModulesDir(): string | null {
+  if (speechEngineModulesDir === undefined) {
+    speechEngineModulesDir =
+      speechNodeModulesDirCandidates().find((dir) => hasSpeechEnginePackage(dir)) ?? null
+  }
+  return speechEngineModulesDir
+}
+
+export function hasLocalSpeechRecognizer(): boolean {
+  return getSpeechEngineModulesDir() !== null
 }

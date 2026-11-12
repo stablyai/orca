@@ -4,14 +4,21 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
-import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
+import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
+import { reactPluginOptions } from './config/build-plugins/react-compiler'
+import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
 
 export default defineConfig({
   root: resolve('src/renderer'),
-  // Why: pairing URLs may live under a reverse-proxy path prefix like
-  // /orca/web-index.html, so built assets must resolve relative to the page.
+  cacheDir: resolve('.cache/vite/web'),
+  // Resolve assets relatively for reverse-proxy pairing prefixes such as /orca/web-index.html.
   base: './',
-  plugins: [react(), tailwindcss(), createPdfjsViewerAssetsPlugin()],
+  plugins: [
+    react(reactPluginOptions()),
+    tailwindcss(),
+    createPdfjsViewerAssetsPlugin(),
+    createViteCacheRetentionPlugin()
+  ],
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true',
     ORCA_BUILD_COMMIT: JSON.stringify(resolveBuildSourceCommit())
@@ -26,6 +33,7 @@ export default defineConfig({
   build: {
     outDir: resolve('out/web'),
     emptyOutDir: true,
+    reportCompressedSize: false,
     rollupOptions: {
       input: resolve('src/renderer/web-index.html')
     }

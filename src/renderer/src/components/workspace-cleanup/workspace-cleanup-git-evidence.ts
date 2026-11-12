@@ -1,24 +1,17 @@
-import type {
-  WorkspaceCleanupBlocker,
-  WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
 import {
-  applyWorkspaceCleanupPolicy,
-  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
-} from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+  type WorkspaceCleanupBlocker,
+  type WorkspaceCleanupCandidate,
+  type WorkspaceCleanupReason,
+  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type {
   WorkspaceCleanupFilterState,
   WorkspaceCleanupSortField,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
-/**
- * The host defers git evidence for rows with no inactivity reason, so their
- * `git.checkedAt` is null and the facet layer reads them as `unknown`. A
- * git-dependent filter or sort would then quietly mislabel most of the list,
- * so the dialog re-scans those rows on demand before trusting the answer.
- */
+/** Broad scans may defer Git reads; resolve unknown rows on demand before trusting Git-based filtering or sorting. */
 export function hasWorkspaceCleanupGitEvidence(candidate: WorkspaceCleanupCandidate): boolean {
   return candidate.git.checkedAt !== null
 }
@@ -32,8 +25,7 @@ const GIT_DERIVED_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'unknown-base'
 ])
 
-/** Bounds how many worktrees one Git-evidence batch can inspect across a huge fleet. */
-export const WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS = WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
+const GIT_DERIVED_REASONS: ReadonlySet<WorkspaceCleanupReason> = new Set(['merged', 'unchanged'])
 
 export function needsWorkspaceCleanupGitEvidence(
   filters: WorkspaceCleanupFilterState,
@@ -48,10 +40,7 @@ export function needsWorkspaceCleanupGitEvidence(
   )
 }
 
-/**
- * Ids still missing git evidence, capped and in list order so the rows the user
- * is looking at resolve first.
- */
+/** Cap missing-evidence IDs in list order so visible rows resolve first. */
 export function selectWorkspaceCleanupGitEvidenceTargets(
   candidates: readonly WorkspaceCleanupCandidate[],
   options: {
@@ -73,11 +62,7 @@ export function selectWorkspaceCleanupGitEvidenceTargets(
   return targets
 }
 
-/**
- * Focused re-scan results win over the deferred broad-scan row. Keyed by
- * host-qualified identity: applying one host's git state to another host's
- * same-id row would mislabel a dirty workspace as safe to delete (STA-4343).
- */
+/** Targeted evidence overrides broad-scan unknowns by host-qualified identity, never another host’s same-ID row (STA-4343). */
 export function applyWorkspaceCleanupGitEvidence(
   candidates: readonly WorkspaceCleanupCandidate[],
   evidenceByIdentity: ReadonlyMap<string, WorkspaceCleanupCandidate>
@@ -94,13 +79,17 @@ export function applyWorkspaceCleanupGitEvidence(
     ) {
       return candidate
     }
-    return applyWorkspaceCleanupPolicy({
+    return {
       ...candidate,
+      reasons: [
+        ...candidate.reasons.filter((reason) => !GIT_DERIVED_REASONS.has(reason)),
+        ...evidence.reasons.filter((reason) => GIT_DERIVED_REASONS.has(reason))
+      ],
       blockers: [
         ...candidate.blockers.filter((blocker) => !GIT_DERIVED_BLOCKERS.has(blocker)),
         ...evidence.blockers.filter((blocker) => GIT_DERIVED_BLOCKERS.has(blocker))
       ],
       git: evidence.git
-    })
+    }
   })
 }

@@ -8,15 +8,8 @@ import {
   waitForActiveTerminalManager
 } from './helpers/terminal'
 
-// Repro for the permanent frozen-pane state behind issue #8104-class reports:
-// once a pane's xterm WriteBuffer wedges (an escaping throw from an unguarded
-// write callback, or a write into a disposed terminal silently dropping its
-// completion — both verified against vendored xterm 6.1.0-beta.287), every
-// later write queues forever: output stops rendering while the PTY stays
-// alive. The replay guard's probe certifies the wedge and fires the
-// terminal_replay_guard_wedged_release breadcrumb ("pane likely needs
-// recovery") — but nothing performs that recovery, so the pane stays a fossil
-// until the user reloads the window. These tests pin the recovery contract.
+// #8104-class freeze: xterm WriteBuffer callback throws or disposed writes lose completion, wedging future output despite a live PTY.
+// Verified on vendored 6.1.0-beta.287; require recovery beyond the replay guard’s wedged-release breadcrumb.
 
 async function wedgeActivePaneWritePipeline(
   page: Parameters<typeof waitForSessionReady>[0]
@@ -35,10 +28,7 @@ async function wedgeActivePaneWritePipeline(
     if (!pane) {
       throw new Error('No active terminal pane to wedge')
     }
-    // Same escape class as issue #2836: WriteBuffer._innerWrite invokes write
-    // callbacks with no try/catch; a synchronous throw skips the loop's tail
-    // re-schedule and write() only re-arms on an EMPTY buffer, so the pipeline
-    // never drains again.
+    // #2836: uncaught _innerWrite callback skips rescheduling; write() re-arms only an empty buffer, so queued output never drains.
     pane.terminal.write('', () => {
       throw new Error('e2e: simulated unguarded write-completion throw')
     })
@@ -70,9 +60,7 @@ test.describe('Wedged terminal write pipeline recovery', () => {
 
     await wedgeActivePaneWritePipeline(orcaPage)
 
-    // Type through the wedge. The PTY is alive: bytes reach the shell and the
-    // shell echoes them — but a wedged pipeline never parses the echo, so
-    // without recovery the marker never renders.
+    // Require echo after typing through the wedge: live PTY alone cannot make a wedged parser render it.
     const afterMarker = `WEDGE_RECOVERED_${runId}`
     await focusActiveTerminalInput(orcaPage)
     await orcaPage.keyboard.type(`echo ${afterMarker}`, { delay: 20 })
@@ -110,11 +98,7 @@ test.describe('Wedged terminal write pipeline recovery', () => {
       })
       .toBe(true)
 
-    // The production zombie: disposePane/teardown raced pane bindings, leaving
-    // delivery and input routed at a disposed xterm. write() on a disposed
-    // terminal silently drops its completion callback (verified against
-    // 6.1.0-beta.287), so delivery acks leak and keyboard onData never fires —
-    // the pane looks painted but is a fossil: input dead, output dead, PTY alive.
+    // Model teardown racing bindings: delivery/input still target disposed xterm, whose dropped completions leak ACKs and suppress onData (6.1.0-beta.287).
     await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -132,9 +116,7 @@ test.describe('Wedged terminal write pipeline recovery', () => {
       pane.terminal.dispose()
     })
 
-    // Generate PTY output daemon-side; delivery into the disposed xterm is the
-    // health signal recovery must catch (typing can't be one here — a disposed
-    // xterm emits no onData at all).
+    // Generate output daemon-side as the health signal; disposed xterm emits no keyboard onData.
     const outputMarker = `ZOMBIE_OUTPUT_${runId}`
     await sendToTerminal(orcaPage, ptyId, `echo ${outputMarker}\r`)
 

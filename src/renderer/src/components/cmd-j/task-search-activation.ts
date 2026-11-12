@@ -1,50 +1,43 @@
 import { useAppStore } from '@/store'
-import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getProvenWorkspaceReferenceIdentity,
   parseWorkspaceReferenceUrl
-} from '../../../../shared/workspace-reference-identity'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import {
+  getLinearIssueWorkspaceName,
   getLinkedWorkItemWorkspaceName,
-  getLinkedWorkItemSuggestedName,
-  type LinkedWorkItemSummary
-} from '@/lib/new-workspace'
-import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+  getLinkedWorkItemSuggestedName
+} from '../../../../shared/workspace-name'
+import '@/lib/workspace/creation/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
+
+import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import {
+  haveConflictingTaskSourceAccounts,
+  type TaskSourceContext
+} from '../../../../shared/work-items/task-source-context'
 import type { CmdJTaskSearchResult } from './task-search-results'
-import { getJiraIssueWorkspaceSeed } from '../task-page-source-context'
+import { getJiraIssueWorkspaceSeed } from '../task-page/task-page-source-context'
 
 function sourceMatches(source: TaskSourceContext, target: TaskSourceContext): boolean {
   if (source.provider !== target.provider || source.hostId !== target.hostId) {
     return false
   }
-  if (source.accountLabel && target.accountLabel && source.accountLabel !== target.accountLabel) {
+  if (haveConflictingTaskSourceAccounts(source, target)) {
     return false
   }
   const left = source.providerIdentity
   const right = target.providerIdentity
-  if (
+  return !(
     left?.provider === 'linear' &&
     right?.provider === 'linear' &&
     left.workspaceId &&
     right.workspaceId &&
     left.workspaceId !== right.workspaceId
-  ) {
-    return false
-  }
-  if (
-    left?.provider === 'jira' &&
-    right?.provider === 'jira' &&
-    left.siteId &&
-    right.siteId &&
-    left.siteId !== right.siteId
-  ) {
-    return false
-  }
-  return true
+  )
 }
 
 export function findCmdJTaskWorkspace(
@@ -88,7 +81,7 @@ export function openCmdJTask(result: CmdJTaskSearchResult, createWorkspace = fal
   if (createWorkspace) {
     const linkedWorkItem: LinkedWorkItemSummary =
       task.provider === 'linear'
-        ? buildLinearIssueLinkedWorkItem(task.issue)
+        ? buildLinearWorkspaceSource(task.issue)
         : {
             provider: task.provider,
             type: 'issue',

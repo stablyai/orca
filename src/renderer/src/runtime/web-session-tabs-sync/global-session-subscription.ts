@@ -1,11 +1,12 @@
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
-import { clearWebSessionCloseIntentsForOwner } from '../web-session-close-intent'
-import { clearWebSessionFocusIntentsForOwner } from '../web-session-focus-intent'
-import { clearWebSessionReorderIntentsForOwner } from '../web-session-reorder-intent'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
+import { clearWebSessionCloseIntentsForOwner } from './closing/web-session-close-intent'
+import { clearWebSessionFocusIntentsForOwner } from './navigation/web-session-focus-intent'
+import { clearWebSessionReorderIntentsForOwner } from './navigation/web-session-reorder-intent'
 import {
   installWindowVisibilitySubscriptionParking,
+  type WindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionSpec
-} from '../window-visibility-subscription-parking'
+} from '../rpc/subscriptions/window-visibility-subscription-parking'
 import { shouldSyncAllRuntimeSessionTabs } from './tracking-decisions'
 import {
   getWebSessionTabsTrackingGeneration,
@@ -20,7 +21,7 @@ import type {
   SessionTabsSnapshotHandler
 } from './visibility-resume-types'
 import { isSessionTabsStreamEnd, WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
-import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
+import { subscribeRuntimeEnvironment } from '../rpc/environment-revisions/runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
 
@@ -57,12 +58,11 @@ function parseEnvironments(value: string | null): MirroredRuntimeEnvironment[] {
     .filter(({ environmentId }) => environmentId.trim())
 }
 
-/** Install all-worktree subscriptions and their visibility-resume coordinator. */
 export function installGlobalSessionTabsSubscriptions({
   runtimeSessionMirrorEnvironmentKey,
   workspaceSessionReady,
   refs
-}: GlobalSubscriptionInstallArgs): (() => void) | undefined {
+}: GlobalSubscriptionInstallArgs): WindowVisibilitySubscriptionParking | undefined {
   const environments = parseEnvironments(runtimeSessionMirrorEnvironmentKey)
   const ownerRevisions = new Map(
     (workspaceSessionReady ? environments : []).map(
@@ -203,16 +203,19 @@ export function installGlobalSessionTabsSubscriptions({
     onVisibilityResume: ({ visibilityGeneration, restartingSpecIndexes }) =>
       coordinator.beginVisibilityResume(visibilityGeneration, restartingSpecIndexes)
   })
-  return () => {
-    refs.snapshotReceipt.current = () => {}
-    refs.snapshotApply.current = () => true
-    refs.snapshotAccepted.current = () => {}
-    dispose()
-    for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
-      const owner = { environmentId, pairingRevision: expectedEnvironmentPairingRevision }
-      clearWebSessionCloseIntentsForOwner(owner)
-      clearWebSessionFocusIntentsForOwner(owner)
-      clearWebSessionReorderIntentsForOwner(owner)
-    }
-  }
+  return Object.assign(
+    () => {
+      refs.snapshotReceipt.current = () => {}
+      refs.snapshotApply.current = () => true
+      refs.snapshotAccepted.current = () => {}
+      dispose()
+      for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
+        const owner = { environmentId, pairingRevision: expectedEnvironmentPairingRevision }
+        clearWebSessionCloseIntentsForOwner(owner)
+        clearWebSessionFocusIntentsForOwner(owner)
+        clearWebSessionReorderIntentsForOwner(owner)
+      }
+    },
+    { restartEnded: dispose.restartEnded }
+  )
 }

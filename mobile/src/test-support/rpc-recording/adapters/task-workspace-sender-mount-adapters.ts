@@ -1,22 +1,22 @@
+import type * as WorktreeCreateRetryModule from '../../../new-workspace/creation/worktree-create-retry'
+import type * as WorktreeCreateCapabilityModule from '../../../new-workspace/creation/worktree-create-capability'
+import type * as ComposerSourceBaseResolveModule from '../../../new-workspace/source-selection/composer-source-base-resolve'
+import type * as SetupHookTrustModule from '../../../new-workspace/creation/setup-hook-trust'
+import type * as SmartSourceSearchRequestsModule from '../../../new-workspace/source-selection/smart-source-search-requests'
+import type * as SmartSourcePasteIntentModule from '../../../new-workspace/source-selection/smart-source-paste-intent'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const REPO = 'repo-1'
 const REPO_SELECTOR = `id:${REPO}`
 
-/**
- * The task workspace-creation senders that are exported async functions taking a client: create and
- * its retry loop, the create-time capability probe, hosted-base resolution, the setup-hook trust
- * write and the Smart source picker's provider reads. No React host is needed, so the recorded
- * state is the function's own answer.
- */
 export function taskWorkspaceSenderMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'tasks.worktree-create-retry': ({ client }) => {
-      const create = modules.load<typeof import('../../../tasks/worktree-create-retry')>(
-        'mobile/src/tasks/worktree-create-retry.ts'
+      const create = modules.load<typeof WorktreeCreateRetryModule>(
+        'mobile/src/new-workspace/creation/worktree-create-retry.ts'
       ).createWorktreeWithNameRetry
       let outcome: unknown = 'uncreated'
       let minted = 0
@@ -26,15 +26,10 @@ export function taskWorkspaceSenderMountAdapters(
             client,
             baseName: String(args.name ?? 'kestrel'),
             buildParams: (candidate: string) => ({ repo: REPO_SELECTOR, name: candidate }),
-            // A resolved probe, because the create path awaits it before the first send.
             worktreeCreateIdempotency: Promise.resolve(
               args.idempotency === false ? false : { dedupeTtlMs: 60_000 }
             ),
-            // The launch route is a create-time decision the caller has already settled, so the
-            // scenario turns it on rather than naming an agent: which agent is picked changes only
-            // the params, and the arm that matters is `agent.launch` instead of `worktree.create`.
-            // `replay: false` keeps the recorded method `agent.launch`; the replay-required route
-            // is a different method and would need its own scenario.
+            // Scenario input selects the launch route; replay:false pins agent.launch, while replay-required launch needs a separate scenario.
             ...(args.agentLaunch === true
               ? { agentLaunch: { agent: 'codex' as const, supported: { replay: false } } }
               : {}),
@@ -49,8 +44,8 @@ export function taskWorkspaceSenderMountAdapters(
       }
     },
     'tasks.worktree-capabilities': ({ client }) => {
-      const read = modules.load<typeof import('../../../tasks/worktree-create-capability')>(
-        'mobile/src/tasks/worktree-create-capability.ts'
+      const read = modules.load<typeof WorktreeCreateCapabilityModule>(
+        'mobile/src/new-workspace/creation/worktree-create-capability.ts'
       ).readNewWorktreeRuntimeCapabilities
       let capabilities: unknown = 'unprobed'
       return {
@@ -64,8 +59,8 @@ export function taskWorkspaceSenderMountAdapters(
       }
     },
     'tasks.composer-hosted-base': ({ client }) => {
-      const resolve = modules.load<typeof import('../../../tasks/composer-source-base-resolve')>(
-        'mobile/src/tasks/composer-source-base-resolve.ts'
+      const resolve = modules.load<typeof ComposerSourceBaseResolveModule>(
+        'mobile/src/new-workspace/source-selection/composer-source-base-resolve.ts'
       )
       let prBase: unknown = 'unresolved'
       let mrBase: unknown = 'unresolved'
@@ -91,8 +86,8 @@ export function taskWorkspaceSenderMountAdapters(
       }
     },
     'tasks.setup-hook-trust': ({ client }) => {
-      const persist = modules.load<typeof import('../../../tasks/setup-hook-trust')>(
-        'mobile/src/tasks/setup-hook-trust.ts'
+      const persist = modules.load<typeof SetupHookTrustModule>(
+        'mobile/src/new-workspace/creation/setup-hook-trust.ts'
       ).persistSetupHookTrustApproval
       let trust: unknown = 'unapproved'
       return {
@@ -112,8 +107,8 @@ export function taskWorkspaceSenderMountAdapters(
       }
     },
     'tasks.smart-source-search': ({ client }) => {
-      const search = modules.load<typeof import('../../../tasks/smart-source-search-requests')>(
-        'mobile/src/tasks/smart-source-search-requests.ts'
+      const search = modules.load<typeof SmartSourceSearchRequestsModule>(
+        'mobile/src/new-workspace/source-selection/smart-source-search-requests.ts'
       )
       const results: Record<string, unknown> = {}
       return {
@@ -141,8 +136,8 @@ export function taskWorkspaceSenderMountAdapters(
       }
     },
     'tasks.paste-lookup': ({ client }) => {
-      const paste = modules.load<typeof import('../../../tasks/smart-source-paste-intent')>(
-        'mobile/src/tasks/smart-source-paste-intent.ts'
+      const paste = modules.load<typeof SmartSourcePasteIntentModule>(
+        'mobile/src/new-workspace/source-selection/smart-source-paste-intent.ts'
       )
       const slugCache = new Map<string, { owner: string; repo: string; host?: string } | null>()
       const repos = [

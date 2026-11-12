@@ -2,25 +2,31 @@ import { homedir } from 'node:os'
 import { basename, extname, join, win32 } from 'node:path'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  getSharedManagedScriptPath,
-  isPlainObject,
-  isSafeUnicodeWindowsBatchHookPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
-  removeManagedCommands,
-  wrapWindowsPowerShellEncodedCommand,
   type HookCommandConfig,
-  type HookDefinition,
   type HooksConfig
-} from '../agent-hooks/installer-utils'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  removeManagedCommands,
+  withPreviousManagedAsync
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { isSafeUnicodeWindowsBatchHookPath } from '../agent-hooks/installation/commands/windows-hook-command'
+import { wrapWindowsPowerShellEncodedCommand } from '../agent-hooks/installation/commands/windows-powershell-hook-launcher'
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
-import { getWindowsNativeHookAgent } from '../agent-hooks/windows-native-hook-executable'
+import { getWindowsNativeHookAgent } from '../agent-hooks/installation/commands/windows-native-hook-executable'
 import {
   wrapRuntimeHomeHookCommand,
   wrapRuntimeHomePosixHookCommand
-} from '../agent-hooks/runtime-home-hook-command'
-import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+} from '../agent-hooks/installation/commands/runtime-home-hook-command'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
+import {
+  claudeManagedHookForms,
+  withClaudeAsyncPermissionRequest
+} from './claude-async-permission-request'
 
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude' | '.qoder' | '.qoder-cn' | '.qwen' | '.codebuddy'
@@ -46,6 +52,9 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   scriptBaseName: 'openclaude-hook',
   usesWindowsCompatLauncher: false
 }
+
+/** Exec form (`args`) is only valid for Claude versions that support it. */
+export type NativeHookFormOptions = { execForm?: boolean }
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
   return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
@@ -100,17 +109,6 @@ export function getManagedCommand(
   return wrapRuntimeHomeHookCommand(getScriptBaseName(scriptPath), options)
 }
 
-export function getManagedEventHook(
-  eventName: string,
-  scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS,
-  nativeHookPath: string | null = null
-): HookCommandConfig {
-  return process.platform === 'win32'
-    ? getManagedLifecycleHook(scriptPath, settings, nativeHookPath)
-    : buildManagedCommandHook(getRemoteManagedEventCommand(eventName, scriptPath))
-}
-
 // Claude adds the full PostCompact command to the model's context after compaction.
 export function getRemoteManagedEventCommand(eventName: string, scriptPath: string): string {
   return eventName === 'PostCompact'
@@ -118,23 +116,32 @@ export function getRemoteManagedEventCommand(eventName: string, scriptPath: stri
     : getRemoteManagedCommand(scriptPath)
 }
 
-/** `nativeHookPath` is the installed orca-agent-hook.exe, or null to keep the `.cmd` form. */
 export function getManagedLifecycleHook(
   scriptPath: string,
   settings = CLAUDE_HOOK_SETTINGS,
-  nativeHookPath: string | null = null
+  nativeHookPath: string | null = null,
+  options: NativeHookFormOptions = {}
 ): HookCommandConfig {
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
-  // Why a bare exe path plus a plain word: Git Bash, PowerShell and CreateProcess all start
-  // `<exe> claude` the same way, without cmd.exe.
+  // Native exe plus agent name launches consistently across Git Bash, PowerShell and CreateProcess.
   const nativeCommand = nativeHookPath ? wrapWindowsDirectCmdHookCommand(nativeHookPath) : null
   if (nativeCommand) {
     const agent = getWindowsNativeHookAgent(scriptPath)
     return {
       type: 'command',
       command: `${nativeCommand} ${agent}`,
+      timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+    }
+  }
+  // Git Bash needs a spaced path quoted, which the no-Git-Bash PowerShell host cannot parse.
+  if (nativeHookPath && options.execForm) {
+    return {
+      type: 'command',
+      command: nativeHookPath,
+      // The exe ignores argv[2]; the script path lets builds without exec-form support replace this entry.
+      args: [getWindowsNativeHookAgent(scriptPath), scriptPath],
       timeout: MANAGED_HOOK_TIMEOUT_SECONDS
     }
   }
@@ -185,7 +192,7 @@ export function hasSameManagedHookInvocation(
   )
 }
 
-/** Per planned event, the index of the first of `formsFor(event)` it carries; unmatched are missing. */
+/** Report the first matching invocation form per event, or list the event as missing. */
 export function findManagedEventHookForms(
   config: HooksConfig,
   eventNames: string[],
@@ -198,7 +205,7 @@ export function findManagedEventHookForms(
     const hooks = Array.isArray(definitions)
       ? definitions.flatMap((definition) => definition.hooks ?? [])
       : []
-    const form = formsFor(eventName).findIndex((expected) =>
+    const form = claudeManagedHookForms(eventName, formsFor(eventName)).findIndex((expected) =>
       hooks.some((hook) => hasSameManagedHookInvocation(hook, expected))
     )
     if (form === -1) {
@@ -218,19 +225,22 @@ export function applyManagedHooks(
   config: HooksConfig,
   hookForEvent: (eventName: string) => HookCommandConfig,
   scriptFileName: string,
-  plan: ClaudeManagedHookPlan
+  plan: ClaudeManagedHookPlan,
+  posixCommands: boolean
 ): HooksConfig {
   const nextHooks = { ...config.hooks }
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
 
   for (const event of plan.install) {
     const current = nextHooks[event.eventName]
-    const cleaned = Array.isArray(current) ? removeManagedCommands(current, isManagedCommand) : []
-    const definition: HookDefinition = {
-      ...event.definition,
-      hooks: [hookForEvent(event.eventName)]
-    }
-    nextHooks[event.eventName] = [...cleaned, definition]
+    const previous = Array.isArray(current) ? current : []
+    const hook = withClaudeAsyncPermissionRequest(
+      event.eventName,
+      withPreviousManagedAsync(hookForEvent(event.eventName), previous, isManagedCommand),
+      posixCommands
+    )
+    const cleaned = removeManagedCommands(previous, isManagedCommand)
+    nextHooks[event.eventName] = [...cleaned, { ...event.definition, hooks: [hook] }]
   }
 
   for (const event of plan.retire) {
@@ -251,8 +261,7 @@ export function applyManagedHooks(
 
 export type StatusLineSlotState = 'managed' | 'user' | 'empty'
 
-// Why: install policy needs "user owns the slot" vs "slot is empty" vs "ours" — an empty slot
-// after a prior install means the user deleted the managed entry, which install must respect.
+// An empty slot after a prior install is a user opt-out, distinct from a fresh empty slot.
 export function getStatusLineSlotState(
   config: HooksConfig,
   scriptFileName = getStatusLineScriptFileName()
@@ -267,13 +276,11 @@ export function getStatusLineSlotState(
   return isManagedCommand(currentCommand) ? 'managed' : 'user'
 }
 
-// Why: records that the managed statusline was installed once, so a later empty slot reads as user opt-out.
 export function getStatusLineInstallMarkerPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return getSharedManagedScriptPath(`${getStatusLineScriptBaseName(settings)}.installed`)
 }
 
-// Why: statusLine is a single settings slot, not a hooks array — never overwrite a
-// user-owned status line; the usage feed then simply falls back to the OAuth poll.
+// A user-owned status line takes precedence over Orca's usage feed.
 export function applyManagedStatusLine(
   config: HooksConfig,
   command: string,

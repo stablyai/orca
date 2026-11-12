@@ -1,18 +1,8 @@
-// Why: column widths are a renderer-only preference. Persisted in
-// localStorage (not settings) for the same reasons hidden columns are —
-// purely cosmetic per device and a noisy debounced settings write would
-// be wasteful for what is effectively continuous drag feedback.
-//
-// Stored values are interpreted as `fr` weights, not pixels — this lets
-// the grid always fit its container exactly. Resize redistributes
-// weights between a column pair so the total stays constant and the
-// table never grows beyond its container.
+// Keep cosmetic widths per device in localStorage; frozen columns use pixels, later columns use fr weights.
 import type { GitHubProjectField } from '../../../../shared/github/project-types'
 
 const STORAGE_KEY = 'orca.githubProject.columnWidths'
 
-// Default fr weights — TITLE gets the most room; others sit at a
-// comfortable label-width. The numeric values are arbitrary ratios.
 export const DEFAULT_TITLE_WIDTH = 360
 export const DEFAULT_FIELD_WIDTH = 140
 export const ACTION_COLUMN_WIDTH = 80

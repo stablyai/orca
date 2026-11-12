@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useCloneFolderOverride } from '../sidebar/project-admission/clone-folder/use-clone-folder-override'
+import { getProjectCloneCheckTarget } from '../../store/projects/project-host-routing'
 import { Download, FolderOpen } from 'lucide-react'
 import {
   Dialog,
@@ -7,13 +9,13 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { CreateProjectParentBrowser } from '@/components/sidebar/CreateProjectLocationField'
+import { CreateProjectParentBrowser } from '@/components/sidebar/project-admission/create/CreateProjectLocationField'
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoKind } from '../../../../shared/repo-types'
 import { pickLocalProjectLocationFolder } from './pick-local-project-folder'
@@ -40,16 +42,13 @@ export function SetProjectLocationDialog({
   onReady
 }: SetProjectLocationDialogProps): React.JSX.Element {
   const open = option !== null
-  // Why: keep the last option rendered through the close animation, so the body
-  // doesn't blank out as the dialog slides away.
+  // Keep the last body through the close animation to avoid blanking it mid-exit.
   const [renderOption, setRenderOption] = useState(option)
   if (option !== null && option !== renderOption) {
     setRenderOption(option)
   }
   const activeOption = option ?? renderOption
-  // Why: Radix dismisses on Escape from a document-capture listener, so the host
-  // browser can never intercept it itself. The body parks a back-out here so
-  // Escape steps out of the browser instead of discarding the half-filled form.
+  // Radix captures document Escape first; delegate browser back-out here so the form survives leaving the browser.
   const exitHostBrowser = useRef<(() => boolean) | null>(null)
 
   return (
@@ -102,6 +101,7 @@ function SetProjectLocationDialogBody({
   exitHostBrowser: RefObject<(() => boolean) | null>
   onReady: (setupId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const setupProjectExistingFolder = useAppStore((state) => state.setupProjectExistingFolder)
   const setupProjectClone = useAppStore((state) => state.setupProjectClone)
   const [view, setView] = useState<DialogView>('choose')
@@ -110,26 +110,22 @@ function SetProjectLocationDialogBody({
   const [setupKind, setSetupKind] = useState<RepoKind>(projectKind)
   const [cloneUrl, setCloneUrl] = useState(defaultCloneUrl)
   const [cloneDestination, setCloneDestination] = useState('')
+  const { cloneFolder, cloneArgs, setCloneFolderName, checkCloneFolderTaken } =
+    useCloneFolderOverride(cloneUrl, cloneDestination)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  // Why: an SSH clone is unbounded and the dialog stays dismissable while it
-  // runs. Without this, a clone the user backed out of minutes ago still fires
-  // onReady, silently moving the run target (and resetting start-from) under a
-  // form they have since pointed at another host.
+  // Clones may finish long after dismissal; do not retarget a composer the user has since moved to another host.
   const abandoned = useRef(false)
   useEffect(() => {
-    // Re-armed on mount: StrictMode runs mount/cleanup/mount, and latching this
-    // on the first cleanup would disable the success path for the whole session.
+    // Reset on mount because StrictMode’s setup/cleanup/setup would otherwise permanently abandon this dialog.
     abandoned.current = false
     return () => {
       abandoned.current = true
     }
   }, [])
   const parsedHost = parseExecutionHostId(option.hostId)
-  // Remote hosts browse in-dialog; the local host gets the native folder picker.
   const remoteHost =
     parsedHost?.kind === 'ssh' || parsedHost?.kind === 'runtime' ? parsedHost : null
   const canClone = projectKind === 'git'
-  // Both views browse for a path; this is the field each one writes back to.
   const pathFields: Record<BrowseField, { value: string; set: (path: string) => void }> = {
     existing: { value: setupPath, set: setSetupPath },
     clone: { value: cloneDestination, set: setCloneDestination }
@@ -184,11 +180,13 @@ function SetProjectLocationDialogBody({
     }
     setIsSubmitting(true)
     try {
+      if (await checkCloneFolderTaken(getProjectCloneCheckTarget(option.hostId))) {
+        return
+      }
       const result = await setupProjectClone({
         projectId: option.projectId,
         hostId: option.hostId,
-        url: cloneUrl.trim(),
-        destination: cloneDestination.trim(),
+        ...cloneArgs,
         displayName: projectName
       })
       if (result && !abandoned.current) {
@@ -215,13 +213,13 @@ function SetProjectLocationDialogBody({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate(
+          {t(
             'auto.components.new.workspace.SetProjectLocationDialog.title',
             'Set project location'
           )}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.new.workspace.SetProjectLocationDialog.description',
             'Choose where {{project}} lives on {{host}}.',
             { project: projectName, host: option.label }
@@ -232,11 +230,11 @@ function SetProjectLocationDialogBody({
         <div className="space-y-2">
           <LocationActionButton
             icon={FolderOpen}
-            title={translate(
+            title={t(
               'auto.components.new.workspace.SetProjectLocationDialog.browseFolder',
               'Browse folder'
             )}
-            description={translate(
+            description={t(
               'auto.components.new.workspace.SetProjectLocationDialog.browseFolderHelp',
               'Use an existing checkout or folder on this host.'
             )}
@@ -251,11 +249,11 @@ function SetProjectLocationDialogBody({
           {canClone ? (
             <LocationActionButton
               icon={Download}
-              title={translate(
+              title={t(
                 'auto.components.new.workspace.SetProjectLocationDialog.cloneFromUrl',
                 'Clone from URL'
               )}
-              description={translate(
+              description={t(
                 'auto.components.new.workspace.SetProjectLocationDialog.cloneFromUrlHelp',
                 'Clone this repository onto {{host}}.',
                 { host: option.label }
@@ -285,6 +283,8 @@ function SetProjectLocationDialogBody({
           onBack={() => setView('choose')}
           onCloneUrlChange={setCloneUrl}
           onCloneDestinationChange={setCloneDestination}
+          cloneFolder={cloneFolder}
+          onCloneFolderNameChange={setCloneFolderName}
           onBrowse={() => openHostBrowser('clone')}
           onSubmit={() => void handleCloneSubmit()}
         />

@@ -1,29 +1,29 @@
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
-
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useEffect, useMemo, useRef } from 'react'
-import { getFolderSourceRepos } from '@/components/sidebar/folder-workspace-composer-helpers'
+import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { getSelectedRepoSshGate } from '@/lib/new-workspace-ssh-gate'
-import { selectRepoSshGateInput } from '@/lib/repo-ssh-connection'
-import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/folder-workspace-composer-path-status'
+import { getSelectedRepoSshGate } from '@/lib/workspace/creation/new-workspace-ssh-gate'
+import { selectRepoSshGateInput } from '@/lib/workspace/catalog/repo-ssh-connection'
+import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-path-status'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
+import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   resolveExecutionHostAgentStartupShell,
-  resolveRepoExecutionHostPlatform,
-  type ExecutionHostPlatformFact
-} from '@/lib/execution-host-facts'
-import { useAppStore } from '@/store'
-import { repoIsRemote } from '../../../../shared/agent-launch-remote'
-import { buildProjectHostSetupOptions } from '@/lib/project-host-setup-options'
-import { buildNewWorkspaceCreateTargetOptions } from '@/lib/new-workspace-project-options'
-import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
+  resolveRepoExecutionHostPlatform
+} from '@/runtime/hosts/platform/execution-host-facts'
+import { useAppStore } from '@/store/index'
+import { repoIsRemote } from '../../../../shared/agent-launch/startup/agent-launch-remote'
+import { buildProjectHostSetupOptions } from '@/lib/workspace/creation/project-host-setup-options'
+import { buildNewWorkspaceCreateTargetOptions } from '@/lib/workspace/creation/new-workspace-project-options'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { useEphemeralVmRecipeOptions } from '@/hooks/useEphemeralVmRecipeOptions'
+import { selectProjectFirstReason } from './runtime-target-selection-copy'
+import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
   const {
@@ -154,10 +154,10 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
 
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#22204).
+  // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
-      return { kind: 'withheld', reason: 'Select a project first.' }
+      return { kind: 'withheld', reason: selectProjectFirstReason(), recovery: 'refreshProjects' }
     }
     return resolveRepoExecutionHostPlatform(
       { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
@@ -188,7 +188,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     worktreesByRepo
   ])
 
-  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only `orca-ide` rename must not apply to remote launch commands.
+  // SSH deploys the shim as orca; Linux’s local orca-ide rename must not affect remote commands.
   const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
 
   const selectedRepoStartupShell = resolveExecutionHostAgentStartupShell(
@@ -214,9 +214,11 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         projectId: selectedRepoProjectId,
         projectHostSetups,
         eligibleRepos,
-        hosts: hostOptions
+        hosts: hostOptions,
+        selectedSetup:
+          selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target : null
       }),
-    [eligibleRepos, hostOptions, projectHostSetups, selectedRepoProjectId]
+    [eligibleRepos, hostOptions, projectHostSetups, selectedRepoProjectId, selectedWorkspaceTarget]
   )
 
   const projectOptions = useMemo(
@@ -244,12 +246,12 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     [selectedRepo]
   )
 
-  // Why: key on repo id, not the repo object — updateRepo replaces it by reference and would re-run this effect, wiping the user's chosen recipe.
+  // Key recipes by repo ID; updateRepo object replacement must not erase the user’s selection.
   const selectedRecipeRepoId = selectedRepo?.id ?? null
 
   const selectedRecipeRepoConnectionId = selectedRepo?.connectionId ?? null
 
-  // Why: gate recipe probing on the experimental toggle, since discovery can surface setup errors for a hidden feature.
+  // Only probe enabled experiments or hidden features can raise setup errors.
   const ephemeralVmsEnabled = settings?.experimentalEphemeralVms === true
 
   const {

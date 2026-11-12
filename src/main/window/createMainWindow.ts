@@ -1,16 +1,22 @@
-import { BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
-import { is } from '@electron-toolkit/utils'
+import { app, BrowserWindow, nativeTheme, powerMonitor, screen } from 'electron'
+import { release } from 'node:os'
 import { join } from 'node:path'
-import { getAppIconPath } from '../app-icon'
-import { browserManager } from '../browser/browser-manager'
-import { getBrowserClientHostId } from '../browser/browser-client-host-id'
-import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
-import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { pathToFileURL } from 'node:url'
+import { installRendererHangStackPolicy } from '../hang-watchdog/renderer-hang-stack-policy'
+import { getAppIconPath } from './desktop-integration/app-icon'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
+import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
+import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
+import { windowMaterialOptions } from './window-material-options'
+import { rememberWindowMaterial } from './window-material-suppression'
+import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
-import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
-import type { Store } from '../persistence'
+import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
+import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
+import { closeWorkspaceSpaceWindow } from './workspace-space-window'
 import {
   installMainWindowCloseLifecycle,
   WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
@@ -20,6 +26,13 @@ import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
+import { installMainWindowActivityRelay } from './main-window-activity'
+import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
+import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
+import {
+  formatHiddenWindowFramePumpArgument,
+  shouldPumpHiddenWindowFrames
+} from '../../shared/hidden-window-frame-pump'
 import {
   forceRepaint,
   installMacosVisibilityRepaint,
@@ -31,14 +44,20 @@ import {
 } from './main-window-visual-lifecycle'
 import { installMainWindowWebviewSecurity } from './main-window-webview-security'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
-import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
-import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
+  installRendererHangStackPolicy(
+    mainWindow.webContents,
+    !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+      ? process.env.ELECTRON_RENDERER_URL
+      : pathToFileURL(join(__dirname, '../renderer/index.html')).href
+  )
   const load =
-    is.dev && process.env.ELECTRON_RENDERER_URL
+    !app.isPackaged && process.env.ELECTRON_RENDERER_URL
       ? mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
       : mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   // Observe each load promise so failures cannot leave recovery waiting silently.
@@ -62,7 +81,7 @@ export function createMainWindow(
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
   const rawSavedBounds = store?.getUI().windowBounds
-  // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
+  // Reject tiny/off-screen saved bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
     rawSavedBounds.width > MIN_WIDTH &&
@@ -77,7 +96,8 @@ export function createMainWindow(
     )
   }
   const savedMaximized = store?.getUI().windowMaximized ?? false
-  // Why: on first launch fill the primary display work area so the window feels spacious without maximize(); saved bounds win later.
+  const savedFullScreen = store?.getUI().windowFullScreen ?? false
+  // Fill the primary work area on first launch; later launches honor saved bounds.
   const defaultBounds = (() => {
     try {
       const { width, height } = screen.getPrimaryDisplay().workAreaSize
@@ -89,15 +109,17 @@ export function createMainWindow(
 
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    // Why: webview guests expose no safe transcript insertion target; let Cmd/Ctrl+E reach the page instead of dropping dictation text.
-    return false
+    const voice = store?.getSettings().voice
+    // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
+    return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
-  const blur = settings?.windowBackgroundBlur ?? false
-  // Why: only Windows acrylic is ever visible; macOS vibrancy+transparent sat behind our opaque background yet
-  // forced per-frame WindowServer alpha compositing (#8482). Applies at creation only, so it needs a restart.
-  const platformBlurOptions =
-    blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
+  const windowMaterial = resolveWindowMaterial(
+    settings,
+    { platform: process.platform, osRelease: release() },
+    nativeTheme.prefersReducedTransparency
+  )
 
+  const pumpHiddenFrames = shouldPumpHiddenWindowFrames(process.env, process.platform)
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? defaultBounds.height,
@@ -106,21 +128,25 @@ export function createMainWindow(
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? 'Orca',
     show: false,
-    // Why: macOS swallows the app-activating click by default, so clicking back into Orca needed a second click (Windows/Linux already deliver it).
+    // Deliver the app-activating click on macOS instead of requiring a second click.
     acceptFirstMouse: true,
-    // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
+    // Save menu-bar space on Windows/Linux; Alt reveals it and macOS uses the system menu.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
-    // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
+    ...windowMaterialOptions(
+      windowMaterial,
+      process.platform,
+      nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff'
+    ),
+    // Keep macOS traffic lights inset; hide Windows native chrome to avoid duplicate titlebars.
     titleBarStyle:
       process.platform === 'darwin'
         ? 'hiddenInset'
         : process.platform === 'win32'
           ? 'hidden'
           : undefined,
-    // Why: Linux ignores titleBarStyle 'hidden'; frame:false drops the native frame so we don't get a double title bar (renderer draws its own).
+    // Linux ignores hidden titleBarStyle; remove its native frame to avoid duplicate titlebars.
     ...(process.platform === 'linux' ? { frame: false } : {}),
-    // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts on zoom change.
+    // Start at 1x traffic-light position; syncTrafficLightPosition follows zoom.
     ...(process.platform === 'darwin'
       ? {
           trafficLightPosition: {
@@ -130,28 +156,30 @@ export function createMainWindow(
         }
       : {}),
     icon: getAppIconPath(settings?.appIcon),
-    ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
       webviewTag: true,
-      // Why an argument and not an IPC read: this is the window whose webviews host browser guests,
-      // and it has to know that before it interprets its first session snapshot — earlier than any
-      // handler registration it could wait on.
-      additionalArguments: [formatBrowserClientHostIdArgument(getBrowserClientHostId())]
+      // Pass host identity at birth so the renderer has it before first snapshot, without waiting for IPC registration.
+      additionalArguments: [
+        formatBrowserClientHostIdArgument(getBrowserClientHostId()),
+        ...(windowMaterial === 'off' ? [] : [formatWindowMaterialArgument(windowMaterial)]),
+        ...(pumpHiddenFrames ? [formatHiddenWindowFramePumpArgument()] : []),
+        ...wslHostsWindowArguments()
+      ]
     }
   })
+  rememberWindowMaterial(mainWindow, windowMaterial)
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
-  // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
+  // Native paste fallback is privileged; trust only the top-level renderer.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
   if (process.platform === 'win32') {
     mainWindow.on('session-end', (event) => {
       markSystemSessionEnding()
-      // Why: killed/exit-1 tree kills look identical from a user task-kill and an
-      // OS shutdown; this is the only positive OS-shutdown signal bundles get.
+      // Record positive OS shutdown evidence; task-kill and shutdown tree deaths otherwise look identical.
       recordDurableCrashBreadcrumb('system_session_end', {
         reasons: Array.isArray(event?.reasons)
           ? event.reasons.filter((reason) => typeof reason === 'string').join(',')
@@ -164,13 +192,12 @@ export function createMainWindow(
   }
 
   if (process.platform === 'darwin') {
-    // Why: preserve hidden-window power savings; stable native sizing and frame-only invalidation
-    // make wake recovery independent of the throttled viewport.
+    // Keep hidden-window throttling; native sizing/frame invalidation recovers wake without an active viewport.
     mainWindow.webContents.setBackgroundThrottling(true)
     installMacosVisibilityRepaint(mainWindow)
   }
 
-  // Why: a focus-preserving wake fires no focus/visibility events; relay resume so terminal wake recovery runs and force a repaint so stale compositor surfaces recover.
+  // Resume may preserve focus and emit no visibility events; explicitly relay terminal wake and repaint stale surfaces.
   const onSystemResume = (): void => {
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed?.() === true) {
       return
@@ -185,9 +212,14 @@ export function createMainWindow(
     mainWindow,
     revealOnDidFinishLoad: opts?.revealOnDidFinishLoad === true,
     savedMaximized,
+    savedFullScreen,
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  const activity = installMainWindowActivityRelay(mainWindow)
+  if (pumpHiddenFrames) {
+    stopHiddenWindowFramePumpOnShow(mainWindow)
+  }
   const focus = installMainWindowFocusLifecycle({
     isWindowClosing: state.isWindowClosing,
     mainWindow,
@@ -209,8 +241,10 @@ export function createMainWindow(
 
   mainWindow.on('closed', () => {
     closeDashboardPopout()
+    closeWorkspaceSpaceWindow()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
+    activity.dispose()
     focus.dispose()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)

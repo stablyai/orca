@@ -1,3 +1,4 @@
+import { RuntimeConnectionChangedBeforeSendError } from '../runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { WebRuntimePendingRequest } from './web-runtime-connection-frame-router'
 
@@ -10,8 +11,12 @@ type WebRuntimeRequestRegistryOptions = {
   sendEncrypted: (message: unknown) => boolean
 }
 
+export const RUNTIME_CONNECTION_CHANGED_MESSAGE = 'Runtime connection changed; try again.'
+
 export class WebRuntimeRequestRegistry {
   readonly pending = new Map<string, WebRuntimePendingRequest>()
+  /** Bumped per established connection, so a caller can pin a request to the one it probed. */
+  connectionEpoch = 0
 
   constructor(private readonly options: WebRuntimeRequestRegistryOptions) {}
 
@@ -34,14 +39,25 @@ export class WebRuntimeRequestRegistry {
     })
   }
 
+  connectionOpened(): void {
+    this.connectionEpoch += 1
+  }
+
   async call(
     method: string,
     params?: unknown,
-    callOptions?: { timeoutMs?: number; signal?: AbortSignal }
+    callOptions?: { timeoutMs?: number; signal?: AbortSignal; expectedConnectionEpoch?: number }
   ): Promise<RuntimeRpcResponse<unknown>> {
     const signal = callOptions?.signal
     await this.options.waitForConnected(callOptions?.timeoutMs, signal)
     signal?.throwIfAborted()
+    // Why: checked once the connection is ready, right before sending — where a silent reconnect lands.
+    if (
+      callOptions?.expectedConnectionEpoch !== undefined &&
+      callOptions.expectedConnectionEpoch !== this.connectionEpoch
+    ) {
+      throw new RuntimeConnectionChangedBeforeSendError(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    }
     return new Promise((resolve, reject) => {
       const id = this.options.nextId()
       const timeoutMs = callOptions?.timeoutMs ?? REQUEST_TIMEOUT_MS

@@ -1,3 +1,6 @@
+import type * as UseMobileTasksWorkspaceSshStateModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-ssh-state'
+import type * as UseMobileTasksWorkspaceSourceEffectsModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-source-effects'
+import type * as UseMobileTasksWorkspaceSparseActionsModule from '../../../tasks/workspace-creation/use-mobile-tasks-workspace-sparse-actions'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -5,21 +8,15 @@ import type { operationModuleLoader } from '../operation-module-loader'
 
 const REPO = 'repo-1'
 
-/**
- * The workspace-create drawer's three model-chained hooks, mounted the way the settings adapters
- * mount theirs: a fixture model supplying only the members the hook destructures, with every setter
- * recorded as an effect.
- */
 export function taskWorkspaceHookMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  // The drawer's SSH hook. `connectionId` picks the arm the detection effect takes: a repo on
-  // an SSH connection detects remote agents, one without it detects local agents.
+  // A connectionId selects remote detection; omission selects local preflight.
   function sshStateAdapter(connectionId: string | undefined): MountAdapter {
     return (context) => {
-      const useSsh = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-workspace-ssh-state')
-      >('mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx').useMobileTasksWorkspaceSshState
+      const useSsh = modules.load<typeof UseMobileTasksWorkspaceSshStateModule>(
+        'mobile/src/tasks/workspace-creation/use-mobile-tasks-workspace-ssh-state.tsx'
+      ).useMobileTasksWorkspaceSshState
       const repo = { id: REPO, displayName: 'Repo', connectionId }
       const model = observableModel(context, {
         client: context.client,
@@ -84,10 +81,8 @@ export function taskWorkspaceHookMountAdapters(
 
   return {
     'tasks.workspace-source': (context) => {
-      const useEffects = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-workspace-source-effects')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx'
+      const useEffects = modules.load<typeof UseMobileTasksWorkspaceSourceEffectsModule>(
+        'mobile/src/tasks/workspace-creation/use-mobile-tasks-workspace-source-effects.tsx'
       ).useMobileTasksWorkspaceSourceEffects
       const model = observableModel(context, {
         client: context.client,
@@ -135,10 +130,8 @@ export function taskWorkspaceHookMountAdapters(
       }
     },
     'tasks.workspace-sparse': (context) => {
-      const useSparse = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-workspace-sparse-actions')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx'
+      const useSparse = modules.load<typeof UseMobileTasksWorkspaceSparseActionsModule>(
+        'mobile/src/tasks/workspace-creation/use-mobile-tasks-workspace-sparse-actions.tsx'
       ).useMobileTasksWorkspaceSparseActions
       const model = observableModel(context, {
         client: context.client,
@@ -187,7 +180,6 @@ export function taskWorkspaceHookMountAdapters(
       }
     },
     'tasks.workspace-ssh': sshStateAdapter('ssh-1'),
-    // The local arm: no connectionId, so the effect calls preflight.detectAgents.
     'tasks.workspace-ssh-local': sshStateAdapter(undefined)
   }
 }

@@ -10,6 +10,16 @@ Terminals are just tabs — see [Tabs, panes & split layouts](/docs/model/tabs-p
 
 Agent terminal tabs show the agent identity plus live state: working, waiting for input, completed, or completed-but-unread. For Claude and Codex, tab titles can also show the **AI Vault conversation name** (custom title / thread name) when Orca can map the pane to that session — manual renames still win.
 
+## Resource Manager terminals
+
+The **Resources** view works in both the desktop app and the paired web client while its page is visible. The separate **PTYs** view manages local desktop terminals; a web client cannot end those terminals.
+
+**Refresh** discovers terminals created since the previous observation. **End** requires a host that can check the selected terminal's identity, agent ownership, and attachments before stopping it. An older host, ambiguous ownership, or lost contact cannot establish a safe End result.
+
+If **End** is unavailable because the terminal host lacks support, end the terminal manually from its terminal tab or on its host.
+
+A confirmed **End** removes saved terminal history just like **Close**. If a newer terminal replaces the selected one while cleanup is pending, that newer terminal remains in the inventory and keeps its history.
+
 ## TUI clipboard (OSC 52)
 
 Many terminal UIs (Zellij, tmux, Neovim, fzf, Grok) copy via **OSC 52** instead of OS clipboard APIs. Orca allows those writes **by default** so copy-from-remote/TUI works over SSH the same way as locally.

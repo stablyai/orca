@@ -6,7 +6,6 @@ export function clampPdfScale(scale: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, scale))
 }
 
-/** Apply a stored zoom preference after pdf.js loads a (re)document. */
 export function applyPdfScalePreference(
   viewer: { currentScale: number; currentScaleValue: string },
   preference: PdfScalePreference,
@@ -19,7 +18,6 @@ export function applyPdfScalePreference(
   viewer.currentScaleValue = 'page-width'
 }
 
-/** Zoom in/out while recording the resulting absolute scale preference. */
 export function stepPdfScalePreference(
   currentScale: number,
   direction: 'in' | 'out',
@@ -32,6 +30,22 @@ export function stepPdfScalePreference(
   return { scale: next, preference: next }
 }
 
+// Half a percent; a scale this close to fit-width already is fit-width.
+const FIT_STOP_MARGIN = 0.005
+
+/** A zoom that would pass over fit-width stops on it; the next one leaves it. */
+function stopAtPdfFitScale(previous: number, next: number, fitScale: number | null): number {
+  if (fitScale === null) {
+    return next
+  }
+  const before = previous / fitScale - 1
+  const after = next / fitScale - 1
+  const crosses =
+    (before < -FIT_STOP_MARGIN && after > -FIT_STOP_MARGIN) ||
+    (before > FIT_STOP_MARGIN && after < FIT_STOP_MARGIN)
+  return crosses ? fitScale : next
+}
+
 type PdfWheelZoomEvent = Pick<
   WheelEvent,
   'ctrlKey' | 'deltaY' | 'deltaMode' | 'clientX' | 'clientY' | 'preventDefault'
@@ -41,6 +55,7 @@ type PdfWheelZoomEvent = Pick<
 export function zoomPdfViewerWithWheel(
   viewer: {
     currentScale: number
+    currentScaleValue: string
     container: {
       scrollLeft: number
       scrollTop: number
@@ -49,30 +64,42 @@ export function zoomPdfViewerWithWheel(
     update: () => void
   },
   event: PdfWheelZoomEvent,
-  bounds: { min: number; max: number }
-): number | null {
+  bounds: { min: number; max: number },
+  getFitScale: () => number | null
+): PdfScalePreference | null {
   if (!shouldHandleImageZoomWheel(event)) {
     return null
   }
   event.preventDefault()
   const previous = viewer.currentScale
-  const next = clampPdfScale(
-    previous * getPinchZoomFactor(event.deltaY, event.deltaMode),
-    bounds.min,
-    bounds.max
+  const fitScale = getFitScale()
+  const next = stopAtPdfFitScale(
+    previous,
+    clampPdfScale(
+      previous * getPinchZoomFactor(event.deltaY, event.deltaMode),
+      bounds.min,
+      bounds.max
+    ),
+    fitScale
   )
   if (next === previous) {
     return null
   }
   const { container } = viewer
   const rect = container.getBoundingClientRect()
-  // Why: an absolute scale avoids updateScale's 0.01 rounding, which swallows slow pinches.
-  viewer.currentScale = next
+  const fitted = next === fitScale
+  if (fitted) {
+    // Why: the preset is what resizes refit to; a numeric set first could move pdf.js to a page of another width.
+    viewer.currentScaleValue = 'page-width'
+  } else {
+    // Why: an absolute scale avoids updateScale's 0.01 rounding, which swallows slow pinches.
+    viewer.currentScale = next
+  }
   // Why: pdf.js keeps the viewport's top-left fixed, so shift by the pointer's grown offset.
   const growth = next / previous - 1
   container.scrollLeft += (event.clientX - rect.left) * growth
   container.scrollTop += (event.clientY - rect.top) * growth
   // Why: pdf.js re-reads its location on the next frame; a faster pinch event would anchor to the old one.
   viewer.update()
-  return next
+  return fitted ? 'page-width' : next
 }

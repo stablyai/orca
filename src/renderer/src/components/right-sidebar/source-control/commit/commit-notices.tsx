@@ -5,8 +5,8 @@ import {
 } from './pull-policy-error-notice'
 import { SourceControlRecoveryNotice } from './recovery-notice'
 import type { CommitNoticesProps } from './commit-area-types'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 
 export function CommitNotices({
   worktreeId,
@@ -33,17 +33,15 @@ export function CommitNotices({
   onFixCommitFailureWithAI,
   onFixPushFailureWithAI
 }: CommitNoticesProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {commitError && commitFailureSummary ? (
         <SourceControlRecoveryNotice
           id="commit-area-error"
           recoveryKind="commit"
-          title={translate(
-            'auto.components.right.sidebar.SourceControl.011f9713fc',
-            'Commit blocked'
-          )}
-          detailsTitle={translate(
+          title={t('auto.components.right.sidebar.SourceControl.011f9713fc', 'Commit blocked')}
+          detailsTitle={t(
             'auto.components.right.sidebar.SourceControl.a9bf7c171a',
             'Commit Failed'
           )}
@@ -69,11 +67,11 @@ export function CommitNotices({
         <SourceControlRecoveryNotice
           id="commit-area-push-error"
           recoveryKind="push"
-          title={translate(
+          title={t(
             'auto.components.right.sidebar.SourceControl.pushRecovery.011f9713fc',
             'Push blocked'
           )}
-          detailsTitle={translate(
+          detailsTitle={t(
             'auto.components.right.sidebar.SourceControl.pushRecovery.a9bf7c171a',
             'Push Failed'
           )}
@@ -119,7 +117,7 @@ export function CommitNotices({
               : 'text-muted-foreground'
           )}
         >
-          {/* Why: Create Review blockers carry recovery steps; truncating hides the action the user needs in a narrow sidebar. */}
+          {/* Wrap recovery guidance because truncation can hide the required action in narrow sidebars. */}
           <span className="min-w-0 self-stretch break-words leading-4 [overflow-wrap:anywhere]">
             {createPrIntentNotice.message}
           </span>
@@ -129,7 +127,7 @@ export function CommitNotices({
               className="text-left font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
               onClick={() => onOpenSourceControlAiSettings()}
             >
-              {translate(
+              {t(
                 'auto.components.right.sidebar.SourceControl.473f18758e',
                 'Source Control AI settings'
               )}

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../core'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
-import type { OrchestrationDb } from '../../../orchestration/db'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 
 type CliRuntimeClient = {
   isRemote?: boolean
@@ -27,6 +27,9 @@ describe('orchestration CLI/runtime boundary', () => {
     h.cleanup()
     restoreTerminalHandle()
     vi.doUnmock('../../../../../cli/format')
+    vi.doUnmock('../../../../../cli/runtime-client')
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
     vi.resetModules()
   })
 
@@ -37,7 +40,6 @@ describe('orchestration CLI/runtime boundary', () => {
     return method.handler(parsed, ctx)
   }
 
-  /** Builds the fake RuntimeClient used by the real CLI handlers in this boundary test. */
   function client(): CliRuntimeClient {
     return {
       isRemote: false,
@@ -91,7 +93,6 @@ describe('orchestration CLI/runtime boundary', () => {
     expect(db.getDispatchContext(child.id)?.assignee_handle).toBe('term_worker')
   })
 
-  /** Looks up real DB-created tasks by unique fixture spec after the CLI allocates their IDs. */
   function taskBySpec(spec: string) {
     const task = db.listTasks().find((candidate) => candidate.spec === spec)
     if (!task) {
@@ -111,7 +112,6 @@ async function loadOrchestrationHandlers(): Promise<Record<string, CliHandler>> 
   return module.ORCHESTRATION_HANDLERS
 }
 
-/** Executes one CLI handler with argv-like flags against the supplied runtime client. */
 async function runCli(
   handler: CliHandler,
   client: CliRuntimeClient,

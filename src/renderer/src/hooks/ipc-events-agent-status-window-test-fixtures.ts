@@ -1,12 +1,10 @@
-/* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 11 agent-status ipc-events specs, not shipped code, and it falls
-   outside the *.test / *.spec / tests glob set. Inlining stubReactSyncEffect and stubAuxiliaryModules would duplicate them
-   into all 11 specs and push several past the max-lines ratchet. */
+import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import type {
   AgentStatusClearIpcPayload,
   MigrationUnsupportedPtyEntry
-} from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusSetData } from './ipc-events-agent-status-store-test-fixtures'
 
 export function buildWindowApi(args: {
@@ -51,7 +49,10 @@ export function buildWindowApi(args: {
         onCreateTerminal: () => () => {},
         onRequestTerminalCreate: () => () => {},
         onPublishAgentLaunchTab: () => () => {},
+        onRevealTerminalPane: () => () => {},
+        onApplyAgentPaneActivity: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
+        onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: () => {},
         onSplitTerminal: () => () => {},
@@ -65,24 +66,20 @@ export function buildWindowApi(args: {
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
         onCloseTerminal: () => () => {},
-        onSleepWorktree: () => () => {},
+        onWorkspaceSleep: () => () => {},
         onResumeSleepingAgents: () => () => {},
-        onNewBrowserTab: () => () => {},
-        onNewMarkdownTab: () => () => {},
         onRequestTabCreate: () => () => {},
+        onRequestRemoteCliBrowserScope: () => () => {},
         replyTabCreate: () => {},
         onRequestTabClose: () => () => {},
         replyTabClose: () => {},
         onRequestTabSetProfile: () => () => {},
         replyTabSetProfile: () => {},
-        onNewTerminalTab: () => () => {},
         onCloseActiveTab: () => () => {},
         onCloseFloatingItem: () => () => {},
         onSelectFloatingIndex: () => () => {},
-        onSwitchTab: () => () => {},
-        onSwitchTabAcrossAllTypes: () => () => {},
+        onBrowserPageTabShortcut: () => () => {},
         onSwitchRecentTab: () => () => {},
-        onSwitchTerminalTab: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},
@@ -100,6 +97,7 @@ export function buildWindowApi(args: {
         onGuestLoadFailed: () => () => {},
         onPaneFocus: () => () => {},
         onOpenLinkInOrcaTab: () => () => {},
+        onSessionProfilesChanged: () => () => {},
         onNavigationUpdate: () => () => {},
         onActivateView: () => () => {}
       },
@@ -122,12 +120,14 @@ export function buildWindowApi(args: {
         listTargets: () => Promise.resolve([]),
         listRemovedTargetLabels: () => Promise.resolve({}),
         listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         getState: () => Promise.resolve(null),
         onStateChanged: () => () => {},
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},
         onPortForwardsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onDetectedPortsChanged: () => () => {},
         ...args.ssh
       },
@@ -160,22 +160,19 @@ export function stubReactSyncEffect(): void {
 }
 
 export function stubAuxiliaryModules(): void {
-  vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('@/app-shell/chrome/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+  vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+  vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
   }))
-  vi.doMock('@/lib/editor-font-zoom', () => ({
-    nextEditorFontZoomLevel: vi.fn(() => 0),
-    computeEditorFontSize: vi.fn(() => 13)
-  }))
-  vi.doMock('@/components/settings/SettingsConstants', () => ({
+  vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+    ...(await importOriginal<typeof UIZoomLevelModule>()),
     zoomLevelToPercent: vi.fn(() => 100),
-    ZOOM_MIN: -3,
-    ZOOM_MAX: 3
+    UI_ZOOM_MIN: -3,
+    UI_ZOOM_MAX: 3
   }))
-  vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+  vi.doMock('@/app-shell/chrome/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
 }

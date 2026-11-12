@@ -1,10 +1,10 @@
-/** A folder workspace in a project group, and an automation with run history. */
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { WslMoveProjectionInput } from '../../moving-wsl-projects/wsl-move-state-projection'
+import type { WslMoveProjectionInput } from '../../moving-wsl-projects/manifest-scope/wsl-move-state-projection'
 import {
   project,
   repo,
@@ -47,7 +47,8 @@ export function foldersAndAutomationsWslMoverProfile(paths: WslMoverPaths): WslM
     kind: 'workspace-run' as const,
     projectId: 'project-auto',
     hostId: 'local' as const,
-    projectHostSetupId: paths.side === 'source' ? 'setup-local' : 'setup-wsl',
+    // A repo's own setup is keyed by the repo id on both sides (createSetupFromRepo, the export).
+    projectHostSetupId: 'repo-auto',
     repoId: 'repo-auto',
     path: repoAuto.path
   }
@@ -61,7 +62,6 @@ export function foldersAndAutomationsWslMoverProfile(paths: WslMoverPaths): WslM
     projectId: 'repo-auto',
     executionTargetType: 'local',
     executionTargetId: 'local',
-    // The host schedules what it owns, as the existing orcad import does.
     schedulerOwner: paths.side === 'source' ? 'local_host_service' : 'remote_host_service',
     workspaceMode: 'existing',
     workspaceId: wtAuto,

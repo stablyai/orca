@@ -1,18 +1,26 @@
-import type { RuntimeVisibleTerminalState } from '../../runtime-terminal-state-records'
+import type {
+  RuntimeHeadlessTerminal,
+  RuntimeVisibleTerminalState
+} from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import type { RuntimeTerminalRead } from '../../../../shared/runtime-types'
-import type { RuntimeProviderSnapshotReadOptions } from '../../runtime-terminal-contracts'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
+import type { RuntimeTerminalRead } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeProviderSnapshotReadOptions } from './provider-snapshot-read-options'
 import {
   buildVisibleSnapshotReadFallback,
   shouldFallbackToVisibleTerminalSnapshot,
   terminalReadLimit
-} from '../../terminal-tail-read'
-import type { RuntimeTerminalProjection } from '../../orca-runtime-core'
-import { DEFAULT_TERMINAL_READ_LIMIT } from '../../terminal-tail-limits'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
-import { projectTerminalTailLines } from '../../orca-runtime-terminal-projection'
+} from './tail/terminal-tail-read'
+import type { RuntimeTerminalProjection } from './terminal-projection'
+import { DEFAULT_TERMINAL_READ_LIMIT } from './tail/terminal-tail-limits'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
+import {
+  projectTerminalTailLines,
+  projectTerminalVisibleLines
+} from '../view/orca-runtime-terminal-projection'
+import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
+import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
   protected abstract readVisibleTerminalState(
@@ -21,6 +29,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   protected abstract readRendererVisibleSnapshotLines(
     ptyId: string
   ): Promise<RuntimeTerminalProjection>
+  protected abstract readWholeScreenModel(
+    ptyId: string | null | undefined
+  ): RuntimeHeadlessTerminal | null
   protected abstract parseVisibleSnapshot(snapshot: {
     data: string
     cols: number
@@ -131,11 +142,13 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     const providerModeUnknown =
       this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
+    const conpty = isNativeWindowsConptyPty(ptyId)
     if (
       !blankFallback &&
       !recoveredWorkerFallback &&
       !providerModeUnknown &&
       !knownAlternateScreen &&
+      !conpty &&
       !this.headlessTerminals.has(ptyId)
     ) {
       return read
@@ -147,7 +160,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       !knownAlternateScreen &&
       !visibleState?.isAlternateScreen
     ) {
-      return read
+      return conpty
+        ? await this.withConptyRenderedTail(ptyId, read, opts.limit, providerSnapshot)
+        : read
     }
     let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
     if (projection.lines.length === 0) {
@@ -165,6 +180,54 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     )
   }
 
+  // ConPTY absolute cursor paints overwrite text that raw tails retain, including ghost PSReadLine predictions; read rendered cells.
+  private async withConptyRenderedTail(
+    ptyId: string,
+    read: RuntimeTerminalRead,
+    limit: number | undefined,
+    providerSnapshot: RuntimeProviderSnapshotReadOptions
+  ): Promise<RuntimeTerminalRead> {
+    const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
+    return projection.lines.length > 0
+      ? buildVisibleSnapshotReadFallback(
+          read,
+          projection.lines,
+          limit,
+          projection.draft,
+          projection.tailRows
+        )
+      : read
+  }
+
+  private async readRenderedTerminalTailLines(
+    ptyId: string,
+    limit: number | undefined,
+    providerSnapshot: RuntimeProviderSnapshotReadOptions
+  ): Promise<RuntimeTerminalProjection> {
+    // Over-fetch a screen so blank rows below the prompt cannot consume the requested nonblank line count.
+    const rowLimit =
+      terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
+      (this.getTerminalSize(ptyId)?.rows ?? 0)
+    const state = this.readWholeScreenModel(ptyId)
+    if (!state) {
+      return this.readProviderTerminalTailLines(ptyId, rowLimit, {
+        timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+        ...providerSnapshot
+      })
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    await state.writeChain
+    if (
+      this.headlessTerminals.get(ptyId) !== state ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation
+    ) {
+      return { lines: [] }
+    }
+    return providerSnapshot.visibleScreenOnly
+      ? projectTerminalVisibleLines(state.emulator)
+      : projectTerminalTailLines(state.emulator, rowLimit)
+  }
+
   protected async readProviderTerminalTailLines(
     ptyId: string,
     limit: number | undefined,
@@ -180,8 +243,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     if (!snapshot) {
       return { lines: [] }
     }
-    // Why: a cached acquisition can carry scrollback this caller did not ask for,
-    // so visible-only reads parse the grid itself rather than trusting the request.
+    // Cached acquisitions can include unrequested scrollback; visible-only reads must parse the grid.
     if (snapshotOptions.visibleScreenOnly) {
       const projection = await this.parseVisibleSnapshot(snapshot)
       // Live bytes ordered after the provider frame make that frame stale.

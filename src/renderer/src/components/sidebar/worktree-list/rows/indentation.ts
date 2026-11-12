@@ -3,8 +3,8 @@ export const SIDEBAR_TREE_INDENT = 18
 const PROJECT_WORKTREE_CARD_EXTRA_INDENT = 2
 // Why: seats full-row flush-card content under the group header; smaller pullback = more indent.
 export const FLUSH_CARD_CONTENT_PULLBACK = 4
-// Why: offsets the experimental card's fixed status lane so title/meta stay on the tree step.
-export const NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK = 6
+// Why: the new card's status lane is 8px wider than the legacy one; pulling back keeps titles aligned.
+export const NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK = 8
 // Why: keeps a zero-indent flush card off the sidebar edge.
 export const FLUSH_CARD_MIN_CONTENT_INSET = 2
 export const WORKTREE_CARD_SURFACE_MARGIN = 4
@@ -14,8 +14,8 @@ export const LINEAGE_IMMEDIATE_PARENT_STEP =
 export const LINEAGE_NESTED_ROW_SURFACE_INSET = 0
 export const LINEAGE_CHILDREN_INLINE_OFFSET =
   LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
-// Why: sub-tree-step surface indent preserving the compact grouped child-card rhythm.
-const GROUPED_WORKTREE_CARD_SURFACE_INDENT = 14
+// Why: header icon+gap (22) vs. card margin+border+legacy lane+gap (23) minus pullback lands the title on the header label.
+const GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET = 3
 export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
 // Why: shared with project headers so titles don't shift when grouping mode changes.
 export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PADDING
@@ -38,43 +38,18 @@ export function getWorktreeCardContentIndent(args: {
   groupDepth: number
   lineageDepth: number
 }): number {
-  const groupSteps = args.isGrouped ? clampDepth(args.groupDepth) + 1 : 0
-  const projectCardIndent = args.isGrouped ? PROJECT_WORKTREE_CARD_EXTRA_INDENT : 0
-  return (groupSteps + clampDepth(args.lineageDepth)) * SIDEBAR_TREE_INDENT + projectCardIndent
-}
-
-export function getFolderBackedRepoWorktreeCardContentIndent(args: {
-  groupDepth: number
-  lineageDepth: number
-}): number {
-  // Why: follows the compact header step of folder-scanned repo headers, not the full tree step.
-  return (
-    getProjectGroupHeaderPaddingLeft(args.groupDepth) +
-    PROJECT_GROUP_HEADER_BASE_PADDING +
-    clampDepth(args.lineageDepth) * SIDEBAR_TREE_INDENT
-  )
-}
-
-export function getFolderBackedRepoWorktreeCardSurfaceInset(args: {
-  groupDepth: number
-  lineageDepth: number
-}): number {
-  const contentAnchor = getFolderBackedRepoWorktreeCardContentIndent(args)
-  const genericSurfaceInset = getWorktreeCardSurfaceInset({
-    isGrouped: true,
-    groupDepth: args.groupDepth
-  })
-  const maxSurfaceInset =
-    contentAnchor - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
-
-  // Why: caps the surface so flush-card margin/padding don't overshoot the content anchor.
-  return Math.min(genericSurfaceInset, Math.max(0, maxSurfaceInset))
+  const lineageIndent = clampDepth(args.lineageDepth) * SIDEBAR_TREE_INDENT
+  return args.isGrouped
+    ? getProjectGroupHeaderPaddingLeft(args.groupDepth) +
+        GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET +
+        lineageIndent
+    : lineageIndent
 }
 
 export function getFolderWorkspaceCardContentIndent(args: { groupDepth: number }): number {
   const parentGroupDepth = Math.max(0, clampDepth(args.groupDepth) - 1)
-  // Why: folder workspaces are direct children of their folder group: one compact header step.
-  return getProjectGroupHeaderPaddingLeft(parentGroupDepth) + PROJECT_GROUP_HEADER_INDENT
+  // Why: folder workspaces are direct children of their folder group, so they align to its label.
+  return getProjectGroupHeaderPaddingLeft(parentGroupDepth) + GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET
 }
 
 export function getFolderWorkspaceCardSurfaceInset(args: {
@@ -101,14 +76,16 @@ export function getFolderWorkspaceRowGeometry(args: {
   cardContentIndent: number
 } {
   if (args.experimentalNewWorktreeCardStyle && args.isFolderBackedWorkspaceChild) {
-    // Why: standalone rows get no lineage wrapper offset, so align to the folder-backed repo anchor.
-    const contentAnchor = getFolderBackedRepoWorktreeCardContentIndent({
-      groupDepth: args.groupDepth,
+    // Why: standalone rows get no lineage wrapper offset, so align to the grouped repo-card anchor.
+    const parentGroupDepth = Math.max(0, clampDepth(args.groupDepth) - 1)
+    const contentAnchor = getWorktreeCardContentIndent({
+      isGrouped: true,
+      groupDepth: parentGroupDepth,
       lineageDepth: 0
     })
-    const surfaceInset = getFolderBackedRepoWorktreeCardSurfaceInset({
-      groupDepth: args.groupDepth,
-      lineageDepth: 0
+    const surfaceInset = getWorktreeCardSurfaceInset({
+      isGrouped: true,
+      groupDepth: parentGroupDepth
     })
 
     return {
@@ -147,7 +124,10 @@ export function getWorktreeCardSurfaceInset(args: {
   isGrouped: boolean
   groupDepth: number
 }): number {
-  return args.isGrouped ? clampDepth(args.groupDepth) * GROUPED_WORKTREE_CARD_SURFACE_INDENT : 0
+  // Why: steps with group headers so each card edge keeps the same offset from its header icon.
+  return args.isGrouped
+    ? getProjectGroupHeaderPaddingLeft(args.groupDepth) - PROJECT_GROUP_HEADER_BASE_PADDING
+    : 0
 }
 
 export function getFlushWorktreeCardPaddingLeft(
@@ -184,35 +164,6 @@ export function getNewCardStyleParentContentMarginLeft(contentIndent: number): n
   // Why: shallow rows hit the padding floor; finish with margin but never pass the inner edge.
   const rawMargin = -remainingShift
   return Math.max(-newInnerPadding, rawMargin)
-}
-
-export function getLineageNestedRowGeometry(args: {
-  experimentalNewWorktreeCardStyle: boolean
-  inheritedCardContentIndent: number
-  lineageDepth: number
-}): {
-  surfaceInset: number
-  cardContentIndent: number
-  lineageChildrenInlineOffset: number
-} {
-  if (args.experimentalNewWorktreeCardStyle) {
-    // Why: the parent card already contributes the baseline; lineage depth would double-count.
-    return {
-      surfaceInset: LINEAGE_NESTED_ROW_SURFACE_INSET,
-      cardContentIndent: 0,
-      lineageChildrenInlineOffset: LINEAGE_CHILDREN_INLINE_OFFSET
-    }
-  }
-
-  const surfaceInset = getWorktreeCardSurfaceInset({
-    isGrouped: true,
-    groupDepth: args.lineageDepth
-  })
-  return {
-    surfaceInset,
-    cardContentIndent: Math.max(0, args.inheritedCardContentIndent - surfaceInset),
-    lineageChildrenInlineOffset: LINEAGE_CHILDREN_INLINE_OFFSET
-  }
 }
 
 export function getLineageChildrenInlineStyle(offset: number | string): {

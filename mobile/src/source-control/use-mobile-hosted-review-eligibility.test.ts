@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
+import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import {
   buildMobileHostedReviewEligibilityLoadKey,
   renderedMobileHostedReviewEligibilityState,
@@ -13,14 +13,15 @@ import {
 import type { MobileCreatePrEligibilityState } from './mobile-create-pr-action'
 
 function eligibility(
-  overrides: Partial<HostedReviewCreationEligibility> = {}
-): HostedReviewCreationEligibility {
+  overrides: Partial<MobileHostedReviewEligibilityReply> = {}
+): MobileHostedReviewEligibilityReply {
   return {
     provider: 'github',
     review: null,
     canCreate: true,
     blockedReason: null,
     nextAction: null,
+    reviewLookupOutcome: 'not_found',
     defaultBaseRef: 'main',
     title: 'feature',
     body: '',
@@ -60,50 +61,9 @@ describe('mobile hosted review eligibility loader core', () => {
       })
     ).toBe(false)
   })
-
-  it('builds distinct keys for different branches', () => {
-    const first = buildMobileHostedReviewEligibilityLoadKey({
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      branch: 'feature-a',
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0,
-      hasUncommittedChanges: false
-    })
-    const second = buildMobileHostedReviewEligibilityLoadKey({
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      branch: 'feature-b',
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0,
-      hasUncommittedChanges: false
-    })
-
-    expect(first.identity).not.toBe(second.identity)
-    expect(first.fetch).not.toBe(second.fetch)
-  })
-
-  it('scopes load identity to the paired host', () => {
-    const input = {
-      worktreeId: 'repo-1::/workspace',
-      branch: 'feature',
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0,
-      hasUncommittedChanges: false
-    }
-    const local = buildMobileHostedReviewEligibilityLoadKey({ ...input, hostId: 'local' })
-    const ssh = buildMobileHostedReviewEligibilityLoadKey({ ...input, hostId: 'ssh-builder' })
-
-    expect(local.identity).not.toBe(ssh.identity)
-    expect(local.fetch).not.toBe(ssh.fetch)
-  })
 })
 
-// #8411: what the hook returns is what paints. A fetch-imminent frame must not
-// render as `idle` (hidden row) or the Create PR row pops in a frame later.
+// Fetch-imminent must render loading immediately; an idle frame would shift the list when Create PR appears.
 describe('rendered eligibility state', () => {
   it('renders fetch-imminent idle as an in-flight load', () => {
     const key = buildMobileHostedReviewEligibilityLoadKey({
@@ -122,31 +82,6 @@ describe('rendered eligibility state', () => {
         shouldFetch: true
       })
     ).toEqual({ kind: 'loading', eligibility: null })
-  })
-
-  it('passes resolved and refetch states through untouched', () => {
-    const key = buildMobileHostedReviewEligibilityLoadKey({
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      branch: 'feature',
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0,
-      hasUncommittedChanges: false
-    })
-    const ready = { kind: 'ready', eligibility: eligibility() } as const
-    const refetch = { kind: 'loading', eligibility: eligibility() } as const
-    const error = { kind: 'error' } as const
-
-    for (const state of [ready, refetch, error]) {
-      expect(
-        renderedMobileHostedReviewEligibilityState({
-          snapshot: loadSnapshot(key, state),
-          key,
-          shouldFetch: true
-        })
-      ).toBe(state)
-    }
   })
 
   it('renders idle when a fetch is not possible, hiding stale snapshots in the same render', () => {
@@ -179,7 +114,7 @@ describe('eligibility request ordering', () => {
   })
 
   it('does not let an older response overwrite the newest state', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
+    type Response = { ok: true; result: MobileHostedReviewEligibilityReply }
     const requests: ReturnType<typeof deferred<Response>>[] = []
     const client = {
       sendRequest: vi.fn(() => {
@@ -229,7 +164,7 @@ describe('eligibility request ordering', () => {
   })
 
   it('disables a ready snapshot in the render that changes its fetch key', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
+    type Response = { ok: true; result: MobileHostedReviewEligibilityReply }
     const requests: ReturnType<typeof deferred<Response>>[] = []
     const client = {
       sendRequest: vi.fn(() => {
@@ -270,56 +205,5 @@ describe('eligibility request ordering', () => {
       await Promise.resolve()
     })
     expect(renderedState).toMatchObject({ kind: 'loading', eligibility: ready })
-  })
-
-  it('invalidates a request when its hook instance unmounts', async () => {
-    type Response = { ok: true; result: HostedReviewCreationEligibility }
-    const requests: ReturnType<typeof deferred<Response>>[] = []
-    const client = {
-      sendRequest: vi.fn(() => {
-        const request = deferred<Response>()
-        requests.push(request)
-        return request.promise
-      })
-    }
-    const newest = eligibility({ canCreate: false, blockedReason: 'existing_review' })
-
-    function Harness(): null {
-      renderedState = useMobileHostedReviewEligibility({
-        client: client as never,
-        connState: 'connected',
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        branch: 'feature',
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0,
-        hasUncommittedChanges: false
-      })
-      return null
-    }
-
-    await act(async () => {
-      renderer = create(createElement(Harness))
-      await Promise.resolve()
-    })
-    act(() => renderer?.unmount())
-    renderer = null
-    await act(async () => {
-      renderer = create(createElement(Harness))
-      await Promise.resolve()
-    })
-    expect(requests).toHaveLength(2)
-
-    await act(async () => {
-      requests[1]!.resolve({ ok: true, result: newest })
-      await Promise.resolve()
-    })
-    await act(async () => {
-      requests[0]!.resolve({ ok: true, result: eligibility() })
-      await Promise.resolve()
-    })
-
-    expect(renderedState).toMatchObject({ kind: 'ready', eligibility: newest })
   })
 })

@@ -8,27 +8,25 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SettingsSegmentedControl, SettingsSwitch } from '../settings/SettingsFormControls'
+import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import type { AgentDashboardMode } from '../../../../shared/ui-chrome-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'
 
 type AgentDashboardSettingsMenuProps = {
-  /** Called after the mode switches to pop-out so the host can hand the board
-   *  over to the pop-out window instead of leaving a stale in-window board. */
+  /** Hand off to the pop-out after switching modes so the old drawer does not remain. */
   onSwitchToPopout: () => void
-  /** Lets the host keep the companion board open while this menu owns the
-   *  next outside click, matching the workspace board's menu handling. */
+  /** Let the host reserve the next outside click for menu dismissal, matching the workspace board. */
   onOpenChange: (open: boolean) => void
 }
 
-/** Board-header settings for the in-window Agent Dashboard, mirroring the
- *  workspace board's settings menu. In-window only — the pop-out renderer has
- *  no store access, so it never mounts this. */
+/** In-window settings only; pop-out renderers have no store access. */
 export function AgentDashboardSettingsMenu({
   onSwitchToPopout,
   onOpenChange
 }: AgentDashboardSettingsMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const mode = useAppStore((s) => s.settings?.experimentalAgentDashboardMode ?? 'in-window')
   const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -51,7 +49,7 @@ export function AgentDashboardSettingsMenu({
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={translate('dashboardPopout.settingsLabel', 'Agent Dashboard settings')}
+              aria-label={t('dashboardPopout.settingsLabel', 'Agent Dashboard settings')}
               className="text-muted-foreground"
             >
               <Settings className="size-3.5" />
@@ -59,7 +57,7 @@ export function AgentDashboardSettingsMenu({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
-          {translate('dashboardPopout.settingsTooltip', 'Board settings')}
+          {t('dashboardPopout.settingsTooltip', 'Board settings')}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" sideOffset={8} collisionPadding={8} className="w-72 p-2">
@@ -68,13 +66,13 @@ export function AgentDashboardSettingsMenu({
             <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
               <span className="min-w-0 space-y-0.5">
                 <span className="block text-[12px] font-medium leading-4 text-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.ExperimentalPane.agentDashboard.modeLabel',
                     'Open as'
                   )}
                 </span>
                 <span className="block text-[11px] leading-4 text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.ExperimentalPane.agentDashboard.modeCopy',
                     'Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.'
                   )}
@@ -85,7 +83,7 @@ export function AgentDashboardSettingsMenu({
               <SettingsSegmentedControl
                 value={mode}
                 onChange={handleModeChange}
-                ariaLabel={translate(
+                ariaLabel={t(
                   'auto.components.settings.ExperimentalPane.agentDashboard.modeAriaLabel',
                   'Agent Dashboard open mode'
                 )}
@@ -94,14 +92,14 @@ export function AgentDashboardSettingsMenu({
                 options={[
                   {
                     value: 'in-window',
-                    label: translate(
+                    label: t(
                       'auto.components.settings.ExperimentalPane.agentDashboard.modeInWindow',
                       'In-window'
                     )
                   },
                   {
                     value: 'popout',
-                    label: translate(
+                    label: t(
                       'auto.components.settings.ExperimentalPane.agentDashboard.modePopout',
                       'Pop-out'
                     )
@@ -115,23 +113,23 @@ export function AgentDashboardSettingsMenu({
         <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
           <span className="min-w-0 space-y-0.5">
             <span className="block text-[12px] font-medium leading-4 text-foreground">
-              {translate('dashboardPopout.settings.showIdle', 'Show idle agents')}
+              {t('dashboardPopout.settings.showIdle', 'Show idle agents')}
             </span>
             <span className="block text-[11px] leading-4 text-muted-foreground">
-              {translate(
+              {t(
                 'dashboardPopout.settings.showIdleCopy',
                 'Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default.'
               )}
             </span>
           </span>
-          <SettingsSwitch
+          <Switch
             checked={showIdle}
-            onChange={() => {
+            onCheckedChange={() => {
               void updateSettings({
                 experimentalAgentDashboardShowIdle: !showIdle
               })
             }}
-            ariaLabel={translate('dashboardPopout.settings.showIdle', 'Show idle agents')}
+            aria-label={t('dashboardPopout.settings.showIdle', 'Show idle agents')}
           />
         </div>
       </DropdownMenuContent>

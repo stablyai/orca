@@ -10,14 +10,13 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
+import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
 } from '../../../../../shared/browser-workspace-types'
-import { getBrowserDisplayTitle } from '../describe-page/browser-page-url-display'
 import {
   EMPTY_BROWSER_ANNOTATIONS,
   type BrowserOverlayViewport
@@ -34,7 +33,6 @@ import type {
 export function useBrowserPageWebviewLifecycle({
   browserTabId,
   browserTabUrl,
-  browserTabLoading,
   browserTabLoadError,
   workspaceId,
   worktreeId,
@@ -59,14 +57,11 @@ export function useBrowserPageWebviewLifecycle({
   setFindOpen,
   focusAddressBarNow,
   focusWebviewNow,
-  paneZoomLevelRef,
-  setBrowserZoomPercent,
   pendingAnnotationPayload,
   inputLocked,
   faviconUrl,
   webviewRef,
   lastKnownWebviewUrlRef,
-  trackNextLoadingEventRef,
   recoveryNavigationValidationRef,
   activeLoadFailureRef,
   retryGuestRecoveryRef,
@@ -100,14 +95,11 @@ export function useBrowserPageWebviewLifecycle({
   setFindOpen: Dispatch<SetStateAction<boolean>>
   focusAddressBarNow: () => boolean
   focusWebviewNow: () => boolean
-  paneZoomLevelRef: MutableRefObject<number>
-  setBrowserZoomPercent: Dispatch<SetStateAction<number>>
   pendingAnnotationPayload: BrowserGrabPayload | null
   inputLocked: boolean
   faviconUrl: string | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  trackNextLoadingEventRef: MutableRefObject<boolean>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   retryGuestRecoveryRef: MutableRefObject<() => void>
@@ -120,7 +112,6 @@ export function useBrowserPageWebviewLifecycle({
   const guestRecoveryPendingRef = useRef(false)
   const validateVisibleGuestRegistrationRef = useRef<() => void>(() => {})
   const wasPaintableForGuestValidationRef = useRef(isPaintable)
-  const browserTabLoadingRef = useRef(browserTabLoading)
   const inputLockedRef = useRef(inputLocked)
   const faviconUrlRef = useRef<string | null>(faviconUrl)
   const initialBrowserUrlRef = useRef(browserTabUrl)
@@ -143,7 +134,6 @@ export function useBrowserPageWebviewLifecycle({
   const invalidatePendingCaptureRef = useRef(cancelPendingBrowserCapture)
 
   useLayoutEffect(() => {
-    browserTabLoadingRef.current = browserTabLoading
     inputLockedRef.current = inputLocked
     viewportPresetIdRef.current = viewportPresetId
     isActiveRef.current = isActive
@@ -151,7 +141,6 @@ export function useBrowserPageWebviewLifecycle({
     invalidatePendingCaptureRef.current = cancelPendingBrowserCapture
     isPaintableRef.current = isPaintable
   }, [
-    browserTabLoading,
     cancelPendingBrowserCapture,
     inputLocked,
     isActive,
@@ -185,28 +174,6 @@ export function useBrowserPageWebviewLifecycle({
     addBrowserHistoryEntryRef.current = addBrowserHistoryEntry
   }, [onSetUrl, onUpdatePageState, addBrowserHistoryEntry, onSetUrlRef, onUpdatePageStateRef])
 
-  const syncNavigationState = useCallback(
-    (webview: Electron.WebviewTag): void => {
-      try {
-        // Parked panes miss guest events; only reconcile isLoading when the store already knows
-        // a navigation is active so an attach-time transient cannot flash a loading indicator.
-        const loading = browserTabLoadingRef.current ? webview.isLoading() : undefined
-        onUpdatePageStateRef.current(browserTabId, {
-          title: getBrowserDisplayTitle(
-            webview.getTitle(),
-            webview.getURL() || browserTabUrlRef.current
-          ),
-          ...(loading === undefined ? {} : { loading }),
-          canGoBack: webview.canGoBack(),
-          canGoForward: webview.canGoForward()
-        })
-      } catch {
-        // Why: these getters only exist after the guest fully attaches; ignore the transient failure during attach.
-      }
-    },
-    [browserTabId, browserTabUrlRef, onUpdatePageStateRef]
-  )
-
   const syncBrowserAnnotationViewportBridge = useCallback((): void => {
     const state = useAppStore.getState()
     syncGuestAnnotationViewportBridge({
@@ -233,7 +200,6 @@ export function useBrowserPageWebviewLifecycle({
     invalidateBrowserAnnotationDocumentRef.current = invalidateBrowserAnnotationDocument
   }, [invalidateBrowserAnnotationDocument])
 
-  // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.
   useEffect(() => {
     return attachBrowserPageWebview({
       browserTabId,
@@ -256,18 +222,14 @@ export function useBrowserPageWebviewLifecycle({
       activeLoadFailureRef,
       recoveryNavigationValidationRef,
       keepAddressBarFocusRef,
-      paneZoomLevelRef,
       viewportPresetIdRef,
       onUpdatePageStateRef,
       setGuestRecoveryGeneration,
-      setBrowserZoomPercent,
       focusAddressBarNow,
-      syncNavigationState,
       syncBrowserAnnotationViewportBridge,
       faviconUrlRef,
       addressBarInputRef,
       lastKnownWebviewUrlRef,
-      trackNextLoadingEventRef,
       invalidateBrowserAnnotationDocumentRef,
       onSetUrlRef,
       setBrowserOverlayViewport,
@@ -279,8 +241,7 @@ export function useBrowserPageWebviewLifecycle({
       retryGuestRecoveryRef,
       setFindOpen
     })
-    // Why: wire listeners once per tab identity. browserTab.url is excluded (re-running would detach/reattach and cancel navigations; callbacks use refs).
-    // webviewPartition IS included: Electron can't change a webview's partition after creation, so a profile switch must recreate it.
+    // Exclude URL changes to avoid cancelling navigation; callbacks read refs. Include partition changes because Electron requires a new guest.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     browserTabId,
@@ -292,7 +253,6 @@ export function useBrowserPageWebviewLifecycle({
     createBrowserTab,
     focusAddressBarNow,
     focusWebviewNow,
-    syncNavigationState,
     syncBrowserAnnotationViewportBridge
   ])
 

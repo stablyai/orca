@@ -1,8 +1,8 @@
-import './unused-default-rpc-methods.test-fixture'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime'
-import { publishHostDescriptor } from '../host-descriptor'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import { publishHostDescriptor } from '../hosts/platform-probe/host-descriptor'
 import { defineMethod, type RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 
@@ -19,7 +19,8 @@ describe('runtime source admission', () => {
   })
 
   function createHarness(installationId: string | null = SOURCE_A) {
-    const runtime = new OrcaRuntimeService()
+    const id = randomUUID()
+    const runtime = { getRuntimeId: () => id }
     const runtimeId = runtime.getRuntimeId()
     if (installationId) {
       publishHostDescriptor(runtimeId, { installationId })
@@ -27,7 +28,8 @@ describe('runtime source admission', () => {
     }
     const effect = vi.fn(() => ({ sent: true }))
     const dispatcher = new RpcDispatcher({
-      runtime,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture handler is effect; admission and response metadata read only getRuntimeId.
+      runtime: runtime as OrcaRuntimeService,
       methods: [
         defineMethod({
           name: 'terminal.send',

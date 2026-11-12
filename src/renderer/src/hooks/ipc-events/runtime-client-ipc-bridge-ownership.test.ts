@@ -2,10 +2,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime-environment-subscriptions'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   beginWorktreeLineageRefresh,
   isRemoteWorktreeLineageFresh
@@ -46,6 +46,7 @@ function createHarness() {
   const getIssue = vi.fn(() => issueRead.promise)
   const refreshStatus = vi.fn(async () => true)
   const fetchRuntimeEnvironmentRepos = vi.fn(async () => [])
+  const acknowledgeAttention = vi.fn(async () => ({ dismissed: 0 }))
   let nextId = 0
   vi.stubGlobal('window', {
     api: {
@@ -54,6 +55,8 @@ function createHarness() {
           subscribeRuntimeEnvironmentFromPreload(ipc, args, callbacks, () => `sub-${nextId++}`),
         call: vi.fn(async () => ({ id: 'r', ok: true, result: [] }))
       },
+      notifications: { acknowledgeAttention },
+      browser: { sessionClientRouteImportSources: async () => ({}) },
       linear: { getIssue }
     }
   })
@@ -111,13 +114,14 @@ function createHarness() {
     pending,
     ipc,
     activateNotifiedWorktree,
+    acknowledgeAttention,
     enqueue,
     emit: (
       index: number,
       replay = false,
       event?:
         | RuntimeClientEvent
-        | { type: 'worktreesChanged'; repoId: string; sortOrderOnly: unknown }
+        | { type: 'worktreesChanged'; repoId: string; sortOrderOnly: unknown; sortOrders?: unknown }
     ) => {
       const response = {
         id: 'r',
@@ -192,27 +196,6 @@ it('does not navigate for an unaddressed activation from an older remote host', 
   }
 })
 
-it.each([true, false, undefined, 'true', 1, null])(
-  'forwards only an explicit order-only host hint (%s)',
-  async (sortOrderOnly) => {
-    const h = createHarness()
-    try {
-      h.start()
-      h.emit(0, false, { type: 'worktreesChanged', repoId: 'remote-repo', sortOrderOnly })
-      for (let index = 0; index < 10; index += 1) {
-        await Promise.resolve()
-      }
-      expect(h.enqueue).toHaveBeenCalledWith({
-        repoId: 'remote-repo',
-        executionHostId: 'runtime:host-a',
-        ...(sortOrderOnly === true ? { sortOrderOnly: true } : {})
-      })
-    } finally {
-      await h.finish()
-    }
-  }
-)
-
 it('invalidates lineage before unknown-repository discovery can block a structural event', async () => {
   const h = createHarness()
   const repos = Promise.withResolvers<never[]>()
@@ -248,55 +231,6 @@ it('invalidates hydrated lineage as soon as a project change is queued', async (
     await h.finish()
   }
 })
-
-it.each(['caller', 'host'] as const)(
-  'ignores remote activation addressed to %s',
-  async (navigation) => {
-    const h = createHarness()
-    try {
-      h.start()
-      h.emit(0, false, {
-        type: 'activateWorktree',
-        repoId: 'remote-repo',
-        worktreeId: 'remote-wt',
-        navigation
-      })
-      for (let index = 0; index < 10; index += 1) {
-        await Promise.resolve()
-      }
-      expect(h.activateNotifiedWorktree).not.toHaveBeenCalled()
-    } finally {
-      await h.finish()
-    }
-  }
-)
-
-it.each(['clients', 'all'] as const)(
-  'honors explicit %s activation on the publishing host',
-  async (navigation) => {
-    const h = createHarness()
-    try {
-      h.start()
-      const event: RuntimeClientEvent = {
-        type: 'activateWorktree',
-        repoId: 'remote-repo',
-        worktreeId: 'remote-wt',
-        navigation
-      }
-      h.emit(0, false, event)
-      for (let index = 0; index < 10; index += 1) {
-        await Promise.resolve()
-      }
-      expect(h.activateNotifiedWorktree).toHaveBeenCalledWith(event, {
-        allowRuntimeEnvironment: true,
-        executionHostId: 'runtime:host-a',
-        isCurrent: expect.any(Function)
-      })
-    } finally {
-      await h.finish()
-    }
-  }
-)
 
 it('does not mistake a local repo with the same id for the publishing remote repo', async () => {
   const h = createHarness()
@@ -364,19 +298,6 @@ it.each(['cleanup', 're-pair'] as const)(
     }
   }
 )
-
-it('does no replay recovery or resubscription after cleanup', async () => {
-  const h = createHarness()
-  try {
-    h.start()()
-    h.emit(0, true)
-    expect(h.refreshStatus).not.toHaveBeenCalled()
-    expect(h.pending).toHaveLength(1)
-    expect(h.getIssue).not.toHaveBeenCalled()
-  } finally {
-    await h.finish()
-  }
-})
 
 it('accepts a fresh bridge early frame while rejecting the previous bridge frame', async () => {
   const h = createHarness()

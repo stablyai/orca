@@ -1,7 +1,8 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { legacyBaseRefSearchResult } from '../../../../shared/base-ref-search-result'
+import type { CloneTargetCheck } from '../../../../shared/git/clone/clone-target-check'
 import type { Repo } from '../../../../shared/repo-types'
-import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
+import { getDefaultCreateProjectParent } from '@/components/sidebar/project-admission/create/create-project-defaults'
 import {
   callRuntimeResult,
   callRuntimeResultWithOwner,
@@ -17,6 +18,10 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
       return owned.result.repos.map((repo) => withRuntimeRepoOwner(repo, owned.hostId))
     },
+    // A WSL move is a desktop's own; a paired web client never holds the retained local rows.
+    listWslMoved: async () => [],
+    // WSL hosts are a desktop's own; a paired web client lists its one runtime live.
+    listHostCatalogSnapshots: async () => ({}),
     add: async ({ path, kind, displayName }) => {
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
@@ -44,15 +49,17 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     pickFolder: () => Promise.resolve(null),
     pickFolders: () => Promise.resolve([]),
     pickDirectory: () => Promise.resolve(null),
-    clone: async ({ url, destination }) => {
+    clone: async ({ url, destination, folderName }) => {
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ repo: Repo }>(
         'repo.clone',
-        { url, destination },
+        { url, destination, folderName },
         10 * 60_000
       )
       return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
     },
+    checkCloneTarget: async (args) =>
+      (await callRuntimeResult<{ target: CloneTargetCheck }>('repo.checkCloneTarget', args)).target,
     cloneAbort: () => Promise.resolve(),
     create: async ({ parentPath, name, kind }) => {
       invalidateRuntimeWorktreeCaches()
@@ -71,7 +78,6 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       return getDefaultCreateProjectParent(result.resolvedPath)
     },
     onCloneProgress: () => noopUnsubscribe,
-    getGitUsername: () => Promise.resolve(''),
     getBaseRefDefault: async ({ repoId }) =>
       callRuntimeResult('repo.baseRefDefault', { repo: repoId }),
     searchBaseRefs: async ({ repoId, query, limit }) =>

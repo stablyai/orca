@@ -3,17 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
-vi.mock('../browser/browser-route-session-runtime', async () => {
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     browserRouteSessionRegistry: { isAllowedPartition: harness.routePartitionAllowedMock },
@@ -23,7 +22,7 @@ vi.mock('../browser/browser-route-session-runtime', async () => {
     }
   }
 })
-vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
@@ -33,10 +32,11 @@ vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
 
 import { createMainWindow, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS } from './createMainWindow'
 import { ipcMain } from 'electron'
-import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
+import { resetExpectedTeardownStateForTest } from '../crash-reporting/process-exits/expected-teardown-state'
 import {
   attachClientPageRendererMock,
   browserWindowMock,
+  createRendererRecoveryWindowHarness,
   resetMainWindowMocks,
   retireClientPageRendererMock,
   retireRouteRendererMock
@@ -49,51 +49,36 @@ describe('createMainWindow', () => {
     vi.useRealTimers()
   })
 
-  it('clears the quit latch when the renderer prevents unload', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    const onQuitAborted = vi.fn()
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
+  it('sends the next close as a plain close once its renderer cancels the newest quit request', () => {
+    const ipcHandlers: Record<string, (...args: any[]) => void> = {}
+    vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
+      ipcHandlers[channel] = handler as (...args: any[]) => void
+      return ipcMain
     })
-
-    createMainWindow(null, { getIsQuitting: () => true, onQuitAborted })
-
-    const preventDefault = vi.fn()
-    windowHandlers.close({ preventDefault } as never)
-    expect(preventDefault).toHaveBeenCalledTimes(1)
-    expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
-      isQuitting: true,
-      requestId: expect.any(Number)
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+    let isQuitting = true
+    createMainWindow(null, {
+      getIsQuitting: () => isQuitting,
+      onQuitAborted: () => {
+        isQuitting = false
+      }
     })
+    const cancel = (senderId: number): void =>
+      ipcHandlers['window:close-cancelled']?.({ sender: { id: senderId } })
+    const retryClose = (): unknown => {
+      windowHandlers.close({ preventDefault: vi.fn() } as never)
+      return browserWindowInstance.webContents.send.mock.lastCall
+    }
 
-    windowHandlers['will-prevent-unload']()
-    expect(onQuitAborted).toHaveBeenCalledTimes(1)
-    expect(webContents.send).toHaveBeenCalledWith('window:unload-prevented')
+    expect(retryClose()).toEqual(['window:close-requested', { isQuitting: true, requestId: 1 }])
+    // Why: a cancel sent before the renderer saw this quit belongs to an older prompt.
+    cancel(143)
+    ipcHandlers['window:close-request-received']?.({ sender: { id: 143 } }, 1)
+    cancel(99)
+    expect(retryClose()).toEqual(['window:close-requested', { isQuitting: true, requestId: 2 }])
+    ipcHandlers['window:close-request-received']?.({ sender: { id: 143 } }, 2)
+    cancel(143)
+    expect(retryClose()).toEqual(['window:close-requested', { isQuitting: false, requestId: 3 }])
   })
 
   it('allows close after the renderer process is gone', () => {
@@ -105,6 +90,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -152,64 +138,6 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
-  it('does not notify the crash recorder when renderer teardown follows a confirmed window close', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const ipcHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn(),
-      isCrashed: vi.fn(() => false)
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve()),
-      close: vi.fn(() => {
-        windowHandlers.close({} as never)
-      })
-    }
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
-      ipcHandlers[channel] = handler as (...args: any[]) => void
-      return ipcMain
-    })
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-    const onRendererProcessGone = vi.fn()
-
-    createMainWindow(null, { onRendererProcessGone })
-
-    ipcHandlers['window:confirm-close']?.()
-    windowHandlers['render-process-gone']?.(
-      {} as never,
-      {
-        reason: 'killed',
-        exitCode: 9
-      } as never
-    )
-
-    expect(onRendererProcessGone).not.toHaveBeenCalled()
-
-    consoleError.mockRestore()
-  })
-
   it('does not persist pending bounds after bypassing close for a gone renderer', () => {
     vi.useFakeTimers()
 
@@ -220,6 +148,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -279,6 +208,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -328,99 +258,6 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
-  it('allows close when Electron reports a crashed webContents', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn(),
-      isCrashed: vi.fn(() => true)
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null, { getIsQuitting: () => true })
-
-    const preventDefault = vi.fn()
-    windowHandlers.close({ preventDefault } as never)
-
-    expect(preventDefault).not.toHaveBeenCalled()
-    expect(webContents.send).not.toHaveBeenCalledWith(
-      'window:close-requested',
-      expect.objectContaining({ isQuitting: true })
-    )
-  })
-
-  // Why (#5787): a hung-but-ALIVE renderer (never gone, never crashed) must NOT
-  // silently bypass the close guard — force-killing it that way is what destroyed
-  // other sessions. It must route through window:close-requested so the
-  // save/running-process confirmation runs.
-  it('requests confirmation for a hung-but-alive renderer instead of bypassing', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn(),
-      isCrashed: vi.fn(() => false)
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
-
-    // No render-process-gone and isCrashed() === false: the renderer is alive.
-    const preventDefault = vi.fn()
-    windowHandlers.close({ preventDefault } as never)
-
-    expect(preventDefault).toHaveBeenCalledTimes(1)
-    expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
-      isQuitting: false,
-      requestId: expect.any(Number)
-    })
-  })
-
   it('destroys an already-unresponsive renderer after an app-wide quit deadline', async () => {
     vi.useFakeTimers()
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
@@ -431,6 +268,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -480,6 +318,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),

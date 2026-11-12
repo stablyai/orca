@@ -1,6 +1,10 @@
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
+import { literalPathspec } from './git-pathspec'
 
 export async function readGitlinkOidFromTree(
   worktreePath: string,
@@ -9,10 +13,13 @@ export async function readGitlinkOidFromTree(
   options: GitRuntimeOptions
 ): Promise<string> {
   try {
-    const { stdout } = await gitExecFileAsync(['ls-tree', ref, '--', submodulePath], {
-      ...gitOptionsForWorktree(worktreePath, options),
-      env: gitOptionalLocksDisabledEnv()
-    })
+    const { stdout } = await gitExecFileAsync(
+      ['ls-tree', ref, '--', literalPathspec(submodulePath, worktreePath, options)],
+      {
+        ...gitOptionsForWorktree(worktreePath, options),
+        env: gitOptionalLocksDisabledEnv()
+      }
+    )
     return stdout.match(/^160000 commit ([0-9a-f]+)\t/m)?.[1] ?? ''
   } catch {
     return ''
@@ -25,10 +32,13 @@ export async function readGitlinkOidFromIndex(
   options: GitRuntimeOptions
 ): Promise<string> {
   try {
-    const { stdout } = await gitExecFileAsync(['ls-files', '-s', '--', submodulePath], {
-      ...gitOptionsForWorktree(worktreePath, options),
-      env: gitOptionalLocksDisabledEnv()
-    })
+    const { stdout } = await gitExecFileAsync(
+      ['ls-files', '-s', '--', literalPathspec(submodulePath, worktreePath, options)],
+      {
+        ...gitOptionsForWorktree(worktreePath, options),
+        env: gitOptionalLocksDisabledEnv()
+      }
+    )
     return stdout.match(/^160000 ([0-9a-f]+) /m)?.[1] ?? ''
   } catch {
     return ''

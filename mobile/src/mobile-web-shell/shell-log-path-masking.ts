@@ -1,10 +1,10 @@
 const MASKED_TEXT_MAX_CHARS = 160
 
-/** Absolute paths and file URLs masked, then clamped: page and schema text can quote user paths. */
+// Mask paths/file URLs before clamping; page and schema text can quote user locations.
 export function maskUserText(text: string): string {
   const masked = text
     .replace(/file:\/\/[^\s)'"`\]]+/g, '[path]')
-    // A following word that still holds a separator is the same path (`C:\Users\John Doe\x`).
+    // Continue through whitespace when the next word still contains a separator, as in C:\Users\John Doe\x.
     .replace(
       /(^|[\s'"`([=:,])(?:~?\/|[A-Za-z]:[\\/]|\\\\)[^\s)'"`\]]+(?: [^\s)'"`\]]*[\\/][^\s)'"`\]]*)*/g,
       '$1[path]'

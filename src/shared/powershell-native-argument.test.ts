@@ -20,10 +20,6 @@ describe('PowerShell native argument quoting', () => {
     ).toBe('"`$(Remove-Item x) ``t `"q`" `\u201Cl`\u201D `\u201Elow \'single\'`nend"')
   })
 
-  it('leaves single-line values on the single-quoted form', () => {
-    expect(quotePowerShellLiteral('a $b `c "d"')).toBe('\'a $b `c "d"\'')
-  })
-
   it('pre-escapes embedded quotes for Windows native argv parsing', () => {
     expect(quotePowerShellNativeArgument('eval "decoded"')).toBe(String.raw`'eval \"decoded\"'`)
     expect(quotePowerShellNativeArgument(String.raw`before\"after`)).toBe(

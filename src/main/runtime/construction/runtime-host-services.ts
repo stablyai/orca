@@ -1,0 +1,376 @@
+import type * as Calls from './runtime-host-service-calls'
+import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
+
+import type { LegacyWorkerRecoveryCandidate } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+
+import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
+
+import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
+import {
+  confirmRunTerminalShellAlone,
+  readRunTerminalClientUse
+} from '../terminal/lifecycle/run-terminal-client-use'
+import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared/execution-host'
+import { RuntimePreservedBranchCleanup } from '../repositories/runtime-preserved-branch-cleanup'
+import type { AgentSessionCreateOperation } from '../session-construction/agent-session/agent-session-create-operation'
+import type * as CompatibilityAuthority from '../orchestration/terminal-authority/orchestration-compatibility-authority'
+
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+
+import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
+import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
+import { RuntimeLegacyWorkerTerminalRecoveryController } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
+import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
+
+import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
+import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
+import { RuntimeMobileDictationController } from '../speech/runtime-mobile-dictation-controller'
+import { RuntimeProjectHostSetupController } from '../repositories/runtime-project-host-setup-controller'
+import { RuntimeProjectGroupController } from '../repositories/runtime-project-group-controller'
+import { RuntimeNestedRepoImport } from '../repositories/runtime-nested-repo-import'
+import { RuntimeRepositoryRegistrationController } from '../repositories/runtime-repository-registration-controller'
+import { RuntimeRepositoryCloneController } from '../repositories/runtime-repository-clone-controller'
+import { RuntimeRepositorySettingsController } from '../repositories/runtime-repository-settings-controller'
+import { RuntimeRepositorySparsePresets } from '../repositories/runtime-repository-sparse-presets'
+import { RuntimeRepositoryRefQueries } from '../repositories/runtime-repository-ref-queries'
+import { RuntimeServerEnvironmentCommands } from '../files/server-browse/runtime-server-environment-commands'
+import { RuntimeRepositoryForkBackfill } from '../repositories/runtime-repository-fork-backfill'
+import { RuntimeWorkspaceSessionController } from '../workspaces/session-hosts/runtime-workspace-session-controller'
+import { RuntimeAiVaultCommands } from '../integrations/ai-vault/runtime-ai-vault-commands'
+import { ClaudeAgentTeamsService } from '../terminal/agent-teams/claude-agent-teams-service'
+import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-workspace-pty-teardown'
+import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
+
+export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
+  declare acquireFileWatcherRemoval: ConstructorParameters<
+    typeof RuntimeProjectGroupController
+  >[0]['acquireFileWatcherRemoval']
+  protected abstract tryGetWorkspaceSessionHostIdForWorktree(
+    worktreeId: string
+  ): ExecutionHostId | null
+  protected abstract getLegacyWorkerRecoveryActivation(
+    ...args: Calls.GetLegacyWorkerRecoveryActivationArgs
+  ): Calls.GetLegacyWorkerRecoveryActivationResult
+  protected abstract hasExactPersistedTerminalSurfaceIdentity(
+    ...args: Calls.HasExactPersistedTerminalSurfaceIdentityArgs
+  ): Calls.HasExactPersistedTerminalSurfaceIdentityResult
+  protected abstract hasExactTerminalSurfaceIdentity(
+    ...args: Calls.HasExactTerminalSurfaceIdentityArgs
+  ): Calls.HasExactTerminalSurfaceIdentityResult
+  protected abstract adoptLegacyWorkerTerminal(
+    ...args: Calls.AdoptLegacyWorkerTerminalArgs
+  ): Calls.AdoptLegacyWorkerTerminalResult
+  protected abstract revealLegacyWorkerTerminal(
+    candidate: LegacyWorkerRecoveryCandidate
+  ): Promise<boolean | null>
+  abstract onPtyExit(...args: Calls.OnPtyExitArgs): Calls.OnPtyExitResult
+  protected abstract rollbackLegacyWorkerTerminalSurface(
+    candidate: LegacyWorkerTerminalRecoveryPlan['candidates'][number]
+  ): void
+  abstract reconcileLegacyWorkerTerminals(
+    ...args: Calls.ReconcileLegacyWorkerTerminalsArgs
+  ): Calls.ReconcileLegacyWorkerTerminalsResult
+  protected abstract updateLegacyWorkerTerminalRecoveryRetry(
+    ...args: Calls.UpdateLegacyWorkerTerminalRecoveryRetryArgs
+  ): Calls.UpdateLegacyWorkerTerminalRecoveryRetryResult
+  protected abstract resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null
+
+  protected abstract runWorktreeTerminalMutation<T>(
+    worktreeId: string,
+    operation: () => Promise<T>
+  ): Promise<T>
+  protected abstract folderWorkspaceToResolvedWorktree(
+    folderWorkspace: FolderWorkspace
+  ): ResolvedWorktree
+
+  readonly preservedBranchCleanup = new RuntimePreservedBranchCleanup(() =>
+    this.store ? this.requireStore() : null
+  )
+
+  protected readonly getLocalProviderFn!: HostBindings['getLocalProvider'] | null
+
+  readonly onPtyStopped!: HostBindings['onPtyStopped'] | null
+
+  protected readonly onTerminalAgentStatus!: HostBindings['onTerminalAgentStatus'] | null
+
+  protected readonly onTerminalProgramStatusFacet!:
+    | HostBindings['onTerminalProgramStatusFacet']
+    | null
+
+  protected readonly onTerminalSideEffects!: HostBindings['onTerminalSideEffects'] | null
+
+  protected readonly onClaudeTerminalEvidence!: HostBindings['onClaudeTerminalEvidence'] | null
+
+  protected terminalSideEffectLocalConsumerAvailable = false
+
+  protected terminalSideEffectConsumerAvailable = false
+
+  readonly getAgentStatusSnapshotFn!: HostBindings['getAgentStatusSnapshot'] | null
+
+  protected readonly structuredAgentStatusSinkFn!: HostBindings['structuredAgentStatusSink'] | null
+
+  readonly readObservedAgentStatusPaneIdentityFn!: HostBindings['readObservedAgentStatusPaneIdentity']
+
+  protected readonly getAgentProviderSessionSnapshotFn!:
+    | HostBindings['getAgentProviderSessionSnapshot']
+    | null
+
+  protected readonly getAgentProviderSessionRowsForPaneFn!:
+    | HostBindings['getAgentProviderSessionRowsForPane']
+    | null
+
+  readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown' {
+    return readRunTerminalClientUse(this, ptyId)
+  }
+
+  confirmTerminalShellAlone(ptyId: string): Promise<boolean> {
+    return confirmRunTerminalShellAlone(this.ptyController, ptyId)
+  }
+
+  /** Includes resume-identity-only provider rows. */
+  getAgentProviderSessionRows(tabId?: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionSnapshotFn?.(tabId) ?? []
+  }
+
+  getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
+  }
+
+  protected readonly attestAgentHookCompatibilityAuthorityFn!:
+    | HostBindings['attestAgentHookCompatibilityAuthority']
+    | null
+
+  protected readonly retireAgentHookCompatibilityAuthorityFn!:
+    | HostBindings['retireAgentHookCompatibilityAuthority']
+    | null
+
+  protected readonly checkHookAgentPresenceFn!: HostBindings['checkHookAgentPresence'] | null
+
+  protected readonly reconcileAgentStatusForEndedProcessFn!:
+    | HostBindings['reconcileAgentStatusForEndedProcess']
+    | null
+
+  protected readonly forgetHookAgentExitFn!: HostBindings['forgetHookAgentExit'] | null
+
+  protected readonly dropAgentStatusForRemovedWorktreeFn!:
+    | HostBindings['dropAgentStatusForRemovedWorktree']
+    | null
+
+  protected readonly canRecoverPersistentLocalPtysFn!: HostBindings['canRecoverPersistentLocalPtys']
+
+  declare protected readonly getPairedDeviceNameFn: HostBindings['getPairedDeviceName']
+
+  protected readonly buildAgentHookPtyEnv!: HostBindings['buildAgentHookPtyEnv'] | null
+
+  protected readonly getDesktopWindowStatusFn!: HostBindings['getDesktopWindowStatus']
+
+  protected readonly prepareAiVaultSessionResumeFn!:
+    | HostBindings['prepareAiVaultSessionResume']
+    | null
+
+  protected readonly prepareCodexStructuredLaunchFn!:
+    | HostBindings['prepareCodexStructuredLaunch']
+    | null
+
+  protected readonly resolveCodexStructuredLaunchHomeFn!:
+    | HostBindings['resolveCodexStructuredLaunchHome']
+    | null
+
+  protected readonly prepareCodexCatalogProbeHomeFn!:
+    | HostBindings['prepareCodexCatalogProbeHome']
+    | null
+
+  protected readonly agentSessionClaimSigner!: HostBindings['agentSessionClaimSigner']
+
+  protected readonly agentSessionCreateOperations = new Map<string, AgentSessionCreateOperation>()
+
+  protected readonly agentPromptSubmissionTailByPtyId = new Map<string, Promise<void>>()
+
+  protected readonly agentPromptLifecycleByPtyId = new Map<
+    string,
+    { status: AgentStatus | null; workingSequence: number; updatedAt: number }
+  >()
+
+  protected readonly agentPromptPermissionSequenceByPtyId = new Map<string, number>()
+
+  protected readonly agentPromptExplicitStatusFloorByPtyId = new Map<string, number>()
+
+  protected readonly orchestrationCompatibilitySshAttachments = new Map<
+    string,
+    CompatibilityAuthority.OrchestrationCompatibilitySshAttachmentAuthority
+  >()
+
+  protected sshRelayRecoveryGenerationByTargetId = new Map<string, number>()
+
+  protected readonly legacyWorkerRecoveryPersistence =
+    new RuntimeLegacyWorkerTerminalRecoveryPersistence(
+      () => this.store,
+      () => this.getExistingOrchestrationDb(),
+      (worktreeId) => this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+    )
+
+  protected readonly legacyWorkerRecovery = new RuntimeLegacyWorkerTerminalRecoveryController({
+    preparePlan: (dispatchIds) => this.legacyWorkerRecoveryPersistence.prepare(dispatchIds),
+    resolveWorkspace: async (candidate) => {
+      const scope = await this.resolveTerminalWorkspaceLaunchScope(`id:${candidate.worktreeId}`)
+      const resolved = scope.folderWorkspace
+        ? this.folderWorkspaceToResolvedWorktree(scope.folderWorkspace)
+        : await this.resolveGitWorktreeSelector(`id:${scope.id}`)
+      return { scope, resolved }
+    },
+    refreshInventory: (worktrees, connectionId) =>
+      this.refreshPtyWorktreeRecordsWithControllerInventory(
+        worktrees,
+        null,
+        undefined,
+        connectionId,
+        false,
+        { includeForegroundProcessEvidence: false, refreshForegroundAgents: false }
+      ),
+    runMutation: (worktreeId, operation) => this.runWorktreeTerminalMutation(worktreeId, operation),
+    getActivation: (worktreeId) => this.getLegacyWorkerRecoveryActivation(worktreeId),
+    hasExactPersistedSurface: (candidate) =>
+      this.hasExactPersistedTerminalSurfaceIdentity(candidate),
+    hasExactSurface: (candidate) => this.hasExactTerminalSurfaceIdentity(candidate),
+    adopt: (candidate, workspace, inventory, activation) =>
+      this.adoptLegacyWorkerTerminal(candidate, workspace, inventory, activation),
+    getRendererEpoch: () => this.rendererGraphEpoch,
+    reveal: (candidate) => this.revealLegacyWorkerTerminal(candidate),
+    onPtyExit: (candidate) => this.onPtyExit(candidate.ptyId, 0, candidate.incarnationId),
+    persist: (resolutions) => this.legacyWorkerRecoveryPersistence.persist(resolutions),
+    rollback: (candidate) => this.rollbackLegacyWorkerTerminalSurface(candidate),
+    reconcileMissing: (candidate) =>
+      this.legacyWorkerRecoveryPersistence.reconcileMissing(candidate, this.lostWorkerReport),
+    notifyResolution: (candidate, resolution) =>
+      this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, resolution),
+    canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),
+    isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
+    hasRequestedReleases: () =>
+      (this.getExistingOrchestrationDb()?.listWorkerTerminalReleaseBacklog(1).length ?? 0) > 0,
+    reconcileRequestedReleases: () => reconcileRequestedWorkerTerminalReleases(this),
+    reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
+    updateRetry: (plan, deferredDispatchIds, options) =>
+      this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)
+  })
+
+  protected restoredOrchestrationAuthorityByPtyId = new Map<
+    string,
+    CompatibilityAuthority.RestoredOrchestrationAuthorityReceipt
+  >()
+
+  protected ptyControllerInventorySequence = 0
+
+  protected ptyControllerAggregateInventoryGeneration = 0
+
+  protected ptyControllerInventoryGenerationByProvider = new Map<string, number>()
+
+  protected readonly accounts = new RuntimeAccountController(() => this.notifier)
+
+  protected readonly mobileSpeech = new RuntimeMobileSpeechCatalog(() => this.store)
+
+  protected readonly mobileDictation = new RuntimeMobileDictationController(() => this.store)
+
+  protected readonly projectHostSetups = new RuntimeProjectHostSetupController({
+    getStore: () => this.store,
+    listRepos: () => this.listRepos(),
+    addRepo: (path, kind, hostId) => this.repositoryRegistrations.add(path, kind, hostId),
+    cloneRepo: (args) =>
+      this.repositoryClones.clone(args.url, args.destination, args.hostId, args.folderName),
+    resolveRepositoryMetadata: (repo) => this.repositoryForkBackfill.resolve(repo),
+    enqueueRepositoryMetadata: (repos) => void this.repositoryForkBackfill.enqueue(repos),
+    invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
+    invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
+    notifyReposChanged: () => this.notifyReposChanged(),
+    countLiveTerminalsForRepo: (repo) =>
+      countRepoTerminalsNotKnownExited(repo, this.ptysById.values(), (ptyId) =>
+        this.isPtyKnownExited(ptyId)
+      )
+  })
+
+  protected readonly projectGroups = new RuntimeProjectGroupController({
+    getStore: () => this.store,
+    resolveRepo: (...args) => this.managedWorktreeQueries.resolveRepoForConnection(...args),
+    notifyReposChanged: () => this.notifyReposChanged(),
+    resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
+    acquireFileWatcherRemoval: (path, connectionId) =>
+      this.acquireFileWatcherRemoval(path, connectionId),
+    teardownFolderWorkspacePtys: (...target) =>
+      teardownFolderWorkspacePtys(
+        {
+          runtime: this,
+          getLocalProvider: () => this.getLocalProvider(),
+          onPtyStopped: this.onPtyStopped
+        },
+        ...target
+      ),
+    cleanupRemovedFolderWorkspaceState: (worktreeId): void | Promise<void> => {
+      // Retire runs after the awaited store cleanup, so the delete cannot
+      // report before the Codex pretrust purge lands; failures degrade here.
+      const cleanup = this.store && this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
+      return Promise.resolve(cleanup).then(() => {
+        this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
+      })
+    },
+    emitWorktreeLifecycle: (event) => this.worktreeLifecycleEvents.emit(event)
+  })
+
+  private readonly repositoryCatalogDeps = {
+    getStore: () => this.store,
+    invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
+    invalidateWorktreeScan: (repoId: string) => this.invalidateWorktreeScanCacheForRepo(repoId),
+    notifyReposChanged: () => this.notifyReposChanged()
+  }
+
+  protected readonly nestedRepoImport = new RuntimeNestedRepoImport(this.repositoryCatalogDeps)
+
+  protected readonly repositoryRegistrations = new RuntimeRepositoryRegistrationController(
+    this.repositoryCatalogDeps
+  )
+
+  protected readonly repositoryClones = new RuntimeRepositoryCloneController(
+    this.repositoryCatalogDeps
+  )
+
+  protected readonly repositorySettings = new RuntimeRepositorySettingsController({
+    ...this.repositoryCatalogDeps,
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    forgetTerminalTopology: (repoId) => this.terminalTopologyRevisionByRepoId.delete(repoId),
+    stopProjectTerminals: (repo, options) => this.stopTerminalsForProject(repo, options),
+    notifyWorktreesChanged: (repoId, options) => this.notifyWorktreesChanged(repoId, options)
+  })
+
+  protected readonly repositorySparsePresets = new RuntimeRepositorySparsePresets({
+    getStore: () => this.store,
+    resolveRepo: (selector) => this.resolveRepoSelector(selector)
+  })
+
+  protected readonly repositoryRefQueries = new RuntimeRepositoryRefQueries({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector)
+  })
+
+  protected readonly serverEnvironment = new RuntimeServerEnvironmentCommands()
+
+  readonly repositoryForkBackfill = new RuntimeRepositoryForkBackfill(
+    () => this.store,
+    () => this.notifyReposChanged()
+  )
+
+  protected readonly workspaceSessions = new RuntimeWorkspaceSessionController({
+    getStore: () => this.store,
+    resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
+    hasRuntimeOwnedPtyCandidate: (session, worktreeId, tabs) =>
+      this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs),
+    getCachedWorktrees: () => this.resolvedWorktrees.peek()?.worktrees ?? null
+  })
+
+  protected readonly aiVault = new RuntimeAiVaultCommands(() => this.prepareAiVaultSessionResumeFn)
+
+  protected readonly claudeAgentTeams = new ClaudeAgentTeamsService()
+
+  getNativeChatLaunchDraftResolutionClientEventSnapshot =
+    this.nativeChatDraftResolutions.snapshot.bind(this.nativeChatDraftResolutions)
+
+  protected emitClientEvent = this.clientEvents.emit.bind(this.clientEvents)
+}

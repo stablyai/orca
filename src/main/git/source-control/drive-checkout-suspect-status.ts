@@ -1,23 +1,24 @@
 import * as path from 'node:path'
 import { lstat } from 'node:fs/promises'
-import type { GitStatusEntry } from '../../../shared/git-status-types'
-import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
+import type { GitStatusEntry } from '../../../shared/git/status/git-status-types'
+import { StatusPorcelainParser } from '../../../shared/git/status/git-status-porcelain-parser'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import {
   findCoveringLocalWatchRoot,
   observeLocalWatcherEvents
-} from '../../ipc/local-watcher-event-observers'
-import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-routing'
+} from '../../ipc/filesystem/watchers/local-watcher-event-observers'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
+import { gitStreamStdout } from '../command-runner/git-stream-stdout'
+import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import {
   withWslWindowsCheckoutGitConfig,
   wslWindowsCheckoutKey
-} from '../wsl-windows-checkout-git-config'
+} from '../command-runner/host-routing/wsl-windows-checkout-git-config'
 import { DriveCheckoutSuspectPaths } from './drive-checkout-suspect-paths'
 import { bulkPathspecCommands } from './git-pathspec'
 import type { GetStatusOptions } from './get-status-options'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 // Why: the later `-c` overrides the injected `core.checkStat=minimal` for just these paths.
 const TARGETED_STATUS_ARGS = [
@@ -36,7 +37,6 @@ const STAT_CONCURRENCY = 8
 const trackers = new Map<string, DriveCheckoutSuspectPaths>()
 let stopObserving: (() => void) | null = null
 
-/** Whether `args` run under the Windows-checkout minimal stat config in this checkout. */
 function runsMinimalStat(
   args: string[],
   worktreePath: string,
@@ -79,10 +79,7 @@ function trackerFor(worktreePath: string, options: GetStatusOptions): DriveCheck
   return tracker
 }
 
-/**
- * Replaces minimal-stat unstaged rows for `checked` paths with the default-stat
- * rows. Staged rows compare index to HEAD, which checkStat never touches.
- */
+/** Replace checked unstaged rows; staged index-to-HEAD rows are independent of checkStat. */
 export function mergeSuspectStatus(
   minimal: readonly GitStatusEntry[],
   checked: ReadonlySet<string>,
@@ -169,10 +166,7 @@ async function readTargetedStatus(
   return parser.entries
 }
 
-/**
- * Rechecks watcher-reported paths with default checkStat and overrides their
- * minimal-stat rows. Without a live watcher for the checkout this is a no-op.
- */
+/** Recheck watcher suspects with default stat, retaining confirmed-dirty paths even without a live watcher. */
 export async function reconcileDriveCheckoutSuspects(
   worktreePath: string,
   entries: GitStatusEntry[],
@@ -247,10 +241,7 @@ function pathspecScope(pathspec: string): string {
   return scope === '.' ? '' : scope
 }
 
-/**
- * Suspects inside `pathspecs` (worktree-relative files or folders; `.` is the whole worktree)
- * when writes there run minimal-stat, else none. Reads only the existing tracker.
- */
+/** Read existing suspects within worktree-relative pathspecs (. means all), only for minimal-stat writes. */
 export function driveCheckoutSuspectsWithin(
   worktreePath: string,
   pathspecs: readonly string[],

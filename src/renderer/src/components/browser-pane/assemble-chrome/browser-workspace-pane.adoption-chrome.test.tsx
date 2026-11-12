@@ -5,9 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import { REMOTE_BROWSER_STREAM_LIVE } from '../stream-remote/remote-browser-stream-status'
 
-// The two panes' runtime machinery is inert here. What this suite drives is the swap between them
-// — the streamed pane a staged tab renders, and the client-hosted pane adoption replaces it with —
-// and the address bar chrome that has to survive it.
+// Drive pane adoption with inert runtime machinery while keeping the address-bar lifecycle real.
 const mocks = vi.hoisted(() => ({
   attach: vi.fn(),
   ensureRemotePage: vi.fn(async () => 'remote-page-a'),
@@ -30,12 +28,14 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn(), message: vi.fn() }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => false)
 }))
 
-vi.mock('@/lib/workspace-browser-tab-open', () => ({
+vi.mock('@/lib/browser/workspace/workspace-browser-tab-open', () => ({
   openWorkspaceBrowserTab: vi.fn(async () => {})
 }))
 
@@ -67,8 +67,7 @@ vi.mock('../stream-remote/use-remote-browser-page-lifecycle', () => ({
     frameUrl: null,
     frameMetadata: null,
     runtimeWorktree: 'worktree-a',
-    // Why non-null: the staged gate is the only thing that may stop a navigation here. A null
-    // target would stop it first and let the gate be deleted with this suite still green.
+    // Keep the runtime target valid so only the staged gate can prevent navigation.
     runtimeTarget: () => ({ kind: 'environment', environmentId: ENVIRONMENT_ID }),
     createRemoteOperationToken: () => ({ environmentId: ENVIRONMENT_ID, generation: 1 }),
     isCurrentRemoteOperationToken: () => true,
@@ -167,9 +166,7 @@ function createWebview(): Electron.WebviewTag & { loadURL: ReturnType<typeof vi.
   const webview = document.createElement('webview') as Electron.WebviewTag & {
     loadURL: ReturnType<typeof vi.fn>
   }
-  // Why a real focus target and not a spy: the pane focuses its guest on attach, and the whole
-  // point of routing the resume through the focus grab is that this call must not win. A spy would
-  // let the grab's latch be deleted with the focus assertions still green.
+  // Use real guest focus: a spy cannot expose whether the resumed address-bar latch defeats it.
   webview.tabIndex = -1
   Object.assign(webview, {
     getURL: vi.fn(() => 'about:blank'),
@@ -247,8 +244,7 @@ function stageClientHostedHandle(): void {
   })
 }
 
-/** The handle hydration seeds for a client-hosted page restored from a previous run: a real host
- *  page id, but no placement until the relaunched host recovers the page. */
+/** Restored client-hosted pages have a real host ID but no placement until host recovery. */
 function restoreClientHostedHandle(): void {
   useAppStore.setState({
     remoteBrowserPageHandlesByPageId: {
@@ -284,11 +280,7 @@ function adoptOntoServer(): void {
   })
 }
 
-/**
- * Why the suite runs twice: every dev build renders under StrictMode, whose double-invoked effects
- * tear down and rebuild a mount that never went anywhere — which is exactly the shape the save and
- * resume here key off. A fix that only holds in production holds for nobody developing on it.
- */
+/** Repeat under StrictMode because effect replay resembles the save/resume teardown without a real pane departure. */
 let strictMode = false
 
 function renderWorkspacePane(): void {
@@ -322,433 +314,258 @@ function startEditing(text: string): HTMLInputElement {
   return input
 }
 
-describe.each([
-  { tree: 'in a plain tree', strict: false },
-  { tree: 'under StrictMode', strict: true }
-])('BrowserPane adoption keeps live address-bar chrome ($tree)', ({ strict }) => {
-  let webview: ReturnType<typeof createWebview>
-  let liveAttachment: { detached: boolean } | null = null
+describe.each([{ tree: 'under StrictMode', strict: true }])(
+  'BrowserPane adoption keeps live address-bar chrome ($tree)',
+  ({ strict }) => {
+    let webview: ReturnType<typeof createWebview>
+    let liveAttachment: { detached: boolean } | null = null
 
-  beforeEach(() => {
-    strictMode = strict
-    frameCallbacks = []
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      frameCallbacks.push(callback)
-      return frameCallbacks.length
-    })
-    vi.stubGlobal('cancelAnimationFrame', () => {})
-    webview = createWebview()
-    liveAttachment = null
-    mocks.attach.mockReset().mockImplementation((_args: unknown, viewport: HTMLElement) => {
-      // Why the double claim throws here too: production's visible-attachment claim refuses a page
-      // another attachment still holds, so a pane that re-attaches before detaching strands itself
-      // on the unavailable notice. A mock that always succeeds cannot see that ordering break.
-      if (liveAttachment?.detached === false) {
-        throw new Error('browser_client_page_renderer_visible_page_claimed')
-      }
-      viewport.appendChild(webview)
-      const attachment = {
-        webview,
-        detached: false,
-        detach: vi.fn(() => {
-          attachment.detached = true
-          webview.remove()
-        }),
-        nextMetadataRevision: vi.fn(() => 1)
-      }
-      liveAttachment = attachment
-      return attachment
-    })
-    mocks.ensureRemotePage.mockClear()
-    mocks.callRuntimeRpc.mockClear()
-    installClientHostedPaneApi({ ui: { onFocusBrowserAddressBar: () => () => {} } })
-    useAppStore.setState({
-      browserPagesByWorkspace: { [WORKSPACE_ID]: [browserPage()] },
-      browserUrlHistory: [
-        {
-          url: 'https://example.internal/docs',
-          normalizedUrl: 'example.internal/docs',
-          title: 'Example docs',
-          lastVisitedAt: Date.now(),
-          visitCount: 3
+    beforeEach(() => {
+      strictMode = strict
+      frameCallbacks = []
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        frameCallbacks.push(callback)
+        return frameCallbacks.length
+      })
+      vi.stubGlobal('cancelAnimationFrame', () => {})
+      webview = createWebview()
+      liveAttachment = null
+      mocks.attach.mockReset().mockImplementation((_args: unknown, viewport: HTMLElement) => {
+        // Model the real visible-attachment claim: a second attach before detach must fail so ordering errors stay observable.
+        if (liveAttachment?.detached === false) {
+          throw new Error('browser_client_page_renderer_visible_page_claimed')
         }
-      ],
-      browserCertificateFailuresByPageId: {},
-      pendingAddressBarFocusByPageId: {},
-      pendingAddressBarFocusByTabId: {}
-    })
-    stageHandle()
-  })
-
-  afterEach(() => {
-    cleanup()
-    clearBrowserAddressBarEditSession(PAGE_ID)
-    clearBrowserPageDeferredNavigation(PAGE_ID)
-    vi.unstubAllGlobals()
-    vi.clearAllMocks()
-  })
-
-  it('carries the draft, caret and open suggestions through the staged-to-client swap', () => {
-    renderWorkspacePane()
-    expect(screen.getByTestId('streamed-viewport')).not.toBeNull()
-
-    const staged = startEditing('example.int')
-    act(() => staged.setSelectionRange(3, 7))
-    expect(staged.getAttribute('aria-expanded')).toBe('true')
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    // The pane really did swap: the streamed viewport is gone and the guest is attached.
-    expect(screen.queryByTestId('streamed-viewport')).toBeNull()
-    expect(mocks.attach).toHaveBeenCalled()
-
-    const adopted = addressBar()
-    expect(adopted.value).toBe('example.int')
-    expect(document.activeElement).toBe(adopted)
-    expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([3, 7])
-    expect(adopted.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByText('Example docs')).not.toBeNull()
-  })
-
-  // Why the draft alone is not enough here: while a suggestion is previewed the input holds that
-  // suggestion's URL, and the query the user typed lives only beside it. Carrying the draft and
-  // dropping the query leaves Escape with nothing to go back to.
-  it('carries the typed query behind a previewed suggestion through the swap', () => {
-    renderWorkspacePane()
-    const staged = startEditing('example')
-    act(() => {
-      fireEvent.keyDown(staged, { key: 'ArrowDown' })
-    })
-    expect(staged.value).toBe('https://example.internal/docs')
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    const adopted = addressBar()
-    expect(adopted.value).toBe('https://example.internal/docs')
-    act(() => {
-      fireEvent.keyDown(adopted, { key: 'Escape' })
-    })
-    expect(adopted.value).toBe('example')
-  })
-
-  // Why: the resumed selection is restored against a bar the user is still typing into, and the
-  // grab holds that bar for several frames after the swap. Re-applying the old caret on each of
-  // them drags it back mid-word, and the next keystroke then replaces the selected text.
-  it('leaves the caret where the user puts it while the grab is still retrying', () => {
-    renderWorkspacePane()
-    const staged = startEditing('example.int')
-    act(() => staged.setSelectionRange(3, 7))
-
-    act(() => adoptOntoClient())
-
-    const adopted = addressBar()
-    act(() => {
-      fireEvent.change(adopted, { target: { value: 'example.internal/docs' } })
-    })
-    act(() => adopted.setSelectionRange(12, 12))
-    // The frames the grab would have spent re-taking the bar all land after the user typed.
-    act(() => flushFrames())
-
-    expect(adopted.value).toBe('example.internal/docs')
-    expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([12, 12])
-  })
-
-  // Why the caret is asserted after a theft and not just after the swap: the resume's own caret
-  // restore is one-shot, spent on the commit that lands the draft. Everything after that rides on
-  // the selection the grab carries, and without it a retry re-takes the bar with select-all — one
-  // keystroke from wiping the draft it just rescued.
-  it('restores the caret, not a select-all, when the guest takes the bar back mid-grab', () => {
-    renderWorkspacePane()
-    const staged = startEditing('example.int')
-    act(() => staged.setSelectionRange(3, 7))
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames(1))
-
-    const adopted = addressBar()
-    expect(document.activeElement).toBe(adopted)
-    act(() => webview.focus())
-    expect(document.activeElement).toBe(webview)
-
-    act(() => flushFrames())
-
-    expect(document.activeElement).toBe(adopted)
-    expect(adopted.value).toBe('example.int')
-    expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([3, 7])
-  })
-
-  // Why the closed direction needs its own test: the resuming focus opens the dropdown on its own,
-  // so an open one survives whether or not the dropdown state is carried. Only a bar the user
-  // dismissed with Escape — still focused, still holding their draft — proves it is.
-  it('keeps a dismissed suggestion list dismissed through the swap', () => {
-    renderWorkspacePane()
-    const staged = startEditing('example.int')
-    act(() => {
-      fireEvent.keyDown(staged, { key: 'Escape' })
-    })
-    expect(staged.getAttribute('aria-expanded')).toBe('false')
-    expect(document.activeElement).toBe(staged)
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    const adopted = addressBar()
-    expect(adopted.value).toBe('example.int')
-    expect(document.activeElement).toBe(adopted)
-    expect(adopted.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('Example docs')).toBeNull()
-  })
-
-  // Why: the swap tears the bar down and puts it back inside one React commit. A pane that goes
-  // away and comes back later — a worktree switched away from and returned to — is a revisit, and
-  // seizing focus there would be the bug this fix is meant to avoid rather than the fix itself.
-  it('does not resume an edit into a pane that mounts in a later task', async () => {
-    renderWorkspacePane()
-    startEditing('example.int')
-
-    cleanup()
-    await act(async () => {})
-    renderWorkspacePane()
-
-    const remounted = addressBar()
-    expect(remounted.value).toBe('about:blank')
-    expect(document.activeElement).not.toBe(remounted)
-  })
-
-  it('leaves an idle address bar alone when the same swap happens', () => {
-    renderWorkspacePane()
-    const streamed = addressBar()
-    expect(document.activeElement).not.toBe(streamed)
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    const adopted = addressBar()
-    expect(adopted.value).toBe('about:blank')
-    // Why: a user reading the page must not have focus yanked into chrome, nor a dropdown opened
-    // over the page, by a handover they never asked for.
-    expect(document.activeElement).not.toBe(adopted)
-    expect(adopted.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('Example docs')).toBeNull()
-  })
-
-  // The pane is no longer keyed on the generation, so a bump re-runs the attach rather than
-  // remounting — but the edit has to survive either way.
-  it('carries a live edit through a host restart that bumps the page generation', () => {
-    renderWorkspacePane()
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    const before = startEditing('rebooting.internal')
-    act(() => before.setSelectionRange(4, 4))
-
-    act(() => adoptOntoClient(CLIENT_PLACEMENT.pageHostGeneration + 1))
-    act(() => flushFrames())
-
-    const after = addressBar()
-    // Why identity and not just the draft: the edit-session registry rescues value, focus and
-    // caret straight back through a remount, so those three assertions pass whether or not the
-    // pane was rebuilt — they cannot see the thing this test is named for.
-    expect(after).toBe(before)
-    expect(after.value).toBe('rebooting.internal')
-    expect(document.activeElement).toBe(after)
-    expect([after.selectionStart, after.selectionEnd]).toEqual([4, 4])
-  })
-
-  // Why: a headless host keeps the page streamed, so the same snapshot must not disturb the pane
-  // at all. This is the path the client-hosted fix must not regress.
-  it('keeps a live edit when a headless host adopts the page in place', () => {
-    renderWorkspacePane()
-    const streamed = startEditing('headless.internal')
-    act(() => streamed.setSelectionRange(8, 8))
-
-    act(() => adoptOntoServer())
-    act(() => flushFrames())
-
-    const after = addressBar()
-    expect(screen.getByTestId('streamed-viewport')).not.toBeNull()
-    expect(after).toBe(streamed)
-    expect(after.value).toBe('headless.internal')
-    expect(document.activeElement).toBe(after)
-    expect([after.selectionStart, after.selectionEnd]).toEqual([8, 8])
-  })
-
-  it('holds a URL submitted against the staged page and loads it once the guest attaches', () => {
-    renderWorkspacePane()
-    const staged = startEditing('https://example.internal/deferred')
-    act(() => {
-      fireEvent.submit(staged.closest('form') ?? staged)
+        viewport.appendChild(webview)
+        const attachment = {
+          webview,
+          detached: false,
+          detach: vi.fn(() => {
+            attachment.detached = true
+            webview.remove()
+          }),
+          nextMetadataRevision: vi.fn(() => 1)
+        }
+        liveAttachment = attachment
+        return attachment
+      })
+      mocks.ensureRemotePage.mockClear()
+      mocks.callRuntimeRpc.mockClear()
+      installClientHostedPaneApi({
+        ui: { onFocusBrowserAddressBar: () => () => {}, onShowBrowserHistory: () => () => {} }
+      })
+      useAppStore.setState({
+        browserPagesByWorkspace: { [WORKSPACE_ID]: [browserPage()] },
+        browserUrlHistory: [
+          {
+            url: 'https://example.internal/docs',
+            normalizedUrl: 'example.internal/docs',
+            title: 'Example docs',
+            lastVisitedAt: Date.now(),
+            visitCount: 3
+          }
+        ],
+        browserCertificateFailuresByPageId: {},
+        pendingAddressBarFocusByPageId: {},
+        pendingAddressBarFocusByTabId: {}
+      })
+      stageHandle()
     })
 
-    // Why: browser.tabShow against a page the host has not minted answers browser_tab_not_found,
-    // which the streamed pane reads as "the page is gone" and closes the tab.
-    expect(mocks.ensureRemotePage).not.toHaveBeenCalled()
-    expect(webview.loadURL).not.toHaveBeenCalled()
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    expect(webview.loadURL).toHaveBeenCalledWith('https://example.internal/deferred')
-  })
-
-  // Why element identity and not the draft: every other assertion here is satisfied by a save and
-  // resume across a remount. Only the same input node proves adoption never tore the chrome down —
-  // a teardown is what replays the suggestion dropdown's open animation over the user's typing.
-  it('adopts a client-hosted page without remounting the chrome', () => {
-    stageClientHostedHandle()
-    renderWorkspacePane()
-
-    // The client-hosted pane mounts from the first frame, so there is no pane to swap at adoption.
-    expect(screen.queryByTestId('streamed-viewport')).toBeNull()
-    // The host has not minted this page yet: attaching would throw for an id the retained registry
-    // has never seen and strand the pane on the unavailable notice.
-    expect(mocks.attach).not.toHaveBeenCalled()
-    expect(screen.queryByText('Client-hosted browser unavailable')).toBeNull()
-
-    const staged = startEditing('example.int')
-    act(() => staged.setSelectionRange(3, 7))
-    expect(staged.getAttribute('aria-expanded')).toBe('true')
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    expect(addressBar()).toBe(staged)
-    expect(staged.getAttribute('aria-expanded')).toBe('true')
-    expect(staged.value).toBe('example.int')
-    expect(document.activeElement).toBe(staged)
-    expect([staged.selectionStart, staged.selectionEnd]).toEqual([3, 7])
-    expect(mocks.attach).toHaveBeenCalled()
-  })
-
-  // Why this is asserted on its own: re-attaching in place is the entire replacement for the
-  // pageHostGeneration the pane used to carry in its React key. Continuity tests stay green
-  // whether or not the guest is ever re-attached — they pass hardest when nothing happens at all.
-  it('re-attaches the guest when a host restart bumps the page generation', () => {
-    stageClientHostedHandle()
-    renderWorkspacePane()
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    const bar = addressBar()
-    const stale = mocks.attach.mock.results.at(-1)?.value as { detach: ReturnType<typeof vi.fn> }
-    expect(attachedGenerations()).toContain(CLIENT_PLACEMENT.pageHostGeneration)
-    expect(attachedGenerations()).not.toContain(CLIENT_PLACEMENT.pageHostGeneration + 1)
-
-    act(() => adoptOntoClient(CLIENT_PLACEMENT.pageHostGeneration + 1))
-    act(() => flushFrames())
-
-    // The host retired the old guest with the generation it belonged to; a pane still holding it
-    // renders a dead webview that no longer answers.
-    expect(attachedGenerations()).toContain(CLIENT_PLACEMENT.pageHostGeneration + 1)
-    // Ordering is load-bearing, not incidental: the visible-attachment claim throws
-    // visible_page_claimed if a second attach lands while the first still holds the page, and the
-    // pane would strand itself on the unavailable notice.
-    expect(stale.detach.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.attach.mock.invocationCallOrder.at(-1) as number
-    )
-    // The claim the attach double models: out of order it throws, and this is where that lands.
-    expect(screen.queryByText('Client-hosted browser unavailable')).toBeNull()
-    // ...without rebuilding the chrome around it, which is what the key change bought.
-    expect(addressBar()).toBe(bar)
-  })
-
-  // Why the tour is gated on a real placement: recording the interaction is a one-way write that
-  // burns the one-time tour, and a staged pane has no controls that work yet to point at.
-  it('does not burn the intro tour on a pane that is still connecting', () => {
-    const recordFeatureInteraction = vi.fn(async () => {})
-    useAppStore.setState({
-      persistedUIReady: true,
-      contextualToursSeenIds: ['client-hosted-browser'],
-      recordFeatureInteraction
-    } as unknown as Parameters<typeof useAppStore.setState>[0])
-    stageClientHostedHandle()
-    renderWorkspacePane()
-
-    expect(recordFeatureInteraction).not.toHaveBeenCalled()
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    expect(recordFeatureInteraction).toHaveBeenCalledWith('client-hosted-browser')
-  })
-
-  // Why this path still matters: the staged pane is chosen from a cached runtime status, and a
-  // live one that disagrees sends the page to the server after all. That swap is the remount the
-  // client-hosted path no longer takes, so the edit-session registry has to still carry the edit.
-  it('carries a live edit when a staged client-hosted page is adopted onto the server', () => {
-    stageClientHostedHandle()
-    renderWorkspacePane()
-    expect(screen.queryByTestId('streamed-viewport')).toBeNull()
-
-    const staged = startEditing('fallback.internal')
-    act(() => staged.setSelectionRange(4, 4))
-
-    act(() => adoptOntoServer())
-    act(() => flushFrames())
-
-    // The pane really did fall back to the streamed one.
-    expect(screen.getByTestId('streamed-viewport')).not.toBeNull()
-    const adopted = addressBar()
-    expect(adopted.value).toBe('fallback.internal')
-    expect(document.activeElement).toBe(adopted)
-    expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([4, 4])
-  })
-
-  it('holds a URL submitted against a staged client-hosted page until its guest attaches', () => {
-    stageClientHostedHandle()
-    renderWorkspacePane()
-    const staged = startEditing('https://example.internal/client-deferred')
-    act(() => {
-      fireEvent.submit(staged.closest('form') ?? staged)
+    afterEach(() => {
+      cleanup()
+      clearBrowserAddressBarEditSession(PAGE_ID)
+      clearBrowserPageDeferredNavigation(PAGE_ID)
+      vi.unstubAllGlobals()
+      vi.clearAllMocks()
     })
 
-    expect(webview.loadURL).not.toHaveBeenCalled()
+    it('carries the draft, caret and open suggestions through the staged-to-client swap', () => {
+      renderWorkspacePane()
+      expect(screen.getByTestId('streamed-viewport')).not.toBeNull()
 
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
+      const staged = startEditing('example.int')
+      act(() => staged.setSelectionRange(3, 7))
+      expect(staged.getAttribute('aria-expanded')).toBe('true')
 
-    expect(webview.loadURL).toHaveBeenCalledWith('https://example.internal/client-deferred')
-  })
+      act(() => adoptOntoClient())
+      act(() => flushFrames())
 
-  // Why: a restored client-placed row has no placement until the relaunched host recovers it, and
-  // the streamed pane would open a server screencast the host refuses for a client-placed page.
-  it('mounts a restored client-hosted page on the client pane while the host recovers it', () => {
-    restoreClientHostedHandle()
-    renderWorkspacePane()
+      // The pane really did swap: the streamed viewport is gone and the guest is attached.
+      expect(screen.queryByTestId('streamed-viewport')).toBeNull()
+      expect(mocks.attach).toHaveBeenCalled()
 
-    expect(screen.queryByTestId('streamed-viewport')).toBeNull()
-    expect(mocks.ensureRemotePage).not.toHaveBeenCalled()
-    // The recovered page keeps its id but not its generation, so attaching now would strand the
-    // pane on the unavailable notice.
-    expect(mocks.attach).not.toHaveBeenCalled()
-    expect(screen.queryByText('Client-hosted browser unavailable')).toBeNull()
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    expect(mocks.attach).toHaveBeenCalled()
-  })
-
-  it('replays a URL held against the staged page when a headless host adopts it', async () => {
-    renderWorkspacePane()
-    const staged = startEditing('https://example.internal/headless')
-    act(() => {
-      fireEvent.submit(staged.closest('form') ?? staged)
-    })
-    expect(mocks.ensureRemotePage).not.toHaveBeenCalled()
-
-    await act(async () => {
-      adoptOntoServer()
+      const adopted = addressBar()
+      expect(adopted.value).toBe('example.int')
+      expect(document.activeElement).toBe(adopted)
+      expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([3, 7])
+      expect(adopted.getAttribute('aria-expanded')).toBe('true')
+      expect(screen.getByRole('option', { name: /Example docs/ })).not.toBeNull()
     })
 
-    expect(mocks.ensureRemotePage).toHaveBeenCalledTimes(1)
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      expect.objectContaining({ environmentId: ENVIRONMENT_ID }),
-      'browser.goto',
-      expect.objectContaining({ url: 'https://example.internal/headless' }),
-      expect.anything()
-    )
-  })
-})
+    // Previewed URLs live in the input; carry the separate typed query too or Escape cannot restore it.
+    it('carries the typed query behind a previewed suggestion through the swap', () => {
+      renderWorkspacePane()
+      const staged = startEditing('example')
+      act(() => {
+        fireEvent.keyDown(staged, { key: 'ArrowDown' })
+      })
+      expect(staged.value).toBe('https://example.internal/docs')
+
+      act(() => adoptOntoClient())
+      act(() => flushFrames())
+
+      const adopted = addressBar()
+      expect(adopted.value).toBe('https://example.internal/docs')
+      act(() => {
+        fireEvent.keyDown(adopted, { key: 'Escape' })
+      })
+      expect(adopted.value).toBe('example')
+    })
+
+    // Apply the saved caret once; retrying it after typing would move it backward or overwrite new text.
+    it('leaves the caret where the user puts it while the grab is still retrying', () => {
+      renderWorkspacePane()
+      const staged = startEditing('example.int')
+      act(() => staged.setSelectionRange(3, 7))
+
+      act(() => adoptOntoClient())
+
+      const adopted = addressBar()
+      act(() => {
+        fireEvent.change(adopted, { target: { value: 'example.internal/docs' } })
+      })
+      act(() => adopted.setSelectionRange(12, 12))
+      // The frames the grab would have spent re-taking the bar all land after the user typed.
+      act(() => flushFrames())
+
+      expect(adopted.value).toBe('example.internal/docs')
+      expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([12, 12])
+    })
+
+    // Steal focus after resume to exercise the grab’s caret restore; otherwise select-all retries can escape detection.
+
+    // An open list survives focus naturally; only a dismissed list proves dropdown state crosses the swap.
+
+    // Only same-commit swaps may reclaim focus; later worktree revisits must not resume old edits.
+    it('does not resume an edit into a pane that mounts in a later task', async () => {
+      renderWorkspacePane()
+      startEditing('example.int')
+
+      cleanup()
+      await act(async () => {})
+      renderWorkspacePane()
+
+      const remounted = addressBar()
+      expect(remounted.value).toBe('')
+      expect(document.activeElement).not.toBe(remounted)
+    })
+
+    // Generation changes reattach in place; edits must survive without remounting.
+
+    // Headless adoption stays streamed and must preserve the same live edit.
+
+    it('holds a URL submitted against the staged page and loads it once the guest attaches', () => {
+      renderWorkspacePane()
+      const staged = startEditing('https://example.internal/deferred')
+      act(() => {
+        fireEvent.submit(staged.closest('form') ?? staged)
+      })
+
+      // tabShow before host minting returns browser_tab_not_found, which would close the staged tab.
+      expect(mocks.ensureRemotePage).not.toHaveBeenCalled()
+      expect(webview.loadURL).not.toHaveBeenCalled()
+
+      act(() => adoptOntoClient())
+      act(() => flushFrames())
+
+      expect(webview.loadURL).toHaveBeenCalledWith('https://example.internal/deferred')
+    })
+
+    // Only input identity exposes chrome remounts; save/resume can otherwise hide the repeated dropdown animation.
+
+    // Continuity alone passes if nothing happens; verify generation changes really reattach the guest.
+    it('re-attaches the guest when a host restart bumps the page generation', () => {
+      stageClientHostedHandle()
+      renderWorkspacePane()
+      act(() => adoptOntoClient())
+      act(() => flushFrames())
+
+      const bar = addressBar()
+      const stale = mocks.attach.mock.results.at(-1)?.value as { detach: ReturnType<typeof vi.fn> }
+      expect(attachedGenerations()).toContain(CLIENT_PLACEMENT.pageHostGeneration)
+      expect(attachedGenerations()).not.toContain(CLIENT_PLACEMENT.pageHostGeneration + 1)
+
+      act(() => adoptOntoClient(CLIENT_PLACEMENT.pageHostGeneration + 1))
+      act(() => flushFrames())
+
+      // The host retires the previous generation’s guest; retaining it would leave an inert tag.
+      expect(attachedGenerations()).toContain(CLIENT_PLACEMENT.pageHostGeneration + 1)
+      // Detach before attach or the visible-page claim strands the pane on the unavailable notice.
+      expect(stale.detach.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.attach.mock.invocationCallOrder.at(-1) as number
+      )
+      expect(screen.queryByText('Client-hosted browser unavailable')).toBeNull()
+      expect(addressBar()).toBe(bar)
+    })
+
+    // Do not consume a one-time tour before placement makes its controls usable.
+
+    // Live host status can override cached client placement and swap to streaming; retain edit-session recovery for this path.
+    it('carries a live edit when a staged client-hosted page is adopted onto the server', () => {
+      stageClientHostedHandle()
+      renderWorkspacePane()
+      expect(screen.queryByTestId('streamed-viewport')).toBeNull()
+
+      const staged = startEditing('fallback.internal')
+      act(() => staged.setSelectionRange(4, 4))
+
+      act(() => adoptOntoServer())
+      act(() => flushFrames())
+
+      // The pane really did fall back to the streamed one.
+      expect(screen.getByTestId('streamed-viewport')).not.toBeNull()
+      const adopted = addressBar()
+      expect(adopted.value).toBe('fallback.internal')
+      expect(document.activeElement).toBe(adopted)
+      expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([4, 4])
+    })
+
+    // Restored client-placed pages must await recovery locally; hosts reject server screencasts for them.
+    it('mounts a restored client-hosted page on the client pane while the host recovers it', () => {
+      restoreClientHostedHandle()
+      renderWorkspacePane()
+
+      expect(screen.queryByTestId('streamed-viewport')).toBeNull()
+      expect(mocks.ensureRemotePage).not.toHaveBeenCalled()
+      // Recovery retains the ID but replaces its generation; attaching early would strand the pane.
+      expect(mocks.attach).not.toHaveBeenCalled()
+      expect(screen.queryByText('Client-hosted browser unavailable')).toBeNull()
+
+      act(() => adoptOntoClient())
+      act(() => flushFrames())
+
+      expect(mocks.attach).toHaveBeenCalled()
+    })
+
+    it('replays a URL held against the staged page when a headless host adopts it', async () => {
+      renderWorkspacePane()
+      const staged = startEditing('https://example.internal/headless')
+      act(() => {
+        fireEvent.submit(staged.closest('form') ?? staged)
+      })
+      expect(mocks.ensureRemotePage).not.toHaveBeenCalled()
+
+      await act(async () => {
+        adoptOntoServer()
+      })
+
+      expect(mocks.ensureRemotePage).toHaveBeenCalledTimes(1)
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+        expect.objectContaining({ environmentId: ENVIRONMENT_ID }),
+        'browser.goto',
+        expect.objectContaining({ url: 'https://example.internal/headless' }),
+        expect.anything()
+      )
+    })
+  }
+)

@@ -1,10 +1,8 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useGitHubOperationScope } from './useGitHubOperationScope'
+import { useMemo } from 'react'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
-import type {
-  ListAssignableUsersBySlugResult,
-  ListLabelsBySlugResult
-} from '../../../shared/github/project-result-types'
 import { clearMetadataRequestStore, createMetadataRequestStore } from './metadata-request-cache'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { githubProjectHost } from '../../../shared/github/project-identity'
@@ -25,9 +23,11 @@ export function useRepoLabelsBySlug(
   host?: string
 ): MetadataListState<string> {
   const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
+  const authority = useGitHubOperationScope(target)
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
-  const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+  const repositoryKey =
+    owner && repo ? `${githubRepoIdentityKey({ owner, repo, host })}::${authority}` : null
   const cacheKey =
     repositoryKey && target.kind === 'environment'
       ? `runtime:${target.environmentId}:${repositoryKey}`
@@ -38,24 +38,18 @@ export function useRepoLabelsBySlug(
     store: slugLabelStore,
     errorFallback: 'Failed to load labels',
     load: () =>
-      (target.kind === 'environment'
-        ? callRuntimeRpc<ListLabelsBySlugResult>(
-            target,
-            'github.project.listLabelsBySlug',
-            { owner: selectedOwner, repo: selectedRepo, host: githubProjectHost(host) },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.listLabelsBySlug({
-            owner: selectedOwner,
-            repo: selectedRepo,
-            host: githubProjectHost(host)
-          })
-      ).then((res) => {
-        if (!res.ok) {
-          throw new Error(res.error.message)
-        }
-        return res.labels
-      })
+      gitHubSlugApiForTarget(target)
+        .listLabelsBySlug({
+          owner: selectedOwner,
+          repo: selectedRepo,
+          host: githubProjectHost(host)
+        })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(res.error.message)
+          }
+          return res.labels
+        })
   })
 }
 
@@ -68,39 +62,49 @@ export function useRepoAssigneesBySlug(
 ): MetadataListState<GitHubAssignableUser> {
   const seedKey = (seedLogins ?? []).slice().sort().join(',')
   const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
+  const authority = useGitHubOperationScope(target)
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
-  const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+  const repositoryKey =
+    owner && repo ? `${githubRepoIdentityKey({ owner, repo, host })}::${authority}` : null
   const cacheKey = repositoryKey
     ? target.kind === 'environment'
-      ? `runtime:${target.environmentId}:${repositoryKey}#${seedKey}`
-      : `${repositoryKey}#${seedKey}`
+      ? `runtime:${target.environmentId}:${repositoryKey}`
+      : repositoryKey
     : null
   const args = {
     owner: selectedOwner,
     repo: selectedRepo,
-    host: githubProjectHost(host),
-    ...(seedKey ? { seedLogins: seedKey.split(',') } : {})
+    host: githubProjectHost(host)
   }
 
-  return useMetadataListRequest({
+  const base = useMetadataListRequest({
     cacheKey,
     store: slugAssigneeStore,
     errorFallback: 'Failed to load assignees',
     load: () =>
-      (target.kind === 'environment'
-        ? callRuntimeRpc<ListAssignableUsersBySlugResult>(
-            target,
-            'github.project.listAssignableUsersBySlug',
-            args,
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.listAssignableUsersBySlug(args)
-      ).then((res) => {
-        if (!res.ok) {
-          throw new Error(res.error.message)
-        }
-        return res.users
-      })
+      gitHubSlugApiForTarget(target)
+        .listAssignableUsersBySlug(args)
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(res.error.message)
+          }
+          return res.users
+        })
   })
+  const data = useMemo(() => {
+    if (!cacheKey || base.resolvedKey !== cacheKey || !seedKey) {
+      return base.data
+    }
+    const users = [...base.data]
+    const seen = new Set(users.map((user) => user.login))
+    for (const login of seedKey.split(',')) {
+      if (!seen.has(login)) {
+        users.push({ login, name: null, avatarUrl: '' })
+        seen.add(login)
+      }
+    }
+    return users
+  }, [base.data, base.resolvedKey, cacheKey, seedKey])
+  return { data, loading: base.loading, error: base.error }
 }

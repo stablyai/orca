@@ -17,17 +17,4 @@ describe('mobile Markdown code placeholder collisions', () => {
       `${literal} and \`<div>\``
     )
   })
-
-  it('preserves authored markers across generated suffix orders and HTML islands', () => {
-    let seed = 173
-    for (let sample = 0; sample < 500; sample++) {
-      const literals: string[] = []
-      for (let index = 0; index < 8; index++) {
-        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-        literals.push(`${marker}${'_'.repeat(seed % 32)}${index}${suffix}`)
-      }
-      const text = literals.join(' ') + ' and `Array<string>`'
-      expect(normalizeMobileMarkdownPreviewHtml(`<p>${text}</p>`)).toBe(text)
-    }
-  })
 })

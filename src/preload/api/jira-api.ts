@@ -1,9 +1,10 @@
-import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
+import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
+import type { JiraFavouriteFilterList } from '../../shared/jira/jira-favourite-filters'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,
   JiraIssueSummaryGenerationResult
-} from '../../shared/jira-issue-summary-generation'
+} from '../../shared/jira/jira-issue-summary-generation'
 import type {
   JiraComment,
   JiraConnectionStatus,
@@ -21,7 +22,7 @@ import type {
   JiraTransition,
   JiraUser,
   JiraViewer
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 
 export type JiraApi = {
   connect: (args: {
@@ -84,6 +85,7 @@ export type JiraApi = {
     mediaFormat?: JiraMediaFormat
   }) => Promise<JiraComment[]>
   listProjects: (args?: { siteId?: JiraSiteSelection }) => Promise<JiraProject[]>
+  listFavouriteFilters: (args: { siteId: string }) => Promise<JiraFavouriteFilterList>
   listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) => Promise<JiraIssueType[]>
   listCreateFields: (args: {
     projectIdOrKey: string

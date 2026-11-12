@@ -1,8 +1,4 @@
-// Filesystem-sentinel interactivity probes for a packaged terminal session.
-//
-// These prove a session is interactive without reading the (WebGL) xterm
-// buffer: a typed command writes a marker FILE, and the harness checks the
-// file. That verifies keystrokes reached the shell AND the shell executed them.
+// Require typed commands to write filesystem sentinels, proving shell execution without WebGL buffer access.
 
 import { existsSync, statSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
@@ -25,11 +21,7 @@ async function waitForFile(filePath, timeoutMs) {
   return false
 }
 
-/**
- * Type a command that writes a unique token to a sentinel file, then confirm
- * the file appears with that token. Proves typed input reaches and runs in the
- * active terminal. Returns true on success.
- */
+// Type a unique-token file command and require matching contents to prove input execution.
 export async function probeEcho(page, runDir, label = 'echo') {
   const token = `${label.toUpperCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const file = path.join(runDir, `${label}-${token}.txt`)
@@ -50,10 +42,7 @@ export function fileMtimeMs(filePath) {
   }
 }
 
-/**
- * Confirm a heartbeat file keeps advancing (session is live and streaming).
- * Samples twice Poll apart; returns true if the second sample is newer.
- */
+// Sample heartbeat mtime twice Poll apart; require advancement for live streaming.
 export async function probeHeartbeatAdvancing(heartbeatFile) {
   const first = fileMtimeMs(heartbeatFile)
   await delay(1500)
@@ -61,11 +50,7 @@ export async function probeHeartbeatAdvancing(heartbeatFile) {
   return second > first && second > 0
 }
 
-/**
- * Ctrl+C on a foreground marker loop: after interrupt the heartbeat must STOP
- * advancing and the shell must return to a prompt (a follow-up sentinel command
- * runs). Both conditions are required — output stopping alone could be a hang.
- */
+// Require Ctrl+C to stop heartbeat AND restore an executing prompt; silence alone could mean a hang.
 export async function probeCtrlCInterruptsMarker(page, runDir, heartbeatFile) {
   await sendCtrlC(page)
   await delay(1500)
@@ -77,10 +62,7 @@ export async function probeCtrlCInterruptsMarker(page, runDir, heartbeatFile) {
   return heartbeatStopped && promptReturned
 }
 
-/**
- * cold-restore Ctrl+C: start a fresh foreground sleep loop in the active (new)
- * terminal, interrupt it, then confirm the prompt returns via a sentinel.
- */
+// For cold restore, start/interrupt a fresh loop and require a follow-up prompt sentinel.
 export async function probeCtrlCOnFreshLoop(page, runDir) {
   const heartbeatFile = path.join(runDir, `fresh-loop-${Date.now()}.txt`)
   if (existsSync(heartbeatFile)) {

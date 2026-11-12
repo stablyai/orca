@@ -3,19 +3,22 @@ import {
   AiVaultSearchResponseSchema,
   AiVaultSearchStatusRequestSchema,
   AiVaultSearchStatusSchema
-} from '../../shared/ai-vault-search-contract'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
-import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
-import { resolveSessionSearchScope } from './session-search-scope-resolution'
-import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
+} from '../../shared/ai-vault/search/ai-vault-search-contract'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
+import { sessionSearchScopeCatalog } from './scope/session-search-scope-catalog'
+import { resolveSessionSearchScope } from './scope/session-search-scope-resolution'
+import type {
+  AiVaultSearchResponse,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import {
   redactForTransport,
   redactStatusForTransport,
   type SessionSearchTransport
-} from '../../shared/ai-vault-search-transport'
+} from '../../shared/ai-vault/search/ai-vault-search-transport'
 import type { SessionSearchService } from './session-search-service'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
-import { compatibleSearchAgents } from '../../shared/ai-vault-search-agent-compatibility'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { compatibleSearchAgents } from '../../shared/ai-vault/search/ai-vault-search-agent-compatibility'
 
 let service: SessionSearchService | null = null
 
@@ -33,9 +36,7 @@ export async function searchSessionService(
   if (!current) {
     return { kind: 'unavailable', reason: 'no-service' }
   }
-  // The choke point every entry point funnels through, so every host kind
-  // resolves alike; the verdict goes to the service, which answers off and
-  // not-ready first.
+  // Let the service answer disabled/not-ready before scope errors.
   const { within, supportedAgents, supportsQoderHistory, supportsJcodeHistory, ...request } = parsed
   // Older clients reject the whole page when a hit has an unknown agent tag.
   const requestedAgents = request.filters?.agents

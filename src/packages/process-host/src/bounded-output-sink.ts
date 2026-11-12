@@ -1,13 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { GrowingByteBuffer } from './growing-byte-buffer'
 
-/**
- * Collects output up to a cap, so a chatty child cannot grow the heap.
- *
- * Accepts strings as well as buffers: a stream someone called `setEncoding` on
- * emits strings, and concatenating those as buffers throws inside a `data`
- * handler, where the rejection has nowhere to go and the caller just hangs.
- */
+// setEncoding streams emit strings; accepting them avoids exceptions in data handlers.
 export function createOutputSink(
   maxBytes: number,
   outputCapture: 'head' | 'tail' = 'head'
@@ -44,8 +38,7 @@ export function createOutputSink(
       chunks.push(chunk.length > remaining ? chunk.subarray(0, remaining) : chunk)
     },
     text: () => tail?.toString() ?? buffer().toString('utf8'),
-    // Why: callers that parse the output need to tell a short answer from a
-    // clipped one -- truncated JSON or JSONL parses as a smaller valid result.
+    // Truncated JSONL can still parse as a valid, incomplete result.
     truncated: () => bytes > maxBytes
   }
 }

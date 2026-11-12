@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
-import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-error'
+import { useCallback, useEffect, useRef } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { isTerminalPaneCloseChord } from '@/components/terminal-pane/input/keyboard/terminal-shortcut-policy'
+import { ensureClientCreationActionAllowed } from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import {
   matchFloatingWorkspacePanelOwnedAction,
   matchFloatingWorkspacePanelShortcut
-} from '@/lib/floating-workspace-shortcut-policy'
-import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+} from '@/components/floating-terminal/floating-workspace-shortcut-policy'
+import { isFloatingWorkspaceTerminalInputTarget } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rename-request'
-import { useAppStore } from '@/store'
+import { resolveTerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'
+import { launchFloatingWorkspaceAgentShortcut } from '@/components/agent-tab-shortcut-launch'
+import { useAppStore } from '@/store/index'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import type { KeybindingContext, KeybindingMatchOptions } from '../../../../shared/keybindings'
 import type {
   FloatingPanelShortcutInput,
@@ -51,9 +55,7 @@ export function useFloatingTerminalPanelShortcuts({
   open,
   onOpenChange
 }: FloatingTerminalPanelShortcutsInput) {
-  // Why the tab (not a pane): with an xterm focused the capture policy defers to the terminal's
-  // own dispatch, which closes the active pane; outside terminal focus the close targets the tab,
-  // matching the main workspace's strip-close semantics.
+  // Terminal focus delegates pane closing to terminal dispatch; other panel focus closes the whole tab.
   const closeActiveFloatingTerminalPane = useCallback(() => {
     if (activeClosableTab) {
       closeFloatingItemConfirmed(activeClosableTab.id)
@@ -93,6 +95,15 @@ export function useFloatingTerminalPanelShortcuts({
           isTerminalPaneCloseChord(input, platform, state.keybindings, matchOptions, matchOptions))
       ) {
         return { kind: 'close', focusedFloatingTerminal }
+      }
+      const agentShortcut = resolveTerminalAgentTabShortcut({
+        activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        keybindings: state.keybindings,
+        matchShortcut: (actionId) =>
+          keybindingMatchesAction(actionId, input, platform, state.keybindings, matchOptions)
+      })
+      if (agentShortcut.actionId) {
+        return { kind: 'agent', shortcut: agentShortcut }
       }
       const panelShortcut = matchFloatingWorkspacePanelShortcut(
         input,
@@ -150,6 +161,11 @@ export function useFloatingTerminalPanelShortcuts({
         } else {
           onOpenChange(false)
         }
+        return 'handled'
+      }
+      if (resolution.kind === 'agent') {
+        consume()
+        launchFloatingWorkspaceAgentShortcut(resolution.shortcut)
         return 'handled'
       }
       if (resolution.kind === 'index') {

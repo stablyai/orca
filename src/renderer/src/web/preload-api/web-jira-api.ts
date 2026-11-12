@@ -1,7 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
-import { readRuntimeJiraPayload } from '../../runtime/runtime-jira-payload-stream'
-import { RuntimeRpcCallError } from '../../runtime/runtime-rpc-result'
+import { readRuntimeJiraPayload } from '../../runtime/jira/runtime-jira-payload-stream'
+import { RuntimeRpcCallError } from '../../runtime/rpc/calls/runtime-rpc-result'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironment } from './web-runtime-session'
 
@@ -61,6 +61,7 @@ export function createWebJiraApi(): PreloadApi['jira'] {
     addIssueComment: (args) => jiraCall('addIssueComment', args),
     issueComments: (args) => readJiraPayload('issueCommentsStream', 'issueComments', args),
     listProjects: (args) => jiraCall('listProjects', args),
+    listFavouriteFilters: (args) => jiraCall('listFavouriteFilters', args),
     listIssueTypes: (args) => jiraCall('listIssueTypes', args),
     listCreateFields: (args) => jiraCall('listCreateFields', args),
     listPriorities: (args) => jiraCall('listPriorities', args),

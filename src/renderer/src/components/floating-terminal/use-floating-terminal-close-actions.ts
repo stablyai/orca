@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import { useTabGroupCloseScopeCommands } from '@/components/tab-group/useTabGroupCloseScopeCommands'
 import { useTabGroupTabCloseCommands } from '@/components/tab-group/useTabGroupTabCloseCommands'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 
@@ -20,8 +20,6 @@ export function useFloatingTerminalCloseActions({
   const scope = useTabGroupCloseScopeCommands({
     groupId: activeGroup?.id ?? '',
     worktreeId,
-    group: activeGroup,
-    groupTabs,
     closeItem,
     closeMany
   })

@@ -1,3 +1,7 @@
+import type {
+  BackendConnectionListener,
+  BackendConnectionPurpose
+} from '../../shared/backend-service-contract'
 import type { ClaudeUsageBreakdownKind, ClaudeUsageSnapshot } from '../../shared/claude-usage-types'
 import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../../shared/codex-usage-types'
 import type {
@@ -25,10 +29,14 @@ export type UsageQueryArgs<Snapshot extends UsageProviderSnapshot> = Pick<
 >
 
 export type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKind> = {
-  getScanState: () => Promise<Snapshot['scanState']>
+  onConnectionChanged?: (listener: BackendConnectionListener) => () => void
+  getScanState: (purpose?: BackendConnectionPurpose) => Promise<Snapshot['scanState']>
   setEnabled: (args: { enabled: boolean }) => Promise<Snapshot['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<Snapshot['scanState']>
-  getSnapshot: (args: UsageQueryArgs<Snapshot> & { limit?: number }) => Promise<Snapshot>
+  getSnapshot: (
+    args: UsageQueryArgs<Snapshot> & { limit?: number },
+    purpose?: BackendConnectionPurpose
+  ) => Promise<Snapshot>
   getSummary: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['summary']>
   getDaily: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['daily']>
   getBreakdown: (
@@ -53,10 +61,8 @@ export type RateLimitsApi = {
   refreshCodexForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
   consumeCodexResetCredit: () => Promise<CodexRateLimitResetResult>
   refreshClaudeForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
-  setPollingInterval: (ms: number) => Promise<void>
   fetchInactiveClaudeAccounts: () => Promise<void>
   fetchInactiveCodexAccounts: () => Promise<void>
-  refreshMiniMax: () => Promise<RateLimitState>
   refreshGrok: () => Promise<RateLimitState>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void
 }

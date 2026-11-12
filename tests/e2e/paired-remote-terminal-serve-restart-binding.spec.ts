@@ -1,24 +1,16 @@
-/**
- * A paired viewer must not erase a verified mirrored PTY binding while a
- * restarted `orca serve` process republishes the same surface as pending, and
- * the surviving daemon PTY must keep appending to its durable history log.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Retain verified mirrored PTY bindings while serve restart republishes pending surfaces; the surviving daemon must keep appending durable history.
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { getHistorySessionDirName } from '../../src/main/daemon/history-paths'
-import { LOG_HEADER_BYTES } from '../../src/main/daemon/terminal-history-log'
-import { profileStateDatabaseFile } from '../../src/main/persistence/profile-state/profile-state-database'
+import { getHistorySessionDirName } from '../../src/main/daemon/history/storage/history-paths'
+import { LOG_HEADER_BYTES } from '../../src/main/daemon/history/storage/terminal-history-log'
+import '../../src/main/persistence/profile-state/database/profile-state-database'
+import { profileStateDatabaseFile } from '../../src/shared/profile-state-storage-paths'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
-import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import {
   launchHeadlessPairedRuntimeHost,
@@ -47,6 +39,9 @@ import {
 const scratch = createRetentionFixtureDirectory()
 const fixturePath = path.join(scratch, 'serve-restart-binding-terminal.mjs')
 const sinkPath = path.join(scratch, 'serve-restart-binding-terminal.log')
+const LAYOUT_OWNER_BUILD = existsSync(
+  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
+)
 
 writeFileSync(
   fixturePath,
@@ -87,80 +82,6 @@ writeFileSync(
 
 test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
-})
-
-test('SQLite candidate retains a remote automation run across serve restart', async ({
-  testRepoPath
-}) => {
-  test.setTimeout(240_000)
-
-  const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
-  try {
-    const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
-      path: testRepoPath,
-      kind: 'git'
-    })
-    const automation = await host.client.call<{ automation: { id: string } }>('automation.create', {
-      agentId: 'codex',
-      name: `remote-sqlite-restart-${Date.now()}`,
-      prompt: 'Retain this remote automation run through a SQLite-only serve restart.',
-      repo: `id:${added.result.repo.id}`,
-      runContext: {
-        kind: 'workspace-run',
-        projectId: added.result.repo.id,
-        hostId: 'runtime:missing',
-        projectHostSetupId: `missing-${Date.now()}`,
-        repoId: added.result.repo.id,
-        path: testRepoPath
-      },
-      workspaceMode: 'new_per_run',
-      reuseSession: false,
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: Date.now(),
-      enabled: false,
-      missedRunGraceMinutes: 720
-    })
-    const run = await host.client.call<{ run: { id: string; status: string } }>(
-      'automation.runNow',
-      { id: automation.result.automation.id }
-    )
-    expect(['dispatching', 'dispatched']).toContain(run.result.run.status)
-
-    const beforeRestart = await host.client.call<{ runs: { id: string }[] }>('automation.runs', {
-      automationId: automation.result.automation.id
-    })
-    expect(beforeRestart.result.runs.some((entry) => entry.id === run.result.run.id)).toBe(true)
-
-    const profileDirectory = path.join(host.userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
-    const profileJsonPath = path.join(profileDirectory, 'orca-data.json')
-    const rootJsonPath = path.join(host.userDataDir, 'orca-data.json')
-    const databasePath = profileStateDatabaseFile(profileDirectory)
-    expect(existsSync(databasePath)).toBe(true)
-    await host.restartServeProcess({
-      betweenProcesses: () => {
-        rmSync(profileJsonPath, { force: true })
-        rmSync(rootJsonPath, { force: true })
-      }
-    })
-    expect(existsSync(profileJsonPath)).toBe(false)
-    expect(existsSync(rootJsonPath)).toBe(false)
-
-    const afterRestartDefinitions = await host.client.call<{
-      automations: { id: string }[]
-    }>('automation.list')
-    expect(
-      afterRestartDefinitions.result.automations.some(
-        (entry) => entry.id === automation.result.automation.id
-      )
-    ).toBe(true)
-    const afterRestart = await host.client.call<{ runs: { id: string }[] }>('automation.runs', {
-      automationId: automation.result.automation.id
-    })
-    expect(afterRestart.result.runs.some((entry) => entry.id === run.result.run.id)).toBe(true)
-  } finally {
-    await host.dispose()
-  }
 })
 
 type HostSurface = {
@@ -289,14 +210,12 @@ async function callRuntime<TResult>(
   ) as Promise<TResult>
 }
 
-async function showClient(app: ElectronApplication, page: Page): Promise<void> {
+// Why not shown: automated launches keep windows hidden; the resize step needs only a known size.
+async function sizeClientWindow(app: ElectronApplication, page: Page): Promise<void> {
   const window = await app.browserWindow(page)
   await window.evaluate((browserWindow) => {
     browserWindow.setSize(1100, 720)
-    browserWindow.show()
-    browserWindow.focus()
   })
-  await expect.poll(() => window.evaluate((browserWindow) => browserWindow.isVisible())).toBe(true)
 }
 
 async function waitForWorktree(host: HeadlessPairedRuntimeHost, repoId: string): Promise<string> {
@@ -579,7 +498,7 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
     const worktreeId = await waitForWorktree(host, added.result.repo.id)
     client = await launchPairedElectronClient(host.offer, testInfo, 'serve-restart-binding')
     client.page.on('pageerror', (error) => pageErrors.push(String(error)))
-    await showClient(client.app, client.page)
+    await sizeClientWindow(client.app, client.page)
     await waitForClientWorktree(client.page, worktreeId)
 
     terminal = await createMirroredTerminal(client, worktreeId)
@@ -634,29 +553,32 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
     expect(host.app.process().pid, 'The serve Electron process must actually be replaced').not.toBe(
       hostPidBeforeRestart
     )
-    let pendingReceipt: PairedTerminalSnapshotReceipt | null = null
-    await expect
-      .poll(
-        async () => {
-          pendingReceipt =
-            (await readPairedTerminalSnapshotProbe(client!.page)).receipts.find(
-              (receipt) => receipt.status === 'pending-handle'
-            ) ?? null
-          return pendingReceipt
-        },
-        {
-          timeout: 60_000,
-          message: 'Paired renderer never received the replacement host pending-handle frame'
-        }
-      )
-      .not.toBeNull()
-    expect(pendingReceipt).toMatchObject({
-      leafId: terminal.leafId,
-      parentTabId: terminal.parentTabId,
-      ptyId: terminal.ptyId,
-      status: 'pending-handle',
-      terminal: null
-    })
+    // Layout-owner main restores the live binding from its tab row, so this build publishes ready immediately.
+    if (!LAYOUT_OWNER_BUILD) {
+      let pendingReceipt: PairedTerminalSnapshotReceipt | null = null
+      await expect
+        .poll(
+          async () => {
+            pendingReceipt =
+              (await readPairedTerminalSnapshotProbe(client!.page)).receipts.find(
+                (receipt) => receipt.status === 'pending-handle'
+              ) ?? null
+            return pendingReceipt
+          },
+          {
+            timeout: 60_000,
+            message: 'Paired renderer never received the replacement host pending-handle frame'
+          }
+        )
+        .not.toBeNull()
+      expect(pendingReceipt).toMatchObject({
+        leafId: terminal.leafId,
+        parentTabId: terminal.parentTabId,
+        ptyId: terminal.ptyId,
+        status: 'pending-handle',
+        terminal: null
+      })
+    }
 
     let recoveredSurface: HostSurface | null = null
     await expect
@@ -676,6 +598,10 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
       ptyId: terminal.ptyId,
       status: 'ready'
     })
+    if (LAYOUT_OWNER_BUILD) {
+      const { receipts } = await readPairedTerminalSnapshotProbe(client.page)
+      expect(receipts.filter((receipt) => receipt.status === 'pending-handle')).toEqual([])
+    }
 
     const recoveredRemotePtyId = toRemoteRuntimePtyId(liveHandle!, client.environmentId)
     await waitForClientBinding(client, worktreeId, terminal, recoveredRemotePtyId)

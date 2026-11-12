@@ -1,14 +1,16 @@
 import { access } from 'node:fs/promises'
 import * as path from 'node:path'
-import type { GitConflictOperation } from '../../../shared/git-status-types'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import type { GitConflictOperation } from '../../../shared/git/status/git-status-types'
+
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from './git-read-cache-invalidation'
 import { resolveGitDir } from './resolve-git-dir'
 
-// Why: the git-status → existsSync race can miss a transient HEAD; fall back to 'unknown' for one poll cycle.
-// Why: detect rebase from rebase-merge/ or rebase-apply/ dirs (persist all steps), not REBASE_HEAD (partial, lingers → stale badge).
+// HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
 export async function detectConflictOperation(
   worktreePath: string,
   options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
@@ -16,14 +18,15 @@ export async function detectConflictOperation(
   const gitDir = await resolveGitDir(worktreePath, options)
   const mergeHead = path.join(gitDir, 'MERGE_HEAD')
   const cherryPickHead = path.join(gitDir, 'CHERRY_PICK_HEAD')
+  const revertHead = path.join(gitDir, 'REVERT_HEAD')
   const rebaseMergeDir = path.join(gitDir, 'rebase-merge')
   const rebaseApplyDir = path.join(gitDir, 'rebase-apply')
 
-  // Why async and concurrent: this runs on every status poll, and on a WSL/UNC git dir each
-  // probe is a 9p round trip — four of them synchronously blocked the Electron main thread.
-  const [hasMergeHead, hasCherryPickHead, hasRebaseMergeDir, hasRebaseApplyDir] = await Promise.all(
-    [mergeHead, cherryPickHead, rebaseMergeDir, rebaseApplyDir].map(pathExists)
-  )
+  // Probe concurrently without blocking main: each WSL/UNC path can cost a 9p round trip.
+  const [hasMergeHead, hasCherryPickHead, hasRebaseMergeDir, hasRebaseApplyDir, hasRevertHead] =
+    await Promise.all(
+      [mergeHead, cherryPickHead, rebaseMergeDir, rebaseApplyDir, revertHead].map(pathExists)
+    )
   const hasRebaseDir = hasRebaseMergeDir || hasRebaseApplyDir
 
   if (hasMergeHead) {
@@ -35,10 +38,13 @@ export async function detectConflictOperation(
   if (hasCherryPickHead) {
     return 'cherry-pick'
   }
+  if (hasRevertHead) {
+    return 'revert'
+  }
   return 'unknown'
 }
 
-/** Mirrors existsSync: any failure to reach the path reads as absent, never as a throw. */
+/** Treat inaccessible paths as absent without throwing. */
 async function pathExists(target: string): Promise<boolean> {
   try {
     await access(target)

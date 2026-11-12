@@ -1,5 +1,5 @@
-import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { cn } from '@/lib/utils'
+import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
+import { cn } from '@/lib/class-names'
 import { TaskPageSourceBar } from './SourceBar'
 import { AlertCircle } from 'lucide-react'
 import { TaskPageGitHubModeControls } from './github/ModeControls'

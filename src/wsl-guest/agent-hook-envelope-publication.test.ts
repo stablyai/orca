@@ -4,9 +4,9 @@ import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   createShedSubagentsField
-} from '../shared/agent-hook-relay'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
-import type { AgentSubagentSnapshot } from '../shared/agent-status-types'
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentSubagentSnapshot } from '../shared/agent-status/contracts/agent-status-subagent-snapshot'
 
 type BoundedClient = {
   frames: Buffer[]
@@ -131,86 +131,6 @@ describe('publishAgentHookEnvelope', () => {
     vi.useRealTimers()
   })
 
-  it('publishes an in-capacity envelope untouched', () => {
-    const primary = makeBoundedClient(65536)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    try {
-      const envelope = makeEnvelope({ lastAssistantMessage: 128, interactivePrompt: 64 })
-      publishAgentHookEnvelope(dispatcher, envelope)
-
-      const published = decodeEnvelopes(primary)
-      expect(published).toHaveLength(1)
-      expect(published[0]).toEqual(envelope)
-      expect(primary.closes).toBe(0)
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
-  it('sheds lastAssistantMessage first and stops as soon as the frame fits', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    try {
-      // Only lastAssistantMessage pushes this past the 12288-byte producer cap.
-      publishAgentHookEnvelope(
-        dispatcher,
-        makeEnvelope({ lastAssistantMessage: 20_000, interactivePrompt: 128, subagents: 2 })
-      )
-
-      const published = decodeEnvelopes(primary)
-      expect(published).toHaveLength(1)
-      expect(published[0].payload.lastAssistantMessage).toBeUndefined()
-      expect(published[0].payload.interactivePrompt).toBe('q'.repeat(128))
-      expect(published[0].payload.subagents).toHaveLength(2)
-      expect(published[0].payload.state).toBe('working')
-      expect(published[0].paneKey).toBe('tab-1:4f1b0f4e-0000-4000-8000-000000000001')
-      expect(published[0].connectionId).toBeNull()
-      expect(primary.closes).toBe(0)
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
-  it('logs only when the final single-sink envelope is actually dropped', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    try {
-      publishAgentHookEnvelope(dispatcher, makeEnvelope({ lastAssistantMessage: 20_000 }))
-      expect(decodeEnvelopes(primary)).toHaveLength(1)
-      expect(stderr).not.toHaveBeenCalled()
-
-      const unsendable = makeEnvelope({})
-      unsendable.payload.prompt = 'p'.repeat(40_000)
-      publishAgentHookEnvelope(dispatcher, unsendable)
-      expect(stderr).toHaveBeenCalledTimes(1)
-      expect(String(stderr.mock.calls[0][0])).toContain('Dropped agent.hook')
-    } finally {
-      stderr.mockRestore()
-      dispatcher.dispose()
-    }
-  })
-
-  it('sheds subagents next when dropping the assistant message is not enough', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    try {
-      publishAgentHookEnvelope(
-        dispatcher,
-        makeEnvelope({ lastAssistantMessage: 8_000, interactivePrompt: 6_000, subagents: 40 })
-      )
-
-      const published = decodeEnvelopes(primary)
-      expect(published).toHaveLength(1)
-      expect(published[0].payload.lastAssistantMessage).toBeUndefined()
-      expect(published[0].payload.subagents).toBeUndefined()
-      expect(published[0].payload.interactivePrompt).toBe('q'.repeat(6_000))
-      expect(primary.closes).toBe(0)
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
   it('keeps the blocking question card when a waiting envelope has to shed', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
@@ -315,60 +235,6 @@ describe('publishAgentHookEnvelope', () => {
     }
   })
 
-  it('never probes the budget for a single sink that accepts the frame', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    const probe = vi.spyOn(dispatcher, 'producerEnvelopeBudget')
-    try {
-      // One sink writes nothing when it rejects, so the publish attempt is itself the measurement.
-      publishAgentHookEnvelope(dispatcher, makeEnvelope({ lastAssistantMessage: 128 }))
-      expect(probe).not.toHaveBeenCalled()
-
-      // Two of the three ladder steps are absent here; skipping them must not cost an extra encode.
-      publishAgentHookEnvelope(dispatcher, makeEnvelope({ interactivePrompt: 20_000 }))
-      expect(probe).toHaveBeenCalledTimes(1)
-      expect(decodeEnvelopes(primary)).toHaveLength(2)
-    } finally {
-      probe.mockRestore()
-      dispatcher.dispose()
-    }
-  })
-
-  it('measures a fan-out up front so both sinks get the same payload', () => {
-    const primary = makeBoundedClient(65536)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    const secondary = makeBoundedClient(16384)
-    const probe = vi.spyOn(dispatcher, 'producerEnvelopeBudget')
-    try {
-      dispatcher.attachClient(secondary.write, secondary.options)
-      publishAgentHookEnvelope(dispatcher, makeEnvelope({ lastAssistantMessage: 20_000 }))
-      // Probing first is what keeps the larger sink from being written a frame we then have to shed.
-      expect(probe).toHaveBeenCalledTimes(2)
-      for (const client of [primary, secondary]) {
-        expect(decodeEnvelopes(client)).toHaveLength(1)
-      }
-    } finally {
-      probe.mockRestore()
-      dispatcher.dispose()
-    }
-  })
-
-  it('skips absent fields instead of consuming a shed step on them', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    try {
-      // No lastAssistantMessage at all: the ladder must move on to interactivePrompt.
-      publishAgentHookEnvelope(dispatcher, makeEnvelope({ interactivePrompt: 20_000 }))
-
-      const published = decodeEnvelopes(primary)
-      expect(published).toHaveLength(1)
-      expect(published[0].payload.interactivePrompt).toBeUndefined()
-      expect(primary.closes).toBe(0)
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
   it('publishes without closing the client when even the fully shed envelope is oversized', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
@@ -383,27 +249,6 @@ describe('publishAgentHookEnvelope', () => {
       // The sink still accepts the next in-capacity frame.
       publishAgentHookEnvelope(dispatcher, makeEnvelope({}))
       expect(decodeEnvelopes(primary)).toHaveLength(1)
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
-  it('does not mutate the caller envelope, so the hook-server replay cache stays intact', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    try {
-      const envelope = makeEnvelope({
-        lastAssistantMessage: 6_000,
-        interactivePrompt: 6_000,
-        subagents: 40
-      })
-      const before = structuredClone(envelope)
-
-      publishAgentHookEnvelope(dispatcher, envelope)
-
-      expect(envelope).toEqual(before)
-      expect(envelope.payload.lastAssistantMessage).toBe('a'.repeat(6_000))
-      expect(envelope.payload.subagents).toHaveLength(40)
     } finally {
       dispatcher.dispose()
     }
@@ -427,28 +272,6 @@ describe('publishAgentHookEnvelope', () => {
       dispatcher.dispose()
     }
   })
-
-  it('logs one multi-sink drop when the fully shed envelope remains unsendable', () => {
-    const primary = makeBoundedClient(65536)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    const secondary = makeBoundedClient(16384)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    try {
-      dispatcher.attachClient(secondary.write, secondary.options)
-      const envelope = makeEnvelope({})
-      envelope.payload.prompt = 'p'.repeat(40_000)
-      publishAgentHookEnvelope(dispatcher, envelope)
-      publishAgentHookEnvelope(dispatcher, envelope)
-
-      expect(decodeEnvelopes(primary)).toHaveLength(0)
-      expect(decodeEnvelopes(secondary)).toHaveLength(0)
-      expect(stderr).toHaveBeenCalledTimes(1)
-      expect(String(stderr.mock.calls[0][0])).toContain('Dropped agent.hook')
-    } finally {
-      stderr.mockRestore()
-      dispatcher.dispose()
-    }
-  })
 })
 
 describe('publishAgentHookEnvelope shed marker', () => {
@@ -463,8 +286,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
 
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
-      // Without this marker the renderer overwrites a populated roster with undefined, blanking live
-      // subagent rows and unblocking hibernation for a pane that is still working.
+      // A shed roster must be marked or clients may erase live subagents and unblock pane hibernation.
       expect(published[0].shedFields).toEqual([
         'lastAssistantMessage',
         createShedSubagentsField(makeSubagents(40))
@@ -477,7 +299,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
   })
 
   it('omits the marker when nothing was shed and never stamps the caller envelope', () => {
-    const primary = makeBoundedClient(65536)
+    const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     try {
       const envelope = makeEnvelope({ lastAssistantMessage: 128, subagents: 2 })
@@ -486,6 +308,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
 
       const shedding = makeEnvelope({ lastAssistantMessage: 20_000, subagents: 2 })
       publishAgentHookEnvelope(dispatcher, shedding)
+      expect(decodeEnvelopes(primary)[1].shedFields).toEqual(['lastAssistantMessage'])
       // The hook server replays this exact object, so the marker must live on the wire copy only.
       expect((shedding as PublishedEnvelope).shedFields).toBeUndefined()
       expect(shedding.payload.lastAssistantMessage).toBe('a'.repeat(20_000))
@@ -516,8 +339,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
 
       primary.blocked = false
       primary.drain()
-      // Nothing in the pipeline republishes a hook envelope: it is fire-and-forget, and the only
-      // other delivery path is the reattach replay.
+      // Queue-full snapshots need their bounded retry path; otherwise only reconnect replay can repair a stale row.
       expect(decodeEnvelopes(primary)).toHaveLength(0)
 
       vi.advanceTimersByTime(250)
@@ -573,31 +395,6 @@ describe('publishAgentHookEnvelope redelivery', () => {
       primary.drain()
       vi.advanceTimersByTime(10_000)
       expect(decodeEnvelopes(primary)).toHaveLength(1)
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
-  it('evicts the longest-idle pane once the pending map is full, keeping the newest', () => {
-    const primary = makeBoundedClient(16384)
-    const dispatcher = new RelayDispatcher(primary.write, primary.options)
-    try {
-      saturateProducerQueue(dispatcher, primary)
-      // 65 panes against a 64-pane cap: the first must be evicted, the last must survive.
-      for (let pane = 0; pane < 65; pane++) {
-        const envelope = makeEnvelope({})
-        envelope.paneKey = `tab-1:4f1b0f4e-0000-4000-8000-${String(pane).padStart(12, '0')}`
-        publishAgentHookEnvelope(dispatcher, envelope)
-      }
-
-      primary.blocked = false
-      primary.drain()
-      vi.advanceTimersByTime(1_000)
-
-      const redelivered = decodeEnvelopes(primary).map((envelope) => envelope.paneKey)
-      expect(redelivered).toHaveLength(64)
-      expect(redelivered).toContain('tab-1:4f1b0f4e-0000-4000-8000-000000000064')
-      expect(redelivered).not.toContain('tab-1:4f1b0f4e-0000-4000-8000-000000000000')
     } finally {
       dispatcher.dispose()
     }

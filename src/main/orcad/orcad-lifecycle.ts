@@ -1,16 +1,26 @@
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
+import { setRuntimeBrowserCommandsFactory } from '../runtime/browser/installation/runtime-browser-commands-factory'
+import { markHostShuttingDown } from '../startup/quit/host-shutdown-state'
+import { setDesktopBrowserBridgeHostEnabled } from '../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { startOrcadBrowserProvider } from './orcad-browser-startup'
 import { OrcadRuntimeLifetime, type OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
+import {
+  markOrcadRunFailed,
+  orcadRunFailed,
+  recordOrcadPreviousUnexpectedExit
+} from './orcad-unexpected-exit'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
-import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
+import { holdOrcadTerminalAdmissionUntilExit } from './orcad-stop-terminal-admission'
 import {
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
-} from '../persistence/profile-state/profile-state-access'
+} from '../persistence/profile-state/access/profile-state-access'
 
 const bundledLauncherChannel = process.env[ORCAD_BUNDLED_LAUNCHER_ENV] === '1'
 delete process.env[ORCAD_BUNDLED_LAUNCHER_ENV]
@@ -23,43 +33,67 @@ function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promi
   }
 }
 
-export { ORCAD_SHUTDOWN_DEADLINE_MS }
+/** Return whether this caller owns the stop; fatal faults supply a nonzero completed-stop code. */
+export type OrcadShutdownTrigger = (
+  reason: string,
+  onFailed?: () => void,
+  stoppedExitCode?: number
+) => boolean
 
-/** True when this call began the stop; false when another source already owns it. */
-export type OrcadShutdownTrigger = (reason: string, onFailed?: () => void) => boolean
+let installedShutdown: OrcadShutdownTrigger | null = null
 
-/**
- * A launcher and its child can both receive the same process-group or service stop signal.
- * Returns the trigger stop-request listeners share, so every source runs one bounded stop.
- * `onFailed` runs before a failed or overdue stop exits, so a caller can retract a clean record.
- */
+/** Deduplicate launcher/child signals into one bounded stop; onFailed retracts clean-stop records. */
 export function installOrcadShutdownSignals(
   stop: () => Promise<void>,
   deadlineMs = ORCAD_SHUTDOWN_DEADLINE_MS
 ): OrcadShutdownTrigger {
   let stopping = false
-  const shutdown: OrcadShutdownTrigger = (signal, onFailed) => {
+  let exitCode = 0
+  let failed = false
+  let retractClean: (() => void) | undefined
+  const markFailed = (): void => {
+    if (!failed) {
+      failed = true
+      retractClean?.()
+    }
+  }
+  const shutdown: OrcadShutdownTrigger = (signal, onFailed, stoppedExitCode = 0) => {
+    // Yielding a lost lock is not a crash; the successor owns the lock now.
+    if (stoppedExitCode !== 0 && stoppedExitCode !== SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE) {
+      markOrcadRunFailed()
+    }
     if (stopping) {
+      // Fatal faults must escalate an in-progress clean stop to failure.
+      if (stoppedExitCode !== 0 && exitCode === 0) {
+        exitCode = stoppedExitCode
+        onFailed?.()
+        markFailed()
+      }
       return false
     }
     stopping = true
+    markHostShuttingDown()
+    holdOrcadTerminalAdmissionUntilExit()
+    exitCode = stoppedExitCode
+    retractClean = onFailed
     setTimeout(() => {
       console.error(`orcad: shutdown after ${signal} exceeded ${deadlineMs}ms — exiting`)
-      onFailed?.()
+      markFailed()
       process.exit(1)
     }, deadlineMs)
     stop()
-      .then(() => process.exit(0))
+      .then(() => process.exit(exitCode))
       .catch((error) => {
         console.error(`orcad: shutdown after ${signal} failed:`, error)
-        onFailed?.()
+        markFailed()
         process.exit(resolveOrcadExitCode(error))
       })
     return true
   }
+  installedShutdown = shutdown
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
-  // Headless runtimes survive terminal hangups; INT/TERM are the graceful stop contract.
+  // Survive terminal hangups; INT/TERM request graceful shutdown.
   if (process.platform !== 'win32') {
     process.on('SIGHUP', () => {})
   }
@@ -72,15 +106,22 @@ export function installOrcadShutdownSignals(
   return shutdown
 }
 
+export async function stopOrcadStructuredAgentSessions(): Promise<void> {
+  const { stopStructuredAgentSessionRuntime } =
+    await import('../runtime/agent-session/structured-agent-session-runtime')
+  await stopStructuredAgentSessionRuntime({ trigger: 'quit' })
+}
+
 export async function startOrcadWithLifecycle<T extends object>(
   start: (registerRuntimeCleanup: (cleanup: OrcadRuntimeCleanup) => void) => Promise<T>,
   cleanupHost: (runtimeCleanupSucceeded: boolean) => Promise<void>
 ): Promise<T & { stop(): Promise<void> }> {
-  // Runtime resources stop in reverse registration order before any host resource.
   const runtime = new OrcadRuntimeLifetime()
   const cleanup = createIdempotentOrcadCleanup(async () => {
-    // First, before any wait: chats whose agent dies with this stop read as a restart, not a crash.
+    // Stamp quit before awaiting teardown so dying chat agents read as restart rather than crash.
     recordAgentSessionRuntimeEnd('quit')
+    // Startup failures reach cleanup without shutdown admission while RPC may already be serving.
+    markHostShuttingDown()
     let runtimeCleanupSucceeded = false
     try {
       await runtime.stop()
@@ -96,20 +137,37 @@ export async function startOrcadWithLifecycle<T extends object>(
     try {
       await cleanup()
     } catch (cleanupError) {
-      // Keep the launch failure as the supervisor-facing verdict; cleanup still needs a breadcrumb.
+      // Preserve the startup fault while recording cleanup failures.
       console.error('[orcad] startup cleanup failed:', cleanupError)
     }
     throw error
   }
 }
 
-/** Keep profile admission and the instance lock until every runtime writer has stopped. */
+/** Keep profile admission/lock until all runtime writers stop. */
 export async function startOrcadWithHost<T extends object>(
   userDataPath: string,
   start: (registerCleanup: (cleanup: OrcadRuntimeCleanup) => void) => Promise<T>,
-  runQuitHandlers: () => void
+  runQuitHandlers: () => void | Promise<void>
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
-  const instanceLock = acquireOrcadInstanceLock(userDataPath)
+  const instanceLock = acquireOrcadInstanceLock(userDataPath, {
+    // Yield the data root to the process that took its lock; supervisors stand by on this code.
+    onExclusivityLost: () => {
+      console.error('[orcad] Stopping so only one runtime writes this data root.')
+      installedShutdown?.(
+        'instance lock lost',
+        undefined,
+        SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
+      )
+    }
+  })
+  const previous = instanceLock.previousUnexpectedExit
+  recordOrcadPreviousUnexpectedExit(previous)
+  if (previous) {
+    console.error(
+      `[orcad] the previous run (pid ${previous.pid}, ${previous.version}) exited without stopping cleanly`
+    )
+  }
   const { pid, startedAtMs, nonce } = instanceLock.record
   const instance = { pid, startedAtMs, nonce, lockPath: instanceLock.path }
   let admission: ProfileStateRuntimeAdmission | undefined
@@ -117,14 +175,16 @@ export async function startOrcadWithHost<T extends object>(
   return startOrcadWithLifecycle(
     async (registerCleanup) => {
       admission = acquireProfileStateRuntimeAdmission(userDataPath)
-      // Why not awaited: a desktop sidecar's authorization UI must not hold RPC readiness hostage.
+      // Browser authorization UI must not block RPC readiness.
       browserProvider = startOrcadBrowserProvider({ userDataPath })
+      // Only managed hosts have opted-in desktop bridges; user-started hosts route to paired page hosts.
+      setDesktopBrowserBridgeHostEnabled(Boolean(process.env[ORCAD_MANAGED_ACTIVATION_ROOT_ENV]))
       return { ...(await start(registerCleanup)), instance }
     },
     async (runtimeCleanupSucceeded) => {
-      // Failed teardown keeps both fences until the process actually exits.
+      // Failed cleanup retains both ownership fences until process exit.
       const host = new OrcadRuntimeLifetime(() => {
-        if (runtimeCleanupSucceeded) {
+        if (runtimeCleanupSucceeded && !orcadRunFailed()) {
           instanceLock.release()
         }
       })
@@ -135,16 +195,22 @@ export async function startOrcadWithHost<T extends object>(
       })
       host.add(() => runQuitHandlers())
       host.add(() => setRuntimeBrowserCommandsFactory(null))
+      host.add(() => setDesktopBrowserBridgeHostEnabled(false))
       host.add(() => browserProvider?.stop())
       await host.stop()
     }
   )
 }
 
-export async function flushOrcadProfileStoreForShutdown(store: {
-  flushFinalOrThrowAsync(): Promise<void>
-  freezeWritesAsync(): Promise<void>
-}): Promise<void> {
+export async function flushOrcadProfileStoreForShutdown(
+  store: { flushFinalOrThrowAsync(): Promise<void>; freezeWritesAsync(): Promise<void> },
+  paneGrids?: { flushPaneGrids(): Promise<void> | null } | null
+): Promise<void> {
+  // A pane's grid still inside its write burst joins the final save.
+  const flushing = paneGrids?.flushPaneGrids()
+  if (flushing) {
+    await flushing
+  }
   try {
     await store.flushFinalOrThrowAsync()
   } finally {
