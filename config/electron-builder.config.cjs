@@ -5,6 +5,9 @@ const {
   MACOS_FOLDER_USAGE_DESCRIPTIONS,
   applyMacHelperFolderUsageDescriptions
 } = require('./scripts/desktop-distribution/macos/macos-folder-usage-descriptions.cjs')
+const {
+  giveMacMainExecutableUniqueUuid
+} = require('./scripts/desktop-distribution/macos/macos-executable-uuid.cjs')
 const electronBuilderNativeRebuild = require('./scripts/desktop-distribution/runtime-verification/electron-builder-native-rebuild.cjs')
 const {
   assertPackagedDaemonEntryExists,
@@ -423,6 +426,12 @@ module.exports = {
     if (context.electronPlatformName === 'darwin') {
       applyMacHelperFolderUsageDescriptions(
         join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
+        context.packager.appInfo.productFilename
+      )
+      // Before signing, so the signature seals the rewritten executable.
+      giveMacMainExecutableUniqueUuid(
+        join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
+        context.packager.appInfo.id,
         context.packager.appInfo.productFilename
       )
       const architecture = macSliceArch(context.arch, 'local-build compatibility')
