@@ -1,4 +1,5 @@
 // Window side of Orca Cloud's session lifecycle: cap warnings, rollovers and idle sleep from main.
+import { installPairedCloudWorkspaceRegistry } from './orca-cloud/paired-cloud-workspace-registry'
 import { syncRunActionsWithWake } from '@/lib/orca-cloud/cloud-run-action-relaunch'
 import {
   armRunActionRelaunch,
@@ -104,6 +105,7 @@ export function installOrcaCloudSessionEvents(): () => void {
   const disposeRunActionWake =
     window.api?.orcaCloudWorkspace?.onWakeProgress?.(syncRunActionsWithWake) ?? (() => {})
   const disposeStore = installOrcaCloudWorkspaceStore()
+  const disposePaired = installPairedCloudWorkspaceRegistry()
   const disposePredictive = installCloudPredictiveWake()
   const disposeSetup = installCloudSetupSession()
   return () => {
@@ -112,6 +114,7 @@ export function installOrcaCloudSessionEvents(): () => void {
     disposeState()
     disposeIdle()
     disposeStore()
+    disposePaired()
     disposeRunActionWake()
     disposePredictive()
   }

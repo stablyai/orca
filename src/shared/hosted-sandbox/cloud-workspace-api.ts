@@ -62,9 +62,16 @@ export type CloudWorkspaceStatus = HostedWorkspaceStatus & {
 
 export type CloudArchiveInfo = NonNullable<HostedArchiveResponse['archive']>
 
+/** A cloud workspace by its sidebar id; a paired one also names its server's environment. */
+export type CloudWorkspaceTarget = { workspaceId: string; environmentId?: string }
+
 export type OrcaCloudWorkspaceApi = {
-  /** Live status: state, CPU/mem/disk, uptime, cost so far, archive. Cheap; the panel polls it while open. */
-  getStatus: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<CloudWorkspaceStatus>>
+  /**
+   * Live status: state, CPU/mem/disk, uptime, cost so far, archive. Cheap; the panel polls it while open.
+   * `environmentId` names a PAIRED workspace's server (no runtime record on this desktop): main
+   * answers for it only when that server is bound to a cloud sandbox.
+   */
+  getStatus: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudWorkspaceStatus>>
   /** "Restart" (Unresponsive / OOM): rehydrate the same disk and re-pair; agents auto-resume. */
   restart: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
   /** Sleep, then archive with a snapshot TTL; metadata captured in the VM or from the client cache. */
@@ -73,9 +80,7 @@ export type OrcaCloudWorkspaceApi = {
     pullRequests?: HostedArchivePullRequest[]
   }) => Promise<CloudWorkspaceResult<null>>
   unarchive: (args: { workspaceId: string }) => Promise<CloudWorkspaceResult<null>>
-  getArchive: (args: {
-    workspaceId: string
-  }) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
+  getArchive: (args: CloudWorkspaceTarget) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
   /** Workspace ids of every Orca Cloud workspace this desktop knows (the sidebar dot / hover card). */
   listCloudWorkspaceIds: () => Promise<string[]>
   /** Product constants and measured timings; null when the control plane can't be reached. */

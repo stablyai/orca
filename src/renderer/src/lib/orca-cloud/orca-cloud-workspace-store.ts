@@ -19,6 +19,7 @@ import type {
   CloudWakeProgressEvent,
   CloudWorkspaceResult,
   CloudWorkspaceStatus,
+  CloudWorkspaceTarget,
   OrcaCloudWorkspaceApi
 } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { eachLimited } from './each-limited'
@@ -35,7 +36,14 @@ export type CloudStatusEntry = {
 }
 
 export type CloudWorkspaceSnapshot = {
+  /** This desktop's own cloud workspaces (runtime records in main). */
   ids: ReadonlySet<string>
+  /**
+   * PAIRED cloud workspaces' own rows (a "<name> (cloud)" server bound to a sandbox), by sidebar id
+   * → that server's environment id. Kept apart from `ids` (owned-only flows key on those); their
+   * status reads through main's paired path and lands in `status` like any other.
+   */
+  paired: Readonly<Record<string, string>>
   /** True once the first id list arrived (until then "not cloud" is unknown, not false). */
   idsLoaded: boolean
   status: Readonly<Record<string, CloudStatusEntry>>
@@ -50,6 +58,7 @@ export type CloudWorkspaceSnapshot = {
 
 const EMPTY: CloudWorkspaceSnapshot = {
   ids: new Set(),
+  paired: {},
   idsLoaded: false,
   status: {},
   wake: {},
@@ -97,6 +106,12 @@ export function cloudWorkspaceApi(): OrcaCloudWorkspaceApi | null {
   return typeof window !== 'undefined' ? (window.api?.orcaCloudWorkspace ?? null) : null
 }
 
+/** The id main resolves a cloud workspace by; a paired one also names its server. */
+export function cloudWorkspaceTarget(workspaceId: string): CloudWorkspaceTarget {
+  const environmentId = snapshot.paired[workspaceId]
+  return environmentId ? { workspaceId, environmentId } : { workspaceId }
+}
+
 export function isCloudWorkspaceArchived(workspaceId: string): boolean {
   const entry = snapshot.status[workspaceId]?.status
   return entry?.state === 'archived' || Boolean(entry?.archive)
@@ -123,7 +138,7 @@ export function refreshCloudWorkspaceStatus(workspaceId: string): Promise<void> 
       }
     }))
     return bridge
-      .getStatus({ workspaceId })
+      .getStatus(cloudWorkspaceTarget(workspaceId))
       .then((result) => applyStatus(workspaceId, result))
       .catch((error: unknown) =>
         applyStatus(workspaceId, {
@@ -174,6 +189,8 @@ function applyStatus(
       ids.delete(workspaceId)
       const status = { ...s.status }
       delete status[workspaceId]
+      // A paired row stays registered (its row is still there); main stops answering only when
+      // the binding is gone, and the next registration drops it then.
       return { ids, status }
     }
     return {
@@ -336,8 +353,10 @@ export function installOrcaCloudWorkspaceStore(): () => void {
   const stopStatus = installWindowVisibilityInterval({
     // Every cloud workspace: a sleeping one can be archived from the phone or another desktop.
     run: () =>
-      void eachLimited([...snapshot.ids], STARTUP_STATUS_CONCURRENCY, (id) =>
-        refreshCloudWorkspaceStatusIfStale(id, STATUS_POLL_MS / 2)
+      void eachLimited(
+        [...new Set([...snapshot.ids, ...Object.keys(snapshot.paired)])],
+        STARTUP_STATUS_CONCURRENCY,
+        (id) => refreshCloudWorkspaceStatusIfStale(id, STATUS_POLL_MS / 2)
       ),
     intervalMs: STATUS_POLL_MS,
     slowWhileUnfocused: true
