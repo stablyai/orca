@@ -14,7 +14,7 @@ import {
 import { resolveSshWorkspaceForget } from '../../workspace-actions/deletion/ssh-workspace-forget-resolution'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
-import { findRepoForHost } from '@/store/repos/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 
 export function resolveSidebarWorkspaceDeleteIntent(args: {
   selectedWorktrees: readonly Worktree[]
@@ -43,8 +43,9 @@ export function resolveSidebarWorkspaceDeleteIntent(args: {
     !isPairedWebClientWindow() &&
     deletable.some((item) => {
       const matchingRepos = getIndexedReposById(state.repos, item.repoId)
-      const repo = item.hostId
-        ? findRepoForHost(matchingRepos, item.repoId, { hostId: item.hostId })
+      const hostId = item.hostId
+      const repo = hostId
+        ? matchingRepos.find((repo) => repoMatchesHostIdentity(repo, item.repoId, hostId))
         : matchingRepos.length === 1
           ? matchingRepos[0]
           : undefined
