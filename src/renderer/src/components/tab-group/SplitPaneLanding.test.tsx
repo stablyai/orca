@@ -217,6 +217,30 @@ describe('SplitPaneLanding late results', () => {
     })
   })
 
+  it.each(['pointer', 'ArrowDown', 'Home', 'End'])(
+    'lets late rows lead after %s leaves selection unchanged',
+    (gesture) => {
+      mocks.data.files = ['src/codec.ts']
+      render()
+      type('cod')
+      expect(highlighted()).toBe('file:src/codec.ts')
+      if (gesture === 'pointer') {
+        act(() =>
+          fireEvent.pointerMove(document.querySelector('[cmdk-item][data-selected="true"]')!)
+        )
+      } else {
+        press(gesture)
+      }
+      expect(highlighted()).toBe('file:src/codec.ts')
+      act(() =>
+        mocks.publish({
+          agentModel: { state: 'settled', rows: [{ kind: 'terminal', agent: 'codex' }] }
+        })
+      )
+      expect(highlighted()).toBe('agent:terminal:codex')
+    }
+  )
+
   it('keeps a highlight the user moved when results change', () => {
     mocks.data.files = ['docs/mark-a.md']
     render()

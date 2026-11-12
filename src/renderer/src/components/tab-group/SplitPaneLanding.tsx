@@ -47,6 +47,7 @@ export function SplitPaneLanding({
   const t = useTranslate()
   const listRef = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState('default-agent')
+  const selectionDuringGestureRef = useRef(selected)
   const [agentPickerOpen, setAgentPickerOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -155,7 +156,14 @@ export function SplitPaneLanding({
     if (highlightMovedRef.current && !listHasRow(listRef.current, selected)) {
       highlightMovedRef.current = false
     }
+    selectionDuringGestureRef.current = next
     setSelected(next)
+  }
+
+  const recordHighlightMove = (): void => {
+    if (selectionDuringGestureRef.current !== selected) {
+      highlightMovedRef.current = true
+    }
   }
 
   const changeQuery = (next: string): void => {
@@ -184,12 +192,24 @@ export function SplitPaneLanding({
       event.preventDefault()
       changeQuery('')
     } else if (movesLandingHighlight(event)) {
-      highlightMovedRef.current = true
+      selectionDuringGestureRef.current = selected
     }
   }
 
   return (
-    <div className="absolute inset-0 overflow-auto scrollbar-sleek bg-background">
+    <div
+      className="absolute inset-0 overflow-auto scrollbar-sleek bg-background"
+      onKeyDown={(event) => {
+        // cmdk changes selection after the Command key handler, before this event bubbles here.
+        if (
+          movesLandingHighlight(event) &&
+          event.target instanceof Element &&
+          event.target.closest('[data-slot="command"]')
+        ) {
+          recordHighlightMove()
+        }
+      }}
+    >
       <div className="flex min-h-full w-full flex-col items-center justify-center px-4 py-10">
         <div ref={measureCard} className="split-pane-landing @container w-full max-w-[380px]">
           <Command
@@ -215,11 +235,10 @@ export function SplitPaneLanding({
             />
             <CommandList
               ref={listRef}
-              onPointerMove={(event) => {
-                if (event.target instanceof Element && event.target.closest('[cmdk-item]')) {
-                  highlightMovedRef.current = true
-                }
+              onPointerMoveCapture={() => {
+                selectionDuringGestureRef.current = selected
               }}
+              onPointerMove={recordHighlightMove}
             >
               <CommandEmpty>
                 {t('components.tabGroup.splitPaneLanding.noMatches', 'No matches')}
