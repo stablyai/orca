@@ -13,6 +13,7 @@ import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { JiraSite } from '../../../../shared/jira/jira-types'
+import { getJiraSiteLabel } from '../../../../shared/jira/jira-site-label'
 import type { RowEntry, SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
 
 export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
@@ -134,21 +135,24 @@ export function RowLabel({
   }
   if (row.kind === 'jira') {
     const siteLabel = jiraSite
-      ? `${jiraSite.displayName} — ${jiraSite.email || jiraSite.siteUrl}`
+      ? `${getJiraSiteLabel(jiraSite)}${jiraSite.email ? ` — ${jiraSite.email}` : ''}`
       : row.issue.siteName
+    const siteContext = showJiraSiteContext && siteLabel ? siteLabel : null
     return (
-      <span className="min-w-0 truncate">
+      <span
+        className="min-w-0 truncate"
+        // A long title truncates the site, so hover still names it.
+        title={siteContext ? `${row.issue.key} ${row.issue.title} — ${siteContext}` : undefined}
+      >
         <span className="font-medium text-foreground">{row.issue.key}</span> {row.issue.title}
-        {showJiraSiteContext && siteLabel ? (
-          <span className="text-muted-foreground"> — {siteLabel}</span>
-        ) : null}
+        {siteContext ? <span className="text-muted-foreground"> — {siteContext}</span> : null}
       </span>
     )
   }
   if (row.kind === 'jira-account') {
     return (
       <span className="min-w-0 truncate">
-        <span className="font-medium text-foreground">{row.site.displayName}</span>
+        <span className="font-medium text-foreground">{getJiraSiteLabel(row.site)}</span>
         {row.site.email ? ` — ${row.site.email}` : ''}
       </span>
     )
