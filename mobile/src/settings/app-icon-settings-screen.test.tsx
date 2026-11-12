@@ -47,8 +47,12 @@ async function press(label: string): Promise<void> {
 
 describe('app icon settings', () => {
   it('shows the active icon and switches to the one tapped, Classic being the default icon', async () => {
-    vi.mocked(getAppIconName).mockReturnValue('Watercolor')
-    vi.mocked(setAlternateAppIcon).mockResolvedValue('Blue')
+    let active: string | null = 'Watercolor'
+    vi.mocked(getAppIconName).mockImplementation(() => active)
+    vi.mocked(setAlternateAppIcon).mockImplementation(async (name) => {
+      active = name
+      return name
+    })
     act(() => {
       renderer = create(createElement(AppIconSettingsScreen))
     })
@@ -73,6 +77,19 @@ describe('app icon settings', () => {
     expect(checkedLabel()).toBe('Classic Orca')
     expect(JSON.stringify(renderer.toJSON())).toContain('Could not change the app icon')
   })
+  it('treats a change the system reports as not applied as a failure', async () => {
+    vi.mocked(getAppIconName).mockReturnValue(null)
+    vi.mocked(setAlternateAppIcon).mockResolvedValue('Blue')
+    act(() => {
+      renderer = create(createElement(AppIconSettingsScreen))
+    })
+
+    await press('Blue Orca')
+
+    expect(checkedLabel()).toBe('Classic Orca')
+    expect(JSON.stringify(renderer.toJSON())).toContain('Could not change the app icon')
+  })
+
   it('ignores another icon while a change is pending, then falls back to the confirmed one', async () => {
     vi.mocked(getAppIconName).mockReturnValue(null)
     let reject: (error: Error) => void = () => {}

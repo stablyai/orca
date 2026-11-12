@@ -48,11 +48,17 @@ export default function AppIconSettingsScreen({
     }
     setError(null)
     setChanging(true)
-    const previous = selected
     setSelected(id)
-    setAlternateAppIcon(NATIVE_ICON_NAMES[id])
+    const requested = NATIVE_ICON_NAMES[id]
+    setAlternateAppIcon(requested)
+      .then(() => {
+        // Android resolves even when the switch failed; only the icon the system reports counts.
+        if (getAppIconName() !== requested) {
+          throw new Error('The app icon did not change')
+        }
+      })
       .catch(() => {
-        setSelected(previous)
+        setSelected(appIconIdOfNativeName(getAppIconName()))
         setError(
           t('settings.appIconScreen.changeFailed', 'Could not change the app icon. Try again.')
         )
