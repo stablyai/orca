@@ -35,7 +35,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'dsh',
   'jcode',
   'kiro',
-  'hermes'
+  'hermes',
+  'junie'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -283,6 +284,12 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     case 'jcode': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
+    // Why: Junie carries session_id only on SessionStart/UserPromptSubmit; the listener's
+    // per-pane cache preserves it across the id-less events (PreToolUse/Stop/...).
+    case 'junie': {
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
