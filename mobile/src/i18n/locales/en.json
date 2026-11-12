@@ -1261,7 +1261,18 @@
     "newWorktreeModalDrawers": {
       "project": "Project",
       "runOn": "Run on",
-      "agent": "Agent"
+      "agent": "Agent",
+      "noMatches": "No matches",
+      "searchProjects": "Search projects",
+      "searchHosts": "Search hosts"
+    },
+    "hostPicker": {
+      "search": "Search desktops"
+    },
+    "newWorktreeQuickPick": {
+      "placeholder": "Search projects",
+      "noMatches": "No matches",
+      "filterByHost": "Filter by {{host}}"
     },
     "newWorktreeProjectTargetFields": {
       "project": "Project",

@@ -1,5 +1,6 @@
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { isNewWorkspaceProjectOptionQueryTooLarge } from '@/lib/workspace/creation/new-workspace-project-options'
+import { matchProjectHostQuery } from '../../../../shared/project-host-query'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -43,6 +44,29 @@ function nameScore(name: string, hits: readonly number[]): number {
   return base - name.length * 0.4
 }
 
+/** Below any name or detail hit: the host only narrows which projects stay. */
+const HOST_MATCH_SCORE = 200
+
+function matchesNamedHost(option: NewWorkspaceProjectOption, query: string): boolean {
+  if (option.kind !== 'project' || !option.hostLabels) {
+    return false
+  }
+  const match = matchProjectHostQuery(query, {
+    name: option.displayName,
+    detail: option.detail,
+    hostLabels: option.hostLabels
+  })
+  if (!match) {
+    return false
+  }
+  // A checkout's detail already names its host, so "build orca" matches without host words left over.
+  const words = query.split(/\s+/)
+  return (
+    match.hostIndexes !== null ||
+    option.hostLabels.some((label) => words.some((word) => label.toLowerCase().includes(word)))
+  )
+}
+
 /** Rank matches with most-recent-first IDs breaking ties and ordering empty queries. */
 export function rankProjectOptions(
   options: readonly NewWorkspaceProjectOption[],
@@ -64,6 +88,9 @@ export function rankProjectOptions(
     const nameHits = nameHitsFor(option.displayName, query)
     const detailHits = substringHits(option.detail, query)
     if (!nameHits && !detailHits) {
+      if (matchesNamedHost(option, query)) {
+        scored.push({ option, score: HOST_MATCH_SCORE + recency, nameHits: [], detailHits: [] })
+      }
       continue
     }
     scored.push({

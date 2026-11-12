@@ -17,6 +17,7 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
 import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import { useReachableServerClients } from '../worktree/use-reachable-server-clients'
+import { useHostPickerSearch } from '../components/use-connected-host-picker'
 import { AutomationManager } from './AutomationManager'
 import { leaveThrough, type AutomationLeaveGuard } from './AutomationEditorNavigation'
 import { automationStyles as styles } from './automation-styles'
@@ -68,6 +69,7 @@ export function MobileAutomationsScreen() {
       disabled: server.relay !== 'ready'
     }))
   ]
+  const hostSearch = useHostPickerSearch(hostOptions.length)
   const title = t('automations.mobile.automations', 'Automations')
   // Keep the subtitle line blank, not generic, until the paired host's name loads.
   const hostLabel =
@@ -120,6 +122,7 @@ export function MobileAutomationsScreen() {
         visible={pickingHost}
         title={t('automations.mobile.host', 'Host')}
         options={hostOptions}
+        {...hostSearch}
         selected={authority}
         onSelect={(next) => {
           if (next !== authority) {
@@ -132,7 +135,6 @@ export function MobileAutomationsScreen() {
           }
         }}
         {...hostPicker.drawerProps}
-        searchable={hostOptions.length > 6}
       />
     </View>
   )

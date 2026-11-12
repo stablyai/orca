@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { hostEndpointLabel } from '../transport/hosts/host-endpoint-label'
 import type { HostProfile } from '../host-catalog/host-profile'
 
@@ -23,6 +24,27 @@ export function hostPickerOptions(hosts: HostProfile[]) {
   })
 }
 
+/** Search as you type in a desktop picker once it offers a choice. */
+export function useHostPickerSearch(optionCount: number) {
+  const t = useMobileTranslation()
+  return {
+    searchable: optionCount > 1,
+    searchPlaceholder: t('components.hostPicker.search', 'Search desktops')
+  }
+}
+
+/** Desktops whose name or endpoint holds every typed word. */
+export function filterHostsByQuery<T extends Pick<HostProfile, 'name' | 'endpoint'>>(
+  hosts: readonly T[],
+  query: string
+): T[] {
+  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  return hosts.filter((host) => {
+    const text = `${host.name} ${hostEndpointLabel(host.endpoint)}`.toLocaleLowerCase()
+    return words.every((word) => text.includes(word))
+  })
+}
+
 /** Runs an action on the only offered host, or on the one picked when several are offered. */
 export function useConnectedHostPicker(connectedHosts: HostProfile[]) {
   const [offer, setOffer] = useState<{ hostIds: readonly string[]; open: boolean }>({
@@ -31,6 +53,7 @@ export function useConnectedHostPicker(connectedHosts: HostProfile[]) {
   })
   const pendingRef = useRef<{ action: (hostId: string) => void; hostId?: string } | null>(null)
   const offeredHosts = connectedHosts.filter((host) => offer.hostIds.includes(host.id))
+  const search = useHostPickerSearch(offeredHosts.length)
   const visible = offer.open && offeredHosts.length === offer.hostIds.length
   if (offer.open && !visible) {
     setOffer({ ...offer, open: false })
@@ -76,7 +99,8 @@ export function useConnectedHostPicker(connectedHosts: HostProfile[]) {
       selected: '',
       onSelect,
       onClose: close,
-      onAfterClose
+      onAfterClose,
+      ...search
     }
   }
 }

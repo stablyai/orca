@@ -14,6 +14,11 @@ import type {
   NewWorkspaceRunTargetOption
 } from './new-workspace-project-targets'
 import { getMobileWorkspaceRepoBadgeColor } from './new-worktree-modal-types'
+import {
+  newWorkspaceProjectHostRowId,
+  searchNewWorkspaceProjectOptions,
+  searchNewWorkspaceRunTargetOptions
+} from './new-workspace-project-search'
 import { PickerListDrawer } from './PickerListDrawer'
 import { OrcaHookTrustDrawer, type OrcaHookTrustPrompt } from './OrcaHookTrustDrawer'
 import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
@@ -36,6 +41,9 @@ export function NewWorktreeModalDrawers(props: {
   jiraSites: readonly JiraSite[]
   sshReady: boolean
   projectPickerItems: NewWorkspaceProjectOption<MobileWorkspaceRepo>[]
+  /** Every host's repos, so a search can name the host a project runs on. */
+  projectSearchRepos: MobileWorkspaceRepo[]
+  hostLabelFor: (repo: MobileWorkspaceRepo) => string
   selectedProjectId: string | null
   runTargetPickerItems: NewWorkspaceRunTargetOption<MobileWorkspaceRepo>[]
   pickerAgentOptions: NewWorktreeAgentOption[]
@@ -51,6 +59,7 @@ export function NewWorktreeModalDrawers(props: {
   onCloseSetupTrust: () => void
 }) {
   const t = useMobileTranslation()
+  const emptyLabel = t('components.newWorktreeModalDrawers.noMatches', 'No matches')
   return (
     <>
       <SmartWorkspaceSourceDrawer
@@ -77,8 +86,28 @@ export function NewWorktreeModalDrawers(props: {
         title={t('components.newWorktreeModalDrawers.project', 'Project')}
         items={props.projectPickerItems}
         selectedId={props.selectedProjectId ?? ''}
+        isSelected={(item) =>
+          item.id === props.selectedProjectId ||
+          (props.selectedRepo !== null &&
+            item.id ===
+              newWorkspaceProjectHostRowId(
+                props.selectedProjectId ?? '',
+                getRepoExecutionHostId(props.selectedRepo)
+              ))
+        }
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
+        search={{
+          placeholder: t('components.newWorktreeModalDrawers.searchProjects', 'Search projects'),
+          emptyLabel,
+          filter: (items, query) =>
+            searchNewWorkspaceProjectOptions(
+              items,
+              props.projectSearchRepos,
+              query,
+              props.hostLabelFor
+            )
+        }}
         renderIcon={(item) => (
           <View
             style={[
@@ -96,6 +125,11 @@ export function NewWorktreeModalDrawers(props: {
         selectedId={props.selectedRepo ? getRepoExecutionHostId(props.selectedRepo) : ''}
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
+        search={{
+          placeholder: t('components.newWorktreeModalDrawers.searchHosts', 'Search hosts'),
+          emptyLabel,
+          filter: searchNewWorkspaceRunTargetOptions
+        }}
         renderIcon={(item) => <HostKindIcon hostId={item.hostId} size={18} />}
       />
 

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostProfile } from '../host-catalog/host-profile'
-import { useConnectedHostPicker } from './use-connected-host-picker'
+import { filterHostsByQuery, useConnectedHostPicker } from './use-connected-host-picker'
 
 function host(id: string, name: string, endpoint: string): HostProfile {
   return {
@@ -95,5 +95,15 @@ describe('useConnectedHostPicker', () => {
     act(() => picker().onAfterClose())
 
     expect(action).not.toHaveBeenCalled()
+  })
+})
+
+describe('filterHostsByQuery', () => {
+  it('keeps desktops whose name or endpoint holds every typed word', () => {
+    const hosts = [desk, laptop, server]
+    expect(filterHostsByQuery(hosts, '  ')).toEqual(hosts)
+    expect(filterHostsByQuery(hosts, 'lap')).toEqual([laptop])
+    expect(filterHostsByQuery(hosts, 'ssh')).toEqual([server])
+    expect(filterHostsByQuery(hosts, 'server relay')).toEqual([])
   })
 })
