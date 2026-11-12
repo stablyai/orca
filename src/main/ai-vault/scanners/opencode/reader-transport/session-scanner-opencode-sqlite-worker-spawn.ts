@@ -1,6 +1,8 @@
 import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { createOpenCodeSqliteWorker } from './session-scanner-opencode-sqlite-worker-entry'
-export { resolveOpenCodeSqliteWorkerEntryPath } from './session-scanner-opencode-sqlite-worker-entry'
+import { existsSync } from 'node:fs'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
+import { findForeignSqliteReaderEntry } from '../../../../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
 import { selectedWslSqliteSessionId } from '../../../session-scanner-selection'
 import { aiVaultScopePathsForWslDistro } from '../../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import {
@@ -27,12 +29,26 @@ import {
   openAiVaultScanSource
 } from '../../../scan-lifecycle/ai-vault-scan-progress'
 
+export function resolveOpenCodeSqliteWorkerEntryPath(
+  runtimeDir = __dirname,
+  pathExists: (path: string) => boolean = existsSync
+): string {
+  return findForeignSqliteReaderEntry(runtimeDir, pathExists)
+}
+
+function defaultWorkerFactory(): Worker {
+  const workerPath = resolveOpenCodeSqliteWorkerEntryPath()
+  // Fail synchronously for missing bundles rather than waiting for an impossible worker response.
+  if (!existsSync(workerPath)) {
+    throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
+  }
+  return spawnWorkerThread(workerPath)
+}
+
 let sharedClient: OpenCodeSqliteWorkerClient | null = null
 
 function getSharedClient(): OpenCodeSqliteWorkerClient {
-  sharedClient ??= new OpenCodeSqliteWorkerClient({
-    workerFactory: createOpenCodeSqliteWorker
-  })
+  sharedClient ??= new OpenCodeSqliteWorkerClient({ workerFactory: defaultWorkerFactory })
   return sharedClient
 }
 

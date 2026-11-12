@@ -4,9 +4,7 @@ import {
 } from './ai-vault-projection-dependency'
 import { app, ipcMain } from 'electron'
 import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
-import {
-  resetAiVaultSessionListCacheForTests,
-} from '../../ai-vault/listing/cached-session-list'
+import { resetAiVaultSessionListCacheForTests } from '../../ai-vault/listing/cached-session-list'
 import type { AiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
 import { deleteAiVaultSession, registerAiVaultDeleteHandler } from './ai-vault-delete'
 import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
