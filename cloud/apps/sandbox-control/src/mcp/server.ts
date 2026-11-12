@@ -12,7 +12,7 @@ const SERVER_INFO = {
   name: 'orca-cloud',
   title: 'Orca Cloud',
   version: '1.0.0',
-  websiteUrl: 'https://onorca.dev'
+  websiteUrl: 'https://orca.dev'
 }
 
 const INSTRUCTIONS =
