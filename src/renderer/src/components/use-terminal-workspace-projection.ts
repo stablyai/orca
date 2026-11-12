@@ -1,0 +1,147 @@
+import { useCallback, useEffect, useMemo } from 'react'
+import { useAppStore } from '../store'
+import { hasFeatureInteraction } from '../../../shared/feature-interactions'
+import { setForegroundTerminalTabIds } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
+import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
+import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
+import { getEffectiveLayoutForWorktree as getEffectiveLayout } from './terminal/split-group-mount'
+import { useContextualTour } from './contextual-tours/use-contextual-tour'
+import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
+import type { TerminalWorkspaceStoreController } from './use-terminal-workspace-store-bindings'
+import { useWorktreeFiles } from './terminal/use-worktree-files'
+
+// Read every render: the titlebar strip can mount after this host. A hook result is never memoized.
+function useTitlebarTabsTarget(): HTMLElement | null {
+  return document.getElementById('titlebar-tabs')
+}
+
+export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStoreController) {
+  const {
+    activeGroupIdByWorktree,
+    activeTabId,
+    activeTabType,
+    activeView,
+    activeWorktreeId,
+    activityTerminalPortals,
+    browserTabsByWorktree,
+    ensureWorktreeRootGroup,
+    groupsByWorktree,
+    hydrationSucceeded,
+    layoutByWorktree,
+    openFiles,
+    renderedActiveWorktreeId,
+    tabsByWorktree,
+    workspaceSessionReady
+  } = controller
+  const foregroundTerminalTabIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (activeView === 'terminal' && activeTabType === 'terminal' && activeTabId) {
+      ids.add(activeTabId)
+    }
+    for (const portal of activityTerminalPortals) {
+      ids.add(portal.tabId)
+    }
+    return Array.from(ids)
+  }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
+
+  useEffect(() => {
+    setForegroundTerminalTabIds(foregroundTerminalTabIds)
+    return () => setForegroundTerminalTabIds([])
+  }, [foregroundTerminalTabIds])
+
+  const tabs = useMemo(
+    () =>
+      renderedActiveWorktreeId !== null && Object.hasOwn(tabsByWorktree, renderedActiveWorktreeId)
+        ? tabsByWorktree[renderedActiveWorktreeId]
+        : [],
+    [renderedActiveWorktreeId, tabsByWorktree]
+  )
+  const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability(
+    workspaceSessionReady && hydrationSucceeded
+  )
+  const titlebarTabsTarget = useTitlebarTabsTarget()
+
+  useEffect(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    ensureWorktreeRootGroup(activeWorktreeId)
+  }, [activeWorktreeId, ensureWorktreeRootGroup])
+
+  const worktreeFiles = useWorktreeFiles(openFiles, renderedActiveWorktreeId)
+  const worktreeBrowserTabs = renderedActiveWorktreeId
+    ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
+    : []
+  // Before host layout arrives, paired clients may own browser pages absent on host; include them so they remain closable.
+  const worktreeClientHostedBrowserRows = useClientHostedBrowserRows(renderedActiveWorktreeId ?? '')
+  const getEffectiveLayoutForWorktree = useCallback(
+    (worktreeId: string) =>
+      getEffectiveLayout(worktreeId, layoutByWorktree, groupsByWorktree, activeGroupIdByWorktree),
+    [activeGroupIdByWorktree, groupsByWorktree, layoutByWorktree]
+  )
+  const effectiveActiveLayout = renderedActiveWorktreeId
+    ? getEffectiveLayoutForWorktree(renderedActiveWorktreeId)
+    : undefined
+  const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
+    ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
+    : ''
+  const activeContextualTourId = useAppStore((state) => state.activeContextualTourId)
+  const hasSplitTerminalPane = useAppStore((state) =>
+    hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
+  )
+  // After a split the owed tip points into the sidebar; don't watch the page for it while it's closed.
+  const nextTourTipReachable = useAppStore(
+    (state) =>
+      state.sidebarOpen ||
+      (!hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split') &&
+        !hasFeatureInteraction(state.featureInteractions, 'tab-splits'))
+  )
+  const splitLandingGroupIds = useAppStore((state) => state.splitLandingGroupIds)
+  const focusesSplitLanding = Boolean(
+    findFocusedSplitLandingGroup(
+      { groupsByWorktree, activeGroupIdByWorktree, splitLandingGroupIds },
+      activeWorktreeId
+    )
+  )
+  const hasSplitTab = useAppStore((state) =>
+    hasFeatureInteraction(state.featureInteractions, 'tab-splits')
+  )
+
+  useContextualTour(
+    'workspace-agent-sessions',
+    Boolean(
+      activeWorktreeId &&
+      activeView === 'terminal' &&
+      workspaceSessionReady &&
+      (activeTabType === 'agent-session' ||
+        (activeTabType === 'terminal' && Boolean(activeTabId)) ||
+        // Splitting a chat focuses the new pane's landing; the tour continues there.
+        focusesSplitLanding) &&
+      nextTourTipReachable
+    ),
+    'workspace_agent_sessions_visible',
+    {
+      // Keep this interaction counted only up to the first split, as before the tour could resume.
+      recordFeatureInteraction:
+        !(hasSplitTerminalPane || hasSplitTab) ||
+        activeContextualTourId === 'workspace-agent-sessions'
+    }
+  )
+
+  return {
+    foregroundTerminalTabIds,
+    tabs,
+    titlebarTabsTarget,
+    worktreeFiles,
+    worktreeBrowserTabs,
+    worktreeClientHostedBrowserRows,
+    getEffectiveLayoutForWorktree,
+    effectiveActiveLayout,
+    activeWorktreeBrowserTabIdsKey,
+    activeContextualTourId,
+    terminalProviderSnapshotCapabilityRevision
+  }
+}
+
+export type TerminalWorkspaceProjectionController = TerminalWorkspaceStoreController &
+  ReturnType<typeof useTerminalWorkspaceProjection>

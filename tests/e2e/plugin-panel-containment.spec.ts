@@ -1,18 +1,26 @@
-/**
- * Invariant: a plugin panel cannot exfiltrate, navigate, or bypass bridge budgets.
- * Oracle: a permissive loopback server receives zero requests while the real
- * sandboxed iframe reports CSP/navigation containment and actual budget refusals.
- * Chromium is required because Vitest cannot exercise CSP or iframe sandboxing.
- * Maturity: experimental until this has CI soak history on all desktop platforms.
- */
+// Require zero loopback requests plus isolated-guest CSP/navigation containment and bounded bridge refusal.
+// Chromium is required; keep experimental maturity until CI soak covers every desktop platform.
 
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
-import type { ElectronApplication, FrameLocator, Page, TestInfo } from '@stablyai/playwright-test'
+import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import {
+  clickInGuest,
+  evalInGuest,
+  guestWebContentsId,
+  pluginGuest,
+  readGuestCsp,
+  readInGuest,
+  waitForGuestReady,
+  ISOLATED_FRAMES_E2E
+} from './helpers/plugin-frame-guest'
+
+// Isolated frames are off by default; these journeys exercise the guest path.
+test.use(ISOLATED_FRAMES_E2E)
 
 type InstalledPanel = {
   pluginKey: string
@@ -26,20 +34,19 @@ type ProbeServer = {
   close: () => Promise<void>
 }
 
-type PanelDocumentSnapshot = {
-  url: string
-  title: string
-  html: string
+type GuestNavigationObservation = {
+  willFrameNavigations: { defaultPrevented: boolean; isMainFrame: boolean; url: string }[]
+  didFrameNavigations: string[]
+  externalUrls: string[]
+  /** Orca's "wants to open" prompts, answered from `promptAnswers` (default Cancel). */
+  prompts: { message: string; detail: string; checkboxLabel: string }[]
+  promptAnswers: { response: number; checkboxChecked: boolean }[]
 }
 
-type ElectronFrameProcess = {
-  frameTreeNodeId: number
-  parentFrameTreeNodeId: number | null
-  processId: number
-  osProcessId: number
+type GuestDocumentSnapshot = {
   url: string
-  origin: string
   marker: string | null
+  fixture: boolean
 }
 
 async function closeServer(server: Server): Promise<void> {
@@ -80,9 +87,13 @@ async function startPermissiveProbeServer(): Promise<ProbeServer> {
 async function materializeHostilePlugin(origin: string): Promise<string> {
   const tempRoot = await mkdtemp(join(tmpdir(), 'orca-hostile-panel-e2e-'))
   const pluginRoot = join(tempRoot, 'hostile-panel')
-  await cp(join(process.cwd(), 'examples', 'plugins', 'hostile-panel'), pluginRoot, {
-    recursive: true
-  })
+  await cp(
+    join(process.cwd(), 'examples', 'plugins', 'test-fixtures', 'hostile-panel'),
+    pluginRoot,
+    {
+      recursive: true
+    }
+  )
   const panelPath = join(pluginRoot, 'panel.html')
   const panelHtml = await readFile(panelPath, 'utf8')
   await writeFile(panelPath, panelHtml.replaceAll('https://example.com', origin))
@@ -117,7 +128,7 @@ async function installApprovedPanel(page: Page, sourcePath: string): Promise<Ins
   }, sourcePath)
 }
 
-async function openPanel(page: Page, panel: InstalledPanel): Promise<void> {
+async function openPanel(page: Page, panel: InstalledPanel): Promise<Locator> {
   await page.evaluate(async () => {
     const store = window.__store?.getState()
     if (!store) {
@@ -133,7 +144,10 @@ async function openPanel(page: Page, panel: InstalledPanel): Promise<void> {
   const panelButton = page.getByRole('button', { name: panel.title })
   await expect(panelButton).toBeVisible({ timeout: 15_000 })
   await panelButton.click()
-  await expect(page.locator(`iframe[title="${panel.title}"]`)).toBeVisible({ timeout: 15_000 })
+  const guest = pluginGuest(page, panel.title)
+  await expect(guest).toBeVisible({ timeout: 15_000 })
+  await waitForGuestReady(guest)
+  return guest
 }
 
 async function attachProbeRequests(testInfo: TestInfo, requests: readonly string[]): Promise<void> {
@@ -143,52 +157,113 @@ async function attachProbeRequests(testInfo: TestInfo, requests: readonly string
   })
 }
 
-async function readPanelDocument(frame: FrameLocator): Promise<PanelDocumentSnapshot> {
-  return frame.locator('html').evaluate((element) => ({
-    url: element.ownerDocument.location.href,
-    title: element.ownerDocument.title,
-    html: element.outerHTML
-  }))
-}
-
-async function inspectElectronFrameProcesses(
+// Watches the guest WebContents itself: main's own will-frame-navigate guard runs first.
+async function startGuestObserver(
   electronApp: ElectronApplication,
-  pageUrl: string
-): Promise<ElectronFrameProcess[]> {
-  return electronApp.evaluate(async ({ BrowserWindow }, expectedUrl) => {
-    const browserWindow =
-      BrowserWindow.getAllWindows().find(
-        (candidate) => candidate.webContents.getURL() === expectedUrl
-      ) ?? BrowserWindow.getAllWindows()[0]
-    if (!browserWindow) {
-      return []
+  guestId: number
+): Promise<void> {
+  await electronApp.evaluate(({ dialog, shell, webContents }, id) => {
+    // By id: earlier specs in this worker may leave other plugins' guests alive.
+    const guest = webContents.fromId(id)
+    if (!guest) {
+      throw new Error('plugin guest WebContents not found')
     }
-    return Promise.all(
-      browserWindow.webContents.mainFrame.framesInSubtree.map(async (frame) => {
-        let marker: string | null = null
-        try {
-          const value = await frame.executeJavaScript(
-            "document.querySelector('h1')?.textContent ?? null"
-          )
-          marker = typeof value === 'string' ? value : null
-        } catch {
-          // A frame can detach while Chromium reports the live frame tree.
-        }
-        return {
-          frameTreeNodeId: frame.frameTreeNodeId,
-          parentFrameTreeNodeId: frame.parent?.frameTreeNodeId ?? null,
-          processId: frame.processId,
-          osProcessId: frame.osProcessId,
-          url: frame.url,
-          origin: frame.origin,
-          marker
-        }
+    const observation: GuestNavigationObservation = {
+      willFrameNavigations: [],
+      didFrameNavigations: [],
+      externalUrls: [],
+      prompts: [],
+      promptAnswers: []
+    }
+    const onWill = (event: Electron.Event<Electron.WebContentsWillFrameNavigateEventParams>) => {
+      observation.willFrameNavigations.push({
+        defaultPrevented: event.defaultPrevented,
+        isMainFrame: event.isMainFrame,
+        url: event.url
       })
-    )
-  }, pageUrl)
+    }
+    const onDid = (_event: Electron.Event, url: string) => {
+      observation.didFrameNavigations.push(url)
+    }
+    const originalOpenExternal = shell.openExternal
+    const originalShowMessageBox = dialog.showMessageBox
+    // Never a native prompt on the test machine: record it and answer from the queue.
+    const recordPrompt = async (...args: unknown[]): Promise<Electron.MessageBoxReturnValue> => {
+      const options = args.at(-1)
+      const field = (name: string): string =>
+        typeof options === 'object' && options !== null && name in options
+          ? String(Object.getOwnPropertyDescriptor(options, name)?.value)
+          : ''
+      observation.prompts.push({
+        message: field('message'),
+        detail: field('detail'),
+        checkboxLabel: field('checkboxLabel')
+      })
+      return { ...(observation.promptAnswers.shift() ?? { response: 1, checkboxChecked: false }) }
+    }
+    dialog.showMessageBox = recordPrompt
+    const recordOpenExternal = async (url: string): Promise<void> => {
+      observation.externalUrls.push(url)
+    }
+    guest.on('will-frame-navigate', onWill)
+    guest.on('did-frame-navigate', onDid)
+    shell.openExternal = recordOpenExternal
+    if (shell.openExternal !== recordOpenExternal) {
+      throw new Error('shell.openExternal could not be stubbed')
+    }
+    Reflect.set(globalThis, '__orcaGuestProbe', {
+      observation,
+      dispose: () => {
+        guest.off('will-frame-navigate', onWill)
+        guest.off('did-frame-navigate', onDid)
+        shell.openExternal = originalOpenExternal
+        dialog.showMessageBox = originalShowMessageBox
+      }
+    })
+  }, guestId)
 }
 
-test('contains hostile panel network, navigation, and bridge-flood probes', async ({
+async function readGuestObserver(
+  electronApp: ElectronApplication
+): Promise<GuestNavigationObservation> {
+  const observation: GuestNavigationObservation = await electronApp.evaluate(
+    () =>
+      Object.getOwnPropertyDescriptor(globalThis, '__orcaGuestProbe')?.value?.observation ?? null
+  )
+  return observation
+}
+
+async function stopGuestObserver(
+  electronApp: ElectronApplication
+): Promise<GuestNavigationObservation | null> {
+  const observation: GuestNavigationObservation | null = await electronApp.evaluate(() => {
+    const probe = Object.getOwnPropertyDescriptor(globalThis, '__orcaGuestProbe')?.value
+    probe?.dispose()
+    Reflect.deleteProperty(globalThis, '__orcaGuestProbe')
+    return probe?.observation ?? null
+  })
+  return observation
+}
+
+async function readGuestDocument(guest: Locator): Promise<GuestDocumentSnapshot> {
+  const url = await guest.evaluate((webview: Electron.WebviewTag) => webview.getURL())
+  const content = await evalInGuest<{ marker: string | null; fixture: boolean }>(
+    guest,
+    `({ marker: document.documentElement.dataset.navigationProbeDocument ?? null,
+        fixture: document.querySelector('h1')?.textContent === 'Hostile panel fixture' })`
+  )
+  return { url, ...content }
+}
+
+function readProbe(guest: Locator, probe: string): Promise<string | null> {
+  return readInGuest<string | null>(
+    guest,
+    `document.querySelector('[data-probe="${probe}"]')?.dataset.contained ?? null`
+  )
+}
+
+test('contains hostile panel network and navigation probes', async ({
+  electronApp,
   orcaPage
 }, testInfo) => {
   testInfo.annotations.push({ type: 'maturity', description: 'experimental' })
@@ -196,92 +271,213 @@ test('contains hostile panel network, navigation, and bridge-flood probes', asyn
   const pluginRoot = await materializeHostilePlugin(server.origin)
   const tempRoot = join(pluginRoot, '..')
   const appUrl = orcaPage.url()
-  const browserEvents: string[] = []
-  const panelDocuments: PanelDocumentSnapshot[] = []
-  orcaPage.on('console', (message) => {
-    browserEvents.push(`console:${message.type()}:${message.text()}`)
-  })
-  orcaPage.on('pageerror', (error) => {
-    browserEvents.push(`pageerror:${error.message}`)
-  })
-  orcaPage.on('framenavigated', (frame) => {
-    browserEvents.push(`framenavigated:${frame.url()}`)
-  })
+  const guestDocuments: GuestDocumentSnapshot[] = []
+  let observation: GuestNavigationObservation | null = null
+  let observing = false
   try {
     const panel = await installApprovedPanel(orcaPage, pluginRoot)
-    await openPanel(orcaPage, panel)
+    const guest = await openPanel(orcaPage, panel)
 
-    const iframe = orcaPage.locator(`iframe[title="${panel.title}"]`)
-    await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts')
-    const frame = orcaPage.frameLocator(`iframe[title="${panel.title}"]`)
-    await expect(frame.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveAttribute(
-      'content',
-      /connect-src 'none'.*img-src data:/
-    )
-    const initialPanelDebug = await frame.locator('html').evaluate((element) => ({
-      readyState: element.ownerDocument.readyState,
-      scriptCount: element.ownerDocument.scripts.length,
-      resultCount: element.querySelectorAll('[data-probe]').length,
-      bodyText: element.ownerDocument.body?.textContent ?? '',
-      scriptText: Array.from(element.ownerDocument.scripts, (script) => script.textContent ?? '')
-    }))
-    await testInfo.attach('hostile-panel-initial-debug', {
-      body: Buffer.from(JSON.stringify(initialPanelDebug, null, 2)),
-      contentType: 'application/json'
-    })
+    await expect(guest).toHaveAttribute('partition', /^persist:orca-plugin-[0-9a-f]{16}$/)
+    await expect(orcaPage.locator(`iframe[title="${panel.title}"]`)).toHaveCount(0)
+    expect(await readGuestCsp(guest)).toMatch(/connect-src 'self' data: blob:.*frame-src 'none'/)
 
     for (const probe of ['fetch-exfil', 'img-beacon']) {
-      await expect(frame.locator(`[data-probe="${probe}"]`)).toHaveAttribute(
-        'data-contained',
-        'true',
-        { timeout: 5_000 }
-      )
+      await expect.poll(() => readProbe(guest, probe), { timeout: 5_000 }).toBe('true')
     }
 
-    await frame.getByRole('button', { name: 'Run bridge budget probes' }).click()
-    for (const probe of ['oversized-message', 'message-flood']) {
-      await expect(frame.locator(`[data-probe="${probe}"]`)).toHaveAttribute(
-        'data-contained',
-        'true',
-        { timeout: 5_000 }
-      )
-    }
-
+    const bridgeErrorCode = await evalInGuest<string>(
+      guest,
+      `window.orca.host.call('invalid.hostileAction', {}).then(
+        () => 'unexpected_success',
+        (error) => (typeof error?.code === 'string' ? error.code : 'missing_error_code'))`
+    )
+    // Why the host's code: the renderer checks only the shape, the host gates the method.
+    expect(bridgeErrorCode).toBe('unknown_method')
     expect(server.requests).toEqual([])
     expect(orcaPage.url()).toBe(appUrl)
-    await expect(iframe).toBeVisible()
 
-    const initialDocument = await readPanelDocument(frame)
-    panelDocuments.push(initialDocument)
+    await startGuestObserver(electronApp, await guestWebContentsId(guest))
+    observing = true
+    const initial = await readGuestDocument(guest)
+    guestDocuments.push(initial)
+    expect(initial.url).toMatch(/^orca-plugin-frame:\/\/[0-9a-f]{16}\//)
     for (const navigation of [
-      { button: 'Try top navigation', probe: 'top-navigation' },
-      { button: 'Try self navigation', probe: 'self-navigation' },
-      { button: 'Try anchor and form navigation', probe: 'anchor-form-navigation' },
-      { button: 'Try meta refresh navigation', probe: 'meta-refresh-navigation' }
+      { button: 'navigate-top', probe: 'top-navigation' },
+      { button: 'navigate-self', probe: 'self-navigation' },
+      { button: 'navigate-anchor-form', probe: 'anchor-form-navigation' },
+      { button: 'navigate-meta', probe: 'meta-refresh-navigation' }
     ]) {
-      await frame.getByRole('button', { name: navigation.button }).click()
-      await expect(frame.locator(`[data-probe="${navigation.probe}"]`)).toHaveAttribute(
-        'data-contained',
-        'true',
-        { timeout: 5_000 }
+      const documentId = `source:${navigation.probe}`
+      await evalInGuest(
+        guest,
+        `document.documentElement.dataset.navigationProbeDocument = ${JSON.stringify(documentId)};
+        document.getElementById(${JSON.stringify(navigation.button)}).click()`
       )
-      const currentDocument = await readPanelDocument(frame)
-      panelDocuments.push(currentDocument)
-      expect(currentDocument.url).toBe(initialDocument.url)
-      expect(currentDocument.html).toContain('Hostile panel fixture')
+      // Each probe reports after its attempt; a guest is its own top, so top-navigation's
+      // `window.top !== window` verdict is meaningless here and the URL check decides.
+      await expect.poll(() => readProbe(guest, navigation.probe)).not.toBeNull()
+      const current = await readGuestDocument(guest)
+      guestDocuments.push(current)
+      expect(current).toEqual({ url: initial.url, marker: documentId, fixture: true })
       expect(server.requests).toEqual([])
       expect(orcaPage.url()).toBe(appUrl)
     }
+
+    const guardDestination = `${server.origin}/frame-guard-navigation`
+    await evalInGuest(guest, `location.assign(${JSON.stringify(guardDestination)})`)
+    await expect
+      .poll(async () => {
+        observation = await readGuestObserver(electronApp)
+        const attempt = observation.willFrameNavigations.find(({ url }) => url === guardDestination)
+        return attempt?.defaultPrevented === true && attempt.isMainFrame
+      })
+      .toBe(true)
+    const guarded = await readGuestDocument(guest)
+    guestDocuments.push(guarded)
+    expect(guarded).toEqual({
+      url: initial.url,
+      marker: 'source:meta-refresh-navigation',
+      fixture: true
+    })
+
+    observation = await readGuestObserver(electronApp)
+    const attempted = observation.willFrameNavigations.filter(({ url }) =>
+      url.startsWith(server.origin)
+    )
+    expect(attempted.every(({ defaultPrevented }) => defaultPrevented)).toBe(true)
+    expect(observation.didFrameNavigations.filter((url) => url.startsWith(server.origin))).toEqual(
+      []
+    )
+    expect(observation.externalUrls).toEqual([])
+    expect(server.requests).toEqual([])
+    expect(orcaPage.url()).toBe(appUrl)
+
+    // Bridge budgets on the guest path: oversized and flooded calls get real refusals.
+    await clickInGuest(guest, '#bridge')
+    for (const probe of ['oversized-message', 'message-flood']) {
+      await expect
+        .poll(() =>
+          readInGuest<string | null>(
+            guest,
+            `document.querySelector('[data-probe="${probe}"]')?.dataset.contained ?? null`
+          )
+        )
+        .toBe('true')
+    }
   } finally {
-    await attachProbeRequests(testInfo, server.requests)
-    await testInfo.attach('hostile-panel-browser-events', {
-      body: Buffer.from(browserEvents.join('\n')),
-      contentType: 'text/plain'
+    try {
+      if (observing) {
+        observation = await stopGuestObserver(electronApp)
+      }
+    } finally {
+      await attachProbeRequests(testInfo, server.requests)
+      await testInfo.attach('hostile-panel-guest-documents', {
+        body: Buffer.from(JSON.stringify(guestDocuments, null, 2)),
+        contentType: 'application/json'
+      })
+      await testInfo.attach('hostile-panel-guest-navigation-observation', {
+        body: Buffer.from(JSON.stringify(observation, null, 2)),
+        contentType: 'application/json'
+      })
+      await server.close()
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  }
+})
+
+test('shell.openExternal from a panel needs a real gesture in the guest', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
+  testInfo.annotations.push({ type: 'maturity', description: 'experimental' })
+  const server = await startPermissiveProbeServer()
+  const pluginRoot = await materializeHostilePlugin(server.origin)
+  const tempRoot = join(pluginRoot, '..')
+  const target = 'https://example.com/orca-open-external-probe'
+  let observing = false
+  try {
+    const panel = await installApprovedPanel(orcaPage, pluginRoot)
+    const guest = await openPanel(orcaPage, panel)
+    await startGuestObserver(electronApp, await guestWebContentsId(guest))
+    observing = true
+
+    const ungated = await evalInGuest<string>(
+      guest,
+      `window.orca.shell.openExternal(${JSON.stringify(target)}).then(
+        () => 'opened', (error) => String(error?.code))`
+    )
+    expect(ungated).toBe('not_permitted')
+    expect((await readGuestObserver(electronApp)).externalUrls).toEqual([])
+
+    await evalInGuest(
+      guest,
+      `(() => {
+        const button = document.createElement('button')
+        button.id = 'open-external'
+        button.textContent = 'Open external'
+        button.style.cssText = 'position:fixed;top:0;left:0;width:160px;height:40px;z-index:9'
+        button.onclick = () => window.orca.shell.openExternal(${JSON.stringify(target)}).then(
+          (result) => { window.__openExternal = result.opened ? 'opened' : result.reason },
+          (error) => { window.__openExternal = String(error?.code) })
+        document.body.appendChild(button)
+      })()`
+    )
+    // A scripted click is not a gesture: the same handler must be refused.
+    await evalInGuest(guest, `document.getElementById('open-external').click()`)
+    await expect
+      .poll(() => readInGuest<string | null>(guest, 'window.__openExternal ?? null'))
+      .toBe('not_permitted')
+    expect((await readGuestObserver(electronApp)).externalUrls).toEqual([])
+    expect((await readGuestObserver(electronApp)).prompts).toEqual([])
+
+    const clickAndRead = async (): Promise<string | null> => {
+      await evalInGuest(guest, 'window.__openExternal = null')
+      await clickInGuest(guest, '#open-external')
+      await expect
+        .poll(() => readInGuest<string | null>(guest, 'window.__openExternal ?? null'))
+        .not.toBeNull()
+      return readInGuest<string | null>(guest, 'window.__openExternal ?? null')
+    }
+    // This background launch's window is hidden, so nobody could answer a prompt: it settles at
+    // once, unopened, instead of waiting forever.
+    expect(await clickAndRead()).toBe('consent-unavailable')
+    expect((await readGuestObserver(electronApp)).prompts).toEqual([])
+    // Report the window as on screen (it is never shown) so the prompt path runs.
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.isVisible = () => true
+        window.isMinimized = () => false
+      }
     })
-    await testInfo.attach('hostile-panel-documents', {
-      body: Buffer.from(JSON.stringify(panelDocuments, null, 2)),
-      contentType: 'application/json'
+
+    // A real click on a host this plugin was never allowed asks first; Cancel opens nothing.
+    expect(await clickAndRead()).toBe('cancelled')
+    let observed = await readGuestObserver(electronApp)
+    expect(observed.externalUrls).toEqual([])
+    expect(observed.prompts).toEqual([
+      {
+        message: expect.stringContaining('wants to open example.com'),
+        detail: target,
+        checkboxLabel: expect.stringContaining('example.com')
+      }
+    ])
+    // Open with "Always allow": opened now, and the next click opens without asking.
+    await electronApp.evaluate(() => {
+      Object.getOwnPropertyDescriptor(
+        globalThis,
+        '__orcaGuestProbe'
+      )?.value?.observation.promptAnswers.push({ response: 0, checkboxChecked: true })
     })
+    expect(await clickAndRead()).toBe('opened')
+    expect(await clickAndRead()).toBe('opened')
+    observed = await readGuestObserver(electronApp)
+    expect(observed.externalUrls).toEqual([target, target])
+    expect(observed.prompts).toHaveLength(2)
+  } finally {
+    if (observing) {
+      await stopGuestObserver(electronApp)
+    }
     await server.close()
     await rm(tempRoot, { recursive: true, force: true })
   }
@@ -296,33 +492,35 @@ test('detects and suspends a busy-looping panel in an isolated renderer', async 
   const pluginRoot = await materializeHostilePlugin(server.origin)
   const tempRoot = join(pluginRoot, '..')
   const appUrl = orcaPage.url()
-  let frameProcesses: ElectronFrameProcess[] = []
+  let processes: { main: number | null; guest: number | null; guestUrl: string | null } | null =
+    null
   try {
     const panel = await installApprovedPanel(orcaPage, pluginRoot)
-    await openPanel(orcaPage, panel)
+    const guest = await openPanel(orcaPage, panel)
 
-    await expect
-      .poll(
-        async () => {
-          frameProcesses = await inspectElectronFrameProcesses(electronApp, appUrl)
-          return frameProcesses.some((frame) => frame.marker === 'Hostile panel fixture')
-        },
-        { timeout: 5_000, message: 'hostile panel should appear in Electron frame tree' }
-      )
-      .toBe(true)
+    const guestId = await guestWebContentsId(guest)
+    processes = await electronApp.evaluate(
+      ({ BrowserWindow, webContents }, { expectedUrl, id }) => {
+        const mainContents = (
+          BrowserWindow.getAllWindows().find(
+            (candidate) => candidate.webContents.getURL() === expectedUrl
+          ) ?? BrowserWindow.getAllWindows()[0]
+        )?.webContents
+        const guestContents = webContents.fromId(id)
+        return {
+          main: mainContents?.getOSProcessId() ?? null,
+          guest: guestContents?.getOSProcessId() ?? null,
+          guestUrl: guestContents?.getURL() ?? null
+        }
+      },
+      { expectedUrl: appUrl, id: guestId }
+    )
+    expect(processes.main).toBeGreaterThan(0)
+    expect(processes.guest).toBeGreaterThan(0)
+    expect(processes.guest).not.toBe(processes.main)
 
-    const mainFrame = frameProcesses.find((frame) => frame.parentFrameTreeNodeId === null)
-    const panelFrame = frameProcesses.find((frame) => frame.marker === 'Hostile panel fixture')
-    expect(mainFrame).toBeTruthy()
-    expect(panelFrame).toBeTruthy()
-    expect(panelFrame?.processId).not.toBe(mainFrame?.processId)
-    expect(panelFrame?.osProcessId).not.toBe(mainFrame?.osProcessId)
-
-    const iframe = orcaPage.locator(`iframe[title="${panel.title}"]`)
-    await iframe.evaluate((element) => {
-      const panelWindow = (element as HTMLIFrameElement).contentWindow
-      panelWindow?.postMessage({ type: 'orca-hostile-busy-probe' }, '*')
-    })
+    // Deferred so executeJavaScript resolves before the guest's main thread spins.
+    await evalInGuest(guest, `setTimeout(() => document.getElementById('busy').click(), 0)`)
 
     await expect(
       orcaPage.getByText('This plugin panel stopped responding and was suspended.')
@@ -333,8 +531,8 @@ test('detects and suspends a busy-looping panel in an isolated renderer', async 
     expect(orcaPage.url()).toBe(appUrl)
     expect(server.requests).toEqual([])
   } finally {
-    await testInfo.attach('hostile-panel-frame-processes', {
-      body: Buffer.from(JSON.stringify(frameProcesses, null, 2)),
+    await testInfo.attach('hostile-panel-processes', {
+      body: Buffer.from(JSON.stringify(processes, null, 2)),
       contentType: 'application/json'
     })
     await attachProbeRequests(testInfo, server.requests)

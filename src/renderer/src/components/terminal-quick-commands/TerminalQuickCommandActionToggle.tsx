@@ -1,7 +1,8 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/class-names'
 import type { TerminalQuickCommandDialogAction } from './terminal-quick-command-dialog-draft'
 import { QUICK_COMMAND_TOGGLE_ITEM_CLASS } from './terminal-quick-command-toggle-style'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalQuickCommandActionToggleProps = {
   selectedAction: TerminalQuickCommandDialogAction
@@ -12,6 +13,7 @@ export function TerminalQuickCommandActionToggle({
   selectedAction,
   onActionChange
 }: TerminalQuickCommandActionToggleProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ToggleGroup
       type="single"
@@ -21,19 +23,34 @@ export function TerminalQuickCommandActionToggle({
           onActionChange(value)
         }
       }}
-      className="justify-start"
+      // Why: equal columns keep the control width stable when labels differ by locale.
+      className="grid w-[11.5rem] grid-cols-2"
       variant="outline"
     >
-      <ToggleGroupItem value="terminal-command" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
-        {translate(
+      <ToggleGroupItem
+        value="terminal-command"
+        className={cn(QUICK_COMMAND_TOGGLE_ITEM_CLASS, 'w-full justify-center')}
+        aria-label={t(
           'auto.components.terminal.quick.commands.TerminalQuickCommandActionToggle.b5ea4d64f6',
           'Terminal Command'
         )}
+      >
+        {t(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandActionToggle.terminal_short',
+          'Terminal'
+        )}
       </ToggleGroupItem>
-      <ToggleGroupItem value="agent-prompt" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
-        {translate(
+      <ToggleGroupItem
+        value="agent-prompt"
+        className={cn(QUICK_COMMAND_TOGGLE_ITEM_CLASS, 'w-full justify-center')}
+        aria-label={t(
           'auto.components.terminal.quick.commands.TerminalQuickCommandActionToggle.b0d58e37ed',
           'Agent Prompt'
+        )}
+      >
+        {t(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandActionToggle.agent_short',
+          'Agent'
         )}
       </ToggleGroupItem>
     </ToggleGroup>

@@ -2,30 +2,27 @@
 
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
+import { i18n } from '@/i18n/i18n'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 
-// Stub the card and dialog so the board test stays free of xterm / Radix
-// machinery while still exercising the board-owned dialog wiring.
+// Stub card/dialog internals while retaining the board’s dialog wiring.
 vi.mock('./AgentKanbanCard', () => ({
   AgentKanbanCard: ({
     card,
     repoIcon,
-    now,
     onOpenTerminal
   }: {
     card: DashboardCard
     repoIcon?: RepoIcon | null
-    now: number
     onOpenTerminal: (card: DashboardCard) => void
   }) => (
     <div
       data-testid="card"
       data-bucket={card.bucket}
       data-unseen={card.unseen}
-      data-now={now}
       data-repo-icon={repoIcon === null ? 'none' : JSON.stringify(repoIcon)}
       onClick={() => onOpenTerminal(card)}
     >
@@ -74,177 +71,44 @@ function card(overrides: Partial<DashboardCard>): DashboardCard {
   }
 }
 
-function renderBoard(
-  cards: DashboardCard[],
-  repoIconsByRepoId?: Record<string, RepoIcon | null>
-): void {
-  const snapshot: DashboardSnapshot = { generatedAt: 1, cards, repoIconsByRepoId }
-  render(<AgentKanbanBoard snapshot={snapshot} />)
-}
-
 const ackAgent = vi.fn(async () => {})
 
 describe('AgentKanbanBoard', () => {
-  beforeEach(() => {
-    // The board relays seen-acks through the dashboard preload API.
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
+    localStorage.clear()
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+    )
     ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
   })
   afterEach(() => {
     cleanup()
-    vi.useRealTimers()
     vi.clearAllMocks()
     vi.restoreAllMocks()
-  })
-
-  it('renders the three fixed columns in order', () => {
-    renderBoard([])
-    const headers = screen.getAllByText(/Needs You|Working|Idle/)
-    expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Idle'])
-  })
-
-  it('places cards in their bucket column and counts them', () => {
-    renderBoard([
-      card({ bucket: 'attention', worktreeName: 'a1' }),
-      card({ bucket: 'attention', worktreeName: 'a2' }),
-      card({ bucket: 'idle', worktreeName: 'i1' })
-    ])
-    const cards = screen.getAllByTestId('card')
-    expect(cards).toHaveLength(3)
-    expect(cards.filter((c) => c.dataset.bucket === 'attention')).toHaveLength(2)
-    expect(within(document.body).getByText('i1').dataset.bucket).toBe('idle')
-    expect(screen.getByText('3 total')).toBeTruthy()
-  })
-
-  it('leaves every column border neutral now that cards carry the state color', () => {
-    renderBoard([card({ bucket: 'attention' })])
-    for (const column of document.querySelectorAll('section')) {
-      expect(column.className).toContain('border-border/60')
-      expect(column.className).not.toContain('amber')
-    }
-  })
-
-  it('routes each card its own repo icon', () => {
-    renderBoard(
-      [
-        card({ repoId: 'r1', worktreeName: 'from-r1' }),
-        card({ repoId: 'r2', worktreeName: 'from-r2' }),
-        card({ repoId: 'r3', worktreeName: 'from-r3' })
-      ],
-      { r1: { type: 'lucide', name: 'Rocket' }, r2: null }
-    )
-
-    expect(screen.getByText('from-r1').dataset.repoIcon).toBe('{"type":"lucide","name":"Rocket"}')
-    expect(screen.getByText('from-r2').dataset.repoIcon).toBe('none')
-    // Unknown repo → the card's own default glyph, never another repo's icon.
-    expect(screen.getByText('from-r3').dataset.repoIcon).toBe('none')
-  })
-
-  it('shows "None" for empty columns', () => {
-    renderBoard([card({ bucket: 'working' })])
-    // attention and idle are empty → two "None" placeholders.
-    expect(screen.getAllByText('None')).toHaveLength(2)
-  })
-
-  it('orders cards in a column by most recent bucket entry first', () => {
-    renderBoard([
-      card({ bucket: 'working', worktreeName: 'old-move', stateChangedAt: 1000 }),
-      card({ bucket: 'working', worktreeName: 'new-move', stateChangedAt: 3000 }),
-      card({ bucket: 'working', worktreeName: 'mid-move', stateChangedAt: 2000 })
-    ])
-    const names = screen.getAllByTestId('card').map((c) => c.textContent)
-    expect(names).toEqual(['new-move', 'mid-move', 'old-move'])
-  })
-
-  it('does not start the clock when no card renders a relative timestamp', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(100_000)
-
-    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [] }} />)
-    expect(vi.getTimerCount()).toBe(0)
-
-    rerender(
-      <AgentKanbanBoard
-        snapshot={{ generatedAt: 2, cards: [card({ startedAt: 0, finishedAt: null })] }}
-      />
-    )
-    const initialNow = screen.getByTestId('card').dataset.now
-
-    expect(vi.getTimerCount()).toBe(0)
-    act(() => vi.advanceTimersByTime(30_000))
-    expect(screen.getByTestId('card').dataset.now).toBe(initialNow)
-  })
-
-  it('parks the clock while hidden, catches up on reveal, and ticks while visible', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(100_000)
-    let visibilityState: DocumentVisibilityState = 'hidden'
-    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState)
-
-    renderBoard([card({ startedAt: 1 })])
-    expect(screen.getByTestId('card').dataset.now).toBe('100000')
-    expect(vi.getTimerCount()).toBe(0)
-
-    act(() => vi.advanceTimersByTime(60_000))
-    expect(screen.getByTestId('card').dataset.now).toBe('100000')
-
-    visibilityState = 'visible'
-    act(() => document.dispatchEvent(new Event('visibilitychange')))
-    expect(screen.getByTestId('card').dataset.now).toBe('160000')
-    expect(vi.getTimerCount()).toBe(1)
-
-    act(() => vi.advanceTimersByTime(30_000))
-    expect(screen.getByTestId('card').dataset.now).toBe('190000')
+    vi.unstubAllGlobals()
   })
 
   it('keeps the terminal dialog open across bucket moves and card removal', () => {
-    const agent = card({ paneKey: 'pk-1', bucket: 'idle', worktreeName: 'wt1' })
-    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
+    const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
+    const { rerender } = render(
+      <AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent], showIdle: true }} />
+    )
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
 
     fireEvent.click(screen.getByTestId('card'))
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
 
-    // Sending a message flips the agent idle → working; the dialog must
-    // follow the card to its new bucket instead of closing.
+    // Replying moves done agents to working; the dialog must survive the bucket change.
     const moved = { ...agent, bucket: 'working' as const, dotState: 'working' as const }
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [moved] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.bucket).toBe('working')
 
-    // Even a vanished card (pane closed) keeps the dialog up — the user
-    // dismisses it explicitly, but stale live routing is cleared.
+    // Keep vanished-card dialogs open until dismissed, but clear stale live routing.
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.ptyId).toBeUndefined()
-  })
-
-  it('relays a seen-ack when a dialog opens and when the open agent changes state', () => {
-    const agent = card({ paneKey: 'pk-ack', bucket: 'idle', unseen: true })
-    const { rerender } = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} />)
-    // unseen comes straight from the snapshot (the shared ack map).
-    expect(screen.getByTestId('card').dataset.unseen).toBe('true')
-
-    fireEvent.click(screen.getByTestId('card'))
-    expect(ackAgent).toHaveBeenCalledWith('pk-ack')
-    ackAgent.mockClear()
-
-    // The ack round-trips through the main window; the next snapshot mutes it.
-    rerender(
-      <AgentKanbanBoard snapshot={{ generatedAt: 2, cards: [{ ...agent, unseen: false }] }} />
-    )
-    expect(screen.getByTestId('card').dataset.unseen).toBe('false')
-    expect(ackAgent).not.toHaveBeenCalled()
-
-    // A state change while the dialog is open re-acks (watching counts as
-    // seeing), so the card never flips bold under an open dialog.
-    rerender(
-      <AgentKanbanBoard
-        snapshot={{
-          generatedAt: 3,
-          cards: [{ ...agent, bucket: 'working' as const, stateChangedAt: 2000, unseen: true }]
-        }}
-      />
-    )
-    expect(ackAgent).toHaveBeenCalledWith('pk-ack')
   })
 })

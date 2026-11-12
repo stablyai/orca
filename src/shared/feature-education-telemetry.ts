@@ -4,20 +4,26 @@ export const FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS = [
   'workspace-board',
   'workspace-agent-sessions',
   'browser',
+  'browser-extensions',
+  'client-hosted-browser',
   'tasks',
   'automations',
   'floating-workspace',
-  'workspace-creation'
+  'workspace-creation',
+  'projects-collapse-all'
 ] as const satisfies readonly ContextualTourId[]
 
 export const FEATURE_EDUCATION_SOURCES = [
   'workspace_board_visible',
   'workspace_agent_sessions_visible',
   'browser_visible',
+  'browser_extensions_visible',
+  'client_hosted_browser_visible',
   'tasks_open',
   'automations_open',
   'floating_workspace_visible',
   'workspace_creation_visible',
+  'project_header_collapsed',
   'workspace_creation_modal',
   'setup_guide_parallel_work',
   'unknown'

@@ -1,5 +1,6 @@
-import type { TabGroup, TuiAgent } from '../../../../shared/types'
-import type { TabSplitDirection } from '../../store/slices/tabs'
+import type { TabGroup } from '../../../../shared/tab-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
 
 export type TabDropZone = 'center' | TabSplitDirection
 
@@ -9,7 +10,7 @@ export type TabDragItemData = {
   groupId: string
   unifiedTabId: string
   visibleTabId: string
-  tabType: 'terminal' | 'editor' | 'browser' | 'simulator'
+  tabType: 'terminal' | 'editor' | 'agent-session' | 'browser' | 'simulator'
   label: string
   iconPath?: string
   color?: string | null

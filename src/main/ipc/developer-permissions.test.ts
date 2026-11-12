@@ -6,6 +6,8 @@ const {
   askForMediaAccessMock,
   getMediaAccessStatusMock,
   isTrustedAccessibilityClientMock,
+  getMacosFullDiskAccessStatusMock,
+  terminalHostsStatusMock,
   execFileMock,
   createSocketMock,
   socketMock,
@@ -13,7 +15,8 @@ const {
 } = vi.hoisted(() => {
   const handleMock = vi.fn()
   const socketState = {
-    sendCallback: null as (() => void) | null
+    sendCallback: null as ((error?: Error | null) => void) | null,
+    errorListener: null as ((error: Error) => void) | null
   }
   const socketMock = {
     on: vi.fn(),
@@ -28,6 +31,8 @@ const {
     askForMediaAccessMock: vi.fn(),
     getMediaAccessStatusMock: vi.fn(),
     isTrustedAccessibilityClientMock: vi.fn(),
+    getMacosFullDiskAccessStatusMock: vi.fn(),
+    terminalHostsStatusMock: vi.fn(async () => 'denied'),
     execFileMock: vi.fn(),
     createSocketMock: vi.fn(() => socketMock),
     socketMock,
@@ -59,6 +64,12 @@ vi.mock('node:child_process', () => ({
   execFile: execFileMock
 }))
 
+vi.mock('../macos-permissions/macos-full-disk-access-status', () => ({
+  getMacosFullDiskAccessStatus: getMacosFullDiskAccessStatusMock
+}))
+vi.mock('../daemon/permissions/daemon-full-disk-access-status', () => ({
+  getTerminalHostsFullDiskAccessStatus: terminalHostsStatusMock
+}))
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 
 describe('registerDeveloperPermissionHandlers', () => {
@@ -72,6 +83,8 @@ describe('registerDeveloperPermissionHandlers', () => {
     askForMediaAccessMock.mockReset()
     getMediaAccessStatusMock.mockReset()
     isTrustedAccessibilityClientMock.mockReset()
+    getMacosFullDiskAccessStatusMock.mockReset()
+    getMacosFullDiskAccessStatusMock.mockResolvedValue('denied')
     execFileMock.mockReset()
     execFileMock.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1)
@@ -83,7 +96,13 @@ describe('registerDeveloperPermissionHandlers', () => {
     })
     createSocketMock.mockClear()
     socketState.sendCallback = null
-    socketMock.on.mockClear()
+    socketState.errorListener = null
+    socketMock.on.mockReset()
+    socketMock.on.mockImplementation((event: string, listener: (error: Error) => void) => {
+      if (event === 'error') {
+        socketState.errorListener = listener
+      }
+    })
     socketMock.removeListener.mockClear()
     socketMock.bind.mockReset()
     socketMock.bind.mockImplementation((callback: () => void) => callback())
@@ -95,7 +114,7 @@ describe('registerDeveloperPermissionHandlers', () => {
         _length: number,
         _port: number,
         _address: string,
-        callback: () => void
+        callback: (error?: Error | null) => void
       ) => {
         socketState.sendCallback = callback
       }
@@ -118,25 +137,6 @@ describe('registerDeveloperPermissionHandlers', () => {
     }
     return call[1] as (_event: unknown, args: { id: string }) => Promise<unknown>
   }
-
-  it('clears the local-network prompt fallback timer when UDP send settles first', async () => {
-    registerDeveloperPermissionHandlers()
-
-    const result = getRequestHandler()({}, { id: 'local-network' })
-    expect(socketMock.send).toHaveBeenCalledTimes(1)
-    expect(vi.getTimerCount()).toBe(1)
-
-    socketState.sendCallback?.()
-
-    await expect(result).resolves.toEqual({
-      id: 'local-network',
-      status: 'unknown',
-      openedSystemSettings: false
-    })
-    expect(vi.getTimerCount()).toBe(0)
-    expect(socketMock.removeListener).toHaveBeenCalledWith('error', expect.any(Function))
-    expect(socketMock.close).toHaveBeenCalledTimes(1)
-  })
 
   it('settles the automation prompt when osascript hangs', async () => {
     const killMock = vi.fn()

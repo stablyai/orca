@@ -19,6 +19,8 @@ export function parsePositiveSafeIntegerText(raw: string): number | null {
   return exactValue === BigInt(value) ? value : null
 }
 
+// Match CLI Number coercion, including integer-valued decimal text, or the caller’s timer may cut the CLI short.
+// Exact-text callers use parsePositiveSafeIntegerText instead.
 export function parsePositiveSafeIntegerNumericText(raw: string): number | null {
   const value = Number(raw)
   return Number.isSafeInteger(value) && value > 0 ? value : null

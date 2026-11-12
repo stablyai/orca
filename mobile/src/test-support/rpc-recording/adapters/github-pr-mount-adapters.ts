@@ -1,0 +1,246 @@
+import type * as GithubPrRpcModule from '../../../source-control/review/github-pr-rpc'
+import type * as GithubPrMutationsModule from '../../../source-control/review/github-pr-mutations'
+import type * as PrAiTriageLaunchModule from '../../../source-control/review/pr-ai-triage-launch'
+import type * as UseMobilePrBranchContextModule from '../../../source-control/review/use-mobile-pr-branch-context'
+import type { MountAdapter } from '../recording-scenario'
+import type { operationModuleLoader } from '../operation-module-loader'
+import type * as LineMutations from '../../../source-control/review/github-pr-review-line-mutations'
+import { legacyShellStatusFixture } from '../legacy-shell-status-fixture'
+
+const WORKTREE = 'repo-9::/w'
+const PR_NUMBER = 12
+const FORK_REPO = { owner: 'fork-owner', repo: 'fork-repo', host: 'github.enterprise.test' }
+
+export function githubPrMountAdapters(
+  modules: ReturnType<typeof operationModuleLoader>
+): Record<string, MountAdapter> {
+  return {
+    'session.pr-reads': ({ client: suppliedClient }) => {
+      const client = legacyShellStatusFixture(suppliedClient)
+      const reads = modules.load<typeof GithubPrRpcModule>(
+        'mobile/src/source-control/review/github-pr-rpc.ts'
+      )
+      const results: Record<string, unknown> = {}
+      function send(name: string, args: Record<string, unknown>): Promise<unknown> {
+        const prRepo = args.fork === true ? FORK_REPO : null
+        if (name === 'repo-slug') {
+          return reads.fetchGithubRepoSlug(client, WORKTREE)
+        }
+        if (name === 'hosted-review') {
+          return reads.fetchHostedReviewForBranch(client, WORKTREE, {
+            branch: 'feature',
+            linkedGitHubPR: PR_NUMBER
+          })
+        }
+        if (name === 'pr-for-branch') {
+          return reads.fetchPRForBranch(client, WORKTREE, { branch: 'feature' })
+        }
+        if (name === 'work-item') {
+          return reads.fetchWorkItemDetails(client, WORKTREE, { prNumber: PR_NUMBER })
+        }
+        if (name === 'checks') {
+          return reads.fetchPRChecks(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            headSha: args.headSha === null ? null : 'head-sha-1',
+            prRepo
+          })
+        }
+        if (name === 'check-details') {
+          return reads.fetchPRCheckDetails(client, WORKTREE, {
+            checkRunId: 7,
+            checkName: 'build',
+            url: null,
+            prRepo
+          })
+        }
+        if (name === 'assignable') {
+          return reads.fetchAssignableUsers(client, WORKTREE, prRepo)
+        }
+        throw new Error(`Unknown pr read action: ${name}`)
+      }
+      return {
+        action: (name, args) =>
+          send(name, args).then((value) => {
+            results[name] = value
+            return value
+          }),
+        state: () => ({ ...results }),
+        dispose: () => {}
+      }
+    },
+    'session.pr-mutations': ({ client }) => {
+      const mutations = modules.load<typeof GithubPrMutationsModule>(
+        'mobile/src/source-control/review/github-pr-mutations.ts'
+      )
+      const lineMutations = () =>
+        modules.load<typeof LineMutations>(
+          'mobile/src/source-control/review/github-pr-review-line-mutations.ts'
+        )
+      const results: Record<string, unknown> = {}
+      function send(name: string, args: Record<string, unknown>): Promise<unknown> {
+        const prRepo = args.fork === true ? FORK_REPO : null
+        const slug = { owner: 'owner', repo: 'repo', commentId: 55 }
+        if (name === 'merge') {
+          return mutations.fetchMergePR(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            method: 'squash',
+            prRepo
+          })
+        }
+        if (name === 'auto-merge') {
+          return mutations.fetchSetPRAutoMerge(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            enabled: true,
+            prRepo
+          })
+        }
+        if (name === 'close') {
+          return mutations.fetchUpdatePRState(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            state: 'closed',
+            prRepo
+          })
+        }
+        if (name === 'request-reviewers') {
+          return mutations.fetchRequestPRReviewers(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            reviewers: ['octocat'],
+            prRepo
+          })
+        }
+        if (name === 'remove-reviewers') {
+          return mutations.fetchRemovePRReviewers(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            reviewers: ['octocat'],
+            prRepo
+          })
+        }
+        if (name === 'rerun-checks') {
+          return mutations.fetchRerunPRChecks(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            headSha: 'head-sha-1',
+            failedOnly: true,
+            prRepo
+          })
+        }
+        if (name === 'reply') {
+          return mutations.fetchAddPRReviewCommentReply(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            commentId: 55,
+            body: 'recorded reply',
+            threadId: 'thread-1',
+            path: 'src/app.ts',
+            line: 3,
+            prRepo
+          })
+        }
+        if (name === 'root-comment') {
+          return mutations.fetchAddIssueComment(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            body: 'recorded comment',
+            prRepo
+          })
+        }
+        if (name === 'line-comment') {
+          return lineMutations().fetchAddPRReviewComment(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            commitId: 'head-sha-1',
+            path: 'src/app.ts',
+            startLine: 3,
+            line: 5,
+            body: 'recorded line comment',
+            prRepo
+          })
+        }
+        if (name === 'file-viewed') {
+          return lineMutations().fetchSetPRFileViewed(client, WORKTREE, {
+            pullRequestId: 'PR_kwDO',
+            path: 'src/app.ts',
+            viewed: true,
+            prRepo
+          })
+        }
+        if (name === 'resolve-thread') {
+          return mutations.fetchResolveReviewThread(client, WORKTREE, {
+            threadId: 'thread-1',
+            resolve: true,
+            prRepo
+          })
+        }
+        if (name === 'edit-comment') {
+          return mutations.fetchUpdateIssueComment(client, { ...slug, body: 'edited' })
+        }
+        if (name === 'delete-comment') {
+          return mutations.fetchDeleteIssueComment(client, slug)
+        }
+        if (name === 'title') {
+          return mutations.fetchUpdatePRTitle(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            title: 'Recorded title',
+            prRepo
+          })
+        }
+        throw new Error(`Unknown pr mutation action: ${name}`)
+      }
+      return {
+        action: (name, args) =>
+          send(name, args).then((value) => {
+            results[name] = value
+            return value
+          }),
+        state: () => ({ ...results }),
+        dispose: () => {}
+      }
+    },
+    'session.pr-triage-launch': ({ client }) => {
+      const launch = modules.load<typeof PrAiTriageLaunchModule>(
+        'mobile/src/source-control/review/pr-ai-triage-launch.ts'
+      ).launchAgentWithPrompt
+      let launched: unknown = 'unlaunched'
+      return {
+        action: (_name, args) =>
+          launch({
+            client,
+            hostCapabilities:
+              args.legacyHost === true
+                ? []
+                : ['agent.launch.v2', 'agent.launch.replay.v1', 'agent.launch.replay-required.v1'],
+            worktreeId: WORKTREE,
+            actionId: 'fixChecks',
+            prompt: String(args.prompt ?? 'Fix the failing checks'),
+            launchSource: 'task_page'
+          }).then((result) => {
+            launched = result
+          }),
+        state: () => ({ launched }),
+        dispose: () => {}
+      }
+    },
+    'session.pr-branch-context': ({ client }) => {
+      const context = modules.load<typeof UseMobilePrBranchContextModule>(
+        'mobile/src/source-control/review/use-mobile-pr-branch-context.ts'
+      )
+      let repoContext: unknown = 'unread'
+      let identity: unknown = 'unread'
+      return {
+        action(name) {
+          if (name === 'repo-context') {
+            return context.loadMobilePrRepoContext(client, WORKTREE).then((value) => {
+              repoContext = value
+              return value
+            })
+          }
+          if (name === 'identity') {
+            return context.loadMobilePrBranchIdentity(client, WORKTREE).then((value) => {
+              identity = value
+              return value
+            })
+          }
+          throw new Error(`Unknown pr branch context action: ${name}`)
+        },
+        state: () => ({ repoContext, identity }),
+        dispose: () => {}
+      }
+    }
+  }
+}

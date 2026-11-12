@@ -3,7 +3,8 @@ export type ComputerUseErrorRecoveryData = {
 }
 
 export function computerUseErrorRecoveryData(
-  code: string
+  code: string,
+  message?: string
 ): ComputerUseErrorRecoveryData | undefined {
   switch (code) {
     case 'app_not_found':
@@ -24,9 +25,20 @@ export function computerUseErrorRecoveryData(
         'If no window is listed, open or focus the app first; `orca computer` does not launch closed desktop apps.'
       )
     case 'window_not_focused':
+      if (message?.includes('may already have been delivered')) {
+        return recoverWith(
+          'Run `orca computer get-app-state --app <app> --json` and verify whether the intended action already occurred before retrying.',
+          'Do not retry the click if it already took effect; otherwise bring the target window forward and use fresh state before trying again.'
+        )
+      }
       return recoverWith(
         'Retry once with `--restore-window`.',
         'If `--restore-window` was already used, stop retrying restore; bring the app forward manually, check permissions, or prefer `set-value` for editable fields.'
+      )
+    case 'background_unavailable':
+      return recoverWith(
+        'If the message names a popup menu or `<select>`, set its option with `orca computer set-value` on that element instead of clicking.',
+        'Otherwise retry once with `--restore-window`; that brings the app forward and uses foreground input, so tell the user it will take over their screen.'
       )
     case 'window_stale':
       return recoverWith(
@@ -44,6 +56,12 @@ export function computerUseErrorRecoveryData(
         'Use a semantic alternative such as `set-value` or `click`, or install the missing desktop dependency if the error names one.'
       )
     case 'permission_denied':
+      if (message?.includes('target_elevated')) {
+        return recoverWith(
+          'Do not retry: Windows blocks input from a non-administrator Orca to an app running as administrator.',
+          'Ask the user to handle this window, or to restart Orca as administrator if they want it to control elevated apps.'
+        )
+      }
       return recoverWith(
         'Run `orca computer permissions --json`, or `orca computer permissions --id accessibility --json` / `--id screenshots --json` when the message names one missing permission.',
         'For remote or SSH targets, verify the command is running inside an active graphical desktop session.'
@@ -74,9 +92,22 @@ export function computerUseErrorRecoveryData(
         'Do not retry the same command unchanged.'
       )
     case 'action_timeout':
+      if (message?.includes('window_not_responding')) {
+        return recoverWith(
+          message.includes('may already have been delivered')
+            ? 'Wait a few seconds, then run `orca computer get-app-state --app <app> --json` and check whether the action already took effect before retrying it.'
+            : 'Wait a few seconds for the app to respond, then run `orca computer get-app-state --app <app> --json` again.',
+          'If it stays unresponsive, ask the user to close or restart the app; do not keep sending it input.'
+        )
+      }
       return recoverWith(
         'Run `orca computer get-app-state --app <app> --json` before retrying so you know whether the UI changed.',
         'Retry with a simpler semantic action or `--no-screenshot` if observation is slow; do not repeat the same timed-out action blindly.'
+      )
+    case 'verification_failed':
+      return recoverWith(
+        'Run `orca computer get-app-state --app <app> --json` and check which field holds the value; another field may have changed instead.',
+        'Do not retry the same `set-value` unchanged. For editable text, click the field and confirm focus, select all (`cmd+a` on macOS, `ctrl+a` on Windows/Linux), then use `type-text` and inspect the resulting value.'
       )
     case 'screenshot_failed':
       return recoverWith(
@@ -85,6 +116,13 @@ export function computerUseErrorRecoveryData(
         'If the message mentions the payload cap, target a smaller/current window or use `--no-screenshot`.'
       )
     case 'accessibility_error':
+      // Why: an Orca server installed before it bundled computer use reports only this exit (#31777).
+      if (message?.startsWith('computer sidecar exited with code')) {
+        return recoverWith(
+          'If this targets an Orca server (`orca serve`, SSH or WSL), its install may not include computer use: update or reprovision the server, then retry.',
+          'Run `orca computer capabilities --json` to confirm the provider is available before retrying.'
+        )
+      }
       return recoverWith(
         'Run `orca computer capabilities --json` to confirm the provider is available before retrying.',
         'If the message mentions permissions, run `orca computer permissions --id accessibility --json` and grant access.',

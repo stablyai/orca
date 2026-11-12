@@ -1,0 +1,272 @@
+import { markUnreadFollowUpMail } from './worker-follow-up-lineage'
+import type { WorkerReportOutcome, WorkerReportSettlement } from '../orchestration-records'
+import type { OrchestrationDb } from '../orchestration-db'
+import { settleActiveDispatchesForTask } from './dispatch-completion'
+import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
+import {
+  findConflictingActiveAttempt,
+  settleTaskForAttemptResult,
+  settleRemoteAttemptResult
+} from './attempt-task-settlement'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
+import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
+import {
+  isWorkerStateIn,
+  reportCorrectsUnobservedPrompt,
+  SETTLEABLE_WORKER_STATES,
+  UNPROVEN_WORKER_STATES
+} from '../../workers/reports/worker-report-admission'
+
+type WorkerReportObservation = {
+  id: string
+  authorityId: string
+  homeReceivedAt: number
+}
+
+type WorkerReportSettlementParams = {
+  taskId: string
+  dispatchId: string
+  outcome: WorkerReportOutcome
+  result: string
+  observation?: WorkerReportObservation
+}
+
+const WORKER_REPORT_TRANSACTION_SAVEPOINT = 'worker_report_transaction'
+
+function recordAcceptedReportFact(db: OrchestrationDb, params: WorkerReportSettlementParams): void {
+  if (!params.observation) {
+    return
+  }
+  const existing = db
+    .getAttemptObservationFacts(params.dispatchId)
+    .find((fact) => fact.id === params.observation?.id)
+  const sequence =
+    existing?.sequence ??
+    ((
+      db.db
+        .prepare(
+          'SELECT MAX(sequence) AS sequence FROM attempt_observation_facts WHERE dispatch_id = ?'
+        )
+        .get(params.dispatchId) as { sequence: number | null }
+    ).sequence ?? -1) + 1
+  db.recordAttemptObservation({
+    id: params.observation.id,
+    dispatchId: params.dispatchId,
+    sequence,
+    authorityId: params.observation.authorityId,
+    authorityClock: 'home',
+    facet: 'worker_report',
+    payload: { status: 'accepted', outcome: params.outcome, reportId: params.observation.id },
+    sourceObservedAt: null,
+    executionReceivedAt: null,
+    homeReceivedAt: params.observation.homeReceivedAt
+  })
+}
+
+export function settleWorkerReport(
+  this: OrchestrationDb,
+  params: WorkerReportSettlementParams
+): WorkerReportSettlement {
+  return runLifecycleWriteTransaction(this.db, WORKER_REPORT_TRANSACTION_SAVEPOINT, () =>
+    this.settleWorkerReportInTransaction(params)
+  )
+}
+
+export function settleWorkerReportInTransaction(
+  this: OrchestrationDb,
+  params: WorkerReportSettlementParams
+): WorkerReportSettlement {
+  const task = this.getTask(params.taskId)
+  if (!task) {
+    return { action: 'rejected', code: 'unknown_task', reason: `Unknown task ${params.taskId}.` }
+  }
+  const dispatch = this.getDispatchContextById(params.dispatchId)
+  if (!dispatch) {
+    return {
+      action: 'rejected',
+      code: 'unknown_dispatch',
+      reason: `Unknown dispatch ${params.dispatchId}.`
+    }
+  }
+  if (dispatch.task_id !== params.taskId) {
+    return {
+      action: 'rejected',
+      code: 'task_dispatch_mismatch',
+      reason: `Dispatch ${params.dispatchId} belongs to task ${dispatch.task_id}, not ${params.taskId}.`
+    }
+  }
+
+  const expectedDispatchStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
+  const expectedTaskStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
+  // Check before duplicate detection (#16095).
+  const settledByUnobservedPrompt = reportCorrectsUnobservedPrompt(dispatch, task)
+  const reportingWorker = this.getWorkerDispatch(params.dispatchId)
+  const settledDispatchStatus = dispatch.status === 'circuit_broken' ? 'failed' : dispatch.status
+  if (
+    !settledByUnobservedPrompt &&
+    settledDispatchStatus === expectedDispatchStatus &&
+    task.status === expectedTaskStatus
+  ) {
+    recordAcceptedReportFact(this, params)
+    return { action: 'settled', outcome: params.outcome, duplicate: true }
+  }
+  const unprovenWorker = isWorkerStateIn(UNPROVEN_WORKER_STATES, reportingWorker?.state)
+  const reconnectingWorker =
+    (dispatch.status === 'pending' || dispatch.status === 'dispatched') &&
+    task.status === 'blocked' &&
+    unprovenWorker
+  const reportingStart =
+    dispatch.status === 'pending' &&
+    task.status === 'dispatched' &&
+    reportingWorker?.state === 'starting'
+  const previousDispatchStatus = settledByUnobservedPrompt
+    ? dispatch.status
+    : reconnectingWorker || reportingStart
+      ? dispatch.status
+      : 'dispatched'
+  const previousTaskStatus = settledByUnobservedPrompt
+    ? 'failed'
+    : reconnectingWorker
+      ? 'blocked'
+      : 'dispatched'
+  if (dispatch.status !== previousDispatchStatus || task.status !== previousTaskStatus) {
+    return {
+      action: 'rejected',
+      code: 'inactive_dispatch',
+      reason: `inactive dispatch ${params.dispatchId}: it or task ${params.taskId} is already settled.`
+    }
+  }
+  const conflictingWorker = findConflictingActiveAttempt(this, params.taskId, params.dispatchId)
+  if (conflictingWorker) {
+    return {
+      action: 'rejected',
+      code: 'inactive_dispatch',
+      reason: `Task ${params.taskId} still has active supervised Dispatch ${conflictingWorker.id}; stop or settle it before completing ${params.dispatchId}.`
+    }
+  }
+  const latest = getActiveDispatchForTask(this, params.taskId)
+  if (!reportingWorker && latest?.id !== params.dispatchId) {
+    return {
+      action: 'rejected',
+      code: 'stale_dispatch',
+      reason: `Dispatch ${params.dispatchId} is not the current dispatch for task ${params.taskId}.`
+    }
+  }
+  const siblingDispatchIds = this.db
+    .prepare(
+      `SELECT id FROM dispatch_contexts
+       WHERE task_id = ? AND id != ? AND status IN ('pending', 'dispatched')`
+    )
+    .all(params.taskId, params.dispatchId) as { id: string }[]
+
+  this.db.exec('SAVEPOINT settle_worker_report')
+  if (settledByUnobservedPrompt) {
+    // A paired coordinator gets the correction once, after all its writes; see peer_run_corrections.
+    this.db
+      .prepare('INSERT INTO peer_run_corrections (dispatch_id) VALUES (?)')
+      .run(params.dispatchId)
+  }
+  const now = new Date().toISOString()
+  const dispatchTransition = transitionLifecycleWithDb(this.db, {
+    entity: 'dispatch',
+    id: params.dispatchId,
+    from: settledByUnobservedPrompt
+      ? dispatch.status
+      : reconnectingWorker || reportingStart
+        ? ['pending', 'dispatched']
+        : 'dispatched',
+    to:
+      params.outcome === 'succeeded' || !settledByUnobservedPrompt
+        ? expectedDispatchStatus
+        : dispatch.status,
+    projection: {
+      completed_at: now,
+      last_failure: params.outcome === 'failed' ? params.result : dispatch.last_failure,
+      capability_revoked_at: dispatch.capability_revoked_at ?? now
+    },
+    ...(settledByUnobservedPrompt ? { correction: 'unobserved_prompt_report' as const } : {})
+  })
+  const taskSettled =
+    dispatchTransition.changed &&
+    settleTaskForAttemptResult(this, {
+      taskId: params.taskId,
+      outcome: params.outcome,
+      result: params.result,
+      from: previousTaskStatus
+    })
+  if (!taskSettled) {
+    this.db.exec('ROLLBACK TO settle_worker_report')
+    this.db.exec('RELEASE settle_worker_report')
+    return {
+      action: 'rejected',
+      code: 'inactive_dispatch',
+      reason: `Dispatch ${params.dispatchId} changed while its worker report was settling.`
+    }
+  }
+  if (settledByUnobservedPrompt) {
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: params.dispatchId,
+      from: 'failed',
+      to: params.outcome === 'succeeded' ? 'succeeded' : 'failed',
+      projection: { stage: 'settled', updated_at: new Date().toISOString() },
+      correction: 'unobserved_prompt_report'
+    })
+    this.db.prepare('DELETE FROM peer_run_corrections WHERE dispatch_id = ?').run(params.dispatchId)
+  } else if ((unprovenWorker || reportingStart) && params.outcome === 'succeeded') {
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: params.dispatchId,
+      from: reportingStart ? 'starting' : UNPROVEN_WORKER_STATES,
+      to: 'ready',
+      projection: { last_error: null }
+    })
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: params.dispatchId,
+      from: 'ready',
+      to: 'succeeded',
+      projection: { stage: 'settled', updated_at: new Date().toISOString() }
+    })
+  } else if (reportingWorker) {
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: params.dispatchId,
+      // Success reconnects through ready above; only failure settles directly here.
+      from: params.outcome === 'succeeded' ? 'ready' : [...SETTLEABLE_WORKER_STATES, 'starting'],
+      to: params.outcome === 'succeeded' ? 'succeeded' : 'failed',
+      projection: { stage: 'settled', updated_at: new Date().toISOString() }
+    })
+  }
+  settleActiveDispatchesForTask(
+    this,
+    params.taskId,
+    expectedDispatchStatus,
+    params.outcome === 'failed' ? params.result : undefined
+  )
+  this.closeQuestionsForDispatch(params.dispatchId)
+  for (const sibling of siblingDispatchIds) {
+    this.closeQuestionsForDispatch(sibling.id)
+  }
+  if (reportingWorker && this.workerAutoReleaseEnabled?.() !== false) {
+    this.armWorkerTerminalAutoReleaseStatement(params.dispatchId)
+  }
+  recordAcceptedReportFact(this, params)
+  markUnreadFollowUpMail(this, params.dispatchId)
+  this.db.exec('RELEASE settle_worker_report')
+  return { action: 'settled', outcome: params.outcome, duplicate: false }
+}
+
+export type WorkerReportSettlementMethods = {
+  settleWorkerReport: typeof settleWorkerReport
+  settleWorkerReportInTransaction: typeof settleWorkerReportInTransaction
+  settleRemoteAttemptResult: typeof settleRemoteAttemptResult
+}
+
+export function attachWorkerReportSettlement(ctor: { prototype: object }): void {
+  Object.assign(ctor.prototype, {
+    settleWorkerReport,
+    settleWorkerReportInTransaction,
+    settleRemoteAttemptResult
+  })
+}

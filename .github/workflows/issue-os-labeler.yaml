@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   apply-os-label:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Apply OS label from issue form

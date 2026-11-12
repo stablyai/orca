@@ -1,0 +1,126 @@
+import { capturedAutomationOwner } from './hosts/automation-captured-owner'
+import { useCallback, useEffect, useMemo } from 'react'
+import {
+  getLocalExecutionHostLabel,
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import type { Repo } from '../../../../shared/repo-types'
+import { getAutomationTargetAvailability } from './hosts/automation-target-availability'
+import type { AutomationsPageDestinationState } from './authoring/use-automations-page-destination-state'
+import type { AutomationsPageDestinationFormState } from './authoring/use-automations-page-destination-form'
+import type { AutomationsPageListState } from './listing/use-automations-page-list-state'
+import type { AutomationsPageLocalState } from './use-automations-page-local-state'
+import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+import { useTranslate } from '../../i18n/use-translate'
+
+/** Display labels and action availability derived from the selected host row. */
+export function useAutomationsPagePresentationState({
+  store,
+  local,
+  list,
+  destination,
+  destinationForm
+}: {
+  store: AutomationsPageStoreState
+  local: AutomationsPageLocalState
+  list: AutomationsPageListState
+  destination: AutomationsPageDestinationState
+  destinationForm: AutomationsPageDestinationFormState
+}) {
+  const t = useTranslate()
+  const {
+    projectHostSetups,
+    sshConnectionStates,
+    sshStateByEnvironment,
+    runtimeStatusByEnvironmentId,
+    sshTargetLabels,
+    runtimeEnvironments,
+    settings,
+    repoForRow,
+    worktreeForRow
+  } = store
+  const { editingAutomationId, draftAtOpen, draft, activePaneTab, setActivePaneTab } = local
+  const { selected, selectedRow } = list
+  const { automationHostTargetFor } = destination
+  const selectedRepo = selectedRow ? (repoForRow(selectedRow) ?? null) : null
+  const selectedWorktree =
+    selectedRow && selected?.workspaceId
+      ? (worktreeForRow(selectedRow, selectedRepo ?? undefined) ?? null)
+      : null
+  const selectedRunNowAvailability = selectedRow
+    ? getAutomationTargetAvailability(
+        {
+          automation: selectedRow.automation,
+          capturedOwner: capturedAutomationOwner(list.capturedAutomationOwners, selectedRow.key),
+          repo: selectedRepo,
+          workspace: selectedWorktree,
+          projectHostSetups,
+          sshConnectionStates,
+          sshStateByEnvironment,
+          runtimeStatusByEnvironmentId,
+          automationHostTarget: automationHostTargetFor(selectedRow)
+        },
+        t
+      )
+    : null
+  const canSaveDraft =
+    editingAutomationId === null ||
+    !draftAtOpen ||
+    local.targetEdited ||
+    JSON.stringify(draft) !== JSON.stringify(draftAtOpen) ||
+    (editingAutomationId !== null &&
+      local.editingHostStableKey !== destination.rowRecoveryHost(local.editingRowKey)?.stableKey)
+  const getAutomationRepoHostLabel = useCallback(
+    (repo: Repo): string => {
+      const hostId = getRepoExecutionHostId(repo)
+      const parsed = parseExecutionHostId(hostId)
+      if (parsed?.kind === 'ssh') {
+        return sshTargetLabels.get(parsed.targetId) ?? parsed.targetId
+      }
+      if (parsed?.kind === 'runtime') {
+        return (
+          runtimeEnvironments.find((environment) => environment.id === parsed.environmentId)
+            ?.name ?? parsed.environmentId
+        )
+      }
+      return getLocalExecutionHostLabel()
+    },
+    [runtimeEnvironments, sshTargetLabels]
+  )
+  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+  const hostLabelById = useMemo(() => {
+    const labels = new Map<string, string>([['local', getLocalExecutionHostLabel()]])
+    for (const [targetId, label] of sshTargetLabels) {
+      labels.set(`ssh:${encodeURIComponent(targetId)}`, label)
+    }
+    for (const environment of runtimeEnvironments) {
+      labels.set(`runtime:${encodeURIComponent(environment.id)}`, environment.name)
+    }
+    for (const [hostId, label] of hostLabelOverrides) {
+      labels.set(hostId, label)
+    }
+    return labels
+  }, [hostLabelOverrides, runtimeEnvironments, sshTargetLabels])
+  useEffect(() => {
+    if ((!selected || list.selectedExternal) && activePaneTab === 'runs') {
+      setActivePaneTab('overview')
+    }
+  }, [activePaneTab, list.selectedExternal, selected, setActivePaneTab])
+
+  return {
+    selectedRepo,
+    selectedWorktree,
+    selectedRunNowAvailability,
+    canSaveDraft,
+    getAutomationRepoHostLabel,
+    hostLabelById,
+    dialogRepos: destinationForm.dialogRepos,
+    dialogWorktrees: destinationForm.dialogWorktrees
+  }
+}
+
+export type AutomationsPagePresentationState = ReturnType<
+  typeof useAutomationsPagePresentationState
+>

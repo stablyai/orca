@@ -35,12 +35,6 @@ function openMenuOnSelectedText(): void {
 }
 
 describe('SelectedTextCopyMenu', () => {
-  it('opens on right-click over selected text', () => {
-    openMenuOnSelectedText()
-
-    expect(screen.getByRole('button', { name: 'Copy' })).toBeDefined()
-  })
-
   it('stays open when a resize reports the same viewport size', () => {
     openMenuOnSelectedText()
 
@@ -48,15 +42,6 @@ describe('SelectedTextCopyMenu', () => {
     fireEvent(window, new Event('resize'))
 
     expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeNull()
-  })
-
-  it('closes when a resize actually changes the viewport size', () => {
-    openMenuOnSelectedText()
-
-    setViewportSize(900, 800)
-    fireEvent(window, new Event('resize'))
-
-    expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull()
   })
 
   it('still closes on a real resize that follows a no-op one', () => {

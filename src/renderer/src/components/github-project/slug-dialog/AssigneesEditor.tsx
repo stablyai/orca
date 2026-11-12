@@ -1,9 +1,9 @@
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import type { GlobalSettings } from '../../../../../shared/types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function AssigneesEditor({
   owner,
@@ -11,7 +11,7 @@ export function AssigneesEditor({
   host,
   selected,
   disabled,
-  sourceSettings,
+  sourceTarget,
   onChange
 }: {
   owner: string
@@ -19,19 +19,18 @@ export function AssigneesEditor({
   host?: string
   selected: string[]
   disabled?: boolean
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
-  // Why: stabilize the assignee seed identity. `selected` is a fresh array on
-  // every parent render — depending on it directly would refire the IPC for
-  // every unrelated re-render while the popover is open.
+  // Key by sorted assignee values so fresh parent arrays cannot trigger redundant IPC while the popover is open.
   const seedKey = useMemo(() => selected.slice().sort().join(','), [selected])
   const metadata = useRepoAssigneesBySlug(
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    sourceSettings,
+    sourceTarget,
     host
   )
   return (
@@ -42,25 +41,16 @@ export function AssigneesEditor({
           disabled={disabled}
           className="rounded-md border border-border/50 bg-muted/30 px-2 py-0.5 text-[11px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-muted/30"
         >
-          {translate(
-            'auto.components.github.project.slug.dialog.AssigneesEditor.98914e6b36',
-            'Assignees:'
-          )}
+          {t('auto.components.github.project.slug.dialog.AssigneesEditor.98914e6b36', 'Assignees:')}
           {selected.length === 0
-            ? translate(
-                'auto.components.github.project.slug.dialog.AssigneesEditor.94a4e6e4fa',
-                'none'
-              )
+            ? t('auto.components.github.project.slug.dialog.AssigneesEditor.94a4e6e4fa', 'none')
             : selected.join(', ')}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {metadata.loading ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.github.project.slug.dialog.AssigneesEditor.529fec247b',
-              'Loading…'
-            )}
+            {t('auto.components.github.project.slug.dialog.AssigneesEditor.529fec247b', 'Loading…')}
           </div>
         ) : (
           metadata.data.map((u) => {

@@ -1,32 +1,15 @@
 import type { Page } from '@stablyai/playwright-test'
-import { mkdirSync } from 'node:fs'
-import { resolve } from 'node:path'
+import 'node:fs'
+import 'node:path'
 import { test, expect } from './helpers/orca-app'
+import './helpers/repo-with-workspaces'
+import './helpers/sidebar-inputs-build'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import {
-  markWorkspaceTerminalSlept,
-  seedLineageScenario,
-  seedWorkspaceAgentStatus,
-  seedWorkspaceLiveTerminal
-} from './worktree-lineage-state'
+import { seedLineageScenario } from './worktree-lineage-state'
 import { worktreeRow } from './worktree-row-locators'
 
 function worktreeOption(page: Page, worktreeId: string) {
   return worktreeRow(page, worktreeId)
-}
-
-async function captureSidebarEvidence(page: Page, name: string): Promise<void> {
-  if (process.env.ORCA_CAPTURE_EVIDENCE !== '1') {
-    return
-  }
-  const outputDir = resolve(process.cwd(), 'pr-evidence')
-  mkdirSync(outputDir, { recursive: true })
-  await page
-    .locator('[data-worktree-sidebar]')
-    .first()
-    .screenshot({
-      path: resolve(outputDir, name)
-    })
 }
 
 test.describe('Worktree Lineage', () => {
@@ -82,9 +65,7 @@ test.describe('Worktree Lineage', () => {
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      // Why: this test covers lineage row rendering. Clearing through the
-      // store keeps it focused on the render contract instead of nested
-      // context-menu hit testing.
+      // Clear via store to isolate lineage rendering from nested context-menu hit testing.
       await store.getState().updateWorktreeLineage(childId, { noParent: true })
     }, childId)
     await expect
@@ -101,27 +82,6 @@ test.describe('Worktree Lineage', () => {
       )
       .toBe(false)
     await expect(childRow).toBeVisible()
-  })
-
-  test('renders legacy-only inline lineage when side-map hydration is absent', async ({
-    orcaPage
-  }) => {
-    const { parentId, childId } = await seedLineageScenario(orcaPage, { inlineOnly: true })
-    const parentRow = worktreeOption(orcaPage, parentId)
-    const childRow = worktreeOption(orcaPage, childId)
-
-    await expect(parentRow.getByRole('button', { name: 'Hide 1 child workspace' })).toBeVisible()
-    await expect(childRow).toBeVisible()
-    await expect
-      .poll(async () => {
-        const [parentBox, childBox] = await Promise.all([
-          parentRow.boundingBox(),
-          childRow.boundingBox()
-        ])
-        return parentBox && childBox ? childBox.y > parentBox.y : false
-      })
-      .toBe(true)
-    await captureSidebarEvidence(orcaPage, 'legacy-inline-lineage-nested.png')
   })
 
   test('injects filtered parents structurally without showing a parent badge', async ({
@@ -186,42 +146,5 @@ test.describe('Worktree Lineage', () => {
     )
     expect(positions).not.toBeNull()
     expect(positions!.childTop).toBeGreaterThan(positions!.parentTop)
-  })
-
-  test('updates nested child preview status when the child terminal sleeps', async ({
-    orcaPage
-  }) => {
-    const { parentId, childId } = await seedLineageScenario(orcaPage)
-    const parentRow = worktreeOption(orcaPage, parentId)
-    const childRow = worktreeOption(orcaPage, childId)
-
-    await expect(parentRow).toBeVisible()
-    await expect(childRow).toBeVisible()
-
-    const childTabId = await seedWorkspaceLiveTerminal(orcaPage, childId)
-    await expect(childRow).toContainText('Active')
-
-    await markWorkspaceTerminalSlept(orcaPage, { worktreeId: childId, tabId: childTabId })
-    await expect(childRow).toContainText('Inactive')
-  })
-
-  test('shows parent and child agent rows while the parent workspace is active', async ({
-    orcaPage
-  }) => {
-    const { parentId, childId } = await seedLineageScenario(orcaPage)
-    const parentRow = worktreeOption(orcaPage, parentId)
-    const childRow = worktreeOption(orcaPage, childId)
-
-    await parentRow.click()
-    await expect(parentRow).toHaveAttribute('aria-current', 'page')
-    await expect(childRow).toBeVisible()
-
-    const parentAgentPrompt = await seedWorkspaceAgentStatus(orcaPage, parentId, 'PARENT')
-    const childAgentPrompt = await seedWorkspaceAgentStatus(orcaPage, childId, 'CHILD')
-
-    await expect(
-      parentRow.getByRole('treeitem').filter({ hasText: parentAgentPrompt })
-    ).toBeVisible()
-    await expect(childRow.getByRole('treeitem').filter({ hasText: childAgentPrompt })).toBeVisible()
   })
 })

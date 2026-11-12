@@ -8,8 +8,7 @@ function resolveParkWaitTimeoutMs(parkDelayMs?: number): number {
   return Math.max(20_000, delay * 10)
 }
 
-// Why: TerminalPane unmount deletes its entry from window.__paneManagers, so a
-// missing manager is the observable signal that the tab's xterm was parked.
+// PaneManager unregisters on unmount, making its absence the observable parking signal.
 export async function waitForTabParked(
   page: Page,
   tabId: string,
@@ -34,7 +33,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
 
@@ -49,17 +48,16 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
   return tabId
 }
 
-// Why: #8262 exempts the single most-recently-hidden tab from cold-park to keep
-// the just-left view instantly warm, so a lone hidden tab never parks. Opening
-// one more tab hides the current view (which then holds that exemption) and
-// leaves the older `targetTabId` free to cold-park. Returns waitForTabParked's
-// elapsed-ms so callers keep their parking annotations.
+// #8262 exempts the most recently hidden tab: use two decoys for an active target, one for an already-hidden target.
 export async function parkHiddenTabBehindDecoy(
   page: Page,
   worktreeId: string,
   targetTabId: string,
   options?: { parkDelayMs?: number }
 ): Promise<number> {
+  if ((await getActiveTabId(page)) === targetTabId) {
+    await createActiveTerminalTab(page, worktreeId)
+  }
   await createActiveTerminalTab(page, worktreeId)
   return waitForTabParked(page, targetTabId, options)
 }

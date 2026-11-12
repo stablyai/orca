@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
-import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
-import { clearMigrationUnsupportedPtysForPaneKey } from '../agent-hooks/migration-unsupported-pty-state'
+import { isStablePaneId } from '../../shared/workspace-layout/stable-pane-id'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { isValidPaneKey } from '../agent-hooks/server/server-status-identity'
+import { clearMigrationUnsupportedPtysForPaneKey } from '../agent-hooks/observations/migration-unsupported-pty-state'
 
 const MAX_PTY_ID_LENGTH = 512
 
@@ -12,18 +14,38 @@ export function registerAgentPaneAuthorityIpcHandlers(
   ownership: AgentPaneAuthorityOwnership
 ): void {
   ipcMain.removeAllListeners('agentStatus:retirePaneAuthority')
+  ipcMain.removeAllListeners('agentStatus:restorePaneAuthority')
   ipcMain.removeAllListeners('agentStatus:transferPaneAuthority')
-  ipcMain.on('agentStatus:retirePaneAuthority', (_event, paneKey: unknown) => {
+  ipcMain.on('agentStatus:restorePaneAuthority', (_event, paneKey: unknown) => {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
     }
     try {
-      agentHookServer.retirePaneAuthority(paneKey)
-      clearMigrationUnsupportedPtysForPaneKey(paneKey)
+      agentHookServer.restorePaneAuthority(paneKey)
     } catch (err) {
-      console.warn('[agent-hooks] retirePaneAuthority failed:', err)
+      console.warn('[agent-hooks] restorePaneAuthority failed:', err)
     }
   })
+  ipcMain.on(
+    'agentStatus:retirePaneAuthority',
+    (_event, paneKey: unknown, retirementId: unknown) => {
+      if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
+        return
+      }
+      try {
+        if (
+          retirementId !== undefined &&
+          (typeof retirementId !== 'string' || !isStablePaneId(retirementId))
+        ) {
+          return
+        }
+        agentHookServer.retirePaneAuthority(paneKey, retirementId)
+        clearMigrationUnsupportedPtysForPaneKey(paneKey)
+      } catch (err) {
+        console.warn('[agent-hooks] retirePaneAuthority failed:', err)
+      }
+    }
+  )
   ipcMain.on('agentStatus:transferPaneAuthority', (_event, value: unknown) => {
     if (!value || typeof value !== 'object') {
       return

@@ -1,24 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import type {
-  DetectedWorktree,
-  DetectedWorktreeListResult,
-  GlobalSettings,
-  Repo,
-  Worktree
-} from './types'
+import type { Repo } from './repo-types'
+import type { DetectedWorktree, DetectedWorktreeListResult } from './worktree/types'
 import {
   getHiddenExternalWorktrees,
-  getNewExternalWorktreeInboxWorktrees,
-  getVisibleExternalWorktrees,
-  mergeExternalWorktreeInboxPaths,
-  shouldOfferNewExternalWorktreeInbox
+  getHiddenImportableExternalWorktrees,
+  getNewExternalWorktreeInboxWorktrees
 } from './external-worktree-inbox'
-import {
-  buildKnownOrcaWorkspaceLayouts,
-  EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT,
-  toDetectedWorktree
-} from './worktree-ownership'
+import { EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT } from './worktree/ownership'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -65,132 +54,35 @@ function detectedResult(worktrees: DetectedWorktree[]): DetectedWorktreeListResu
   }
 }
 
-function makeSettings(): GlobalSettings {
-  return {
-    workspaceDir: '/orca/workspaces',
-    nestWorkspaces: true,
-    workspaceDirHistory: [],
-    refreshLocalBaseRefOnWorktreeCreate: false,
-    localBaseRefSuggestionDismissed: false,
-    branchPrefix: 'none',
-    branchPrefixCustom: '',
-    enableGitHubAttribution: false,
-    theme: 'system',
-    appFontFamily: 'Geist',
-    editorAutoSave: false,
-    editorAutoSaveDelayMs: 1000,
-    editorMinimapEnabled: false,
-    markdownReviewToolsEnabled: true,
-    terminalFontSize: 14,
-    terminalFontFamily: 'monospace',
-    terminalFontWeight: 400,
-    terminalLineHeight: 1.2
-  } as unknown as GlobalSettings
-}
-
-function makeGitWorktree(overrides: Partial<Worktree> = {}): Worktree {
-  return {
-    id: `repo-1::${overrides.path ?? '/repo'}`,
-    repoId: repo.id,
-    path: '/repo',
-    displayName: 'repo',
-    branch: 'refs/heads/main',
-    head: 'abc123',
-    isBare: false,
-    isMainWorktree: true,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    workspaceStatus: 'todo',
-    ...overrides
-  }
-}
-
 describe('external worktree inbox', () => {
-  it('merges inbox paths without duplicates when paths match after normalization', () => {
-    expect(mergeExternalWorktreeInboxPaths(['/repo/one/'], ['/repo/one', '/repo/two'])).toEqual([
-      '/repo/one/',
-      '/repo/two'
-    ])
-  })
-
-  it('offers the inbox only after the initial prompt is dismissed and discovery is not suppressed', () => {
-    expect(shouldOfferNewExternalWorktreeInbox(repo)).toBe(true)
-    expect(
-      shouldOfferNewExternalWorktreeInbox({
-        ...repo,
-        externalWorktreeVisibilityPromptDismissedAt: undefined
-      })
-    ).toBe(false)
-    expect(
-      shouldOfferNewExternalWorktreeInbox({
-        ...repo,
-        externalWorktreeDiscoverySuppressedAt: 1
-      })
-    ).toBe(false)
-    expect(
-      shouldOfferNewExternalWorktreeInbox({
-        ...repo,
-        externalWorktreeVisibility: 'show'
-      })
-    ).toBe(false)
-  })
-
-  it('returns only hidden external worktrees outside the inbox baseline', () => {
-    const hidden = detectedWorktree({ id: 'hidden', path: '/scratch/new-one' })
-    const baselined = detectedWorktree({ id: 'baselined', path: '/scratch/old-one' })
+  it('lists hidden agent scratch among importable worktrees so recovery stays reachable', () => {
+    // Scratch cannot be revealed by the visibility toggle (#9388); per-path import preserves recovery (#10324).
+    const hiddenScratch = detectedWorktree({
+      id: 'hidden-scratch',
+      path: '/repo/.claude/worktrees/scratch-1',
+      ownership: 'agent-scratch'
+    })
+    const hiddenExternal = detectedWorktree({ id: 'hidden-external' })
     const detected = detectedResult([
-      hidden,
-      baselined,
-      detectedWorktree({ id: 'visible', visible: true }),
-      detectedWorktree({ id: 'orca-managed', ownership: 'orca-managed' })
+      hiddenScratch,
+      hiddenExternal,
+      detectedWorktree({ id: 'visible-scratch', ownership: 'agent-scratch', visible: true }),
+      detectedWorktree({ id: 'orca-managed', ownership: 'orca-managed' }),
+      detectedWorktree({ id: 'checked-out', selectedCheckout: true })
     ])
 
-    expect(getHiddenExternalWorktrees(detected)).toEqual([hidden, baselined])
+    expect(getHiddenImportableExternalWorktrees(detected)).toEqual([hiddenScratch, hiddenExternal])
+    // Scratch remains outside discovery counts despite dialog control.
+    expect(getHiddenExternalWorktrees(detected)).toEqual([hiddenExternal])
+  })
+
+  it('offers no importable worktrees from a non-authoritative snapshot', () => {
+    const scratch = detectedWorktree({ id: 'scratch', ownership: 'agent-scratch' })
+
     expect(
-      getNewExternalWorktreeInboxWorktrees(detected, {
-        ...repo,
-        externalWorktreeInboxBaselinePaths: ['/scratch/old-one']
-      })
-    ).toEqual([hidden])
-  })
-
-  it('excludes explicitly visible agent scratch from visibility-control counts', () => {
-    const visible = detectedWorktree({ id: 'visible', visible: true })
-    const scratch = detectedWorktree({
-      id: 'agent-scratch',
-      ownership: 'agent-scratch',
-      visible: true
-    })
-
-    expect(getVisibleExternalWorktrees(detectedResult([visible, scratch]))).toEqual([visible])
-  })
-
-  it('offers metadata-free nested Orca workspace worktrees through the inbox', () => {
-    const settings = makeSettings()
-    const manual = toDetectedWorktree({
-      repo,
-      settings,
-      worktree: makeGitWorktree({
-        path: '/orca/workspaces/orca/manual-from-git',
-        displayName: 'manual-from-git',
-        branch: 'refs/heads/manual-from-git',
-        isMainWorktree: false
-      }),
-      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
-    })
-
-    expect(manual.ownership).toBe('external')
-    expect(manual.visible).toBe(false)
-    expect(getNewExternalWorktreeInboxWorktrees(detectedResult([manual]), repo)).toEqual([manual])
+      getHiddenImportableExternalWorktrees({ ...detectedResult([scratch]), authoritative: false })
+    ).toEqual([])
+    expect(getHiddenImportableExternalWorktrees(undefined)).toEqual([])
   })
 
   it('suppresses non-authoritative detected results', () => {

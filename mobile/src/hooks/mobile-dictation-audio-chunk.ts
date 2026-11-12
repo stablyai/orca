@@ -1,52 +1,312 @@
+import { useEffect, useState } from 'react'
 import {
   MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE,
   MOBILE_DICTATION_PCM_SAMPLE_RATE
 } from './mobile-dictation-pending-audio-budget'
 import { bytesToBase64 } from './mobile-dictation-session-state'
-import type { MicrophoneDataEvent } from '@orca/expo-two-way-audio'
+import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
+import { waitForRpcClientReconnected } from '../transport/rpc/rpc-client-reconnect-wait'
+import { probeLivenessWhileWaiting } from '../transport/rpc/rpc-liveness-probe-while-waiting'
+import '../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
+import { isLogicalClientSuspendedError } from '../transport/connection/logical-client-suspended-error'
+import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
+import type {
+  DictationCapture,
+  DictationCaptureChunk
+} from '../platform/dictation-capture-contract'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
-import type { RpcClient } from '../transport/rpc-client'
+import type { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
+import type { MobileDictationRecording } from './mobile-dictation-recording'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { MobileDictationRun } from './mobile-dictation-engine-run'
 
 type MobileDictationAudioChunkQueue = {
+  // One promise per busy send slot; each settles once nothing is left to send.
   pendingChunks: Set<Promise<void>>
   pendingAudioBudget: MobileDictationPendingAudioBudget
-  shouldReleaseBudget: (dictationId: string) => boolean
+  heldAudio: MobileDictationHeldAudio
+  isActive: (dictationId: string) => boolean
   failActiveDictation: (dictationId: string, err: unknown) => void
+  transcriptSoFar: MobileDictationTranscriptSoFar
+  // Called for the active dictation when its host has stopped taking audio.
+  stopAtAudioLimit: () => void
 }
+
+// Holding: the microphone runs from the tap while the host's start reply is pending, or while a replay's host start is.
+export type MobileDictationAudioPhase = 'closed' | 'holding' | 'sending'
+
+// Newer hosts report the text so far: shown while speaking, and handed over by a failure instead of dropped.
+export class MobileDictationTranscriptSoFar {
+  private kept: { dictationId: string; text: string; revision: number } | null = null
+
+  constructor(private readonly onNote: (text: string) => void = () => {}) {}
+
+  // Several chunk replies can be in flight; hosts that number their text let an older reply arrive last without undoing words.
+  note(dictationId: string, text: string, revision = Number.POSITIVE_INFINITY): void {
+    const kept = this.kept
+    if (kept?.dictationId === dictationId && revision < kept.revision) {
+      return
+    }
+    this.kept = { dictationId, text, revision }
+    this.onNote(text)
+  }
+
+  take(dictationId: string): string {
+    const kept = this.kept
+    this.kept = null
+    return kept?.dictationId === dictationId ? kept.text : ''
+  }
+}
+
+// The text so far as React state, with the instance chunk replies write it through.
+export function useMobileDictationTranscriptSoFar() {
+  const [text, setText] = useState('')
+  const [kept] = useState(() => new MobileDictationTranscriptSoFar(setText))
+  return [text, setText, kept] as const
+}
+
+// A request refused or still waiting while the connection moved never reached the host; send it again on the new one, within the host's grace.
+// With resendWhile the host dedupes, so a request whose reply a drop lost goes again after each reconnect too, while it still holds.
+export async function sendAcrossConnectionMove<T>(
+  client: RpcClient,
+  send: () => Promise<T>,
+  resendWhile?: () => boolean
+): Promise<T> {
+  const again = () => (resendWhile ? sendAcrossConnectionMove(client, send, resendWhile) : send())
+  try {
+    return await send()
+  } catch (err) {
+    if (isLogicalClientCutoverError(err) && !isRpcDeliveryUnknown(err)) {
+      return again()
+    }
+    // A timeout on a connection still up gets no second try there; a reply lost to a drop does.
+    const lostToDrop = isLogicalClientCutoverError(err) || client.getState() !== 'connected'
+    const resend =
+      isLogicalClientSuspendedError(err) ||
+      (resendWhile !== undefined && isRpcDeliveryUnknown(err) && lostToDrop)
+    if (resend && (await waitForReconnect(client)) && (resendWhile?.() ?? true)) {
+      return again()
+    }
+    throw err
+  }
+}
+
+// Every chunk refused during one outage shares a single wait instead of a listener and timer each.
+const reconnectWaits = new WeakMap<RpcClient, Promise<boolean>>()
+
+function waitForReconnect(client: RpcClient): Promise<boolean> {
+  let wait = reconnectWaits.get(client)
+  if (!wait) {
+    wait = waitForRpcClientReconnected(client, MOBILE_DICTATION_RECONNECT_GRACE_MS).finally(() =>
+      reconnectWaits.delete(client)
+    )
+    reconnectWaits.set(client, wait)
+  }
+  return wait
+}
+
+// Streams the microphone to the host for the run's active dictation.
+export function useMobileDictationAudioChunks(capture: DictationCapture, run: MobileDictationRun) {
+  useEffect(() => {
+    const source = {
+      getClient: () => run.client.current,
+      getActiveId: () => run.activeId.current,
+      audioPhase: () => (run.enabled.current ? run.audioPhase.current : 'closed')
+    }
+    const sub = subscribeMobileDictationAudioChunks(capture, source, {
+      pendingChunks: run.pendingChunks.current,
+      pendingAudioBudget: run.pendingAudioBudget.current,
+      failActiveDictation: run.failActiveDictation,
+      transcriptSoFar: run.keptTranscript,
+      heldAudio: run.heldAudio.current,
+      recording: run.recording.current,
+      // Like desktop: stop as the user would, so what the host kept is transcribed and inserted.
+      stopAtAudioLimit: () => {
+        if (run.status.current === 'recording') {
+          run.onAudioLimitReached.current?.()
+          void run.finish.current(dictationSessionErrorMessage('no-speech'))
+        }
+      }
+    })
+    run.sendHeldAudio.current = sub.sendHeld
+    return () => sub.remove()
+  }, [capture, run])
+}
+
+export function subscribeMobileDictationAudioChunks(
+  capture: Pick<DictationCapture, 'onChunk'>,
+  source: {
+    getClient: () => RpcClient | null
+    getActiveId: () => string | null
+    audioPhase: () => MobileDictationAudioPhase
+  },
+  queue: Omit<MobileDictationAudioChunkQueue, 'isActive'> & { recording: MobileDictationRecording }
+): { remove: () => void; sendHeld: () => void } {
+  // Reuse wiring on the microphone hot path instead of allocating per chunk.
+  const chunkQueue = { ...queue, isActive: (id: string) => source.getActiveId() === id }
+  const send = (client: RpcClient, dictationId: string, chunk: DictationCaptureChunk) => {
+    if (chunk.droppedBytes > 0) {
+      // Page capture loss and budget overflow both mean the page fell behind the microphone; report the same error. Native capture never drops here.
+      queue.failActiveDictation(
+        dictationId,
+        new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE)
+      )
+      return
+    }
+    enqueueMobileDictationAudioChunk(client, dictationId, chunk, chunkQueue)
+  }
+  const subscription = capture.onChunk((chunk) => {
+    const dictationId = source.getActiveId()
+    if (!dictationId) {
+      return
+    }
+    // Kept whatever the phase, so a phone's failure or a failed send can play it to the computer again.
+    queue.recording.keep(chunk)
+    const phase = source.audioPhase()
+    if (phase === 'closed') {
+      return
+    }
+    if (phase === 'holding') {
+      queue.heldAudio.hold(chunk)
+      return
+    }
+    const client = source.getClient()
+    if (client) {
+      send(client, dictationId, chunk)
+    }
+  })
+  return {
+    remove: () => subscription.remove(),
+    // Call once the phase turns to sending, before any later chunk, so the seq order matches speech order.
+    // Held audio is sent first through the normal slots; it may be a long on-device dictation's replay, so it never counts as falling behind.
+    sendHeld: () => {
+      const client = source.getClient()
+      const dictationId = source.getActiveId()
+      if (!client || !dictationId) {
+        return
+      }
+      if (queue.heldAudio.droppedBytes > 0) {
+        queue.failActiveDictation(
+          dictationId,
+          new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE)
+        )
+        return
+      }
+      queue.pendingAudioBudget.reserveBacklog(queue.heldAudio.bytes)
+      fillSendSlots(client, dictationId, chunkQueue)
+    }
+  }
+}
+
+// Each chunk RPC holds one of the page bridge's desktop request slots until it settles, through a reconnect too; audio captured while all are busy rides in the next request.
+export const MOBILE_DICTATION_MAX_CHUNK_SENDS_IN_FLIGHT = 4
 
 export function enqueueMobileDictationAudioChunk(
   client: RpcClient,
   dictationId: string,
-  event: MicrophoneDataEvent,
+  chunk: DictationCaptureChunk,
   queue: MobileDictationAudioChunkQueue
 ): void {
-  const raw = event.data
-  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
-  const byteLength = bytes.byteLength
-  if (!queue.pendingAudioBudget.tryReserve(byteLength)) {
+  if (!queue.pendingAudioBudget.tryReserve(chunk.data.byteLength)) {
     queue.failActiveDictation(
       dictationId,
       new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE)
     )
     return
   }
-  const sendChunk = client
-    .sendRequest('speech.dictation.chunk', {
-      dictationId,
-      audioBase64: bytesToBase64(bytes),
-      sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE
+  queue.heldAudio.hold(chunk)
+  fillSendSlots(client, dictationId, queue)
+}
+
+function fillSendSlots(
+  client: RpcClient,
+  dictationId: string,
+  queue: MobileDictationAudioChunkQueue
+): void {
+  while (
+    queue.pendingChunks.size < MOBILE_DICTATION_MAX_CHUNK_SENDS_IN_FLIGHT &&
+    queue.heldAudio.bytes > 0
+  ) {
+    const slot = sendHeldAudio(client, dictationId, queue).finally(() => {
+      queue.pendingChunks.delete(slot)
     })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-    })
-    .catch((err) => queue.failActiveDictation(dictationId, err))
-    .finally(() => {
-      if (queue.shouldReleaseBudget(dictationId)) {
-        queue.pendingAudioBudget.release(byteLength)
-      }
-      queue.pendingChunks.delete(sendChunk)
-    })
-  queue.pendingChunks.add(sendChunk)
+    queue.pendingChunks.add(slot)
+  }
+}
+
+// Finish awaits these slots, so a slot keeps sending until nothing is held.
+async function sendHeldAudio(
+  client: RpcClient,
+  dictationId: string,
+  queue: MobileDictationAudioChunkQueue
+): Promise<void> {
+  // Check before taking: after a cancel, held audio may already belong to the next dictation.
+  while (queue.isActive(dictationId)) {
+    const chunk = queue.heldAudio.takeNext()
+    if (!chunk) {
+      return
+    }
+    const backlogShare = queue.pendingAudioBudget.takeBacklog(chunk.data.byteLength)
+    await sendAudioChunk(client, dictationId, chunk.data, backlogShare, queue)
+  }
+}
+
+async function sendAudioChunk(
+  client: RpcClient,
+  dictationId: string,
+  bytes: Uint8Array,
+  backlogShare: number,
+  queue: MobileDictationAudioChunkQueue
+): Promise<void> {
+  const params = {
+    dictationId,
+    audioBase64: bytesToBase64(bytes),
+    sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE,
+    seq: queue.pendingAudioBudget.nextSeq(bytes.byteLength)
+  }
+  const hostDedupesResends = queue.pendingAudioBudget.hostDedupesResends
+  try {
+    const reply = await sendAcrossConnectionMove(
+      client,
+      () => {
+        // Wait for a reconnect only as long as the host keeps the session; past that, fail and keep the text so far.
+        const sent = dictationAudioChunkSend.request(client, params, {
+          timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS
+        })
+        return hostDedupesResends ? probeLivenessWhileWaiting(client, sent) : sent
+      },
+      // A recording cancelled during the outage must not reach the host when it comes back.
+      hostDedupesResends ? () => queue.isActive(dictationId) : undefined
+    )
+    // Only newer hosts send the text, and only when it changed; any other result still acknowledges the chunk.
+    const result = dictationAudioChunkSend.interpret(reply)
+    const text = result == null ? undefined : rpcPayloadMember(result, 'text')
+    const revision = result == null ? undefined : rpcPayloadMember(result, 'revision')
+    if (typeof text === 'string' && queue.isActive(dictationId)) {
+      queue.transcriptSoFar.note(
+        dictationId,
+        text,
+        typeof revision === 'number' ? revision : undefined
+      )
+    }
+    // Newer hosts repeat this on every reply once a cloud dictation reaches its length cap.
+    const limitReached = result != null && rpcPayloadMember(result, 'audioLimitReached') === true
+    if (limitReached && queue.isActive(dictationId)) {
+      queue.stopAtAudioLimit()
+    }
+  } catch (err) {
+    // A host that cannot dedupe loses only the audio in flight at a drop; for one that dedupes, still being offline here means the reconnect grace ran out and later held audio would wait it out again.
+    const graceExpired = hostDedupesResends && client.getState() !== 'connected'
+    if (!isRpcDeliveryUnknown(err) || graceExpired) {
+      queue.failActiveDictation(dictationId, err)
+    }
+  } finally {
+    if (queue.isActive(dictationId)) {
+      queue.pendingAudioBudget.release(bytes.byteLength, backlogShare)
+    }
+  }
 }

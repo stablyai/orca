@@ -8,8 +8,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
-import type { FloatingTerminalTriggerLocation } from '../../../../shared/types'
-import { translate } from '@/i18n/i18n'
+import type { FloatingTerminalTriggerLocation } from '../../../../shared/ui-chrome-types'
+import { useTranslate } from '@/i18n/use-translate'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type FloatingTerminalIconContextMenuProps = {
   children: React.ReactNode
@@ -24,6 +25,8 @@ export function FloatingTerminalIconContextMenu({
   className,
   style
 }: FloatingTerminalIconContextMenuProps): React.JSX.Element {
+  const t = useTranslate()
+  const languageRevision = useUiLanguageRevision()
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [open, setOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
@@ -42,7 +45,7 @@ export function FloatingTerminalIconContextMenu({
     if (currentLocation === 'floating-button') {
       return {
         icon: <PanelBottom className="size-3.5" />,
-        label: translate(
+        label: t(
           'auto.components.floating.terminal.FloatingTerminalIconContextMenu.0ee79e0674',
           'Move to Status Bar'
         ),
@@ -51,13 +54,14 @@ export function FloatingTerminalIconContextMenu({
     }
     return {
       icon: <PanelTop className="size-3.5" />,
-      label: translate(
+      label: t(
         'auto.components.floating.terminal.FloatingTerminalIconContextMenu.763f5fa2c1',
         'Move to Floating Button'
       ),
       location: 'floating-button' as const
     }
-  }, [currentLocation])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [currentLocation, languageRevision, t])
 
   return (
     <>
@@ -67,8 +71,6 @@ export function FloatingTerminalIconContextMenu({
         style={style}
         data-floating-terminal-toggle
         onContextMenuCapture={(event) => {
-          // Why: workspace cards use DropdownMenu anchored at the cursor for
-          // right-click menus; match that style instead of Radix ContextMenu.
           event.preventDefault()
           event.stopPropagation()
           setMenuPoint({ x: event.clientX, y: event.clientY })
@@ -116,7 +118,7 @@ export function FloatingTerminalIconContextMenu({
             }}
           >
             <EyeOff className="size-3.5" />
-            {translate(
+            {t(
               'auto.components.floating.terminal.FloatingTerminalIconContextMenu.8e7d775287',
               'Hide Floating Workspace'
             )}

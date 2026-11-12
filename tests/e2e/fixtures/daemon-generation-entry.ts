@@ -1,7 +1,7 @@
 import process from 'node:process'
-import { startDaemon, type DaemonHandle } from '../../../src/main/daemon/daemon-main'
-import { createPtySubprocess } from '../../../src/main/daemon/pty-subprocess'
-import { createDaemonFileLog } from '../../../src/main/daemon/daemon-file-log'
+import { startDaemon, type DaemonHandle } from '../../../src/main/daemon/server/daemon-main'
+import { createPtySubprocess } from '../../../src/main/daemon/pty-subprocess/pty-subprocess'
+import { createDaemonFileLog } from '../../../src/main/daemon/observability/daemon-file-log'
 
 type FixtureArgs = {
   protocolVersion: number
@@ -50,11 +50,10 @@ async function main(): Promise<void> {
     socketPath,
     tokenPath,
     log: createDaemonFileLog(logPath),
-    spawnSubprocess: (options) => {
-      const subprocess = createPtySubprocess(options)
+    spawnSubprocess: async (options) => {
+      const subprocess = await createPtySubprocess(options)
       if (refuseDispose) {
-        // Why: models an access-denied/unreapable Windows PTY while keeping the
-        // real child and ConPTY handle inside this disposable fixture tree.
+        // Model an unreapable Windows PTY while retaining the real child/ConPTY inside the disposable fixture.
         subprocess.kill = () => {}
         subprocess.forceKill = () => {}
       }

@@ -1,3 +1,4 @@
+import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -8,6 +9,7 @@ import { TEST_REPO_PATH_FILE } from './global-setup'
 import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
+import { retryTransientMainEvaluate } from './helpers/electron-main-evaluate-retry'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation,
@@ -23,12 +25,14 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime/client'
+import { RuntimeClientError } from '../../src/cli/runtime/types'
 import type {
   RuntimeStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalRead
 } from '../../src/shared/runtime-types'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
+import { parsePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(
@@ -45,13 +49,11 @@ function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolati
     launchEnv: {
       NODE_ENV: 'development',
       ORCA_E2E_HEADLESS: '1',
-      // Why: production builds always use the lock; this opt-in makes the dev
-      // E2E bundle exercise the same second-instance ownership path.
+      // Opt dev E2E builds into production’s single-instance ownership path.
       ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
     },
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
 }
 
@@ -65,6 +67,31 @@ function readDaemonPid(userDataDir: string): number {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
   return parsed.pid
+}
+
+function readPersistedPromotionBinding(
+  userDataDir: string,
+  worktreeId: string,
+  tabId: string,
+  leafId: string
+): { tabId: string; leafId: string; ptyId: string } | null {
+  try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const persisted = readPersistedProfileState(userDataDir) as {
+      workspaceSession?: {
+        tabsByWorktree?: Record<string, { id?: string; ptyId?: string | null }[]>
+        terminalLayoutsByTabId?: Record<string, { ptyIdsByLeafId?: Record<string, string | null> }>
+      }
+    }
+    const tab = persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.find(
+      (candidate) => candidate.id === tabId
+    )
+    const ptyId =
+      persisted.workspaceSession?.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId]
+    return tab && ptyId ? { tabId, leafId, ptyId } : null
+  } catch {
+    return null
+  }
 }
 
 async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
@@ -111,7 +138,10 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       args: [...getOrcaElectronLaunchArgs(mainPath, false), '--serve', '--serve-no-pairing'],
       env
     })
-    const resolvedHome = await serveApp.evaluate(({ app }) => app.getPath('home'))
+    const launchedServeApp = serveApp
+    const resolvedHome = await retryTransientMainEvaluate(() =>
+      launchedServeApp.evaluate(({ app }) => app.getPath('home'))
+    )
     assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     // Why: this spec bypasses the app fixture, so opt into its gated Electron log capture for CI failures.
     forwardElectronProcessLogs(serveApp, testInfo)
@@ -119,10 +149,22 @@ test('promotes the headless owner without replacing its daemon terminal', async 
     const client = new RuntimeClient(userDataDir, 5_000)
 
     await expect
-      .poll(async () => (await client.getCliStatus()).result.app.desktopWindowStatus, {
-        timeout: 60_000,
-        message: 'headless serve never became safely openable'
-      })
+      .poll(
+        async () => {
+          try {
+            return (await client.getCliStatus()).result.app.desktopWindowStatus
+          } catch (error) {
+            if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
+              return 'starting'
+            }
+            throw error
+          }
+        },
+        {
+          timeout: 60_000,
+          message: 'headless serve never became safely openable'
+        }
+      )
       .toBe('openable')
 
     const beforeStatus = await client.call<RuntimeStatus>('status.get')
@@ -133,8 +175,11 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       title: 'Serve promotion continuity'
     })
     const terminal = created.result.terminal
-    if (!terminal.ptyId) {
-      throw new Error('Headless terminal did not expose its daemon PTY id')
+    const originalPtyId = terminal.ptyId
+    const originalTabId = terminal.tabId
+    const paneIdentity = terminal.paneKey ? parsePaneKey(terminal.paneKey) : null
+    if (!originalPtyId || !originalTabId || !paneIdentity) {
+      throw new Error('Headless terminal did not expose its durable pane and daemon PTY identity')
     }
 
     const beforeMarker = `SERVE_PROMOTION_BEFORE_${Date.now()}`
@@ -177,6 +222,26 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       })
     }
 
+    await expect
+      .poll(
+        () =>
+          readPersistedPromotionBinding(
+            userDataDir,
+            terminal.worktreeId,
+            originalTabId,
+            paneIdentity.leafId
+          ),
+        {
+          timeout: 15_000,
+          message: 'headless terminal binding was not persisted during desktop promotion'
+        }
+      )
+      .toEqual({
+        tabId: originalTabId,
+        leafId: paneIdentity.leafId,
+        ptyId: originalPtyId
+      })
+
     const page = await serveApp.firstWindow({ timeout: 60_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
@@ -210,6 +275,6 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       await closeElectronAppForE2E(serveApp)
     }
     await cleanupE2EDaemons(userDataDir)
-    rmSync(userDataDir, { recursive: true, force: true })
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
   }
 })

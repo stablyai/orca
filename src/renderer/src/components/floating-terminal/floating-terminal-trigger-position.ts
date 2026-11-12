@@ -48,7 +48,7 @@ function isAnchorY(value: unknown): value is FloatingTerminalAnchorY {
 }
 
 function getWindowStorage(): Storage | null {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+  return typeof window !== 'undefined' && window.localStorage !== undefined
     ? window.localStorage
     : null
 }

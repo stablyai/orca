@@ -1,19 +1,14 @@
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { getDiffCommentLineMetaLabel } from './diff-comment-line-meta-label'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
-// Why: the saved-note card lives inside a Monaco view zone's DOM node.
-// useDiffCommentDecorator creates a React root per zone and renders this
-// component into it so we can use normal lucide icons and JSX instead of
-// hand-built DOM + inline SVG strings.
-//
-// User-facing copy uses "Note" rather than "Comment" so it is not confused
-// with GitHub PR review comments (which some diff-view surfaces also render).
-// Internal types/ids (`DiffComment`, `diffComments`, `addDiffComment`) keep
-// the old names so we don't have to migrate the persisted WorktreeMeta shape.
+// Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
 type Props = {
   lineNumber: number
@@ -26,13 +21,18 @@ type Props = {
   createdAtLabel?: string
   url?: string
   onDelete?: () => void
-  // Why: Monaco view zones have a fixed `heightInPx` set at insertion time
-  // and aren't auto-measured. The parent decorator re-syncs that height when
-  // the rendered card wraps or grows so it cannot overlap following lines.
+  // Monaco zones do not auto-measure; notify the decorator when wrapping/growth needs a new heightInPx.
   onContentResize?: () => void
   observeRenderedSize?: boolean
   onSubmitEdit?: (body: string) => Promise<boolean>
   headerActions?: ReactNode
+}
+
+function resizeDiffCommentTextarea(textarea: HTMLTextAreaElement): boolean {
+  const previousHeight = textarea.style.height
+  textarea.style.height = 'auto'
+  textarea.style.height = `${Math.min(textarea.scrollHeight, 240)}px`
+  return textarea.style.height !== previousHeight
 }
 
 export function DiffCommentCard({
@@ -51,6 +51,9 @@ export function DiffCommentCard({
   onSubmitEdit,
   headerActions
 }: Props): React.JSX.Element {
+  const t = useTranslate()
+  // Zone cards live in separate React roots, so subscribe directly to language changes.
+  useUiLanguageRevision()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
@@ -60,9 +63,7 @@ export function DiffCommentCard({
   const resizeAfterCloseRef = useRef(false)
   const observesRenderedSize = observeRenderedSize === true && onContentResize !== undefined
 
-  // Why: stash `onContentResize` in a ref so resize effects do not depend on
-  // the decorator's fresh arrow each render. Re-running the edit layout effect
-  // would yank the caret to the textarea's end while the user is mid-edit.
+  // Read the latest resize callback without rerunning edit layout; fresh parent arrows would move the caret to the end mid-edit.
   const onContentResizeRef = useRef(onContentResize)
   onContentResizeRef.current = onContentResize
 
@@ -89,8 +90,7 @@ export function DiffCommentCard({
         }
       }
     }
-    // Why: narrow diff panes can wrap body/header text after Monaco's initial
-    // estimate; observe the real card height in either diff layout.
+    // Initial Monaco estimates miss narrow-pane wrapping; observe actual card height in both diff layouts.
     const observer = new ResizeObserver(() => notifyResize())
     observer.observe(card)
     return () => {
@@ -101,9 +101,7 @@ export function DiffCommentCard({
     }
   }, [observesRenderedSize])
 
-  // Why: focus + auto-grow the textarea on entering edit mode. Layout effect
-  // so the height is set before the browser paints — a measurement pass on
-  // the next animation frame would visibly jump from 0 to N px.
+  // Measure the newly edited textarea before paint so its view zone cannot jump on the next frame.
   useLayoutEffect(() => {
     if (!editing) {
       if (resizeAfterCloseRef.current) {
@@ -116,17 +114,14 @@ export function DiffCommentCard({
     if (!el) {
       return
     }
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 240)}px`
+    resizeDiffCommentTextarea(el)
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
     onContentResizeRef.current?.()
   }, [editing])
 
   const scheduleContentResizeAfterClose = (): void => {
-    // Why: closing edit mode removes the textarea/footer before Monaco can
-    // re-measure the view zone. Let the layout effect run after React commits
-    // the body-only card so async saves cannot measure the old edit height.
+    // Measure after the body-only commit; async saves must not retain the textarea/footer height.
     resizeAfterCloseRef.current = true
   }
 
@@ -144,8 +139,13 @@ export function DiffCommentCard({
   const trimmedDraft = draft.trim()
   const canSubmit = !submitting && trimmedDraft.length > 0 && trimmedDraft !== body
   const lineLabel =
-    label === undefined ? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase() : label
-  const metaText = [author || 'Note', lineLabel, createdAtLabel || (sentAt ? 'sent' : null)]
+    label === undefined ? getDiffCommentLineMetaLabel({ lineNumber, startLine }, t) : label
+  const metaText = [
+    author || t('auto.components.diff.comments.DiffCommentCard.noteAuthorFallback', 'Note'),
+    lineLabel,
+    createdAtLabel ||
+      (sentAt ? t('auto.components.diff.comments.DiffCommentCard.sentMeta', 'sent') : null)
+  ]
     .filter(Boolean)
     .join(' ')
 
@@ -161,10 +161,7 @@ export function DiffCommentCard({
         setEditing(false)
       }
     } catch (err) {
-      // Why: surface the error in the console but keep the editor open with
-      // the draft intact so the user can retry. Without this, a rejection from
-      // `onSubmitEdit` becomes an unhandled promise rejection at the call sites
-      // (`void handleSubmit()`).
+      // Catch rejected saves and retain the draft for retry; fire-and-forget callers cannot handle this rejection.
       console.error('Failed to submit diff comment edit:', err)
     } finally {
       if (mountedRef.current) {
@@ -195,21 +192,21 @@ export function DiffCommentCard({
                   <button
                     type="button"
                     className="orca-diff-comment-pill-btn"
-                    title={translate(
+                    title={t(
                       'auto.components.diff.comments.DiffCommentCard.508ee678a5',
                       'Open in browser'
                     )}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.diff.comments.DiffCommentCard.508ee678a5',
                       'Open in browser'
                     )}
                     onClick={(ev) => {
                       ev.preventDefault()
                       ev.stopPropagation()
-                      void window.api.shell.openUrl(url)
+                      openAppHttpLink(url, { event: ev })
                     }}
                   >
-                    {translate('auto.components.diff.comments.DiffCommentCard.6978871a3d', 'Open')}
+                    {t('auto.components.diff.comments.DiffCommentCard.6978871a3d', 'Open')}
                   </button>
                   {(onSubmitEdit || onDelete) && (
                     <span className="orca-diff-comment-pill-divider" />
@@ -221,11 +218,11 @@ export function DiffCommentCard({
                   <button
                     type="button"
                     className="orca-diff-comment-pill-btn"
-                    title={translate(
+                    title={t(
                       'auto.components.diff.comments.DiffCommentCard.cad3384faa',
                       'Edit note'
                     )}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.diff.comments.DiffCommentCard.cad3384faa',
                       'Edit note'
                     )}
@@ -244,11 +241,11 @@ export function DiffCommentCard({
                 <button
                   type="button"
                   className="orca-diff-comment-pill-btn orca-diff-comment-pill-btn-danger"
-                  title={translate(
+                  title={t(
                     'auto.components.diff.comments.DiffCommentCard.cce596969e',
                     'Delete note'
                   )}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.diff.comments.DiffCommentCard.cce596969e',
                     'Delete note'
                   )}
@@ -275,16 +272,16 @@ export function DiffCommentCard({
         {/* Body or Edit Mode */}
         {editing ? (
           <div className="flex flex-col gap-2 mt-1">
-            <textarea
+            <ImeTextarea
               ref={textareaRef}
               className="orca-diff-comment-popover-textarea"
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value)
-                const el = e.currentTarget
-                el.style.height = 'auto'
-                el.style.height = `${Math.min(el.scrollHeight, 240)}px`
-                onContentResizeRef.current?.()
+                // Why: rich-review layout measures every note; skip it when this card stayed put.
+                if (resizeDiffCommentTextarea(e.currentTarget)) {
+                  onContentResizeRef.current?.()
+                }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -304,7 +301,7 @@ export function DiffCommentCard({
             />
             <div className="orca-diff-comment-popover-footer">
               <Button variant="ghost" size="sm" onClick={handleCancel} disabled={submitting}>
-                {translate('auto.components.diff.comments.DiffCommentCard.0203bed775', 'Cancel')}
+                {t('auto.components.diff.comments.DiffCommentCard.0203bed775', 'Cancel')}
               </Button>
               <Button
                 size="sm"
@@ -312,14 +309,11 @@ export function DiffCommentCard({
                 disabled={!canSubmit}
                 title={
                   submitting
-                    ? translate(
-                        'auto.components.diff.comments.DiffCommentCard.bb0a55f856',
-                        'Saving…'
-                      )
+                    ? t('auto.components.diff.comments.DiffCommentCard.bb0a55f856', 'Saving…')
                     : undefined
                 }
               >
-                {translate('auto.components.diff.comments.DiffCommentCard.109a791e7b', 'Save')}
+                {t('auto.components.diff.comments.DiffCommentCard.109a791e7b', 'Save')}
                 <CornerDownLeft className="ml-1 size-3 opacity-70" />
               </Button>
             </div>

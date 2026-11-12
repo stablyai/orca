@@ -1,0 +1,280 @@
+import { translate } from '@/i18n/i18n'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
+
+export type LocalizedContextualTourStepCopy = {
+  title: string
+  body: string
+  /** Shown instead of `body` when the shortcut it names has no binding. */
+  bodyWithoutShortcut?: string
+  primaryActionLabel?: string
+  secondaryActionLabel?: string
+}
+
+type StepCopyThunk = () => LocalizedContextualTourStepCopy
+
+const getProjectsCollapseModifierLabel = (): string =>
+  getShortcutPlatform() === 'darwin' ? '⌥' : 'Alt'
+
+// Thunks resolve translate() in the language active at render time; `satisfies` makes a step without copy a type error.
+const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
+  'workspace-board-plan': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.plan.title',
+      'Plan work on the board'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.plan.body',
+      'Use the board when you want to see workspaces by status instead of by project.'
+    )
+  }),
+  'workspace-board-lanes': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.lanes.title',
+      'Move work through lanes'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.board.lanes.body',
+      'Drag workspaces between lanes as their status changes.'
+    )
+  }),
+  'agent-sessions-new-tab': () => ({
+    title: translate(
+      'components.contextualTours.agentSessions.newTab.title',
+      'New agents start here'
+    ),
+    body: translate(
+      'components.contextualTours.agentSessions.newTab.body',
+      'Click + to start an agent, a terminal, or a browser tab.'
+    )
+  }),
+  'agent-sessions-split-chat': () => ({
+    title: translate(
+      'components.contextualTours.agentSessions.splitChatPane.title',
+      'Open a pane beside the chat'
+    ),
+    body: translate(
+      'components.contextualTours.agentSessions.splitChat.body',
+      'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.'
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.agentSessions.splitChat.bodyWithoutShortcut',
+      'Click the split button at the top of the chat. Each side gets its own tabs.'
+    ),
+    primaryActionLabel: translate(
+      'components.contextualTours.agentSessions.splitChatPane.action',
+      'Split pane'
+    )
+  }),
+  'agent-sessions-split': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.title',
+      'Split a terminal pane'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.body',
+      'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.'
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.agentSessions.split.bodyWithoutShortcut',
+      'Right-click the pane for split options.'
+    ),
+    primaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.action',
+      'Split terminal'
+    )
+  }),
+  'agent-sessions-parallel': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.parallel.title',
+      'Start another task in parallel'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.parallel.body',
+      'Each worktree gets its own branch, so parallel work stays separate.'
+    )
+  }),
+  'browser-annotate': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.annotate.title',
+      'Mark design feedback in place'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.annotate.body',
+      'Annotate elements and send those notes to an agent.'
+    )
+  }),
+  'browser-logins': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.logins.title',
+      'Stay logged in'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.logins.body',
+      'Bring your existing logins into Orca to stay signed in immediately.'
+    )
+  }),
+  'browser-extensions-intro': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.title',
+      'Chrome extensions'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.body',
+      'Install from the Chrome Web Store and pin them next to the address bar.'
+    ),
+    primaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.action',
+      'Open Web Store'
+    ),
+    secondaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.secondaryAction',
+      'Got it'
+    )
+  }),
+  'client-hosted-browser-intro': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.title',
+      'This page renders on your desktop'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.body',
+      'Remote browser tabs now render on this device. Network traffic still goes through the remote host.'
+    ),
+    primaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.client.hosted.browser.intro.action',
+      'Got it'
+    ),
+    secondaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.client.hosted.browser.intro.secondaryAction',
+      'Browser settings'
+    )
+  }),
+  'tasks-source': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.tasks.source.title',
+      'Choose the work source'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.tasks.source.body',
+      'Switch between connected providers and project filters without changing pages.'
+    )
+  }),
+  'tasks-filter': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.tasks.filter.title',
+      'Filter to the work you need'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.tasks.filter.body',
+      'Use presets and search to narrow issues, reviews, merge requests, or tasks.'
+    )
+  }),
+  'tasks-start': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.tasks.start.title',
+      'Start from work items'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.tasks.start.body',
+      'Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace.'
+    )
+  }),
+  'automations-intro': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
+      'What is an automation?'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
+      'Automations run agent work on a schedule. Add an automation by clicking this button.'
+    )
+  }),
+  'automations-results': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
+      'Find the results'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
+      'Runs show when automations ran, what happened, and where to inspect their output.'
+    )
+  }),
+  'floating-workspace-repos': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.floating.workspace.repos.title',
+      'Run an agent across every repo'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.floating.workspace.repos.body',
+      'Agents here run in any folder you choose. Point one at the directory above your services to work across all your repos at once.'
+    )
+  }),
+  'floating-workspace-scratchpad': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.floating.workspace.scratchpad.title',
+      'Or use it as a scratchpad'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.floating.workspace.scratchpad.body',
+      'Open agents, scratch terminals, notes, and browser tabs without cluttering the worktree you’re focused on.'
+    )
+  }),
+  'workspace-creation-project': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.project.title',
+      'Pick a project'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.project.body',
+      'Orca isolates each task in its own worktree, branched off your base.'
+    )
+  }),
+  'workspace-creation-name': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.name.title',
+      'Name it, or start from existing work'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.name.body',
+      'Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message.'
+    )
+  }),
+  'workspace-creation-agent': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.agent.title',
+      'Choose what agent starts the work'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.workspace.creation.agent.body',
+      'Pick the agent that should be opened when this worktree is created.'
+    )
+  }),
+  'projects-collapse-all-intro': () => ({
+    title: translate(
+      'components.contextualTours.projectsCollapseAll.intro.title',
+      'Collapse all projects at once'
+    ),
+    // {sidebar.projects.toggleCollapse} resolves to the user's current binding at render time.
+    body: translate(
+      'components.contextualTours.projectsCollapseAll.intro.body',
+      'Press {sidebar.projects.toggleCollapse}, click this button, or {{modifier}}-click any project header.',
+      { modifier: getProjectsCollapseModifierLabel() }
+    ),
+    bodyWithoutShortcut: translate(
+      'components.contextualTours.projectsCollapseAll.intro.bodyWithoutShortcut',
+      'Click this button, or {{modifier}}-click any project header.',
+      { modifier: getProjectsCollapseModifierLabel() }
+    ),
+    primaryActionLabel: translate(
+      'components.contextualTours.projectsCollapseAll.intro.action',
+      'Got it'
+    )
+  })
+} satisfies Record<ContextualTourStepId, StepCopyThunk>
+
+export function getLocalizedContextualTourStepCopy(
+  stepId: string
+): LocalizedContextualTourStepCopy | undefined {
+  return LOCALIZED_STEP_COPY[stepId]?.()
+}

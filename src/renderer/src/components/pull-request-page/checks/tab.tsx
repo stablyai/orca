@@ -1,0 +1,390 @@
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
+import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
+import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useAppStore } from '@/store/index'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import {
+  createGitHubChecksTabState,
+  resolveGitHubChecksTabState,
+  toggleGitHubChecksTabExpandedKey,
+  type GitHubChecksContextOwner
+} from '@/components/github-checks-tab-state'
+
+import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
+import {
+  getCheckCounts,
+  getOverallCheckCounts,
+  getChecksSummaryLabel
+} from '@/components/pr-check-counts'
+import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
+import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import {
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../../../shared/work-items/task-source-context'
+
+import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
+import {
+  canUseGitHubRepoContext,
+  getGitHubSourceRuntimeHost
+} from '@/lib/work-items/github/github-source-runtime-context'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
+import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { refreshPullRequestChecks } from './refresh'
+import { rerunPullRequestChecks } from './rerun'
+import { requestPullRequestCheckDetails } from './details-request'
+import { fixBrokenPullRequestChecks } from './fix-launch'
+import { ChecksCompactHeader, buildChecksToolbar } from './toolbar'
+import { CheckRow } from './row'
+import { ChecksFixDialog } from './fix-dialog'
+import { ChecksTabLayouts } from './layouts'
+import { useTranslate } from '@/i18n/use-translate'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+
+export function ChecksTab({
+  item,
+  repoPath,
+  repoId,
+  sourceContext,
+  headSha,
+  checks,
+  loading,
+  variant = 'compact',
+  onChecksUpdated
+}: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  repoId: string | null
+  sourceContext?: TaskSourceContext | null
+  headSha: string | undefined
+  checks: GitHubWorkItemDetails['checks']
+  loading: boolean
+  variant?: 'compact' | 'page'
+  onChecksUpdated: (checks: PRCheckDetail[]) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const targetRepoId = repoId ?? item.repoId
+  const settings = useAppStore((s) => s.settings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
+  const updateRepo = useAppStore((s) => s.updateRepo)
+  const repo = useAppStore((s) =>
+    targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
+  )
+  const repos = useAppStore((s) => s.repos)
+  const projects = useAppStore((s) => s.projects)
+  const { checkOwner, onOwnerUpdated } = usePRCheckRefreshOwner(item, sourceContext)
+  const [fixingChecks, setFixingChecks] = useState(false)
+  const [fixChecksComposerPrompt, setFixChecksComposerPrompt] = useState<string | null>(null)
+  const mountedRef = useMountedRef()
+  const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
+  const nextCheckDetailsRequestIdRef = useRef(0)
+  const checkDetailsContextKey = [
+    sourceContext ? getTaskSourceCacheScope(sourceContext) : 'local',
+    repoId ?? item.repoId ?? '',
+    repoPath ?? '',
+    prRepo ? githubRepoIdentityKey(prRepo) : '',
+    item.id,
+    item.number,
+    headSha ?? ''
+  ].join('\0')
+  const [checksState, setChecksState] = useState(() =>
+    createGitHubChecksTabState(checks, checkDetailsContextKey)
+  )
+  const resolvedChecksState = resolveGitHubChecksTabState(
+    checksState,
+    checks,
+    checkDetailsContextKey
+  )
+  const committedChecksContextOwnerRef = useRef(resolvedChecksState.contextOwner)
+  const nextChecksRefreshRequestIdRef = useRef(0)
+  const activeChecksRefreshRequestIdRef = useRef<number | null>(null)
+  const [refreshingOwner, setRefreshingOwner] = useState<{
+    contextOwner: GitHubChecksContextOwner
+    requestId: number
+  } | null>(null)
+  const refreshing = refreshingOwner?.contextOwner === resolvedChecksState.contextOwner
+  const [rerunningOwner, setRerunningOwner] = useState<GitHubChecksContextOwner | null>(null)
+  const rerunning = rerunningOwner === resolvedChecksState.contextOwner
+  useLayoutEffect(() => {
+    committedChecksContextOwnerRef.current = resolvedChecksState.contextOwner
+  }, [resolvedChecksState.contextOwner])
+  if (resolvedChecksState !== checksState) {
+    // Why: reconcile before paint when a parent check refresh replaces the source list, so stale rows/details never show.
+    setChecksState(resolvedChecksState)
+  }
+  const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
+  const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
+  const fixChecksRecipe = useMemo(
+    () =>
+      resolveSourceControlActionRecipe({
+        settings,
+        repo,
+        actionId: 'fixChecks'
+      }),
+    [repo, settings]
+  )
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  // Why: the fix agent runs on the repo's execution host, so its OS decides quoting (#27971).
+  const fixChecksLaunchPlatform = useMemo(() => {
+    if (!repo) {
+      return undefined
+    }
+    const fact = resolveRepoExecutionHostPlatform(
+      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      repo,
+      () =>
+        getLocalRepoProjectExecutionRuntimeContext(
+          // Why: repo-scoped resolution only reads repos/projects/settings, and subscribing keeps the launch platform fresh.
+          {
+            activeRepoId: null,
+            activeWorktreeId: null,
+            projects,
+            repos,
+            settings,
+            worktreesByRepo: {}
+          },
+          repo.id,
+          CLIENT_PLATFORM
+        )
+    )
+    return fact.kind === 'known' ? fact.platform : undefined
+  }, [
+    projects,
+    repo,
+    repos,
+    runtimeStatusByEnvironmentId,
+    settings,
+    sshConnectionStates,
+    sshStateByEnvironment
+  ])
+  // Why: parses a fresh host object per call, so memoize to keep the check action callbacks stable.
+  const runtimeHost = useMemo(() => getGitHubSourceRuntimeHost(sourceContext), [sourceContext])
+  const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
+  const sorted = sortChecksBySeverity(list)
+  const failedChecks = getBrokenChecks(list)
+  const counts = getCheckCounts(list)
+  const overallCounts = getOverallCheckCounts(
+    list,
+    checkOwner,
+    resolvedChecksState.checkObservationOwner
+  )
+  const summaryLabel = getChecksSummaryLabel(
+    list,
+    checkOwner,
+    resolvedChecksState.checkObservationOwner,
+    t
+  )
+  const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(overallCounts)
+  const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
+
+  const handleRefresh = useCallback(
+    async (expectedContextOwner?: GitHubChecksContextOwner) =>
+      refreshPullRequestChecks({
+        canUseChecksRepoContext,
+        expectedContextOwner,
+        committedChecksContextOwnerRef,
+        nextChecksRefreshRequestIdRef,
+        activeChecksRefreshRequestIdRef,
+        setRefreshingOwner,
+        setChecksState,
+        runtimeHost,
+        sourceContext,
+        repoId,
+        repoPath,
+        item: checkOwner,
+        headSha: checkOwner.headSha,
+        prRepo,
+        mountedRef,
+        onOwnerUpdated,
+        onChecksUpdated
+      }),
+    [
+      canUseChecksRepoContext,
+      checkOwner,
+      mountedRef,
+      onChecksUpdated,
+      onOwnerUpdated,
+      runtimeHost,
+      prRepo,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
+  )
+
+  const handleRerun = useCallback(
+    async (failedOnly: boolean) =>
+      rerunPullRequestChecks({
+        canUseChecksRepoContext,
+        rerunning,
+        committedChecksContextOwnerRef,
+        setRerunningOwner,
+        runtimeHost,
+        sourceContext,
+        repoId,
+        repoPath,
+        item: checkOwner,
+        headSha: checkOwner.headSha,
+        prRepo,
+        failedOnly,
+        mountedRef,
+        handleRefresh
+      }),
+    [
+      canUseChecksRepoContext,
+      handleRefresh,
+      checkOwner,
+      mountedRef,
+      prRepo,
+      runtimeHost,
+      rerunning,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
+  )
+
+  const requestCheckDetails = useCallback(
+    (check: PRCheckDetail, key: string): void => {
+      requestPullRequestCheckDetails({
+        canUseChecksRepoContext,
+        check,
+        key,
+        nextCheckDetailsRequestIdRef,
+        mountedRef,
+        setChecksState,
+        runtimeHost,
+        sourceContext,
+        repoId,
+        repoPath,
+        item,
+        prRepo
+      })
+    },
+    [
+      canUseChecksRepoContext,
+      item,
+      mountedRef,
+      runtimeHost,
+      prRepo,
+      repoId,
+      repoPath,
+      sourceContext
+    ]
+  )
+
+  const handleToggleCheckDetails = useCallback(
+    (check: PRCheckDetail): void => {
+      const key = getCheckDetailsKey(check)
+      setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
+      if (detailsByCheckKey[key]) {
+        return
+      }
+      requestCheckDetails(check, key)
+    },
+    [detailsByCheckKey, requestCheckDetails]
+  )
+
+  const { refreshAction, rerunAction, secondaryActions, actions } = buildChecksToolbar(
+    {
+      variant,
+      canUseChecksRepoContext,
+      refreshing,
+      rerunning,
+      fixingChecks,
+      canFixBrokenChecks,
+      failedChecksCount: failedChecks.length,
+      listLength: list.length,
+      onRefresh: () => {
+        void handleRefresh()
+      },
+      onFix: () => {
+        void fixBrokenPullRequestChecks({
+          targetRepoId,
+          fixingChecks,
+          failedChecks,
+          item,
+          list,
+          setFixingChecks,
+          setFixChecksComposerPrompt
+        })
+      },
+      onRerun: (failedOnly) => {
+        void handleRerun(failedOnly)
+      }
+    },
+    t
+  )
+
+  const compactHeader = (
+    <ChecksCompactHeader
+      SummaryIcon={SummaryIcon}
+      summaryColor={summaryColor}
+      summaryLabel={summaryLabel}
+      counts={overallCounts}
+      showSummary={isCompletePRCheckOwner(checkOwner)}
+      listLength={list.length}
+      refreshAction={refreshAction}
+      rerunAction={rerunAction}
+      secondaryActions={secondaryActions}
+    />
+  )
+
+  const fixChecksAgentDialog = (
+    <ChecksFixDialog
+      fixChecksComposerPrompt={fixChecksComposerPrompt}
+      setFixChecksComposerPrompt={setFixChecksComposerPrompt}
+      fixChecksRecipe={fixChecksRecipe}
+      fixChecksLaunchPlatform={fixChecksLaunchPlatform}
+      repoConnectionId={repo?.connectionId ?? null}
+      targetRepoId={targetRepoId}
+      item={item}
+      updateSettings={updateSettingsOrThrow}
+      updateRepo={updateRepo}
+    />
+  )
+
+  const renderCheckRow = (check: PRCheckDetail): React.JSX.Element => {
+    const key = getCheckDetailsKey(check)
+    return (
+      <CheckRow
+        key={key}
+        check={check}
+        variant={variant}
+        expanded={expandedCheckKey === key}
+        detailsState={detailsByCheckKey[key]}
+        onToggle={handleToggleCheckDetails}
+        onRetryDetails={requestCheckDetails}
+      />
+    )
+  }
+
+  return (
+    <ChecksTabLayouts
+      loading={loading}
+      listLength={list.length}
+      variant={variant}
+      compactHeader={compactHeader}
+      actions={actions}
+      SummaryIcon={SummaryIcon}
+      summaryColor={summaryColor}
+      summaryLabel={summaryLabel}
+      counts={counts}
+      summaryPending={overallCounts.pending > 0 && overallCounts.failing === 0}
+      owner={checkOwner}
+      sorted={sorted}
+      renderCheckRow={renderCheckRow}
+      fixChecksAgentDialog={fixChecksAgentDialog}
+    />
+  )
+}

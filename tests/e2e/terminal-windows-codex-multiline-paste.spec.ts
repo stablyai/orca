@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
+import { attachRepoAndOpenTerminal } from './helpers/orca-restart'
 import {
   focusActiveTerminalInput,
   getTerminalContent,
@@ -31,7 +32,7 @@ function pastePayload(repeats = 4): string {
     '',
     '- If the worktree is dirty before starting, stop and report it.',
     '',
-    '- Use native Windows PowerShell, Node 24, and pnpm 10.',
+    '- Use native Windows PowerShell, Node 24, and pnpm 12.',
     '',
     '- Confirm the checked-out full SHA before testing.',
     '',
@@ -54,33 +55,8 @@ async function activateTestRepository(
   page: Parameters<typeof focusActiveTerminalInput>[0],
   repoPath: string
 ): Promise<void> {
-  await page.evaluate(async (targetRepoPath) => {
-    const normalizePath = (value: string): string => value.replaceAll('\\', '/').toLowerCase()
-    await window.api.repos.add({ path: targetRepoPath })
-    const store = window.__store
-    if (!store) {
-      throw new Error('Orca store unavailable')
-    }
-    await store.getState().fetchRepos()
-    const repo = store
-      .getState()
-      .repos.find((candidate) => normalizePath(candidate.path) === normalizePath(targetRepoPath))
-    if (!repo) {
-      throw new Error('Seeded repository unavailable')
-    }
-    await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-    await store.getState().fetchWorktrees(repo.id)
-    const worktree = store
-      .getState()
-      .worktreesByRepo[repo.id]?.find(
-        (candidate) => normalizePath(candidate.path) === normalizePath(targetRepoPath)
-      )
-    if (!worktree) {
-      throw new Error('Seeded worktree unavailable')
-    }
-    store.getState().setActiveWorktree(worktree.id)
-    store.getState().createTab(worktree.id)
-  }, repoPath)
+  const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
+  await page.evaluate((id) => window.__store!.getState().createTab(id), worktreeId)
 }
 
 function pasteCollectorScript(
@@ -123,8 +99,7 @@ async function enableTerminalAccessibilityDom(
     if (!pane) {
       throw new Error(`Terminal pane ${targetPtyId} is unavailable`)
     }
-    // Why: xterm paints to canvas by default. Screen-reader mode mirrors the
-    // visible prompt into DOM rows so the regression assertions stay user-facing.
+    // Enable screen-reader DOM rows for user-facing prompt assertions despite canvas rendering.
     pane.terminal.options.screenReaderMode = true
     pane.terminal.refresh(0, pane.terminal.rows - 1)
   }, ptyId)
@@ -136,15 +111,12 @@ async function enableTerminalAccessibilityDom(
 async function waitForCodexComposerReady(
   page: Parameters<typeof focusActiveTerminalInput>[0]
 ): Promise<void> {
-  // Why: Codex can render its header before delayed MCP startup takes over the
-  // composer. Let that startup begin, then paste only after the TUI is idle.
+  // Wait for delayed MCP startup to finish after the header, then paste into idle composer.
   await page.waitForTimeout(5_000)
   await expect
     .poll(async () => await getTerminalContent(page, 12_000), { timeout: 60_000 })
     .not.toMatch(/Booting MCP server|tab to queue message/i)
-  // Why: absence of boot states alone can pass on an empty screen; the idle
-  // composer placeholder is the positive ready marker (mirrors the product's
-  // codex-composer-prompt draft-paste signal).
+  // Require the idle placeholder positively; absent boot states also match an empty screen.
   await expect
     .poll(async () => await getTerminalContent(page, 12_000), { timeout: 60_000 })
     .toMatch(/Ask Codex/i)
@@ -213,9 +185,7 @@ test.describe('Windows Codex multiline paste', () => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const payload = pastePayload(110)
     const expectedText = payload.replace(/\r?\n/g, '\r')
-    // Why: assert on the normalized size so the payload keeps exercising the
-    // chunked (>64 KiB direct-max) lane even if planning ever measures
-    // post-normalization bytes.
+    // Require normalized payload >64KiB so chunked-lane coverage survives changes to byte-planning order.
     expect(Buffer.byteLength(expectedText, 'utf8')).toBeGreaterThan(64 * 1024)
     const expectedHash = createHash('sha256').update(expectedText).digest('hex')
     const marker = `ORCA_LARGE_PASTE_${randomUUID().replaceAll('-', '')}`

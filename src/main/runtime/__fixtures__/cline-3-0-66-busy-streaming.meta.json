@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T19:12:26.788Z",
+  "platform": "darwin",
+  "command": ["cline", "--config", "<scratch>/cline-or", "--data-dir", "<scratch>/cline-or/data"],
+  "cols": 120,
+  "rows": 40,
+  "note": "cline 3.0.66, macOS, OpenRouter free router, isolated --config/--data-dir, promo dismissed, one turn, recording stopped while the turn was still running. Truncated 89003 -> 35988 bytes, after the first frame whose spinner row has scrolled off.",
+  "exitCode": 0
+}

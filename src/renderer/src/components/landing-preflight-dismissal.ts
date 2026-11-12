@@ -2,18 +2,13 @@ import {
   getProjectIdentityKey,
   isGitHubBackedRepo
 } from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
-// Why: GitHub-CLI setup nudges are dismissible, but the dismissal must lapse
-// when the user adds a NEW GitHub-backed project — that's the moment the CLI
-// actually becomes useful. We snapshot the set of GitHub project identity keys
-// present at dismiss time; a later set that contains a key not in the snapshot
-// means a genuinely new GitHub project appeared and the nudge should return.
+// Snapshot GitHub identities on dismissal; show the nudge again only when a new GitHub project appears.
 
 const STORAGE_PREFIX = 'orca.preflightBanner.dismissed.'
 
 type DismissalRecord = {
-  /** GitHub project identity keys present when the user dismissed. */
   githubKeys: string[]
 }
 
@@ -21,9 +16,8 @@ function storageKey(issueId: string): string {
   return `${STORAGE_PREFIX}${issueId}`
 }
 
-/** GitHub-backed project identity keys for the current repo set, de-duped so
- *  the same GitHub project added twice doesn't read as two distinct projects. */
-export function githubProjectKeys(repos: Repo[]): string[] {
+/** Deduplicate project identities so registering the same GitHub repo twice does not count as a new project. */
+export function githubProjectKeys(repos: readonly Repo[]): string[] {
   const keys = repos
     .filter((repo) => isGitHubBackedRepo(repo))
     .map((repo) => getProjectIdentityKey(repo))
@@ -43,9 +37,8 @@ function readRecord(issueId: string): DismissalRecord | null {
   }
 }
 
-/** True when the issue was dismissed and no new GitHub project has appeared
- *  since. A GitHub key present now but absent from the snapshot re-surfaces it. */
-export function isPreflightIssueDismissed(issueId: string, repos: Repo[]): boolean {
+/** Keep dismissed while every current GitHub identity was present in the dismissal snapshot. */
+export function isPreflightIssueDismissed(issueId: string, repos: readonly Repo[]): boolean {
   const record = readRecord(issueId)
   if (!record) {
     return false
@@ -55,12 +48,11 @@ export function isPreflightIssueDismissed(issueId: string, repos: Repo[]): boole
   return !hasNewGithubProject
 }
 
-export function dismissPreflightIssue(issueId: string, repos: Repo[]): void {
+export function dismissPreflightIssue(issueId: string, repos: readonly Repo[]): void {
   try {
     const record: DismissalRecord = { githubKeys: githubProjectKeys(repos) }
     localStorage.setItem(storageKey(issueId), JSON.stringify(record))
   } catch {
-    // Why: a blocked storage write shouldn't break dismiss for the session;
-    // the in-memory state in PreflightBanner still hides it until relaunch.
+    // Blocked storage must not break dismissal; the banner’s in-memory state lasts until relaunch.
   }
 }

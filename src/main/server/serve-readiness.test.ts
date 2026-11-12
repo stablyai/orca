@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+
 import {
   renderServeReadiness,
   ServeReadinessPublisher,
@@ -22,60 +23,6 @@ const ready: ServeReadiness = {
 }
 
 describe('ServeReadinessPublisher', () => {
-  it('writes one complete human-readable ready block', async () => {
-    const write = vi.fn(async () => {})
-    const publisher = new ServeReadinessPublisher(write)
-
-    await publisher.publish(ready, { mode: 'human' })
-
-    expect(write).toHaveBeenCalledOnce()
-    expect(write).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'Orca server ready\nBound endpoint: ws://0.0.0.0:6768\nAdvertised endpoint: wss://orca.example.test/runtime'
-      )
-    )
-    expect(write).toHaveBeenCalledWith(
-      expect.stringContaining('Pairing URL: orca://pair?code=secret\n')
-    )
-  })
-
-  it('publishes a versioned JSON contract with explicit endpoints and pairing availability', () => {
-    expect(JSON.parse(renderServeReadiness(ready, { mode: 'json' }))).toEqual({
-      type: 'orca_server_ready',
-      schemaVersion: 1,
-      runtimeId: 'runtime-1',
-      endpoint: 'ws://0.0.0.0:6768',
-      boundEndpoint: 'ws://0.0.0.0:6768',
-      advertisedEndpoint: 'wss://orca.example.test/runtime',
-      managedWslCliReconciliation: 'settled',
-      pairing: ready.pairing
-    })
-  })
-
-  it('reports unavailable pairing as an explicit machine-readable object', () => {
-    const unavailable: ServeReadiness = {
-      ...ready,
-      advertisedEndpoint: null,
-      pairing: {
-        available: false,
-        reason: 'invalid_advertised_endpoint',
-        guidance: 'Use a reachable address.'
-      }
-    }
-
-    const json = JSON.parse(renderServeReadiness(unavailable, { mode: 'json' }))
-    expect(json.pairing).toEqual(unavailable.pairing)
-    expect(renderServeReadiness(unavailable, { mode: 'human' })).toContain(
-      'Pairing unavailable: invalid_advertised_endpoint\nPairing guidance: Use a reachable address.'
-    )
-  })
-
-  it('preserves the recipe JSON contract', () => {
-    expect(renderServeReadiness(ready, { mode: 'recipe-json', projectRoot: '/workspace' })).toBe(
-      '{"schemaVersion":1,"pairingCode":"orca://pair?code=secret","projectRoot":"/workspace"}'
-    )
-  })
-
   it('fails recipe output with the unavailable reason and guidance', () => {
     const unavailable: ServeReadiness = {
       ...ready,

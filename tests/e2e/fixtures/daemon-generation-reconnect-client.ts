@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import { randomUUID } from 'node:crypto'
-import { DaemonPtyAdapter } from '../../../src/main/daemon/daemon-pty-adapter'
-import type { DaemonPtyRouter } from '../../../src/main/daemon/daemon-pty-router'
+import { DaemonPtyAdapter } from '../../../src/main/daemon/providers/adapter/daemon-pty-adapter'
+import type { DaemonPtyRouter } from '../../../src/main/daemon/providers/routing/daemon-pty-router'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
-import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
+import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
 import { createDesktopDiscoveredDaemonRouter } from './daemon-generation-desktop-discovery'
 import { dispatchFixtureCloseBursts } from './daemon-generation-runtime-close'
@@ -41,7 +41,7 @@ const MAX_OUTPUT_CHARS = 32_768
 
 function readConfig(): ClientConfig {
   const configIndex = process.argv.indexOf('--config')
-  const configPath = configIndex >= 0 ? process.argv[configIndex + 1] : undefined
+  const configPath = configIndex !== -1 ? process.argv[configIndex + 1] : undefined
   if (!configPath) {
     throw new Error('Reconnect client requires --config <path>')
   }
@@ -143,8 +143,7 @@ function createRuntimeClosePath(
 }> {
   const pendingShutdowns: Promise<void>[] = []
   const surfaces = config.sessions.map((session, index) => {
-    // Why: app relaunch must target the same persisted mirror incarnation, not
-    // accidentally mint a different tab identity that weakens the repetition proof.
+    // Reuse mirror incarnation ids across relaunch so minting new tabs cannot weaken the repeated-close proof.
     const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
     return { session, leafId, mobileTabId: `${PARENT_TAB_ID}::${leafId}` }
   })
@@ -159,7 +158,7 @@ function createRuntimeClosePath(
       pendingShutdowns.push(shutdown)
       return true
     },
-    listProcesses: (options) => router.listProcesses(options),
+    listProcesses: (_hostId, options) => router.listProcesses(options),
     hasPty: (ptyId) => router.hasPty(ptyId),
     getForegroundProcess: (ptyId) => router.getForegroundProcess(ptyId)
   })
@@ -270,6 +269,9 @@ async function main(): Promise<void> {
         router.dispose()
       }
       router = await connectThroughDesktopDiscovery(config, burst)
+    }
+    if (!router) {
+      throw new Error('Reconnect fixture needs at least one reconnect burst')
     }
     await connectParallelRuntimeClients(config)
     const { dispatcher, targets, pendingShutdowns } = await createRuntimeClosePath(config, router)

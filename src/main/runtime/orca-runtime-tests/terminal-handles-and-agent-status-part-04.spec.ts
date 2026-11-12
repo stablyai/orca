@@ -1,0 +1,234 @@
+import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../../ipc/pty/ipc/spawn-types'
+import { describe, expect, it, vi } from 'vitest'
+import './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
+
+describe('OrcaRuntimeService', () => {
+  it.each([
+    {
+      behavior: 'fills a missing renderer session',
+      hookAgentType: 'codex',
+      hookOffset: 0,
+      rendererSessionId: null,
+      expectedSessionId: 'hook-session'
+    },
+    {
+      behavior: 'replaces a stale renderer session at the same event timestamp',
+      hookAgentType: 'codex',
+      hookOffset: 0,
+      rendererSessionId: 'stale-renderer-session',
+      expectedSessionId: 'hook-session'
+    },
+    {
+      behavior: 'preserves a renderer session newer than the hook row',
+      hookAgentType: 'codex',
+      hookOffset: -1,
+      rendererSessionId: 'newer-renderer-session',
+      expectedSessionId: 'newer-renderer-session'
+    },
+    {
+      behavior: 'rejects a hook session owned by another agent',
+      hookAgentType: 'claude',
+      hookOffset: 1,
+      rendererSessionId: null,
+      expectedSessionId: null
+    }
+  ] as const)(
+    '$behavior',
+    async ({ hookAgentType, hookOffset, rendererSessionId, expectedSessionId }) => {
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      const paneKey = `codex-tab:${leafId}`
+      const providerSession = {
+        key: 'session_id' as const,
+        id: 'hook-session'
+      }
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey,
+            state: 'done',
+            prompt: '',
+            agentType: hookAgentType,
+            connectionId: null,
+            receivedAt: now + hookOffset,
+            stateStartedAt: now + hookOffset,
+            tabId: 'codex-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            providerSession
+          }
+        ]
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: null,
+            activeTabId: `codex-tab::${leafId}`,
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: `codex-tab::${leafId}`,
+                parentTabId: 'codex-tab',
+                leafId,
+                title: 'Codex',
+                launchAgent: 'codex',
+                agentStatus: {
+                  state: 'working',
+                  prompt: 'Reply with MOBILE QA OK and nothing else.',
+                  updatedAt: now,
+                  stateStartedAt: now,
+                  agentType: 'codex',
+                  paneKey,
+                  stateHistory: [],
+                  ...(rendererSessionId
+                    ? {
+                        providerSession: {
+                          key: 'session_id' as const,
+                          id: rendererSessionId
+                        }
+                      }
+                    : {})
+                },
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+
+      const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+      expect(result.tabs[0]).toEqual(
+        expect.objectContaining({
+          type: 'terminal',
+          agentStatus: expect.objectContaining({
+            state: 'working',
+            prompt: 'Reply with MOBILE QA OK and nothing else.',
+            agentType: 'codex'
+          })
+        })
+      )
+      if (expectedSessionId) {
+        expect(result.tabs[0]).toHaveProperty('agentStatus.providerSession', {
+          key: 'session_id',
+          id: expectedSessionId
+        })
+      } else {
+        expect(result.tabs[0]).not.toHaveProperty('agentStatus.providerSession')
+      }
+    }
+  )
+
+  it('preserves host metadata when terminal.create adopts a stable pane owner', async () => {
+    const adoptStablePane = vi.fn(
+      async (args: AdoptStablePaneArgs): Promise<AdoptStablePaneResult | null> => {
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }
+    )
+    const spawn = vi.fn(async (opts: { adoptedStablePane?: { owner: { handle?: string } } }) =>
+      opts.adoptedStablePane
+        ? {
+            id: 'pty-stable-owner',
+            isReattach: true,
+            stablePaneOwner: {
+              handle: opts.adoptedStablePane.owner.handle!,
+              tabId: 'stable-owner-tab',
+              leafId: HEADLESS_LEAF_ID
+            }
+          }
+        : { id: 'pty-stable-owner' }
+    )
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        claudeAgentTeamsMode: 'in-process' as const
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      adoptStablePane,
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const first = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'stable-owner-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Original owner',
+      launchAgent: 'claude'
+    })
+    adoptStablePane.mockResolvedValueOnce({
+      materialized: true,
+      result: { id: 'pty-stable-owner', isReattach: true },
+      owner: {
+        handle: first.handle,
+        tabId: 'stable-owner-tab',
+        leafId: HEADLESS_LEAF_ID,
+        ptyId: 'pty-stable-owner'
+      }
+    })
+
+    const adopted = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'stable-owner-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Replacement intent',
+      command: "claude 'replacement'",
+      launchAgent: 'claude'
+    })
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(adopted).toMatchObject({
+      handle: first.handle,
+      ptyId: 'pty-stable-owner',
+      title: 'Original owner',
+      isReattach: true
+    })
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({
+        parentTabId: 'stable-owner-tab',
+        title: 'Original owner',
+        launchAgent: 'claude'
+      })
+    ])
+    expect(spawn).toHaveBeenCalledOnce()
+  })
+
+  it('refuses before spawning when the client disconnects during pane adoption', async () => {
+    const abort = new AbortController()
+    const spawn = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      adoptStablePane: vi.fn(async (args: AdoptStablePaneArgs) => {
+        abort.abort()
+        await args.spawnFresh?.({ mustExist: false })
+        return null
+      }),
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        tabId: 'disconnected-during-adopt',
+        leafId: HEADLESS_LEAF_ID,
+        signal: abort.signal
+      })
+    ).rejects.toThrow('client_disconnected')
+
+    expect(spawn).not.toHaveBeenCalled()
+  })
+})

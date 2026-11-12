@@ -1,0 +1,75 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "source-control.commit-message",
+  "family": "git.commit-message-ai",
+  "namedDeltas": [],
+  "values": {
+    "25b63dbb4c58": {
+      "name": "git.cancelGenerateCommitMessage#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.cancelGenerateCommitMessage\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "adb40821f3e2": {
+      "generated": "ungenerated"
+    },
+    "d7e067c96156": {
+      "name": "git.cancelGenerateCommitMessage#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.cancelGenerateCommitMessage"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-commit-message-cancel-rejected",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["d7e067c96156"],
+          "payloads": ["25b63dbb4c58"],
+          "settlements": {
+            "cancel": "a947768bc0ed"
+          },
+          "state": "adb40821f3e2",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

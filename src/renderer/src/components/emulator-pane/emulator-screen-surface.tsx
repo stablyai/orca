@@ -5,7 +5,7 @@ import type {
   PointerEventHandler,
   WheelEventHandler
 } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getEmulatorScreenAriaLabel } from './emulator-screen-aria-label'
 import { EmulatorScreenStreamContent } from './emulator-screen-stream-content'
 import type {
@@ -13,8 +13,10 @@ import type {
   StreamSize,
   VisualStreamGeometry
 } from './emulator-device-frame-layout'
+import { useTranslate } from '@/i18n/use-translate'
 
 type EmulatorScreenSurfaceProps = {
+  deviceId?: string
   frameLayout: DeviceFrameLayout | null
   isLive: boolean
   keyboardCaptureActive: boolean
@@ -38,6 +40,7 @@ type EmulatorScreenSurfaceProps = {
 }
 
 export function EmulatorScreenSurface({
+  deviceId,
   frameLayout,
   isLive,
   keyboardCaptureActive,
@@ -59,6 +62,7 @@ export function EmulatorScreenSurface({
   streamKey,
   streamRotation
 }: EmulatorScreenSurfaceProps) {
+  const t = useTranslate()
   return (
     <div
       className={cn(
@@ -83,11 +87,11 @@ export function EmulatorScreenSurface({
       role={isLive ? 'application' : undefined}
       tabIndex={isLive ? 0 : undefined}
       aria-keyshortcuts={keyboardCaptureActive ? 'Escape' : undefined}
-      aria-label={getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive)}
+      aria-label={getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive, t)}
     >
-      {/* Why: the stream is the actual emulator screen; fake in-screen chrome
-          doubles up with iOS's real status bar and makes bezels lie. */}
+      {/* Use the real streamed screen; extra in-screen chrome would duplicate iOS status bars and distort bezels. */}
       <EmulatorScreenStreamContent
+        deviceId={deviceId}
         loading={loading}
         onStreamError={onStreamError}
         onStreamSize={onStreamSize}

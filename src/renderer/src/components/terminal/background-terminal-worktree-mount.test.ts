@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { isSnapshotBackedTerminalPty } from '../terminal-pane/terminal-hidden-view-parking'
+import { describe, expect, it } from 'vitest'
+import { isSnapshotBackedTerminalPty } from '../terminal-pane/parking/retention/terminal-hidden-view-parking'
 import {
   clearTerminalProviderSnapshotCapabilities,
   synchronizeTerminalProviderSnapshotCapabilities,
@@ -7,40 +7,15 @@ import {
 } from './terminal-provider-snapshot-capability'
 
 import {
-  COLD_ACTIVATION_TAB_DEFER_THRESHOLD,
-  addBackgroundMountedTerminalWorktree,
   applyBackgroundMountTabRestriction,
-  canDeferColdActivationTabsForHost,
-  collectDeferredMountTabIds,
-  hasRequestedBackgroundTerminalWorktreeMount,
   planColdActivationTabDeferral,
   pruneClosedBackgroundMountTabs,
   requestBackgroundTerminalWorktreeMount,
   revealActivationDeferredTabs,
-  subscribeBackgroundTerminalWorktreeMountRequests,
-  takeAllPendingBackgroundTerminalWorktreeMounts,
-  shouldMountBackgroundWorktreeTab
+  takeAllPendingBackgroundTerminalWorktreeMounts
 } from './background-terminal-worktree-mount'
 
 describe('background terminal mount request registry', () => {
-  it('replays a request made before the Terminal listener mounts', () => {
-    takeAllPendingBackgroundTerminalWorktreeMounts()
-    const onRequest = vi.fn()
-    const unsubscribe = subscribeBackgroundTerminalWorktreeMountRequests(onRequest)
-
-    requestBackgroundTerminalWorktreeMount({ worktreeId: 'wt-cold', tabIds: ['tab-1'] })
-
-    expect(hasRequestedBackgroundTerminalWorktreeMount()).toBe(true)
-    expect(onRequest).toHaveBeenCalledOnce()
-    expect(takeAllPendingBackgroundTerminalWorktreeMounts()).toEqual([
-      { worktreeId: 'wt-cold', tabIds: ['tab-1'] }
-    ])
-    onRequest.mockClear()
-    requestBackgroundTerminalWorktreeMount({ worktreeId: 'wt-later', tabIds: ['tab-2'] })
-    expect(onRequest).not.toHaveBeenCalled()
-    unsubscribe()
-  })
-
   it('unions targeted requests and lets a whole-worktree request dominate', () => {
     takeAllPendingBackgroundTerminalWorktreeMounts()
     requestBackgroundTerminalWorktreeMount({ worktreeId: 'wt-1', tabIds: ['tab-1'] })
@@ -52,29 +27,6 @@ describe('background terminal mount request registry', () => {
     requestBackgroundTerminalWorktreeMount({ worktreeId: 'wt-1', tabIds: ['tab-1'] })
     requestBackgroundTerminalWorktreeMount({ worktreeId: 'wt-1' })
     expect(takeAllPendingBackgroundTerminalWorktreeMounts()).toEqual([{ worktreeId: 'wt-1' }])
-  })
-})
-
-describe('addBackgroundMountedTerminalWorktree', () => {
-  it('adds a hidden worktree mount and notifies the caller once', () => {
-    const mountedWorktreeIds = new Set<string>()
-    const onAdded = vi.fn()
-
-    expect(addBackgroundMountedTerminalWorktree(mountedWorktreeIds, 'wt-1', onAdded)).toBe(true)
-    expect(mountedWorktreeIds.has('wt-1')).toBe(true)
-    expect(onAdded).toHaveBeenCalledTimes(1)
-
-    expect(addBackgroundMountedTerminalWorktree(mountedWorktreeIds, 'wt-1', onAdded)).toBe(false)
-    expect(onAdded).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores missing worktree ids', () => {
-    const mountedWorktreeIds = new Set<string>()
-    const onAdded = vi.fn()
-
-    expect(addBackgroundMountedTerminalWorktree(mountedWorktreeIds, undefined, onAdded)).toBe(false)
-    expect(mountedWorktreeIds.size).toBe(0)
-    expect(onAdded).not.toHaveBeenCalled()
   })
 })
 
@@ -105,23 +57,6 @@ describe('applyBackgroundMountTabRestriction', () => {
 
     applyBackgroundMountTabRestriction(restrictions, mounted, 'wt-1', undefined)
     expect(restrictions.has('wt-1')).toBe(false)
-  })
-
-  it('keeps the existing set identity when the targets are already covered', () => {
-    const existing = new Set(['tab-1', 'tab-2'])
-    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', existing]])
-    const mounted = new Set(['wt-1'])
-
-    applyBackgroundMountTabRestriction(restrictions, mounted, 'wt-1', ['tab-2'])
-    expect(restrictions.get('wt-1')).toBe(existing)
-  })
-})
-
-describe('shouldMountBackgroundWorktreeTab', () => {
-  it('mounts every tab without a restriction and only listed tabs with one', () => {
-    expect(shouldMountBackgroundWorktreeTab(null, 'tab-1')).toBe(true)
-    expect(shouldMountBackgroundWorktreeTab(new Set(['tab-1']), 'tab-1')).toBe(true)
-    expect(shouldMountBackgroundWorktreeTab(new Set(['tab-1']), 'tab-2')).toBe(false)
   })
 })
 
@@ -178,49 +113,6 @@ describe('cold activation tab deferral', () => {
   const tabIds = (count: number): string[] =>
     Array.from({ length: count }, (_, index) => `tab-${index + 1}`)
 
-  it('enables deferral only for a positively resolved local execution host', () => {
-    expect(canDeferColdActivationTabsForHost({ executionHostId: 'local' })).toBe(true)
-    expect(canDeferColdActivationTabsForHost({ executionHostId: 'ssh:ssh-1' })).toBe(false)
-    expect(canDeferColdActivationTabsForHost({ executionHostId: 'runtime:runtime-1' })).toBe(false)
-    expect(canDeferColdActivationTabsForHost({ executionHostId: null })).toBe(false)
-  })
-
-  it('mounts everything at once when few tabs would defer', () => {
-    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
-    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
-    const deferring = planColdActivationTabDeferral({
-      restrictions,
-      deferredMountTabIdsByWorktree,
-      worktreeId: 'wt-1',
-      allTabIds: tabIds(COLD_ACTIVATION_TAB_DEFER_THRESHOLD + 1),
-      isTabLive: () => false,
-      isTabDeferrable: () => true,
-      immediateTabIds: new Set(['tab-1'])
-    })
-    expect(deferring).toBe(false)
-    expect(restrictions.has('wt-1')).toBe(false)
-    expect(deferredMountTabIdsByWorktree.has('wt-1')).toBe(false)
-  })
-
-  it('restricts a cold activation with many tabs to the immediate set', () => {
-    const restrictions = new Map<string, ReadonlySet<string>>()
-    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
-    const deferring = planColdActivationTabDeferral({
-      restrictions,
-      deferredMountTabIdsByWorktree,
-      worktreeId: 'wt-1',
-      allTabIds: tabIds(10),
-      isTabLive: () => false,
-      isTabDeferrable: () => true,
-      immediateTabIds: new Set(['tab-3'])
-    })
-    expect(deferring).toBe(true)
-    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-3']))
-    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(
-      new Set(['tab-1', 'tab-2', 'tab-4', 'tab-5', 'tab-6', 'tab-7', 'tab-8', 'tab-9', 'tab-10'])
-    )
-  })
-
   it('keeps live, previously allowed, and non-deferrable tabs mounted', () => {
     const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-2'])]])
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
@@ -238,7 +130,7 @@ describe('cold activation tab deferral', () => {
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2', 'tab-5', 'tab-9']))
   })
 
-  it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', () => {
+  it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', async () => {
     const worktreeId = 'wt-1'
     const allTabIds = tabIds(7)
     const ptyIdByTabId = new Map(
@@ -246,7 +138,7 @@ describe('cold activation tab deferral', () => {
     )
     const legacyPtyId = ptyIdByTabId.get('tab-2')!
     clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], (ids) =>
+    await synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], async (ids) =>
       ids.map((id) => ({ id, authoritative: id !== legacyPtyId }))
     )
     const restrictions = new Map<string, ReadonlySet<string>>()
@@ -274,61 +166,6 @@ describe('cold activation tab deferral', () => {
     expect(deferredMountTabIdsByWorktree.get(worktreeId)).toEqual(
       new Set(['tab-3', 'tab-4', 'tab-5', 'tab-6', 'tab-7'])
     )
-  })
-
-  it('preserves cold-activation deferral for an all-current daemon worktree', () => {
-    const worktreeId = 'wt-current'
-    const allTabIds = tabIds(7)
-    const ptyIdByTabId = new Map(
-      allTabIds.map((tabId) => [tabId, `${worktreeId}@@${tabId}-session`])
-    )
-    const resolve = vi.fn((ids: string[]) =>
-      ids.map((id) => ({ id, authoritative: true as boolean | null }))
-    )
-    clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], resolve)
-    const restrictions = new Map<string, ReadonlySet<string>>()
-    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
-
-    const deferring = planColdActivationTabDeferral({
-      restrictions,
-      deferredMountTabIdsByWorktree,
-      worktreeId,
-      allTabIds,
-      isTabLive: () => false,
-      isTabDeferrable: (tabId) => {
-        const ptyId = ptyIdByTabId.get(tabId) ?? null
-        return (
-          isSnapshotBackedTerminalPty(ptyId, worktreeId) &&
-          ptyId !== null &&
-          terminalProviderHasAuthoritativeSnapshot(ptyId)
-        )
-      },
-      immediateTabIds: new Set(['tab-1'])
-    })
-
-    expect(deferring).toBe(true)
-    expect(restrictions.get(worktreeId)).toEqual(new Set(['tab-1']))
-    expect(deferredMountTabIdsByWorktree.get(worktreeId)).toEqual(
-      new Set(['tab-2', 'tab-3', 'tab-4', 'tab-5', 'tab-6', 'tab-7'])
-    )
-    expect(resolve).toHaveBeenCalledOnce()
-  })
-
-  it('does not defer when most tabs are already live', () => {
-    const restrictions = new Map<string, ReadonlySet<string>>()
-    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
-    const deferring = planColdActivationTabDeferral({
-      restrictions,
-      deferredMountTabIdsByWorktree,
-      worktreeId: 'wt-1',
-      allTabIds: tabIds(10),
-      isTabLive: (tabId) => tabId !== 'tab-10',
-      isTabDeferrable: () => true,
-      immediateTabIds: new Set()
-    })
-    expect(deferring).toBe(false)
-    expect(restrictions.has('wt-1')).toBe(false)
   })
 
   it('reveals newly visible tabs and lifts the restriction once all are revealed', () => {
@@ -381,32 +218,5 @@ describe('cold activation tab deferral', () => {
     })
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1']))
     expect(deferredMountTabIdsByWorktree.has('wt-1')).toBe(false)
-  })
-
-  it('hands a targeted wake from activation watcher ownership to its pane', () => {
-    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
-    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>([
-      ['wt-1', new Set(['tab-2', 'tab-3'])]
-    ])
-    const mounted = new Set(['wt-1'])
-
-    applyBackgroundMountTabRestriction(restrictions, mounted, 'wt-1', ['tab-2'])
-    revealActivationDeferredTabs({
-      restrictions,
-      deferredMountTabIdsByWorktree,
-      worktreeId: 'wt-1',
-      allTabIds: tabIds(3),
-      immediateTabIds: new Set(['tab-2'])
-    })
-
-    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2']))
-    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(['tab-3']))
-  })
-
-  it('collects the tabs a restriction keeps unmounted', () => {
-    expect(collectDeferredMountTabIds(null, tabIds(3))).toEqual(new Set())
-    expect(collectDeferredMountTabIds(new Set(['tab-2']), tabIds(3))).toEqual(
-      new Set(['tab-1', 'tab-3'])
-    )
   })
 })

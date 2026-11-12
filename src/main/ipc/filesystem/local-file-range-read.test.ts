@@ -1,0 +1,33 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, expect, it } from 'vitest'
+import { readLocalFileRange } from './local-file-range-read'
+
+let folder: string
+beforeEach(async () => {
+  folder = await mkdtemp(join(tmpdir(), 'orca-file-range-'))
+})
+afterEach(async () => {
+  await rm(folder, { recursive: true, force: true })
+})
+
+it('reads only the requested bytes and reports partial and past-EOF ranges', async () => {
+  const file = join(folder, 'records.csv')
+  await writeFile(file, '0123456789')
+  await expect(readLocalFileRange(file, 3, 4)).resolves.toEqual({
+    contentBase64: Buffer.from('3456').toString('base64'),
+    bytesRead: 4,
+    eof: false
+  })
+  await expect(readLocalFileRange(file, 8, 4)).resolves.toEqual({
+    contentBase64: Buffer.from('89').toString('base64'),
+    bytesRead: 2,
+    eof: true
+  })
+  await expect(readLocalFileRange(file, 12, 4)).resolves.toEqual({
+    contentBase64: '',
+    bytesRead: 0,
+    eof: true
+  })
+})

@@ -1,0 +1,378 @@
+import { useCallback, useRef, useState } from 'react'
+import { Text } from 'react-native'
+import type { VoiceSettingsOperations } from './voice-settings-operations'
+import { MobileStateView } from '../components/MobileStateView'
+import { voiceSettingsStyles as styles } from './voice-settings-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { ListRow } from '../components/list/ListGroup'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+import { VoiceModelList } from '../components/VoiceModelList'
+import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
+import {
+  isModelInFlight,
+  type MobileSpeechModel,
+  type MobileSpeechSetup
+} from '../dictation/mobile-dictation-setup'
+import { MobileSwitch } from '../components/MobileSwitch'
+import {
+  dictationShortcutMode,
+  dictationShortcutModeSettings
+} from '../../../src/shared/dictation-shortcut-mode'
+import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
+import { VoiceTranscribeOnSection, voiceTranscribeOnShown } from './voice-transcribe-on-section'
+
+const POLL_INTERVAL_MS = 1500
+
+function dictationModes(t: Translate, offersAuto: boolean) {
+  const toggle = {
+    value: 'toggle',
+    label: t('settings.voiceSettingsScreen.toggleMode', 'Toggle')
+  } as const
+  const hold = { value: 'hold', label: t('settings.voiceSettingsScreen.holdMode', 'Hold') } as const
+  const auto = { value: 'auto', label: t('settings.voiceSettingsScreen.autoMode', 'Auto') } as const
+  return offersAuto ? [auto, hold, toggle] : [toggle, hold]
+}
+
+type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
+type VoiceSettingsError =
+  | { message: string }
+  | 'loadFailed'
+  | 'updateFailed'
+  | 'selectModelFailed'
+  | 'downloadFailed'
+  | 'deleteFailed'
+
+function voiceSettingsErrorMessage(t: Translate, error: VoiceSettingsError | null): string | null {
+  if (error === null) {
+    return null
+  }
+  if (typeof error === 'object') {
+    return error.message
+  }
+  switch (error) {
+    case 'loadFailed':
+      return t('settings.voiceSettingsScreen.loadFailed', 'Failed to load voice settings')
+    case 'updateFailed':
+      return t('settings.voiceSettingsScreen.updateFailed', 'Could not update')
+    case 'selectModelFailed':
+      return t('settings.voiceSettingsScreen.selectModelFailed', 'Could not select model')
+    case 'downloadFailed':
+      return t('settings.voiceSettingsScreen.downloadFailed', 'Download failed')
+    case 'deleteFailed':
+      return t('settings.voiceSettingsScreen.deleteFailed', 'Delete failed')
+  }
+}
+
+export default function VoiceSettingsScreen({
+  operations,
+  connecting = false,
+  focused,
+  onBack
+}: {
+  operations: VoiceSettingsOperations | null
+  /** A paired desktop is still dialing, so the screen is loading rather than unpaired. */
+  connecting?: boolean
+  focused: boolean
+  onBack: () => void
+}): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
+  const [loading, setLoading] = useState(true)
+  // A read clears only its own failure, so a background re-read cannot hide why a change failed.
+  const [loadError, setLoadError] = useState<VoiceSettingsError | null>(null)
+  const [error, setError] = useState<VoiceSettingsError | null>(null)
+  const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
+  const requestEpoch = useRef(0)
+  const pendingChanges = useRef(0)
+  const rereadWhenSettled = useRef(false)
+  const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
+  const refresh = useCallback(async (): Promise<boolean | undefined> => {
+    if (!operations) {
+      return false
+    }
+    // A read sent during a change can predate it: the host clears a deleted model only after removing its files.
+    if (pendingChanges.current > 0) {
+      return undefined
+    }
+    const epoch = requestEpoch.current
+    // The serialized read owns its spinner so retries hide stale errors and no competing read clears it.
+    setLoading(true)
+    try {
+      const next = await operations.load()
+      if (epoch !== requestEpoch.current) {
+        return undefined
+      }
+      setSetup(next)
+      setLoadError(null)
+      return next.models.some(isModelInFlight)
+    } catch (err) {
+      if (epoch === requestEpoch.current) {
+        setLoadError(err instanceof Error ? { message: err.message } : 'loadFailed')
+      }
+      return undefined
+    } finally {
+      setLoading(false)
+    }
+  }, [operations])
+
+  const polling = setup?.models.some(isModelInFlight) ?? false
+  const refreshSetup = useDictationSetupPoller({
+    visible: focused && operations !== null,
+    polling,
+    refresh,
+    intervalMs: POLL_INTERVAL_MS
+  })
+
+  // Only the newest change's reply is applied; after a skipped reply or a failure, re-read once all changes settle.
+  const sendChange = useCallback(
+    async <T,>(
+      send: () => Promise<T>
+    ): Promise<
+      { ok: true; reply: T; latest: boolean } | { ok: false; error: unknown; latest: boolean }
+    > => {
+      const epoch = ++requestEpoch.current
+      pendingChanges.current += 1
+      try {
+        const reply = await send()
+        const latest = epoch === requestEpoch.current
+        rereadWhenSettled.current ||= !latest
+        return { ok: true, reply, latest }
+      } catch (error) {
+        rereadWhenSettled.current = true
+        return { ok: false, error, latest: epoch === requestEpoch.current }
+      } finally {
+        pendingChanges.current -= 1
+        if (pendingChanges.current === 0 && rereadWhenSettled.current) {
+          rereadWhenSettled.current = false
+          void refreshSetup()
+        }
+      }
+    },
+    [refreshSetup]
+  )
+
+  const configure = useCallback(
+    async (params: Parameters<VoiceSettingsOperations['configure']>[0]) => {
+      if (!operations) {
+        return
+      }
+      setError(null)
+      const { enabled, dictationMode, dictationHoldToRecord } = params
+      setSetup((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(enabled === undefined ? {} : { enabled }),
+              ...(dictationMode === undefined ? {} : { dictationMode }),
+              ...(dictationHoldToRecord === undefined || prev.dictationHoldToRecord === undefined
+                ? {}
+                : { dictationHoldToRecord })
+            }
+          : prev
+      )
+      const result = await sendChange(() => operations.configure(params))
+      if (!result.latest) {
+        return
+      }
+      if (result.ok) {
+        setSetup(result.reply)
+      } else {
+        setError(result.error instanceof Error ? { message: result.error.message } : 'updateFailed')
+      }
+    },
+    [operations, sendChange]
+  )
+
+  const handleUseModel = useCallback(
+    async (model: MobileSpeechModel) => {
+      if (!operations) {
+        return
+      }
+      setBusyAction({ modelId: model.id, type: 'select' })
+      setError(null)
+      const result = await sendChange(() =>
+        operations.configure({ enabled: true, modelId: model.id })
+      )
+      if (!result.ok) {
+        setError(
+          result.error instanceof Error ? { message: result.error.message } : 'selectModelFailed'
+        )
+      } else if (result.latest) {
+        setSetup(result.reply)
+        setModelDrawerOpen(false)
+      }
+      setBusyAction(null)
+    },
+    [operations, sendChange]
+  )
+
+  const handleDownload = useCallback(
+    async (model: MobileSpeechModel) => {
+      if (!operations) {
+        return
+      }
+      requestEpoch.current += 1
+      setBusyAction({ modelId: model.id, type: 'download' })
+      setError(null)
+      try {
+        await operations.download(model.id)
+        await refreshSetup()
+      } catch (err) {
+        setError(err instanceof Error ? { message: err.message } : 'downloadFailed')
+      } finally {
+        setBusyAction(null)
+      }
+    },
+    [operations, refreshSetup]
+  )
+
+  const handleDelete = useCallback(
+    async (model: MobileSpeechModel) => {
+      if (!operations) {
+        return
+      }
+      const deletedSelectedModel = setup?.selectedModelId === model.id
+      setBusyAction({ modelId: model.id, type: 'delete' })
+      setError(null)
+      const result = await sendChange(() => operations.delete(model.id))
+      if (!result.ok) {
+        setError(result.error instanceof Error ? { message: result.error.message } : 'deleteFailed')
+      } else if (result.latest) {
+        setSetup(result.reply)
+        if (deletedSelectedModel) {
+          setModelDrawerOpen(false)
+        }
+      }
+      setBusyAction(null)
+    },
+    [operations, sendChange, setup?.selectedModelId]
+  )
+
+  const enabled = setup?.enabled ?? false
+  const offersAuto = setup?.dictationHoldToRecord !== undefined
+  const selectedModel = setup?.models.find((m) => m.id === setup.selectedModelId)
+  const selectedModelLabel =
+    selectedModel?.label ?? t('settings.voiceSettingsScreen.noneSelected', 'None selected')
+  const loadErrorMessage = voiceSettingsErrorMessage(t, loadError)
+  const errorMessage = voiceSettingsErrorMessage(t, error)
+
+  const showLoading = operations ? loading && setup === null : connecting
+  const footerError = errorMessage ?? loadErrorMessage
+
+  return (
+    <SettingsScreen
+      title={t('settings.voiceSettingsScreen.title', 'Voice')}
+      onBack={onBack}
+      fillContent={showLoading}
+      overlays={
+        <BottomDrawer visible={modelDrawerOpen} onClose={() => setModelDrawerOpen(false)}>
+          <Text style={styles.drawerTitle}>
+            {t('settings.voiceSettingsScreen.speechModel', 'Speech Model')}
+          </Text>
+          {setup ? (
+            <VoiceModelList
+              setup={setup}
+              disabled={false}
+              busyAction={busyAction}
+              onUseModel={(m) => void handleUseModel(m)}
+              onDownload={(m) => void handleDownload(m)}
+              onDelete={(m) => void handleDelete(m)}
+            />
+          ) : null}
+        </BottomDrawer>
+      }
+    >
+      <VoiceTranscribeOnSection />
+      {showLoading ? (
+        <MobileStateView
+          loading
+          title={t('settings.voiceSettingsScreen.loading', 'Loading voice settings…')}
+        />
+      ) : !operations ? (
+        <SettingsNote>
+          {t(
+            'settings.voiceSettingsScreen.connectDesktop',
+            'Connect to a desktop to manage voice settings.'
+          )}
+        </SettingsNote>
+      ) : setup === null ? (
+        <SettingsNote error>
+          {loadErrorMessage ??
+            t('settings.voiceSettingsScreen.loadFailedMessage', 'Failed to load voice settings.')}
+        </SettingsNote>
+      ) : (
+        <>
+          <SettingsSection
+            first={!voiceTranscribeOnShown()}
+            title={t('settings.voiceSettingsScreen.dictationHeading', 'DICTATION')}
+            // The segmented control leaves the mode row no room for two lines of explanation.
+            footer={
+              offersAuto
+                ? t(
+                    'settings.voiceSettingsScreen.dictationModeWithAutoDescription',
+                    'Auto: tap to start and stop; on your computer, holding the shortcut records until you let go. Hold: dictate while held. Toggle: press once to start, again to stop.'
+                  )
+                : t(
+                    'settings.voiceSettingsScreen.dictationModeDescription',
+                    'Toggle: press once to start, again to stop. Hold: dictate while held.'
+                  )
+            }
+          >
+            <ListRow
+              key="enabled"
+              title={t('settings.voiceSettingsScreen.enableDictation', 'Enable Voice Dictation')}
+              subtitle={t(
+                'settings.voiceSettingsScreen.dictationDescription',
+                'Dictate text into any focused pane on your desktop.'
+              )}
+              accessory={
+                <MobileSwitch
+                  testID="voice-enabled"
+                  accessibilityLabel={t(
+                    'settings.voiceSettingsScreen.enableDictation',
+                    'Enable Voice Dictation'
+                  )}
+                  value={enabled}
+                  onValueChange={(enabled) => void configure({ enabled })}
+                />
+              }
+            />
+            <ListRow
+              key="mode"
+              title={t('settings.voiceSettingsScreen.dictationMode', 'Dictation Mode')}
+              disabled={!enabled}
+              accessory={
+                <MobileSegmentedControl
+                  segments={dictationModes(t, offersAuto)}
+                  selected={offersAuto ? dictationShortcutMode(setup) : setup.dictationMode}
+                  onSelect={(mode) => void configure(dictationShortcutModeSettings(mode))}
+                  testIDPrefix="voice-mode-"
+                  disabled={!enabled}
+                />
+              }
+            />
+          </SettingsSection>
+
+          <SettingsSection
+            title={t('settings.voiceSettingsScreen.speechModelHeading', 'SPEECH MODEL')}
+            footer={footerError ? <SettingsNote error>{footerError}</SettingsNote> : undefined}
+          >
+            <ListRow
+              key="model"
+              title={t('settings.voiceSettingsScreen.speechModel', 'Speech Model')}
+              subtitle={selectedModelLabel}
+              navigates
+              disabled={!enabled}
+              testID="voice-model-picker"
+              onPress={() => setModelDrawerOpen(true)}
+            />
+          </SettingsSection>
+        </>
+      )}
+    </SettingsScreen>
+  )
+}

@@ -1,117 +1,98 @@
-import { describe, expect, it } from 'vitest'
-import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
+import { describe, expect, it, vi } from 'vitest'
+import { TERMINAL_LIVE_INPUT_MAX_BYTES } from './terminal-live-input'
 import {
+  cancelTerminalLivePendingFlush,
+  createTerminalLivePendingFlushState,
   queueTerminalLiveMirrorSend,
-  waitForTerminalLivePendingFlush,
-  type TerminalLivePendingFlushState
+  waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
 
-describe('terminal live pending flush state', () => {
-  it('Given no in-flight flush When waiting for the barrier Then allows control input', async () => {
-    // Given
-    const state: TerminalLivePendingFlushState = { current: null }
-
-    // When / Then
-    await expect(waitForTerminalLivePendingFlush(state)).resolves.toBe(true)
-  })
-
-  it('Given an in-flight flush When control input waits Then control is held until flush succeeds', async () => {
-    // Given
-    const events: string[] = []
-    let resolveFlush: (value: boolean) => void = () => {}
-    const flushPromise = new Promise<boolean>((resolve) => {
-      resolveFlush = resolve
-    })
-    const state: TerminalLivePendingFlushState = { current: flushPromise }
-
-    // When
-    const controlSend = sendTerminalLiveControlAfterPendingFlush(
-      () => waitForTerminalLivePendingFlush(state),
-      async () => {
-        events.push('control')
-        return true
-      }
-    )
-    await Promise.resolve()
-
-    // Then
-    expect(events).toEqual([])
-    resolveFlush(true)
-    await expect(controlSend).resolves.toBe(true)
-    expect(events).toEqual(['control'])
-  })
-
-  it('Given an in-flight flush fails When control input waits Then control is skipped', async () => {
-    // Given
-    const events: string[] = []
-    let resolveFlush: (value: boolean) => void = () => {}
-    const flushPromise = new Promise<boolean>((resolve) => {
-      resolveFlush = resolve
-    })
-    const state: TerminalLivePendingFlushState = { current: flushPromise }
-
-    // When
-    const controlSend = sendTerminalLiveControlAfterPendingFlush(
-      () => waitForTerminalLivePendingFlush(state),
-      async () => {
-        events.push('control')
-        return true
-      }
-    )
-    resolveFlush(false)
-
-    // Then
-    await expect(controlSend).resolves.toBe(false)
-    expect(events).toEqual([])
-  })
-})
-
 describe('terminal live mirror send queue', () => {
-  it('Given a failed previous send When a mirror send queues Then it still runs in order', async () => {
-    // Given
-    const state: TerminalLivePendingFlushState = { current: null }
-    const order: string[] = []
-    const first = queueTerminalLiveMirrorSend(state, async () => {
-      order.push('first')
-      return false
+  it.each(['throw', 'reject', 'refuse', 'too-large'] as const)(
+    'retires dependent input after a send fails by %s',
+    async (failure) => {
+      const state = createTerminalLivePendingFlushState()
+      const writes: string[] = []
+      const onFailure = vi.fn()
+      state.onFailure = onFailure
+      const sender = (_handle: string, payload: string): Promise<boolean> => {
+        writes.push(payload)
+        if (writes.length === 1 && failure !== 'too-large') {
+          if (failure === 'throw') {
+            throw new Error('transport unavailable')
+          }
+          return failure === 'reject'
+            ? Promise.reject(new Error('timeout'))
+            : Promise.resolve(false)
+        }
+        return Promise.resolve(true)
+      }
+      const first = queueTerminalLiveMirrorSend(
+        state,
+        'terminal-1',
+        failure === 'too-large' ? 'a'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES + 1) : 'first',
+        sender
+      )
+      const second = queueTerminalLiveMirrorSend(state, 'terminal-1', 'second', sender)
+
+      await waitForTerminalLivePendingFlush(state)
+
+      await expect(Promise.all([first, second])).resolves.toEqual([false, false])
+      expect(writes).toEqual(failure === 'too-large' ? [] : ['first'])
+      expect(onFailure).toHaveBeenCalledExactlyOnceWith(
+        'terminal-1',
+        failure === 'too-large' ? 'input-too-large' : 'delivery-unconfirmed'
+      )
+      expect(state.activeRequests).toEqual([])
+      expect(state.pendingBatches).toEqual([])
+      await expect(queueTerminalLiveMirrorSend(state, 'terminal-1', 'fresh', sender)).resolves.toBe(
+        true
+      )
+    }
+  )
+
+  it('cancels flush waiters before the retired transport acknowledges', async () => {
+    const state = createTerminalLivePendingFlushState()
+    let releaseRetired = (_sent: boolean): void => {}
+    let releaseFresh = (_sent: boolean): void => {}
+    const retired = queueTerminalLiveMirrorSend(
+      state,
+      'retired',
+      'old',
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseRetired = resolve
+        })
+    )
+    let controlResult: boolean | null = null
+    const control = waitForTerminalLivePendingFlush(state).then((sent) => {
+      controlResult = sent
     })
 
-    // When
-    const second = queueTerminalLiveMirrorSend(state, async () => {
-      order.push('second')
-      return true
-    })
-
-    // Then
-    await expect(first).resolves.toBe(false)
-    await expect(second).resolves.toBe(true)
-    expect(order).toEqual(['first', 'second'])
-  })
-
-  it('Given a throwing send When a mirror send queues Then the promise resolves false and the chain continues', async () => {
-    // Given
-    const state: TerminalLivePendingFlushState = { current: null }
-    const first = queueTerminalLiveMirrorSend(state, async () => {
-      throw new Error('boom')
-    })
-
-    // When
-    const second = queueTerminalLiveMirrorSend(state, async () => true)
-
-    // Then
-    await expect(first).resolves.toBe(false)
-    await expect(second).resolves.toBe(true)
-  })
-
-  it('Given a settled mirror send When it was the newest Then the state resets to null', async () => {
-    // Given
-    const state: TerminalLivePendingFlushState = { current: null }
-
-    // When
-    await queueTerminalLiveMirrorSend(state, async () => true)
-    await Promise.resolve()
-
-    // Then
-    expect(state.current).toBeNull()
+    cancelTerminalLivePendingFlush(state)
+    const fresh = queueTerminalLiveMirrorSend(
+      state,
+      'fresh',
+      'new',
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseFresh = resolve
+        })
+    )
+    const freshBarrier = waitForTerminalLivePendingFlush(state)
+    try {
+      await vi.waitFor(() => expect(controlResult).toBe(false))
+      await expect(retired).resolves.toBe(false)
+      releaseRetired(true)
+      await Promise.resolve()
+      expect(state.current).toBe(freshBarrier)
+      cancelTerminalLivePendingFlush(state)
+      await expect(freshBarrier).resolves.toBe(false)
+      await expect(fresh).resolves.toBe(false)
+    } finally {
+      releaseRetired(true)
+      releaseFresh(true)
+      await control
+    }
   })
 })

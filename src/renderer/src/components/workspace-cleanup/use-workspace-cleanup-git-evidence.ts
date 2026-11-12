@@ -1,0 +1,188 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useMountedRef } from '@/hooks/useMountedRef'
+
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import { selectWorkspaceCleanupGitEvidenceTargets } from './workspace-cleanup-git-evidence'
+import {
+  type WorkspaceCleanupCandidate,
+  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { useAppStore } from '@/store'
+import {
+  cancelWorkspaceCleanupHostScan,
+  scanWorkspaceCleanupHosts
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-host-scan'
+
+export type WorkspaceCleanupGitEvidenceState = {
+  /** Focused re-scan results, keyed by host-qualified identity. */
+  evidenceByIdentity: ReadonlyMap<string, WorkspaceCleanupCandidate>
+  pendingWorktreeIds: ReadonlySet<string>
+  checkedCount: number
+  totalCount: number
+}
+
+const EMPTY_EVIDENCE: WorkspaceCleanupGitEvidenceState = {
+  evidenceByIdentity: new Map(),
+  pendingWorktreeIds: new Set(),
+  checkedCount: 0,
+  totalCount: 0
+}
+
+/** Fill deferred Git evidence in targeted batches without blocking initial browse rendering. */
+export function useWorkspaceCleanupGitEvidence({
+  enabled,
+  candidates,
+  scannedAt
+}: {
+  enabled: boolean
+  candidates: readonly WorkspaceCleanupCandidate[]
+  scannedAt: number | null
+}): WorkspaceCleanupGitEvidenceState {
+  const mountedRef = useMountedRef()
+  const [state, setState] = useState<WorkspaceCleanupGitEvidenceState>(EMPTY_EVIDENCE)
+  const evidenceRef = useRef(new Map<string, WorkspaceCleanupCandidate>())
+  const attemptedRef = useRef(new Set<string>())
+  const queueRef = useRef<string[]>([])
+  const queuedRef = useRef(new Set<string>())
+  const inFlightRef = useRef(new Set<string>())
+  // Why: restarted filters must share one physical RPC/subprocess cap.
+  const activeRequestWorktreeIdsRef = useRef(new Set<string>())
+  const activeScanIdRef = useRef<string | null>(null)
+  const totalRef = useRef(0)
+  const enabledRef = useRef(enabled)
+  const scannedAtRef = useRef(scannedAt)
+  // Late results from a cleared Git filter must not resurrect its pending banner.
+  const generationRef = useRef(0)
+
+  // Repeated stream publications must reuse unchanged Map/Set identities to avoid subscriber churn.
+  const publishDirtyRef = useRef(false)
+  const publish = useCallback(() => {
+    if (!mountedRef.current || !publishDirtyRef.current) {
+      return
+    }
+    publishDirtyRef.current = false
+    setState({
+      evidenceByIdentity: new Map(evidenceRef.current),
+      pendingWorktreeIds: new Set([...queuedRef.current, ...inFlightRef.current]),
+      checkedCount: totalRef.current - queuedRef.current.size - inFlightRef.current.size,
+      totalCount: totalRef.current
+    })
+  }, [mountedRef])
+
+  const pump = useCallback(() => {
+    if (activeRequestWorktreeIdsRef.current.size > 0 || queueRef.current.length === 0) {
+      publish()
+      return
+    }
+    const generation = generationRef.current
+    // Honor main’s targeted-scan limit or overflow IDs are silently dropped but marked attempted.
+    const worktreeIds = queueRef.current.slice(0, WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS)
+    queueRef.current = queueRef.current.slice(worktreeIds.length)
+    const scanId = createBrowserUuid()
+    activeScanIdRef.current = scanId
+    for (const worktreeId of worktreeIds) {
+      queuedRef.current.delete(worktreeId)
+      inFlightRef.current.add(worktreeId)
+      activeRequestWorktreeIdsRef.current.add(worktreeId)
+      attemptedRef.current.add(worktreeId)
+    }
+    publishDirtyRef.current = true
+    const acceptCandidates = (nextCandidates: readonly WorkspaceCleanupCandidate[]): void => {
+      if (generation !== generationRef.current) {
+        return
+      }
+      for (const candidate of nextCandidates) {
+        if (!activeRequestWorktreeIdsRef.current.has(candidate.worktreeId)) {
+          continue
+        }
+        evidenceRef.current.set(getWorkspaceCleanupCandidateIdentity(candidate), candidate)
+        inFlightRef.current.delete(candidate.worktreeId)
+        publishDirtyRef.current = true
+      }
+      publish()
+    }
+    void scanWorkspaceCleanupHosts({ worktreeIds, scanId }, useAppStore.getState(), (progress) =>
+      acceptCandidates(progress.candidates)
+    )
+      .then((result) => acceptCandidates(result.candidates))
+      .catch(() => {
+        // Failures remain Not checked; remember attempts to prevent retry loops.
+      })
+      .finally(() => {
+        if (activeScanIdRef.current === scanId) {
+          activeScanIdRef.current = null
+        }
+        for (const worktreeId of worktreeIds) {
+          activeRequestWorktreeIdsRef.current.delete(worktreeId)
+          if (generation === generationRef.current && inFlightRef.current.delete(worktreeId)) {
+            publishDirtyRef.current = true
+          }
+        }
+        pump()
+      })
+    publish()
+  }, [publish])
+
+  // Layout effect: queue targets before first paint so unchecked rows open as "Checking", not "unknown".
+  useLayoutEffect(() => {
+    const wasEnabled = enabledRef.current
+    const snapshotChanged = scannedAtRef.current !== scannedAt
+    enabledRef.current = enabled
+    scannedAtRef.current = scannedAt
+
+    const closing = wasEnabled && !enabled
+    if (closing || (enabled && (!wasEnabled || snapshotChanged))) {
+      generationRef.current += 1
+      const activeScanId = activeScanIdRef.current
+      if (activeScanId) {
+        void cancelWorkspaceCleanupHostScan(activeScanId)
+      }
+      queueRef.current = []
+      queuedRef.current.clear()
+      inFlightRef.current.clear()
+      // Closing keeps evidence so the exit animation does not flash "Git status unknown"; reopening resets it.
+      if (!closing) {
+        attemptedRef.current.clear()
+        evidenceRef.current.clear()
+      }
+      totalRef.current = 0
+      publishDirtyRef.current = true
+      publish()
+    }
+    if (!enabled) {
+      return
+    }
+    // Exclude queued/in-flight IDs before applying the cap or later IDs remain permanently skipped.
+    const targets = selectWorkspaceCleanupGitEvidenceTargets(candidates, {
+      resolvedWorktreeIds: new Set([
+        ...attemptedRef.current,
+        ...queuedRef.current,
+        ...inFlightRef.current
+      ]),
+      maxTargets: Number.POSITIVE_INFINITY
+    })
+    if (targets.length === 0) {
+      return
+    }
+    queueRef.current.push(...targets)
+    for (const target of targets) {
+      queuedRef.current.add(target)
+    }
+    totalRef.current += targets.length
+    publishDirtyRef.current = true
+    pump()
+  }, [candidates, enabled, pump, publish, scannedAt])
+
+  useEffect(
+    () => () => {
+      const activeScanId = activeScanIdRef.current
+      if (activeScanId) {
+        void cancelWorkspaceCleanupHostScan(activeScanId)
+      }
+    },
+    []
+  )
+
+  return state
+}

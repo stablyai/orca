@@ -1,5 +1,4 @@
-// Why: markdown image destinations close at the first unescaped `)`. encodeURI
-// leaves `()` alone, so Jira-controlled external URLs must be destination-safe.
+// encodeURI leaves parentheses that can terminate Markdown image destinations.
 
 const MARKDOWN_DESTINATION_HOSTILE = new Set(['(', ')', '[', ']', '<', '>', '"', "'", '`', '\\'])
 
@@ -25,7 +24,7 @@ export function escapeMarkdownLinkDestination(url: string): string | null {
   }
 
   let encoded = ''
-  for (let i = 0; i < url.length; ) {
+  for (let i = 0; i < url.length;) {
     const char = url[i] ?? ''
     if (char === '%') {
       const hex = url.slice(i + 1, i + 3)

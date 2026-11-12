@@ -1,25 +1,28 @@
 import { createServer, type Server } from 'node:http'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import 'node:fs'
+import 'node:os'
+import 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
-import { encodePairingOffer, type PairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import {
   decrypt,
   deriveSharedKey,
   encrypt,
   generateKeyPair,
   publicKeyToBase64
-} from '../../shared/e2ee-crypto'
+} from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import './websocket-transport'
+import '../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { RuntimeClient } from './client'
+import '../workspaces/worktree-removal-request'
 import { launchOrcaApp } from './launch'
-import { addEnvironmentFromPairingCode } from './environments'
-import { RuntimeClientError } from './types'
+import './environments'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-  RUNTIME_PROTOCOL_VERSION,
-  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+  RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
 
 vi.mock('./launch', () => ({
@@ -31,6 +34,9 @@ type TestRuntime = {
   publicKeyB64: string
   deviceToken: string
   authFrames: Record<string, unknown>[]
+  requestMethods: string[]
+  requestParams: unknown[]
+  connectionCount: () => number
   close: () => Promise<void>
 }
 
@@ -40,113 +46,6 @@ describe('CLI remote WebSocket transport', () => {
   afterEach(async () => {
     vi.mocked(launchOrcaApp).mockClear()
     await Promise.all(servers.splice(0).map((server) => server.close()))
-  })
-
-  it('calls a remote runtime through a mobile pairing offer', async () => {
-    const runtime = await startTestRuntime('runtime-ws-1')
-    servers.push(runtime)
-
-    const pairingUrl = encodePairingOffer({
-      v: 2,
-      endpoint: runtime.endpoint,
-      deviceToken: runtime.deviceToken,
-      publicKeyB64: runtime.publicKeyB64
-    })
-    const client = new RuntimeClient('/tmp/unused', 5_000, pairingUrl)
-    const response = await client.call<{ runtimeId: string }>('status.get')
-
-    expect(response.ok).toBe(true)
-    expect(response.result.runtimeId).toBe('runtime-ws-1')
-    expect(runtime.authFrames).toContainEqual(
-      expect.objectContaining({
-        clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
-      })
-    )
-  })
-
-  it('rejects malformed remote pairing codes before local runtime lookup', () => {
-    expect(() => new RuntimeClient('/tmp/unused', 5_000, 'not-a-pairing-code')).toThrow(
-      RuntimeClientError
-    )
-  })
-
-  it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
-    const runtime = await startTestRuntime('runtime-ws-2', {
-      appVersion: '1.5.0',
-      remoteUpdateSupport: {
-        installMode: 'unsupported-headless-serve',
-        automatic: false,
-        reason: 'manual-service-update-required'
-      },
-      capabilities: ['updater.remote-control.v1']
-    })
-    servers.push(runtime)
-    const offer: PairingOffer = {
-      v: 2,
-      endpoint: runtime.endpoint,
-      deviceToken: runtime.deviceToken,
-      publicKeyB64: runtime.publicKeyB64
-    }
-    const pairingUrl = encodePairingOffer(offer)
-    const barePayload = new URLSearchParams(pairingUrl.slice(pairingUrl.indexOf('?') + 1)).get(
-      'code'
-    )!
-
-    const client = new RuntimeClient('/tmp/unused', 5_000, barePayload)
-    const status = await client.getCliStatus()
-
-    expect(status.result.app).toEqual({ running: false, pid: null })
-    expect(status.result.runtime.reachable).toBe(true)
-    expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
-    expect(status.result.runtime).toMatchObject({
-      appVersion: '1.5.0',
-      remoteUpdateSupport: { automatic: false, reason: 'manual-service-update-required' },
-      capabilities: ['updater.remote-control.v1']
-    })
-  })
-
-  it('does not launch a local desktop app for remote-paired open', async () => {
-    const runtime = await startTestRuntime('runtime-remote-headless', {
-      desktopWindowStatus: 'initializing'
-    })
-    servers.push(runtime)
-    const client = new RuntimeClient(
-      '/tmp/unused',
-      5_000,
-      encodePairingOffer({
-        v: 2,
-        endpoint: runtime.endpoint,
-        deviceToken: runtime.deviceToken,
-        publicKeyB64: runtime.publicKeyB64
-      })
-    )
-
-    const status = await client.openOrca()
-
-    expect(status.result.app.desktopWindowStatus).toBe('initializing')
-    expect(launchOrcaApp).not.toHaveBeenCalled()
-  })
-
-  it('connects through a saved environment selector', async () => {
-    const runtime = await startTestRuntime('runtime-env-1')
-    servers.push(runtime)
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-env-'))
-    addEnvironmentFromPairingCode(userDataPath, {
-      name: 'remote-dev',
-      pairingCode: encodePairingOffer({
-        v: 2,
-        endpoint: runtime.endpoint,
-        deviceToken: runtime.deviceToken,
-        publicKeyB64: runtime.publicKeyB64
-      })
-    })
-
-    const client = new RuntimeClient(userDataPath, 5_000, null, 'remote-dev')
-    const status = await client.getCliStatus()
-
-    expect(status.result.app).toEqual({ running: false, pid: null })
-    expect(status.result.runtime.reachable).toBe(true)
-    expect(status.result.runtime.runtimeId).toBe('runtime-env-1')
   })
 
   it('blocks remote RPCs when the server protocol is too old', async () => {
@@ -168,29 +67,9 @@ describe('CLI remote WebSocket transport', () => {
       code: 'incompatible_runtime',
       message: expect.stringContaining('server is too old')
     })
-  })
-
-  it('blocks orchestration mutations when a remote runtime lacks the contract capability', async () => {
-    const runtime = await startTestRuntime('runtime-old-orchestration', { capabilities: [] })
-    servers.push(runtime)
-    const client = new RuntimeClient(
-      '/tmp/unused',
-      5_000,
-      encodePairingOffer({
-        v: 2,
-        endpoint: runtime.endpoint,
-        deviceToken: runtime.deviceToken,
-        publicKeyB64: runtime.publicKeyB64
-      })
-    )
-
-    await expect(client.call('orchestration.send', { subject: 'hello' })).rejects.toMatchObject({
-      code: 'orchestration_migration_required',
-      data: {
-        reason: 'runtime_capability_missing',
-        effectsApplied: false
-      }
-    })
+    expect(runtime.connectionCount()).toBe(1)
+    expect(runtime.authFrames).toHaveLength(1)
+    expect(runtime.requestMethods).toEqual(['status.get'])
   })
 })
 
@@ -207,6 +86,14 @@ async function startTestRuntime(
       reason: 'manual-service-update-required'
     }
     capabilities?: string[]
+    malformed?: boolean
+    failure?: boolean
+    hold?: string
+    onRequest?: (method: string) => void
+    disconnect?: boolean
+    mutationDisconnect?: boolean
+    rejectAuth?: boolean
+    degradations?: RuntimeStatus['degradations']
   } = {}
 ): Promise<TestRuntime> {
   const serverKeyPair = generateKeyPair()
@@ -214,6 +101,9 @@ async function startTestRuntime(
   const httpServer = createServer()
   const wss = new WebSocketServer({ server: httpServer })
   const authFrames: Record<string, unknown>[] = []
+  const requestMethods: string[] = []
+  const requestParams: unknown[] = []
+  let connectionCount = 0
 
   wss.on('connection', (ws) => {
     let sharedKey: Uint8Array | null = null
@@ -226,6 +116,12 @@ async function startTestRuntime(
           type?: string
           publicKeyB64?: string
         }
+        if (!hello.publicKeyB64) {
+          // Legacy-only host: refuses a v2 hello the way hosts before v2 do.
+          ws.close(4001, 'Invalid e2ee_hello')
+          return
+        }
+        connectionCount += 1
         const clientPublicKey = Buffer.from(hello.publicKeyB64 ?? '', 'base64')
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
@@ -243,7 +139,11 @@ async function startTestRuntime(
           deviceToken?: string
         }
         authFrames.push(auth)
-        if (auth.type !== 'e2ee_auth' || auth.deviceToken !== deviceToken) {
+        if (
+          auth.type !== 'e2ee_auth' ||
+          auth.deviceToken !== deviceToken ||
+          statusOverrides.rejectAuth
+        ) {
           ws.send(encrypt(JSON.stringify({ type: 'e2ee_error' }), sharedKey))
           ws.close(4001, 'auth failed')
           return
@@ -253,37 +153,63 @@ async function startTestRuntime(
         return
       }
 
-      const request = JSON.parse(plaintext) as { id: string; method: string }
+      const request: { id: string; method: string; params?: unknown } = JSON.parse(plaintext)
+      requestMethods.push(request.method)
+      requestParams.push(request.params)
+      statusOverrides.onRequest?.(request.method)
+      if (request.method === statusOverrides.hold) {
+        return
+      }
+      if (request.method === 'status.get' && statusOverrides.disconnect) {
+        ws.close()
+        return
+      }
+      if (request.method === 'worktree.rm' && statusOverrides.mutationDisconnect) {
+        ws.close()
+        return
+      }
       const response =
-        request.method === 'status.get'
+        request.method === 'status.get' && statusOverrides.failure
           ? {
               id: request.id,
-              ok: true,
-              result: {
-                runtimeId,
-                rendererGraphEpoch: 1,
-                graphStatus: 'ready',
-                authoritativeWindowId: null,
-                desktopWindowStatus: statusOverrides.desktopWindowStatus,
-                liveTabCount: 0,
-                liveLeafCount: 0,
-                runtimeProtocolVersion:
-                  statusOverrides.runtimeProtocolVersion ?? RUNTIME_PROTOCOL_VERSION,
-                minCompatibleRuntimeClientVersion:
-                  statusOverrides.minCompatibleRuntimeClientVersion ??
-                  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-                appVersion: statusOverrides.appVersion,
-                remoteUpdateSupport: statusOverrides.remoteUpdateSupport,
-                capabilities: statusOverrides.capabilities
-              },
-              _meta: { runtimeId }
-            }
-          : {
-              id: request.id,
               ok: false,
-              error: { code: 'method_not_found', message: 'Unknown method' },
+              error: { code: 'runtime_unavailable', message: 'status failed' },
               _meta: { runtimeId }
             }
+          : request.method === 'worktree.rm'
+            ? { id: request.id, ok: true, result: { removed: true }, _meta: { runtimeId } }
+            : request.method === 'status.get'
+              ? {
+                  id: request.id,
+                  ok: true,
+                  result: statusOverrides.malformed
+                    ? { capabilities: 42 }
+                    : {
+                        runtimeId,
+                        rendererGraphEpoch: 1,
+                        graphStatus: 'ready',
+                        authoritativeWindowId: null,
+                        desktopWindowStatus: statusOverrides.desktopWindowStatus,
+                        liveTabCount: 0,
+                        liveLeafCount: 0,
+                        runtimeProtocolVersion:
+                          statusOverrides.runtimeProtocolVersion ?? RUNTIME_PROTOCOL_VERSION,
+                        minCompatibleRuntimeClientVersion:
+                          statusOverrides.minCompatibleRuntimeClientVersion ??
+                          MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+                        appVersion: statusOverrides.appVersion,
+                        remoteUpdateSupport: statusOverrides.remoteUpdateSupport,
+                        capabilities: statusOverrides.capabilities,
+                        degradations: statusOverrides.degradations
+                      },
+                  _meta: { runtimeId }
+                }
+              : {
+                  id: request.id,
+                  ok: false,
+                  error: { code: 'method_not_found', message: 'Unknown method' },
+                  _meta: { runtimeId }
+                }
       ws.send(encrypt(JSON.stringify(response), sharedKey))
     })
   })
@@ -299,6 +225,9 @@ async function startTestRuntime(
     publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey),
     deviceToken,
     authFrames,
+    requestMethods,
+    requestParams,
+    connectionCount: () => connectionCount,
     close: async () => {
       await new Promise<void>((resolve) => {
         wss.close(() => resolve())

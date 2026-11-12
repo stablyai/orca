@@ -1,81 +1,39 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { Mic } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import type { FeatureTip } from '../../../../shared/feature-tips'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
-} from '@/lib/orchestration-setup-state'
+} from '@/components/orchestration/setup/orchestration-setup-state'
+import { useAppStore } from '@/store/index'
+import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store'
-import { CliFeatureTipVisual } from './CliFeatureTipVisual'
-import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
+  setAgentDefaultSurfaceFromFeatureTip,
+  openChatUiFeatureTipSettings
+} from './chat-ui-here-actions'
+import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
-import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
-import { FeatureTipActions } from './FeatureTipActions'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
+import { localizeFeatureTip } from './feature-tip-copy'
 import {
   getOrcaCliFeatureTipTelemetrySource,
+  trackChatUiFeatureTipAction,
   trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
-
-const WAVEFORM_BAR_HEIGHTS = [30, 60, 90, 70, 100, 50, 80, 35, 65]
-
-function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
-  return (
-    <span className="rounded-sm bg-foreground/10 px-1 py-0.5 font-medium text-foreground">
-      {children}
-    </span>
-  )
-}
-
-function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
-  if (tip.action === 'setup-cli') {
-    return <CliFeatureTipVisual />
-  }
-
-  switch (tip.action) {
-    case 'learn-cmd-j-palette':
-      // Kept for type exhaustiveness; the cmd-j tip is rendered via
-      // CmdJPaletteTipDialog and never reaches this function at runtime.
-      return <CmdJPaletteFeatureTipVisual />
-    case 'enable-voice':
-      return (
-        <div className="flex flex-col items-center gap-2.5">
-          <div className="flex size-14 items-center justify-center rounded-full bg-foreground text-background">
-            <Mic className="size-5" />
-          </div>
-          {/* Animated waveform — purely decorative, signals "voice" without copy */}
-          <div className="flex h-6 items-center justify-center gap-1" aria-hidden="true">
-            {WAVEFORM_BAR_HEIGHTS.map((height, i) => (
-              <span
-                key={i}
-                className="block w-[3px] rounded-[2px] bg-foreground/60 animate-waveform"
-                style={{ height: `${height}%`, animationDelay: `${i * 0.1}s` }}
-              />
-            ))}
-          </div>
-        </div>
-      )
-  }
-}
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
+import { SessionSearchTipDialog } from './SessionSearchTipDialog'
+import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
+import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
 
 export default function FeatureTipsModal(): JSX.Element | null {
+  const t = useTranslate()
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -84,20 +42,28 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant) ?? 'none'
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
+  const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
   const mountedRef = useMountedRef()
   const activeModalRef = useRef(activeModal)
   const setupRequestIdRef = useRef(0)
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
   const isOpen = activeModal === 'feature-tips'
-  const currentTip = getFeatureTipForModal({
+  const rawTip = getFeatureTipForModal({
     cliInstalled: true,
     modalData,
     seenTipIds,
     featureInteractions,
-    settings
+    chatUiLaunchTipVariant,
+    settings,
+    webClient: isWebClientLocation()
+  })
+  const currentTip = rawTip ? localizeFeatureTip(rawTip) : null
+  const sessionSearchSetup = useSessionSearchTipSetup({
+    dialogOpen: isOpen && currentTip?.id === 'agent-session-search'
   })
 
   useEffect(() => {
@@ -112,6 +78,9 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
   const handleOpenChange = (open: boolean): void => {
     if (!open) {
+      if (currentTip?.id === 'chat-ui-here') {
+        trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
+      }
       setupRequestIdRef.current += 1
       markCurrentTipSeen()
       setSkillTerminalOpen(false)
@@ -134,13 +103,42 @@ export default function FeatureTipsModal(): JSX.Element | null {
   }
 
   const openShortcutsSettings = (): void => {
-    // Why: dismiss the tip when navigating away — the tip's job is done once
-    // the user clicks through to rebind, and leaving it mounted behind the
-    // settings page would re-appear on close.
+    // Dismiss before opening Settings so closing Settings cannot resurrect the tip.
     markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'shortcuts', repoId: null })
     openSettingsPage()
+  }
+
+  const openVoiceSettings = (): void => {
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({ pane: 'voice', repoId: null })
+    openSettingsPage()
+  }
+
+  const openSessionSearchSettings = (): void => {
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({ pane: 'session-history', repoId: null })
+    openSettingsPage()
+  }
+
+  const handleTerminalChoice = async (): Promise<void> => {
+    if (chatUiLaunchTipVariant === 'chat-ui-on') {
+      handleSkip()
+      await setAgentDefaultSurfaceFromFeatureTip('terminal')
+      return
+    }
+    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'stay_in_terminal')
+    handleSkip()
+  }
+
+  const openAgentSettings = (): void => {
+    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'open_settings')
+    markCurrentTipSeen()
+    closeModal()
+    openChatUiFeatureTipSettings()
   }
 
   const enableOrchestrationSkillSetup = (): void => {
@@ -156,9 +154,16 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
     markFeatureTipsSeen([currentTip.id])
     switch (currentTip.action) {
+      case 'use-chat-ui': {
+        closeModal()
+        if (chatUiLaunchTipVariant !== 'chat-ui-off') {
+          trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
+          break
+        }
+        await setAgentDefaultSurfaceFromFeatureTip('chat')
+        break
+      }
       case 'learn-cmd-j-palette': {
-        // Why: passive education tip — acknowledging just dismisses; the rebind
-        // path lives in Settings and is reachable from the palette itself.
         trackCmdJPaletteFeatureTipAcknowledged(
           getOrcaCliFeatureTipTelemetrySource(modalData.source)
         )
@@ -178,11 +183,24 @@ export default function FeatureTipsModal(): JSX.Element | null {
         openSettingsPage()
         break
       }
+      case 'enable-session-search': {
+        if (sessionSearchSetup.stage === 'offer') {
+          // Why: stay open through the first index so search is never offered half-built.
+          setPrimaryBusy(true)
+          await sessionSearchSetup.enable()
+          setPrimaryBusy(false)
+          break
+        }
+        closeModal()
+        if (sessionSearchSetup.stage === 'ready') {
+          showAiVaultSearch()
+        }
+        break
+      }
       case 'setup-cli': {
         const setupRequestId = setupRequestIdRef.current + 1
         setupRequestIdRef.current = setupRequestId
-        // Why: this modal is lazily mounted; closing it does not unmount the
-        // component, so async install results must not reopen UI after dismissal.
+        // Closing this lazily mounted modal does not unmount it; ignore dismissed installs’ async results.
         const canApplySetupResult = (): boolean =>
           mountedRef.current &&
           activeModalRef.current === 'feature-tips' &&
@@ -199,7 +217,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             }
             enableOrchestrationSkillSetup()
             toast.success(
-              translate(
+              t(
                 'auto.components.feature.tips.FeatureTipsModal.ce13a742d0',
                 'Registered `orca` in PATH.'
               )
@@ -213,14 +231,14 @@ export default function FeatureTipsModal(): JSX.Element | null {
             return
           }
           toast.warning(
-            translate(
+            t(
               'auto.components.feature.tips.FeatureTipsModal.1da82af45b',
               'Orca CLI needs attention'
             ),
             {
               description:
-                result.status.detail ??
-                translate(
+                formatCliUserFacingDetail(result.status.detail) ||
+                t(
                   'auto.components.feature.tips.FeatureTipsModal.d1a86c7eb5',
                   'Open Settings to finish CLI setup.'
                 )
@@ -229,7 +247,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
           closeModal()
           openCliSettings()
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to install Orca CLI.'
+          const message =
+            error instanceof Error
+              ? error.message
+              : t(
+                  'auto.components.feature.tips.FeatureTipsModal.cliInstallFailed',
+                  'Failed to install Orca CLI.'
+                )
           if (
             import.meta.env.DEV &&
             message.includes('Development mode uses a generated launcher for validation only')
@@ -240,7 +264,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             }
             enableOrchestrationSkillSetup()
             toast.info(
-              translate(
+              t(
                 'auto.components.feature.tips.FeatureTipsModal.53905bd076',
                 'Development preview: opening skills setup terminal.'
               )
@@ -251,7 +275,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
           trackOrcaCliFeatureTipSetupResult(telemetrySource, 'failed')
           if (canApplySetupResult()) {
-            toast.error(message)
+            toast.error(formatCliUserFacingDetail(message) || message)
           }
         } finally {
           if (canApplySetupResult()) {
@@ -268,114 +292,36 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
   if (currentTip.action === 'setup-cli') {
     return (
-      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-        {/* Why: the CLI tip sits over terminal surfaces, so it needs a local token-mixed surface. */}
-        <DialogContent
-          className="!flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))] sm:max-w-4xl md:!h-[min(31rem,calc(100vh-2rem))] md:!flex-row"
-          showCloseButton={!skillTerminalOpen}
-        >
-          <div
-            className={`scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 transition-[flex-basis] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:shrink-0 ${
-              skillTerminalOpen ? 'basis-auto md:basis-full' : 'basis-auto md:basis-[47.5%]'
-            }`}
-          >
-            <DialogHeader className={`${skillTerminalOpen ? 'gap-2' : 'gap-4'} text-left`}>
-              <div>
-                <DialogTitle
-                  className={`text-3xl font-semibold leading-tight tracking-tight ${
-                    skillTerminalOpen ? 'max-w-2xl' : 'max-w-[22rem]'
-                  }`}
-                >
-                  {currentTip.title}
-                </DialogTitle>
-                <DialogDescription className="mt-3 max-w-2xl text-sm leading-relaxed">
-                  {currentTip.description}
-                </DialogDescription>
-                <div
-                  aria-hidden={skillTerminalOpen}
-                  className={`max-w-sm space-y-2 overflow-hidden rounded-md border text-sm leading-relaxed text-muted-foreground transition-[max-height,opacity,transform,margin,padding,border-color] duration-300 ease-out motion-reduce:transition-none ${
-                    skillTerminalOpen
-                      ? 'pointer-events-none mt-0 max-h-0 -translate-y-2 border-transparent p-0 opacity-0'
-                      : 'mt-3 max-h-64 translate-y-0 border-border/70 bg-muted/35 p-3 opacity-100'
-                  }`}
-                >
-                  <p className="font-medium text-foreground">
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.4795ac2d4a',
-                      'Try asking:'
-                    )}
-                  </p>
-                  <p>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.55846c7f95',
-                      '“Split this PR into two'
-                    )}
-                    <WorktreePromptTerm>
-                      {translate(
-                        'auto.components.feature.tips.FeatureTipsModal.27c567a89c',
-                        'worktrees'
-                      )}
-                    </WorktreePromptTerm>{' '}
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.7fc6f02099',
-                      'and create PRs for each.”'
-                    )}
-                  </p>
-                  <p>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.864e2db28f',
-                      '“When the agent in'
-                    )}
-                    <WorktreePromptTerm>
-                      {translate(
-                        'auto.components.feature.tips.FeatureTipsModal.298301b7a0',
-                        'worktree'
-                      )}
-                    </WorktreePromptTerm>{' '}
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.3c6c478462',
-                      'X finishes, send it the review task.”'
-                    )}
-                  </p>
-                </div>
-              </div>
-              {skillTerminalOpen ? <CliSkillSetupTerminal /> : null}
-            </DialogHeader>
+      <CliSetupTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        skillTerminalOpen={skillTerminalOpen}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSkip={handleSkip}
+      />
+    )
+  }
 
-            <DialogFooter className="mt-8 flex sm:justify-stretch">
-              {skillTerminalOpen ? (
-                <Button className="w-full" onClick={handleSkip}>
-                  {translate('auto.components.feature.tips.FeatureTipsModal.c169298e4d', 'Done')}
-                </Button>
-              ) : (
-                <FeatureTipActions
-                  currentTip={currentTip}
-                  primaryBusy={primaryBusy}
-                  onPrimaryAction={() => void handlePrimaryAction()}
-                  onSkip={handleSkip}
-                  showSkip={false}
-                  fullWidth
-                />
-              )}
-            </DialogFooter>
-          </div>
-          <div
-            className={`min-h-0 min-w-0 shrink-0 overflow-hidden transition-[flex-basis,max-height] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-              skillTerminalOpen
-                ? 'pointer-events-none max-h-0 basis-0 md:max-h-none md:basis-0'
-                : 'max-h-[40rem] basis-auto md:basis-[52.5%]'
-            }`}
-          >
-            <div
-              className={`h-full transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[29.4rem] ${
-                skillTerminalOpen ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'
-              }`}
-            >
-              {skillTerminalOpen ? null : <FeatureTipVisual tip={currentTip} />}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+  if (currentTip.action === 'use-chat-ui') {
+    if (chatUiLaunchTipVariant === 'none') {
+      return null
+    }
+    return (
+      <ChatUiHereTipDialog
+        open={isOpen}
+        tip={currentTip}
+        variant={chatUiLaunchTipVariant}
+        swapButtons={
+          settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
+          settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
+        }
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSkip={() => void handleTerminalChoice()}
+        onSettingsClick={openAgentSettings}
+      />
     )
   }
 
@@ -393,29 +339,35 @@ export default function FeatureTipsModal(): JSX.Element | null {
     )
   }
 
-  return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md gap-4 p-7" showCloseButton>
-        <DialogHeader className="items-center gap-4 px-8 text-center sm:text-center">
-          <FeatureTipVisual tip={currentTip} />
-          <DialogTitle className="text-2xl font-semibold tracking-tight">
-            {currentTip.title}
-          </DialogTitle>
-          <DialogDescription className="max-w-sm text-sm leading-relaxed">
-            {currentTip.description}
-          </DialogDescription>
-        </DialogHeader>
+  if (currentTip.action === 'enable-session-search') {
+    return (
+      <SessionSearchTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSettingsClick={openSessionSearchSettings}
+        stage={sessionSearchSetup.stage}
+        status={sessionSearchSetup.status}
+      />
+    )
+  }
 
-        <DialogFooter className="sm:justify-center">
-          <FeatureTipActions
-            currentTip={currentTip}
-            primaryBusy={primaryBusy}
-            onPrimaryAction={() => void handlePrimaryAction()}
-            onSkip={handleSkip}
-            showSkip
-          />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+  if (currentTip.action !== 'enable-voice') {
+    currentTip.action satisfies never
+    return null
+  }
+
+  return (
+    <VoiceDictationTipDialog
+      open={isOpen}
+      tip={currentTip}
+      primaryBusy={primaryBusy}
+      onOpenChange={handleOpenChange}
+      onPrimaryAction={() => void handlePrimaryAction()}
+      onSkip={handleSkip}
+      onVoiceSettingsClick={openVoiceSettings}
+    />
   )
 }

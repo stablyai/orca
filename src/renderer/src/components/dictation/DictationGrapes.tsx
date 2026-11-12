@@ -1,0 +1,38 @@
+import { cn } from '@/lib/class-names'
+import { DICTATION_GRAPES } from '../../../../shared/dictation-audio-meter'
+
+type DictationGrapesProps = {
+  level: number
+  /** Moves with the voice; otherwise the grapes rest and pulse. */
+  active: boolean
+  className?: string
+}
+
+export function DictationGrapes({ level, active, className }: DictationGrapesProps) {
+  const normalizedLevel = Math.min(1, Math.max(0, level))
+
+  return (
+    <div
+      data-testid="dictation-grapes"
+      aria-hidden="true"
+      className={cn(
+        'flex h-6 w-11 shrink-0 items-center justify-center gap-px overflow-hidden',
+        !active && 'animate-pulse motion-reduce:animate-none',
+        className
+      )}
+    >
+      {DICTATION_GRAPES.map((grape, index) => {
+        const energy = active ? normalizedLevel : 0
+        const scale = grape.base + energy * grape.response
+        const verticalOffset = energy * grape.lift * 2
+        return (
+          <span
+            key={index}
+            className="size-1 shrink-0 rounded-full bg-current opacity-80 transition-transform duration-100 ease-out motion-reduce:transition-none"
+            style={{ transform: `translateY(${verticalOffset}px) scale(${scale})` }}
+          />
+        )
+      })}
+    </div>
+  )
+}

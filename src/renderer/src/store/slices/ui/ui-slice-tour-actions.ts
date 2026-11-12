@@ -1,0 +1,311 @@
+import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import {
+  hasContextualTourActionStep,
+  isContextualTourStepDone
+} from '../../../../../shared/contextual-tour-action-steps'
+import {
+  getContextualTour,
+  type ContextualTourId,
+  getContextualTourStepIndex
+} from '../../../../../shared/contextual-tours'
+import {
+  getContextualTourRequestDecision,
+  hasContextualTourTarget,
+  getNextVisibleContextualTourStepIndex,
+  getPreviousVisibleContextualTourStepIndex
+} from '../../../components/contextual-tours/contextual-tour-gate'
+import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
+
+// An unfinished action tour waits for the user to act, so it sits outside the one-tour-per-session
+// limit: it neither blocks other tours nor is blocked by them until it is seen (final tip shown or closed).
+export function isPausedActionTour(
+  state: Pick<UISlice, 'contextualToursSeenIds'>,
+  tourId: ContextualTourId | null
+): tourId is ContextualTourId {
+  return (
+    tourId !== null &&
+    !state.contextualToursSeenIds.includes(tourId) &&
+    hasContextualTourActionStep(getContextualTour(tourId))
+  )
+}
+
+function isInformationalTour(tourId: ContextualTourId): boolean {
+  return !hasContextualTourActionStep(getContextualTour(tourId))
+}
+
+export function isContextualTourSessionConsumed(
+  state: Pick<UISlice, 'contextualToursSeenIds' | 'contextualToursStartedThisSession'>,
+  tourId: ContextualTourId
+): boolean {
+  return (
+    !isPausedActionTour(state, tourId) &&
+    state.contextualToursStartedThisSession.some(
+      (started) => started !== tourId && isInformationalTour(started)
+    )
+  )
+}
+
+// A step added ahead of actions the user already did must not reopen the tour for them; only a
+// run already started this session (or a forced replay) continues past those actions.
+export function isContextualTourStartBlockedByProgress(
+  state: Pick<UISlice, 'featureInteractions' | 'contextualToursStartedThisSession'>,
+  tourId: ContextualTourId
+): boolean {
+  return (
+    !state.contextualToursStartedThisSession.includes(tourId) &&
+    getContextualTour(tourId).steps.some((step) =>
+      isContextualTourStepDone(step, state.featureInteractions)
+    )
+  )
+}
+
+export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
+  return {
+    contextualToursSeenIds: [],
+    contextualToursAutoEligible: null,
+    activeContextualTourId: null,
+    activeContextualTourStepIndex: 0,
+    activeContextualTourSource: null,
+    activeContextualTourSourceDetached: false,
+    activeContextualTourWasFeaturePreviouslyInteracted: false,
+    contextualTourNavigationInteractionSnapshot: {},
+    activeContextualTourSuppressed: false,
+    contextualToursStartedThisSession: [],
+    contextualToursOnboardingVisible: false,
+    contextualToursBlockingSurfaceVisible: false,
+    lastCompletedContextualTourId: null,
+    setContextualToursAutoEligible: (eligible) =>
+      set((s) => {
+        if (s.contextualToursAutoEligible === eligible) {
+          return s
+        }
+        if (typeof window !== 'undefined') {
+          window.api.ui.set({ contextualToursAutoEligible: eligible }).catch(console.error)
+        }
+        return { contextualToursAutoEligible: eligible }
+      }),
+    setContextualToursOnboardingVisible: (visible) =>
+      set((s) =>
+        s.contextualToursOnboardingVisible === visible
+          ? s
+          : { contextualToursOnboardingVisible: visible }
+      ),
+    setContextualToursBlockingSurfaceVisible: (visible) =>
+      set((s) =>
+        s.contextualToursBlockingSurfaceVisible === visible
+          ? s
+          : { contextualToursBlockingSurfaceVisible: visible }
+      ),
+    requestContextualTour: (id, source, wasFeaturePreviouslyInteracted, options) =>
+      set((s) => {
+        const tour = getContextualTour(id)
+        const decision = getContextualTourRequestDecision({
+          tour,
+          persistedUIReady: s.persistedUIReady,
+          autoEligible: options?.force === true || s.contextualToursAutoEligible === true,
+          onboardingVisible: s.contextualToursOnboardingVisible,
+          seenIds: options?.force === true ? [] : s.contextualToursSeenIds,
+          progressBlocked: options?.force !== true && isContextualTourStartBlockedByProgress(s, id),
+          sessionConsumed: options?.force !== true && isContextualTourSessionConsumed(s, id),
+          activeTourId: s.activeContextualTourId,
+          activeModal: s.activeModal,
+          blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
+          targetExists: hasContextualTourTarget,
+          isStepDone: (step) => isContextualTourStepDone(step, s.featureInteractions)
+        })
+        if (decision.kind !== 'start') {
+          if (s.contextualTourNavigationInteractionSnapshot[id] === undefined) {
+            return s
+          }
+          const { [id]: _consumed, ...remainingNavigationSnapshot } =
+            s.contextualTourNavigationInteractionSnapshot
+          void _consumed
+          return { contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot }
+        }
+        const navigationSnapshot = s.contextualTourNavigationInteractionSnapshot[id]
+        const { [id]: _consumed, ...remainingNavigationSnapshot } =
+          s.contextualTourNavigationInteractionSnapshot
+        void _consumed
+        return {
+          activeContextualTourId: id,
+          activeContextualTourStepIndex: decision.stepIndex,
+          activeContextualTourSource: source,
+          activeContextualTourSourceDetached: false,
+          activeContextualTourWasFeaturePreviouslyInteracted:
+            wasFeaturePreviouslyInteracted ??
+            navigationSnapshot ??
+            hasFeatureInteraction(s.featureInteractions, id),
+          contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
+          activeContextualTourSuppressed: false,
+          contextualToursStartedThisSession: s.contextualToursStartedThisSession.includes(id)
+            ? s.contextualToursStartedThisSession
+            : [...s.contextualToursStartedThisSession, id],
+          lastCompletedContextualTourId: null
+        }
+      }),
+    suppressContextualTour: (id, source) =>
+      set((s) => {
+        if (
+          s.activeContextualTourId !== id ||
+          s.activeContextualTourSource !== source ||
+          s.activeContextualTourSourceDetached
+        ) {
+          return s
+        }
+        return s.activeContextualTourSuppressed ? s : { activeContextualTourSuppressed: true }
+      }),
+    detachContextualTourSource: (id, source) =>
+      set((s) => {
+        if (s.activeContextualTourId !== id || s.activeContextualTourSource !== source) {
+          return s
+        }
+        return s.activeContextualTourSourceDetached
+          ? s
+          : { activeContextualTourSourceDetached: true }
+      }),
+    advanceContextualTour: () =>
+      set((s) => {
+        if (!s.activeContextualTourId) {
+          return s
+        }
+        const tour = getContextualTour(s.activeContextualTourId)
+        if (
+          tour.id === 'workspace-agent-sessions' &&
+          tour.steps[s.activeContextualTourStepIndex]?.id === 'agent-sessions-new-tab'
+        ) {
+          return {
+            activeContextualTourStepIndex: getContextualTourStepIndex(
+              tour.id,
+              s.activeTabType === 'agent-session'
+                ? 'agent-sessions-split-chat'
+                : 'agent-sessions-split'
+            )
+          }
+        }
+        const nextStepIndex = getNextVisibleContextualTourStepIndex({
+          tour,
+          currentStepIndex: s.activeContextualTourStepIndex,
+          targetExists: hasContextualTourTarget
+        })
+        if (nextStepIndex !== null) {
+          return { activeContextualTourStepIndex: nextStepIndex }
+        }
+        // Why: the browser tour's last target lives in a closed menu until that step is active.
+        if (
+          s.activeContextualTourId === 'browser' &&
+          s.activeContextualTourStepIndex + 1 < tour.steps.length
+        ) {
+          return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
+        }
+        return s
+      }),
+    regressContextualTour: () =>
+      set((s) => {
+        if (!s.activeContextualTourId) {
+          return s
+        }
+        const previousStepIndex = getPreviousVisibleContextualTourStepIndex({
+          tour: getContextualTour(s.activeContextualTourId),
+          currentStepIndex: s.activeContextualTourStepIndex,
+          targetExists: hasContextualTourTarget
+        })
+        if (previousStepIndex === null) {
+          return s
+        }
+        return { activeContextualTourStepIndex: previousStepIndex }
+      }),
+    dismissContextualTour: (id) => {
+      const activeTourId = get().activeContextualTourId
+      if (id && activeTourId !== id) {
+        return
+      }
+      const tourId = id ?? activeTourId
+      if (tourId) {
+        get().markContextualToursSeen([tourId])
+      }
+      set((s) => {
+        if (id && s.activeContextualTourId !== id) {
+          return s
+        }
+        return {
+          activeContextualTourId: null,
+          activeContextualTourStepIndex: 0,
+          activeContextualTourSource: null,
+          activeContextualTourSourceDetached: false,
+          activeContextualTourWasFeaturePreviouslyInteracted: false,
+          activeContextualTourSuppressed: false,
+          lastCompletedContextualTourId: null
+        }
+      })
+    },
+    completeContextualTour: (id) => {
+      const activeTourId = get().activeContextualTourId
+      if (id && activeTourId !== id) {
+        return
+      }
+      const tourId = id ?? activeTourId
+      if (tourId) {
+        get().markContextualToursSeen([tourId])
+      }
+      set((s) => {
+        if (id && s.activeContextualTourId !== id) {
+          return s
+        }
+        return {
+          activeContextualTourId: null,
+          activeContextualTourStepIndex: 0,
+          activeContextualTourSource: null,
+          activeContextualTourSourceDetached: false,
+          activeContextualTourWasFeaturePreviouslyInteracted: false,
+          activeContextualTourSuppressed: false,
+          lastCompletedContextualTourId: tourId ?? null
+        }
+      })
+    },
+    cancelContextualTour: (id) =>
+      set((s) => {
+        const activeTourId = s.activeContextualTourId
+        const tourId = id ?? activeTourId
+        if (!tourId || (id && activeTourId !== id)) {
+          return s
+        }
+        // An unshown informational attempt frees the session for a retry; an action tour stays paused.
+        const freesSession =
+          !s.contextualToursSeenIds.includes(tourId) && isInformationalTour(tourId)
+        return {
+          activeContextualTourId: null,
+          activeContextualTourStepIndex: 0,
+          activeContextualTourSource: null,
+          activeContextualTourSourceDetached: false,
+          activeContextualTourWasFeaturePreviouslyInteracted: false,
+          activeContextualTourSuppressed: false,
+          lastCompletedContextualTourId: null,
+          contextualToursStartedThisSession: freesSession
+            ? s.contextualToursStartedThisSession.filter((started) => started !== tourId)
+            : s.contextualToursStartedThisSession
+        }
+      }),
+    markContextualToursSeen: (ids) =>
+      set((s) => {
+        if (ids.length === 0) {
+          return s
+        }
+        const current = new Set(s.contextualToursSeenIds)
+        let changed = false
+        for (const id of ids) {
+          if (!current.has(id)) {
+            current.add(id)
+            changed = true
+          }
+        }
+        if (!changed) {
+          return s
+        }
+        const next = [...current]
+        if (typeof window !== 'undefined') {
+          window.api.ui.set({ contextualToursSeenIds: next }).catch(console.error)
+        }
+        return { contextualToursSeenIds: next }
+      })
+  }
+}

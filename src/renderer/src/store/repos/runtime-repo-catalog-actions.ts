@@ -1,0 +1,148 @@
+import type { StateCreator } from 'zustand'
+import type { AppState } from '../types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
+import { retainValidFilterRepoIds } from './repo-filter-selection'
+import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/settings/worktree-visibility-owner-settings'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { filterSetupScriptPromptDismissalsToValidRepos } from '@/runtime/repo-hooks/setup-script-prompt'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
+import {
+  claimHostCatalogFence,
+  isHostCatalogFenceCurrent
+} from '../host-catalog/host-catalog-fence'
+import type { RepoSlice } from './repo-state'
+import {
+  fetchRepoCatalogForTarget,
+  filterSetupsForPrunedRepoRows,
+  mergeFetchedRepoCatalog,
+  reconcileFetchedCatalogWorktreeState,
+  reconcileSupersededSshRepos
+} from './repo-catalog-merge'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
+import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'
+import {
+  withWslMovedRepoIds,
+  withWslMovedSetupScriptDismissals
+} from './wsl-moved-repo-ui-retention'
+
+export function createRuntimeRepoCatalogActions(
+  set: Parameters<StateCreator<AppState>>[0],
+  get: Parameters<StateCreator<AppState>>[1]
+): Pick<RepoSlice, 'fetchRuntimeEnvironmentRepos'> {
+  return {
+    fetchRuntimeEnvironmentRepos: async (environmentId) => {
+      set((s) => ({ reposFetchGeneration: s.reposFetchGeneration + 1 }))
+      const target = { kind: 'environment' as const, environmentId }
+      const targetHostId = getRuntimeTargetHostId(target)
+      const fence = claimHostCatalogFence(get, 'repos', target)
+      try {
+        const [catalog, visibilitySnapshot] = await Promise.all([
+          fetchRepoCatalogForTarget(target, get().repos),
+          readRuntimeWorktreeVisibilitySnapshot(environmentId)
+        ])
+        const visibilityDefaults = visibilitySnapshot.defaults
+        if (!isHostCatalogFenceCurrent(get, fence)) {
+          return []
+        }
+        let finalizedHostRepos: Repo[] = []
+        set((s) => {
+          if (!isHostCatalogFenceCurrent(get, fence)) {
+            return s
+          }
+          // Why: skip merging a runtime env removed while this Connect-flow fetch was in flight, so purged repos aren't re-added (#8881).
+          if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
+            return s
+          }
+          const result = mergeFetchedRepoCatalog(catalog, s.repos)
+          const reconciliation = reconcileSupersededSshRepos(result.repos, s)
+          const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
+          const validRepoIds = new Set(finalizedRepos.map((repo) => repo.id))
+          const validRepoHostIdentities = new Set(finalizedRepos.map(getRepoHostIdentity))
+          const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
+            previous: {
+              projects: s.projects,
+              projectHostSetups: filterSetupsForPrunedRepoRows(
+                s.projectHostSetups,
+                result.repos,
+                finalizedRepos
+              )
+            },
+            fetched: catalog.projectHostSetupCompatibility,
+            repos: finalizedRepos,
+            hostId: result.hostId
+          })
+          finalizedHostRepos = finalizedRepos.filter(
+            (repo) => getRepoExecutionHostId(repo) === result.hostId
+          )
+          return {
+            repos: finalizedRepos,
+            ...(visibilityDefaults === undefined
+              ? {}
+              : {
+                  worktreeVisibilityDefaultsByHost: {
+                    ...s.worktreeVisibilityDefaultsByHost,
+                    [targetHostId]: visibilityDefaults
+                  }
+                }),
+            ...(visibilityDefaults !== undefined && s.settings
+              ? s.settings.activeRuntimeEnvironmentId === environmentId
+                ? visibilityDefaults
+                  ? {
+                      settings: {
+                        ...s.settings,
+                        worktreeVisibilityDefaults: visibilityDefaults
+                      },
+                      worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: environmentId,
+                      worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
+                        visibilitySnapshot.sourceDefaultsSupported ? environmentId : null
+                    }
+                  : {
+                      settings: Object.fromEntries(
+                        Object.entries(s.settings).filter(
+                          ([key]) => key !== 'worktreeVisibilityDefaults'
+                        )
+                      ) as GlobalSettings,
+                      worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
+                      worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null
+                    }
+                : {}
+              : {}),
+            pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+            ...reconcileFetchedCatalogWorktreeState(
+              s,
+              catalog,
+              finalizedRepos,
+              reconciliation.pendingReadoptions
+            ),
+            ...mergedProjectCompatibility,
+            activeRepoId:
+              s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+            filterRepoIds: retainValidFilterRepoIds(
+              s.filterRepoIds,
+              withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
+            ),
+            setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
+              s.setupScriptPromptDismissedRepoIds,
+              filterSetupScriptPromptDismissalsToValidRepos(
+                s.setupScriptPromptDismissedRepoIds,
+                validRepoHostIdentities
+              ),
+              s.wslMovedProjects
+            )
+          }
+        })
+        noteLiveRepoCatalogApplied(get, targetHostId)
+        scheduleSafeAutoForkSync(finalizedHostRepos)
+        return finalizedHostRepos
+      } catch (err) {
+        console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)
+        return []
+      }
+    }
+  }
+}

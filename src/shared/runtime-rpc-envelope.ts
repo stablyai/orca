@@ -1,10 +1,9 @@
-// Why: runtime clients can be CLI, desktop, or future non-Electron shells.
-// Keeping the envelope contract here avoids making those clients import each
-// other just to validate the shared RPC frame shape.
+// Share envelopes across CLI/desktop/non-Electron clients without client-to-client imports.
 import { z } from 'zod'
+import type { OrchestrationCompatibilityEvidence } from './orchestration/orchestration-compatibility-evidence'
+import type { RemoteOwnedPeerRun } from './orchestration/remote-owned-wire'
 
-// Why: clients and runtimes update independently; strip additive envelope
-// fields while continuing to validate every known discriminator and field.
+// Independently updated peers may add envelope fields; strip unknown fields while validating known ones.
 const MetaSuccess = z
   .object({
     runtimeId: z.string()
@@ -78,6 +77,23 @@ export type RuntimeOrchestrationEnvelope = {
   orchestrationCapability?: string
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  /** A paired Orca acting as the coordinator of one of its Runs on this server. */
+  orchestrationPeerRun?: RemoteOwnedPeerRun
+  compatibilityInvocationId?: string
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+}
+
+/** Which runtime a request is meant for; a host that is not that runtime refuses it before any handler. */
+export const ExpectedRuntimeSourceSchema = z.object({
+  sourceId: z.string().min(1).max(4_096),
+  runtimeId: z.string().min(1).max(4_096)
+})
+
+export type ExpectedRuntimeSource = {
+  /** The launching profile's installation id. */
+  sourceId: string
+  /** The runtime the client verified for this send. */
+  runtimeId: string
 }
 
 export type RuntimeRpcKeepaliveFrame = z.infer<typeof Keepalive>
@@ -90,3 +106,23 @@ export function isKeepaliveFrame(frame: unknown): frame is RuntimeRpcKeepaliveFr
     (frame as { _keepalive: unknown })._keepalive === true
   )
 }
+
+/** Same-machine IPC observation only; remote hosts own their own monotonic operation budget. */
+export type RuntimeRpcDispatchObservation = {
+  expiresAt: number
+  responseTimeoutMs: number
+  responseExpiresAt?: number
+}
+
+/** Select request params from the status of the socket that will send them. */
+export type RuntimeRequestSelection = {
+  paramsForStatus: (status: unknown) => unknown
+  onDispatch?: () => void
+}
+
+/** Internal preparation on the exact sending socket; never serialized or given credentials. */
+export type RuntimeRequestPreparation = (request: {
+  params: unknown
+  envelope: RuntimeOrchestrationEnvelope | undefined
+  measure: (params: unknown, envelope: RuntimeOrchestrationEnvelope | undefined) => number
+}) => { params: unknown; envelope: RuntimeOrchestrationEnvelope | undefined }

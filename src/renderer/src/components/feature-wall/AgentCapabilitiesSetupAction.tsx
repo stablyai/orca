@@ -1,44 +1,91 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, Globe2, Loader2, MonitorCog, Terminal, Workflow } from 'lucide-react'
+import {
+  useBundledSkillInstallAction,
+  type BundledSkillInstallActionState
+} from '@/hooks/skills/installation/use-bundled-skill-install-action'
+import { bundledSkillSetupActionLabel } from '../skills/setup/bundled-skill-setup-copy'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
+import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../../lib/skills/runtime/skill-runtime-command'
+import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Check, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
+import { AgentCapabilityStatusNote, AgentCapabilityStatusPill } from './AgentCapabilityStatusBadges'
+import {
+  bundledSkillInstallNeedsAttention,
+  useBundledSkillInstall,
+  type BundledSkillInstall
+} from '@/hooks/skills/installation/use-bundled-skill-install'
+import { BundledSkillInstallStatus } from '../skills/setup/BundledSkillInstallStatus'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   hasSelectedOnboardingFeatureSetup,
+  onboardingFeatureSetupRunTelemetry,
+  onboardingFeatureSetupSkillNames,
   runOnboardingFeatureSetup,
   type OnboardingFeatureSetupId,
   type OnboardingFeatureSetupSelection
 } from '../onboarding/onboarding-feature-setup'
 import {
-  getAgentCapabilityStatusClassName,
   getDefaultAgentCapabilitySetupSelection,
   isAgentCapabilityReadinessChecking,
+  isAgentCapabilityReadinessComplete,
   useAgentCapabilitySetupStatus,
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
-import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { capabilitiesSetupBusyLabel, capabilityToggleLabel } from './agent-capability-setup-copy'
+import { AGENT_CAPABILITY_SETUP_ROWS } from './agent-capability-setup-rows'
+import { track } from '@/diagnostics/telemetry/telemetry'
 
-export function AgentCapabilitiesSetupAction(props: {
+type AgentCapabilitiesSetupActionProps = {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
   onBrowserUseSkillInstalledChange: (installed: boolean) => void
-}): React.JSX.Element {
+}
+
+export function AgentCapabilitiesSetupAction(
+  props: AgentCapabilitiesSetupActionProps
+): React.JSX.Element {
+  const runtime = useOnboardingSkillRuntime()
+  return <AgentCapabilitiesSetupForRuntime key={runtime.setupKey} {...props} runtime={runtime} />
+}
+
+function AgentCapabilitiesSetupForRuntime(
+  props: AgentCapabilitiesSetupActionProps & {
+    runtime: ReturnType<typeof useOnboardingSkillRuntime>
+  }
+): React.JSX.Element {
   const { onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } = props
-  const capabilitySetupStatus = useAgentCapabilitySetupStatus()
-  const { readiness } = capabilitySetupStatus
+  const { readiness, installStatus } = useAgentCapabilitySetupStatus()
   const featureSetupDefaultsAppliedRef = useRef(false)
   const featureSetupChangedByUserRef = useRef(false)
   const [featureSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
     DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION
   )
-  const [featureSetupCommand, setFeatureSetupCommand] = useState<string | null>(null)
-  const [featureSetupCommandSelection, setFeatureSetupCommandSelection] =
-    useState<OnboardingFeatureSetupSelection | null>(null)
   const [setupBusyLabel, setSetupBusyLabel] = useState<string | null>(null)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const activeRuntime = props.runtime
+  const [wslSetup, setWslSetup] = useState<{
+    command: string
+    runtime: OnboardingFeatureSetupRuntimeContext
+    selection: OnboardingFeatureSetupSelection
+  } | null>(null)
+  const legacyWsl = activeRuntime.agentRuntime?.runtime === 'wsl'
+  const skillInstall = useBundledSkillInstall({ target: activeRuntime.bundledSkillTarget })
+  const installSkills = skillInstall.install
+  const installAction = useBundledSkillInstallAction(
+    onboardingFeatureSetupSkillNames(featureSetup),
+    {
+      enabled: !legacyWsl && hasSelectedOnboardingFeatureSetup(featureSetup),
+      target: activeRuntime.bundledSkillTarget,
+      refreshKey: skillInstall.state.kind
+    }
+  )
   useEffect(() => {
     onBrowserUseSkillInstalledChange(readiness.browserUseSkillInstalled)
   }, [onBrowserUseSkillInstalledChange, readiness.browserUseSkillInstalled])
@@ -60,10 +107,10 @@ export function AgentCapabilitiesSetupAction(props: {
     setFeatureSetup(value)
   }, [])
   const handleStartFeatureSetup = useCallback(async (): Promise<void> => {
-    if (setupBusyLabel !== null || featureSetupCommand !== null) {
+    if (setupBusyLabel !== null) {
       return
     }
-    setSetupBusyLabel('Setting up capabilities...')
+    setSetupBusyLabel(capabilitiesSetupBusyLabel())
     try {
       const result = await runOnboardingFeatureSetup(featureSetup)
       if (featureSetup.browserUse) {
@@ -87,18 +134,30 @@ export function AgentCapabilitiesSetupAction(props: {
           }
         )
       }
-      if (result.skillCommandsCopied) {
+      // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+      if (legacyWsl) {
+        const command = buildAgentFeatureSkillInstallCommand(result.skillNames)
+        await window.api.ui.writeClipboardText(
+          buildSkillCommandForRuntime(command, activeRuntime.agentRuntime)
+        )
+        setWslSetup({ command, runtime: activeRuntime, selection: featureSetup })
+        return
+      }
+      const installState = await installSkills(
+        result.skillNames,
+        installAction.kind === 'replace' ? installAction.paths : undefined
+      )
+      const telemetry =
+        installState && onboardingFeatureSetupRunTelemetry(featureSetup, result, installState)
+      if (telemetry) {
+        track('onboarding_feature_setup_run', telemetry)
+      }
+      if (installState?.kind === 'done' && installState.summary.ok) {
         toast.success(
           translate(
             'auto.components.feature.wall.AgentCapabilitiesSetupAction.c605f51f2b',
             'Capability setup ready'
-          ),
-          {
-            description: translate(
-              'auto.components.feature.wall.AgentCapabilitiesSetupAction.3a59452a67',
-              'Skill command copied and inserted below for review.'
-            )
-          }
+          )
         )
       }
       if (result.computerUsePermissionsOpened) {
@@ -109,99 +168,70 @@ export function AgentCapabilitiesSetupAction(props: {
           )
         )
       }
-      if (result.skillInstallCommand) {
-        setFeatureSetupCommandSelection(featureSetup)
-        setFeatureSetupCommand(result.skillInstallCommand)
-      }
     } finally {
       setSetupBusyLabel(null)
     }
-  }, [featureSetup, featureSetupCommand, recordFeatureInteraction, setupBusyLabel])
+  }, [
+    activeRuntime,
+    featureSetup,
+    installSkills,
+    installAction,
+    legacyWsl,
+    recordFeatureInteraction,
+    setupBusyLabel
+  ])
 
   return (
     <div className="space-y-5">
-      <AgentCapabilitySetupControls
-        featureSetup={featureSetup}
-        onFeatureSetupChange={handleFeatureSetupChange}
-        featureSetupCommand={featureSetupCommand}
-        featureSetupCommandSelection={featureSetupCommandSelection}
-        setupBusyLabel={setupBusyLabel}
-        onStartFeatureSetup={() => void handleStartFeatureSetup()}
-        installStatus={capabilitySetupStatus.installStatus}
-      />
+      {/* COMPAT(wsl-bridge): removed when WSL runs as an orcad host. */}
+      {wslSetup ? (
+        <FeatureSetupInlineTerminal
+          command={wslSetup.command}
+          runtimeContext={wslSetup.runtime}
+          selection={wslSetup.selection}
+        />
+      ) : (
+        <AgentCapabilitySetupControls
+          featureSetup={featureSetup}
+          onFeatureSetupChange={handleFeatureSetupChange}
+          installAction={legacyWsl ? undefined : installAction}
+          skillInstall={
+            legacyWsl
+              ? { ...skillInstall, ready: !activeRuntime.installDisabledReason }
+              : skillInstall
+          }
+          setupBusyLabel={setupBusyLabel}
+          onStartFeatureSetup={() => void handleStartFeatureSetup()}
+          allReady={isAgentCapabilityReadinessComplete(readiness)}
+          installStatus={installStatus}
+        />
+      )}
     </div>
   )
 }
 
-type AgentCapabilitySetupRow = {
-  id: OnboardingFeatureSetupId
-  title: string
-  description: string
-  icon: ReactNode
-}
-
-const AGENT_CAPABILITY_SETUP_ROWS: readonly AgentCapabilitySetupRow[] = [
-  {
-    id: 'orchestration',
-    get title() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.ac07f8887f',
-        'Agent Orchestration'
-      )
-    },
-    get description() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.c61c91e642',
-        'Let agents coordinate through Orca to keep large, multi-step tasks moving to completion.'
-      )
-    },
-    icon: <Workflow className="size-4" />
-  },
-  {
-    id: 'browserUse',
-    get title() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.e638da007a',
-        'Agent Browser Use'
-      )
-    },
-    get description() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.5e8fe5a72d',
-        "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see."
-      )
-    },
-    icon: <Globe2 className="size-4" />
-  },
-  {
-    id: 'computerUse',
-    get title() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.362a07517d',
-        'Computer Use'
-      )
-    },
-    get description() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.1b51644c2d',
-        'Let agents control the desktop, moving the cursor, clicking, and typing in any app.'
-      )
-    },
-    icon: <MonitorCog className="size-4" />
-  }
-]
-
 function AgentCapabilitySetupControls(props: {
   featureSetup: OnboardingFeatureSetupSelection
   onFeatureSetupChange: (value: OnboardingFeatureSetupSelection) => void
-  featureSetupCommand: string | null
-  featureSetupCommandSelection: OnboardingFeatureSetupSelection | null
+  skillInstall: BundledSkillInstall
+  installAction?: BundledSkillInstallActionState
   setupBusyLabel: string | null
   onStartFeatureSetup: () => void
+  allReady: boolean
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }): React.JSX.Element {
+  const t = useTranslate()
   const hasSelectedFeatures = hasSelectedOnboardingFeatureSetup(props.featureSetup)
-  const showSetupAction = !props.featureSetupCommand
+  const installState = props.skillInstall.state
+  const showSetupAction =
+    installState.kind !== 'unsupported' &&
+    props.installAction?.kind !== 'unsupported' &&
+    !bundledSkillInstallNeedsAttention(installState) &&
+    props.installAction?.kind !== 'attention'
+  // Why: a disabled install button is noise once everything is set up.
+  const showAllReady =
+    (props.installAction?.kind === 'none' || (props.allReady && !hasSelectedFeatures)) &&
+    !props.setupBusyLabel
 
   return (
     <>
@@ -210,35 +240,57 @@ function AgentCapabilitySetupControls(props: {
         onChange={props.onFeatureSetupChange}
         installStatus={props.installStatus}
       />
-      <FullDiskAccessSetupPrompt />
-      {showSetupAction ? (
+      {showSetupAction && showAllReady ? (
+        <p className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Check className="size-4" />
+          {t('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
+        </p>
+      ) : showSetupAction ? (
         <div className="mt-6 flex items-center">
           <Button
             type="button"
             variant="default"
             className="shrink-0"
-            disabled={!hasSelectedFeatures || Boolean(props.setupBusyLabel)}
+            disabled={
+              !hasSelectedFeatures ||
+              Boolean(props.setupBusyLabel) ||
+              !props.skillInstall.ready ||
+              props.installAction?.kind === 'loading'
+            }
             onClick={props.onStartFeatureSetup}
           >
             {props.setupBusyLabel ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
-              <Terminal className="size-4" />
+              <Download className="size-4" />
             )}
             {props.setupBusyLabel ??
-              translate(
-                'auto.components.feature.wall.AgentCapabilitiesSetupAction.c89534cbe9',
-                'Install CLI & Skills'
-              )}
+              (props.installAction?.kind === 'replace'
+                ? t(
+                    'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                    "Replace with Orca's copy"
+                  )
+                : props.installAction?.kind === 'run' && props.installAction.changes
+                  ? bundledSkillSetupActionLabel(props.installAction.changes, t)
+                  : t(
+                      'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
+                      'Install skills'
+                    ))}
           </Button>
         </div>
       ) : null}
-      {props.featureSetupCommand ? (
-        <FeatureSetupInlineTerminal
-          command={props.featureSetupCommand}
-          selection={props.featureSetupCommandSelection ?? props.featureSetup}
-        />
-      ) : null}
+      <BundledSkillInstallStatus
+        install={props.skillInstall}
+        unsupported={
+          props.installAction?.kind === 'unsupported' ? props.installAction.reason : undefined
+        }
+        attention={
+          props.installAction?.kind === 'attention'
+            ? { retry: props.onStartFeatureSetup, message: props.installAction.attentionMessage }
+            : undefined
+        }
+        className="mt-4"
+      />
     </>
   )
 }
@@ -248,6 +300,7 @@ function AgentCapabilitySetupChecklist(props: {
   onChange: (value: OnboardingFeatureSetupSelection) => void
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section className="mt-6">
       <div className="grid gap-3 md:grid-cols-3">
@@ -260,37 +313,34 @@ function AgentCapabilitySetupChecklist(props: {
               type="button"
               role="checkbox"
               aria-checked={selected}
-              aria-label={`${selected ? 'Disable' : 'Enable'} ${row.title}`}
+              aria-label={capabilityToggleLabel(selected, row.title, t)}
               className={cn(
-                'flex min-h-24 flex-col rounded-lg border px-4 py-3 text-left transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                selected
-                  ? 'border-ring bg-accent text-foreground ring-2 ring-ring/25'
-                  : 'border-border bg-muted/20 text-muted-foreground hover:bg-muted/40'
+                'flex min-h-24 flex-col rounded-lg border px-4 py-3.5 text-left transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                selected ? 'border-foreground/60 bg-accent' : 'border-border hover:bg-accent/60'
               )}
               onClick={() => props.onChange({ ...props.value, [row.id]: !selected })}
             >
               <span className="flex items-start justify-between gap-3">
-                <span
-                  className={cn(
-                    'flex size-8 items-center justify-center rounded-lg border',
-                    selected
-                      ? 'border-border bg-background text-foreground'
-                      : 'border-border bg-muted/40'
-                  )}
-                >
+                <span className="grid size-7 place-items-center rounded-md bg-muted text-foreground">
                   {row.icon}
                 </span>
-                <span
-                  aria-hidden
-                  className={cn(
-                    'flex size-5 items-center justify-center rounded-full border transition-colors',
-                    selected
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-background'
-                  )}
-                >
-                  {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+                <span className="flex items-center gap-2">
+                  <AgentCapabilityStatusPill status={installStatus} />
+                  {/* Why: an empty circle on an installed card reads as "not done"; show it only when it means something. */}
+                  {selected || !installStatus.installed ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'flex size-5 items-center justify-center rounded-full border transition-colors',
+                        selected
+                          ? 'border-foreground bg-foreground text-background'
+                          : 'border-border'
+                      )}
+                    >
+                      {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+                    </span>
+                  ) : null}
                 </span>
               </span>
               <span className="mt-3 text-sm font-medium text-foreground">{row.title}</span>
@@ -303,43 +353,5 @@ function AgentCapabilitySetupChecklist(props: {
         })}
       </div>
     </section>
-  )
-}
-
-function AgentCapabilityStatusNote(props: {
-  status: AgentCapabilityInstallStatus
-}): React.JSX.Element {
-  if (props.status.installed) {
-    return (
-      <span className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="rounded-full border border-green-500/45 bg-green-500/10 px-2 py-0.5 text-[11px] font-semibold leading-none text-green-700 dark:text-green-300">
-          {translate(
-            'auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2',
-            'Installed'
-          )}
-        </span>
-        {props.status.tone !== 'ready' ? (
-          <span
-            className={cn(
-              'text-xs font-medium',
-              getAgentCapabilityStatusClassName(props.status.tone)
-            )}
-          >
-            {props.status.label}
-          </span>
-        ) : null}
-      </span>
-    )
-  }
-
-  return (
-    <span
-      className={cn(
-        'mt-1 text-xs font-medium',
-        getAgentCapabilityStatusClassName(props.status.tone)
-      )}
-    >
-      {props.status.label}
-    </span>
   )
 }

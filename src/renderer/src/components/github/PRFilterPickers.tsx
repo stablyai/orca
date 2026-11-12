@@ -1,6 +1,3 @@
-// Why: lower-level pickers used by PRFilterDropdowns. Split out so the parent
-// stays under the per-file line cap and so each picker can be tested or reused
-// independently of the qualifier-mapping logic.
 import React, { useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
@@ -10,15 +7,17 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type PickerOption = { key: string; primary: string; secondary?: string }
 
 export const PULL_REQUEST_PICKER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isPullRequestPickerQueryTooLarge(
+function isPullRequestPickerQueryTooLarge(
   query: string,
   maxBytes = PULL_REQUEST_PICKER_QUERY_MAX_BYTES
 ): boolean {
@@ -53,6 +52,32 @@ export function filterPullRequestPickerOptions(
   )
 }
 
+function pickerFallbackText(
+  {
+    loading,
+    queryTooLarge,
+    error,
+    emptyText
+  }: {
+    loading: boolean
+    queryTooLarge: boolean
+    error: string | null
+    emptyText?: string
+  },
+  t: Translate = translate
+): string {
+  if (loading) {
+    return t('auto.components.github.PRFilterPickers.loading', 'Loading…')
+  }
+  if (queryTooLarge) {
+    return t(
+      'auto.components.github.PRFilterPickers.searchTextTooLarge',
+      'Search text is too large.'
+    )
+  }
+  return error ?? emptyText ?? t('auto.components.github.PRFilterPickers.noMatches', 'No matches')
+}
+
 export function SingleSelectList({
   options,
   activeValue,
@@ -71,12 +96,11 @@ export function SingleSelectList({
   searchPlaceholder: string
   emptyText?: string
   renderOption?: (opt: PickerOption) => React.ReactNode
-  // Why: PR authors and reviewers can be external contributors who aren't in
-  // `listAssignableUsers` (repo collaborators only). Allowing a typed login as
-  // a fallback lets the user filter by anyone GitHub recognizes.
+  // Allow external authors/reviewers missing from the collaborator-only assignable-user list.
   allowCustomValue?: boolean
   onSelect: (value: string | null) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
   const { queryTooLarge, trimmedQuery } = getPullRequestPickerQueryState(query)
@@ -85,13 +109,12 @@ export function SingleSelectList({
     trimmedQuery.length > 0 &&
     !queryTooLarge &&
     !filtered.some((o) => o.key.toLowerCase() === trimmedQuery.toLowerCase())
-  const fallback = loading
-    ? 'Loading…'
-    : queryTooLarge
-      ? 'Search text is too large.'
-      : showCustom
-        ? 'Press Enter to use the typed value.'
-        : (error ?? emptyText ?? 'No matches')
+  const fallback = showCustom
+    ? t(
+        'auto.components.github.PRFilterPickers.pressEnterToUseValue',
+        'Press Enter to use the typed value.'
+      )
+    : pickerFallbackText({ loading, queryTooLarge, error, emptyText }, t)
 
   return (
     <Command shouldFilter={false}>
@@ -109,10 +132,15 @@ export function SingleSelectList({
             onSelect={() => onSelect(trimmedQuery)}
             className="items-center gap-2 px-3 py-1.5 text-xs"
           >
-            <span className="text-muted-foreground">
-              {translate('auto.components.github.PRFilterPickers.2d1f58eda6', 'Use')}
+            <span className="min-w-0 truncate text-muted-foreground">
+              <Trans
+                i18n={i18n}
+                defaults={t('auto.components.github.PRFilterPickers.useTypedValue', 'Use <value/>')}
+                components={{
+                  value: <span className="font-medium text-foreground">{trimmedQuery}</span>
+                }}
+              />
             </span>
-            <span className="truncate font-medium">{trimmedQuery}</span>
           </CommandItem>
         ) : null}
         {activeValue ? (
@@ -121,7 +149,7 @@ export function SingleSelectList({
             onSelect={() => onSelect(null)}
             className="gap-2 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            {translate('auto.components.github.PRFilterPickers.472c12ae03', 'Clear')}
+            {t('auto.components.github.PRFilterPickers.472c12ae03', 'Clear')}
           </CommandItem>
         ) : null}
         {filtered.map((opt) => {
@@ -165,15 +193,20 @@ export function MultiSelectList({
   emptyText?: string
   onChange: (next: string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const { queryTooLarge } = getPullRequestPickerQueryState(query)
-  const fallback = loading
-    ? 'Loading…'
-    : queryTooLarge
-      ? 'Search text is too large.'
-      : (error ?? emptyText ?? 'No matches')
+  const fallback = pickerFallbackText(
+    {
+      loading,
+      queryTooLarge,
+      error,
+      emptyText
+    },
+    t
+  )
 
   const toggle = (key: string): void => {
     const next = new Set(selectedSet)
@@ -201,8 +234,9 @@ export function MultiSelectList({
             onSelect={() => onChange([])}
             className="gap-2 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            {translate('auto.components.github.PRFilterPickers.fdf387297c', 'Clear (')}
-            {selected.length})
+            {t('auto.components.github.PRFilterPickers.clearSelected', 'Clear ({{count}})', {
+              count: selected.length
+            })}
           </CommandItem>
         ) : null}
         {filtered.map((opt) => {

@@ -1,18 +1,9 @@
 import React from 'react'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import gitForWindowsLogoUrl from '../../../../../resources/gwindows_logo.svg?url'
 
-export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | typeof WINDOWS_GIT_BASH_SHELL
-
-// Why: the "+" dropdown and per-tab tab strip both need a visual distinction
-// between PowerShell, CMD, Git Bash, and WSL sessions. Stock lucide glyphs don't
-// differentiate — every session rendered as the same generic chevron. These
-// hand-crafted icons and the official Git for Windows mark make each shell
-// identifiable at a glance without shipping a heavier brand-asset package
-// like simple-icons. The generic (macOS/Linux) terminal fallback uses the same
-// colored-tile treatment so the tab strip reads as a consistent set of badges
-// rather than a monochrome lucide glyph next to colorful brand marks.
+// Use distinct shell tiles in the strip and create menu so PowerShell, CMD, Git Bash and WSL remain recognizable.
 
 function PowerShellIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
@@ -51,9 +42,8 @@ function CmdIcon({ size = 14 }: { size?: number }): React.JSX.Element {
 }
 
 function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // Text-based mark. A full Tux silhouette at 14px is unreadable and a rough
-  // hand-drawn version is worse than a clean "WSL" typographic tile, which
-  // still reads as distinct from PowerShell/CMD at a glance.
+  const t = useTranslate()
+  // A WSL text tile stays legible at 14px where a Tux silhouette does not.
   return (
     <svg
       width={size}
@@ -72,7 +62,7 @@ function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         fill="#1F1F1F"
         fontFamily="system-ui, -apple-system, sans-serif"
       >
-        {translate('auto.components.tab.bar.shell.icons.e9b2e70613', 'WSL')}
+        {t('auto.components.tab.bar.shell.icons.e9b2e70613', 'WSL')}
       </text>
     </svg>
   )
@@ -93,11 +83,7 @@ function GitBashIcon({ size = 14 }: { size?: number }): React.JSX.Element {
 }
 
 function GenericTerminalIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // Why: matches the tile treatment of PowerShell/CMD/WSL so the tab strip
-  // reads as a consistent set of badges instead of a flat monochrome chevron.
-  // Uses black/white (same palette as the CmdIcon) so generic mac/linux
-  // sessions stay visually neutral — the colorful brand tiles are reserved
-  // for shells that actually have a brand identity.
+  // Keep generic terminals neutral while matching branded shells’ tile shape.
   return (
     <svg
       width={size}

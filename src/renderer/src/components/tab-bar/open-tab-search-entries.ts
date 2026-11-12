@@ -1,0 +1,249 @@
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
+import type { SearchableBrowserPage } from '@/lib/browser/palette/browser-palette-search'
+import { buildSearchableSimulatorTabs } from '@/lib/simulator/search/simulator-palette-search'
+import type { SearchableSimulatorTab } from '@/lib/simulator/search/simulator-palette-search-types'
+import '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import type { AppState } from '@/store/types'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { getPaletteOwnershipWorktreeIds } from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import type { Translate } from '@/i18n/use-translate'
+
+export type OpenTabSearchEntries = {
+  workspaceTabs: readonly SearchableWorkspaceTab[]
+  browserPages: readonly SearchableBrowserPage[]
+  simulatorTabs: readonly SearchableSimulatorTab[]
+}
+
+export type OpenTabSearchEntryState = Pick<
+  AppState,
+  | 'activeBrowserTabId'
+  | 'activeFileId'
+  | 'activeFileIdByWorktree'
+  | 'activeGroupIdByWorktree'
+  | 'activeTabId'
+  | 'activeTabIdByWorktree'
+  | 'activeTabType'
+  | 'activeTabTypeByWorktree'
+  | 'activeWorktreeId'
+  | 'browserPagesByWorkspace'
+  | 'browserTabsByWorktree'
+  | 'folderWorkspaces'
+  | 'groupsByWorktree'
+  | 'openFiles'
+  | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
+  | 'worktreesByRepo'
+> & {
+  executionHostId: ExecutionHostId
+  generatedTitlesEnabled: boolean
+  repo: Pick<Repo, 'connectionId' | 'displayName' | 'executionHostId' | 'id'> | null
+  worktree: Worktree
+}
+
+export type OpenTabSearchBrowserPageState = Pick<
+  OpenTabSearchEntryState,
+  | 'activeBrowserTabId'
+  | 'activeTabType'
+  | 'activeWorktreeId'
+  | 'browserPagesByWorkspace'
+  | 'browserTabsByWorktree'
+  | 'executionHostId'
+  | 'folderWorkspaces'
+  | 'repo'
+  | 'unifiedTabsByWorktree'
+  | 'worktree'
+  | 'worktreesByRepo'
+>
+
+// Select browser state separately so terminal-title and editor writes cannot rerender browser-only consumers.
+export function selectOpenTabSearchBrowserPageState(
+  state: AppState,
+  worktreeId: string
+): OpenTabSearchBrowserPageState | null {
+  const entry = selectOpenTabSearchEntryState(state, worktreeId)
+  if (!entry) {
+    return null
+  }
+  const {
+    activeBrowserTabId,
+    activeTabType,
+    activeWorktreeId,
+    browserPagesByWorkspace,
+    browserTabsByWorktree,
+    executionHostId,
+    folderWorkspaces,
+    repo,
+    unifiedTabsByWorktree,
+    worktree,
+    worktreesByRepo
+  } = entry
+  return {
+    activeBrowserTabId,
+    activeTabType,
+    activeWorktreeId,
+    browserPagesByWorkspace,
+    browserTabsByWorktree,
+    executionHostId,
+    folderWorkspaces,
+    repo,
+    unifiedTabsByWorktree,
+    worktree,
+    worktreesByRepo
+  }
+}
+
+export type OpenTabSearchAgentState = Pick<
+  AppState,
+  | 'agentStatusByPaneKey'
+  | 'paneForegroundAgentByPaneKey'
+  | 'retainedAgentsByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
+  | 'terminalLayoutsByTabId'
+>
+
+// Offer every workspace tab across groups, including the active one, to match Cmd+J.
+export function selectOpenTabSearchEntryState(
+  state: AppState,
+  worktreeId: string
+): OpenTabSearchEntryState | null {
+  const preferredHostId =
+    state.activeWorktreeId === worktreeId
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined
+  // Why getKnownWorktreeById: folder workspaces are absent from worktreesByRepo.
+  const worktree = state.getKnownWorktreeById(worktreeId, preferredHostId) ?? null
+  if (!worktree) {
+    return null
+  }
+  const repoCandidates = state.repos.filter((candidate) => candidate.id === worktree.repoId)
+  const resolvedHostId = worktree.hostId ?? preferredHostId
+  const repo =
+    (resolvedHostId
+      ? repoCandidates.find((candidate) => getRepoExecutionHostId(candidate) === resolvedHostId)
+      : undefined) ??
+    repoCandidates[0] ??
+    null
+  // Use the host that found the workspace when workspace/repo metadata has no host; do not silently fall back to local.
+  const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined, preferredHostId)
+  return {
+    activeBrowserTabId: state.activeBrowserTabId,
+    activeFileId: state.activeFileId,
+    activeFileIdByWorktree: state.activeFileIdByWorktree,
+    activeGroupIdByWorktree: state.activeGroupIdByWorktree,
+    activeTabId: state.activeTabId,
+    activeTabIdByWorktree: state.activeTabIdByWorktree,
+    activeTabType: state.activeTabType,
+    activeTabTypeByWorktree: state.activeTabTypeByWorktree,
+    activeWorktreeId: state.activeWorktreeId,
+    browserPagesByWorkspace: state.browserPagesByWorkspace,
+    browserTabsByWorktree: state.browserTabsByWorktree,
+    executionHostId,
+    folderWorkspaces: selectFolderWorkspaces(state),
+    generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
+    groupsByWorktree: state.groupsByWorktree,
+    openFiles: state.openFiles,
+    repo,
+    tabsByWorktree: state.tabsByWorktree,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+    worktree,
+    worktreesByRepo: selectWorktreesByRepo(state)
+  }
+}
+
+export function selectOpenTabSearchAgentState(state: AppState): OpenTabSearchAgentState {
+  return {
+    agentStatusByPaneKey: state.agentStatusByPaneKey,
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId
+  }
+}
+
+function openTabSearchScope(state: OpenTabSearchBrowserPageState) {
+  const { repo, worktree } = state
+  const scopedWorktree =
+    worktree.hostId === state.executionHostId
+      ? worktree
+      : { ...worktree, hostId: state.executionHostId }
+  return {
+    worktrees: [scopedWorktree],
+    ownershipWorktrees: getPaletteOwnershipWorktreeIds(state),
+    repoMap: new Map(repo ? [[repo.id, repo]] : []),
+    worktreeOrder: new Map([[worktree.id, 0]])
+  }
+}
+
+export function buildOpenTabSearchBrowserPages(
+  state: OpenTabSearchBrowserPageState,
+  scope = openTabSearchScope(state)
+): SearchableBrowserPage[] {
+  return buildSearchableBrowserPages({
+    ...scope,
+    browserTabsByWorktree: state.browserTabsByWorktree,
+    browserPagesByWorkspace: state.browserPagesByWorkspace,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+    activeBrowserTabId: state.activeBrowserTabId,
+    activeWorktreeId: state.activeWorktreeId,
+    activeTabType: state.activeTabType
+  })
+}
+
+export function buildOpenTabSearchEntries(
+  state: OpenTabSearchEntryState,
+  agentState: OpenTabSearchAgentState,
+  chatNames: StructuredChatTabNames,
+  t?: Translate
+): OpenTabSearchEntries {
+  const scope = openTabSearchScope(state)
+
+  return {
+    workspaceTabs: buildSearchableWorkspaceTabEntries({
+      ...scope,
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+      tabsByWorktree: state.tabsByWorktree,
+      openFiles: state.openFiles,
+      agentStatusByPaneKey: agentState.agentStatusByPaneKey,
+      retainedAgentsByPaneKey: agentState.retainedAgentsByPaneKey,
+      sleepingAgentSessionsByPaneKey: agentState.sleepingAgentSessionsByPaneKey,
+      terminalLayoutsByTabId: agentState.terminalLayoutsByTabId,
+      paneForegroundAgentByPaneKey: agentState.paneForegroundAgentByPaneKey,
+      activeGroupIdByWorktree: state.activeGroupIdByWorktree,
+      groupsByWorktree: state.groupsByWorktree,
+      activeWorktreeId: state.activeWorktreeId,
+      activeTabType: state.activeTabType,
+      activeTabId: state.activeTabId,
+      activeTabIdByWorktree: state.activeTabIdByWorktree,
+      activeFileId: state.activeFileId,
+      activeFileIdByWorktree: state.activeFileIdByWorktree,
+      activeTabTypeByWorktree: state.activeTabTypeByWorktree,
+      generatedTitlesEnabled: state.generatedTitlesEnabled,
+      chatNames
+    }),
+    browserPages: buildOpenTabSearchBrowserPages(state, scope),
+    simulatorTabs: buildSearchableSimulatorTabs(
+      {
+        ...scope,
+        unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+        activeGroupIdByWorktree: state.activeGroupIdByWorktree,
+        groupsByWorktree: state.groupsByWorktree,
+        activeWorktreeId: state.activeWorktreeId,
+        activeTabType: state.activeTabType
+      },
+      t
+    )
+  }
+}

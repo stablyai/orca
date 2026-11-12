@@ -2,21 +2,16 @@ import { toast } from 'sonner'
 import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveResult
-} from '@/store/slices/workspace-cleanup'
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { translate } from '@/i18n/i18n'
+import { showPreservedBranchBatchToast } from '../sidebar/workspace-actions/deletion/preserved-branch-batch-toast'
 
 export function showWorkspaceCleanupRemovalResultToasts(
   result: WorkspaceCleanupRemoveResult,
   pendingSettlementFailures?: ReadonlySet<WorkspaceCleanupFailure>
 ): void {
-  if (result.removedIds.length > 0) {
-    toast.success(
-      translate(
-        'auto.components.workspace.cleanup.backgroundRemoval.removed',
-        'Removed workspaces: {{value0}}',
-        { value0: result.removedIds.length }
-      )
-    )
+  if (result.preservedBranches && result.preservedBranches.length > 0) {
+    showPreservedBranchBatchToast(result.removedIds.length, result.preservedBranches)
   }
   const definitiveFailures = pendingSettlementFailures
     ? result.failures.filter((failure) => !pendingSettlementFailures.has(failure))
@@ -33,8 +28,7 @@ export function showWorkspaceCleanupRemovalResultToasts(
   }
   const stillRemovingCount = result.failures.length - definitiveFailures.length
   if (stillRemovingCount > 0) {
-    // Why: rows past the deadline are still removing; an error toast here would
-    // contradict the authoritative outcome reported when they settle.
+    // Timed-out rows still remove; definitive error toasts would contradict later authoritative outcomes.
     toast.info(
       translate(
         'auto.components.workspace.cleanup.backgroundRemoval.stillRemoving',

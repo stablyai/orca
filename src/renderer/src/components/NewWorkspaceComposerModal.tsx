@@ -1,6 +1,19 @@
-import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { useAppStore } from '@/store'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import type { ComposerModalData } from './new-workspace/composer-modal-data'
+import { toast } from 'sonner'
+import {
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage
+} from '@/lib/workspace/creation/workspace-create-error-format'
+import type {
+  AgentPickerDraft,
+  AgentPickerEntry
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
+import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
+import { agentChoicePending } from '@/lib/agent-session/launch/inventory/host-chat-program'
+import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useAppStore } from '@/store/index'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import {
   Dialog,
   DialogContent,
@@ -9,104 +22,93 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
-import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
-import type { AddRepoDialogHostedController } from '@/components/sidebar/use-add-repo-hosted-controller'
+import AgentSettingsDialog, {
+  restoreAgentSettingsInvoker
+} from '@/components/agent/AgentSettingsDialog'
+import { useComposerHostedAddProject } from './new-workspace/use-composer-hosted-add-project'
 import { useComposerState } from '@/hooks/useComposerState'
 import {
+  composerLaunchWorkspace,
+  quickWorkspacePickerInputs,
   pickQuickWorkspaceAgent,
   resolveQuickWorkspaceAgentSelection
-} from '@/lib/quick-workspace-agent-selection'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type {
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus
-} from '../../../shared/types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+} from '@/lib/workspace/creation/quick-workspace-agent-selection'
+import { useAgentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { shouldAllowComposerEnterSubmitTarget } from '@/lib/workspace/creation/new-workspace-enter-guard'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
-import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
-import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
+import { useTranslate } from '@/i18n/use-translate'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace/creation/workspace-composer-initial-focus'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
+import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
-// Why: match App-level AddRepoDialog loading — the add flow is off the hot
-// path for the composer, so keep its clone/SSH machinery out of the entry render.
-const HostedAddRepoDialog = lazyWithRetry(() => import('@/components/sidebar/AddRepoDialog'), {
-  reloadKey: 'composer-add-repo'
-})
-
-type ComposerModalData = {
-  prefilledName?: string
-  initialRepoId?: string
-  initialEphemeralVmRecipeId?: string
-  initialProjectGroupId?: string
-  linkedWorkItem?: LinkedWorkItemSummary | null
-  taskSourceContext?: TaskSourceContext | null
-  initialBaseBranch?: string
-  initialWorkspaceStatus?: WorkspaceStatus
-  /** Telemetry surface that opened the composer. Set by each
-   *  `openModal('new-workspace-composer', ...)` site so
-   *  `workspace_created.source` carries the right value. Falls back to
-   *  `unknown` when omitted. */
-  telemetrySource?: WorkspaceCreateTelemetrySource
-  contextualTourSource?: string
-  setupGuideTourRequestId?: string
-}
+// Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
+const HostedAddRepoDialog = lazyWithRetry(
+  () => import('@/components/sidebar/project-admission/dialog/AddRepoDialog'),
+  {
+    reloadKey: 'composer-add-repo'
+  }
+)
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
   const modalData = useAppStore((s) => s.modalData as ComposerModalData | undefined)
   const closeModal = useAppStore((s) => s.closeModal)
 
-  // Why: Dialog open-state transitions must be driven by the store, not a
-  // mirror useState, so palette/open-modal calls feel instantaneous and the
-  // modal doesn't linger with stale data after close.
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        closeModal()
-      }
-    },
-    [closeModal]
-  )
-
   if (!visible) {
     return null
   }
 
-  return (
-    <ComposerModalBody
-      modalData={modalData ?? {}}
-      onClose={closeModal}
-      onOpenChange={handleOpenChange}
-    />
-  )
+  if (modalData?.directSetup) {
+    return (
+      <DirectWorkItemSetupDialog key={modalData.directSetup.id} request={modalData.directSetup} />
+    )
+  }
+
+  return <ComposerModalBody modalData={modalData ?? {}} onClose={closeModal} />
 }
 
 function ComposerModalBody({
   modalData,
-  onClose,
-  onOpenChange
+  onClose
 }: {
   modalData: ComposerModalData
   onClose: () => void
-  onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const submitCancelledRef = useRef(false)
+  const handleDismiss = useCallback(() => {
+    submitCancelledRef.current = true
+    onClose()
+  }, [onClose])
+  const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
+
   return (
-    <Dialog open onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
+        ref={dialogRef}
         className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
+        onEscapeKeyDown={(event) => {
+          if (dialogRef.current?.querySelector('[data-sparse-preset-editor]')) {
+            event.preventDefault()
+          }
+        }}
         onOpenAutoFocus={(event) => {
-          // Why: Radix's FocusScope fires this once the dialog has mounted.
-          // preventDefault stops it from focusing whatever first-tabbable it
-          // picks (close button), and we instead focus the name/source field
-          // so users can start typing immediately.
+          // Override Radix’s first-tabbable close button with the name/source field for immediate typing.
           event.preventDefault()
           const content = event.currentTarget as HTMLElement
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <QuickTabBody modalData={modalData} onClose={onClose} active />
+        <QuickTabBody
+          modalData={modalData}
+          onClose={onClose}
+          isSubmissionCancelled={isSubmissionCancelled}
+          active
+        />
       </DialogContent>
     </Dialog>
   )
@@ -115,12 +117,15 @@ function ComposerModalBody({
 function QuickTabBody({
   modalData,
   onClose,
+  isSubmissionCancelled,
   active
 }: {
   modalData: ComposerModalData
   onClose: () => void
+  isSubmissionCancelled: () => boolean
   active: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const {
     cardProps,
@@ -128,204 +133,275 @@ function QuickTabBody({
     onComposerNodeChange,
     nameInputRef,
     submitQuick,
-    createDisabled,
-    selectAddedProjectRepo
+    createDisabled: formDisabled,
+    selectAddedProjectRepo,
+    selectAddedProjectGroup
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
-    // Why: the modal is quick-create only now, so prompt-prefill state is
-    // intentionally ignored even if older callers still send it.
+    // Quick create ignores legacy prompt-prefill payloads.
     initialPrompt: '',
+    initialNote: modalData.recovery?.note,
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
+    initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
+    initialWorkspaceTarget: modalData.initialWorkspaceTarget ?? null,
     initialRepoId: modalData.initialRepoId,
     initialEphemeralVmRecipeId: modalData.initialEphemeralVmRecipeId,
     initialProjectGroupId: modalData.initialProjectGroupId,
     initialWorkspaceStatus: modalData.initialWorkspaceStatus,
+    initialParentWorktreeId: modalData.initialParentWorktreeId,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
     onCreated: onClose,
+    isSubmissionCancelled,
     ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
-    enableIssueAutomation: false,
-    createGateMode: 'quick'
+    enableIssueAutomation: modalData.enableIssueAutomation === true
   })
-  // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
-  // the settings page and closes the modal. For the quick-create flow we want
-  // a less disruptive affordance — a nested dialog layered over the composer
-  // so the user can tweak agents without losing their in-progress workspace
-  // name/repo selection.
+  // Layer agent settings over the composer so edits retain the typed workspace/repo selection.
   const [agentSettingsOpen, setAgentSettingsOpen] = useState(false)
-  // Why: once the user picks an agent, their choice wins and must not be
-  // overwritten when the derived "preferred" value changes (e.g. detection
-  // finishes and adds more installed agents to the set). Track that with an
-  // override rather than an effect that mirrors a prop into state — deriving
-  // during render keeps the selection in sync with the detected set without
-  // triggering an extra commit.
+  const agentSettingsInvoker = useRef<HTMLButtonElement | null>(null)
+  // User picks outrank newly detected preferences. Derive from an override so detection stays current without an effect-driven extra commit.
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
-    undefined
+    modalData.recovery?.agent
   )
-  const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
-    const pref = settings?.defaultTuiAgent
-    // Why: detection can still be pending when quick-create submits; keep the
-    // prior catalog fallback while filtering disabled agents out of that choice.
-    return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
-  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
+  // The picker rows' workspace when known, so the offered list and the rows read one host.
+  const launchWorkspace =
+    cardProps.agentRows?.target.workspace ?? composerLaunchWorkspace(cardProps)
+  const offeredAgentIds = useAgentsOfferedForLaunch(launchWorkspace, cardProps.detectedAgentIds)
+  const detected = cardProps.detectedAgentIds ? [...cardProps.detectedAgentIds] : null
+  const choicePending = (agent: TuiAgent): boolean =>
+    agentChoicePending(useAppStore.getState(), agent, launchWorkspace, detected)
+  // Pending discovery preserves the existing catalog fallback; current facts settle the default.
+  const preferredQuickAgent = pickQuickWorkspaceAgent(
+    settings?.defaultTuiAgent,
+    cardProps.detectedAgentIds,
+    settings?.disabledTuiAgents,
+    offeredAgentIds,
+    choicePending
+  )
+  // An explicit pick stays valid where it opens as a chat without its CLI.
   const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
     quickAgentOverride,
     preferredQuickAgent,
     detectedAgentIds: cardProps.detectedAgentIds,
+    offeredAgentIds,
+    selectedChoiceUnresolved: Boolean(quickAgentOverride && choicePending(quickAgentOverride)),
     disabledTuiAgents: settings?.disabledTuiAgents
   })
   if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
-    // Why: detection/settings changes can invalidate a user-picked agent; repair
-    // before the child selector renders an unavailable option for one commit.
+    // Repair invalid picks before children render an unavailable option.
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
+  const chipAgentIds =
+    offeredAgentIds &&
+    new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
+  // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
+  const [quickAgentPick, setQuickAgentPick] = useState<
+    Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
+  >(modalData.recovery ?? { agent: null })
+  const observation = useAgentMenuObservation(
+    cardProps.agentRows?.target ?? null,
+    active && Boolean(cardProps.agentRows),
+    cardProps.agentRows?.detectionTarget,
+    { wakeOnOpen: true }
+  )
+  const pickerDraft =
+    quickAgentPick.agent === quickAgent && quickAgentPick.contextKey === observation.contextKey
+      ? quickAgentPick.draft
+      : undefined
+  const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
+  const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
+  const createDisabled = formDisabled || !launchSelection.ready
 
-  const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
-    setQuickAgentOverride(agent)
-  }, [])
+  const handleQuickAgentChange = useCallback(
+    (
+      agent: TuiAgent | null,
+      surface?: AgentLaunchSurface,
+      draft?: AgentPickerDraft,
+      entry?: AgentPickerEntry
+    ) => {
+      setQuickAgentOverride(agent)
+      setQuickAgentPick({ agent, surface, draft, entry, contextKey: observation.contextKey })
+    },
+    [observation.contextKey]
+  )
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    await submitQuick(quickAgent)
-  }, [quickAgent, submitQuick])
-  // Why: Add Project layers over the composer as a nested dialog instead of
-  // replacing it in the activeModal slot — closing the composer mid-flow (and
-  // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
-  // stays mounted so cancel/complete plays the close animation and the
-  // dialog's close effects can abort in-flight clone/scan work. (Folder/non-git
-  // outcomes still navigate away and tear the whole modal down.)
-  const [addProjectOpen, setAddProjectOpen] = useState(false)
-  const [addProjectMounted, setAddProjectMounted] = useState(false)
-  const handleOpenAddProject = useCallback((): void => {
-    setAddProjectMounted(true)
-    setAddProjectOpen(true)
-  }, [])
-  const handleProjectAdded = useCallback(
-    (repoId: string): void => {
-      selectAddedProjectRepo(repoId)
-    },
-    [selectAddedProjectRepo]
-  )
-  const handleAddProjectCloseAutoFocus = useCallback(
-    (event: Event): void => {
-      // Why: after adding a project the next step is naming the worktree.
-      // Radix would try to restore focus to the (unmounted) combobox row that
-      // opened the dialog; send it to the name field instead — the same place
-      // picking a project from the combobox lands.
-      event.preventDefault()
-      nameInputRef?.current?.focus()
-    },
-    [nameInputRef]
-  )
-  const addProjectController = useMemo<AddRepoDialogHostedController>(
-    () => ({
-      open: addProjectOpen,
-      onOpenChange: setAddProjectOpen,
-      onProjectAdded: handleProjectAdded,
-      onCloseAutoFocus: handleAddProjectCloseAutoFocus
-    }),
-    [addProjectOpen, handleAddProjectCloseAutoFocus, handleProjectAdded]
-  )
+    if (createDisabled) {
+      return
+    }
+    await submitQuick(quickAgent, {
+      // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
+      setupOnly: quickAgent === null,
+      launchChoice: launchSelection.choice,
+      onLegacyPreparationFailure: (error) => {
+        if (isSubmissionCancelled()) {
+          return
+        }
+        const snapshot = {
+          ...modalData,
+          prefilledName: cardProps.name,
+          initialRepoId: cardProps.repoId,
+          initialBaseBranch: cardProps.baseBranch,
+          initialWorkspaceTarget:
+            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
+              ? {
+                  projectId: cardProps.selectedProjectId,
+                  hostId: cardProps.selectedRepoExecutionHostId,
+                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
+                }
+              : modalData.initialWorkspaceTarget,
+          linkedWorkItem: cardProps.linkedWorkItem,
+          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
+        }
+        toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
+          action: {
+            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+            onClick: () => {
+              if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
+                useAppStore.getState().openModal('new-workspace-composer', snapshot)
+              }
+            }
+          }
+        })
+      },
+      ...quickWorkspacePickerInputs(
+        pickerDraft,
+        quickAgentPick.entry,
+        launchSelection.choice?.executionHostId
+      )
+    })
+  }, [
+    createDisabled,
+    quickAgent,
+    launchSelection.choice,
+    submitQuick,
+    pickerDraft,
+    quickAgentPick,
+    isSubmissionCancelled,
+    modalData,
+    cardProps
+  ])
+  const {
+    addProjectOpen,
+    addProjectMounted,
+    nestedDialogCount,
+    addProjectController,
+    handleNestedDialogOpenChange,
+    handleOpenAddProject,
+    handleOpenAddProjectEntryRequest
+  } = useComposerHostedAddProject({
+    nameInputRef,
+    selectAddedProjectRepo,
+    selectAddedProjectGroup
+  })
   const selectedProjectOption = cardProps.projectOptions.find(
     (option) => option.id === cardProps.selectedProjectId
   )
   const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
   const primaryActionLabel = isFolderWorkspaceTarget
-    ? getFolderWorkspacePrimaryActionLabel()
+    ? getFolderWorkspacePrimaryActionLabel(t)
     : cardProps.selectedRepoIsGit
-      ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-      : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
+      ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
+      : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
-  // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
-  const nestedDialogOpen = agentSettingsOpen || addProjectOpen
+  // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
+  const nestedDialogOpen = agentSettingsOpen || addProjectOpen || nestedDialogCount > 0
   useEffect(() => {
     if (!active || nestedDialogOpen) {
-      // Why: while a nested dialog (Add Project / Agents) is layered on top,
-      // this capture-phase handler must not steal its Escape (which should
-      // close only the nested dialog) or fire composer submit underneath it.
+      // Nested dialogs own input; never submit the underlying composer through this capture handler.
       return
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Enter' && event.key !== 'Escape') {
+      // Creation uses the screen submit chord, outside configurable app commands.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       const target = event.target
       if (!(target instanceof HTMLElement)) {
         return
       }
-
-      if (event.key === 'Escape') {
-        if (
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          target instanceof HTMLSelectElement ||
-          target.isContentEditable
-        ) {
-          event.preventDefault()
-          target.blur()
-          return
-        }
-        event.preventDefault()
-        onClose()
-        return
-      }
-
-      // Why: workspace creation is screen-local submit behavior, not a
-      // user-configurable app command.
-      if (!isScreenSubmitShortcut(event)) {
-        return
-      }
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
-      if (createDisabled) {
+      if (createDisabled || composerRef.current?.hasAttribute('data-sparse-preset-editing')) {
         return
       }
       event.preventDefault()
       void handleCreate()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen, onClose])
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
+  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
 
   return (
     <>
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">
           {isFolderWorkspaceTarget
-            ? translate(
+            ? t(
                 'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
                 'Create Folder Workspace'
               )
             : primaryActionLabel}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          {translate(
-            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
-            'Choose the project, workspace name, and agent before creating the workspace.'
+          {t(
+            'components.newWorkspace.createDescription',
+            'Choose the project and workspace name. Select an agent if you want to start one.'
           )}
         </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
-        // Why: the scroll container clips children (overflow-y-auto forces overflow-x to auto),
-        // while Orca's standard field focus ring paints 3px outside the control and the ghost
-        // "Advanced" disclosure pulls its padded hover highlight ~8px left to align its label with
-        // the field labels. Inset px-2 so both stay fully visible instead of clipped at the edge.
-        containerClassName="min-h-0 flex-1 overflow-y-auto px-2 scrollbar-sleek"
+        // Keep focus rings and the Advanced hover highlight inside the scroll padding.
+        containerClassName="px-2"
+        contentClassName="-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek"
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
+        agentPickerDraft={pickerDraft}
+        agentSetupDisabled={
+          observation.model.state !== 'settled' ||
+          observation.model.pickerContext?.executionHostId !== 'local'
+        }
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
+        // Chips list offered agents, keeping a pick whose chat is still being learned.
+        detectedAgentIds={chipAgentIds}
+        createDisabled={createDisabled}
+        agentSurfaceRows={
+          cardProps.agentRows
+            ? {
+                model: observation.model,
+                selection: launchSelection,
+                surface: quickAgentSurface,
+                contextKey: observation.contextKey,
+                onPick: handleQuickAgentChange
+              }
+            : undefined
+        }
         primaryActionLabel={primaryActionLabel}
-        onOpenAgentSettings={() => setAgentSettingsOpen(true)}
+        onOpenAgentSettings={(invoker) => {
+          agentSettingsInvoker.current = invoker
+          setAgentSettingsOpen(true)
+        }}
         onCreate={() => void handleCreate()}
         onAddProjectOverride={handleOpenAddProject}
+        onAddProjectEntryRequest={handleOpenAddProjectEntryRequest}
+        onNestedDialogOpenChange={handleNestedDialogOpenChange}
       />
-      <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
+      <AgentSettingsDialog
+        open={agentSettingsOpen}
+        onOpenChange={setAgentSettingsOpen}
+        onCloseAutoFocus={(event) => {
+          const invoker = agentSettingsInvoker.current
+          agentSettingsInvoker.current = null
+          restoreAgentSettingsInvoker(event, invoker)
+        }}
+      />
       {addProjectMounted ? (
         <Suspense fallback={null}>
           <HostedAddRepoDialog hosted={addProjectController} />

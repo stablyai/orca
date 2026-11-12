@@ -4,7 +4,7 @@ import type {
   EphemeralVmRecipeDoctorCheck,
   EphemeralVmRecipeDoctorResult
 } from './ephemeral-vm-recipes'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 
 export function doctorEphemeralVmRecipe(args: {
   repoPath: string
@@ -70,8 +70,7 @@ export function doctorEphemeralVmRecipe(args: {
   if (recipe.resume) {
     checks.push(checkCommandPath(args.repoPath, recipe.resume, 'recipe.resume'))
   }
-  // Why: a workspace suspended by `suspend` can only be woken if `resume` exists;
-  // defining one without the other strands the workspace asleep.
+  // Require suspend/resume pairs so suspended workspaces can always wake.
   if (Boolean(recipe.suspend) !== Boolean(recipe.resume)) {
     checks.push({
       id: 'recipe.suspend_resume_pairing',
@@ -135,8 +134,7 @@ function checkCommandPath(
       remediation: 'Create the script or update the recipe command path.'
     }
   }
-  // Why: a non-executable script fails create with a confusing EACCES. The exec
-  // bit is a POSIX concept — skip on Windows, where it does not apply.
+  // Catch confusing create-time EACCES early; executable bits apply only on POSIX.
   if (process.platform !== 'win32') {
     try {
       accessSync(scriptPath, fsConstants.X_OK)

@@ -1,18 +1,5 @@
-/**
- * Repro + recovery for the stuck-occlusion freeze (field snapshot,
- * v1.4.124-rc.2.perf, 2026-07-06): macOS occlusion tracking wedges
- * document.visibilityState at 'hidden' after display sleep and never fires
- * another visibilitychange. The hidden-delivery gate then marks the pane the
- * user is looking at as hidden, and main drops its renderer-bound bytes
- * indefinitely (78MB dropped across 2 visible ptys in the field) — a frozen
- * terminal with a perfectly healthy transport.
- *
- * The test emulates the wedge exactly as Chromium produces it: visibilityState
- * pinned to 'hidden' with one final visibilitychange, then silence. Recovery
- * must come from the staleness proof — a real keystroke while the document
- * claims hidden — which unlatches the gate and repaints the missed output from
- * the main-owned snapshot, WITHOUT a reload and WITHOUT any visibilitychange.
- */
+// v1.4.124-rc.2.perf (2026-07-06): macOS display-sleep occlusion stuck hidden, dropping 78MB across two visible PTYs despite healthy transport.
+// Pin hidden with one final visibilitychange, then require a real keystroke to prove staleness, unlatch delivery and restore missed output without reload/event.
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
@@ -42,8 +29,7 @@ async function getDeliverySnapshot(page: Page): Promise<DeliverySnapshot> {
 
 test.describe('terminal stuck-occlusion recovery', () => {
   test.afterEach(async ({ orcaPage }) => {
-    // Drop the instance shadow so the prototype getter (real state) rules
-    // again, and fire one genuine visibilitychange to restore tracker trust.
+    // Remove the instance override and emit visibilitychange so the real prototype state restores tracker trust.
     await orcaPage.evaluate(() => {
       delete (document as { visibilityState?: string }).visibilityState
       document.dispatchEvent(new Event('visibilitychange'))
@@ -119,9 +105,7 @@ test.describe('terminal stuck-occlusion recovery', () => {
       .poll(async () => getTerminalContent(orcaPage), { timeout: 15_000 })
       .toContain('live-after-256')
 
-    // The one-paste freeze report is prod-reachable and carries the episode's
-    // history: the stale-visibility latch and gate transitions must be in the
-    // renderer breadcrumbs, and main's per-pty table must be populated.
+    // Require episode history in renderer breadcrumbs and main’s per-PTY table for the production one-paste freeze path.
     const report = await orcaPage.evaluate(() =>
       (
         window as Window & {

@@ -1,9 +1,9 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../shared/types'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -15,10 +15,11 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { QUICK_COMMAND_TOGGLE_ITEM_CLASS } from './terminal-quick-command-toggle-style'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalQuickCommandScopeFieldProps = {
-  repos: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  disabled: boolean
+  repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   selectedScope: TerminalQuickCommandScope
   selectedRepoId: string
   selectedRepoMissing: boolean
@@ -32,13 +33,14 @@ function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
 }
 
 export function getQuickCommandProjectScopeRepoId(
-  repos: Pick<Repo, 'id'>[],
+  repos: readonly Pick<Repo, 'id'>[],
   lastRepoScopeId: string | null
 ): string | null {
   return lastRepoScopeId ?? repos[0]?.id ?? null
 }
 
 export function TerminalQuickCommandScopeField({
+  disabled,
   repos,
   selectedScope,
   selectedRepoId,
@@ -47,16 +49,18 @@ export function TerminalQuickCommandScopeField({
   rememberRepoScopeId,
   setDraft
 }: TerminalQuickCommandScopeFieldProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-2">
       <Label>
-        {translate(
+        {t(
           'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.c25cf350ef',
           'Scope'
         )}
       </Label>
       <div className="flex flex-wrap items-center gap-2">
         <ToggleGroup
+          disabled={disabled}
           type="single"
           value={selectedScope.type}
           onValueChange={(value) => {
@@ -68,8 +72,7 @@ export function TerminalQuickCommandScopeField({
               if (!repoId) {
                 return
               }
-              // Why: toggling Global should not discard the command's project
-              // and silently move it to whichever repo is first in the list.
+              // Global toggling must preserve the chosen project instead of selecting the first repo.
               rememberRepoScopeId(repoId)
               setDraft((current) => ({
                 ...current,
@@ -81,7 +84,7 @@ export function TerminalQuickCommandScopeField({
           variant="outline"
         >
           <ToggleGroupItem value="global" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
-            {translate(
+            {t(
               'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.b83efc79e2',
               'Global'
             )}
@@ -91,7 +94,7 @@ export function TerminalQuickCommandScopeField({
             disabled={repos.length === 0}
             className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}
           >
-            {translate(
+            {t(
               'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.3834d24243',
               'Project'
             )}
@@ -100,6 +103,7 @@ export function TerminalQuickCommandScopeField({
         {selectedScope.type === 'repo' && repos.length > 0 ? (
           <div className="space-y-1">
             <Select
+              disabled={disabled}
               value={selectedRepoId}
               onValueChange={(repoId) => {
                 rememberRepoScopeId(repoId)
@@ -110,11 +114,11 @@ export function TerminalQuickCommandScopeField({
                 <SelectValue
                   placeholder={
                     selectedRepoMissing
-                      ? translate(
+                      ? t(
                           'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.2264edd5d3',
                           'Project not in list'
                         )
-                      : translate(
+                      : t(
                           'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.2496523a6f',
                           'Choose project'
                         )
@@ -123,7 +127,7 @@ export function TerminalQuickCommandScopeField({
               </SelectTrigger>
               <SelectContent>
                 {repos.map((repo) => (
-                  <SelectItem key={repo.id} value={repo.id}>
+                  <SelectItem key={repo.id} value={repo.id} disabled={disabled}>
                     <RepoBadgeLabel
                       name={getRepoLabel(repo)}
                       color={repo.badgeColor}
@@ -135,7 +139,7 @@ export function TerminalQuickCommandScopeField({
             </Select>
             {selectedRepoMissing ? (
               <p className="max-w-48 text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.2db6edede7',
                   'Saving keeps the existing project scope unless you choose another.'
                 )}

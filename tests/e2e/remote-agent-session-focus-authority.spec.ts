@@ -7,8 +7,9 @@ import {
   createRuntimeDesktopPairingOffer,
   launchPairedWebClient
 } from './helpers/paired-electron-client'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import type { RuntimeTerminalSummary } from '../../src/shared/runtime-types'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 type ClientMirror = {
   activeTabId: string | null
@@ -24,12 +25,16 @@ const fixtureScript = path.join(
   process.cwd(),
   'config',
   'scripts',
+  'diagnostics',
+  'remote-agent-authority',
   'remote-agent-session-repro-fixture.mjs'
 )
 const writableShellScript = path.join(
   process.cwd(),
   'config',
   'scripts',
+  'diagnostics',
+  'remote-agent-authority',
   'remote-agent-session-repro-writable-shell.mjs'
 )
 
@@ -45,15 +50,11 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(scriptPath: string, ...args: string[]): string {
   const command = [process.execPath, scriptPath, ...args]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 function countAgentSpawns(): number {
@@ -140,7 +141,7 @@ async function readRenderedTabOrder(page: Page): Promise<string[]> {
 
 function expectImmediatelyAfter(order: string[], predecessor: string, created: string): void {
   const predecessorIndex = order.indexOf(predecessor)
-  if (predecessorIndex < 0) {
+  if (predecessorIndex === -1) {
     throw new Error(
       `placement predecessor ${predecessor} missing before ${created}: ${JSON.stringify(order)}`
     )
@@ -374,7 +375,19 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
       afterTabId: toWebTerminalSurfaceTabId(`${predecessorHostTabId}::${predecessorHostLeafId}`)
     })
     const legacyWebTabId = toWebTerminalSurfaceTabId(legacy.terminal.tabId)
-    const mirroredLegacyGroup = legacy.mirror.tabGroups.find((group) => group.id === legacyGroup.id)
+    await expect
+      .poll(
+        async () => {
+          const order = await readRenderedTabOrder(client.page)
+          const anchorIndex = order.indexOf(predecessorWebTabId)
+          return anchorIndex === -1 ? [] : order.slice(anchorIndex, anchorIndex + 3)
+        },
+        { timeout: 15_000, message: 'Legacy placement did not reach the rendered tab order' }
+      )
+      .toEqual([predecessorWebTabId, legacyWebTabId, successorWebTabId])
+    const mirroredLegacyGroup = (
+      await readClientMirror(client.page, session.worktreeId)
+    ).tabGroups.find((group) => group.id === legacyGroup.id)
     if (!mirroredLegacyGroup) {
       throw new Error('Legacy placement mirrored group is missing')
     }

@@ -1,0 +1,228 @@
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../../shared/abort-signal-reason'
+import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionProviderOpenInput,
+  StructuredAgentSessionProviderOpenResult
+} from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
+import { initializeCodexAppServerConnection } from '../../app-server/codex-app-server-handshake'
+import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
+import {
+  CodexBackgroundTaskTracker,
+  codexChildWorkSink
+} from '../background-work/codex-background-task-tracker'
+import type { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
+import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
+import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
+import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
+import { openCodexThread } from '../threads/codex-structured-thread-open'
+import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
+import { withCodexVisualsThreadConfig } from '../launch/codex-structured-visuals'
+import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import {
+  restoredCodexSessionOptions,
+  reportedCodexSessionOptions
+} from '../catalog/codex-structured-session-options'
+import { CodexSkillReport } from '../catalog/codex-structured-skill-report'
+import { codexAcquireCatalogAccess } from '../catalog/codex-structured-acquire-catalog'
+import {
+  CODEX_DEFAULT_SERVICE_TIER,
+  reportedCodexThreadOptions
+} from '../catalog/codex-structured-service-tier'
+import { readCodexConfiguredLaunchDefaults } from '../launch/codex-configured-launch-defaults'
+import {
+  assertCodexConnectionOpen,
+  codexSessionLifecycle,
+  type CodexAcquisitionRegistry,
+  type CodexAcquisitionAttempt,
+  type CodexSession,
+  type CodexStructuredLaunch,
+  type CodexStructuredSessionAdapterDeps
+} from './codex-structured-session-state'
+import type { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
+
+type CodexOpenContext = {
+  input: StructuredAgentSessionAcquireInput
+  deps: CodexStructuredSessionAdapterDeps
+  launch: CodexStructuredLaunch
+  account: AgentSessionAccountKind | undefined
+  sessions: Map<string, CodexSession>
+  acquisitions: CodexAcquisitionRegistry
+  attempt: CodexAcquisitionAttempt
+  connection: CodexAppServerConnection
+  translator: CodexJournalTranslator | null
+  dispatchEchoes: CodexDispatchEchoes
+  subagentExecutions: CodexSubagentExecutions
+  setPrimaryThreadId: (threadId: string) => void
+  forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
+  unbindReadingControl?: () => void
+}
+
+/** The host owns the open promise and closes the spawned child if this rejects. */
+export async function openCodexStructuredSession(
+  start: CodexOpenContext,
+  openInput: StructuredAgentSessionProviderOpenInput
+): Promise<StructuredAgentSessionProviderOpenResult> {
+  const { input, deps, launch, sessions, acquisitions, attempt, connection, translator } = start
+  const sessionId = input.identity.sessionId
+  const generation = attempt.acquisitionGeneration
+  if (
+    generation === undefined ||
+    openInput.sessionId !== sessionId ||
+    openInput.fence !== input.fence ||
+    openInput.acquisitionGeneration !== generation
+  ) {
+    throw new Error('codex open does not match the spawned child')
+  }
+  const current = (): void => {
+    throwIfSignalAborted(openInput.signal)
+    if (attempt.exitError) {
+      throw attempt.exitError
+    }
+    acquisitions.assertCurrent(sessionId, attempt)
+    assertCodexConnectionOpen(connection, sessionId)
+  }
+  current()
+  await waitForPromiseWithSignal(
+    initializeCodexAppServerConnection(connection, null),
+    openInput.signal
+  )
+  current()
+  const threadLaunch = await waitForPromiseWithSignal(
+    withCodexVisualsThreadConfig(connection, launch, {
+      sessionId,
+      ...(deps.logger ? { logger: deps.logger } : {})
+    }),
+    openInput.signal
+  )
+  current()
+  const commandEnv = {
+    ...launch.commandEnv,
+    ...(launch.visuals ? { [NATIVE_CHAT_SCRATCH_DIR_ENV]: launch.visuals.folder } : {})
+  }
+  const opened = await waitForPromiseWithSignal(
+    openCodexThread(
+      connection,
+      { ...threadLaunch, commandEnv },
+      // Long rollout/MCP setup relies on the host ceiling and cancellation unless a timeout is supplied.
+      deps.requestTimeoutMs ?? null,
+      openInput.signal
+    ),
+    openInput.signal
+  )
+  current()
+  start.setPrimaryThreadId(opened.threadId)
+  attempt.window.appliedSettings.observe(opened)
+  const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
+  if (
+    translator &&
+    input.events &&
+    (returnedTurns.length > 0 || (launch.resumeThreadId !== null && !opened.supersededThreadId))
+  ) {
+    await waitForPromiseWithSignal(
+      catchUpCodexThread({
+        connection,
+        threadId: opened.threadId,
+        sessionId,
+        sink: input.events,
+        returnedTurns,
+        paginate: opened.historyMode === 'paginated' || returnedTurns.length === 0,
+        subagentExecutions: start.subagentExecutions,
+        onReceipt: (clientMessageId, providerIdentity) =>
+          deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity }),
+        signal: openInput.signal,
+        assertCurrent: current,
+        ...(deps.requestTimeoutMs !== undefined ? { timeoutMs: deps.requestTimeoutMs } : {}),
+        ...(deps.logger ? { logger: deps.logger } : {})
+      }),
+      openInput.signal
+    )
+    current()
+  }
+  const configured =
+    opened.serviceTier === undefined
+      ? await waitForPromiseWithSignal(
+          readCodexConfiguredLaunchDefaults(connection, deps.requestTimeoutMs, launch.cwd),
+          openInput.signal
+        )
+      : null
+  current()
+  const serviceTier =
+    opened.serviceTier === undefined
+      ? configured
+        ? (configured.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
+        : undefined
+      : (opened.serviceTier ?? CODEX_DEFAULT_SERVICE_TIER)
+  const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
+  const session: CodexSession = {
+    events: input.events,
+    account: start.account,
+    codexHome: launch.codexHome,
+    connection,
+    ...codexSessionLifecycle(input.fence, generation),
+    threadId: opened.threadId,
+    historyMode: opened.historyMode,
+    permissions: {
+      acquiredMode: input.permissionMode ?? 'ask',
+      ...(opened.sandbox ? { acquiredSandbox: opened.sandbox } : {}),
+      launchSandboxIntact: true,
+      cwd: launch.cwd,
+      ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
+    },
+    activeTurnIds: new Set(),
+    abortedTurnIds: new Set(),
+    prompts: attempt.window.prompts,
+    options: restoredCodexSessionOptions(input.options),
+    reportedOptions: reportedCodexThreadOptions(opened),
+    nativeDefaults: serviceTier ? { serviceTier } : {},
+    appliedTurnOptions: {
+      ...(opened.model ? { model: opened.model } : {}),
+      ...(opened.effort ? { effort: opened.effort } : {}),
+      ...(serviceTier ? { serviceTier } : {})
+    },
+    appliedSettings: attempt.window.appliedSettings,
+    ...(catalogAccess ? { catalogAccess } : {}),
+    dispatchEchoes: start.dispatchEchoes,
+    translator,
+    backgroundTasks: new CodexBackgroundTaskTracker(
+      opened.threadId,
+      start.subagentExecutions,
+      codexChildWorkSink(sessionId, deps, input.events)
+    ),
+    forceCloseUnexpected: (reason) =>
+      start.forceCloseUnexpected(sessionId, input.fence, generation, reason),
+    ...(start.unbindReadingControl ? { unbindReadingControl: start.unbindReadingControl } : {})
+  }
+  current()
+  sessions.set(sessionId, session)
+  for (const event of attempt.window.drain()) {
+    event()
+  }
+  current()
+  acquisitions.deleteIfCurrent(sessionId, attempt)
+  session.skillReport = new CodexSkillReport({
+    connection,
+    cwd: launch.cwd,
+    sessionId,
+    isCurrent: () => sessions.get(sessionId) === session && !session.ended,
+    publish: () => input.events?.publish(),
+    ...(deps.requestTimeoutMs !== undefined ? { timeoutMs: deps.requestTimeoutMs } : {}),
+    ...(deps.logger ? { logger: deps.logger } : {})
+  })
+  session.skillReport.refresh()
+  return {
+    link: codexProviderHandleLink({
+      threadId: opened.threadId,
+      ...(opened.supersededThreadId
+        ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
+        : { resumed: launch.resumeThreadId !== null }),
+      fence: input.fence,
+      linkId: deps.mintLinkId?.(),
+      observedAt: deps.now?.() ?? Date.now()
+    }),
+    reportedOptions: reportedCodexSessionOptions(session)
+  }
+}

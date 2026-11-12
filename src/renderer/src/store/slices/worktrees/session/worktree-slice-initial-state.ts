@@ -1,0 +1,52 @@
+import type { WorktreeSlice } from '../worktree-slice-contract'
+
+export const worktreeSliceInitialState: Pick<
+  WorktreeSlice,
+  | 'worktreesByRepo'
+  | 'detectedWorktreesByRepo'
+  | 'worktreeCatalogVersionByRepoHost'
+  | 'worktreeLineageById'
+  | 'workspaceLineageByChildKey'
+  | 'crossStoreLineageByStoreKey'
+  | 'ownLineageInstallationId'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceKey'
+  | 'activeWorkspaceExecutionHostId'
+  | 'pendingWorktreeCreations'
+  | 'activePendingCreationId'
+  | 'renamingWorktreeId'
+  | 'deleteStateByWorktreeId'
+  | 'baseStatusByWorktreeId'
+  | 'remoteBranchConflictByWorktreeId'
+  | 'sortEpoch'
+  | 'settledSortEpoch'
+  | 'sortOrderEpoch'
+  | 'everActivatedWorktreeIds'
+  | 'lastVisitedAtByWorktreeId'
+  | 'hasHydratedWorktreePurge'
+  | 'startupWorktreeRefreshCompleted'
+> = {
+  worktreesByRepo: {},
+  detectedWorktreesByRepo: {},
+  worktreeCatalogVersionByRepoHost: {},
+  worktreeLineageById: {},
+  workspaceLineageByChildKey: {},
+  crossStoreLineageByStoreKey: {},
+  ownLineageInstallationId: undefined,
+  activeWorktreeId: null,
+  activeWorkspaceKey: null,
+  activeWorkspaceExecutionHostId: null,
+  pendingWorktreeCreations: {},
+  activePendingCreationId: null,
+  renamingWorktreeId: null,
+  deleteStateByWorktreeId: {},
+  baseStatusByWorktreeId: {},
+  remoteBranchConflictByWorktreeId: {},
+  sortEpoch: 0,
+  settledSortEpoch: 0,
+  sortOrderEpoch: 0,
+  everActivatedWorktreeIds: new Set<string>(),
+  lastVisitedAtByWorktreeId: {},
+  hasHydratedWorktreePurge: false,
+  startupWorktreeRefreshCompleted: false
+}

@@ -1,0 +1,125 @@
+import React from 'react'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion'
+import {
+  getPRCommentGroupCount,
+  getPRCommentGroupId,
+  getPRCommentGroupRoot,
+  isResolvedPRCommentGroup,
+  type PRCommentGroup
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
+import { useTranslate } from '@/i18n/use-translate'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import type { MentionOption } from '../page-types'
+import { ConversationCommentCard } from './comment-card'
+
+export function ConversationCommentGroup({
+  group,
+  itemType,
+  repoPath,
+  repoId,
+  sourceContext,
+  prNumber,
+  prRepo,
+  files,
+  headSha,
+  baseSha,
+  markdownGitHubRepo,
+  mentionOptions,
+  resolvedReplyingTo,
+  onToggleReply,
+  onSubmitReply
+}: {
+  group: PRCommentGroup
+  itemType: 'issue' | 'pr'
+  repoPath: string | null
+  repoId: string
+  sourceContext?: TaskSourceContext | null
+  prNumber: number
+  prRepo: GitHubOwnerRepo | null
+  files: GitHubPRFile[]
+  headSha: string | undefined
+  baseSha: string | undefined
+  markdownGitHubRepo: { owner: string; repo: string; host?: string } | null
+  mentionOptions: MentionOption[]
+  resolvedReplyingTo: number | null
+  onToggleReply: (commentId: number) => void
+  onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const cardProps = {
+    itemType,
+    repoPath,
+    repoId,
+    sourceContext,
+    prNumber,
+    prRepo,
+    files,
+    headSha,
+    baseSha,
+    markdownGitHubRepo,
+    mentionOptions,
+    resolvedReplyingTo,
+    onToggleReply,
+    onSubmitReply
+  }
+  const cards =
+    group.kind === 'thread'
+      ? [
+          <ConversationCommentCard key={group.root.id} comment={group.root} {...cardProps} />,
+          ...group.replies.map((reply) => (
+            <ConversationCommentCard key={reply.id} comment={reply} isReply {...cardProps} />
+          ))
+        ]
+      : [<ConversationCommentCard key={group.comment.id} comment={group.comment} {...cardProps} />]
+
+  if (!isResolvedPRCommentGroup(group)) {
+    return (
+      <div key={getPRCommentGroupId(group)} className="flex min-w-0 flex-col gap-3">
+        {cards}
+      </div>
+    )
+  }
+
+  const root = getPRCommentGroupRoot(group)
+  const count = getPRCommentGroupCount(group)
+  return (
+    <Accordion key={getPRCommentGroupId(group)} type="single" collapsible>
+      <AccordionItem
+        value={getPRCommentGroupId(group)}
+        className="rounded-lg border border-border/40 bg-card"
+      >
+        <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
+          <span className="min-w-0 truncate">
+            {group.kind === 'thread'
+              ? t(
+                  'auto.components.PullRequestPage.resolvedThreadBy',
+                  'Resolved thread by {{author}}',
+                  {
+                    author: root.author
+                  }
+                )
+              : t(
+                  'auto.components.PullRequestPage.resolvedCommentBy',
+                  'Resolved comment by {{author}}',
+                  {
+                    author: root.author
+                  }
+                )}
+            {count > 1 ? ` (${count})` : ''}
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="flex min-w-0 flex-col gap-3 px-3 pb-3 pt-0">
+          {cards}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  )
+}

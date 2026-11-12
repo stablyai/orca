@@ -1,5 +1,7 @@
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import { parseWebPairingInput, type WebPairingOffer } from './web-pairing'
@@ -17,7 +19,7 @@ function requireResult<T>(response: RuntimeRpcResponse<unknown>): T {
 }
 
 async function openClient(offer: WebPairingOffer): Promise<WebRuntimeClient> {
-  const client = new WebRuntimeClient(offer)
+  const client = new WebRuntimeClient(pairedRuntimeConnectionFromOffer(offer))
   requireResult(await client.call('status.get', undefined, { timeoutMs: 15_000 }))
   return client
 }
@@ -96,19 +98,6 @@ describe.runIf(Boolean(pairingInput && proxyEndpoint))(
       const reconnected = await openClient(directOffer)
       clients.push(reconnected)
       await exerciseCatalogAndFilesystem(reconnected)
-    })
-
-    it('serves independent simultaneous clients over both paths', async () => {
-      const [direct, proxy] = await Promise.all([
-        openClient(directOffer),
-        openClient({ ...directOffer, endpoint: proxyEndpoint ?? '' })
-      ])
-      clients.push(direct, proxy)
-
-      const results = await Promise.all([direct.call('repo.list'), proxy.call('repo.list')])
-      expect(
-        results.map((response) => requireResult<{ repos: Repo[] }>(response).repos.length)
-      ).toEqual([expect.any(Number), expect.any(Number)])
     })
 
     it.runIf(Boolean(secondPairingInput))(

@@ -1,5 +1,4 @@
 import { join } from 'node:path'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 export type RuntimeTransportMetadata =
   | {
@@ -23,22 +22,7 @@ export type RuntimeMetadata = {
   startedAt: number
 }
 
-export const MAX_RUNTIME_METADATA_FILE_BYTES = 64 * 1024
-export const MAX_RUNTIME_METADATA_JSON_STRUCTURAL_TOKENS = 16 * 1024
-export const MAX_RUNTIME_METADATA_JSON_NESTING_DEPTH = 32
-
-export function parseRuntimeMetadataJson(serialized: string): RuntimeMetadata {
-  assertJsonTextStructureWithinLimits(serialized, {
-    structuralTokens: MAX_RUNTIME_METADATA_JSON_STRUCTURAL_TOKENS,
-    nestingDepth: MAX_RUNTIME_METADATA_JSON_NESTING_DEPTH
-  })
-  return JSON.parse(serialized) as RuntimeMetadata
-}
-
-// Why: the CLI must handle metadata files written by older Orca versions that
-// used a singular `transport` field. This helper extracts the first transport
-// matching the given kinds from either the new `transports` array or the
-// legacy `transport` field.
+// Read both legacy singular transport and the newer transports array for older CLI metadata files.
 export function findTransport(
   metadata: RuntimeMetadata,
   ...kinds: RuntimeTransportMetadata['kind'][]
@@ -55,7 +39,7 @@ export function findTransport(
   return null
 }
 
-const PRIMARY_RUNTIME_METADATA_FILE = 'orca-runtime.json'
+export const PRIMARY_RUNTIME_METADATA_FILE = 'orca-runtime.json'
 
 export function getRuntimeMetadataPath(userDataPath: string): string {
   return join(userDataPath, PRIMARY_RUNTIME_METADATA_FILE)

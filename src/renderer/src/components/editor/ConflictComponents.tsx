@@ -11,31 +11,52 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
-import type { GitConflictKind, GitStatusEntry } from '../../../../shared/types'
+import { cn } from '@/lib/class-names'
+import type { ConflictReviewEntry } from '../../../../shared/editor-tab-view-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type {
+  GitConflictKind,
+  GitStatusEntry
+} from '../../../../shared/git/status/git-status-types'
 import { ConflictReviewFileTree } from './ConflictReviewFileTree'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
-  both_modified: 'Both modified',
-  both_added: 'Both added',
-  deleted_by_us: 'Deleted by us',
-  deleted_by_them: 'Deleted by them',
-  added_by_us: 'Added by us',
-  added_by_them: 'Added by them',
-  both_deleted: 'Both deleted'
-}
+const getConflictKindLabels = createLocalizedCatalog<Record<GitConflictKind, string>>(() => ({
+  both_modified: translate('editorConflicts.kind.bothModified', 'Both modified'),
+  both_added: translate('editorConflicts.kind.bothAdded', 'Both added'),
+  deleted_by_us: translate('editorConflicts.kind.deletedByUs', 'Deleted by us'),
+  deleted_by_them: translate('editorConflicts.kind.deletedByThem', 'Deleted by them'),
+  added_by_us: translate('editorConflicts.kind.addedByUs', 'Added by us'),
+  added_by_them: translate('editorConflicts.kind.addedByThem', 'Added by them'),
+  both_deleted: translate('editorConflicts.kind.bothDeleted', 'Both deleted')
+}))
 
-export const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
-  both_modified: 'Resolve the conflict markers',
-  both_added: 'Choose which version to keep, or combine them',
-  deleted_by_us: 'Decide whether to restore the file',
-  deleted_by_them: 'Decide whether to keep the file or accept deletion',
-  added_by_us: 'Review whether to keep the added file',
-  added_by_them: 'Review the added file before keeping it',
-  both_deleted: 'Resolve in Git or restore one side before editing'
-}
+const getConflictHints = createLocalizedCatalog<Record<GitConflictKind, string>>(() => ({
+  both_modified: translate('editorConflicts.hint.bothModified', 'Resolve the conflict markers'),
+  both_added: translate(
+    'editorConflicts.hint.bothAdded',
+    'Choose which version to keep, or combine them'
+  ),
+  deleted_by_us: translate(
+    'editorConflicts.hint.deletedByUs',
+    'Decide whether to restore the file'
+  ),
+  deleted_by_them: translate(
+    'editorConflicts.hint.deletedByThem',
+    'Decide whether to keep the file or accept deletion'
+  ),
+  added_by_us: translate('editorConflicts.hint.addedByUs', 'Review whether to keep the added file'),
+  added_by_them: translate(
+    'editorConflicts.hint.addedByThem',
+    'Review the added file before keeping it'
+  ),
+  both_deleted: translate(
+    'editorConflicts.hint.bothDeleted',
+    'Resolve in Git or restore one side before editing'
+  )
+}))
 
 const EMPTY_CONFLICT_REVIEW_ENTRIES: readonly ConflictReviewEntry[] = []
 let conflictReviewFileTreeCollapsedPreference = false
@@ -75,13 +96,17 @@ export function ConflictBanner({
     onJump: (direction: ConflictNavigationDirection) => void
   }
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const conflict = file.conflict
   if (!conflict) {
     return null
   }
 
   const isUnresolved = conflict.conflictStatus === 'unresolved'
-  const label = isUnresolved ? 'Unresolved' : 'Resolved locally'
+  const kind = getConflictKindLabels()[conflict.conflictKind]
+  const label = isUnresolved
+    ? t('editorConflicts.unresolvedBanner', 'Unresolved conflict · {{kind}}', { kind })
+    : t('editorConflicts.resolvedBanner', 'Conflict resolved locally · {{kind}}', { kind })
 
   return (
     <div
@@ -99,11 +124,7 @@ export function ConflictBanner({
           ) : (
             <CircleCheck className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
           )}
-          <span className="min-w-0 truncate font-medium text-foreground">
-            {label}{' '}
-            {translate('auto.components.editor.ConflictComponents.55d61a0ccd', 'conflict ·')}{' '}
-            {CONFLICT_KIND_LABELS[conflict.conflictKind]}
-          </span>
+          <span className="min-w-0 truncate font-medium text-foreground">{label}</span>
           {conflictNavigation && conflictNavigation.total > 0 && (
             <span className="shrink-0 px-1 text-[11px] tabular-nums text-muted-foreground">
               {(conflictNavigation.currentIndex ?? 0) + 1} / {conflictNavigation.total}
@@ -118,7 +139,7 @@ export function ConflictBanner({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.editor.ConflictComponents.41d9af2e7a',
                     'Previous conflict'
                   )}
@@ -128,10 +149,7 @@ export function ConflictBanner({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate(
-                  'auto.components.editor.ConflictComponents.41d9af2e7a',
-                  'Previous conflict'
-                )}
+                {t('auto.components.editor.ConflictComponents.41d9af2e7a', 'Previous conflict')}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -140,7 +158,7 @@ export function ConflictBanner({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.editor.ConflictComponents.9c2901ef8a',
                     'Next conflict'
                   )}
@@ -150,20 +168,16 @@ export function ConflictBanner({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.editor.ConflictComponents.9c2901ef8a', 'Next conflict')}
+                {t('auto.components.editor.ConflictComponents.9c2901ef8a', 'Next conflict')}
               </TooltipContent>
             </Tooltip>
           </div>
         )}
       </div>
-      {/* Why: the hint is omitted here because the file is already open in the
-         editor below. Showing "Open and edit…" or similar would be confusing
-         when the user is already viewing/editing the working-tree contents.
-         The hint is still shown in ConflictPlaceholderView and the review
-         list where it provides actionable guidance. */}
+      {/* The file is already open below; reserve open/edit guidance for placeholders and the review list. */}
       {!isUnresolved && (
         <div className="mt-1 text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.editor.ConflictComponents.6e459867ad',
             'Session-local continuity state. Git is no longer reporting this file as unmerged.'
           )}
@@ -171,8 +185,9 @@ export function ConflictBanner({
       )}
       {entry?.oldPath && (
         <div className="mt-1 text-muted-foreground">
-          {translate('auto.components.editor.ConflictComponents.d5edd81755', 'Renamed from')}{' '}
-          {entry.oldPath}
+          {t('editorConflicts.renamedFrom', 'Renamed from {{path}}', {
+            path: entry.oldPath
+          })}
         </div>
       )}
     </div>
@@ -180,6 +195,7 @@ export function ConflictBanner({
 }
 
 export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX.Element | null {
+  const t = useTranslate()
   const conflict = file.conflict
   if (!conflict) {
     return null
@@ -189,17 +205,17 @@ export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX
     <div className="flex h-full items-center justify-center px-6 text-center">
       <div className="max-w-md space-y-2">
         <div className="text-sm font-medium text-foreground">
-          {CONFLICT_KIND_LABELS[conflict.conflictKind]}
+          {getConflictKindLabels()[conflict.conflictKind]}
         </div>
         <div className="text-xs text-muted-foreground">
           {conflict.message ??
-            translate(
+            t(
               'auto.components.editor.ConflictComponents.da539359b6',
               'No working-tree file is available to edit for this conflict.'
             )}
         </div>
         <div className="text-xs text-muted-foreground">
-          {conflict.guidance ?? CONFLICT_HINT_MAP[conflict.conflictKind]}
+          {conflict.guidance ?? getConflictHints()[conflict.conflictKind]}
         </div>
       </div>
     </div>
@@ -225,6 +241,8 @@ export function ConflictReviewPanel({
   onRefreshSnapshot: () => void
   onReturnToSourceControl: () => void
 }): React.JSX.Element {
+  const intlLocale = useIntlLocale()
+  const t = useTranslate()
   const [fileTreeCollapsed, setFileTreeCollapsedState] = React.useState(
     () => conflictReviewFileTreeCollapsedPreference
   )
@@ -241,13 +259,14 @@ export function ConflictReviewPanel({
       })),
     [liveEntriesByPath, snapshotEntries]
   )
-  const unresolvedSnapshotEntries = treeEntries.filter(
-    (entry) => entry.liveEntry?.conflictStatus === 'unresolved'
+  const unresolvedCount = treeEntries.reduce(
+    (count, entry) => (entry.liveEntry?.conflictStatus === 'unresolved' ? count + 1 : count),
+    0
   )
-  const unresolvedCount = unresolvedSnapshotEntries.length
+  const [renderStartTime] = React.useState(() => Date.now())
   const snapshotTime = new Date(
-    file.conflictReview?.snapshotTimestamp ?? Date.now()
-  ).toLocaleTimeString()
+    file.conflictReview?.snapshotTimestamp ?? renderStartTime
+  ).toLocaleTimeString(intlLocale)
   const setFileTreeCollapsed = React.useCallback((collapsed: boolean) => {
     conflictReviewFileTreeCollapsedPreference = collapsed
     setFileTreeCollapsedState(collapsed)
@@ -258,13 +277,10 @@ export function ConflictReviewPanel({
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="max-w-md space-y-3">
           <div className="text-sm font-medium text-foreground">
-            {translate(
-              'auto.components.editor.ConflictComponents.992145ff5a',
-              'All conflicts resolved'
-            )}
+            {t('auto.components.editor.ConflictComponents.992145ff5a', 'All conflicts resolved')}
           </div>
           <div className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.editor.ConflictComponents.31931dec46',
               'This review snapshot no longer has any live unresolved conflicts.'
             )}
@@ -272,11 +288,11 @@ export function ConflictReviewPanel({
           <div className="flex items-center justify-center gap-2">
             <Button type="button" size="sm" variant="outline" onClick={onReturnToSourceControl}>
               <GitMerge className="size-3.5" />
-              {translate('auto.components.editor.ConflictComponents.28e7db4a90', 'Source Control')}
+              {t('auto.components.editor.ConflictComponents.28e7db4a90', 'Source Control')}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
               <X className="size-3.5" />
-              {translate('auto.components.editor.ConflictComponents.58ad5ad431', 'Dismiss')}
+              {t('auto.components.editor.ConflictComponents.58ad5ad431', 'Dismiss')}
             </Button>
           </div>
         </div>
@@ -303,7 +319,7 @@ export function ConflictReviewPanel({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.editor.ConflictComponents.c8ca989aea',
                       'Show file tree'
                     )}
@@ -313,41 +329,35 @@ export function ConflictReviewPanel({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate(
-                    'auto.components.editor.ConflictComponents.c8ca989aea',
-                    'Show file tree'
-                  )}
+                  {t('auto.components.editor.ConflictComponents.c8ca989aea', 'Show file tree')}
                 </TooltipContent>
               </Tooltip>
             )}
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
               <span className="text-sm font-medium text-foreground">
-                {unresolvedCount}{' '}
-                {translate(
-                  'auto.components.editor.ConflictComponents.4be41eaafc',
-                  'unresolved conflict'
+                {t(
+                  'auto.components.editor.ConflictComponents.unresolvedConflicts',
+                  '{{count}} unresolved conflicts',
+                  { count: unresolvedCount, defaultValue_one: '{{count}} unresolved conflict' }
                 )}
-                {unresolvedCount === 1 ? '' : 's'}
               </span>
               <span className="text-muted-foreground/50">·</span>
               <span className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.editor.ConflictComponents.a1ce36f77d',
-                  'Snapshot captured at'
-                )}{' '}
-                {snapshotTime}.
+                {t('editorConflicts.snapshotCapturedAt', 'Snapshot captured at {{time}}.', {
+                  time: snapshotTime
+                })}
               </span>
             </div>
           </div>
           <Button type="button" size="sm" variant="outline" onClick={onRefreshSnapshot}>
             <RefreshCw className="size-3.5" />
-            {translate('auto.components.editor.ConflictComponents.90d576adb2', 'Refresh')}
+            {t('auto.components.editor.ConflictComponents.90d576adb2', 'Refresh')}
           </Button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
           {selectedContent ?? (
             <div className="flex h-full min-h-0 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.editor.ConflictComponents.f338288514',
                 'Loading conflict contents...'
               )}

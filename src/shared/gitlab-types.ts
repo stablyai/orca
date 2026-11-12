@@ -1,11 +1,17 @@
-/* GitLab-specific shared types, split from `./types` to avoid merge conflicts on upstream syncs; re-exported from `./types` for import stability. */
-import type { CheckStatus, ClassifiedError, PRConflictSummary } from './types'
+/** GitLab-specific types re-export through ./types for import compatibility. */
+import type { ClassifiedError } from './classified-error'
+import type { ExecutionHostId } from './execution-host'
+import type {
+  CheckStatus,
+  PRConflictSummary,
+  ProviderCheckSummary
+} from './github/pull-requests/pull-request-types'
+import type { HostedReviewDecision } from './source-control/hosted-review/hosted-review-contracts'
 
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
 export type GitLabProjectRef = { host: string; path: string }
 
-// ── GitLab MR / issue / work-item shapes ────────────────────────────
-// Why: preserve native GitLab state strings (`opened`, not gh `open`) so values are never ambiguously mapped.
+// Retain GitLab-native opened state rather than ambiguously mapping to GitHub open.
 
 export type MRState = 'opened' | 'closed' | 'merged' | 'locked' | 'draft'
 export type GitLabIssueState = 'opened' | 'closed'
@@ -36,6 +42,8 @@ export type MRInfo = {
   pipelineStatus: CheckStatus
   updatedAt: string
   mergeable: MRMergeableState
+  /** GitLab `detailed_merge_status` (or a short alias) for UI that needs more than MERGEABLE/CONFLICTING/UNKNOWN. */
+  mergeStateStatus?: string | null
   /** Full markdown description. Optional — list endpoints omit it; populated on single-MR fetch (`getMR`). */
   description?: string
   /** Author username (GitLab `username`). Optional for the same reason. */
@@ -72,6 +80,8 @@ export type MRComment = {
   startLine?: number
   /** True when GitLab marks the author as a bot. Mirrors GitHub PRComment.isBot. */
   isBot?: boolean
+  /** True only when the author is the glab account that read the thread; not looked up by Checks polling or desktop detail reads. Mirrors GitHub PRComment.viewerDidAuthor. */
+  viewerDidAuthor?: boolean
 }
 
 export type GitLabCommentResult = { ok: true; comment: MRComment } | { ok: false; error: string }
@@ -170,8 +180,15 @@ export type GitLabWorkItem = {
   isCrossRepository?: boolean
   /** Stamped by the renderer so cross-project views can attribute rows. Mirrors GitHubWorkItem.repoId. */
   repoId: string
+  /** Why: mirrors GitHubWorkItem.repoHostId; the renderer stamps the host whose row returned it,
+   *  so a twin's item resolves its own row (`getWorkItemRepo`), never the other host's. */
+  repoHostId?: ExecutionHostId
   /** Exact GitLab project that produced this row — mutations/details use it instead of re-resolving the repo preference. */
   projectRef?: GitLabProjectRef
+  checksSummary?: ProviderCheckSummary
+  mergeable?: MRMergeableState
+  reviewDecision?: HostedReviewDecision
+  reviewerCount?: number
 }
 
 export type GitLabMRFile = {
@@ -195,7 +212,7 @@ export type GitLabMRInlineCommentInput = {
   headSha: string
 }
 
-// Why: mirrors GitHubProjectSettings. `pinned` is reserved for a future UI affordance — defined now to keep settings migrations simple.
+// Reserve pinned alongside recents, matching GitHub settings without another migration for a future picker.
 export type GitLabProjectSettings = {
   pinned: { host: string; path: string }[]
   recent: { host: string; path: string; lastOpenedAt: string }[]
@@ -208,7 +225,7 @@ export type GitLabTodo = {
   id: number
   /** Free-form GitLab action name, e.g. 'assigned', 'mentioned', 'build_failed', 'review_requested'. */
   actionName: string
-  targetType: GitLabTodoTargetType | string
+  targetType: GitLabTodoTargetType | (string & {})
   /** iid for MR/Issue targets; absent for Commit/Note targets where the identifier is a SHA or note ID. */
   targetIid: number | null
   targetTitle: string
@@ -233,22 +250,41 @@ export type GitLabPipelineJob = {
   stage: string
   /** Raw GitLab job status — 'success' / 'failed' / 'running' / 'pending' / 'canceled' / 'skipped' / 'manual' / 'created' / 'preparing'. */
   status: string
+  allowFailure?: boolean
   webUrl: string
   /** Duration in seconds. null when the job hasn't finished. */
   duration: number | null
+  /** Provider ISO times; absent from older Orca servers and from jobs that haven't started. */
+  startedAt?: string
+  finishedAt?: string
 }
 
-// Why: aggregated detail for GitLabItemDialog; flattens discussions into one comments list (inline positioning is v1.5 work).
+// The MR's own pipeline; its status is the pipeline verdict even when its job list is partial or empty.
+export type GitLabPipeline = {
+  id: number
+  status: string
+  /** Pipeline-level verdict, settled by the MR status rule from the same reply. */
+  checkStatus?: CheckStatus
+  webUrl?: string | null
+  /** Commit and ref the pipeline ran on; absent from older Orca servers. */
+  sha?: string
+  ref?: string
+  startedAt?: string
+  finishedAt?: string
+}
+
+// Flatten discussions into the work-item details comment list.
 export type GitLabWorkItemDetails = {
   /** repoId is stamped by the renderer's caller — the main process doesn't know Orca's Repo.id. */
   item: Omit<GitLabWorkItem, 'repoId'>
   body: string
   comments: MRComment[]
-  /** MR head/base SHAs — MRs only. Reserved for a future Files tab. */
+  /** MR-only head/base SHAs used for per-file content retrieval. */
   headSha?: string
   baseSha?: string
   startSha?: string
   files?: GitLabMRFile[]
+  pipeline?: GitLabPipeline
   /** MR-only — populated when the MR's head_pipeline exists. */
   pipelineJobs?: GitLabPipelineJob[]
   /** MR-only reviewers and approval status. */
@@ -275,10 +311,14 @@ export type GitLabMRUpdate = {
   body?: string
   addLabels?: string[]
   removeLabels?: string[]
+  readyForReview?: true
 }
 
 // Why: GitLab-native MR list filter replacing GitHub's search-DSL; 'all' maps to no state filter.
 export type MRListState = 'opened' | 'merged' | 'closed' | 'all'
+
+/** Narrows an MR list to the signed-in user's part in each MR; absent means everyone's. */
+export type GitLabMRInvolvement = 'authored' | 'reviewing'
 
 // Why: totalCount / totalPages come from X-Total / X-Total-Pages headers via `glab api -i`.
 export type GitLabPagedResult<T> = {

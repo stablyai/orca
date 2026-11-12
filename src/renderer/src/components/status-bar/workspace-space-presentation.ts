@@ -1,17 +1,20 @@
-import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type MigrationUnsupportedPtyEntry
-} from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/types'
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
+
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
-} from '../../../../shared/workspace-space-types'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
+import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 
 export type WorkspaceSpaceSortKey = 'size' | 'name' | 'repo' | 'activity'
 export type WorkspaceSpaceSortDirection = 'asc' | 'desc'
@@ -26,6 +29,7 @@ export function isWorkspaceSpaceFilterQueryTooLarge(
 
 export type WorkspaceSpaceDeleteReadiness = {
   isActive: boolean
+  canOpenWorkspace?: boolean
   changedFileCount: number | null
   dirtyEditorBufferCount: number
   activeAgentCount: number
@@ -46,15 +50,13 @@ export type WorkspaceSpaceAgentActivityInputs = {
   now: number
 }
 
-function getPaneKeyTabId(paneKey: string): string | null {
+export function getPaneKeyTabId(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
   if (parsed) {
     return parsed.tabId
   }
 
-  // Why: older hydrated snapshots can still carry `tabId:numericPaneId`.
-  // Delete readiness only needs tab ownership, so preserve the conservative
-  // "workspace is in use" signal instead of treating the row as deletable.
+  // Legacy numeric pane keys still establish tab ownership and must conservatively block deletion.
   const separatorIndex = paneKey.indexOf(':')
   if (
     separatorIndex <= 0 ||
@@ -82,12 +84,12 @@ function countTitleActiveAgentsForTab(
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     return Object.values(paneTitles).filter((title) => {
-      const status = classifyTitleActivity(title)
+      const status = detectAgentStatusFromTitle(title)
       return status === 'working' || status === 'permission'
     }).length
   }
 
-  const status = classifyTitleActivity(tab.title)
+  const status = detectAgentStatusFromTitle(tab.title)
   return status === 'working' || status === 'permission' ? 1 : 0
 }
 
@@ -108,7 +110,7 @@ export function countWorkspaceSpaceActiveAgents({
     if (!isActiveAgentState(entry)) {
       continue
     }
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
     }
     const tabId = getPaneKeyTabId(entry.paneKey || paneKey)
@@ -242,6 +244,7 @@ export function isWorkspaceSpaceRowReadyToDelete(
     worktree.status === 'ok' &&
     !worktree.isMainWorktree &&
     readiness !== undefined &&
+    readiness.canOpenWorkspace !== false &&
     !readiness.isActive &&
     readiness.changedFileCount === 0 &&
     readiness.dirtyEditorBufferCount === 0 &&
@@ -254,56 +257,29 @@ export function isWorkspaceSpaceRowReadyToDelete(
   )
 }
 
-export function getWorkspaceSpaceGitStatusRefreshCandidates(
-  rows: readonly WorkspaceSpaceWorktree[]
-): WorkspaceSpaceWorktree[] {
-  return rows.filter(
-    (worktree) => worktree.canDelete && worktree.status === 'ok' && !worktree.isMainWorktree
-  )
-}
-
-export function getSelectedDeletableWorkspaceIds(
-  rows: readonly WorkspaceSpaceWorktree[],
-  selectedIds: ReadonlySet<string>,
-  isWorktreeDeleting: (worktreeId: string) => boolean = () => false
-): string[] {
-  return rows
-    .filter(
-      (row) =>
-        row.canDelete &&
-        row.status === 'ok' &&
-        selectedIds.has(row.worktreeId) &&
-        !isWorktreeDeleting(row.worktreeId)
-    )
-    .map((row) => row.worktreeId)
-}
-
-export function getVisibleDeletableWorkspaceIds(
-  rows: readonly WorkspaceSpaceWorktree[],
-  isWorktreeDeleting: (worktreeId: string) => boolean = () => false
-): string[] {
-  return rows
-    .filter((row) => row.canDelete && row.status === 'ok' && !isWorktreeDeleting(row.worktreeId))
-    .map((row) => row.worktreeId)
-}
-
 export function resolveWorkspaceSpaceInspectedWorktreeId(
   rows: readonly WorkspaceSpaceWorktree[],
-  currentWorktreeId: string | null
+  currentIdentity: string | null
 ): string | null {
-  if (currentWorktreeId && rows.some((row) => row.worktreeId === currentWorktreeId)) {
-    return currentWorktreeId
+  if (
+    currentIdentity &&
+    rows.some((row) => getWorkspaceSpaceWorktreeIdentity(row) === currentIdentity)
+  ) {
+    return currentIdentity
   }
-  return rows.find((row) => row.status === 'ok')?.worktreeId ?? null
+  const firstReady = rows.find((row) => row.status === 'ok')
+  return firstReady ? getWorkspaceSpaceWorktreeIdentity(firstReady) : null
 }
 
 export function resolveWorkspaceSpaceTreemapZoomWorktreeId(
   rows: readonly WorkspaceSpaceWorktree[],
-  currentWorktreeId: string | null
+  currentIdentity: string | null
 ): string | null {
-  return currentWorktreeId &&
-    rows.some((row) => row.worktreeId === currentWorktreeId && row.status === 'ok')
-    ? currentWorktreeId
+  return currentIdentity &&
+    rows.some(
+      (row) => getWorkspaceSpaceWorktreeIdentity(row) === currentIdentity && row.status === 'ok'
+    )
+    ? currentIdentity
     : null
 }
 
@@ -315,7 +291,7 @@ export function pruneWorkspaceSpaceSelectedIds(
     return selectedIds
   }
 
-  const validIds = new Set(rows.map((row) => row.worktreeId))
+  const validIds = new Set(rows.map(getWorkspaceSpaceWorktreeIdentity))
   let changed = false
   const nextIds = new Set<string>()
   for (const id of selectedIds) {

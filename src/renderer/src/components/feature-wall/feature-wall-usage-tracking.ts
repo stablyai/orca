@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type FeatureWallUsageProviderConnection = {
   connected: boolean
@@ -18,32 +19,45 @@ export function hasFeatureWallProviderUsageTracking(provider: ProviderRateLimits
   )
 }
 
-export function getFeatureWallUsageProviderConnection(args: {
-  managedAccountCount: number
-  provider: ProviderRateLimits | null
-}): FeatureWallUsageProviderConnection {
-  if (args.managedAccountCount > 0) {
+export function getFeatureWallUsageProviderConnection(
+  args: {
+    managedAccountCount: number | undefined
+    provider: ProviderRateLimits | null
+  },
+  t: Translate = translate
+): FeatureWallUsageProviderConnection {
+  const { managedAccountCount } = args
+  if (managedAccountCount !== undefined && managedAccountCount > 0) {
     return {
       connected: true,
-      label: translate(
+      label: t(
         'auto.components.feature.wall.feature.wall.usage.tracking.00087eecb2',
         'Connected · {{value0}}',
-        { value0: args.managedAccountCount }
+        { value0: managedAccountCount }
       )
     }
   }
   if (hasFeatureWallProviderUsageTracking(args.provider)) {
     return {
       connected: true,
-      label: translate(
+      label: t(
         'auto.components.feature.wall.feature.wall.usage.tracking.cc39a87288',
         'Connected · System default'
       )
     }
   }
+  if (managedAccountCount === undefined) {
+    return {
+      connected: false,
+      label: t(
+        'auto.components.feature.wall.agents.orchestration.UsageAccountsCard.accountStatusUnknown',
+        'Account status unknown'
+      )
+    }
+  }
   return {
     connected: false,
-    label: translate(
+    label: t(
       'auto.components.feature.wall.feature.wall.usage.tracking.b94ec70eda',
       'Tracking not set up'
     )

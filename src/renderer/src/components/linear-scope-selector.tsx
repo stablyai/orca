@@ -1,12 +1,17 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Check, ChevronDown, KeyRound } from 'lucide-react'
-import type { LinearTeam, LinearWorkspace, LinearWorkspaceSelection } from '../../../shared/types'
+import type {
+  LinearTeam,
+  LinearWorkspace,
+  LinearWorkspaceSelection
+} from '../../../shared/linear/workspace-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type LinearScopeSelectorProps = {
   workspaces: LinearWorkspace[]
@@ -34,7 +39,7 @@ type LinearScopeTeamSelectionInput = {
 
 export const LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isLinearScopeTeamFilterQueryTooLarge(
+function isLinearScopeTeamFilterQueryTooLarge(
   query: string,
   maxBytes = LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES
 ): boolean {
@@ -98,19 +103,20 @@ export function normalizeLinearScopeTeamSelection({
 function summarizeTeamKeys(
   teams: LinearTeam[],
   selectedTeamIds: ReadonlySet<string>,
-  options: { activeAllWorkspaces: boolean; multipleWorkspaces: boolean }
+  options: { activeAllWorkspaces: boolean; multipleWorkspaces: boolean },
+  t: Translate = translate
 ): string {
   const selectedTeams = teams.filter((team) => selectedTeamIds.has(team.id))
-  if (selectedTeams.length === 0) {
-    return 'All teams'
-  }
 
   if (options.activeAllWorkspaces && options.multipleWorkspaces) {
     const workspaceIds = new Set(selectedTeams.map((team) => team.workspaceId ?? ''))
     const keys = selectedTeams.map((team) => team.key)
     const keyCount = new Set(keys).size
     if (workspaceIds.size > 1 || keyCount < keys.length) {
-      return `${selectedTeams.length} team${selectedTeams.length === 1 ? '' : 's'}`
+      return t('auto.components.linear.scope.selector.teamCount', '{{count}} teams', {
+        count: selectedTeams.length,
+        defaultValue_one: '{{count}} team'
+      })
     }
   }
 
@@ -119,13 +125,16 @@ function summarizeTeamKeys(
   return `${labels.join(', ')}${rest.length > 0 ? ` +${rest.length}` : ''}`
 }
 
-export function getLinearScopeTriggerLabel({
-  workspaces,
-  selectedWorkspaceId,
-  teams,
-  selectedTeamIds,
-  teamSelectionIsStickyAll
-}: LinearScopeLabelInput): string {
+export function getLinearScopeTriggerLabel(
+  {
+    workspaces,
+    selectedWorkspaceId,
+    teams,
+    selectedTeamIds,
+    teamSelectionIsStickyAll
+  }: LinearScopeLabelInput,
+  t: Translate = translate
+): string {
   const multipleWorkspaces = workspaces.length > 1
   const activeAllWorkspaces = selectedWorkspaceId === 'all'
   const selectedWorkspace =
@@ -134,19 +143,20 @@ export function getLinearScopeTriggerLabel({
       : null
   const allVisibleTeamsSelected =
     teams.length > 0 && teams.every((team) => selectedTeamIds.has(team.id))
-  const teamLabel =
-    teamSelectionIsStickyAll || selectedTeamIds.size === 0 || allVisibleTeamsSelected
-      ? 'All teams'
-      : summarizeTeamKeys(teams, selectedTeamIds, {
-          activeAllWorkspaces,
-          multipleWorkspaces
-        })
+  const allTeams =
+    teamSelectionIsStickyAll ||
+    allVisibleTeamsSelected ||
+    !teams.some((team) => selectedTeamIds.has(team.id))
+  const teamLabel = allTeams
+    ? t('auto.components.linear.scope.selector.7783361266', 'All teams')
+    : summarizeTeamKeys(teams, selectedTeamIds, { activeAllWorkspaces, multipleWorkspaces }, t)
 
   if (!multipleWorkspaces) {
     return teamLabel
   }
   if (activeAllWorkspaces) {
-    return teamLabel === 'All teams' ? 'All workspaces' : `All workspaces / ${teamLabel}`
+    const allWorkspaces = t('auto.components.linear.scope.selector.a14ce4df2b', 'All workspaces')
+    return allTeams ? allWorkspaces : `${allWorkspaces} / ${teamLabel}`
   }
   return `${selectedWorkspace?.organizationName ?? 'Linear'} / ${teamLabel}`
 }
@@ -163,6 +173,7 @@ export function LinearScopeSelector({
   onOpen,
   className
 }: LinearScopeSelectorProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
@@ -170,13 +181,16 @@ export function LinearScopeSelector({
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
     [workspaces]
   )
-  const triggerLabel = getLinearScopeTriggerLabel({
-    workspaces,
-    selectedWorkspaceId,
-    teams,
-    selectedTeamIds,
-    teamSelectionIsStickyAll
-  })
+  const triggerLabel = getLinearScopeTriggerLabel(
+    {
+      workspaces,
+      selectedWorkspaceId,
+      teams,
+      selectedTeamIds,
+      teamSelectionIsStickyAll
+    },
+    t
+  )
   const showWorkspaceNames = selectedWorkspaceId === 'all' || workspaces.length > 1
   const allTeamsSelected = teams.length > 0 && teams.every((team) => selectedTeamIds.has(team.id))
   const filteredTeams = useMemo(
@@ -253,10 +267,7 @@ export function LinearScopeSelector({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder={translate(
-              'auto.components.linear.scope.selector.89f6580dbf',
-              'Search teams...'
-            )}
+            placeholder={t('auto.components.linear.scope.selector.89f6580dbf', 'Search teams...')}
             value={query}
             onValueChange={setQuery}
             className="text-xs"
@@ -265,7 +276,7 @@ export function LinearScopeSelector({
             {workspaces.length > 1 ? (
               <div className="border-b border-border py-1">
                 <div className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase text-muted-foreground">
-                  {translate('auto.components.linear.scope.selector.05baa5ae90', 'Workspace')}
+                  {t('auto.components.linear.scope.selector.05baa5ae90', 'Workspace')}
                 </div>
                 <CommandItem
                   value="workspace:all"
@@ -282,10 +293,7 @@ export function LinearScopeSelector({
                     )}
                   />
                   <span>
-                    {translate(
-                      'auto.components.linear.scope.selector.a14ce4df2b',
-                      'All workspaces'
-                    )}
+                    {t('auto.components.linear.scope.selector.a14ce4df2b', 'All workspaces')}
                   </span>
                 </CommandItem>
                 {workspaces.map((workspace) => (
@@ -311,7 +319,7 @@ export function LinearScopeSelector({
             ) : null}
             <div className="border-b border-border py-1">
               <div className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase text-muted-foreground">
-                {translate('auto.components.linear.scope.selector.e1ae6bebb0', 'Teams')}
+                {t('auto.components.linear.scope.selector.e1ae6bebb0', 'Teams')}
               </div>
               <CommandItem
                 value="teams:all"
@@ -324,9 +332,7 @@ export function LinearScopeSelector({
                     allTeamsSelected || teamSelectionIsStickyAll ? 'opacity-70' : 'opacity-0'
                   )}
                 />
-                <span>
-                  {translate('auto.components.linear.scope.selector.7783361266', 'All teams')}
-                </span>
+                <span>{t('auto.components.linear.scope.selector.7783361266', 'All teams')}</span>
               </CommandItem>
             </div>
             {filteredTeams.length > 0 ? (
@@ -367,11 +373,11 @@ export function LinearScopeSelector({
             ) : (
               <div className="px-3 py-5 text-xs leading-relaxed text-muted-foreground">
                 {query.trim()
-                  ? translate(
+                  ? t(
                       'auto.components.linear.scope.selector.405b33c378',
                       'No fetched teams match your search.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.linear.scope.selector.b3488fad3c',
                       'No teams were fetched. Access can depend on key scope, private-team membership, archived teams, permissions, or a fetch failure.'
                     )}
@@ -389,9 +395,7 @@ export function LinearScopeSelector({
             className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-foreground transition hover:bg-accent hover:text-accent-foreground"
           >
             <KeyRound className="size-3.5 text-muted-foreground" />
-            <span>
-              {translate('auto.components.linear.scope.selector.91c8871dad', 'Add team access')}
-            </span>
+            <span>{t('auto.components.linear.scope.selector.91c8871dad', 'Add team access')}</span>
           </button>
         </div>
       </PopoverContent>

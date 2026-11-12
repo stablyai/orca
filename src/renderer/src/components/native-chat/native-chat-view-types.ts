@@ -1,20 +1,59 @@
-import type { TuiAgent } from '../../../../shared/types'
-import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { NativeChatSession } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatContextMenuActions } from './pane/actions/use-native-chat-context-menu'
 
-export type NativeChatViewProps = {
+export type NativeChatBridgeViewProps = {
+  mode?: 'bridge'
   /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
   terminalTabId: string
-  /** Specific split leaf this chat surface replaces. */
+  isVisible: boolean
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
   paneKey?: string
-  /** PTY bound to `paneKey`, used for composer and interactive-card sends. */
   targetPtyId?: string | null
-  /** Launch-time agent hint from the TerminalTab, when Orca started one. */
   launchAgent?: TuiAgent | null
   /** Trusted title/foreground fallback for manually-started agents. */
   resolvedAgent?: TuiAgent | null
-  /** Return this pane to the hosted terminal surface. */
+  /** Whether this pane owns the tab's launch draft; false for split siblings. */
+  ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
-  /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
+  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
+  readTerminalDraft?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
+
+export type NativeChatStructuredViewProps = {
+  mode: 'structured'
+  tabId: string
+  groupId?: string
+  sessionId: string
+  target: RuntimeClientTarget
+  agent: AgentType
+  isVisible: boolean
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
+  contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+}
+
+export type NativeChatResolvedViewProps = {
+  paneKey: string
+  agent: NativeChatSession['agent']
+  sessionId: string | null
+  transcriptPath: string | null
+  isVisible: boolean
+  /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
+  isFocusedGroup: boolean
+  targetPtyId: string | null
+  terminalTabId: string
+  ownsTabWideLaunchDraft: boolean
+  onSwitchToTerminal?: () => void
+  readTerminalScreen?: () => string | null
+  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
+  readTerminalDraft?: () => string | null
+  contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+}
+
+export type NativeChatViewProps = NativeChatBridgeViewProps | NativeChatStructuredViewProps

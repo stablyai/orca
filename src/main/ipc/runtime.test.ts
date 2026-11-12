@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, removeHandlerMock, fromWebContentsMock } = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  removeHandlerMock: vi.fn(),
-  fromWebContentsMock: vi.fn()
-}))
+const { handleMock, onMock, removeAllListenersMock, removeHandlerMock, fromWebContentsMock } =
+  vi.hoisted(() => ({
+    handleMock: vi.fn(),
+    onMock: vi.fn(),
+    removeAllListenersMock: vi.fn(),
+    removeHandlerMock: vi.fn(),
+    fromWebContentsMock: vi.fn()
+  }))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
@@ -12,170 +15,146 @@ vi.mock('electron', () => ({
   },
   ipcMain: {
     handle: handleMock,
+    on: onMock,
+    removeAllListeners: removeAllListenersMock,
     removeHandler: removeHandlerMock
   }
 }))
-
 import { registerRuntimeHandlers } from './runtime'
-import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
+import { EphemeralVmFailureError } from '../../shared/ephemeral-vm-failure-copy'
 
 describe('registerRuntimeHandlers', () => {
   beforeEach(() => {
     handleMock.mockReset()
+    onMock.mockReset()
+    removeAllListenersMock.mockReset()
     removeHandlerMock.mockReset()
     fromWebContentsMock.mockReset()
   })
 
-  it('routes sync requests through the authoritative browser window id', () => {
-    const runtime = {
-      syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }),
-      getStatus: vi.fn().mockReturnValue({ graphStatus: 'unavailable' }),
-      getRuntimeId: vi.fn().mockReturnValue('runtime-1')
-    }
+  it("passes the orchestration contract fence for the window's own mutations", async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fence answers before any other runtime member is read.
+    registerRuntimeHandlers({ getRuntimeId: () => 'runtime-1' } as never)
+    const registration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
+    const frame = {}
+    const response = await registration![1](
+      { senderFrame: frame, sender: { mainFrame: frame, id: 1, once: vi.fn(), on: vi.fn() } },
+      {
+        method: 'orchestration.approvalAnswer',
+        params: { dispatch: 'ctx_1', prompt: 'apr_1', decision: 'deny', reason: 'no' }
+      }
+    )
+    expect(response.error?.code).not.toBe('orchestration_migration_required')
+  })
+
+  // #36923: the window's wake shares the runtime's one VM wake path with its sleep's suspend.
+  it("routes the window's recipe VM wake through the runtime", async () => {
+    const record = { id: 'vm-1', status: 'running' }
+    const runtime = { wakeWorkspaceVm: vi.fn().mockResolvedValue(record) }
 
     registerRuntimeHandlers(runtime as never)
 
-    const syncRegistration = handleMock.mock.calls.find(
-      ([channel]) => channel === 'runtime:syncWindowGraph'
+    const registration = handleMock.mock.calls.find(
+      ([channel]) => channel === 'ephemeralVm:resumeWorkspace'
     )
-    expect(syncRegistration).toBeTruthy()
+    await expect(registration![1]({}, { workspaceId: 'repo::/vm' })).resolves.toEqual({
+      ok: true,
+      runtime: record
+    })
+    expect(runtime.wakeWorkspaceVm).toHaveBeenCalledWith('repo::/vm')
+  })
 
+  it('returns coded VM wake and suspend failures as values so the code reaches the window', async () => {
+    const failure = {
+      error: 'Resume exited with code 3.',
+      errorCode: 'resumeExited',
+      errorParams: { exitCode: 3 }
+    }
+    const runtime = {
+      wakeWorkspaceVm: vi.fn().mockRejectedValue(new EphemeralVmFailureError(failure)),
+      suspendWorkspaceVm: vi.fn().mockRejectedValue(new Error('Suspend failed.'))
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = (channel: string) =>
+      handleMock.mock.calls.find(([registered]) => registered === channel)![1]
+
+    await expect(
+      handler('ephemeralVm:resumeWorkspace')({}, { workspaceId: 'repo::/vm' })
+    ).resolves.toEqual({ ok: false, ...failure })
+    await expect(
+      handler('ephemeralVm:suspendWorkspace')({}, { workspaceId: 'repo::/vm' })
+    ).resolves.toEqual({ ok: false, error: 'Suspend failed.' })
+    expect(runtime.suspendWorkspaceVm).toHaveBeenCalledWith('repo::/vm')
+  })
+
+  // #37067: a phone's re-read on the add's reposChanged came before this publish.
+
+  it('rejects a graph publication queued by a superseded main frame', () => {
+    const runtime = {
+      syncWindowGraph: vi.fn(),
+      getStatus: vi.fn(),
+      getRuntimeId: vi.fn()
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    const sender = { mainFrame: { generation: 2 } }
     fromWebContentsMock.mockReturnValue({ id: 17 })
 
-    const handler = syncRegistration![1]
-    const result = handler({ sender: {} }, { tabs: [], leaves: [] })
-
-    expect(runtime.syncWindowGraph).toHaveBeenCalledWith(17, { tabs: [], leaves: [] })
-    expect(result).toEqual({ graphStatus: 'ready' })
+    expect(() =>
+      handler({ sender, senderFrame: { generation: 1 } }, { tabs: [], leaves: [] })
+    ).toThrow('Runtime graph sync must originate from the current main frame')
+    expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
   })
+})
 
-  it('routes generic local runtime RPC calls through the dispatcher', async () => {
-    const runtime = {
-      syncWindowGraph: vi.fn(),
-      getStatus: vi.fn().mockReturnValue({
-        runtimeId: 'runtime-1',
-        rendererGraphEpoch: 0,
-        graphStatus: 'ready',
-        authoritativeWindowId: null,
-        liveTabCount: 0,
-        liveLeafCount: 0
-      }),
-      getRuntimeId: vi.fn().mockReturnValue('runtime-1')
-    }
-
-    registerRuntimeHandlers(runtime as never)
-
-    const callRegistration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
-    expect(callRegistration).toBeTruthy()
-
-    const handler = callRegistration![1]
-    const result = await handler({ sender: {} }, { method: 'status.get' })
-
-    expect(result).toMatchObject({
-      ok: true,
-      result: { runtimeId: 'runtime-1', graphStatus: 'ready' },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-  })
-
-  it('registers project group runtime RPC methods for local desktop callers', async () => {
-    const runtime = {
-      syncWindowGraph: vi.fn(),
-      getStatus: vi.fn(),
-      getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
-      listProjectGroups: vi.fn().mockReturnValue([{ id: 'group-1', name: 'Platform' }])
-    }
-
-    registerRuntimeHandlers(runtime as never)
-
-    const callRegistration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
-    expect(callRegistration).toBeTruthy()
-
-    const handler = callRegistration![1]
-    const result = await handler({ sender: {} }, { method: 'projectGroup.list' })
-
-    expect(result).toMatchObject({
-      ok: true,
-      result: { groups: [{ id: 'group-1', name: 'Platform' }] },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-  })
-
-  it('deduplicates retries while a terminal fit restore is still pending', async () => {
-    const finishRestoreByPtyId = new Map<string, (restored: boolean) => void>()
-    const reclaimTerminalForDesktop = vi.fn(
-      (ptyId: string) =>
-        new Promise<boolean>((resolve) => {
-          finishRestoreByPtyId.set(ptyId, resolve)
-        })
-    )
-    const runtime = {
-      syncWindowGraph: vi.fn(),
-      getStatus: vi.fn(),
-      reclaimTerminalForDesktop
-    }
-    registerRuntimeHandlers(runtime as never)
-    const restoreRegistration = handleMock.mock.calls.find(
-      ([channel]) => channel === 'runtime:restoreTerminalFit'
-    )
-    expect(restoreRegistration).toBeTruthy()
-    const handler = restoreRegistration![1]
-
-    const first = handler({ sender: {} }, { ptyId: 'pty-1' })
-    const retry = handler({ sender: {} }, { ptyId: 'pty-1' })
-    const otherTerminal = handler({ sender: {} }, { ptyId: 'pty-2' })
-
-    expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(2)
-    expect(reclaimTerminalForDesktop).toHaveBeenNthCalledWith(1, 'pty-1')
-    expect(reclaimTerminalForDesktop).toHaveBeenNthCalledWith(2, 'pty-2')
-    finishRestoreByPtyId.get('pty-1')?.(true)
-    finishRestoreByPtyId.get('pty-2')?.(true)
-    await expect(otherTerminal).resolves.toEqual({ restored: true })
-    await expect(first).resolves.toEqual({ restored: true })
-    await expect(retry).resolves.toEqual({ restored: true })
-    expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(2)
-
-    const afterSettlement = handler({ sender: {} }, { ptyId: 'pty-1' })
-    expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(3)
-    finishRestoreByPtyId.get('pty-1')?.(false)
-    await expect(afterSettlement).resolves.toEqual({ restored: false })
-  })
-
-  it('bounds retries without accumulating reclaim waiters for one PTY', async () => {
-    vi.useFakeTimers()
-    try {
-      let finishRestore!: (restored: boolean) => void
-      const reclaimTerminalForDesktop = vi.fn(
-        () =>
-          new Promise<boolean>((resolve) => {
-            finishRestore = resolve
-          })
+it('cancels the GitHub host handler through the existing local subscription boundary', async () => {
+  handleMock.mockClear()
+  onMock.mockClear()
+  const entered = Promise.withResolvers<AbortSignal>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies every runtime method reached by this upload subscription.
+  registerRuntimeHandlers({
+    getRuntimeId: () => 'local',
+    uploadGitHubAttachment: (_params: unknown, _bytes: Buffer, signal: AbortSignal) => {
+      entered.resolve(signal)
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
       )
-      registerRuntimeHandlers({
-        syncWindowGraph: vi.fn(),
-        getStatus: vi.fn(),
-        reclaimTerminalForDesktop
-      } as never)
-      const handler = handleMock.mock.calls.find(
-        ([channel]) => channel === 'runtime:restoreTerminalFit'
-      )![1]
-
-      const first = handler({ sender: {} }, { ptyId: 'pty-wedged' })
-      await vi.advanceTimersByTimeAsync(TERMINAL_FIT_RESTORE_DEADLINE_MS)
-      await expect(first).resolves.toEqual({ restored: false })
-
-      const retry = handler({ sender: {} }, { ptyId: 'pty-wedged' })
-      expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(1)
-      finishRestore(true)
-      await expect(retry).resolves.toEqual({ restored: true })
-
-      const afterSettlement = handler({ sender: {} }, { ptyId: 'pty-wedged' })
-      expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(2)
-      finishRestore(false)
-      await expect(afterSettlement).resolves.toEqual({ restored: false })
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
+    }
+  } as never)
+  const frame = {}
+  const sender = {
+    mainFrame: frame,
+    id: 14237,
+    once: vi.fn(),
+    on: vi.fn(),
+    send: vi.fn(),
+    isDestroyed: () => false
+  }
+  const event = { senderFrame: frame, sender }
+  const handler = (channel: string) => handleMock.mock.calls.find(([name]) => name === channel)![1]
+  const started = await handler('runtime:call')(event, {
+    method: 'clipboard.startImageUpload',
+    params: { expectedBase64Length: 8, fileName: 'image.png' }
+  })
+  expect(started.ok).toBe(true)
+  await handler('runtime:call')(event, {
+    method: 'clipboard.appendImageUploadChunk',
+    params: { uploadId: started.result.uploadId, offset: 0, contentBase64: 'aW1hZ2U=' }
+  })
+  handler('runtime:subscribe')(event, {
+    subscriptionId: 'image-cancel',
+    method: 'github.uploadAttachment',
+    params: {
+      uploadId: started.result.uploadId,
+      target: { kind: 'repo', repo: 'repo', source: 'origin' },
+      fileName: 'image.png',
+      contentType: 'image/png'
     }
   })
+  const signal = await entered.promise
+  const unsubscribe = onMock.mock.calls.find(([name]) => name === 'runtime:unsubscribe')![1]
+  unsubscribe(event, { subscriptionId: 'image-cancel' })
+  expect(signal.aborted).toBe(true)
 })

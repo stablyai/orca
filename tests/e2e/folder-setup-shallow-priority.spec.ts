@@ -1,3 +1,4 @@
+import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -28,9 +29,7 @@ async function createShallowPriorityTruncationFixture(): Promise<{
   webClientPath: string
   groupName: string
 }> {
-  // Why: realpathSync so the paths the test asserts on match the store's
-  // repo.path / projectGroup.parentPath on macOS, where os.tmpdir() (/var/...)
-  // symlinks to /private/var/... and the app canonicalizes paths on import.
+  // Resolve macOS /var symlinks like import does when recording project paths.
   const parentPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-shallow-priority-'))
   )
@@ -40,8 +39,7 @@ async function createShallowPriorityTruncationFixture(): Promise<{
 
   for (let index = 1; index <= 101; index += 1) {
     const repoName = `archived-service-${String(index).padStart(3, '0')}`
-    // Why: the scan only needs repo markers here; a real git init for 101
-    // throwaway repos makes this regression much slower without adding signal.
+    // Only repo markers matter to this scan; avoid initializing 101 unused git repositories.
     mkdirSync(path.join(archivePath, repoName, '.git'), { recursive: true })
   }
   initializeGitRepo(webClientPath)
@@ -59,9 +57,7 @@ async function createCancellableScanFixture(): Promise<{
   webPath: string
   groupName: string
 }> {
-  // Why: realpathSync so the paths the test asserts on match the store's
-  // canonicalized repo.path / projectGroup.parentPath on macOS (os.tmpdir()
-  // /var/... symlinks to /private/var/...).
+  // Resolve macOS /var symlinks like import does when recording project paths.
   const parentPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-cancellable-scan-'))
   )
@@ -144,8 +140,7 @@ async function installCancellableNestedScanMock(
 }
 
 function getImportAsGroupButton(importDialog: Locator): Locator {
-  // Why: this test should fail on import-dialog copy drift instead of falling
-  // back to a retired accessible label.
+  // Require the current accessible action so retired labels cannot hide copy drift.
   return importDialog.getByRole('button', {
     name: IMPORT_AS_GROUP_BUTTON_NAME,
     exact: true
@@ -166,10 +161,7 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
   const fixture = await createShallowPriorityTruncationFixture()
   await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
 
-  await orcaPage
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: /Browse folder/i }).click()
@@ -256,10 +248,7 @@ test('can stop a nested repo scan and import repositories found so far', async (
   })
   await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
 
-  await orcaPage
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
   await dialog.getByRole('button', { name: /Browse folder/i }).click()
 

@@ -1,0 +1,111 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AutomaticWorkRunMarker } from '../automatic-work-run-marker-store'
+
+const BOOT = { bootTimeMs: 1_000_000, bootId: null }
+
+describe('AutomaticWorkRunMarker', () => {
+  let dir: string
+  let path: string
+  const logger = { log: vi.fn() }
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-automatic-work-'))
+    path = join(dir, 'automatic-work-run.json')
+    logger.log.mockClear()
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  function open(now = 10, boot = BOOT): AutomaticWorkRunMarker {
+    const marker = new AutomaticWorkRunMarker(path, logger)
+    marker.open(now, boot)
+    return marker
+  }
+
+  it('pauses after the previous daemon died with automatic work running in this boot', () => {
+    open().arm()
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'running' })
+
+    const next = open(20)
+    expect(next.mode).toEqual({ kind: 'paused', reason: 'unclean_host_death', since: 20 })
+    expect(logger.log).toHaveBeenCalledWith(
+      'automatic-work-paused',
+      expect.objectContaining({ reason: 'unclean_host_death' })
+    )
+  })
+
+  it('keeps a crash pause until an explicit resume, which survives the next start', () => {
+    open().arm()
+    const paused = open(20)
+    expect(open(30).mode).toMatchObject({ kind: 'paused', reason: 'unclean_host_death' })
+
+    const carried = open(40)
+    carried.resume()
+    expect(carried.mode).toEqual({ kind: 'normal' })
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ mode: { kind: 'normal' } })
+    expect(logger.log).toHaveBeenCalledWith(
+      'automatic-work-resumed',
+      expect.objectContaining({ reason: 'unclean_host_death' })
+    )
+    carried.markCleanExit()
+    expect(open(50).mode).toEqual({ kind: 'normal' })
+    expect(paused.mode.kind).toBe('paused')
+  })
+
+  // #40328: a pause carried over a clean restart must not read as a fresh crash in the log.
+  it('logs whether the start that carries a pause followed a clean exit', () => {
+    open().arm()
+    open(20).markCleanExit()
+    logger.log.mockClear()
+
+    expect(open(30).mode).toMatchObject({ kind: 'paused', reason: 'unclean_host_death' })
+    expect(logger.log).toHaveBeenCalledWith(
+      'automatic-work-paused',
+      expect.objectContaining({
+        carriedOver: true,
+        previousExit: 'clean',
+        pausedSince: new Date(20).toISOString()
+      })
+    )
+  })
+
+  it('never reads an outside stop as a crash, even when the exit is then cut short', () => {
+    const stopped = open()
+    stopped.arm()
+    stopped.recordStopRequested()
+    // Omit markCleanExit to simulate teardown dying before completion.
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'clean-exit' })
+    expect(open(20).mode).toEqual({ kind: 'normal' })
+  })
+
+  it('keeps the stop on record when automatic work is armed or resumed after it', () => {
+    const marker = open()
+    marker.recordStopRequested()
+    marker.arm()
+    marker.resume()
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'clean-exit' })
+    expect(open(20).mode).toEqual({ kind: 'normal' })
+  })
+
+  it('arms on open when a fork was admitted before the endpoint was won', () => {
+    const marker = new AutomaticWorkRunMarker(path, logger)
+    marker.arm()
+    marker.open(10, BOOT)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'running' })
+  })
+
+  it('never writes once the daemon has lost its endpoint to a successor', () => {
+    let owns = true
+    const marker = new AutomaticWorkRunMarker(path, logger, () => owns)
+    marker.open(10, BOOT)
+    marker.arm()
+    owns = false
+    marker.markCleanExit()
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ state: 'running' })
+  })
+})

@@ -1,65 +1,86 @@
-import { createReadStream } from 'node:fs'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-history/opencode/transcript-opencode'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
-import { errorMessage } from '../ai-vault/session-scanner-values'
+} from '../../shared/native-chat/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
+import { errorMessage } from '../../shared/error-message'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine
-} from './transcript-line-decoders'
-import { decodeTranscriptStream } from './transcript-stream-lines'
+import { openTranscriptReadStream } from './transcript-filesystem/wsl-transcript-fs-access'
+import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
+import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
+import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
+import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
+import { decodeTranscriptStream } from './transcript-streaming/transcript-stream-lines'
 
 export type ReadTranscriptResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
+      sourceEmpty?: boolean
+      forkTipItemIds?: string[]
     }
-  // notFound marks a retry-worthy miss (transcript not flushed to disk yet,
-  // #8401) as opposed to a real parse/IO error callers surface immediately.
+  // notFound is retryable: the agent may not have flushed its transcript yet.
   | { error: string; notFound?: true }
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
-  /** Resolve directly to this file, skipping path discovery (used by tests). */
   filePath?: string
+  sourceOrder?: boolean
 }
 
-/**
- * Read the ENTIRE Claude/Codex JSONL transcript for an agent + session id into
- * the NativeChatMessage model. Unlike the AI-Vault preview scan, this applies
- * NO message cap. Unknown record types are skipped rather than throwing, so a
- * single malformed/unrecognized line cannot fail the whole read. The per-line
- * record-to-message mapping is shared with the live tailer.
- */
+/** Read the full transcript with no message cap; skip malformed/unknown records using the tailer’s decoders. */
 export async function readNativeChatTranscript(
   agent: AgentType,
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
-  const filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptFull(
+      sessionId,
+      {},
+      undefined,
+      agent === 'zcode' ? 'zcode' : undefined
+    )
+  }
+  let filePath: string | null
+  try {
+    filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  } catch (err) {
+    // Gate refusal is unavailable, never evidence that the transcript is missing.
+    return { error: wslTranscriptFsRefusal(err).message }
+  }
   if (!filePath) {
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
   try {
     const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
     if (transcriptAgent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeClaudeTranscriptLine, options.sourceOrder)
+      }
     }
     if (transcriptAgent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeCodexTranscriptLine, options.sourceOrder)
+      }
     }
     if (transcriptAgent === 'grok') {
-      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
+      return {
+        messages: await readTranscript(filePath, decodeGrokTranscriptLine, options.sourceOrder)
+      }
+    }
+    if (transcriptAgent === 'omp') {
+      return {
+        messages: await readTranscript(filePath, decodeOmpTranscriptLine, options.sourceOrder)
+      }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
-    // Why: ENOENT after a successful resolve is the same first-flush/rotation
-    // race as an unresolved path — keep it retry-worthy (#8401).
-    if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+    // First flush/rotation can race successful resolution; ENOENT remains retryable.
+    if (isENOENT(err)) {
       return { error: errorMessage(err), notFound: true }
     }
     return { error: errorMessage(err) }
@@ -68,9 +89,18 @@ export async function readNativeChatTranscript(
 
 async function readTranscript(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  sourceOrder = false
 ): Promise<NativeChatMessage[]> {
-  const stream = createReadStream(filePath, { encoding: 'utf-8' })
-  const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
+  const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
+  const { messages } = await decodeTranscriptStream(
+    stream,
+    filePath,
+    0,
+    decode,
+    true,
+    Infinity,
+    sourceOrder
+  )
   return messages
 }

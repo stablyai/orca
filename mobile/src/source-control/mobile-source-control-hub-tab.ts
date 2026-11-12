@@ -1,29 +1,24 @@
-// The three lenses of the mobile Source Control hub. Kept as a pure module (no
-// React/native imports) so tab parsing is unit-testable and the deep-link `tab`
-// query param and the segmented control share one source of truth.
+import { translate } from '../i18n/mobile-i18n'
 
-export type SourceControlHubTab = 'changes' | 'pr' | 'history'
+export type SourceControlHubTab = 'changes' | 'pr'
 
-export const SOURCE_CONTROL_HUB_TABS: readonly SourceControlHubTab[] = [
-  'changes',
-  'pr',
-  'history'
-] as const
+// `history` predates the Commits screen; links carrying it open Commits over Changes.
+export type SourceControlHubRouteTab = SourceControlHubTab | 'history'
+
+export const SOURCE_CONTROL_HUB_TABS: readonly SourceControlHubTab[] = ['changes', 'pr'] as const
 
 export const SOURCE_CONTROL_HUB_TAB_LABELS: Record<SourceControlHubTab, string> = {
-  changes: 'Changes',
-  pr: 'Pull Request',
-  history: 'Commits'
+  get changes() {
+    return translate('sourceControl.hubTab.changes', 'Changes')
+  },
+  get pr() {
+    return translate('sourceControl.hubTab.pullRequest', 'Pull request')
+  }
 }
 
-// Normalize a route param (possibly an array from expo-router, possibly unknown)
-// to a valid tab, defaulting to 'changes'. Deep links that name a stale/invalid
-// tab fall back rather than render a blank body.
 export function parseSourceControlHubTab(
   value: string | string[] | undefined | null
-): SourceControlHubTab {
+): SourceControlHubRouteTab {
   const first = Array.isArray(value) ? value[0] : value
-  return SOURCE_CONTROL_HUB_TABS.includes(first as SourceControlHubTab)
-    ? (first as SourceControlHubTab)
-    : 'changes'
+  return first === 'pr' || first === 'history' ? first : 'changes'
 }

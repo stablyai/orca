@@ -1,15 +1,32 @@
 import * as React from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
-function Card({ className, ...props }: React.ComponentProps<'div'>) {
+const cardVariants = cva(
+  'flex flex-col rounded-xl border border-border/50 bg-card text-card-foreground shadow-sm',
+  {
+    variants: {
+      size: {
+        default: 'gap-6 py-6',
+        sm: 'gap-3 py-2.5 shadow-xs',
+        list: 'gap-6 py-1'
+      }
+    },
+    defaultVariants: { size: 'default' }
+  }
+)
+
+function Card({
+  className,
+  size,
+  ...props
+}: React.ComponentProps<'div'> & VariantProps<typeof cardVariants>) {
   return (
     <div
       data-slot="card"
-      className={cn(
-        'flex flex-col gap-6 rounded-xl border border-border/50 bg-card py-6 text-card-foreground shadow-sm',
-        className
-      )}
+      data-size={size ?? 'default'}
+      className={cn(cardVariants({ size }), className)}
       {...props}
     />
   )
@@ -48,28 +65,8 @@ function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-function CardAction({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn('col-start-2 row-span-2 row-start-1 self-start justify-self-end', className)}
-      {...props}
-    />
-  )
-}
-
 function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
   return <div data-slot="card-content" className={cn('px-6', className)} {...props} />
 }
 
-function CardFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn('flex items-center px-6 [.border-t]:pt-6', className)}
-      {...props}
-    />
-  )
-}
-
-export { Card, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent }
+export { Card, CardHeader, CardTitle, CardDescription, CardContent }

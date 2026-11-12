@@ -1,15 +1,16 @@
 import {
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuItem
-} from '@/components/ui/dropdown-menu'
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuItem,
+  ContextMenuShortcut
+} from '@/components/ui/context-menu'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
-import type { TabSplitDirection } from '../../store/slices/tabs'
+import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
-import { TAB_CONTEXT_SUBMENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const PANE_COLUMN_DIRECTIONS: TabSplitDirection[] = ['right', 'left', 'down', 'up']
 
@@ -26,57 +27,69 @@ function paneColumnDirectionIcon(direction: TabSplitDirection): React.JSX.Elemen
   }
 }
 
-function paneColumnDirectionLabel(direction: TabSplitDirection): string {
+function paneColumnDirectionLabel(direction: TabSplitDirection, t: Translate = translate): string {
   switch (direction) {
     case 'right':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.right', 'Right')
+      return t('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.right', 'Right')
     case 'left':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.left', 'Left')
+      return t('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.left', 'Left')
     case 'down':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.down', 'Down')
+      return t('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.down', 'Down')
     case 'up':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.up', 'Up')
+      return t('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.up', 'Up')
   }
 }
 
 export function TabWorkspaceLayoutMenuSection({
   unifiedTabId,
   groupId,
-  trailingSeparator = false
+  leadingSeparator = false,
+  trailingSeparator = false,
+  shortcutLabels
 }: {
   unifiedTabId: string
   groupId: string
+  leadingSeparator?: boolean
   trailingSeparator?: boolean
+  shortcutLabels?: Partial<Record<TabSplitDirection, string>>
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
     return null
   }
 
   return (
     <>
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger className="[&>svg:last-child]:size-3.5">
+      {leadingSeparator ? <ContextMenuSeparator /> : null}
+      <ContextMenuSub>
+        <ContextMenuSubTrigger className="[&>svg:last-child]:size-3.5">
           <Columns2 className="size-3.5 shrink-0" />
-          {translate(
+          {t(
             'auto.components.tab.bar.TabWorkspaceLayoutMenuSection.moveToPaneColumn',
             'Move Tab to Split'
           )}
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className={TAB_CONTEXT_SUBMENU_CONTENT_CLASS}>
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent
+          animation="none"
+          className="max-w-[calc(100vw-1rem)] whitespace-nowrap"
+        >
           {PANE_COLUMN_DIRECTIONS.map((direction) => (
-            <DropdownMenuItem
+            <ContextMenuItem
               key={direction}
               onSelect={() => {
                 moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
               }}
             >
               {paneColumnDirectionIcon(direction)}
-              {paneColumnDirectionLabel(direction)}
-            </DropdownMenuItem>
+              {paneColumnDirectionLabel(direction, t)}
+              {shortcutLabels?.[direction] ? (
+                <ContextMenuShortcut>{shortcutLabels[direction]}</ContextMenuShortcut>
+              ) : null}
+            </ContextMenuItem>
           ))}
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
-      {trailingSeparator ? <DropdownMenuSeparator /> : null}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      {trailingSeparator ? <ContextMenuSeparator /> : null}
     </>
   )
 }

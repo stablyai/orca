@@ -1,0 +1,140 @@
+import { useEffect, useRef } from 'react'
+import { useAppStore } from '../store/index'
+import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
+import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/app-shell/shutdown/shutdown-checkpoint-guard'
+import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
+import { runAfterEditorFramesFlush } from './editor/save/flush/editor-pending-flush'
+import {
+  collectBrowserWebviewIds,
+  destroyWebviewsRemovedFromStore
+} from '../store/slices/browser/cleanup/browser-webview-cleanup'
+import type { TerminalActivationController } from './use-terminal-activation-actions'
+
+export function useTerminalWindowLifecycle(
+  controller: Pick<
+    TerminalActivationController,
+    | 'activeBrowserTabId'
+    | 'activeTabType'
+    | 'activeWorktreeBrowserTabIdsKey'
+    | 'proceedToNativeWindowClose'
+    | 'queueEditorCloseRequests'
+    | 'renderedActiveWorktreeId'
+    | 'setActiveBrowserTab'
+    | 'setActiveTabType'
+    | 'windowCloseAfterDirtyRef'
+  >
+): void {
+  const {
+    activeBrowserTabId,
+    activeTabType,
+    activeWorktreeBrowserTabIdsKey,
+    proceedToNativeWindowClose,
+    queueEditorCloseRequests,
+    renderedActiveWorktreeId,
+    setActiveBrowserTab,
+    setActiveTabType,
+    windowCloseAfterDirtyRef
+  } = controller
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent): void => {
+      if (isIntentionalAppRestartInProgress()) {
+        return
+      }
+      const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
+      if (dirtyFiles.length > 0) {
+        preventUnloadAndScheduleShutdownCheckpointReset(event, window)
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
+  useEffect(() => {
+    setWindowCloseRequestHandler(({ isQuitting }) => {
+      if (isIntentionalAppRestartInProgress()) {
+        window.api.ui.confirmWindowClose()
+        return
+      }
+      if (windowCloseAfterDirtyRef.current) {
+        return
+      }
+      const state = useAppStore.getState()
+      // Claimed before the flush so repeat requests are ignored; a cancel clears it and voids this one.
+      const pendingClose = { isQuitting }
+      windowCloseAfterDirtyRef.current = pendingClose
+      // Why: a custom editor frame may still hold debounced edits the dirty check must see.
+      runAfterEditorFramesFlush(
+        state,
+        state.openFiles.map((file) => file.id),
+        () => {
+          if (windowCloseAfterDirtyRef.current !== pendingClose) {
+            return
+          }
+          const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
+          if (dirtyFiles.length > 0) {
+            queueEditorCloseRequests(
+              dirtyFiles.map((file) => file.id),
+              pendingClose
+            )
+            return
+          }
+          windowCloseAfterDirtyRef.current = null
+          proceedToNativeWindowClose(isQuitting)
+        }
+      )
+    })
+    return () => setWindowCloseRequestHandler(null)
+  }, [proceedToNativeWindowClose, queueEditorCloseRequests, windowCloseAfterDirtyRef])
+
+  // Initialize lazily: eager useRef arguments walk every browser page/tab again on every render.
+  const prevBrowserWebviewIdsRef = useRef<Set<string>>(undefined!)
+  prevBrowserWebviewIdsRef.current ??= collectBrowserWebviewIds(
+    useAppStore.getState().browserTabsByWorktree,
+    useAppStore.getState().browserPagesByWorkspace
+  )
+  useEffect(() => {
+    let prevBrowserTabs = useAppStore.getState().browserTabsByWorktree
+    let prevBrowserPages = useAppStore.getState().browserPagesByWorkspace
+    return useAppStore.subscribe((state) => {
+      if (
+        state.browserTabsByWorktree === prevBrowserTabs &&
+        state.browserPagesByWorkspace === prevBrowserPages
+      ) {
+        return
+      }
+      prevBrowserTabs = state.browserTabsByWorktree
+      prevBrowserPages = state.browserPagesByWorkspace
+      prevBrowserWebviewIdsRef.current = destroyWebviewsRemovedFromStore(
+        prevBrowserWebviewIdsRef.current,
+        state.browserTabsByWorktree,
+        state.browserPagesByWorkspace
+      )
+    })
+  }, [])
+
+  useEffect(() => {
+    const activeWorktreeBrowserTabs = renderedActiveWorktreeId
+      ? (useAppStore.getState().browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
+      : []
+    if (
+      activeTabType === 'browser' &&
+      renderedActiveWorktreeId &&
+      (!activeBrowserTabId ||
+        !activeWorktreeBrowserTabs.some((tab) => tab.id === activeBrowserTabId))
+    ) {
+      const fallbackBrowserTab = activeWorktreeBrowserTabs[0]
+      if (fallbackBrowserTab) {
+        setActiveBrowserTab(fallbackBrowserTab.id)
+      } else {
+        setActiveTabType('terminal', renderedActiveWorktreeId)
+      }
+    }
+  }, [
+    activeTabType,
+    renderedActiveWorktreeId,
+    activeBrowserTabId,
+    activeWorktreeBrowserTabIdsKey,
+    setActiveBrowserTab,
+    setActiveTabType
+  ])
+}

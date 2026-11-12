@@ -1,14 +1,36 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileOnboardingPage } from './MobileOnboardingPage'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+  class AnimatedValue {
+    interpolate() {
+      return 0
+    }
+    setValue() {}
+  }
   return {
+    AccessibilityInfo: {
+      addEventListener: vi.fn(() => ({ remove: vi.fn() })),
+      isReduceMotionEnabled: vi.fn(() => Promise.resolve(true))
+    },
     ActivityIndicator: 'ActivityIndicator',
+    Animated: {
+      Value: AnimatedValue,
+      View: 'AnimatedView',
+      delay: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+      loop: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+      parallel: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+      sequence: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+      timing: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() }))
+    },
+    Easing: { cubic: (t: number) => t, in: (e: unknown) => e, out: (e: unknown) => e },
+    Image: 'Image',
     Pressable: 'Pressable',
-    ScrollView: ({ children, ...props }: { children?: unknown }) =>
+    ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
     StyleSheet: { create: (styles: unknown) => styles },
     Text: 'Text',
@@ -17,16 +39,13 @@ vi.mock('react-native', async () => {
 })
 
 vi.mock('lucide-react-native', () => ({
-  BellRing: 'BellRing',
   MessageSquare: 'MessageSquare'
 }))
 
+vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: 'OrcaLogo' }))
+
 describe('MobileOnboardingPage', () => {
   let renderer: ReactTestRenderer | null = null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -64,7 +83,7 @@ describe('MobileOnboardingPage', () => {
 
   function button(label: string) {
     return renderer!.root.find(
-      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === label
+      (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === label
     )
   }
 
@@ -72,7 +91,7 @@ describe('MobileOnboardingPage', () => {
     const callbacks = await renderPage('session-view')
 
     act(() => button('Open sessions in Chat UI').props.onPress())
-    expect(callbacks.onSessionChoice).toHaveBeenCalledWith('chat')
+    expect(callbacks.onSessionChoice).toHaveBeenCalledExactlyOnceWith('chat')
     expect(callbacks.onNotificationChoice).not.toHaveBeenCalled()
   })
 
@@ -95,7 +114,7 @@ describe('MobileOnboardingPage', () => {
 
   it('hides an off-screen page from assistive technology', async () => {
     await renderPage('notifications', { active: false })
-    const scrollView = renderer!.root.findByType('ScrollView')
+    const scrollView = findByHostType(renderer!.root, 'ScrollView')
 
     expect(scrollView.props.accessibilityElementsHidden).toBe(true)
     expect(scrollView.props.importantForAccessibility).toBe('no-hide-descendants')

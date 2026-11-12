@@ -1,0 +1,140 @@
+import type { ChildProcess } from 'node:child_process'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
+import { waitForProcessExitUntil } from './provider-process-exit-deadline'
+import {
+  PROVIDER_SUPERVISOR_MAX_STOP_MS,
+  PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL
+} from './provider-process-supervisor'
+import type { ProviderProcessTeardownVerdict } from './provider-process-teardown'
+
+export type ProviderProcessTree = {
+  capture(): Promise<void>
+  refresh?: () => Promise<void>
+  reap(): Promise<DescendantTreeVerdict>
+  readonly treeVerdict: DescendantTreeVerdict
+  /** A live root targeted by a reap can no longer count as a voluntary exit. */
+  readonly forcedReapAttempted?: boolean
+  readonly killDelivered?: boolean
+}
+
+export type ProviderProcessClosePolicy = {
+  gracefulExitMs: number
+  forcedExitMs: number
+  signalSupervisorOnClose?: boolean
+  /** Accept voluntary stdin-end exit without post-exit reaping, only if no forced reap was attempted. */
+  selfExitIsClose?: boolean
+}
+
+export type ProviderProcessCloseInput = {
+  child: Pick<ChildProcess, 'pid' | 'kill' | 'stdin'>
+  exitPromise: Promise<void>
+  rootVerdict: () => DescendantTreeVerdict
+  supervised?: boolean
+  policy: ProviderProcessClosePolicy
+  tree?: ProviderProcessTree
+  terminateTree: () => Promise<ProviderProcessTeardownVerdict>
+  /** Time after stdin end/SIGTERM before a supervisor is asked to reap now, or an unsupervised root is forced. */
+  briefGraceMs?: number
+}
+
+/** 'brief' is for a stop the user is waiting on; providers without a SIGTERM ladder may ignore it. */
+export type ProviderProcessCloseOptions = { grace?: 'brief' }
+
+export type ProviderProcessCloseResult = {
+  root: DescendantTreeVerdict
+  /** Null when this close made no observation of the descendants. */
+  tree: DescendantTreeVerdict | null
+  selfExit?: true
+  killDelivered?: true
+}
+
+export const ROOT_ONLY_GRACEFUL_EXIT_MS = 1_500
+const ROOT_ONLY_FORCED_EXIT_MS = 1_000
+
+/** Providers without their own reaper must allow the supervisor its full stop before fallback. */
+export function rootOnlyProviderClosePolicy(supervised: boolean): ProviderProcessClosePolicy {
+  return {
+    gracefulExitMs: supervised ? PROVIDER_SUPERVISOR_MAX_STOP_MS : ROOT_ONLY_GRACEFUL_EXIT_MS,
+    forcedExitMs: ROOT_ONLY_FORCED_EXIT_MS
+  }
+}
+
+/** Writer close is final after delivery; descendant observations remain independent. */
+export function acceptProviderWriterClose(result: ProviderProcessCloseResult): boolean {
+  return result.root === 'exited' || result.killDelivered === true
+}
+
+// A supervised close without its SIGTERM has no ladder to shorten, so it keeps the full wait.
+async function waitForGracefulExit(
+  input: ProviderProcessCloseInput,
+  signalled: boolean
+): Promise<void> {
+  const { gracefulExitMs } = input.policy
+  if (input.briefGraceMs === undefined || (input.supervised && !signalled)) {
+    return waitForProcessExitUntil(input.exitPromise, gracefulExitMs)
+  }
+  const briefMs = Math.min(input.briefGraceMs, gracefulExitMs)
+  await waitForProcessExitUntil(input.exitPromise, briefMs)
+  if (!signalled || input.rootVerdict() === 'exited') {
+    return
+  }
+  // The supervisor still owns the reap: asked now, it SIGKILLs its group instead of waiting out the grace.
+  input.child.kill(PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL)
+  await waitForProcessExitUntil(input.exitPromise, gracefulExitMs - briefMs)
+}
+
+/** The supervisor owns the POSIX signal ladder; its wrapper must outlive that ladder. */
+export async function closeProviderProcess(
+  input: ProviderProcessCloseInput
+): Promise<ProviderProcessCloseResult> {
+  const { child, policy, tree } = input
+  if (tree) {
+    await tree.capture()
+  }
+  try {
+    child.stdin?.end()
+  } catch {
+    // A broken pipe still owes the reap.
+  }
+  const signalled =
+    input.supervised === true &&
+    policy.signalSupervisorOnClose === true &&
+    input.rootVerdict() !== 'exited'
+  if (signalled) {
+    child.kill('SIGTERM')
+  }
+  let reaped = false
+  let fallbackTree: DescendantTreeVerdict | null = null
+  let killDelivered = false
+  if (input.rootVerdict() !== 'exited') {
+    await waitForGracefulExit(input, signalled)
+    if (input.rootVerdict() !== 'exited') {
+      reaped = true
+      await tree?.refresh?.()
+      if (tree) {
+        await tree.reap()
+      } else {
+        const verdict = await input.terminateTree()
+        fallbackTree = typeof verdict === 'object' && verdict ? verdict.tree : verdict
+        killDelivered = typeof verdict === 'object' && verdict !== null
+      }
+      await waitForProcessExitUntil(input.exitPromise, policy.forcedExitMs)
+    }
+  }
+  if (
+    policy.selfExitIsClose &&
+    !reaped &&
+    !tree?.forcedReapAttempted &&
+    input.rootVerdict() === 'exited'
+  ) {
+    return { root: 'exited', tree: tree ? tree.treeVerdict : null, selfExit: true }
+  }
+  if (!reaped && input.rootVerdict() === 'exited' && tree && tree.treeVerdict !== 'exited') {
+    await tree.reap()
+  }
+  return {
+    root: input.rootVerdict(),
+    tree: tree ? tree.treeVerdict : fallbackTree,
+    ...(tree?.killDelivered || killDelivered ? { killDelivered: true } : {})
+  }
+}

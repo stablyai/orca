@@ -1,7 +1,7 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { TaskProvider } from '../../../shared/types'
+import type { TaskProvider } from '../../../shared/work-items/task-providers'
 import type { PreflightStatus } from '../../../preload/api-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { TaskSourceHostAvailability } from './task-source-context-summary'
 
 type ProviderToolStatus = {
@@ -31,8 +31,7 @@ function getRepoBackedProviderToolStatus(
   if (provider === 'github') {
     return preflightStatus.gh
   }
-  // Why: older remote servers can predate GitLab preflight entirely. That is a
-  // host capability gap, not a user-fixable missing `glab` install.
+  // Older servers can lack GitLab preflight; report a capability gap instead of a fixable missing glab install.
   return Object.hasOwn(preflightStatus, 'glab')
     ? (preflightStatus.glab ?? { installed: false, authenticated: false })
     : 'unsupported'

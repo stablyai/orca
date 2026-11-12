@@ -7,34 +7,159 @@ import {
   SSH_DETECTED_PORTS_MAX_ENTRIES,
   SSH_DETECTED_PORT_ADVERTISED_URL_MAX_UTF8_BYTES,
   SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES,
-  SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES
+  SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES,
+  SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES,
+  admitSshConnectionStateForAuthorityReconciliation,
+  isAdmissibleDirectSshAuthority
 } from './ssh-retained-payload-admission'
 
 describe('SSH retained payload admission', () => {
-  it('keeps ordinary connection state while stripping unknown payload fields', () => {
-    const admitted = admitSshConnectionState(
-      {
-        targetId: 'ssh-a',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 2,
-        connectionGeneration: 3,
-        supportsFolderDownload: true,
-        remotePlatform: 'linux',
-        unexpected: 'x'.repeat(1024)
-      },
-      'ssh-a'
-    )
+  it('keeps a managed server update note, and drops an unknown one without hiding the server', () => {
+    const admit = (update: unknown) =>
+      admitSshConnectionState(
+        {
+          targetId: 'ssh-a',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          managedServer: { kind: 'managed', environmentId: 'env-1', update }
+        },
+        'ssh-a'
+      )?.managedServer
+    expect(admit({ state: 'failed', detail: 'readiness timed out' })).toEqual({
+      kind: 'managed',
+      environmentId: 'env-1',
+      update: { state: 'failed', detail: 'readiness timed out' }
+    })
+    expect(admit({ state: 'from-the-future' })).toEqual({ kind: 'managed', environmentId: 'env-1' })
+  })
 
-    expect(admitted).toEqual({
+  it('keeps the projects a move linked, dropping malformed entries alone', () => {
+    const admit = (linked: unknown) =>
+      admitSshConnectionState(
+        {
+          targetId: 'ssh-a',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          managedServer: { kind: 'managed', environmentId: 'env-1', linked }
+        },
+        'ssh-a'
+      )?.managedServer
+    expect(
+      admit([{ path: '/root/app', automations: 2 }, { path: '/root/x', automations: -1 }, 'bad'])
+    ).toEqual({
+      kind: 'managed',
+      environmentId: 'env-1',
+      linked: [{ path: '/root/app', automations: 2 }]
+    })
+    expect(admit('nope')).toEqual({ kind: 'managed', environmentId: 'env-1' })
+  })
+
+  it('admits the plain SSH mode and drops a malformed one without dropping the state', () => {
+    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
+    const plainSsh = { reason: 'home_noexec', message: 'Home is noexec.' }
+
+    expect(admitSshConnectionState({ ...state, plainSsh }, 'ssh-a')?.plainSsh).toEqual(plainSsh)
+    const malformed = admitSshConnectionState({ ...state, plainSsh: { reason: 7 } }, 'ssh-a')
+    expect(malformed).not.toBeNull()
+    expect(malformed).not.toHaveProperty('plainSsh')
+  })
+
+  it("drops an older host's move offer and admits only a literal elsewhere flag", () => {
+    const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
+    const relay = { kind: 'relay', reason: 'relay_terminals_live', terminals: 2 }
+
+    expect(
+      admitSshConnectionState({ ...state, managedServer: { ...relay, offerMove: true } }, 'ssh-a')
+        ?.managedServer
+    ).toEqual(relay)
+    expect(
+      admitSshConnectionState(
+        { ...state, managedServer: { ...relay, terminalsElsewhere: true } },
+        'ssh-a'
+      )?.managedServer
+    ).toEqual({ ...relay, terminalsElsewhere: true })
+    expect(
+      admitSshConnectionState(
+        { ...state, managedServer: { ...relay, terminalsElsewhere: 'yes' } },
+        'ssh-a'
+      )?.managedServer
+    ).toEqual(relay)
+  })
+
+  it('rejects partial and malformed provider authority', () => {
+    const state = {
       targetId: 'ssh-a',
       status: 'connected',
       error: null,
-      reconnectAttempt: 2,
-      connectionGeneration: 3,
-      supportsFolderDownload: true,
-      remotePlatform: 'linux'
-    })
+      reconnectAttempt: 0
+    }
+
+    expect(admitSshConnectionState({ ...state, providerEpoch: 'provider-a' }, 'ssh-a')).toBeNull()
+    expect(admitSshConnectionState({ ...state, connectionGeneration: 3 }, 'ssh-a')).toBeNull()
+    expect(
+      admitSshConnectionState(
+        {
+          ...state,
+          providerEpoch: 'x'.repeat(SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES + 1),
+          connectionGeneration: 3
+        },
+        'ssh-a'
+      )
+    ).toBeNull()
+  })
+
+  it('admits only bounded complete direct SSH authority', () => {
+    expect(
+      isAdmissibleDirectSshAuthority({
+        targetId: 'ssh-a',
+        providerEpoch: 'provider-a',
+        connectionGeneration: 3
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleDirectSshAuthority({
+        targetId: 'ssh-a',
+        providerEpoch: 'provider-a'
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleDirectSshAuthority({
+        targetId: 'x'.repeat(SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES + 1),
+        providerEpoch: 'provider-a',
+        connectionGeneration: 3
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleDirectSshAuthority({
+        targetId: 'ssh-a',
+        providerEpoch: 'x'.repeat(SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES + 1),
+        connectionGeneration: 3
+      })
+    ).toBe(false)
+  })
+
+  it('normalizes only partial authority for bounded reconciliation', () => {
+    const state = {
+      targetId: 'ssh-a',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    }
+
+    expect(
+      admitSshConnectionStateForAuthorityReconciliation(
+        { ...state, providerEpoch: 'provider-a' },
+        'ssh-a'
+      )
+    ).toEqual({ ...state, providerEpoch: null })
+    expect(
+      admitSshConnectionStateForAuthorityReconciliation(
+        { ...state, providerEpoch: '', connectionGeneration: 3 },
+        'ssh-a'
+      )
+    ).toBeNull()
   })
 
   it('caps connection errors without splitting a UTF-8 code point', () => {

@@ -165,7 +165,7 @@ export function inspectMcpConfigContent(
 function collectMcpServerEntries(rawServers: Record<string, unknown>): [string, unknown][] | null {
   const entries: [string, unknown][] = []
   for (const name in rawServers) {
-    if (!Object.prototype.hasOwnProperty.call(rawServers, name)) {
+    if (!Object.hasOwn(rawServers, name)) {
       continue
     }
     if (

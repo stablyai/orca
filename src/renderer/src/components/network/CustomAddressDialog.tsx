@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Loader2 } from 'lucide-react'
 
 export type CustomAddressValidator = (input: string) => { ok: true; value: string } | { ok: false }
 
@@ -21,24 +22,21 @@ export type CustomAddressDialogCopy = {
   hint: string
   cancel: string
   confirm: string
+  confirmationError?: string
 }
 
 type CustomAddressDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  // Why: prefill from the current selection when it is already a custom value
-  // so reopening to edit shows what is in use rather than a blank field.
+  // Reopening a custom selection should show its current value.
   initialValue?: string
   validate: CustomAddressValidator
   copy: CustomAddressDialogCopy
   inputId: string
-  onConfirm: (value: string) => void
+  onConfirm: (value: string) => boolean | void | Promise<boolean | void>
 }
 
-// Why: shared single-field modal for entering a custom address/endpoint. The
-// grammar differs per surface (mobile takes IPv4/Tailscale; the server-share
-// form takes host / host:port / wss URLs), so validation and copy are injected
-// rather than baked in.
+// Callers supply grammar/copy; Mobile also accepts full HTTP(S)/WebSocket URLs.
 export function CustomAddressDialog({
   open,
   onOpenChange,
@@ -49,30 +47,57 @@ export function CustomAddressDialog({
   onConfirm
 }: CustomAddressDialogProps): React.JSX.Element {
   const [value, setValue] = useState(initialValue ?? '')
+  const [submitting, setSubmitting] = useState(false)
+  const [confirmationFailed, setConfirmationFailed] = useState(false)
 
-  // Why: reseed each time the dialog opens so a prior cancelled edit doesn't
-  // leak into the next open.
-  useEffect(() => {
+  // Reset on open so canceled edits cannot leak into later visits.
+  const [seededFor, setSeededFor] = useState({ open, initialValue })
+  if (seededFor.open !== open || seededFor.initialValue !== initialValue) {
+    setSeededFor({ open, initialValue })
     if (open) {
       setValue(initialValue ?? '')
     }
-  }, [open, initialValue])
+  }
 
-  const parsed = validate(value)
-  // Why: only flag invalid input once the user has typed something — an empty
-  // field on open shouldn't read as an error.
-  const showInvalid = value.trim() !== '' && !parsed.ok
-
-  const submit = (): void => {
-    if (!parsed.ok) {
-      return
-    }
-    onConfirm(parsed.value)
+  const close = (): void => {
+    setSubmitting(false)
+    setConfirmationFailed(false)
     onOpenChange(false)
   }
 
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) {
+      onOpenChange(true)
+    } else if (!submitting) {
+      close()
+    }
+  }
+
+  const parsed = validate(value)
+  // Keep empty fields neutral until the user enters a value.
+  const showInvalid = value.trim() !== '' && !parsed.ok
+
+  const submit = async (): Promise<void> => {
+    if (!parsed.ok || submitting) {
+      return
+    }
+    setSubmitting(true)
+    setConfirmationFailed(false)
+    try {
+      if ((await onConfirm(parsed.value)) !== false) {
+        close()
+      } else {
+        setConfirmationFailed(true)
+      }
+    } catch {
+      setConfirmationFailed(true)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
@@ -84,26 +109,34 @@ export function CustomAddressDialog({
             id={inputId}
             autoFocus
             value={value}
+            disabled={submitting}
             aria-invalid={showInvalid}
             placeholder={copy.placeholder}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value)
+              setConfirmationFailed(false)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
-                submit()
+                void submit()
               }
             }}
           />
-          {/* Why: neutral helper copy that doubles as validation guidance —
-              kept muted (not destructive-red) so a half-typed value doesn't
-              feel like a hard error. */}
+          {/* Keep guidance muted so partially typed values do not look like hard errors. */}
           <p className="text-xs text-muted-foreground">{copy.hint}</p>
+          {confirmationFailed ? (
+            <p className="text-xs text-destructive" role="alert">
+              {copy.confirmationError ?? copy.hint}
+            </p>
+          ) : null}
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" disabled={submitting} onClick={close}>
             {copy.cancel}
           </Button>
-          <Button type="button" disabled={!parsed.ok} onClick={submit}>
+          <Button type="button" disabled={!parsed.ok || submitting} onClick={() => void submit()}>
+            {submitting ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
             {copy.confirm}
           </Button>
         </DialogFooter>

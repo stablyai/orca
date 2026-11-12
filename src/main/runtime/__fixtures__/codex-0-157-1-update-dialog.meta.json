@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-29T01:41:43.328Z",
+  "platform": "darwin",
+  "command": ["codex", "--no-daemon", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.1: launch with the update check on; the update dialog owns the screen. STA-8834.",
+  "exitCode": 0
+}

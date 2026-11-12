@@ -17,6 +17,7 @@ import {
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import { waitForTerminalPtyVisible } from './artificial-opencode-pane-interactions'
 
 type RevisitPressurePane = { paneKey: string; ptyId: string }
 
@@ -26,9 +27,7 @@ type RevisitPressureMeasurement = {
   maxTimerDriftMs: number
 }
 
-// Why: the renderer hidden-skip counters were deleted with the skip grammar;
-// only the mode-2031 fact-reply counter still exists renderer-side.
-type RevisitPressureDebug = { hiddenRendererMode2031ReplyCount: number }
+type RevisitPressureDebug = { hiddenRendererSkipCount: number }
 
 type RevisitPressureSchedulerSnapshot = {
   peakQueuedChars: number
@@ -161,6 +160,7 @@ export async function runRendererBackpressureRevisitScenario<
     await switchToWorktree(orcaPage, secondWorktreeId)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
+    await waitForTerminalPtyVisible(orcaPage, typingPtyId)
     const measurement = await deps.measureTypingDuringLoad(
       orcaPage,
       typingScriptPath,
@@ -198,6 +198,8 @@ export async function runRendererBackpressureRevisitScenario<
     await switchToWorktree(orcaPage, firstWorktreeId)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
+    // Why: hidden PaneManagers persist, so manager readiness alone can race the reveal commit.
+    await waitForTerminalPtyVisible(orcaPage, revisitPane.ptyId)
     await deps.focusPane(orcaPage, revisitPane.paneKey)
     await sendToTerminal(orcaPage, revisitPane.ptyId, `printf '\\n${revisitMarker}\\n'\r`)
     const revisitLatencyMs = await waitForMarkerLatency(orcaPage, revisitMarker, 10_000)

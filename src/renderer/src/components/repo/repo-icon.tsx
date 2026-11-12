@@ -16,6 +16,7 @@ import {
   Palette,
   Rocket,
   Server,
+  // `Shapes` is lucide-react's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
   Sparkles,
   SquareTerminal,
@@ -23,15 +24,9 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-
-export type RepoLucideIconOption = {
-  name: string
-  label: string
-  icon: LucideIcon
-}
 
 export const getRepoLucideIconOptions = createLocalizedCatalog(() => [
   {
@@ -147,14 +142,20 @@ export function RepoIconGlyph({
   iconClassName?: string
   color?: string
 }): React.JSX.Element {
-  if (repoIcon?.type === 'image') {
+  const imageSrc = repoIcon?.type === 'image' ? repoIcon.src : null
+  // Private GHES avatars may require cookies; track failed URLs without hiding later replacement icons.
+  const [failedImageSrc, setFailedImageSrc] = React.useState<string | null>(null)
+
+  if (imageSrc !== null && failedImageSrc !== imageSrc) {
     return (
       <span className={cn('inline-flex items-center justify-center overflow-hidden', className)}>
         <img
-          src={repoIcon.src}
+          src={imageSrc}
           alt=""
-          className={cn('size-full object-contain', iconClassName)}
+          // Keep in step with MobileRepoIcon's radii.mark.
+          className={cn('size-full rounded-[4px] object-contain', iconClassName)}
           draggable={false}
+          onError={() => setFailedImageSrc(imageSrc)}
         />
       </span>
     )
@@ -166,7 +167,9 @@ export function RepoIconGlyph({
         className={cn('inline-flex items-center justify-center leading-none', className)}
         aria-hidden="true"
       >
-        <span className={cn('text-[0.9em]', iconClassName)}>{repoIcon.emoji}</span>
+        <span className={cn('inline-flex items-center justify-center text-[0.9em]', iconClassName)}>
+          {repoIcon.emoji}
+        </span>
       </span>
     )
   }
@@ -174,7 +177,10 @@ export function RepoIconGlyph({
   const Icon = getRepoLucideIcon(repoIcon?.type === 'lucide' ? repoIcon.name : 'Folder')
   return (
     <span className={cn('inline-flex items-center justify-center', className)}>
-      <Icon className={iconClassName} style={color ? { color } : undefined} />
+      {React.createElement(Icon, {
+        className: iconClassName,
+        style: color ? { color } : undefined
+      })}
     </span>
   )
 }

@@ -1,0 +1,67 @@
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RefObject } from 'react'
+import type { ExecutionHostId, ParsedExecutionHost } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repo-types'
+import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { OrcaVmRecipe } from '../../../../shared/orca-yaml-hook-types'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
+import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
+import type { WorkspaceCreationTargetResolution } from '@/lib/workspace/creation/project-host-workspace-target'
+
+export type ComposerRuntimeTargetModel = {
+  isProjectGroupTarget: boolean
+  folderSourceRepos: Repo[]
+  parsedFolderTargetHost: ParsedExecutionHost | null
+  folderTargetRuntimeEnvironmentId: string | null
+  folderTargetConnectionId: string | null
+  folderTargetIsRemote: boolean
+  folderTargetAgentDetectionTarget:
+    | { kind: 'runtime'; environmentId: string; connectionId?: undefined }
+    | { kind: 'ssh'; connectionId: string; environmentId?: undefined }
+    | { kind: 'local'; environmentId?: undefined; connectionId?: undefined }
+    | undefined
+  folderTargetSshState: SshConnectionState | null
+  folderTargetSshStatus: SshConnectionStatus | null
+  folderTargetRequiresConnection: boolean
+  folderTargetConnectInProgress: boolean
+  folderPathStatusBlocksCreate: boolean
+  pathStatusProjectError: string | null
+  folderDetectedIds: TuiAgent[] | null
+  folderDetectedAgentIds: Set<TuiAgent> | null
+  selectedWorkspaceTarget: WorkspaceCreationTargetResolution
+  resolvedRepoId: string
+  selectedRepo: Repo | undefined
+  selectedRepoIsGit: boolean
+  selectedRepoExecutionHostId: ExecutionHostId | null
+  selectedRepoHookContextKey: string | null
+  selectedRepoAgentLaunchFact: ExecutionHostPlatformFact
+  selectedRepoIsRemote: boolean
+  selectedRepoStartupShell: AgentStartupShell | undefined
+  selectedRepoProjectId: string | null
+  selectedProjectId: string | null
+  selectedProjectHostSetupId: string | null
+  projectHostSetupOptions: ProjectHostSetupOption[]
+  projectOptions: NewWorkspaceProjectOption[]
+  /** Runtime that owns the selected repo; an unstamped repo follows focus. */
+  selectedRepoRuntimeEnvironmentId: string | null
+  /** Transport to the selected repo's owner; `null` with no repo selected. */
+  selectedRepoTarget: RuntimeClientTarget | null
+  selectedRecipeRepoId: string | null
+  selectedRecipeRepoConnectionId: string | null
+  ephemeralVmsEnabled: boolean
+  ephemeralVmRecipes: OrcaVmRecipe[]
+  selectedEphemeralVmRecipeId: string | null
+  setSelectedEphemeralVmRecipeId: (recipeId: string | null) => void
+  ephemeralVmRecipeError: string | null
+  selectedRepoConnectionId: string | null
+  selectedRepoSshState: SshConnectionState | null
+  selectedRepoSshStatus: SshConnectionStatus | null
+  selectedRepoRequiresConnection: boolean
+  /** The resolved target is a per-workspace VM, which Run on never lists. */
+  selectedTargetNeedsVisibleHost: boolean
+  selectedRepoConnectInProgress: boolean
+  repoIdRef: RefObject<string>
+}

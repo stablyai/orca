@@ -1,5 +1,9 @@
+import { toast } from 'sonner'
+import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { useAppStore } from '@/store'
+import { hasUndoneContextualTourAction } from '../../../../shared/contextual-tour-action-steps'
+import { useAppStore } from '@/store/index'
+import { runActiveNativeChatSplit } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import {
   getContextualTour,
   type ContextualTourId,
@@ -9,23 +13,30 @@ import type { ContextualTourOutcome } from '../../../../shared/feature-education
 import {
   trackContextualTourOutcome,
   trackContextualTourShown
-} from '@/lib/feature-education-telemetry'
+} from '@/diagnostics/telemetry/feature-education-telemetry'
 import { isContextualTourAllowedForModal } from './contextual-tour-gate'
 import {
+  areContextualTourRenderStatesEqual,
   getContextualTourCleanupOutcome,
-  measureContextualTourOverlayRenderState
+  hasContextualTourTargetMoved,
+  measureContextualTourOverlayRenderState,
+  type MeasuredContextualTourTarget
 } from './contextual-tour-overlay-measurement'
 import {
   ContextualTourOverlaySurface,
-  getContextualTourFocusableElements,
   handleContextualTourOverlayKeyDown,
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
+import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
+import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { CHROME_WEB_STORE_HOME_URL } from '../../../../shared/browser/extensions/browser-extension-webstore'
 
 export function ContextualTourOverlay(): JSX.Element | null {
+  const t = useTranslate()
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
   const activeStepIndex = useAppStore((s) => s.activeContextualTourStepIndex)
   const activeTourSource = useAppStore((s) => s.activeContextualTourSource)
@@ -37,9 +48,19 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const blockingSurfaceVisible = useAppStore((s) => s.contextualToursBlockingSurfaceVisible)
   const activeTourSuppressed = useAppStore((s) => s.activeContextualTourSuppressed)
   const keybindings = useAppStore((s) => s.keybindings)
+  const activeTourHasUndoneAction = useAppStore((s) =>
+    s.activeContextualTourId
+      ? hasUndoneContextualTourAction(
+          getContextualTour(s.activeContextualTourId),
+          s.featureInteractions,
+          s.activeContextualTourStepIndex
+        )
+      : false
+  )
   const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
+  const activeTabType = useAppStore((s) => s.activeTabType)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
-  const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
   const advanceContextualTour = useAppStore((s) => s.advanceContextualTour)
   const regressContextualTour = useAppStore((s) => s.regressContextualTour)
@@ -50,12 +71,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openModal = useAppStore((s) => s.openModal)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openBrowserProfileTab = useAppStore((s) => s.openBrowserProfileTabInActiveWorkspace)
   const [renderState, setRenderState] = useState<ActiveTourRenderState | null>(null)
-  const [measureVersion, setMeasureVersion] = useState(0)
   const panelRef = useRef<HTMLElement | null>(null)
+  const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
   const markedTourIdRef = useRef<string | null>(null)
-  const previousFocusRef = useRef<HTMLElement | null>(null)
-  const focusedStepRef = useRef<string | null>(null)
+  const renderedStepIndexRef = useRef<number | null>(null)
   const telemetryTourIdRef = useRef<ContextualTourId | null>(null)
   const telemetryOutcomeSentRef = useRef(false)
   const telemetryStepsSeenRef = useRef<Set<number>>(new Set())
@@ -101,8 +124,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       setRenderState(null)
       return
     }
-    // Why: reset before the measurement layout effect below, otherwise the
-    // first passive effect can hide a freshly measured tour until the next tick.
+    // Reset before layout measurement; a later passive reset could hide the freshly measured tour.
     markedTourIdRef.current = null
     telemetryTourIdRef.current = null
     telemetryOutcomeSentRef.current = false
@@ -137,23 +159,9 @@ export function ContextualTourOverlay(): JSX.Element | null {
     onboardingVisible
   ])
 
-  useEffect(() => {
-    if (!activeTourId) {
-      return
-    }
-    const scheduleMeasure = (): void => setMeasureVersion((version) => version + 1)
-    window.addEventListener('resize', scheduleMeasure)
-    window.addEventListener('scroll', scheduleMeasure, true)
-    const interval = window.setInterval(scheduleMeasure, 500)
-    return () => {
-      window.removeEventListener('resize', scheduleMeasure)
-      window.removeEventListener('scroll', scheduleMeasure, true)
-      window.clearInterval(interval)
-    }
-  }, [activeTourId])
-
-  useLayoutEffect(() => {
+  const measureTourOverlay = useCallback((): void => {
     if (!activeTour || activeTourId === null) {
+      measuredTargetRef.current = null
       setRenderState(null)
       return
     }
@@ -171,8 +179,17 @@ export function ContextualTourOverlay(): JSX.Element | null {
       measurement.kind === 'render' ? measurement.telemetryTotalSteps : 0
     )
 
+    if (measurement.kind !== 'render') {
+      // Discard stale/detached targets so the next scroll performs a full scan.
+      measuredTargetRef.current = null
+      setRenderState(null)
+    }
     if (measurement.kind === 'advance') {
       advanceContextualTour()
+      return
+    }
+    if (measurement.kind === 'regress') {
+      regressContextualTour()
       return
     }
     if (measurement.kind === 'wait') {
@@ -184,7 +201,16 @@ export function ContextualTourOverlay(): JSX.Element | null {
       return
     }
 
-    setRenderState(measurement.renderState)
+    measuredTargetRef.current = {
+      element: measurement.renderState.targetElement,
+      rect: measurement.renderState.rect
+    }
+    renderedStepIndexRef.current = activeStepIndex
+    setRenderState((previous) =>
+      areContextualTourRenderStatesEqual(previous, measurement.renderState)
+        ? previous
+        : measurement.renderState
+    )
   }, [
     activeStepIndex,
     activeTour,
@@ -193,19 +219,76 @@ export function ContextualTourOverlay(): JSX.Element | null {
     cancelContextualTour,
     emitContextualTourOutcome,
     keybindings,
-    measureVersion,
+    regressContextualTour,
     sidebarOpen
   ])
 
   useEffect(() => {
-    if (!activeTourId || !renderState || markedTourIdRef.current === activeTourId) {
+    if (!activeTourId) {
       return
     }
-    // Why: a tour is considered seen only after its first measured target
-    // paints, so missing or removed surfaces can retry on a later visit.
+    // Coalesce triggers per frame; scroll probes only the target rect, while 500ms scans detect appearing/disappearing steps.
+    let frame: number | null = null
+    let fullPassQueued = false
+    const scheduleMeasure = (fullPass: boolean): void => {
+      fullPassQueued = fullPassQueued || fullPass
+      if (frame !== null) {
+        return
+      }
+      frame = window.requestAnimationFrame(() => {
+        frame = null
+        const runFullPass = fullPassQueued
+        fullPassQueued = false
+        if (runFullPass || hasContextualTourTargetMoved(measuredTargetRef.current)) {
+          measureTourOverlay()
+        }
+      })
+    }
+    const scheduleTargetMeasure = (): void => scheduleMeasure(false)
+    const scheduleFullMeasure = (): void => scheduleMeasure(true)
+    window.addEventListener('resize', scheduleFullMeasure)
+    window.addEventListener('scroll', scheduleTargetMeasure, true)
+    // Hidden windows cannot run queued rAF; resume full measurement when visible instead of polling idle.
+    const stopFullPassInterval = installWindowVisibilityInterval({
+      run: scheduleFullMeasure,
+      intervalMs: 500
+    })
+    return () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame)
+      }
+      window.removeEventListener('resize', scheduleFullMeasure)
+      window.removeEventListener('scroll', scheduleTargetMeasure, true)
+      stopFullPassInterval()
+    }
+  }, [activeTourId, measureTourOverlay])
+
+  useLayoutEffect(() => {
+    measureTourOverlay()
+  }, [activeBrowserTabId, activeTabId, activeTabType, measureTourOverlay])
+
+  useEffect(() => {
+    if (
+      !activeTourId ||
+      !renderState ||
+      activeTourHasUndoneAction ||
+      // A step change keeps the previous step's renderState until the new step measures.
+      renderedStepIndexRef.current !== activeStepIndex ||
+      markedTourIdRef.current === activeTourId
+    ) {
+      return
+    }
+    // Mark seen only after the first measured target paints so missing surfaces may retry; a step
+    // waiting for its action stays pending through interruptions until it succeeds or is dismissed.
     markedTourIdRef.current = activeTourId
     markContextualToursSeen([activeTourId])
-  }, [activeTourId, markContextualToursSeen, renderState])
+  }, [
+    activeStepIndex,
+    activeTourHasUndoneAction,
+    activeTourId,
+    markContextualToursSeen,
+    renderState
+  ])
 
   useEffect(() => {
     if (!activeTourId || !renderState || telemetryTourIdRef.current === activeTourId) {
@@ -247,50 +330,17 @@ export function ContextualTourOverlay(): JSX.Element | null {
     window.addEventListener('beforeunload', emitPendingCancellation)
     return () => {
       window.removeEventListener('beforeunload', emitPendingCancellation)
-      // Why: analytics expects every shown tour to have an outcome, even when
-      // the renderer closes or unmounts before the user presses Skip/Done.
+      // Record an outcome for shown tours even if the renderer exits before Skip/Done.
       emitPendingCancellation()
     }
   }, [activeTourId, emitContextualTourOutcome])
 
-  useEffect(() => {
-    if (!activeTourId || !renderState) {
-      return
-    }
-    const focusKey = `${activeTourId}:${activeStepIndex}`
-    if (focusedStepRef.current === focusKey) {
-      return
-    }
-    focusedStepRef.current = focusKey
-
-    const currentFocus = document.activeElement
-    if (
-      !previousFocusRef.current &&
-      currentFocus instanceof HTMLElement &&
-      !panelRef.current?.contains(currentFocus)
-    ) {
-      previousFocusRef.current = currentFocus
-    }
-
-    const timeout = window.setTimeout(() => {
-      const panel = panelRef.current
-      const firstFocusable = panel ? getContextualTourFocusableElements(panel)[0] : null
-      ;(firstFocusable ?? panel)?.focus({ preventScroll: true })
-    }, 0)
-    return () => window.clearTimeout(timeout)
-  }, [activeStepIndex, activeTourId, renderState])
-
-  useEffect(() => {
-    if (activeTourId) {
-      return
-    }
-    focusedStepRef.current = null
-    const previousFocus = previousFocusRef.current
-    previousFocusRef.current = null
-    if (previousFocus?.isConnected) {
-      previousFocus.focus({ preventScroll: true })
-    }
-  }, [activeTourId])
+  useContextualTourFocus({
+    activeTourId,
+    activeStepIndex,
+    rendered: renderState !== null,
+    panelRef
+  })
 
   if (!activeTourId || !renderState) {
     return null
@@ -316,9 +366,33 @@ export function ContextualTourOverlay(): JSX.Element | null {
       setSidebarOpen,
       openTaskPage,
       openModal,
-      canCreateWorkspace,
+      openClientHostedBrowserSettings: () => {
+        openSettingsTarget({
+          pane: 'browser',
+          repoId: null,
+          sectionId: BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID
+        })
+        openSettingsPage()
+      },
+      openChromeWebStore: () =>
+        openBrowserProfileTab(
+          CHROME_WEB_STORE_HOME_URL,
+          renderState.targetElement.getAttribute('data-browser-profile-id')
+        ),
+      reportChromeWebStoreOpenFailure: () =>
+        toast.error(
+          t('browser.extensions.openWebStoreFailed', "Couldn't open the Chrome Web Store.")
+        ),
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
+      splitActiveChat: () => {
+        const { activeWorktreeId, activeGroupIdByWorktree } = useAppStore.getState()
+        runActiveNativeChatSplit(
+          activeWorktreeId,
+          activeWorktreeId ? (activeGroupIdByWorktree[activeWorktreeId] ?? null) : null,
+          'right'
+        )
+      },
       schedule: (callback) => {
         window.setTimeout(callback, 0)
       }

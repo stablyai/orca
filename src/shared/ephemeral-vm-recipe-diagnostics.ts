@@ -1,10 +1,13 @@
-import { parsePairingCode } from './pairing'
+import { parsePairingCode } from './remote-runtime/pairing/pairing'
+import { redactEphemeralVmRecipeDiagnosticText } from './ephemeral-vm-recipe-diagnostic-redaction'
 import {
   getEphemeralVmRecipeResultConnection,
   type EphemeralVmRecipeConnection,
   type EphemeralVmRecipeResult,
   type JsonValue
 } from './ephemeral-vm-recipes'
+
+export { redactEphemeralVmRecipeDiagnosticText }
 
 export type EphemeralVmRecipeResultWarning = {
   id: string
@@ -32,18 +35,6 @@ export function getEphemeralVmRecipeResultWarnings(
     })
   }
   return warnings
-}
-
-export function redactEphemeralVmRecipeDiagnosticText(text: string): string {
-  if (!text) {
-    return text
-  }
-  return text
-    .replace(/orca:\/\/pair\?code=[A-Za-z0-9_-]+/g, 'orca://pair?code=[redacted]')
-    .replace(
-      /("(?:pairingCode|deviceToken|publicKeyB64|token|secret|password|apiKey|accessToken|identityFile|identityAgent|proxyCommand)"\s*:\s*)"[^"]*"/gi,
-      '$1"[redacted]"'
-    )
 }
 
 export function redactEphemeralVmRecipeResultForDiagnostics(

@@ -1,4 +1,10 @@
 import { yieldToEventLoop } from './event-loop-yield'
+import {
+  getUtf8ByteLengthForCodePoint,
+  measureUtf8ByteLength,
+  readUtf8CodePointAt,
+  type Utf8ByteLengthMeasurement
+} from './utf8-byte-limits'
 
 export const CLIPBOARD_TEXT_READ_MAX_BYTES = 16 * 1024 * 1024
 export const CLIPBOARD_TEXT_WRITE_MAX_BYTES = 16 * 1024 * 1024
@@ -14,34 +20,6 @@ export type WriteClipboardTextOptions = {
   maxBytes?: number
 }
 
-export type ClipboardTextByteLengthMeasurement = {
-  byteLength: number
-  exceededLimit: boolean
-}
-
-export function measureClipboardTextByteLength(
-  text: string,
-  options: { stopAfterBytes?: number } = {}
-): ClipboardTextByteLengthMeasurement {
-  const stopAfterBytes = options.stopAfterBytes
-  let byteLength = 0
-  for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
-    byteLength += getUtf8ByteLengthForCodePoint(codePoint)
-    if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
-      return { byteLength, exceededLimit: true }
-    }
-    if (codePoint > 0xffff) {
-      index += 1
-    }
-  }
-  return { byteLength, exceededLimit: false }
-}
-
-export function getClipboardTextByteLength(text: string): number {
-  return measureClipboardTextByteLength(text).byteLength
-}
-
 export async function measureClipboardTextByteLengthWithYield(
   text: string,
   options: {
@@ -49,7 +27,7 @@ export async function measureClipboardTextByteLengthWithYield(
     yieldAfterCodeUnits?: number
     yieldToEventLoop?: () => Promise<void>
   } = {}
-): Promise<ClipboardTextByteLengthMeasurement> {
+): Promise<Utf8ByteLengthMeasurement> {
   const stopAfterBytes = options.stopAfterBytes
   const yieldAfterCodeUnits = Math.max(
     1,
@@ -60,7 +38,7 @@ export async function measureClipboardTextByteLengthWithYield(
   let byteLength = 0
 
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(text, index)
     byteLength += getUtf8ByteLengthForCodePoint(codePoint)
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
       return { byteLength, exceededLimit: true }
@@ -79,7 +57,7 @@ export async function measureClipboardTextByteLengthWithYield(
 export function isClipboardTextByteLengthOverLimit(text: string, maxBytes: number): boolean {
   return (
     text.length > maxBytes ||
-    measureClipboardTextByteLength(text, { stopAfterBytes: maxBytes }).exceededLimit
+    measureUtf8ByteLength(text, { stopAfterBytes: maxBytes }).exceededLimit
   )
 }
 
@@ -171,17 +149,4 @@ export function isClipboardTextTooLargeError(error: unknown): boolean {
 
 export function isClipboardTextWriteTooLargeError(error: unknown): boolean {
   return error instanceof Error && error.message.includes(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
-}
-
-function getUtf8ByteLengthForCodePoint(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
 }

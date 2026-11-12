@@ -1,0 +1,310 @@
+import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
+import { toast } from 'sonner'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store/index'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { launchOnboardingCompletionAgent } from './onboarding-completion-agent-launch'
+import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { buildWindowsTerminalSnapshotPayload } from './windows-terminal-onboarding-telemetry'
+import { persistStep, type PersistCurrentStepResult } from './use-onboarding-flow-persistence'
+import { STEPS, type AgentSurface, type StepNumber } from './use-onboarding-flow-types'
+import { captureThemeLookSettings } from './onboarding-theme-look-settings'
+import {
+  prepareSkippedOnboardingPreferences,
+  resolveStepIndex,
+  type OnboardingStepSkipOptions,
+  type TaskSourcesExitAction
+} from './onboarding-flow-state'
+
+type CloseWith = (
+  outcome: 'completed' | 'dismissed',
+  lastStepReached: StepNumber,
+  completedPath?: 'add_project_modal' | 'workspace',
+  dismissedExtras?: { advancedVia: 'button' | 'keyboard'; durationMs: number }
+) => Promise<boolean>
+
+type OnboardingFlowActionsArgs = {
+  busyLabel: string | null
+  setBusyLabel: Dispatch<SetStateAction<string | null>>
+  setError: Dispatch<SetStateAction<string | null>>
+  currentStep: (typeof STEPS)[number]
+  consumeStepDurationMs: () => number
+  trackTaskSourcesSnapshot: (
+    exitAction: TaskSourcesExitAction,
+    durationMs: number,
+    advancedVia: 'button' | 'keyboard'
+  ) => void
+  settings: GlobalSettings | null
+  persistCurrentStep: () => Promise<PersistCurrentStepResult>
+  selectedWorkspaceId: string | null
+  closeWith: CloseWith
+  openModal: (modal: 'add-repo') => void
+  getNextStepIndex: (index: number) => number
+  onOnboardingChange: (state: OnboardingState) => void
+  stepIndex: number
+  setStepIndex: Dispatch<SetStateAction<number>>
+  selectedAgent: TuiAgent | null
+  agentSurface: AgentSurface
+  themeLookBaseline: GlobalSettings | null
+  setTheme: Dispatch<SetStateAction<GlobalSettings['theme']>>
+  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  skipOptions: OnboardingStepSkipOptions
+}
+
+export function useOnboardingFlowActions({
+  busyLabel,
+  setBusyLabel,
+  setError,
+  currentStep,
+  consumeStepDurationMs,
+  trackTaskSourcesSnapshot,
+  settings,
+  persistCurrentStep,
+  selectedWorkspaceId: worktreeId,
+  closeWith,
+  openModal,
+  getNextStepIndex,
+  onOnboardingChange,
+  stepIndex,
+  setStepIndex,
+  selectedAgent,
+  agentSurface,
+  themeLookBaseline,
+  setTheme,
+  updateSettings,
+  skipOptions
+}: OnboardingFlowActionsArgs) {
+  // Latch synchronously: busyLabel commits too late to stop shortcut autorepeat from skipping a step.
+  const nextInFlightRef = useRef(false)
+  const trackCurrentStepCompleted = useCallback(
+    (advancedVia: 'button' | 'keyboard'): void => {
+      // Step 1 spans the Chat/Terminal page and the agent page; only the agent page completes it.
+      if (currentStep.id === 'agent_surface') {
+        return
+      }
+      const durationMs = consumeStepDurationMs()
+      track('onboarding_step_completed', {
+        step: currentStep.stepNumber,
+        value_kind: currentStep.valueKind,
+        duration_ms: durationMs,
+        advanced_via: advancedVia
+      })
+      if (currentStep.id === 'integrations') {
+        trackTaskSourcesSnapshot('continue', durationMs, advancedVia)
+      }
+      if (currentStep.id === 'windows_terminal') {
+        track(
+          'onboarding_windows_terminal_snapshot',
+          buildWindowsTerminalSnapshotPayload({
+            settings,
+            exitAction: 'continue',
+            durationMs,
+            advancedVia
+          })
+        )
+      }
+    },
+    [
+      consumeStepDurationMs,
+      currentStep.id,
+      currentStep.stepNumber,
+      currentStep.valueKind,
+      settings,
+      trackTaskSourcesSnapshot
+    ]
+  )
+  const complete = useCallback(
+    async (
+      workspaceExecutionHostId: Parameters<typeof launchOnboardingCompletionAgent>[2],
+      path: 'workspace' | 'add_project_modal',
+      agent?: TuiAgent | null
+    ): Promise<boolean> => {
+      const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, path)
+      if (closed && !worktreeId && path === 'add_project_modal') {
+        openModal('add-repo')
+      } else if (closed && worktreeId) {
+        await launchOnboardingCompletionAgent(worktreeId, agent, workspaceExecutionHostId)
+      }
+      return closed
+    },
+    [closeWith, openModal, worktreeId]
+  )
+
+  const next = useCallback(
+    async (advancedVia: 'button' | 'keyboard' = 'button') => {
+      if (nextInFlightRef.current || busyLabel) {
+        return
+      }
+      nextInFlightRef.current = true
+      const agent = selectedAgent
+      const workspaceExecutionHostId = worktreeId
+        ? getExecutionHostIdForWorktree(useAppStore.getState(), worktreeId)
+        : undefined
+      try {
+        const result = await persistCurrentStep()
+        if (result.ok) {
+          trackCurrentStepCompleted(advancedVia)
+          if (currentStep.id === 'notifications') {
+            setBusyLabel(
+              worktreeId
+                ? translate('components.onboarding.flow.actions.continue', 'Continue')
+                : translate(
+                    'components.onboarding.flow.actions.openingAddProject',
+                    'Opening Add Project...'
+                  )
+            )
+            await complete(
+              workspaceExecutionHostId,
+              worktreeId ? 'workspace' : 'add_project_modal',
+              agent
+            )
+            return
+          }
+          const nextIndex = getNextStepIndex(stepIndex)
+          const skippedThroughStepNumber = STEPS[nextIndex].stepNumber - 1
+          if (skippedThroughStepNumber > currentStep.stepNumber) {
+            // Why: skipped optional pages must still persist progress at the next visible page.
+            try {
+              onOnboardingChange(await persistStep(skippedThroughStepNumber))
+            } catch (err) {
+              toast.error(
+                translate(
+                  'auto.components.onboarding.use.onboarding.flow.52acfbef51',
+                  'Could not save progress'
+                ),
+                {
+                  description: err instanceof Error ? err.message : String(err)
+                }
+              )
+            }
+          }
+          setStepIndex(nextIndex)
+        }
+      } finally {
+        setBusyLabel(null)
+        nextInFlightRef.current = false
+      }
+    },
+    [
+      busyLabel,
+      complete,
+      currentStep.id,
+      currentStep.stepNumber,
+      getNextStepIndex,
+      worktreeId,
+      selectedAgent,
+      onOnboardingChange,
+      persistCurrentStep,
+      stepIndex,
+      trackCurrentStepCompleted,
+      setBusyLabel,
+      setStepIndex
+    ]
+  )
+
+  const setUpLater = useCallback(async () => {
+    if (nextInFlightRef.current || busyLabel || currentStep.id === 'notifications') {
+      return
+    }
+    nextInFlightRef.current = true
+    const workspaceExecutionHostId = worktreeId
+      ? getExecutionHostIdForWorktree(useAppStore.getState(), worktreeId)
+      : undefined
+    const agent = currentStep.id === 'agent' ? selectedAgent : undefined
+    const durationMs = consumeStepDurationMs()
+    const stepId = currentStep.id
+    const stepNumber = currentStep.stepNumber
+    const valueKind = currentStep.valueKind
+    setError(null)
+    setBusyLabel(translate('components.onboarding.flow.actions.continue', 'Continue'))
+    try {
+      const preferencesSaved = await prepareSkippedOnboardingPreferences({
+        currentStepId: stepId,
+        lookBeforePreview: themeLookBaseline ? captureThemeLookSettings(themeLookBaseline) : null,
+        settingsTheme: settings?.theme,
+        selectedAgent,
+        agentSurface,
+        settings,
+        setTheme,
+        applyTheme: applyDocumentTheme,
+        updateSettings,
+        setError
+      })
+      if (!preferencesSaved || !(await complete(workspaceExecutionHostId, 'workspace', agent))) {
+        return
+      }
+      track('onboarding_step_skipped', {
+        step: stepNumber,
+        value_kind: valueKind,
+        duration_ms: durationMs,
+        advanced_via: 'button'
+      })
+      if (stepId === 'integrations') {
+        trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
+      }
+      if (stepId === 'windows_terminal') {
+        track(
+          'onboarding_windows_terminal_snapshot',
+          buildWindowsTerminalSnapshotPayload({
+            settings,
+            exitAction: 'skip_to_project_setup',
+            durationMs,
+            advancedVia: 'button'
+          })
+        )
+      }
+    } finally {
+      setBusyLabel(null)
+      nextInFlightRef.current = false
+    }
+  }, [
+    busyLabel,
+    complete,
+    consumeStepDurationMs,
+    currentStep.id,
+    currentStep.stepNumber,
+    currentStep.valueKind,
+    agentSurface,
+    selectedAgent,
+    settings,
+    trackTaskSourcesSnapshot,
+    updateSettings,
+    setBusyLabel,
+    setError,
+    setTheme,
+    themeLookBaseline,
+    worktreeId
+  ])
+
+  const dismissOnboarding = useCallback(
+    async (advancedVia: 'button' | 'keyboard' = 'button'): Promise<boolean> => {
+      if (busyLabel) {
+        return false
+      }
+      setError(null)
+      return closeWith('dismissed', currentStep.stepNumber, undefined, {
+        durationMs: consumeStepDurationMs(),
+        advancedVia
+      })
+    },
+    [busyLabel, closeWith, consumeStepDurationMs, currentStep.stepNumber, setError]
+  )
+
+  const back = useCallback(() => {
+    setStepIndex((index) => resolveStepIndex(index - 1, skipOptions, 'backward'))
+  }, [setStepIndex, skipOptions])
+
+  const jumpToStep = useCallback(
+    (idx: number) => {
+      setStepIndex(resolveStepIndex(idx, skipOptions, idx < stepIndex ? 'backward' : 'forward'))
+    },
+    [setStepIndex, skipOptions, stepIndex]
+  )
+
+  return { next, setUpLater, dismissOnboarding, back, jumpToStep }
+}

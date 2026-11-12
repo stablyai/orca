@@ -1,0 +1,69 @@
+name: Performance contracts
+
+on:
+  schedule:
+    - cron: '15 9 * * *'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - '.github/workflows/performance-contracts.yml'
+      - 'config/vitest.performance.config.ts'
+      - 'config/oxlint-performance-audit.json'
+      - 'config/oxlint-plugins/*performance.mjs'
+      - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
+      - 'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs'
+      - 'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs'
+      - '**/*.performance.test.ts'
+      - '**/*.performance.test.tsx'
+      # Contracts without the .performance suffix. Keep in sync with config/vitest.performance.config.ts;
+      # without these a rename lands green and only breaks the next nightly.
+      - 'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts'
+      - 'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts'
+      - 'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx'
+      - 'src/main/sqlite/sync-database.test.ts'
+      - 'src/main/codex-usage/codex-rollout-file-lifetime.test.ts'
+      - 'src/main/codex-usage/scanner-incremental-append.test.ts'
+      - 'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-contracts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    # Operation-count and retention contracts, not wall-clock budgets: use the hosted images the cache warmers seed.
+    runs-on: ${{ fromJSON('{"ubuntu-latest":"ubuntu-24.04","macos-latest":"macos-15","windows-latest":"windows-2022"}')[matrix.os] || matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Run operation-count and retention contracts
+        run: pnpm test:perf:contracts --reporter=default --reporter=json --outputFile=performance-contracts.json
+      # Source-only scan: identical on every OS, so run it once.
+      - name: Audit production performance patterns
+        if: always() && matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: pnpm --silent audit:perf > performance-audit.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: performance-contracts-${{ matrix.os }}
+          path: performance-contracts.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.os == 'ubuntu-latest'
+        with:
+          name: performance-audit
+          path: performance-audit.json
+          if-no-files-found: error

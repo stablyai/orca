@@ -1,12 +1,13 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; reveal state intentionally resets when the active/reduced-motion gates change. */
 import { useEffect, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { Wrench } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ClaudeActivity = { kind: 'tool'; tool: string; arg: string } | { kind: 'msg'; text: ReactNode }
 
@@ -23,6 +24,7 @@ const CLAUDE_ACTIVITIES: readonly ClaudeActivity[] = [
 ]
 
 export function StatusesPage(props: { active: boolean; reducedMotion: boolean }): JSX.Element {
+  const t = useTranslate()
   const { active, reducedMotion } = props
   const [revealed, setRevealed] = useState({ claude: false, opencode: false, codex: false })
   const [claudeIdx, setClaudeIdx] = useState(0)
@@ -48,18 +50,23 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
     schedule(() => setRevealed((r) => ({ ...r, codex: true })), 1900)
 
     let idx = 0
-    const cycleId = window.setInterval(() => {
-      setClaudeFading(true)
-      const swap = window.setTimeout(() => {
-        idx = (idx + 1) % CLAUDE_ACTIVITIES.length
-        setClaudeIdx(idx)
-        setClaudeFading(false)
-      }, 280)
-      timeouts.push(swap)
-    }, 2400)
+    // Pause hidden-window work; keep idx so revealing resumes without skipping an activity.
+    const stopCycle = installWindowVisibilityInterval({
+      run: () => {
+        setClaudeFading(true)
+        const swap = window.setTimeout(() => {
+          idx = (idx + 1) % CLAUDE_ACTIVITIES.length
+          setClaudeIdx(idx)
+          setClaudeFading(false)
+        }, 280)
+        timeouts.push(swap)
+      },
+      runOnVisible: () => {},
+      intervalMs: 2400
+    })
     return () => {
       timeouts.forEach((id) => window.clearTimeout(id))
-      window.clearInterval(cycleId)
+      stopCycle()
     }
   }, [active, reducedMotion])
 
@@ -70,7 +77,7 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
         <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
           <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
           <div className="truncate text-[15.5px] font-semibold leading-[1.2]">
-            {translate(
+            {t(
               'auto.components.feature.wall.agents.orchestration.StatusesPage.79971d1539',
               'redesign auth flow'
             )}
@@ -85,12 +92,12 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
           >
             {revealed.codex ? (
               <span>
-                {translate(
+                {t(
                   'auto.components.feature.wall.agents.orchestration.StatusesPage.78f0318ac1',
                   'Wants to run'
                 )}
                 <CodeChip>
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.agents.orchestration.StatusesPage.7b26349cb2',
                     'pnpm migrate latest'
                   )}
@@ -117,12 +124,12 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
           <AgentRow icon={<AgentIcon agent="opencode" size={18} />} name="OpenCode" state="done">
             {revealed.opencode ? (
               <span>
-                {translate(
+                {t(
                   'auto.components.feature.wall.agents.orchestration.StatusesPage.139e3d7458',
                   'Updated'
                 )}
                 <CodeChip>
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.agents.orchestration.StatusesPage.2f549fc0ba',
                     'src/auth/session.test.ts'
                   )}
@@ -199,8 +206,7 @@ function Skel(props: { widthPct: number }): JSX.Element {
   )
 }
 
-// Long horizontal scroller of supported agent pills. Track is duplicated so a
-// -50% translate loop reads as seamless infinite scroll.
+// Duplicate the track so translating by half its width loops seamlessly.
 function SupportedAgentsMarquee(props: { reducedMotion: boolean }): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const agentCatalog = getAgentCatalog()

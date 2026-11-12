@@ -1,10 +1,23 @@
 import { translate } from '@/i18n/i18n'
-import { getExecutionHostLabel } from '../../../shared/execution-host'
+import type { Translate } from '@/i18n/use-translate'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
-import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
+import type { ExecutionHostHealth } from '../../../shared/execution-host/execution-host-health'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
-import type { TaskProvider } from '../../../shared/types'
-import type { TaskProviderIdentity, TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskProvider } from '../../../shared/work-items/task-providers'
+import type { TaskProviderIdentity } from '../../../shared/work-items/task-provider-identity'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { getTranslatedExecutionHostLabel } from './sidebar/execution-host-label'
+import {
+  accountTitlePart,
+  availabilityTitlePart,
+  formatHostStatus,
+  getAvailabilityLabel,
+  getAvailabilityStatusLabel,
+  hostTitlePart,
+  projectCountLabel,
+  selectedProjectCountLabel,
+  sourceHostCountLabel
+} from './task-source-host-status-labels'
 
 export type TaskSourceContextSummary = {
   label: string
@@ -32,69 +45,95 @@ export type TaskSourceHostAvailability = {
 type HostLabelLookup = ReadonlyMap<string, string> | undefined
 
 function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup): string {
-  return hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
+  return hostLabelById?.get(hostId) ?? getTranslatedExecutionHostLabel(hostId)
 }
 
-export function getTaskSourceContextSummary(args: {
-  provider: TaskProvider
+type RepoBackedTaskSourceSummaryArgs = {
   providerLabel: string
-  repoContexts?: readonly TaskSourceContext[]
+  repoContexts: readonly TaskSourceContext[]
+  /** Resolved list sources; null names no repository. Saved project identity is not the list's source. */
+  repoIdentities: readonly (TaskProviderIdentity | null)[]
   hostAvailability?: readonly TaskSourceHostAvailability[]
   hostLabelById?: HostLabelLookup
-  accountHostId?: ExecutionHostScope | null
   selectedRepoCount?: number
-  linearWorkspaceName?: string | null
-  jiraSiteName?: string | null
-}): TaskSourceContextSummary {
+}
+
+export function getTaskSourceContextSummary(
+  args:
+    | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
+    | {
+        provider: Extract<TaskProvider, 'linear' | 'jira'>
+        providerLabel: string
+        hostAvailability?: readonly TaskSourceHostAvailability[]
+        hostLabelById?: HostLabelLookup
+        accountHostId?: ExecutionHostScope | null
+        linearWorkspaceName?: string | null
+        jiraSiteName?: string | null
+      },
+  t?: Translate
+): TaskSourceContextSummary {
   switch (args.provider) {
     case 'github':
     case 'gitlab':
-      return getRepoBackedTaskSourceSummary(args)
+      return getRepoBackedTaskSourceSummary(args, t)
     case 'linear':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.linearWorkspaceName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
+      return getAccountBackedTaskSourceSummary(
+        args.providerLabel,
+        {
+          accountLabel: args.linearWorkspaceName,
+          accountHostId: args.accountHostId,
+          hostLabelById: args.hostLabelById,
+          hostAvailability: args.hostAvailability
+        },
+        t
+      )
     case 'jira':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
+      return getAccountBackedTaskSourceSummary(
+        args.providerLabel,
+        {
+          accountLabel: args.jiraSiteName,
+          accountHostId: args.accountHostId,
+          hostLabelById: args.hostLabelById,
+          hostAvailability: args.hostAvailability
+        },
+        t
+      )
   }
 }
 
-export function getTaskSourceAvailabilityNotice(args: {
-  providerLabel: string
-  hostAvailability?: readonly TaskSourceHostAvailability[]
-  hostLabelById?: HostLabelLookup
-  sourceCount?: number
-}): TaskSourceAvailabilityNotice | null {
-  const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
+export function getTaskSourceAvailabilityNotice(
+  args: {
+    providerLabel: string
+    hostAvailability?: readonly TaskSourceHostAvailability[]
+    hostLabelById?: HostLabelLookup
+    sourceCount?: number
+  },
+  t: Translate = translate
+): TaskSourceAvailabilityNotice | null {
+  const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById, t)
   if (unavailableHosts.length === 0) {
     return null
   }
   const sourceCount = Math.max(args.sourceCount ?? unavailableHosts.length, unavailableHosts.length)
   const blocking = unavailableHosts.length >= sourceCount
-  const hostStatusLabels = unavailableHosts.map((host) => `${host.hostLabel} ${host.statusLabel}`)
+  const hostStatusLabels = unavailableHosts.map(formatHostStatus)
   const target =
-    unavailableHosts.length === 1 ? hostStatusLabels[0] : `${unavailableHosts.length} source hosts`
+    unavailableHosts.length === 1
+      ? hostStatusLabels[0]
+      : sourceHostCountLabel(unavailableHosts.length, t)
   return {
     label: blocking
-      ? translate(
+      ? t(
           'auto.components.taskSourceContextSummary.sourceUnavailable',
           '{{value0}} source unavailable: {{value1}}',
           { value0: args.providerLabel, value1: target }
         )
-      : translate(
+      : t(
           'auto.components.taskSourceContextSummary.someSourceHostsUnavailable',
           'Some {{value0}} source hosts unavailable: {{value1}}',
           { value0: args.providerLabel, value1: target }
         ),
-    title: translate(
+    title: t(
       'auto.components.taskSourceContextSummary.reconnectOrUpdateTitle',
       'Reconnect or update {{value0}} to load this source.',
       { value0: formatLongList(hostStatusLabels) }
@@ -103,43 +142,44 @@ export function getTaskSourceAvailabilityNotice(args: {
   }
 }
 
-function getRepoBackedTaskSourceSummary(args: {
-  providerLabel: string
-  repoContexts?: readonly TaskSourceContext[]
-  hostAvailability?: readonly TaskSourceHostAvailability[]
-  hostLabelById?: HostLabelLookup
-  selectedRepoCount?: number
-}): TaskSourceContextSummary {
-  const contexts = args.repoContexts ?? []
+function getRepoBackedTaskSourceSummary(
+  args: RepoBackedTaskSourceSummaryArgs,
+  t: Translate = translate
+): TaskSourceContextSummary {
+  const contexts = args.repoContexts
   const hostLabels = uniqueLabels(
     contexts.map((context) => getHostLabel(context.hostId, args.hostLabelById))
   )
-  const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
-  const availabilityLabel = getAvailabilityLabel(unavailableHosts)
-  const identityLabels = uniqueLabels(
-    contexts.map((context) => getProviderIdentityLabel(context.providerIdentity))
-  )
+  const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById, t)
+  const availabilityLabel = getAvailabilityLabel(unavailableHosts, t)
+  const identityLabels = uniqueLabels(args.repoIdentities.map(getProviderIdentityLabel))
   const accountLabels = uniqueLabels(contexts.map((context) => context.accountLabel))
   const repoCount = args.selectedRepoCount ?? contexts.length
-  const hostLabel = hostLabels.length === 0 ? 'No host' : formatShortList(hostLabels)
-  const accountLabel = accountLabels.length > 0 ? `Account: ${formatLongList(accountLabels)}` : null
+  const hostLabel =
+    hostLabels.length === 0
+      ? t('auto.components.taskSourceContextSummary.noHost', 'No host')
+      : formatShortList(hostLabels)
+  const accountLabel =
+    accountLabels.length > 0 ? accountTitlePart(formatLongList(accountLabels), t) : null
   const targetLabel =
     accountLabels.length > 1
       ? formatShortList(accountLabels)
       : repoCount > 1
-        ? `${repoCount} projects`
-        : (identityLabels[0] ?? contexts[0]?.accountLabel ?? 'Selected project')
+        ? projectCountLabel(repoCount, t)
+        : (identityLabels[0] ??
+          contexts[0]?.accountLabel ??
+          t('auto.components.taskSourceContextSummary.selectedProject', 'Selected project'))
   const titleParts = [
     args.providerLabel,
-    hostLabels.length > 0 ? `Host: ${formatLongList(hostLabels)}` : null,
-    unavailableHosts.length > 0
-      ? `Availability: ${formatLongList(
-          unavailableHosts.map((host) => `${host.hostLabel} ${host.statusLabel}`)
-        )}`
-      : null,
+    hostLabels.length > 0 ? hostTitlePart(formatLongList(hostLabels), t) : null,
+    unavailableHosts.length > 0 ? availabilityTitlePart(unavailableHosts, t) : null,
     accountLabel,
-    identityLabels.length > 0 ? `Source: ${formatLongList(identityLabels)}` : null,
-    repoCount > 1 ? `${repoCount} selected projects` : null
+    identityLabels.length > 0
+      ? t('auto.components.taskSourceContextSummary.sourceTitle', 'Source: {{source}}', {
+          source: formatLongList(identityLabels)
+        })
+      : null,
+    repoCount > 1 ? selectedProjectCountLabel(repoCount, t) : null
   ].filter((part): part is string => Boolean(part))
 
   return {
@@ -150,28 +190,29 @@ function getRepoBackedTaskSourceSummary(args: {
   }
 }
 
-function getAccountBackedTaskSourceSummary(
+export function getAccountBackedTaskSourceSummary(
   providerLabel: string,
   args: {
     accountLabel: string | null | undefined
     accountHostId: ExecutionHostScope | null | undefined
     hostLabelById?: HostLabelLookup
     hostAvailability?: readonly TaskSourceHostAvailability[]
-  }
+  },
+  t: Translate = translate
 ): TaskSourceContextSummary {
-  const target = args.accountLabel?.trim() || 'Current account'
+  const target =
+    args.accountLabel?.trim() ||
+    t('auto.components.taskSourceContextSummary.currentAccount', 'Current account')
   const hostLabel = getHostLabel(args.accountHostId ?? 'local', args.hostLabelById)
-  const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
-  const availabilityLabel = getAvailabilityLabel(unavailableHosts)
+  const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById, t)
+  const availabilityLabel = getAvailabilityLabel(unavailableHosts, t)
   const titleParts = [
-    `${providerLabel} source`,
-    `Host: ${hostLabel}`,
-    availabilityLabel
-      ? `Availability: ${formatLongList(
-          unavailableHosts.map((host) => `${host.hostLabel} ${host.statusLabel}`)
-        )}`
-      : null,
-    `Account: ${target}`
+    t('auto.components.taskSourceContextSummary.providerSourceTitle', '{{provider}} source', {
+      provider: providerLabel
+    }),
+    hostTitlePart(hostLabel, t),
+    availabilityLabel ? availabilityTitlePart(unavailableHosts, t) : null,
+    accountTitlePart(target, t)
   ].filter((part): part is string => Boolean(part))
   return {
     label: [providerLabel, hostLabel, availabilityLabel, target]
@@ -217,7 +258,8 @@ function uniqueLabels(labels: readonly (string | null | undefined)[]): string[] 
 
 function getUnavailableHosts(
   hostAvailability: readonly TaskSourceHostAvailability[],
-  hostLabelById?: HostLabelLookup
+  hostLabelById?: HostLabelLookup,
+  t?: Translate
 ): {
   hostLabel: string
   statusLabel: string
@@ -225,7 +267,7 @@ function getUnavailableHosts(
   const seen = new Set<string>()
   const unavailableHosts: { hostLabel: string; statusLabel: string }[] = []
   for (const availability of hostAvailability) {
-    const statusLabel = getAvailabilityStatusLabel(availability)
+    const statusLabel = getAvailabilityStatusLabel(availability, t)
     if (!statusLabel) {
       continue
     }
@@ -238,70 +280,6 @@ function getUnavailableHosts(
     unavailableHosts.push({ hostLabel, statusLabel })
   }
   return unavailableHosts
-}
-
-function getAvailabilityStatusLabel(availability: TaskSourceHostAvailability): string | null {
-  switch (availability.reason) {
-    case undefined:
-      break
-    case 'checking-task-source-capability':
-      return 'checking server capabilities'
-    case 'missing-task-source-capability':
-      return 'server update needed for task sources'
-    case 'missing-provider-auth':
-      return 'provider auth needed'
-    case 'unavailable-source-tool':
-      return 'source tool unavailable'
-    case 'unsupported-provider':
-      return 'provider unsupported on this host'
-  }
-  if (availability.status) {
-    return availability.status === 'connected' ? null : getSshStatusLabel(availability.status)
-  }
-  switch (availability.health) {
-    case 'local':
-    case 'available':
-    case undefined:
-      return null
-    case 'connecting':
-      return 'connecting'
-    case 'blocked':
-      return 'server update needed'
-    case 'disconnected':
-      return 'disconnected'
-    case 'error':
-      return 'connection issue'
-  }
-}
-
-function getAvailabilityLabel(
-  unavailableHosts: readonly { hostLabel: string; statusLabel: string }[]
-): string | null {
-  if (unavailableHosts.length === 0) {
-    return null
-  }
-  if (unavailableHosts.length === 1) {
-    return unavailableHosts[0].statusLabel
-  }
-  return `${unavailableHosts.length} unavailable`
-}
-
-function getSshStatusLabel(status: SshConnectionStatus): string {
-  switch (status) {
-    case 'connected':
-      return 'connected'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'connecting'
-    case 'auth-failed':
-      return 'auth needed'
-    case 'reconnection-failed':
-    case 'error':
-      return 'connection issue'
-    case 'disconnected':
-      return 'disconnected'
-  }
 }
 
 function formatShortList(labels: readonly string[]): string {

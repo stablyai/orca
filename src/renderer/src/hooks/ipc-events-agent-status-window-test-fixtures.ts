@@ -1,0 +1,178 @@
+import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
+import type * as ReactModule from 'react'
+import { vi } from 'vitest'
+import type {
+  AgentStatusClearIpcPayload,
+  MigrationUnsupportedPtyEntry
+} from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusSetData } from './ipc-events-agent-status-store-test-fixtures'
+
+export function buildWindowApi(args: {
+  onSet: (cb: (data: AgentStatusSetData) => void) => () => void
+  onClear?: (cb: (data: AgentStatusClearIpcPayload) => void) => () => void
+  onLegacyWorkerTerminalRecovery?: (
+    cb: (data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void
+  ) => () => void
+  getSnapshot?: () => Promise<AgentStatusSetData[]>
+  getMigrationUnsupportedSnapshot?: () => Promise<MigrationUnsupportedPtyEntry[]>
+  drop?: (paneKey: string) => void
+  runtime?: Record<string, unknown>
+  ssh?: Record<string, unknown>
+  ui?: Record<string, unknown>
+}): Record<string, unknown> {
+  return {
+    api: {
+      repos: { onChanged: () => () => {} },
+      automations: { onChanged: () => () => {} },
+      worktrees: {
+        onChanged: () => () => {},
+        onBaseStatus: () => () => {},
+        onRemoteBranchConflict: () => () => {}
+      },
+      ui: {
+        onStateChanged: () => () => {},
+        onOpenSettings: () => () => {},
+        consumePendingOpenSettings: () => Promise.resolve(false),
+        onOpenFeatureTour: () => () => {},
+        onToggleLeftSidebar: () => () => {},
+        onToggleRightSidebar: () => () => {},
+        onToggleWorktreePalette: () => () => {},
+        onToggleFloatingTerminal: () => () => {},
+        onOpenQuickOpen: () => () => {},
+        onToggleQuickCommandsMenu: () => () => {},
+        onOpenNewWorkspace: () => () => {},
+        onOpenTasks: () => () => {},
+        onJumpToWorktreeIndex: () => () => {},
+        onJumpToTabIndex: () => () => {},
+        onWorktreeHistoryNavigate: () => () => {},
+        onActivateWorktree: () => () => {},
+        onCreateTerminal: () => () => {},
+        onRequestTerminalCreate: () => () => {},
+        onPublishAgentLaunchTab: () => () => {},
+        onRevealTerminalPane: () => () => {},
+        onApplyAgentPaneActivity: () => () => {},
+        onAgentLaunchPaneVerdict: () => () => {},
+        onLaunchRecipe: () => () => {},
+        onRequestTerminalTabMount: () => () => {},
+        replyTerminalCreate: () => {},
+        onSplitTerminal: () => () => {},
+        onRenameTerminal: () => () => {},
+        onFocusTerminal: () => () => {},
+        onFocusEditorTab: () => () => {},
+        onCloseSessionTab: () => () => {},
+        onSessionTabCloseRequest: () => () => {},
+        respondSessionTabClose: () => {},
+        onMoveSessionTab: () => () => {},
+        onOpenFileFromMobile: () => () => {},
+        onOpenDiffFromMobile: () => () => {},
+        onCloseTerminal: () => () => {},
+        onWorkspaceSleep: () => () => {},
+        onResumeSleepingAgents: () => () => {},
+        onRequestTabCreate: () => () => {},
+        onRequestRemoteCliBrowserScope: () => () => {},
+        replyTabCreate: () => {},
+        onRequestTabClose: () => () => {},
+        replyTabClose: () => {},
+        onRequestTabSetProfile: () => () => {},
+        replyTabSetProfile: () => {},
+        onCloseActiveTab: () => () => {},
+        onCloseFloatingItem: () => () => {},
+        onSelectFloatingIndex: () => () => {},
+        onBrowserPageTabShortcut: () => () => {},
+        onSwitchRecentTab: () => () => {},
+        onToggleStatusBar: () => () => {},
+        onFullscreenChanged: () => () => {},
+        onTerminalZoom: () => () => {},
+        getZoomLevel: () => 0,
+        set: vi.fn(),
+        ...args.ui
+      },
+      settings: { onChanged: () => () => {} },
+      updater: {
+        getStatus: () => Promise.resolve({ state: 'idle' }),
+        onStatus: () => () => {},
+        onClearDismissal: () => () => {}
+      },
+      browser: {
+        onGuestLoadFailed: () => () => {},
+        onPaneFocus: () => () => {},
+        onOpenLinkInOrcaTab: () => () => {},
+        onSessionProfilesChanged: () => () => {},
+        onNavigationUpdate: () => () => {},
+        onActivateView: () => () => {}
+      },
+      rateLimits: {
+        get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+        onUpdate: () => () => {}
+      },
+      runtime: {
+        getTerminalFitOverrides: () => Promise.resolve([]),
+        getTerminalDrivers: () => Promise.resolve([]),
+        getBrowserDrivers: () => Promise.resolve([]),
+        onTerminalFitOverrideChanged: () => () => {},
+        onTerminalDriverChanged: () => () => {},
+        onBrowserDriverChanged: () => () => {},
+        onClientHostedBrowserRowsChanged: () => () => {},
+        getClientHostedBrowserRows: async () => [],
+        ...args.runtime
+      },
+      ssh: {
+        listTargets: () => Promise.resolve([]),
+        listRemovedTargetLabels: () => Promise.resolve({}),
+        listPortForwards: () => Promise.resolve([]),
+        listUnrestoredPortForwards: () => Promise.resolve([]),
+        listDetectedPorts: () => Promise.resolve([]),
+        getState: () => Promise.resolve(null),
+        onStateChanged: () => () => {},
+        onCredentialRequest: () => () => {},
+        onCredentialResolved: () => () => {},
+        onPortForwardsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
+        onDetectedPortsChanged: () => () => {},
+        ...args.ssh
+      },
+      notifications: { dispatch: vi.fn(async () => ({ delivered: false })) },
+      agentStatus: {
+        onSet: args.onSet,
+        onClear: args.onClear ?? vi.fn(() => () => {}),
+        onLegacyWorkerTerminalRecovery:
+          args.onLegacyWorkerTerminalRecovery ?? vi.fn(() => () => {}),
+        getSnapshot: args.getSnapshot ?? vi.fn(() => Promise.resolve([])),
+        ...(args.getMigrationUnsupportedSnapshot
+          ? { getMigrationUnsupportedSnapshot: args.getMigrationUnsupportedSnapshot }
+          : {}),
+        drop: args.drop ?? vi.fn()
+      }
+    }
+  }
+}
+
+export function stubReactSyncEffect(): void {
+  vi.doMock('react', async () => {
+    const actual = await vi.importActual<typeof ReactModule>('react')
+    return {
+      ...actual,
+      useEffect: (effect: () => void | (() => void)) => {
+        effect()
+      }
+    }
+  })
+}
+
+export function stubAuxiliaryModules(): void {
+  vi.doMock('@/app-shell/chrome/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+  vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
+    activateAndRevealWorktree: vi.fn(),
+    ensureWorktreeHasInitialTerminal: vi.fn()
+  }))
+  vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
+    getVisibleWorktreeIds: () => []
+  }))
+  vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+    ...(await importOriginal<typeof UIZoomLevelModule>()),
+    zoomLevelToPercent: vi.fn(() => 100),
+    UI_ZOOM_MIN: -3,
+    UI_ZOOM_MAX: 3
+  }))
+  vi.doMock('@/app-shell/chrome/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+}

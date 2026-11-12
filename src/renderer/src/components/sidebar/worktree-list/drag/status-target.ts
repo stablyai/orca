@@ -1,0 +1,53 @@
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../../../shared/worktree/types'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
+import { getWorktreeLineageDropTargetIdentity } from './worktree-lineage-drag-drop'
+import type { WorktreeSidebarStatusDropTarget } from './worktree-sidebar-drop-preview'
+import { NO_WORKTREE_SIDEBAR_DROP_TARGET, type WorktreeSidebarLineageDropTarget } from './row-state'
+
+export function getPointerDropStatusTarget(args: {
+  container: HTMLElement
+  x: number
+  y: number
+}): WorktreeSidebarLineageDropTarget {
+  const target = document.elementFromPoint(args.x, args.y)
+  if (!(target instanceof Element) || !args.container.contains(target)) {
+    return NO_WORKTREE_SIDEBAR_DROP_TARGET
+  }
+  const pinTarget = target.closest<HTMLElement>('[data-workspace-pin-drop-target]')
+  if (pinTarget && args.container.contains(pinTarget)) {
+    return { status: null, isPinDrop: true, lineageParentIdentity: null }
+  }
+  const lineageParentIdentity = getWorktreeLineageDropTargetIdentity({
+    container: args.container,
+    target,
+    pointerY: args.y
+  })
+  const statusTarget = target.closest<HTMLElement>('[data-workspace-status-drop-target]')
+  return {
+    status:
+      statusTarget && args.container.contains(statusTarget)
+        ? ((statusTarget.dataset.workspaceStatus as WorkspaceStatus | undefined) ?? null)
+        : null,
+    isPinDrop: false,
+    lineageParentIdentity
+  }
+}
+
+export function shouldPreferSidebarStatusDropTarget(args: {
+  sourceGroupKey: string
+  target: WorktreeSidebarStatusDropTarget
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+}): boolean {
+  if (args.target.isPinDrop) {
+    return true
+  }
+  if (!args.target.status) {
+    return false
+  }
+  const sourceStatus = getWorkspaceStatusFromGroupKey(args.sourceGroupKey, args.workspaceStatuses)
+  return sourceStatus !== null && args.target.status !== sourceStatus
+}

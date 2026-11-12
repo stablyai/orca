@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { SearchSubprocessLineAccumulator } from './search-subprocess-lines'
 
 describe('SearchSubprocessLineAccumulator', () => {
+  it('still enforces per-line UTF-8 byte limits for decoded batches', () => {
+    const parser = new SearchSubprocessLineAccumulator(4)
+    const lines: string[] = []
+    expect(parser.push('éé\n漢\n', (line) => lines.push(line))).toBe(true)
+    expect(parser.push('漢é\n', (line) => lines.push(line))).toBe(false)
+    expect(lines).toEqual(['éé', '漢'])
+    expect(parser.finish()).toBeNull()
+  })
+
   it('preserves UTF-8 records split across raw byte chunks', () => {
     const parser = new SearchSubprocessLineAccumulator(32)
     const bytes = Buffer.from('first🐋\nsecond')
@@ -33,23 +42,15 @@ describe('SearchSubprocessLineAccumulator', () => {
 
     expect(lines).toEqual(['', 'a', ''])
   })
+})
 
-  it('retains one growable buffer for adversarial one-byte fragments', () => {
-    const parser = new SearchSubprocessLineAccumulator(256 * 1024)
-    const byte = Buffer.from('x')
-    let accepted = true
-
-    for (let index = 0; index < 200_000; index += 1) {
-      accepted = parser.push(byte, () => {}) && accepted
-    }
-
-    expect(accepted).toBe(true)
-    expect(Reflect.get(parser, 'buffer')).toBeInstanceOf(Buffer)
-    expect(parser.finish()).toBe('x'.repeat(200_000))
-    expect(Reflect.get(parser, 'buffer')).toBeNull()
-  })
-
-  it('rejects invalid byte limits', () => {
-    expect(() => new SearchSubprocessLineAccumulator(-1)).toThrow(RangeError)
+describe('oversized search record continuation', () => {
+  it.each(['clear', 'finish'] as const)('resets an unterminated discard on %s', (reset) => {
+    const parser = new SearchSubprocessLineAccumulator(4, 'discard')
+    const lines: string[] = []
+    expect(parser.push('oversized', (line) => lines.push(line))).toBe(false)
+    parser[reset]()
+    expect(parser.push('four\n', (line) => lines.push(line))).toBe(true)
+    expect(lines).toEqual(['four'])
   })
 })

@@ -1,6 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 
-import { updateEnvironmentFromPairingCode } from '../../../src/shared/runtime-environment-store'
+import { updateEnvironmentFromPairingCode } from '../../../src/shared/remote-runtime/host-store/runtime-environment-store'
 
 export type SameIdPairingReplacement = {
   environmentId: string
@@ -28,16 +28,20 @@ export async function replaceRuntimePairingInPlace(args: {
     if (!store) {
       throw new Error('Paired desktop store is unavailable during same-ID re-pair')
     }
+    const connection = await window.api.runtimeEnvironments.connect({ selector })
+    if (!connection.ok) {
+      throw new Error(`Same-ID re-pair reconnect failed: ${JSON.stringify(connection.error)}`)
+    }
     const environments = await window.api.runtimeEnvironments.list()
     store.getState().setRuntimeEnvironments(environments)
     if (!(await store.getState().refreshRuntimeEnvironmentStatus(selector))) {
       throw new Error('Same-ID re-paired desktop could not reach the HUB runtime')
     }
-    if (!(await store.getState().switchRuntimeEnvironment(selector))) {
+    if (!(await store.getState().setActiveRuntimeEnvironmentPreference(selector))) {
       throw new Error('Same-ID re-paired desktop could not select the HUB runtime')
     }
     // Why: same-ID selection is a no-op, so explicitly rehydrate the graph from the replacement transport.
-    await store.getState().fetchRepos()
+    await store.getState().fetchRepos({ runtimeEnvironmentId: selector, throwOnError: true })
     await store.getState().fetchAllWorktrees()
     await store.getState().fetchWorktreeLineage()
     return window.api.runtimeEnvironments.resolve({ selector })

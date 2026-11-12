@@ -1,20 +1,38 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import path from 'node:path'
+import type * as FsPromises from 'node:fs/promises'
+import { scanWorkspacePorts } from './local-workspace-port-scanner'
 import {
   attributePortToWorkspace,
-  isContainerProcess,
-  parseLsofListeningOutput,
-  parseNetstatListeningOutput,
-  parseProcNetTcp,
-  resetWorkspacePortScanTimeoutBackoffForTests,
-  scanWorkspacePorts
-} from './local-workspace-port-scanner'
+  attributePortsToWorkspaces,
+  normalizeWorkspacePortProbes
+} from './local-workspace-port-attribution'
+import { resetWorkspacePortScanTimeoutBackoffForTests } from './local-workspace-port-scan-state'
 
-const execFileMock = vi.hoisted(() => vi.fn())
+const runPortScanCommandMock = vi.hoisted(() => vi.fn())
 
-vi.mock('child_process', () => ({
-  execFile: execFileMock
+vi.mock('./port-scan-command-client', () => ({
+  runPortScanCommand: (command: string, args: string[], operation?: string) =>
+    command === '/usr/sbin/netstat'
+      ? Promise.resolve({
+          stdout:
+            'Active Internet connections (including servers)\nProto Recv-Q Send-Q Local Address Foreign Address (state)\ntcp4 0 0 127.0.0.1.5173 *.* LISTEN\n',
+          spawnMs: 5
+        })
+      : runPortScanCommandMock(command, args, operation),
+  isPortScanWorkerUnavailableError: () => false
 }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return { ...actual, realpath: vi.fn(actual.realpath) }
+})
+
+const LSOF_LISTEN_OUTPUT = ['p123', 'cnode', 'd0x1', 'n127.0.0.1:5173'].join('\n')
+
+function urlWatcherStub(): { lookup: () => undefined; reconcileWorkspaces: Mock } {
+  return { lookup: () => undefined, reconcileWorkspaces: vi.fn() }
+}
 
 const worktrees = [
   {
@@ -31,111 +49,7 @@ const worktrees = [
   }
 ]
 
-describe('local workspace port scanner parsing', () => {
-  it('parses lsof field output into listening ports', () => {
-    const ports = parseLsofListeningOutput(
-      ['p123', 'cnode', 'n127.0.0.1:5173', 'p456', 'cnginx', 'n*:8080'].join('\n')
-    )
-
-    expect(ports).toEqual([
-      { pid: 123, processName: 'node', host: '127.0.0.1', port: 5173 },
-      { pid: 456, processName: 'nginx', host: '*', port: 8080 }
-    ])
-  })
-
-  it('parses multiple lsof listening ports for the same process', () => {
-    const ports = parseLsofListeningOutput(
-      ['p123', 'cnode', 'n127.0.0.1:5173', 'n127.0.0.1:55173'].join('\n')
-    )
-
-    expect(ports).toEqual([
-      { pid: 123, processName: 'node', host: '127.0.0.1', port: 5173 },
-      { pid: 123, processName: 'node', host: '127.0.0.1', port: 55173 }
-    ])
-  })
-
-  it('parses Windows netstat listening rows', () => {
-    const ports = parseNetstatListeningOutput(
-      [
-        'Proto  Local Address          Foreign Address        State           PID',
-        'TCP    127.0.0.1:3000         0.0.0.0:0              LISTENING       4242',
-        'TCP    [::]:5173              [::]:0                 LISTENING       5151'
-      ].join('\n')
-    )
-
-    expect(ports).toEqual([
-      { host: '127.0.0.1', port: 3000, pid: 4242 },
-      { host: '::', port: 5173, pid: 5151 }
-    ])
-  })
-
-  it('parses Windows netstat rows without whitespace regex splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    const ports = parseNetstatListeningOutput(
-      'TCP    127.0.0.1:3000         0.0.0.0:0              LISTENING       4242'
-    )
-    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
-      ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
-    )
-    splitSpy.mockRestore()
-
-    expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, pid: 4242 }])
-    expect(usedWhitespaceFieldSplit).toBe(false)
-  })
-
-  it('parses Linux proc tcp listeners', () => {
-    const ports = parseProcNetTcp(
-      [
-        '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
-        '   0: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 12345 1 0000000000000000 100 0 0 10 0'
-      ].join('\n')
-    )
-
-    expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, inode: 12345 }])
-  })
-
-  it('parses Linux proc rows without whitespace regex splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    const ports = parseProcNetTcp(
-      [
-        '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
-        '   0: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 12345'
-      ].join('\n')
-    )
-    const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
-      ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
-    )
-    splitSpy.mockRestore()
-
-    expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, inode: 12345 }])
-    expect(usedWhitespaceFieldSplit).toBe(false)
-  })
-})
-
 describe('attributePortToWorkspace', () => {
-  it('uses cwd ancestry and picks the deepest matching worktree', () => {
-    const owner = attributePortToWorkspace(
-      { cwd: '/repo/worktrees/feature/packages/app', commandLine: 'node server.js' },
-      worktrees
-    )
-
-    expect(owner).toMatchObject({
-      worktreeId: 'repo::/repo/worktrees/feature',
-      displayName: 'feature',
-      confidence: 'cwd'
-    })
-  })
-
-  it('falls back to command-line path evidence', () => {
-    const commandPath = path.posix.resolve('/repo/worktrees/feature/node_modules/vite/bin/vite.js')
-    const owner = attributePortToWorkspace({ commandLine: `node ${commandPath}` }, worktrees)
-
-    expect(owner).toMatchObject({
-      worktreeId: 'repo::/repo/worktrees/feature',
-      confidence: 'command'
-    })
-  })
-
   it('requires command-line path boundary evidence', () => {
     const owner = attributePortToWorkspace(
       { commandLine: `node ${path.posix.resolve('/repo/worktrees/feature-other/server.js')}` },
@@ -144,187 +58,86 @@ describe('attributePortToWorkspace', () => {
 
     expect(owner).toBeUndefined()
   })
-
-  it('keeps path case significant on case-sensitive platforms', () => {
-    const owner = attributePortToWorkspace({ cwd: '/Repo/worktrees/feature' }, worktrees)
-
-    if (process.platform === 'win32') {
-      expect(owner).toMatchObject({ worktreeId: 'repo::/repo/worktrees/feature' })
-    } else {
-      expect(owner).toBeUndefined()
-    }
-  })
-
-  it('does not guess when there is no worktree evidence', () => {
-    const owner = attributePortToWorkspace({ cwd: '/Applications/ContainerRuntime.app' }, worktrees)
-
-    expect(owner).toBeUndefined()
-  })
 })
 
-describe('container process classification', () => {
-  it('detects common container listener owners without workspace attribution', () => {
-    expect(isContainerProcess({ processName: 'com.container.backend' })).toBe(true)
-    expect(isContainerProcess({ processName: 'com.vendor.backend' })).toBe(true)
-    expect(isContainerProcess({ commandLine: '/usr/bin/container-runtime port-forward' })).toBe(
-      true
-    )
-    expect(isContainerProcess({ processName: 'node', commandLine: 'node server.js' })).toBe(false)
-  })
-})
-
-describe('scanWorkspacePorts attribution work', () => {
+describe('scanWorkspacePorts with delayed process creation', () => {
   afterEach(() => {
     resetWorkspacePortScanTimeoutBackoffForTests()
     vi.restoreAllMocks()
-    execFileMock.mockReset()
+    runPortScanCommandMock.mockReset()
   })
 
-  it('normalizes worktree paths once per scan instead of once per port phase', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    const win32ResolveSpy = vi.spyOn(path.win32, 'resolve')
-    const posixResolveSpy = vi.spyOn(path.posix, 'resolve')
-    const invokeCallback = (callback: unknown, stdout: string): void => {
-      if (typeof callback !== 'function') {
-        throw new Error('missing execFile callback')
-      }
-      const execCallback = callback as (error: Error | null, stdout: string) => void
-      execCallback(null, stdout)
-    }
-    execFileMock.mockImplementation(
-      (command: string, args: string[], _options: unknown, callback: unknown) => {
-        if (command === 'lsof' && args.includes('-iTCP')) {
-          invokeCallback(
-            callback,
-            ['p123', 'cnode', 'n127.0.0.1:3000', 'p124', 'cnode', 'n127.0.0.1:3001'].join('\n')
-          )
-        } else if (command === 'lsof') {
-          invokeCallback(
-            callback,
-            ['p123', 'n/repo/service', 'p124', 'n/repo/worktrees/feature/app'].join('\n')
-          )
-        } else if (command === 'ps') {
-          invokeCallback(
-            callback,
-            [
-              '123 node /repo/service/server.js',
-              '124 node /repo/worktrees/feature/app/server.js'
-            ].join('\n')
-          )
-        } else {
-          invokeCallback(callback, '')
-        }
-        return { kill: vi.fn() }
-      }
-    )
+  // EDR spawn delay must not consume the command execution budget (#11161).
 
-    const scan = await scanWorkspacePorts(worktrees, {
-      lookup: () => undefined,
-      reconcileScan: vi.fn()
+  // Missing metadata cannot prove listener absence; eviction would lose PTY-only URL evidence (#11161).
+
+  // Skipped metadata cycles must retain attribution instead of moving workspace ports into External (#11161).
+
+  it('does not hand carried-forward metadata to a different listener', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    let listenOutput = LSOF_LISTEN_OUTPUT
+    let listenSpawnMs = 5
+    runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === '/usr/sbin/lsof' && args.includes('-iTCP')) {
+        return { stdout: listenOutput, spawnMs: listenSpawnMs }
+      }
+      return {
+        stdout: command === '/usr/sbin/lsof' ? ['p123', 'n/repo'].join('\n') : '',
+        spawnMs: 5
+      }
     })
 
-    expect(scan.ports.filter((port) => port.kind === 'workspace')).toHaveLength(2)
-    const win32WorktreePathResolveCalls = win32ResolveSpy.mock.calls.filter(
-      ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
-    )
-    const posixWorktreePathResolveCalls = posixResolveSpy.mock.calls.filter(
-      ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
-    )
-    expect(win32WorktreePathResolveCalls).toHaveLength(0)
-    expect(posixWorktreePathResolveCalls).toHaveLength(worktrees.length)
+    await scanWorkspacePorts(worktrees, urlWatcherStub())
+    listenOutput = ['p123', 'cnode', 'n127.0.0.1:9999'].join('\n')
+    listenSpawnMs = 4_200
+    const skipped = await scanWorkspacePorts(worktrees, urlWatcherStub())
+
+    expect(skipped.ports[0]?.kind).toBe('external')
   })
 })
 
-describe('scanWorkspacePorts command timeout', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-    resetWorkspacePortScanTimeoutBackoffForTests()
-    vi.restoreAllMocks()
-    execFileMock.mockReset()
-  })
+describe('scan-local workspace attribution', () => {
+  it('preserves cwd precedence, root boundaries and probe ties across a listener batch', () => {
+    const probes = normalizeWorkspacePortProbes([
+      { id: 'first', repoId: 'r', displayName: 'first', path: '/repo/bb' },
+      { id: 'second', repoId: 'r', displayName: 'second', path: '/repo/aa' },
+      { id: 'root', repoId: 'r', displayName: 'root', path: '/' },
+      { id: 'spaces', repoId: 'r', displayName: 'spaces', path: '/a /a' },
+      { id: 'long', repoId: 'r', displayName: 'long', path: '/a /b' },
+      { id: 'suffix', repoId: 'r', displayName: 'suffix', path: '/b' },
+      { id: 'unicode', repoId: 'r', displayName: 'unicode', path: '/repo/🌊' }
+    ])
+    probes.push({ ...probes[1], normalizedPath: '/repo/bb' })
+    const listeners = [
+      { cwd: '/repo/aa/server', commandLine: 'node /repo/bb/start' },
+      { commandLine: 'node /repo/aa/x /repo/bb/y' },
+      { cwd: '/outside' },
+      { cwd: '/' },
+      { commandLine: 'node /repo/bb-other/server' },
+      { commandLine: 'node --dir=/repo/bb:5173' },
+      { commandLine: 'z/a /a /a' },
+      { commandLine: 'z/a /b' },
+      { commandLine: 'node /a /b' },
+      { commandLine: 'node --dir=/repo/🌊:3000' },
+      { cwd: '/repo/🌊/server' }
+    ].map((evidence, i) => ({ host: '127.0.0.1', port: 3000 + i, ...evidence }))
 
-  it('returns an unavailable scan when lsof never reports completion', async () => {
-    vi.useFakeTimers()
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    const killMock = vi.fn()
-    execFileMock.mockImplementation(() => ({ kill: killMock }))
-
-    let settled = false
-    const scanPromise = scanWorkspacePorts([], {
-      lookup: () => undefined,
-      reconcileScan: vi.fn()
-    }).then((scan) => {
-      settled = true
-      return scan
-    })
-
-    await vi.advanceTimersByTimeAsync(4_000)
-
-    expect(settled).toBe(true)
-    await expect(scanPromise).resolves.toMatchObject({
-      platform: 'darwin',
-      ports: [],
-      unavailableReason: 'Port scanning is unavailable on darwin.'
-    })
-    expect(killMock).toHaveBeenCalled()
-  })
-
-  it('backs off after a command timeout instead of launching lsof on every scan tick', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    const killMock = vi.fn()
-    execFileMock.mockImplementation(() => ({ kill: killMock }))
-
-    const firstScanPromise = scanWorkspacePorts([], {
-      lookup: () => undefined,
-      reconcileScan: vi.fn()
-    })
-
-    await vi.advanceTimersByTimeAsync(4_000)
-    await expect(firstScanPromise).resolves.toMatchObject({
-      platform: 'darwin',
-      ports: [],
-      unavailableReason: 'Port scanning is unavailable on darwin.'
-    })
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-
-    const cooldownScans = await Promise.all(
-      Array.from({ length: 10 }, () =>
-        scanWorkspacePorts([], {
-          lookup: () => undefined,
-          reconcileScan: vi.fn()
-        })
-      )
-    )
-
-    expect(cooldownScans).toHaveLength(10)
-    expect(cooldownScans[0]).toMatchObject({
-      platform: 'darwin',
-      ports: []
-    })
     expect(
-      cooldownScans.every((scan) => scan.unavailableReason?.includes('temporarily paused'))
-    ).toBe(true)
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-
-    vi.setSystemTime(65_001)
-    await vi.advanceTimersByTimeAsync(0)
-    execFileMock.mockImplementation(
-      (_command: string, args: string[], _options: unknown, callback: unknown) => {
-        const execCallback = callback as (error: Error | null, stdout: string) => void
-        const output = args.includes('-iTCP') ? 'p123\ncnode\nn127.0.0.1:3000' : ''
-        execCallback(null, output)
-        return { kill: vi.fn() }
-      }
-    )
-
-    const recoveredScan = await scanWorkspacePorts([], {
-      lookup: () => undefined,
-      reconcileScan: vi.fn()
-    })
-
-    expect(recoveredScan.unavailableReason).toBeUndefined()
-    expect(execFileMock).toHaveBeenCalledTimes(4)
+      attributePortsToWorkspaces(listeners, probes).map(({ owner }) =>
+        owner ? [owner.worktreeId, owner.confidence] : null
+      )
+    ).toEqual([
+      ['second', 'cwd'],
+      ['first', 'command'],
+      null,
+      ['root', 'cwd'],
+      null,
+      ['first', 'command'],
+      ['spaces', 'command'],
+      ['suffix', 'command'],
+      ['long', 'command'],
+      ['unicode', 'command'],
+      ['unicode', 'cwd']
+    ])
   })
 })

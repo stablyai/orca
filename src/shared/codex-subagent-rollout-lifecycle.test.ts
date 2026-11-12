@@ -3,8 +3,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createHookListenerState, normalizeHookPayload } from './agent-hook-listener'
-import { makePaneKey } from './stable-pane-id'
+import { createHookListenerState } from './agent-hook-listener/listener-state'
+import { normalizeHookPayload } from './agent-hook-listener/normalization/normalize-hook-payload'
+import { makePaneKey } from './workspace-layout/stable-pane-id'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 const CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f316f'
@@ -67,7 +68,7 @@ describe('Codex rollout subagent lifecycle', () => {
       subagents: [
         {
           id: CHILD_ID,
-          description: '/root/pr_review',
+          description: 'pr_review',
           state: 'working',
           startedAt: 1234
         }

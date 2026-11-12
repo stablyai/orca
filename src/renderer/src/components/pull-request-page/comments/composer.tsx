@@ -1,0 +1,197 @@
+import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
+import React, { useCallback, useRef, useState } from 'react'
+import { LoaderCircle, Send } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { cn } from '@/lib/class-names'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
+import { addIssueCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
+import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import type { MentionOption } from '../page-types'
+import { MentionTextarea } from '../mentions/textarea'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
+
+export function GHCommentComposer({
+  className,
+  repoPath,
+  repoId,
+  sourceContext,
+  issueNumber,
+  itemType,
+  prRepo,
+  mentionOptions,
+  mentionError,
+  onCommentAdded
+}: {
+  className?: string
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+  issueNumber: number
+  itemType: 'issue' | 'pr'
+  prRepo?: GitHubOwnerRepo | null
+  mentionError?: string | null
+  mentionOptions: MentionOption[]
+  onCommentAdded: (comment: PRComment) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const images = useGitHubImagePending()
+  const [body, setBody] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useMountedRef()
+
+  const autoGrow = useCallback(() => {
+    const el = textareaRef.current
+    if (!el) {
+      return
+    }
+    el.style.height = 'auto'
+    el.style.height = `${Math.max(80, Math.min(el.scrollHeight, 240))}px`
+  }, [])
+
+  const handleSubmit = useCallback(async () => {
+    if (images.pendingRef.current) {
+      return
+    }
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.PullRequestPage.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result = await addIssueCommentForRepo({
+        repoPath,
+        repoId: repoId ?? undefined,
+        sourceContext,
+        number: issueNumber,
+        body: bodyState.body,
+        type: itemType,
+        prRepo
+      })
+      if (result.ok) {
+        onCommentAdded(result.comment)
+      }
+      if (!mountedRef.current) {
+        return
+      }
+      if (result.ok) {
+        setBody('')
+        requestAnimationFrame(autoGrow)
+        // Why: use GitHub's returned comment so the optimistic row shows the real login/avatar without a reopen.
+      } else {
+        toast.error(
+          codeHostErrorText(result) ??
+            translate('auto.components.PullRequestPage.1208347ac0', 'Failed to add comment')
+        )
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.PullRequestPage.1208347ac0', 'Failed to add comment')
+        )
+      }
+    } finally {
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
+    }
+  }, [
+    autoGrow,
+    images.pendingRef,
+    body,
+    mountedRef,
+    repoPath,
+    repoId,
+    sourceContext,
+    issueNumber,
+    itemType,
+    prRepo,
+    onCommentAdded
+  ])
+  const canSubmitComment = hasBoundedCommentBodyText(body)
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (isScreenSubmitShortcut(e)) {
+        e.preventDefault()
+        handleSubmit()
+      }
+    },
+    [handleSubmit]
+  )
+
+  return (
+    <div className={cn('relative', className)}>
+      <MentionTextarea
+        imageUpload={{
+          address: githubCommentImageUploadAddress({
+            repoPath,
+            repoId,
+            sourceContext,
+            type: itemType,
+            prRepo
+          }),
+          onPending: images.onPending,
+          enabled: !submitting
+        }}
+        textareaRef={textareaRef}
+        value={body}
+        onValueChange={(nextValue) => {
+          setBody(nextValue)
+          requestAnimationFrame(autoGrow)
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder={t('auto.components.PullRequestPage.d2030fc8cd', 'Add a comment…')}
+        rows={4}
+        mentionOptions={mentionOptions}
+        mentionError={mentionError}
+        wrapperClassName="flex min-h-20 w-full items-stretch"
+        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 pb-12 pr-12 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            size="icon-sm"
+            onClick={handleSubmit}
+            disabled={!canSubmitComment || submitting || images.pending}
+            className="absolute bottom-3 right-3 shadow-sm"
+            aria-label={t('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+          >
+            {submitting ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {t('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+}

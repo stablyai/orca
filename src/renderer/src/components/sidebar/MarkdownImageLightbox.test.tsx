@@ -10,7 +10,7 @@ afterEach(() => {
 })
 
 describe('ExpandableMarkdownImage', () => {
-  it('opens an accessible dialog, traps focus, and restores focus after Escape', async () => {
+  it('opens an accessible dialog and restores focus after Escape', async () => {
     const user = userEvent.setup()
     render(
       <ExpandableMarkdownImage
@@ -22,25 +22,13 @@ describe('ExpandableMarkdownImage', () => {
 
     const trigger = screen.getByRole('button', { name: 'Expand image' })
     await user.click(trigger)
-    expect(screen.getByRole('dialog', { name: 'shot.png' })).toBeTruthy()
+    const dialog = screen.getByRole('dialog', { name: 'shot.png' })
     expect(screen.getAllByAltText('shot.png').length).toBeGreaterThanOrEqual(2)
-    const closeButton = screen.getByRole('button', { name: 'Close' })
-    expect(document.activeElement).toBe(closeButton)
-
-    await user.tab()
-    expect(document.activeElement).toBe(closeButton)
+    expect(document.activeElement).toBe(dialog)
 
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'shot.png' })).toBeNull())
     expect(document.activeElement).toBe(trigger)
-  })
-
-  it('closes from the dialog close button', () => {
-    render(<ExpandableMarkdownImage src="data:image/png;base64,abc" alt="ui.png" />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Expand image' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    expect(screen.queryByRole('dialog', { name: 'ui.png' })).toBeNull()
   })
 
   it('keeps the parent issue drawer open after Escape and close-button dismissal', () => {

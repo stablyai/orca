@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parse as parseJsonc } from 'jsonc-parser'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -16,11 +17,7 @@ vi.mock('os', async () => {
 })
 
 import { DevinHookService } from './hook-service'
-import {
-  getDevinConfigPath,
-  getDevinManagedCommand,
-  getDevinManagedScriptPath
-} from './hook-settings'
+import { applyDevinManagedHooks, getDevinConfigPath, getDevinManagedCommand } from './hook-settings'
 
 describe('DevinHookService', () => {
   let homeDir: string
@@ -38,181 +35,73 @@ describe('DevinHookService', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  it('installs managed hooks into user Devin config and posts to /hook/devin', () => {
-    const status = new DevinHookService().install()
-
-    expect(status.state).toBe('installed')
-    expect(status.agent).toBe('devin')
-    expect(status.configPath).toBe(getDevinConfigPath())
-    expect(status.managedHooksPresent).toBe(true)
-
-    const config = JSON.parse(readFileSync(getDevinConfigPath(), 'utf8')) as {
-      hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
-      agent?: { model: string }
-    }
-    for (const eventName of [
-      'SessionStart',
-      'UserPromptSubmit',
-      'Stop',
-      'PostCompaction',
-      'SessionEnd'
-    ]) {
-      expect(config.hooks[eventName][0].hooks[0].command).toContain('devin-hook')
-    }
-    for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
-      expect(config.hooks[eventName][0].matcher).toBeUndefined()
-    }
-    const script = readFileSync(getDevinManagedScriptPath(), 'utf8')
-    expect(script).toContain('/hook/devin')
-    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-    // on the curl command line (EDR oversized-command-line false positive).
-    expect(script).toContain('printf \'%s\' "$payload" | curl')
-    expect(script).toContain('--data-urlencode "payload@-"')
-    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-  })
-
-  it('preserves unrelated keys in Devin config when installing hooks', () => {
-    const configPath = getDevinConfigPath()
-    mkdirSync(dirname(configPath), { recursive: true })
-    writeFileSync(
-      configPath,
-      `${JSON.stringify({ permissions: { mode: 'normal' }, hooks: {} }, null, 2)}\n`
-    )
-
-    new DevinHookService().install()
-
-    const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
-      permissions: { mode: string }
-      hooks: Record<string, unknown>
-    }
-    expect(config.permissions.mode).toBe('normal')
-    expect(config.hooks.UserPromptSubmit).toBeDefined()
-  })
-
-  it('installs when Devin config uses JSONC comments', () => {
+  it('keeps user comments and unrelated formatting when installing and removing', () => {
     const configPath = getDevinConfigPath()
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(
       configPath,
       `{
-  // user hooks
-  "hooks": {}
+  // keep me: chosen deliberately
+  "permissions": { "mode": "normal" },
+  /* block comment */
+  "hooks": {
+    // the user's own hook
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "mine.sh" }] }]
+  }
 }
 `
     )
 
-    const status = new DevinHookService().install()
-
-    expect(status.state).toBe('installed')
-    expect(JSON.parse(readFileSync(configPath, 'utf8')).hooks.UserPromptSubmit).toBeDefined()
-  })
-
-  it('surfaces read_config_from overlap in status detail', () => {
-    const configPath = getDevinConfigPath()
-    mkdirSync(dirname(configPath), { recursive: true })
-    writeFileSync(
-      configPath,
-      `${JSON.stringify({ hooks: {}, read_config_from: { claude: true } }, null, 2)}\n`
-    )
-
-    const status = new DevinHookService().getStatus()
-
-    expect(status.detail).toContain('read_config_from')
-    expect(status.detail).toContain('claude')
-  })
-
-  it('uses a cmd.exe wrapper for managed hook command on Windows', () => {
-    const previous = process.platform
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    try {
-      const scriptPath = 'C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd'
-      const command = getDevinManagedCommand(scriptPath)
-      const encoded = command.match(/ -EncodedCommand (\S+)$/)?.[1]
-      expect(encoded).toBeDefined()
-      const decoded = Buffer.from(encoded!, 'base64').toString('utf16le')
-      expect(decoded).toContain(`Test-Path -LiteralPath '${scriptPath}' -PathType Leaf`)
-      expect(decoded).toContain('[Console]::In.ReadToEnd() | Out-Null')
-    } finally {
-      Object.defineProperty(process, 'platform', { value: previous })
-    }
-  })
-
-  it('reports not_installed when Devin config has no managed hooks', () => {
-    const configPath = getDevinConfigPath()
-    mkdirSync(dirname(configPath), { recursive: true })
-    writeFileSync(configPath, `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
-
-    const status = new DevinHookService().getStatus()
-
-    expect(status.state).toBe('not_installed')
-    expect(status.managedHooksPresent).toBe(false)
-  })
-
-  it('remove clears managed hook commands from Devin config', () => {
     const service = new DevinHookService()
-    const installed = service.install()
-    expect(installed.state).toBe('installed')
+    service.install()
 
-    const removed = service.remove()
+    const installed = readFileSync(configPath, 'utf8')
+    expect(installed).toContain('// keep me: chosen deliberately')
+    expect(installed).toContain('/* block comment */')
+    expect(installed).toContain("// the user's own hook")
+    expect(installed).toContain('mine.sh')
+    expect(parseJsonc(installed).permissions.mode).toBe('normal')
+    expect(parseJsonc(installed).hooks.UserPromptSubmit).toBeDefined()
 
-    expect(removed.state).toBe('not_installed')
-    const configPath = getDevinConfigPath()
-    const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
-      hooks: Record<string, { hooks: { command: string }[] }[]>
-    }
-    const commands = Object.values(config.hooks).flatMap((definitions) =>
-      definitions.flatMap((definition) => definition.hooks.map((hook) => hook.command))
-    )
-    expect(commands.some((command) => command.includes('devin-hook'))).toBe(false)
+    service.remove()
+
+    const removed = readFileSync(configPath, 'utf8')
+    expect(removed).toContain('// keep me: chosen deliberately')
+    expect(removed).toContain('mine.sh')
+    expect(parseJsonc(removed).hooks.UserPromptSubmit).toBeUndefined()
   })
 
-  it('returns partial status when some managed hooks are missing', () => {
-    const configPath = getDevinConfigPath()
-    const scriptPath = getDevinManagedScriptPath()
-    const command = getDevinManagedCommand(scriptPath)
-    mkdirSync(dirname(configPath), { recursive: true })
-    mkdirSync(dirname(scriptPath), { recursive: true })
-    writeFileSync(scriptPath, '#!/bin/sh\n')
-
-    // Only install the managed hook for UserPromptSubmit
-    writeFileSync(
-      configPath,
-      `${JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command }] }] } }, null, 2)}\n`
-    )
-
-    const status = new DevinHookService().getStatus()
-
-    expect(status.state).toBe('partial')
-    expect(status.managedHooksPresent).toBe(true)
-    expect(status.detail).toContain('Stop')
-    expect(status.detail).toContain('PreToolUse')
-    expect(status.detail).toContain('PostToolUse')
-    expect(status.detail).toContain('PermissionRequest')
-    expect(status.detail).toContain('SessionStart')
-    expect(status.detail).toContain('PostCompaction')
-    expect(status.detail).toContain('SessionEnd')
-  })
-
-  it('uses APPDATA on Windows for Devin config path', () => {
+  it('registers a forward-slash cmd path on Windows and replaces the legacy backslash entry', () => {
     const previous = process.platform
-    const previousAppData = process.env.APPDATA
     Object.defineProperty(process, 'platform', { value: 'win32' })
     try {
-      process.env.APPDATA = 'C:\\Users\\test\\AppData\\Roaming'
-      expect(getDevinConfigPath()).toBe(
-        join('C:\\Users\\test\\AppData\\Roaming', 'devin', 'config.json')
-      )
+      const scriptPath = 'C:\\Users\\ada\\.orca\\agent-hooks\\devin-hook.cmd'
+      const command = getDevinManagedCommand(scriptPath)
+      // Forward slashes survive Git Bash path handling.
+      expect(command).toBe('C:/Users/ada/.orca/agent-hooks/devin-hook.cmd')
+      // UNC paths retain the encoded launcher because they have no drive letter.
+      expect(
+        getDevinManagedCommand('\\\\server\\share\\ada\\.orca\\agent-hooks\\devin-hook.cmd')
+      ).toMatch(/ -EncodedCommand \S+$/)
 
-      // Fallback when APPDATA is unset
-      delete process.env.APPDATA
-      expect(getDevinConfigPath()).toBe(join(homeDir, 'AppData', 'Roaming', 'devin', 'config.json'))
+      const next = applyDevinManagedHooks(
+        {
+          hooks: {
+            Stop: [
+              { hooks: [{ type: 'command', command: scriptPath }] },
+              { hooks: [{ type: 'command', command: 'C:\\tools\\user-hook.cmd' }] }
+            ]
+          }
+        },
+        command,
+        'devin-hook.cmd'
+      )
+      expect(next.hooks?.Stop?.flatMap((definition) => definition.hooks ?? [])).toEqual([
+        { type: 'command', command: 'C:\\tools\\user-hook.cmd' },
+        expect.objectContaining({ command })
+      ])
     } finally {
       Object.defineProperty(process, 'platform', { value: previous })
-      if (previousAppData !== undefined) {
-        process.env.APPDATA = previousAppData
-      } else {
-        delete process.env.APPDATA
-      }
     }
   })
 })

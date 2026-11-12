@@ -1,9 +1,13 @@
 import type { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 import { parseEphemeralVmRecipeResult, type EphemeralVmRecipeResult } from './ephemeral-vm-recipes'
-import { runRecipeCommand } from './ephemeral-vm-recipe-process'
+import { getEphemeralVmRecipeCheckoutModeFailure } from './ephemeral-vm-recipe-checkout-mode'
+import { pickEphemeralVmFailureCode, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'
+import { getEphemeralVmRecipeTimeoutSeconds } from './ephemeral-vm-recipe-timeouts'
+import { getRecipeStepFailure, runRecipeStep } from './ephemeral-vm-recipe-step'
+import { getEphemeralVmRecipeDestroyFailure } from './ephemeral-vm-recipe-destroy-result'
 import {
   buildEphemeralVmRecipeCleanupPayload,
   buildEphemeralVmRecipeLifecyclePayload
@@ -25,6 +29,7 @@ export type EphemeralVmRecipeContext = {
   repoUrl?: string
   branch?: string
   ref?: string
+  expectedRefHead?: string
   orcaVersion?: string
 }
 
@@ -35,6 +40,8 @@ export type EphemeralVmRecipeStartArgs = {
   env?: NodeJS.ProcessEnv
   maxCaptureBytes?: number
   signal?: AbortSignal
+  /** Called once the create process has actually started. */
+  onSpawn?: () => void
   onStdout?: (chunk: string) => void
   onStderr?: (chunk: string) => void
   spawnCommand?: typeof spawn
@@ -51,12 +58,12 @@ export type EphemeralVmRecipeStartSuccess = {
 export type EphemeralVmRecipeStartFailure = {
   ok: false
   context: EphemeralVmRecipeContext
-  error: string
   stdout: string
   stderr: string
   exitCode: number | null
   signal: NodeJS.Signals | null
-}
+  recipeResult?: EphemeralVmRecipeResult
+} & EphemeralVmFailure
 
 export type EphemeralVmRecipeStartResult =
   | EphemeralVmRecipeStartSuccess
@@ -66,7 +73,7 @@ export type EphemeralVmRecipeCleanupArgs = {
   recipe: OrcaVmRecipe
   repoPath: string
   context: EphemeralVmRecipeContext
-  recipeResult: EphemeralVmRecipeResult
+  recipeResult?: EphemeralVmRecipeResult
   env?: NodeJS.ProcessEnv
   maxCaptureBytes?: number
   signal?: AbortSignal
@@ -80,12 +87,11 @@ export type EphemeralVmRecipeLifecycleArgs = EphemeralVmRecipeCleanupArgs
 export type EphemeralVmRecipeCleanupResult = {
   ok: boolean
   skipped: boolean
-  error?: string
   stdout: string
   stderr: string
   exitCode: number | null
   signal: NodeJS.Signals | null
-}
+} & Partial<EphemeralVmFailure>
 
 export type EphemeralVmRecipeResumeResult =
   | (EphemeralVmRecipeStartSuccess & { skipped: false })
@@ -103,26 +109,11 @@ export async function runEphemeralVmRecipeStart(
 ): Promise<EphemeralVmRecipeStartResult> {
   validateRepoPath(args.repoPath)
   const context = buildRecipeContext(args.recipe, args.repoPath, args.context)
-  const processResult = await runRecipeCommand({
-    command: args.recipe.create,
-    repoPath: args.repoPath,
-    context,
-    mode: 'create',
-    env: args.env,
-    maxCaptureBytes: args.maxCaptureBytes,
-    signal: args.signal,
-    onStdout: args.onStdout,
-    onStderr: args.onStderr,
-    spawnCommand: args.spawnCommand
-  })
+  const processResult = await runRecipeStep(args, 'create', args.recipe.create, context)
 
-  if (processResult.exitCode !== 0) {
-    return {
-      ok: false,
-      context,
-      error: `Recipe exited with code ${processResult.exitCode ?? 'unknown'}.`,
-      ...processResult
-    }
+  const stepFailure = getRecipeStepFailure(args.recipe, 'create', processResult)
+  if (stepFailure) {
+    return { ok: false, context, ...stepFailure, ...processResult }
   }
 
   const parsed = parseEphemeralVmRecipeResult(processResult.stdout)
@@ -131,6 +122,17 @@ export async function runEphemeralVmRecipeStart(
       ok: false,
       context,
       error: parsed.error,
+      ...pickEphemeralVmFailureCode(parsed),
+      ...processResult
+    }
+  }
+  const checkoutModeFailure = getEphemeralVmRecipeCheckoutModeFailure(args.recipe, parsed.result)
+  if (checkoutModeFailure) {
+    return {
+      ok: false,
+      context,
+      ...checkoutModeFailure,
+      recipeResult: parsed.result,
       ...processResult
     }
   }
@@ -153,27 +155,20 @@ export async function runEphemeralVmRecipeCleanup(
   }
 
   const payload = buildEphemeralVmRecipeCleanupPayload(args)
-  const processResult = await runRecipeCommand({
-    command: args.recipe.destroy,
-    repoPath: args.repoPath,
-    context: args.context,
-    mode: 'destroy',
-    stdin: `${JSON.stringify(payload)}\n`,
-    env: args.env,
-    maxCaptureBytes: args.maxCaptureBytes,
-    signal: args.signal,
-    onStdout: args.onStdout,
-    onStderr: args.onStderr,
-    spawnCommand: args.spawnCommand
-  })
+  const processResult = await runRecipeStep(
+    args,
+    'destroy',
+    args.recipe.destroy,
+    args.context,
+    `${JSON.stringify(payload)}\n`
+  )
 
-  if (processResult.exitCode !== 0) {
-    return {
-      ok: false,
-      skipped: false,
-      error: `Destroy exited with code ${processResult.exitCode ?? 'unknown'}.`,
-      ...processResult
-    }
+  const failure = getEphemeralVmRecipeDestroyFailure(
+    processResult,
+    getEphemeralVmRecipeTimeoutSeconds(args.recipe, 'destroy') ?? 0
+  )
+  if (failure) {
+    return failure
   }
 
   return { ok: true, skipped: false, ...processResult }
@@ -188,27 +183,17 @@ export async function runEphemeralVmRecipeSuspend(
   }
 
   const payload = buildEphemeralVmRecipeLifecyclePayload({ ...args, mode: 'suspend' })
-  const processResult = await runRecipeCommand({
-    command: args.recipe.suspend,
-    repoPath: args.repoPath,
-    context: args.context,
-    mode: 'suspend',
-    stdin: `${JSON.stringify(payload)}\n`,
-    env: args.env,
-    maxCaptureBytes: args.maxCaptureBytes,
-    signal: args.signal,
-    onStdout: args.onStdout,
-    onStderr: args.onStderr,
-    spawnCommand: args.spawnCommand
-  })
+  const processResult = await runRecipeStep(
+    args,
+    'suspend',
+    args.recipe.suspend,
+    args.context,
+    `${JSON.stringify(payload)}\n`
+  )
 
-  if (processResult.exitCode !== 0) {
-    return {
-      ok: false,
-      skipped: false,
-      error: `Suspend exited with code ${processResult.exitCode ?? 'unknown'}.`,
-      ...processResult
-    }
+  const stepFailure = getRecipeStepFailure(args.recipe, 'suspend', processResult)
+  if (stepFailure) {
+    return { ok: false, skipped: false, ...stepFailure, ...processResult }
   }
 
   return { ok: true, skipped: false, ...processResult }
@@ -229,28 +214,17 @@ export async function runEphemeralVmRecipeResume(
   }
 
   const payload = buildEphemeralVmRecipeLifecyclePayload({ ...args, mode: 'resume' })
-  const processResult = await runRecipeCommand({
-    command: args.recipe.resume,
-    repoPath: args.repoPath,
-    context: args.context,
-    mode: 'resume',
-    stdin: `${JSON.stringify(payload)}\n`,
-    env: args.env,
-    maxCaptureBytes: args.maxCaptureBytes,
-    signal: args.signal,
-    onStdout: args.onStdout,
-    onStderr: args.onStderr,
-    spawnCommand: args.spawnCommand
-  })
+  const processResult = await runRecipeStep(
+    args,
+    'resume',
+    args.recipe.resume,
+    args.context,
+    `${JSON.stringify(payload)}\n`
+  )
 
-  if (processResult.exitCode !== 0) {
-    return {
-      ok: false,
-      skipped: false,
-      context: args.context,
-      error: `Resume exited with code ${processResult.exitCode ?? 'unknown'}.`,
-      ...processResult
-    }
+  const stepFailure = getRecipeStepFailure(args.recipe, 'resume', processResult)
+  if (stepFailure) {
+    return { ok: false, skipped: false, context: args.context, ...stepFailure, ...processResult }
   }
 
   const parsed = parseEphemeralVmRecipeResult(processResult.stdout)
@@ -260,6 +234,18 @@ export async function runEphemeralVmRecipeResume(
       skipped: false,
       context: args.context,
       error: parsed.error,
+      ...pickEphemeralVmFailureCode(parsed),
+      ...processResult
+    }
+  }
+  const checkoutModeFailure = getEphemeralVmRecipeCheckoutModeFailure(args.recipe, parsed.result)
+  if (checkoutModeFailure) {
+    return {
+      ok: false,
+      skipped: false,
+      context: args.context,
+      ...checkoutModeFailure,
+      recipeResult: parsed.result,
       ...processResult
     }
   }

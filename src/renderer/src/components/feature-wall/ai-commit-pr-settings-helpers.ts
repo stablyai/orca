@@ -1,12 +1,14 @@
-import type { CommitMessageAiSettings, GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { CommitMessageAiSettings } from '../../../../shared/source-control/ai/generation/commit-message-ai-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getCommitMessageAgentCapability,
   isCustomAgentId,
   type CommitMessageAgentCapability,
   type CommitMessageAgentChoice,
   type CommitMessageModelCapability
-} from '../../../../shared/commit-message-agent-spec'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+} from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 
 export const EMPTY_COMMIT_MESSAGE_AI_SETTINGS: CommitMessageAiSettings = {
   enabled: false,

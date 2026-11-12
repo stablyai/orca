@@ -1,9 +1,13 @@
+import { OnboardingLanguageSwitcher } from './OnboardingLanguageSwitcher'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { isEditableTarget } from '@/lib/editable-target'
-import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import {
+  getScreenSubmitModifierLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import type { OnboardingState } from '../../../../shared/types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
@@ -14,123 +18,51 @@ import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDi
 import { OnboardingFooter } from './OnboardingFooter'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
-import { translate } from '@/i18n/i18n'
-
-const stepCopy = {
-  agent: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.198b148b3c',
-        'Pick your default agent'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.322fc50a18',
-        "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
-      )
-    }
-  },
-  theme: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.f396db9f20',
-        'Make it feel like home'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.04ae28d8ca',
-        'Pick the look you want to stare at for hours.'
-      )
-    }
-  },
-  notifications: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.b054332836',
-        'Set up notifications'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.ff92d15436',
-        'Orca will notify you when agents are done or need help.'
-      )
-    }
-  },
-  integrations: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.ae3b00ca82',
-        'Set up GitHub tasks'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.97c42cda00',
-        'Install the GitHub CLI to:'
-      )
-    }
-  },
-  windows_terminal: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.windowsTerminalTitle',
-        'Set Windows terminal defaults'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle',
-        'Choose the DEFAULT Shell for new panes and how right-click behaves in the terminal.'
-      )
-    }
-  }
-} as const
-
-const stepTooltipLabels = {
-  agent: 'Default Agent',
-  theme: 'Appearance',
-  windows_terminal: 'Windows Terminal',
-  notifications: 'Notifications',
-  integrations: 'Integrations'
-} as const
+import { useTranslate } from '@/i18n/use-translate'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { useScrollEdgeFades } from '@/lib/list-interaction/use-scroll-edge-fades'
+import { AgentSurfaceStep } from './AgentSurfaceStep'
+import { stepCopy, stepTooltipLabels } from './onboarding-step-copy'
 
 type OnboardingFlowProps = {
   onboarding: OnboardingState
   onOnboardingChange: (state: OnboardingState) => void
-  onSettingsDetourStart?: () => void
 }
 
 export default function OnboardingFlow({
   onboarding,
-  onOnboardingChange,
-  onSettingsDetourStart
+  onOnboardingChange
 }: OnboardingFlowProps): React.JSX.Element {
-  const flow = useOnboardingFlow(onboarding, onOnboardingChange, { onSettingsDetourStart })
+  const t = useTranslate()
+  const flow = useOnboardingFlow(onboarding, onOnboardingChange)
+  const stepFades = useScrollEdgeFades<HTMLDivElement>()
   const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
-  const copy = stepCopy[currentStep.id]
-  const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
+  const copy =
+    currentStep.id === 'agent' && flow.agentSurface === 'chat'
+      ? stepCopy.agent_chat
+      : stepCopy[currentStep.id]
+  const shouldShowSetUpLater = currentStep.id !== 'notifications'
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
-    busyLabel ?? (currentStep.id === 'notifications' ? 'Add your first project' : 'Continue')
+    busyLabel ??
+    (currentStep.id === 'notifications' && !flow.hasSelectedWorkspace
+      ? t('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
+      : t('components.onboarding.flow.actions.continue', 'Continue'))
+  const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      // Why: click-off / Escape dismissal stays available on every step,
-      // including the final notifications step, so the modal never feels stuck.
-      if (busyLabel || skipConfirmOpen) {
+      if (busyLabel || skipConfirmOpen || languagePickerOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen]
+    [busyLabel, skipConfirmOpen, languagePickerOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -139,43 +71,43 @@ export default function OnboardingFlow({
     void flowDismissOnboarding(advancedVia)
   }, [flowDismissOnboarding])
 
-  // Why: depend on stable callbacks + step id only so the listener doesn't
-  // re-bind on every render of the parent (flow object identity changes).
+  // Depend on stable callbacks/step ID so the changing flow object cannot churn the key listener.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
-      // clone-URL input or any other editable field on a step.
+      if (languagePickerOpen || skipConfirmOpen) {
+        return
+      }
+      // Do not submit while typing in clone URL or another editable field.
       if (isEditableTarget(event.target)) {
         return
       }
-      // Why: onboarding continue is screen-local submit behavior, not a
-      // user-configurable app command.
+      // Continue uses the screen submit shortcut rather than configurable app-command bindings.
       if (!isScreenSubmitShortcut(event)) {
         return
       }
       event.preventDefault()
       void flowNext('keyboard')
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [flowNext])
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
+  }, [flowNext, languagePickerOpen, skipConfirmOpen])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || skipConfirmOpen) {
+      if (event.key !== 'Escape' || skipConfirmOpen || languagePickerOpen) {
         return
       }
       event.preventDefault()
       requestSkipConfirmation('keyboard')
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [requestSkipConfirmation, skipConfirmOpen])
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
+  }, [requestSkipConfirmation, skipConfirmOpen, languagePickerOpen])
 
   return (
-    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+    <TooltipProvider skipDelayDuration={0}>
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
+        className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground"
         data-onboarding-overlay
         onPointerDown={(event) => {
           if (!shouldRequestOnboardingSkipConfirmation(event)) {
@@ -192,10 +124,7 @@ export default function OnboardingFlow({
         <section
           ref={flow.setLifecycleRootRef}
           role="dialog"
-          aria-label={translate(
-            'auto.components.onboarding.OnboardingFlow.277ba45540',
-            'Orca onboarding'
-          )}
+          aria-label={t('auto.components.onboarding.OnboardingFlow.277ba45540', 'Orca onboarding')}
           aria-modal="true"
           data-onboarding-modal
           className={cn(
@@ -204,30 +133,34 @@ export default function OnboardingFlow({
           )}
         >
           <div className="relative flex h-full min-h-0 flex-col px-6 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-9">
-            <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
-              <img
-                src={logo}
-                alt=""
-                aria-hidden="true"
-                className="h-7 w-auto shrink-0 invert dark:invert-0"
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
+                <img
+                  src={logo}
+                  alt=""
+                  aria-hidden="true"
+                  className="h-7 w-auto shrink-0 invert dark:invert-0"
+                />
+                <span>{t('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}</span>
+              </div>
+              <OnboardingLanguageSwitcher
+                open={languagePickerOpen}
+                onOpenChange={setLanguagePickerOpen}
               />
-              <span>
-                {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
-              </span>
             </div>
 
             <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
               {flow.progressSteps.map(({ step, index: realStepIndex }, progressIdx) => {
                 const isActive = realStepIndex === stepIndex
                 const isDone = realStepIndex < stepIndex
+                const stepTooltipLabel = stepTooltipLabels[step.id].value
                 return (
                   <Tooltip key={step.id}>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         className={cn(
-                          // Why: the visible bars stay 4px tall, but the invisible
-                          // hit area makes hover/click/tooltip targeting reliable.
+                          // Expand the invisible hit area while keeping the stepper bars 4px tall.
                           'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
                           isActive
                             ? 'w-10 bg-foreground'
@@ -235,35 +168,34 @@ export default function OnboardingFlow({
                               ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
                               : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                         )}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.onboarding.OnboardingFlow.adaa0aa627',
                           'Go to onboarding step {{value0}}: {{value1}}',
-                          { value0: progressIdx + 1, value1: stepTooltipLabels[step.id] }
+                          { value0: progressIdx + 1, value1: stepTooltipLabel }
                         )}
                         aria-current={isActive ? 'step' : undefined}
                         onClick={() => flow.jumpToStep(realStepIndex)}
                       />
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
-                      {stepTooltipLabels[step.id]}
+                      {stepTooltipLabel}
                     </TooltipContent>
                   </Tooltip>
                 )
               })}
               <span className="ml-3 text-xs font-medium text-muted-foreground">
-                {flow.progressStepIndex + 1}{' '}
-                {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
-                {flow.progressSteps.length}
+                {t(
+                  'auto.components.onboarding.OnboardingFlow.stepOfTotal',
+                  '{{current}} of {{total}}',
+                  { current: flow.progressStepIndex + 1, total: flow.progressSteps.length }
+                )}
               </span>
             </div>
 
             <div className="mt-8 shrink-0">
               {stepIndex === 0 && (
                 <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  {translate(
-                    'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
-                    'Welcome to Orca'
-                  )}
+                  {t('auto.components.onboarding.OnboardingFlow.1b5e182e9f', 'Welcome to Orca')}
                 </div>
               )}
               <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
@@ -277,17 +209,33 @@ export default function OnboardingFlow({
             </div>
 
             <div
+              ref={stepFades.ref}
               className={cn(
                 'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-                // Why: agent step pins permissions below a capped agent grid scroll
-                // region; other steps keep the shared outer scroll container.
+                // Agent permissions stay outside the capped grid scroll; other steps use the outer scroller.
                 currentStep.id === 'agent'
                   ? 'mt-10 flex flex-col overflow-hidden'
-                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
+                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10', stepFades.className)
               )}
             >
+              {currentStep.id === 'agent_surface' && (
+                <AgentSurfaceStep
+                  agentSurface={flow.agentSurface}
+                  onSelect={flow.setAgentSurface}
+                  noChatAgentDetected={
+                    !flow.isDetectingAgents &&
+                    flow.chatDetected !== null &&
+                    flow.chatDetected.length === 0
+                  }
+                />
+              )}
               {currentStep.id === 'agent' && (
                 <AgentStep
+                  agentSurface={flow.agentSurface}
+                  onAgentSurfaceChange={flow.setAgentSurface}
+                  chatAgents={flow.chatAgents}
+                  chatDetected={flow.chatDetected}
+                  nativeChatProviders={flow.settings?.nativeChatProviders}
                   selectedAgent={flow.selectedAgent}
                   onSelect={flow.setSelectedAgent}
                   detectedSet={flow.detectedSet}
@@ -302,6 +250,8 @@ export default function OnboardingFlow({
                   onThemeChange={flow.setTheme}
                   settings={flow.settings}
                   updateSettings={flow.updateSettings}
+                  lookBaseline={flow.themeLookBaseline}
+                  onLookBaselineChange={flow.setThemeLookBaseline}
                 />
               )}
               {currentStep.id === 'notifications' && (
@@ -317,11 +267,11 @@ export default function OnboardingFlow({
             </div>
 
             <OnboardingFooter
-              shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
+              shouldShowSetUpLater={shouldShowSetUpLater}
               busyLabel={busyLabel}
-              onSkipToRepo={() => void flow.skipToRepo()}
+              onSetUpLater={() => void flow.setUpLater()}
               stepIndex={stepIndex}
-              onBack={flow.nestedScan ? flow.cancelNested : flow.back}
+              onBack={flow.back}
               showPrimary
               primaryBusy={shouldShowFooterBusy}
               primaryLabel={footerPrimaryLabel}

@@ -3,18 +3,13 @@ import { parseExecutionHostId } from './execution-host'
 const SSH_PTY_ID_PREFIX = 'ssh:'
 const SSH_PTY_ID_SEPARATOR = '@@'
 
-// Why: reconnect/restore paths sometimes hand these routers the execution-host
-// id form ("ssh:<targetId>", from a workspace `hostId`) instead of the bare SSH
-// target id that app PTY ids embed. Both name the same connection, so collapse
-// to the bare id before comparing/encoding — otherwise a valid reattach throws a
-// spurious "belongs to SSH connection" error at the user.
+// Restore callers may supply ssh:<targetId> host IDs; normalize before comparisons to avoid false ownership errors.
 function normalizeConnectionId(connectionId: string): string {
   const parsed = parseExecutionHostId(connectionId)
   return parsed?.kind === 'ssh' ? parsed.targetId : connectionId
 }
 
-// Why: SSH relays allocate target-local ids like "pty-1"; app-wide routing
-// needs the target id embedded so two relays cannot collide after restore.
+// Embed target identity because relay-local PTY IDs collide across hosts.
 export type ParsedSshPtyId = {
   connectionId: string
   relayPtyId: string
@@ -64,4 +59,13 @@ export function toRelaySshPtyId(connectionId: string, ptyId: string): string {
     throw new Error(`PTY ${ptyId} belongs to SSH connection "${parsed.connectionId}"`)
   }
   return parsed.relayPtyId
+}
+
+/** Compare stored relay IDs without throwing for another target; a cross-target ID simply does not match. */
+export function toComparableRelaySshPtyId(connectionId: string, ptyId: string): string {
+  try {
+    return toRelaySshPtyId(connectionId, ptyId)
+  } catch {
+    return ptyId
+  }
 }

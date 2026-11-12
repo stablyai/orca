@@ -3,12 +3,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MAX_BYTES,
-  getTextControlPasteByteLength
-} from '@/lib/text-control-paste'
-import { insertText } from './dictation-insertion-target'
+  TEXT_CONTROL_PASTE_MAX_BYTES
+} from '@/lib/text-input/paste/text-control-paste-model'
+import { captureInsertionTarget, insertText } from './dictation-insertion-target'
 
 type DocumentWithExecCommand = Document & {
   execCommand?: (commandId: string, showUi?: boolean, value?: string) => boolean
@@ -20,18 +18,12 @@ afterEach(() => {
   document.body.replaceChildren()
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   Object.defineProperty(document, 'execCommand', {
     configurable: true,
     value: originalExecCommand
   })
 })
-
-function appendTextarea(): HTMLTextAreaElement {
-  const textarea = document.createElement('textarea')
-  document.body.appendChild(textarea)
-  textarea.focus()
-  return textarea
-}
 
 function appendContentEditable(): HTMLElement {
   const element = document.createElement('div')
@@ -54,71 +46,22 @@ function installExecCommandMock(
 }
 
 describe('dictation insertion target', () => {
-  it('dispatches terminal dictation with the captured pane target', () => {
-    const listener = vi.fn()
-    document.addEventListener('dictation:insertText', listener)
+  it('sends text dictated into a focused browser page to that page', async () => {
+    const insertDictationText = vi.fn(async () => true)
+    vi.stubGlobal('api', { browser: { insertDictationText } })
+    const viewport = document.createElement('div')
+    viewport.dataset.browserPageViewportId = 'page-1'
+    const guest = document.createElement('webview')
+    guest.tabIndex = 0
+    viewport.appendChild(guest)
+    document.body.appendChild(viewport)
+    guest.focus()
 
-    insertText('git status', { kind: 'terminal', tabId: 'tab-1', paneId: 7 })
+    const target = captureInsertionTarget()
+    expect(target).toEqual({ kind: 'browser', browserPageId: 'page-1' })
+    await expect(insertText('hello', target!)).resolves.toBe(true)
 
-    expect(listener).toHaveBeenCalledTimes(1)
-    expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({
-      text: 'git status',
-      tabId: 'tab-1',
-      paneId: 7
-    })
-  })
-
-  it('chunks large textarea dictation without one large input event', async () => {
-    vi.useFakeTimers()
-    const textarea = appendTextarea()
-    const inputEvents: InputEvent[] = []
-    textarea.addEventListener('input', (event) => inputEvents.push(event as InputEvent))
-    const text = 'a'.repeat(TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 5)
-
-    insertText(text, { kind: 'text', element: textarea })
-    await vi.runAllTimersAsync()
-
-    expect(textarea.value).toBe(text)
-    expect(inputEvents).toHaveLength(1)
-    expect(inputEvents[0].inputType).toBe('insertText')
-    expect(inputEvents[0].data ?? '').toBe('')
-  })
-
-  it('chunks large contenteditable dictation through bounded insertText calls', async () => {
-    vi.useFakeTimers()
-    const editor = appendContentEditable()
-    const beforeInputEvents: InputEvent[] = []
-    editor.addEventListener('beforeinput', (event) => beforeInputEvents.push(event as InputEvent))
-    const execCommand = installExecCommandMock(() => true)
-    const text = 'ab\u{1f600}'.repeat(20_000)
-
-    insertText(text, { kind: 'contentEditable', element: editor })
-    await vi.runAllTimersAsync()
-
-    expect(execCommand.mock.calls.length).toBeGreaterThan(1)
-    expect(
-      execCommand.mock.calls.every(
-        (call) =>
-          getTextControlPasteByteLength(String(call[2] ?? '')) <= TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES
-      )
-    ).toBe(true)
-    expect(beforeInputEvents).toHaveLength(execCommand.mock.calls.length)
-    expect(beforeInputEvents.some((event) => event.data === text)).toBe(false)
-  })
-
-  it('waits for yielded contenteditable dictation preflight before inserting large text', async () => {
-    vi.useFakeTimers()
-    const editor = appendContentEditable()
-    const execCommand = installExecCommandMock(() => true)
-    const text = 'x'.repeat(TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 10)
-
-    insertText(text, { kind: 'contentEditable', element: editor })
-
-    expect(execCommand).not.toHaveBeenCalled()
-
-    await vi.runAllTimersAsync()
-
-    expect(execCommand).toHaveBeenCalled()
+    expect(insertDictationText).toHaveBeenCalledWith({ browserPageId: 'page-1', text: 'hello' })
   })
 
   it('cancels chunked contenteditable dictation when the target disconnects', async () => {

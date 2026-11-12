@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://onOrca.dev"><img src="../../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
+  <a href="https://orca.dev"><img src="../../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
 </h1>
 
 <p align="center">
@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <sub><a href="../../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a></sub>
+  <sub><a href="../../README.md">English</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a> · <a href="README.tr.md">Türkçe</a> · <a href="README.ru.md">Русский</a></sub>
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
   并排运行 Codex、Claude Code、OpenCode 或 Pi — 每个都在自己的 worktree 中运行，并在一个地方统一跟踪。
 </p>
 
-<h3 align="center"><a href="https://onorca.dev/download"><ins>下载 Orca</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>下载 Orca</ins></a></h3>
 
 <p align="center">
   <img src="../assets/readme-hero.jpg" alt="Orca 桌面应用在并行 worktree 中运行智能体，角落里是 Orca 移动 companion 应用" width="960" />
@@ -36,11 +36,11 @@
 
 用手机监控并指挥你的智能体 — 智能体完成时收到通知，随时随地发送后续指令。
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.32/app-release.apk) · [文档 →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://orca.dev/download/android) · [文档 →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca 桌面端与移动 companion 应用" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/mobile"><picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca 桌面端与移动 companion 应用" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -50,11 +50,11 @@
 
 把一个提示同时分发给五个智能体，每个都在自己隔离的 git worktree 中运行 — 比较结果，合并最佳方案。
 
-[文档 →](https://www.onorca.dev/docs/model/worktrees)
+[文档 →](https://orca.dev/docs/model/worktrees)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="../assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="../assets/feature-wall/parallel-worktrees.jpg" alt="并行 worktree 编排" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/model/worktrees"><picture><source srcset="../site/public/docs/tab-split.gif" type="image/gif"><img src="../site/public/docs/posters/tab-split.jpg" alt="并行 worktree 编排" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -64,11 +64,11 @@
 
 Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然保留的滚动历史。
 
-[文档 →](https://www.onorca.dev/docs/terminal)
+[文档 →](https://orca.dev/docs/terminal)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="../assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="../assets/feature-wall/terminal-splits.jpg" alt="终端分屏" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/terminal"><picture><source srcset="../../resources/onboarding/feature-wall/tile-02.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-02.poster.jpg" alt="终端分屏" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -78,11 +78,11 @@ Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然�
 
 在真实的 Chromium 窗口中点击任意 UI 元素，把它的 HTML、CSS 和裁剪好的截图直接发送到智能体的提示中。
 
-[文档 →](https://www.onorca.dev/docs/browser/design-mode)
+[文档 →](https://orca.dev/docs/browser/design-mode)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="../assets/feature-wall/design-mode.gif" type="image/gif"><img src="../assets/feature-wall/design-mode.jpg" alt="内置浏览器与设计模式" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/browser/design-mode"><picture><source srcset="../site/public/docs/orca-design-mode.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-05.poster.jpg" alt="内置浏览器与设计模式" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -92,11 +92,11 @@ Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然�
 
 在应用内浏览 PR、issue 和项目看板 — 从任意任务打开 worktree，无需切换上下文即可完成评审。
 
-[文档 →](https://www.onorca.dev/docs/review/linear)
+[文档 →](https://orca.dev/docs/review/linear)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="../assets/feature-wall/github-linear.gif" type="image/gif"><img src="../assets/feature-wall/github-linear.jpg" alt="Orca 中的 GitHub 与 Linear 任务工作流" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/review/linear"><picture><source srcset="../../resources/onboarding/feature-wall/tile-03.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-03.poster.jpg" alt="Orca 中的 GitHub 与 Linear 任务工作流" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -106,11 +106,11 @@ Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然�
 
 在高性能远程机器上运行智能体，完整支持文件编辑、git 和终端 — 自动重连与端口转发一应俱全。
 
-[文档 →](https://www.onorca.dev/docs/ssh)
+[文档 →](https://orca.dev/docs/ssh)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="../assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="../assets/feature-wall/ssh-worktrees.jpg" alt="通过 SSH 使用远程 worktree" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/ssh"><picture><source srcset="../../resources/onboarding/feature-wall/tile-06.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-06.poster.jpg" alt="通过 SSH 使用远程 worktree" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -120,11 +120,11 @@ Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然�
 
 在任意 diff 行上添加评论并发回给智能体 — 评审、编辑、提交，全程无需离开 Orca。
 
-[文档 →](https://www.onorca.dev/docs/review/annotate-ai-diff)
+[文档 →](https://orca.dev/docs/review/annotate-ai-diff)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="../assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="../assets/feature-wall/annotate-diff.jpg" alt="标注 AI 生成的 diff" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/review/annotate-ai-diff"><picture><source srcset="../site/public/docs/annotate-ai-diff.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-08.poster.jpg" alt="标注 AI 生成的 diff" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -134,11 +134,11 @@ Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然�
 
 VS Code 的编辑器，处处自动保存 — 把文件或图片直接拖入智能体提示。
 
-[文档 →](https://www.onorca.dev/docs/editing/file-explorer)
+[文档 →](https://orca.dev/docs/editing/file-explorer)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/editing/file-explorer"><picture><source srcset="../assets/feature-wall/file-drag.gif" type="image/gif"><img src="../assets/feature-wall/file-drag.jpg" alt="将文件和图片拖入智能体提示" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/editing/file-explorer"><picture><source srcset="../../resources/onboarding/feature-wall/tile-07.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-07.poster.jpg" alt="将文件和图片拖入智能体提示" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -148,22 +148,22 @@ VS Code 的编辑器，处处自动保存 — 把文件或图片直接拖入智�
 
 智能体也能驱动 Orca — 用 `orca worktree create`、`snapshot`、`click` 和 `fill` 把每个工作流脚本化。
 
-[文档 →](https://www.onorca.dev/docs/cli/overview)
+[文档 →](https://orca.dev/docs/cli/overview)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="../assets/feature-wall/orca-cli.gif" type="image/gif"><img src="../assets/feature-wall/orca-cli.jpg" alt="从 CLI 脚本化 Orca" width="100%" /></picture></a>
+  <a href="https://orca.dev/docs/cli/overview"><picture><source srcset="../../resources/onboarding/feature-wall/tile-09.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-09.poster.jpg" alt="从 CLI 脚本化 Orca" width="100%" /></picture></a>
 </td>
 </tr>
 </table>
 
 **开箱即用的还有：**
 
-- **[快速打开](https://www.onorca.dev/docs/model/quick-open)** — 在 worktree、文件、智能体、命令和仓库上下文之间搜索，不打断你的心流。
-- **[账号切换与用量追踪](https://www.onorca.dev/docs/agents/usage-tracking)** — 查看 Claude 和 Codex 的用量与限额重置时间，并且无需重新登录即可热切换账号。
-- **[丰富仓库预览](https://www.onorca.dev/docs/editing/markdown)** — 在工作区中预览 Markdown、图片、PDF 和仓库文档。
-- **[Computer Use](https://www.onorca.dev/docs/cli/computer-use)** — 当工作流需要真实交互时，让智能体操作桌面应用和可见 UI。
-- **[通知与未读状态](https://www.onorca.dev/docs/notifications)** — 第一时间知道智能体何时完成或需要关注，并可将会话标记为未读，稍后再回来处理。
+- **[快速打开](https://orca.dev/docs/model/quick-open)** — 在 worktree、文件、智能体、命令和仓库上下文之间搜索，不打断你的心流。
+- **[账号切换与用量追踪](https://orca.dev/docs/agents/usage-tracking)** — 查看 Claude 和 Codex 的用量与限额重置时间，并且无需重新登录即可热切换账号。
+- **[丰富仓库预览](https://orca.dev/docs/editing/markdown)** — 在工作区中预览 Markdown、图片、PDF 和仓库文档。
+- **[Computer Use](https://orca.dev/docs/cli/computer-use)** — 当工作流需要真实交互时，让智能体操作桌面应用和可见 UI。
+- **[通知与未读状态](https://orca.dev/docs/notifications)** — 第一时间知道智能体何时完成或需要关注，并可将会话标记为未读，稍后再回来处理。
 - **还有很多很多** — 我们每天发布新功能，这个列表永远跟不上。[更新日志](https://github.com/stablyai/orca/releases)才是真正的功能列表。
 
 ---
@@ -178,6 +178,9 @@ VS Code 的编辑器，处处自动保存 — 把文件或图片直接拖入智�
   <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" alt="Grok logo" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://cursor.com/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=cursor.com&sz=64" alt="Cursor logo" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
   <a href="https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=github.com&sz=64" alt="GitHub Copilot logo" width="16" valign="middle" /> GitHub Copilot</kbd></a> &nbsp;
+  <a href="https://dev.meta.ai/docs/muse-code"><kbd><img src="../../src/shared/agent-icons/muse.png" alt="Muse logo" width="16" valign="middle" /> Muse</kbd></a> &nbsp;
+  <a href="https://deepseek-harness.github.io/deepseek-harness/"><kbd><img src="../../src/shared/agent-icons/dsh.png" alt="DeepSeek Harness logo" width="16" valign="middle" /> DeepSeek Harness</kbd></a> &nbsp;
+  <a href="https://zcode.z.ai/en/docs"><kbd><img src="../../src/shared/agent-icons/zcode.png" alt="ZCode logo" width="16" valign="middle" /> ZCode</kbd></a> &nbsp;
   <a href="https://opencode.ai/docs/cli/"><kbd><img src="https://www.google.com/s2/favicons?domain=opencode.ai&sz=64" alt="OpenCode logo" width="16" valign="middle" /> OpenCode</kbd></a> &nbsp;
   <a href="https://ampcode.com/manual#install"><kbd><img src="https://www.google.com/s2/favicons?domain=ampcode.com&sz=64" alt="Amp logo" width="16" valign="middle" /> Amp</kbd></a> &nbsp;
   <a href="https://openclaude.gitlawb.com/"><kbd><img src="../../resources/openclaude-logo.png" alt="OpenClaude logo" width="16" valign="middle" /> OpenClaude</kbd></a> &nbsp;
@@ -185,14 +188,15 @@ VS Code 的编辑器，处处自动保存 — 把文件或图片直接拖入智�
   <a href="https://pi.dev"><kbd><img src="https://pi.dev/favicon.svg" alt="Pi logo" width="16" valign="middle" /> Pi</kbd></a> &nbsp;
   <a href="https://omp.sh"><kbd><img src="https://omp.sh/favicon.svg" alt="oh-my-pi logo" width="16" valign="middle" /> oh-my-pi</kbd></a> &nbsp;
   <a href="https://hermes-agent.nousresearch.com/docs/"><kbd><img src="https://www.google.com/s2/favicons?domain=nousresearch.com&sz=64" alt="Hermes Agent logo" width="16" valign="middle" /> Hermes Agent</kbd></a> &nbsp;
-  <a href="https://block.github.io/goose/docs/quickstart/"><kbd><img src="https://www.google.com/s2/favicons?domain=goose-docs.ai&sz=64" alt="Goose logo" width="16" valign="middle" /> Goose</kbd></a> &nbsp;
+  <a href="https://goose-docs.ai/docs/quickstart/"><kbd><img src="https://www.google.com/s2/favicons?domain=goose-docs.ai&sz=64" alt="Goose logo" width="16" valign="middle" /> Goose</kbd></a> &nbsp;
   <a href="https://docs.augmentcode.com/cli/overview"><kbd><img src="https://www.google.com/s2/favicons?domain=augmentcode.com&sz=64" alt="Auggie logo" width="16" valign="middle" /> Auggie</kbd></a> &nbsp;
   <a href="https://github.com/autohandai/code-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=autohand.ai&sz=64" alt="Autohand Code logo" width="16" valign="middle" /> Autohand Code</kbd></a> &nbsp;
   <a href="https://github.com/charmbracelet/crush"><kbd><img src="https://www.google.com/s2/favicons?domain=charm.sh&sz=64" alt="Charm logo" width="16" valign="middle" /> Charm</kbd></a> &nbsp;
   <a href="https://docs.cline.bot/cline-cli/overview"><kbd><img src="https://www.google.com/s2/favicons?domain=cline.bot&sz=64" alt="Cline logo" width="16" valign="middle" /> Cline</kbd></a> &nbsp;
   <a href="https://www.codebuff.com/docs/help/quick-start"><kbd><img src="https://www.google.com/s2/favicons?domain=codebuff.com&sz=64" alt="Codebuff logo" width="16" valign="middle" /> Codebuff</kbd></a> &nbsp;
+  <a href="https://freebuff.com/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=freebuff.com&sz=64" alt="Freebuff logo" width="16" valign="middle" /> Freebuff</kbd></a> &nbsp;
   <a href="https://commandcode.ai/docs/quickstart"><kbd><img src="https://www.google.com/s2/favicons?domain=commandcode.ai&sz=64" alt="Command Code logo" width="16" valign="middle" /> Command Code</kbd></a> &nbsp;
-  <a href="https://docs.continue.dev/guides/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=continue.dev&sz=64" alt="Continue logo" width="16" valign="middle" /> Continue</kbd></a> &nbsp;
+  <a href="https://docs.continue.dev/cli/quickstart"><kbd><img src="https://www.google.com/s2/favicons?domain=continue.dev&sz=64" alt="Continue logo" width="16" valign="middle" /> Continue</kbd></a> &nbsp;
   <a href="https://docs.factory.ai/cli/getting-started/quickstart"><kbd><img src="../assets/droid-logo.svg" alt="Droid logo" width="16" valign="middle" /> Droid</kbd></a> &nbsp;
   <a href="https://kilo.ai/docs/cli"><kbd><img src="https://raw.githubusercontent.com/Kilo-Org/kilocode/main/packages/kilo-vscode/assets/icons/kilo-light.svg" alt="Kilocode logo" width="16" valign="middle" /> Kilocode</kbd></a> &nbsp;
   <a href="https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html"><kbd><img src="https://www.google.com/s2/favicons?domain=moonshot.cn&sz=64" alt="Kimi logo" width="16" valign="middle" /> Kimi</kbd></a> &nbsp;
@@ -209,14 +213,17 @@ VS Code 的编辑器，处处自动保存 — 把文件或图片直接拖入智�
 
 ### 桌面端 — macOS、Windows、Linux
 
-- **[从 onOrca.dev 下载](https://onorca.dev/download)**
+- **[从 orca.dev 下载](https://orca.dev/download)**
 - 或直接获取安装包：[macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [全部构建](https://github.com/stablyai/orca/releases/latest)
 
 _也可以通过包管理器安装：_
 
 ```bash
 # macOS (Homebrew)
+# 请始终使用完整名称；单独的 `orca` 是无关的 Plotly cask。
 brew install --cask stablyai/orca/orca
+# 升级已有安装
+brew upgrade --cask stablyai/orca/orca
 
 # Arch Linux (AUR) — or stably-orca-git to build from source
 yay -S stably-orca-bin
@@ -227,7 +234,7 @@ yay -S stably-orca-bin
 与桌面应用配对，用手机监控并指挥你的智能体。
 
 - **iOS:** [从 App Store 下载](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [下载 APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.32/app-release.apk)
+- **Android:** [下载 APK](https://orca.dev/download/android)
 
 ---
 
@@ -235,13 +242,12 @@ yay -S stably-orca-bin
 
 - **Discord:** 加入 **[Discord](https://discord.gg/fzjDKHxv8Q)** 社区。
 - **Twitter / X:** 关注 **[@orca_build](https://x.com/orca_build)** 获取更新和公告。
-- **微信:** 如果第 5 群已满，可加入第 6 群。
+- **微信:** 扫码加入 Orca 社区微信群。
 
-  <img src="../assets/wechat-qr.jpg" alt="Orca 社区微信第 5 群二维码" width="160" style="margin-right: 16px;" />
-  <img src="../assets/wechat-qr-group6.jpg" alt="Orca 社区微信第 6 群二维码" width="160" />
+  <img src="../assets/wechat-qr.jpg" alt="Orca 社区微信群二维码" width="160" />
 
 - **反馈与想法:** 我们发布很快。缺少什么功能？[提交功能请求](https://github.com/stablyai/orca/issues)。
-- **隐私:** 查看[隐私与遥测文档](https://www.onorca.dev/docs/telemetry)，了解 Orca 收集哪些匿名使用数据以及如何退出。
+- **隐私:** 查看[隐私与遥测文档](https://orca.dev/docs/telemetry)，了解 Orca 收集哪些匿名使用数据以及如何退出。
 - **支持我们:** 给这个仓库点 [Star](https://github.com/stablyai/orca)，关注我们的日常发布。
 
 ---

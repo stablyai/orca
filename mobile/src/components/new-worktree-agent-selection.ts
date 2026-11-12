@@ -1,7 +1,8 @@
-import type { TuiAgent } from '../../../src/shared/types'
-import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
-import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
-import { pickWorkspaceAgent } from '../tasks/workspace-agent-selection'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import { translate } from '../i18n/mobile-i18n'
+import { MOBILE_AGENT_CATALOG } from '../agents/mobile-agent-catalog'
+import { isMobileTuiAgentEnabled } from '../agents/mobile-tui-agents'
+import { pickWorkspaceAgent } from '../new-workspace/creation/workspace-agent-selection'
 
 export type NewWorktreeRuntimeSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
@@ -18,7 +19,9 @@ export const NEW_WORKTREE_AGENT_OPTIONS: NewWorktreeAgentOption[] = MOBILE_AGENT
 
 export const NEW_WORKTREE_BLANK_AGENT: NewWorktreeAgentOption = {
   id: '__blank__',
-  label: 'Blank Terminal'
+  get label() {
+    return translate('components.newWorktreeAgentSelection.blankTerminal', 'Blank Terminal')
+  }
 }
 
 export function newWorktreeAgentOptionFor(id: string | null | undefined): NewWorktreeAgentOption {

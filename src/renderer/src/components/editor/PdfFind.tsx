@@ -1,9 +1,10 @@
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EventBus } from 'pdfjs-dist/web/pdf_viewer.mjs'
-import { translate } from '@/i18n/i18n'
-import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { useTranslate } from '@/i18n/use-translate'
+import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
 
 type PdfFindProps = {
   isOpen: boolean
@@ -16,6 +17,7 @@ export default function PdfFind({
   onClose,
   eventBusRef
 }: PdfFindProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const [activeMatch, setActiveMatch] = useState(0)
   const [totalMatches, setTotalMatches] = useState(0)
@@ -60,6 +62,27 @@ export default function PdfFind({
     input.select()
   }, [])
 
+  // Subscribe before dispatching: PDF.js can report cached counts synchronously.
+  useEffect(() => {
+    const eventBus = eventBusRef.current
+    if (!eventBus || !isOpen) {
+      return
+    }
+    const handleMatchesCount = (evt: {
+      matchesCount: { current: number; total: number }
+    }): void => {
+      setActiveMatch(evt.matchesCount.current)
+      setTotalMatches(evt.matchesCount.total)
+    }
+    eventBus.on('updatefindmatchescount', handleMatchesCount)
+    // Navigation and zero-result searches report counts on the control-state event.
+    eventBus.on('updatefindcontrolstate', handleMatchesCount)
+    return () => {
+      eventBus.off('updatefindmatchescount', handleMatchesCount)
+      eventBus.off('updatefindcontrolstate', handleMatchesCount)
+    }
+  }, [eventBusRef, isOpen])
+
   useEffect(() => {
     if (!isOpen) {
       return
@@ -73,23 +96,6 @@ export default function PdfFind({
     }
     dispatchFind('')
   }, [requestQuery, isOpen, dispatchFind, eventBusRef])
-
-  useEffect(() => {
-    const eventBus = eventBusRef.current
-    if (!eventBus || !isOpen) {
-      return
-    }
-    const handleMatchesCount = (evt: {
-      matchesCount: { current: number; total: number }
-    }): void => {
-      setActiveMatch(evt.matchesCount.current)
-      setTotalMatches(evt.matchesCount.total)
-    }
-    eventBus.on('updatefindmatchescount', handleMatchesCount)
-    return () => {
-      eventBus.off('updatefindmatchescount', handleMatchesCount)
-    }
-  }, [eventBusRef, isOpen])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -105,8 +111,7 @@ export default function PdfFind({
     [onClose, findNext, findPrevious]
   )
 
-  // Why: close hides the bar immediately; reset counters before the next commit
-  // so reopening with the same query never paints stale match totals.
+  // Reset before the next commit so reopening the same query cannot flash stale counts.
   if ((!isOpen || !requestQuery) && (activeMatch !== 0 || totalMatches !== 0)) {
     setActiveMatch(0)
     setTotalMatches(0)
@@ -122,22 +127,22 @@ export default function PdfFind({
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}
     >
-      <input
+      <ImeInput
         ref={handleInputRef}
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={translate('auto.components.editor.PdfFind.2fc3ba0ea8', 'Find in page...')}
+        placeholder={t('auto.components.editor.PdfFind.2fc3ba0ea8', 'Find in page...')}
         className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
       />
       {query ? (
         <span className="shrink-0 text-xs text-zinc-400">
           {totalMatches > 0
-            ? translate('auto.components.editor.PdfFind.db56fcd6d2', '{{value0}} of {{value1}}', {
+            ? t('auto.components.editor.PdfFind.db56fcd6d2', '{{value0}} of {{value1}}', {
                 value0: activeMatch,
                 value1: totalMatches
               })
-            : translate('auto.components.editor.PdfFind.d080ab37d6', 'No matches')}
+            : t('auto.components.editor.PdfFind.d080ab37d6', 'No matches')}
         </span>
       ) : null}
       <div className="mx-0.5 h-4 w-px bg-zinc-700" />
@@ -147,7 +152,7 @@ export default function PdfFind({
         size="icon-xs"
         onClick={findPrevious}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.editor.PdfFind.30de726ad0', 'Previous match')}
+        title={t('auto.components.editor.PdfFind.30de726ad0', 'Previous match')}
       >
         <ChevronUp size={14} />
       </Button>
@@ -157,7 +162,7 @@ export default function PdfFind({
         size="icon-xs"
         onClick={findNext}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.editor.PdfFind.eeba2547a1', 'Next match')}
+        title={t('auto.components.editor.PdfFind.eeba2547a1', 'Next match')}
       >
         <ChevronDown size={14} />
       </Button>
@@ -168,7 +173,7 @@ export default function PdfFind({
         size="icon-xs"
         onClick={onClose}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.editor.PdfFind.cd65b1d6b0', 'Close')}
+        title={t('auto.components.editor.PdfFind.cd65b1d6b0', 'Close')}
       >
         <X size={14} />
       </Button>

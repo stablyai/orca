@@ -1,0 +1,146 @@
+import { readPRCheckRefreshOwner } from '@/lib/source-control/checks/pr-check-refresh-owner'
+import { toast } from 'sonner'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import {
+  getGitHubRuntimeRepoId,
+  type GitHubRuntimeHost
+} from '@/lib/work-items/github/github-source-runtime-context'
+import {
+  resetGitHubChecksTabForSource,
+  updateGitHubChecksTabLocalChecks,
+  type GitHubChecksTabState
+} from '@/components/github-checks-tab-state'
+import { translate } from '@/i18n/i18n'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+
+export async function refreshPullRequestChecks(args: {
+  canUseChecksRepoContext: boolean
+  expectedContextOwner?: object
+  committedChecksContextOwnerRef: { current: object }
+  nextChecksRefreshRequestIdRef: { current: number }
+  activeChecksRefreshRequestIdRef: { current: number | null }
+  setRefreshingOwner: (
+    value:
+      | { contextOwner: object; requestId: number }
+      | null
+      | ((
+          current: { contextOwner: object; requestId: number } | null
+        ) => { contextOwner: object; requestId: number } | null)
+  ) => void
+  setChecksState: (updater: (current: GitHubChecksTabState) => GitHubChecksTabState) => void
+  runtimeHost: GitHubRuntimeHost | null
+  sourceContext?: TaskSourceContext | null
+  repoId: string | null
+  repoPath: string | null
+  item: GitHubWorkItem
+  headSha: string | undefined
+  prRepo: GitHubOwnerRepo | null
+  mountedRef: { current: boolean }
+  onOwnerUpdated?: (item: GitHubWorkItem) => void
+  onChecksUpdated: (checks: PRCheckDetail[]) => void
+}): Promise<PRCheckDetail[] | null> {
+  if (!args.canUseChecksRepoContext) {
+    toast.error(
+      translate(
+        'auto.components.PullRequestPage.c057f2fcb0',
+        'Unable to refresh checks without a repository path.'
+      )
+    )
+    return null
+  }
+  const refreshContextOwner =
+    args.expectedContextOwner ?? args.committedChecksContextOwnerRef.current
+  if (args.committedChecksContextOwnerRef.current !== refreshContextOwner) {
+    return null
+  }
+  const refreshRequestId = ++args.nextChecksRefreshRequestIdRef.current
+  args.activeChecksRefreshRequestIdRef.current = refreshRequestId
+  args.setRefreshingOwner({ contextOwner: refreshContextOwner, requestId: refreshRequestId })
+  try {
+    const observation = await readPRCheckRefreshOwner({
+      repoPath: args.repoPath,
+      repoId: args.repoId ?? args.item.repoId,
+      sourceContext: args.sourceContext,
+      ownerRepo: args.prRepo,
+      item: args.item,
+      accepts: () =>
+        args.mountedRef.current &&
+        args.committedChecksContextOwnerRef.current === refreshContextOwner &&
+        args.activeChecksRefreshRequestIdRef.current === refreshRequestId
+    })
+    if (!observation.current()) {
+      return null
+    }
+    if (observation.owner) {
+      args.onOwnerUpdated?.(observation.owner)
+    }
+    const nextChecks = await (args.runtimeHost
+      ? callRuntimeRpc<PRCheckDetail[]>(
+          { kind: 'environment', environmentId: args.runtimeHost.environmentId },
+          'github.prChecks',
+          {
+            repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? args.item.repoId),
+            prNumber: args.item.number,
+            headSha: observation.owner?.headSha ?? args.headSha,
+            prRepo: args.prRepo,
+            noCache: true
+          },
+          { timeoutMs: 30_000, ...observation.rpcOptions }
+        )
+      : window.api.gh.prChecks({
+          repoPath: args.repoPath ?? '',
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
+          prNumber: args.item.number,
+          headSha: observation.owner?.headSha ?? args.headSha,
+          prRepo: args.prRepo,
+          noCache: true,
+          // Refresh and rerun are user acts: they may start a stopped WSL distro.
+          wakeWslDistro: true
+        }))
+    if (
+      !observation.current() ||
+      !args.mountedRef.current ||
+      args.committedChecksContextOwnerRef.current !== refreshContextOwner ||
+      args.activeChecksRefreshRequestIdRef.current !== refreshRequestId
+    ) {
+      return null
+    }
+    args.setChecksState((current) =>
+      current.contextOwner === refreshContextOwner
+        ? updateGitHubChecksTabLocalChecks(
+            resetGitHubChecksTabForSource(current),
+            nextChecks,
+            observation.owner
+          )
+        : current
+    )
+    args.onChecksUpdated(nextChecks)
+    return nextChecks
+  } catch (err) {
+    if (
+      args.mountedRef.current &&
+      args.committedChecksContextOwnerRef.current === refreshContextOwner &&
+      args.activeChecksRefreshRequestIdRef.current === refreshRequestId
+    ) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.PullRequestPage.246b2c6456', 'Failed to refresh checks')
+      )
+    }
+    return null
+  } finally {
+    if (args.activeChecksRefreshRequestIdRef.current === refreshRequestId) {
+      args.activeChecksRefreshRequestIdRef.current = null
+    }
+    if (args.mountedRef.current) {
+      args.setRefreshingOwner((current) =>
+        current?.requestId === refreshRequestId ? null : current
+      )
+    }
+  }
+}

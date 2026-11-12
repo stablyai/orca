@@ -2,7 +2,7 @@ import {
   buildServeSimKeyboardFramesForKey,
   type ServeSimKeyboardFrame
 } from '../../../../shared/emulator-keyboard-frame'
-import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
 
 export const EMULATOR_KEYBOARD_PASTE_MAX_BYTES = 4 * 1024
 export const EMULATOR_KEYBOARD_PASTE_MAX_FRAMES_PER_CHUNK = 48
@@ -57,10 +57,6 @@ export type PasteTextIntoEmulatorKeyboardOptions = {
   text: string
 }
 
-export function getEmulatorKeyboardPasteByteLength(text: string): number {
-  return measureClipboardTextByteLength(text).byteLength
-}
-
 export function buildEmulatorKeyboardPastePlan(
   text: string,
   options: {
@@ -81,7 +77,7 @@ function validateEmulatorKeyboardPasteText(
   maxBytes?: number
 ): EmulatorKeyboardPasteValidation {
   const byteLimit = getPositiveIntegerLimit(maxBytes, EMULATOR_KEYBOARD_PASTE_MAX_BYTES)
-  const byteLengthMeasurement = measureClipboardTextByteLength(text, { stopAfterBytes: byteLimit })
+  const byteLengthMeasurement = measureUtf8ByteLength(text, { stopAfterBytes: byteLimit })
   if (byteLengthMeasurement.exceededLimit) {
     return { byteLength: byteLengthMeasurement.byteLength, reason: 'too-large', status: 'rejected' }
   }
@@ -182,13 +178,32 @@ export async function pasteTextIntoEmulatorKeyboard({
   return { byteLength: validation.byteLength, chunkCount, status: 'sent' }
 }
 
+// Android has no HID socket: main injects the whole text over the scrcpy control socket.
+export async function pasteTextIntoAndroidEmulator({
+  maxBytes,
+  sendText,
+  text
+}: {
+  maxBytes?: number
+  sendText: (text: string) => Promise<boolean>
+  text: string
+}): Promise<EmulatorKeyboardPasteResult> {
+  const validation = validateEmulatorKeyboardPasteText(text, maxBytes)
+  if (validation.status === 'rejected') {
+    return validation
+  }
+  if (!(await sendText(text.replaceAll('\r', '')))) {
+    return { byteLength: validation.byteLength, reason: 'target-unavailable', status: 'rejected' }
+  }
+  return { byteLength: validation.byteLength, chunkCount: 1, status: 'sent' }
+}
+
 function getPositiveIntegerLimit(value: number | undefined, fallback: number): number {
   return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value ?? fallback) : fallback
 }
 
 function waitForEmulatorKeyboardChunk(frameCount: number, frameDelayMs: number): Promise<void> {
-  // Why: serve-sim's sender spaces frames with timers, so later chunks must wait
-  // for the previous chunk's scheduled HID events instead of overlapping them.
+  // Wait for scheduled HID frames before the next chunk so serve-sim’s timer-spaced events cannot overlap.
   const delayMs = Math.max(frameDelayMs, frameCount * frameDelayMs)
   return new Promise((resolve) => window.setTimeout(resolve, delayMs))
 }

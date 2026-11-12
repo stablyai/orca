@@ -1,0 +1,155 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "speech.setup-sheet",
+  "family": "speech.setup-sheet",
+  "namedDeltas": [],
+  "values": {
+    "430a60866d83": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "dictationMode": "hold",
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "label": "Small",
+            "progress": 0.42,
+            "provider": "local",
+            "recommended": true,
+            "sizeBytes": 466862080,
+            "status": "downloading"
+          },
+          {
+            "id": "gpt-4o-transcribe",
+            "label": "OpenAI",
+            "progress": {
+              "$rpc": "null"
+            },
+            "provider": "openai",
+            "recommended": false,
+            "sizeBytes": {
+              "$rpc": "null"
+            },
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "gpt-4o-transcribe"
+      }
+    },
+    "4f793e38be31": {
+      "name": "speech.models.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.list\",\"params\":null}"
+    },
+    "d91e455b7326": {
+      "list": {
+        "dictationMode": "hold",
+        "enabled": true,
+        "models": [
+          {
+            "id": "whisper-small",
+            "label": "Small",
+            "progress": 0.42,
+            "provider": "local",
+            "recommended": true,
+            "sizeBytes": 466862080,
+            "status": "downloading"
+          },
+          {
+            "id": "gpt-4o-transcribe",
+            "label": "OpenAI",
+            "progress": {
+              "$rpc": "null"
+            },
+            "provider": "openai",
+            "recommended": false,
+            "sizeBytes": {
+              "$rpc": "null"
+            },
+            "status": "ready"
+          }
+        ],
+        "selectedModelId": "gpt-4o-transcribe"
+      }
+    },
+    "f4bd63aa8e8f": {
+      "name": "speech.models.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.models.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "dictationMode": "hold",
+            "enabled": true,
+            "models": [
+              {
+                "id": "whisper-small",
+                "label": "Small",
+                "progress": 0.42,
+                "provider": "local",
+                "recommended": true,
+                "sizeBytes": 466862080,
+                "status": "downloading"
+              },
+              {
+                "id": "gpt-4o-transcribe",
+                "label": "OpenAI",
+                "progress": {
+                  "$rpc": "null"
+                },
+                "provider": "openai",
+                "recommended": false,
+                "sizeBytes": {
+                  "$rpc": "null"
+                },
+                "status": "ready"
+              }
+            ],
+            "selectedModelId": "gpt-4o-transcribe"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "speech-setup-sheet-model-vocabulary",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["f4bd63aa8e8f"],
+          "payloads": ["4f793e38be31"],
+          "settlements": {
+            "list": "430a60866d83"
+          },
+          "state": "d91e455b7326",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

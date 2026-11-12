@@ -1,0 +1,272 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "accounts.codex-reset-credit",
+  "family": "components.codex-reset-credit",
+  "namedDeltas": [],
+  "values": {
+    "055241a84f48": {
+      "settled": {
+        "outcome": "reset"
+      }
+    },
+    "0a07efb53f1e": {
+      "settled": {
+        "$rpc": "null"
+      }
+    },
+    "52d5e56d067b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "outcome": "reset",
+        "scope": {
+          "accountId": "codex-1",
+          "accountRevision": 1700000000000,
+          "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+          "target": {
+            "runtime": "host",
+            "wslDistro": {
+              "$rpc": "null"
+            }
+          }
+        },
+        "snapshot": {
+          "claude": {
+            "accounts": [],
+            "activeAccountId": {
+              "$rpc": "null"
+            }
+          },
+          "codex": {
+            "accounts": [
+              {
+                "email": "codex@example.test",
+                "id": "codex-1",
+                "updatedAt": 1700000000000
+              }
+            ],
+            "activeAccountId": "codex-1",
+            "activeAccountIdsByRuntime": {
+              "host": "codex-1",
+              "wsl": {}
+            }
+          },
+          "rateLimits": {
+            "claude": {
+              "$rpc": "null"
+            },
+            "claudeTarget": {
+              "runtime": "host",
+              "wslDistro": {
+                "$rpc": "null"
+              }
+            },
+            "codex": {
+              "error": {
+                "$rpc": "null"
+              },
+              "provider": "codex",
+              "rateLimitResetCredits": {
+                "availableCount": 1
+              },
+              "session": {
+                "$rpc": "null"
+              },
+              "status": "ok",
+              "updatedAt": 1700000000000,
+              "weekly": {
+                "$rpc": "null"
+              }
+            },
+            "codexTarget": {
+              "runtime": "host",
+              "wslDistro": {
+                "$rpc": "null"
+              }
+            },
+            "inactiveClaudeAccounts": [],
+            "inactiveCodexAccounts": []
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "944a34b7acd6": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.consumeCodexResetCredit\",\"params\":{\"idempotencyKey\":\"00000000-0000-4000-8000-000000000001\",\"expectedScope\":{\"target\":{\"runtime\":\"host\",\"wslDistro\":null},\"accountId\":\"codex-1\",\"accountRevision\":1700000000000,\"offerRevision\":\"v1:[1,null,null,[],null,null,1700000000000]\"}}}"
+    },
+    "b88c06607a7c": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "outcome": "reset",
+            "scope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "snapshot": {
+              "claude": {
+                "accounts": [],
+                "activeAccountId": {
+                  "$rpc": "null"
+                }
+              },
+              "codex": {
+                "accounts": [
+                  {
+                    "email": "codex@example.test",
+                    "id": "codex-1",
+                    "updatedAt": 1700000000000
+                  }
+                ],
+                "activeAccountId": "codex-1",
+                "activeAccountIdsByRuntime": {
+                  "host": "codex-1",
+                  "wsl": {}
+                }
+              },
+              "rateLimits": {
+                "claude": {
+                  "$rpc": "null"
+                },
+                "codex": {
+                  "error": {
+                    "$rpc": "null"
+                  },
+                  "provider": "codex",
+                  "rateLimitResetCredits": {
+                    "availableCount": 1
+                  },
+                  "session": {
+                    "$rpc": "null"
+                  },
+                  "status": "ok",
+                  "updatedAt": 1700000000000,
+                  "weekly": {
+                    "$rpc": "null"
+                  }
+                },
+                "inactiveClaudeAccounts": [],
+                "inactiveCodexAccounts": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "de0c9a811224": {
+      "name": "accounts.consumeCodexResetCredit#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.consumeCodexResetCredit"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedScope": {
+              "accountId": "codex-1",
+              "accountRevision": 1700000000000,
+              "offerRevision": "v1:[1,null,null,[],null,null,1700000000000]",
+              "target": {
+                "runtime": "host",
+                "wslDistro": {
+                  "$rpc": "null"
+                }
+              }
+            },
+            "idempotencyKey": "00000000-0000-4000-8000-000000000001"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    }
+  },
+  "recording": {
+    "scenario": "codex-reset-credit-consumed",
+    "checkpoints": [
+      {
+        "id": "requested",
+        "observation": {
+          "sender": ["de0c9a811224"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "9270aeb7d9c6"
+          },
+          "state": "0a07efb53f1e",
+          "effects": []
+        }
+      },
+      {
+        "id": "consumed",
+        "observation": {
+          "sender": ["b88c06607a7c"],
+          "payloads": ["944a34b7acd6"],
+          "settlements": {
+            "confirm": "52d5e56d067b"
+          },
+          "state": "055241a84f48",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

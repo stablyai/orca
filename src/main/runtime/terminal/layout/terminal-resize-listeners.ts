@@ -1,0 +1,264 @@
+import { sessionIdFromStructuredWorkerIncarnation } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import '../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle'
+import { observeStructuredWorker } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
+import { addListenerToMap } from './terminal-listener-map'
+import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
+import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+
+import {
+  type TerminalExitCause,
+  describeTerminalExitCause,
+  isDeliberateTerminalExit
+} from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { terminalLastOutput } from '../output/tail/terminal-tail-read'
+import { DEFAULT_TERMINAL_LIST_LIMIT } from '../query/terminal-list-limit'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
+import type {
+  RuntimeTerminalListResult,
+  RuntimeTerminalOrphanAdoptionRequest,
+  RuntimeTerminalOrphanAdoptionResult
+} from '../../../../shared/runtime-terminal-contracts'
+import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
+import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import {
+  reportWorkerTurnStop,
+  type WorkerTurnStop
+} from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+
+export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
+  subscribeToTerminalResize(
+    ptyId: string,
+    listener: (event: {
+      cols: number
+      rows: number
+      displayMode: string
+      reason: string
+      seq?: number
+    }) => void
+  ): () => void {
+    return addListenerToMap(this.resizeListeners, ptyId, listener)
+  }
+
+  protected notifyTerminalResize(
+    ptyId: string,
+    event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
+  ): void {
+    const listeners = this.resizeListeners.get(ptyId)
+    if (!listeners) {
+      return
+    }
+    notifyRuntimeListeners(listeners, (listener) => listener(event), 'pty-resize')
+  }
+
+  // Section 7.2: observe exits directly so dispatch recovery need not wait for coordinator polling.
+  protected failActiveDispatchOnExit(
+    handle: string,
+    paneKey: string | null,
+    cause: TerminalExitCause,
+    lastOutput?: string
+  ): void {
+    const errorContext = describeTerminalExitCause(cause)
+    // A person closing the pane leaves the task unowned; any other end is the agent's exit.
+    const stop = isDeliberateTerminalExit(cause)
+      ? { reason: 'lost' as const, cause: 'it was closed in Orca' }
+      : { reason: 'exited' as const, cause: errorContext }
+    const settledLocally = this.failActiveDispatchAndReport(handle, paneKey ?? undefined, {
+      error: errorContext,
+      options: { workerProcessExited: true, terminationReason: cause.kind },
+      processExited: true,
+      stop: { ...stop, lastOutput }
+    })
+    if (!settledLocally && paneKey) {
+      this.reportRemoteWorkerExit(handle, paneKey, { ...stop, lastOutput })
+    }
+  }
+
+  /** The PTY's last lines, read while its record exists: an exit prunes it before any async read. */
+  protected readPtyLastOutput(ptyId: string | null | undefined): string | undefined {
+    return terminalLastOutput(ptyId ? this.ptysById.get(ptyId) : undefined)
+  }
+
+  /** A paired server's worker has no local Dispatch; any exit it did not report reaches the Run home through the stop relay. */
+  private reportRemoteWorkerExit(
+    handle: string,
+    paneKey: string,
+    stop: Pick<WorkerTurnStop, 'reason' | 'cause' | 'lastOutput'>
+  ): void {
+    const db = this._orchestrationDb
+    const attachment = db?.findActiveRemoteAttachmentForPane(paneKey)
+    // The coordinator's own worker-stop closes the terminal before it settles the attachment.
+    if (
+      !db ||
+      !attachment ||
+      attachment.state === 'stopping' ||
+      attachment.state === 'stop_unknown' ||
+      !db.isRemoteAttachmentProcessCurrent({
+        dispatchId: attachment.dispatch_id,
+        paneKey,
+        processIncarnation: this.getTerminalProcessIncarnation(handle)
+      })
+    ) {
+      return
+    }
+    reportWorkerTurnStop(
+      db,
+      { kind: 'remote', attachment },
+      { from: handle, ...stop },
+      this.workerTurnStopReportDeps
+    )
+  }
+
+  /** Codex outlives a failed reconnect, so no PTY exit will ever settle its dispatch (#24791). */
+  protected settleLostAgentSession(ptyId: string): void {
+    const surfaces: { handle: string | undefined; paneKey?: string }[] = [
+      ...this.getLeavesForPty(ptyId).map((leaf) => ({
+        handle: this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)),
+        paneKey: this.makeRuntimePaneKey(leaf)
+      })),
+      // Pane identity survives handle reminting, as on the exit path.
+      {
+        handle: this.handleByPtyId.get(ptyId),
+        paneKey: this.paneOfPty(this.ptysById.get(ptyId)).paneKey ?? undefined
+      }
+    ]
+    const reason = 'Codex lost its app-server and could not reconnect; relaunch Codex to continue'
+    try {
+      surfaces.some(
+        ({ handle, paneKey }) =>
+          handle !== undefined &&
+          this.failActiveDispatchAndReport(handle, paneKey, {
+            error: reason,
+            // The terminal and worktree stay up for inspection; workerProcessExited bypasses the active-worker guard for this dead session.
+            options: { workerProcessExited: true, workerStage: 'agent_session_lost' },
+            processExited: false,
+            stop: {
+              reason: 'lost',
+              cause: `${reason}; its terminal is still open for inspection`,
+              lastOutput: this.readPtyLastOutput(ptyId)
+            }
+          })
+      )
+    } catch (error) {
+      console.warn('[orchestration] failed to settle a lost agent session', ptyId, error)
+    }
+  }
+
+  /** Returns whether the surface had an active dispatch. */
+  private failActiveDispatchAndReport(
+    handle: string,
+    paneKey: string | undefined,
+    failure: {
+      error: string
+      options: Parameters<OrchestrationDb['failDispatch']>[2]
+      processExited: boolean
+      stop: Pick<WorkerTurnStop, 'reason' | 'cause' | 'lastOutput'>
+    }
+  ): boolean {
+    const db = this._orchestrationDb
+    // Pane identity survives handle reminting.
+    const dispatch = db?.getActiveDispatchForTerminal(handle, paneKey)
+    if (!db || !dispatch) {
+      return false
+    }
+    // Only this runtime's in-flight stop claims the outcome; durable stopping rows from a crashed runtime cannot absorb later failures.
+    const stopping = db.getWorkerDispatch?.(dispatch.id)
+    if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
+      if (failure.processExited) {
+        db.settleWorkerStop(dispatch.id)
+      }
+      return true
+    }
+    const settled = db.failDispatch(dispatch.id, failure.error, failure.options)?.status
+    // A stop asked for earlier (unconfirmed, or by a runtime before a restart) settles the Dispatch as failed, but sends no mail: the coordinator asked for it.
+    if (stopping?.state === 'stopping' || stopping?.state === 'stop_unknown') {
+      return true
+    }
+    reportWorkerTurnStop(
+      db,
+      { kind: 'local', dispatch },
+      {
+        from: handle,
+        ...failure.stop,
+        ...(settled === 'failed' || settled === 'circuit_broken' ? { settled } : {})
+      },
+      this.workerTurnStopReportDeps
+    )
+    return true
+  }
+
+  async listTerminals(
+    worktreeSelector?: string,
+    limit = DEFAULT_TERMINAL_LIST_LIMIT,
+    opts: {
+      handles?: readonly string[]
+      requireFreshPtyLiveness?: boolean
+      includeVisualLayouts?: boolean
+    } = {}
+  ): Promise<RuntimeTerminalListResult> {
+    return this.terminalList.list(worktreeSelector, limit, opts)
+  }
+
+  async inspectTerminalProcessIncarnationLiveness(
+    processIncarnation: string,
+    serializedHostScope: string | null
+  ): Promise<'live' | 'exited' | 'unverifiable'> {
+    const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
+    if (structuredSessionId) {
+      // Structured sessions have no PTY; consult durable records through /clear successors. The in-memory registry vanishes at settlement, so absence there proves no exit.
+      return observeStructuredWorker({ sessionId: structuredSessionId }).status
+    }
+    const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
+    if (!hostScope || !this.ptyController?.listProcesses) {
+      return 'unverifiable'
+    }
+    const listed = await withTimeoutResult(
+      this.ptyController.listProcesses(
+        hostScope.kind === 'ssh'
+          ? toSshExecutionHostId(hostScope.targetId)
+          : LOCAL_EXECUTION_HOST_ID
+      ),
+      PTY_CONTROLLER_LIST_TIMEOUT_MS
+    )
+    if (!listed.ok) {
+      return 'unverifiable'
+    }
+    return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
+  }
+
+  protected getTerminalTopologyRevision(worktreeId: string): number {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    return (
+      this.getWorkspaceSessionForWorktree(worktreeId)?.terminalTopologyRevisionByRepoId?.[repoId] ??
+      this.terminalTopologyRevisionByRepoId.get(repoId) ??
+      0
+    )
+  }
+
+  async adoptTerminalOrphans(
+    request: RuntimeTerminalOrphanAdoptionRequest
+  ): Promise<RuntimeTerminalOrphanAdoptionResult> {
+    if (request.claims.length === 0) {
+      throw new Error('terminal_orphan_claims_required')
+    }
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+    return this.runWorktreeTerminalMutation(workspace.id, async () => {
+      const resolvedWorkspace = workspace.folderWorkspace
+        ? this.folderWorkspaceToResolvedWorktree(workspace.folderWorkspace)
+        : await this.resolveGitWorktreeSelector(`id:${workspace.id}`)
+      const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
+        [resolvedWorkspace],
+        workspace.id,
+        undefined,
+        workspace.connectionId ?? null
+      )
+      if (!inventory) {
+        throw new Error('terminal_liveness_unavailable')
+      }
+      return this.adoptTerminalOrphansFromInventoryUnderMutation(request, workspace, inventory)
+    })
+  }
+}

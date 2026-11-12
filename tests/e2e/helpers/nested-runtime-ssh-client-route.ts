@@ -71,7 +71,7 @@ async function captureNestedTerminalRouteDiagnostic(
           })
         : null
       return {
-        activeRuntimeEnvironmentId: state?.settings.activeRuntimeEnvironmentId ?? null,
+        activeRuntimeEnvironmentId: state?.settings?.activeRuntimeEnvironmentId ?? null,
         environmentId,
         environments: await window.api.runtimeEnvironments.list(),
         leafId,
@@ -114,7 +114,7 @@ async function captureNestedTerminalRouteDiagnostic(
           ([owner, bucket]) => ({
             owner,
             statuses: [...bucket.connectionStates.entries()],
-            targets: bucket.targets?.map((target) => target.id) ?? [],
+            targets: [...bucket.targetLabels.keys()],
             targetsHydrated: bucket.targetsHydrated
           })
         ),
@@ -293,7 +293,7 @@ export async function addPairedRuntimeEnvironment(
       if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
         throw new Error(`Paired desktop could not reach ${name}`)
       }
-      if (!(await store.getState().switchRuntimeEnvironment(result.environment.id))) {
+      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))) {
         throw new Error(`Paired desktop could not select ${name}`)
       }
       return result.environment.id

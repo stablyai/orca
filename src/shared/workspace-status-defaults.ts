@@ -1,4 +1,4 @@
-import type { WorkspaceStatusDefinition } from './types'
+import type { WorkspaceStatusDefinition } from './worktree/types'
 
 export const DEFAULT_STATUS_VISUALS: Record<string, { color: string; icon: string }> = {
   todo: { color: 'neutral', icon: 'circle' },

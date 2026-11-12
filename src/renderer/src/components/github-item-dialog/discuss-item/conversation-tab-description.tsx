@@ -1,0 +1,154 @@
+import React, { useState } from 'react'
+import type { GitHubImageUploadAddress } from '@/components/github/github-image-upload'
+import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+
+export function ConversationTabDescription({
+  imageUploadAddress,
+  item,
+  authorLabel,
+  canEditBody,
+  loading,
+  detailsLoaded,
+  bodyEditing,
+  bodySaving,
+  bodyChanged,
+  body,
+  bodyImageUrls,
+  resolvedBodyDraft,
+  markdownGitHubRepo,
+  setBodyDraft,
+  setBodyEditing,
+  onSaveBody
+}: {
+  imageUploadAddress?: () => GitHubImageUploadAddress
+  item: GitHubWorkItem
+  authorLabel: string
+  canEditBody: boolean
+  loading: boolean
+  detailsLoaded: boolean
+  bodyEditing: boolean
+  bodySaving: boolean
+  bodyChanged: boolean
+  body: string
+  bodyImageUrls?: Record<string, string>
+  resolvedBodyDraft: string
+  markdownGitHubRepo: GitHubOwnerRepo | null
+  setBodyDraft: (value: string) => void
+  setBodyEditing: (value: boolean) => void
+  onSaveBody: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const [uploading, setUploading] = useState(false)
+  const save = () => {
+    if (!uploading) {
+      onSaveBody()
+    }
+  }
+  return (
+    <div className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
+      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
+        <span className="font-medium text-foreground">{authorLabel}</span>
+        <span>
+          {t('auto.components.GitHubItemDialog.updatedRelativeTime', 'updated {{time}}', {
+            time: formatRelativeTime(item.updatedAt, intlLocale)
+          })}
+        </span>
+        {canEditBody && !loading && detailsLoaded ? (
+          bodyEditing ? (
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="gap-1.5"
+                disabled={bodySaving}
+                onClick={() => {
+                  setBodyDraft(body)
+                  setBodyEditing(false)
+                }}
+              >
+                <X className="size-3.5" />
+                {t('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                className="gap-1.5"
+                disabled={bodySaving || !bodyChanged || uploading}
+                onClick={save}
+              >
+                {bodySaving ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <Check className="size-3.5" />
+                )}
+                {t('auto.components.GitHubItemDialog.9df4e74bdf', 'Save')}
+              </Button>
+            </div>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="ml-auto size-7"
+                  onClick={() => {
+                    setBodyDraft(body)
+                    setBodyEditing(true)
+                  }}
+                  aria-label={t('auto.components.GitHubItemDialog.4d555d3796', 'Edit description')}
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {t('auto.components.GitHubItemDialog.4d555d3796', 'Edit description')}
+              </TooltipContent>
+            </Tooltip>
+          )
+        ) : null}
+      </div>
+      <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
+        {loading && !detailsLoaded ? (
+          <div className="flex items-center justify-center py-5">
+            <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : bodyEditing ? (
+          <GitHubMarkdownComposer
+            imageUploadAddress={imageUploadAddress}
+            onImageUploadPendingChange={setUploading}
+            value={resolvedBodyDraft}
+            onChange={setBodyDraft}
+            placeholder={t('auto.components.GitHubItemDialog.52b20b56f7', 'Description')}
+            disabled={bodySaving}
+            autoFocus
+            minHeightClassName="min-h-64"
+            onSubmitShortcut={save}
+          />
+        ) : body.trim() ? (
+          <CommentMarkdown
+            content={body}
+            bodyImageUrls={bodyImageUrls}
+            variant="document"
+            githubRepo={markdownGitHubRepo}
+            className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+          />
+        ) : (
+          <span className="italic text-muted-foreground">
+            {t('auto.components.GitHubItemDialog.9b9cb55994', 'No description provided.')}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -1,8 +1,27 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { withBrowserPageTarget } from './browser-page-target'
 
-export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
-  // ── Cookie management ──
+export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget([
+  {
+    path: ['extension', 'list'],
+    summary: 'List installed browser extensions and their enabled state',
+    usage: 'orca extension list [--profile <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'profile'],
+    notes: ['Desktop only. Defaults to the default browser profile on this Orca host.']
+  },
+  {
+    path: ['extension', 'reload'],
+    summary: 'Reload an installed unpacked browser extension',
+    usage:
+      'orca extension reload <extension-id> [--json] | orca extension reload --path <folder> [--json]',
+    positionalArgs: ['extension-id'],
+    allowedFlags: [...GLOBAL_FLAGS, 'extension-id', 'path'],
+    notes: [
+      'Desktop only. --path selects an already installed unpacked source folder; it never installs one.',
+      'Like the Settings reload button, this restarts the extension in every profile where it is enabled.'
+    ]
+  },
   {
     path: ['cookie', 'get'],
     summary: 'Get cookies for the active tab (optionally filter by URL)',
@@ -35,7 +54,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
       'orca cookie delete --name <n> [--domain <d>] [--url <u>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'name', 'domain', 'url', 'worktree']
   },
-  // ── Viewport ──
   {
     path: ['viewport'],
     summary: 'Set browser viewport size',
@@ -43,7 +61,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
       'orca viewport --width <w> --height <h> [--scale <n>] [--mobile] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'width', 'height', 'scale', 'mobile', 'worktree']
   },
-  // ── Geolocation ──
   {
     path: ['geolocation'],
     summary: 'Override browser geolocation',
@@ -51,7 +68,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
       'orca geolocation --latitude <lat> --longitude <lon> [--accuracy <n>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'latitude', 'longitude', 'accuracy', 'worktree']
   },
-  // ── Request interception ──
   {
     path: ['intercept', 'enable'],
     summary: 'Enable request interception (pause matching requests)',
@@ -70,9 +86,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca intercept list [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
-  // TODO: add intercept continue/block once agent-browser supports per-request
-  // interception decisions (currently only supports URL-pattern-based route/unroute).
-  // ── Console/network capture ──
   {
     path: ['capture', 'start'],
     summary: 'Start capturing console and network events',
@@ -97,7 +110,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca network [--limit <n>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'limit', 'worktree']
   },
-  // ── Additional core commands ──
   {
     path: ['dblclick'],
     summary: 'Double-click element by ref',
@@ -128,14 +140,12 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca is --what <state> --element <ref> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'what', 'element', 'worktree']
   },
-  // ── Keyboard insert text ──
   {
     path: ['inserttext'],
     summary: 'Insert text without key events',
     usage: 'orca inserttext --text <text> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'text', 'worktree']
   },
-  // ── Mouse commands ──
   {
     path: ['mouse', 'move'],
     summary: 'Move mouse to x,y coordinates',
@@ -160,7 +170,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca mouse wheel --dy <n> [--dx <n>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dy', 'dx', 'worktree']
   },
-  // ── Find (semantic locators) ──
   {
     path: ['find'],
     summary: 'Find element by semantic locator and perform action',
@@ -168,7 +177,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
       'orca find --locator <type> --value <text> --action <action> [--text <text>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'locator', 'value', 'action', 'text', 'worktree']
   },
-  // ── Set commands ──
   {
     path: ['set', 'device'],
     summary: 'Emulate a device',
@@ -195,12 +203,12 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['set', 'media'],
-    summary: 'Set color scheme and reduced motion preferences',
+    summary:
+      'Set color scheme and reduced motion preferences (omitted ones reset to no preference)',
     usage:
       'orca set media [--color-scheme <dark|light>] [--reduced-motion <reduce|no-preference>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'color-scheme', 'reduced-motion', 'worktree']
   },
-  // ── Clipboard commands ──
   {
     path: ['clipboard', 'read'],
     summary: 'Read clipboard contents',
@@ -213,7 +221,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca clipboard write --text <text> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'text', 'worktree']
   },
-  // ── Dialog commands ──
   {
     path: ['dialog', 'accept'],
     summary: 'Accept a browser dialog',
@@ -226,7 +233,6 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca dialog dismiss [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
-  // ── Storage commands ──
   {
     path: ['storage', 'local', 'get'],
     summary: 'Get a localStorage value by key',
@@ -265,18 +271,16 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca storage session clear [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
-  // ── Download command ──
   {
     path: ['download'],
     summary: 'Download a file by clicking a selector',
     usage: 'orca download --selector <ref> --path <path> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'selector', 'path', 'worktree']
   },
-  // ── Highlight command ──
   {
     path: ['highlight'],
     summary: 'Highlight an element by selector',
     usage: 'orca highlight --selector <ref> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'selector', 'worktree']
   }
-]
+])

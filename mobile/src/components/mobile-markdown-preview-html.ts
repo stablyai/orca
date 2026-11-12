@@ -1,27 +1,21 @@
-// Why: README HTML snippets can document escaped entities; repeated cleanup
-// passes must not turn `&amp;lt;` into a real tag and strip it.
+import {
+  findMobileMarkdownMarkupTagEnd,
+  findNextPairedMarkupOpener,
+  isPairedMarkupOpener,
+  replaceMobileMarkdownPairedMarkupTags,
+  stripMobileMarkdownMarkupTags
+} from './mobile-markdown-preview-tag-stripper'
+
+// Avoid repeated entity decoding: escaped README &amp;lt; must not become real tag and disappear.
 const escapedHtmlEntityTokens = [
   { pattern: /&amp;nbsp;/gi, token: '\uE000ORCA_MD_ENTITY_NBSP\uE000', value: '&nbsp;' },
   { pattern: /&amp;lt;/gi, token: '\uE000ORCA_MD_ENTITY_LT\uE000', value: '&lt;' },
   { pattern: /&amp;gt;/gi, token: '\uE000ORCA_MD_ENTITY_GT\uE000', value: '&gt;' },
   { pattern: /&amp;quot;/gi, token: '\uE000ORCA_MD_ENTITY_QUOT\uE000', value: '&quot;' },
-  { pattern: /&amp;#39;/gi, token: '\uE000ORCA_MD_ENTITY_APOS\uE000', value: '&#39;' }
+  { pattern: /&amp;#39;/gi, token: '\uE000ORCA_MD_ENTITY_APOS\uE000', value: '&#39;' },
+  { pattern: /&lt;/gi, token: '\uE000ORCA_MD_ENTITY_RAW_LT\uE000', value: '<' },
+  { pattern: /&gt;/gi, token: '\uE000ORCA_MD_ENTITY_RAW_GT\uE000', value: '>' }
 ] as const
-
-const strippableHtmlTagNames = new Set(
-  [
-    'a abbr address area article aside audio b base bdi bdo blockquote body br button',
-    'canvas caption cite code col colgroup data datalist dd del details dfn dialog div',
-    'dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 head',
-    'header hgroup hr html i iframe img input ins kbd label legend li link main map',
-    'mark menu meta meter nav noscript object ol optgroup option output p picture pre',
-    'progress q rp rt ruby s samp script search section select slot small source span',
-    'strong style sub summary sup table tbody td template textarea tfoot th thead time',
-    'title tr track u ul var video wbr'
-  ]
-    .join(' ')
-    .split(' ')
-)
 
 function protectEscapedHtmlEntities(value: string): string {
   return escapedHtmlEntityTokens.reduce(
@@ -52,11 +46,7 @@ function decodeHtmlEntities(value: string, preserveEscapedEntities = false): str
 function stripTags(value: string): string {
   const { protectedText, codeSpans, placeholderPrefix } = protectMarkdownCode(value)
   const stripped = decodeHtmlEntities(
-    protectedText
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/<\/?([A-Za-z][A-Za-z0-9:-]*)(?:\s[^<>]*)?\/?>/g, (tag, name: string) =>
-        strippableHtmlTagNames.has(name.toLowerCase()) ? '' : tag
-      ),
+    stripMobileMarkdownMarkupTags(protectedText.replace(/<!--[\s\S]*?-->/g, '')),
     true
   )
     .replace(/[ \t]+\n/g, '\n')
@@ -66,37 +56,180 @@ function stripTags(value: string): string {
   return restoreMarkdownCode(stripped, codeSpans, placeholderPrefix)
 }
 
-function attrValue(tag: string, name: string): string {
-  const pattern = new RegExp(`${name}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, 'i')
-  const match = tag.match(pattern)
-  const raw = match?.[1] ?? ''
-  return decodeHtmlEntities(raw.replace(/^["']|["']$/g, ''))
+/** An attribute's decoded value in an HTML tag, quotes respected; '' when absent. */
+export function attrValue(tag: string, name: string): string {
+  let cursor = 1
+  while (cursor < tag.length && !/[\s/>]/.test(tag[cursor] ?? '')) {
+    cursor += 1
+  }
+  while (cursor < tag.length) {
+    while (/\s/.test(tag[cursor] ?? '')) {
+      cursor += 1
+    }
+    if (tag[cursor] === '>' || (tag[cursor] === '/' && tag[cursor + 1] === '>')) {
+      return ''
+    }
+
+    const attributeStart = cursor
+    while (!/[\s=/>]/.test(tag[cursor] ?? '>')) {
+      cursor += 1
+    }
+    if (attributeStart === cursor) {
+      cursor += 1
+      continue
+    }
+    const attributeName = tag.slice(attributeStart, cursor)
+    while (/\s/.test(tag[cursor] ?? '')) {
+      cursor += 1
+    }
+    if (tag[cursor] !== '=') {
+      continue
+    }
+
+    cursor += 1
+    while (/\s/.test(tag[cursor] ?? '')) {
+      cursor += 1
+    }
+    const quote = tag[cursor] === '"' || tag[cursor] === "'" ? tag[cursor] : ''
+    if (quote) {
+      cursor += 1
+    }
+    const valueStart = cursor
+    if (quote) {
+      const valueEnd = tag.indexOf(quote, cursor)
+      if (valueEnd === -1) {
+        return ''
+      }
+      cursor = valueEnd + 1
+      if (attributeName.toLowerCase() === name) {
+        return decodeHtmlEntities(tag.slice(valueStart, valueEnd))
+      }
+      continue
+    }
+
+    while (!/[\s>]/.test(tag[cursor] ?? '>')) {
+      cursor += 1
+    }
+    if (attributeName.toLowerCase() === name) {
+      return decodeHtmlEntities(tag.slice(valueStart, cursor))
+    }
+  }
+  return ''
+}
+
+const tagAttributesSource = `(?:[^<>"']|"[^"]*"|'[^']*')*`
+const imageTagPattern = new RegExp(`<img\\b${tagAttributesSource}>`, 'gi')
+
+export type HtmlImage = {
+  start: number
+  end: number
+  src: string
+  alt: string
+  width?: number
+  height?: number
+}
+
+/** A pixel length (`300`, `300px`); percentages and other units stay unread. */
+function pixels(value: string): number | undefined {
+  const match = /^\s*(\d+)(?:px)?\s*$/i.exec(value)
+  return match ? Number(match[1]) : undefined
+}
+
+/** The `<img>` tags in HTML with an https source, where they sit, and their authored width. */
+export function htmlImages(html: string): HtmlImage[] {
+  return [...html.matchAll(imageTagPattern)].flatMap((match) => {
+    const src = attrValue(match[0], 'src')
+    const width = pixels(attrValue(match[0], 'width'))
+    const height = pixels(attrValue(match[0], 'height'))
+    return /^https:\/\//i.test(src)
+      ? [
+          {
+            start: match.index,
+            end: match.index + match[0].length,
+            src,
+            alt: attrValue(match[0], 'alt'),
+            ...(width ? { width } : {}),
+            ...(height ? { height } : {})
+          }
+        ]
+      : []
+  })
+}
+
+function normalizeAnchorTags(value: string): string {
+  const lowerValue = value.toLowerCase()
+  let output = ''
+  let copyCursor = 0
+  let searchCursor = 0
+  let closingStart = -1
+
+  while (searchCursor < value.length) {
+    const start = findNextPairedMarkupOpener(value, lowerValue, 'a', searchCursor)
+    if (start < 0) {
+      break
+    }
+    const end = findMobileMarkdownMarkupTagEnd(value, start + 2)
+    if (end < 0) {
+      if (end === -2) {
+        break
+      }
+      searchCursor = start + 2
+      continue
+    }
+    if (!isPairedMarkupOpener(value, start + 2, end)) {
+      searchCursor = end + 1
+      continue
+    }
+
+    const tag = value.slice(start, end + 1)
+    const href = attrValue(tag, 'href')
+    if (!href) {
+      searchCursor = end + 1
+      continue
+    }
+
+    if (closingStart < end + 1) {
+      closingStart = lowerValue.indexOf('</a>', end + 1)
+    }
+    if (closingStart < 0) {
+      break
+    }
+    const nestedStart = findNextPairedMarkupOpener(value, lowerValue, 'a', end + 1)
+    if (nestedStart >= 0 && nestedStart < closingStart) {
+      searchCursor = nestedStart
+      continue
+    }
+
+    const text = stripTags(value.slice(end + 1, closingStart))
+    output += value.slice(copyCursor, start)
+    output += href && text ? `[${text}](${href})` : text
+    copyCursor = closingStart + 4
+    searchCursor = copyCursor
+  }
+
+  return output + value.slice(copyCursor)
 }
 
 function normalizeInlineHtml(value: string): string {
-  return value
+  const imagesNormalized = value
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<img\b[^>]*>/gi, (tag) => attrValue(tag, 'alt') || 'image')
-    .replace(
-      /<a\b[^>]*href\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)[^>]*>([\s\S]*?)<\/a>/gi,
-      (tag, _href, label) => {
-        const href = attrValue(tag, 'href')
-        const text = stripTags(label)
-        return href && text ? `[${text}](${href})` : text
-      }
-    )
-    .replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_tag, _name, inner) => {
-      const text = stripTags(inner)
-      return text ? `**${text}**` : ''
-    })
-    .replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_tag, _name, inner) => {
-      const text = stripTags(inner)
-      return text ? `*${text}*` : ''
-    })
-    .replace(/<(code|kbd)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_tag, _name, inner) => {
-      const text = stripTags(inner)
-      return text ? `\`${text}\`` : ''
-    })
+    // An image without alt text is decoration (badges, icons): it draws no word.
+    .replace(imageTagPattern, (tag) => attrValue(tag, 'alt'))
+
+  let next = normalizeAnchorTags(imagesNormalized)
+  next = replaceMobileMarkdownPairedMarkupTags(next, ['strong', 'b'], (_name, inner) => {
+    const text = stripTags(inner)
+    return text ? `**${text}**` : ''
+  })
+  next = replaceMobileMarkdownPairedMarkupTags(next, ['em', 'i'], (_name, inner) => {
+    const text = stripTags(inner)
+    return text ? `*${text}*` : ''
+  })
+  next = replaceMobileMarkdownPairedMarkupTags(next, ['code', 'kbd'], (_name, inner) => {
+    const text = stripTags(inner)
+    return text ? `\`${text}\`` : ''
+  })
+  return next
 }
 
 // Why: Markdown code is literal source, so it must bypass the HTML strip pass.
@@ -108,11 +241,18 @@ function escapeRegExp(value: string): string {
 }
 
 function codePlaceholderPrefix(content: string): string {
-  let prefix = CODE_PLACEHOLDER_PREFIX_BASE
-  while (content.includes(prefix)) {
-    prefix = `${prefix}_`
+  let suffixLength = 0
+  let cursor = 0
+  while ((cursor = content.indexOf(CODE_PLACEHOLDER_PREFIX_BASE, cursor)) !== -1) {
+    cursor += CODE_PLACEHOLDER_PREFIX_BASE.length
+    const suffixStart = cursor
+    while (content[cursor] === '_') {
+      cursor += 1
+    }
+    // One extra underscore keeps the prefix longer than every authored run.
+    suffixLength = Math.max(suffixLength, cursor - suffixStart + 1)
   }
-  return prefix
+  return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
 }
 
 function protectMarkdownCode(content: string): {
@@ -171,18 +311,20 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   )
   let next = protectedText
 
-  // Why: repository Markdown often uses small HTML islands for centered README
-  // headers and badges. Preview mode should read like Markdown, while Source
-  // mode remains the exact file bytes.
-  next = next.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_tag, level, inner) => {
-    const text = stripTags(normalizeInlineHtml(inner))
-    return text ? `\n${'#'.repeat(Number(level))} ${text}\n` : '\n'
-  })
-  next = next.replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_tag, inner) => {
+  // Normalize README HTML headers/badges for readable Preview; Source keeps exact bytes.
+  next = replaceMobileMarkdownPairedMarkupTags(
+    next,
+    ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+    (name, inner) => {
+      const text = stripTags(normalizeInlineHtml(inner))
+      return text ? `\n${'#'.repeat(Number(name.slice(1)))} ${text}\n` : '\n'
+    }
+  )
+  next = replaceMobileMarkdownPairedMarkupTags(next, ['p'], (_name, inner) => {
     const text = stripTags(normalizeInlineHtml(inner))
     return text ? `\n${text}\n` : '\n'
   })
-  next = next.replace(/<sub\b[^>]*>([\s\S]*?)<\/sub>/gi, (_tag, inner) =>
+  next = replaceMobileMarkdownPairedMarkupTags(next, ['sub'], (_name, inner) =>
     stripTags(normalizeInlineHtml(inner))
   )
   next = normalizeInlineHtml(next)

@@ -4,10 +4,11 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetr
 import type { AgentsStep } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStep } from '../../../../shared/workbench-steps'
 import type { ReviewStep } from '../../../../shared/review-steps'
-import type { GlobalSettings } from '../../../../shared/types'
-import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
-import { cn } from '@/lib/utils'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { InstalledAgentSkillState } from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { cn } from '@/lib/class-names'
 import { PreviewMedia, RelatedFeatures } from './FeatureWallPreview'
+import { getLocalizedFeatureWallWorkflowCopy } from './feature-wall-tour-localized-copy'
 import { TasksAnimatedVisual } from './TasksAnimatedVisual'
 import { WorkspacesAnimatedVisual } from './WorkspacesAnimatedVisual'
 import { WorkbenchAnimatedVisual } from './WorkbenchAnimatedVisual'
@@ -16,12 +17,12 @@ import { BrowserAnimatedVisual } from './BrowserAnimatedVisual'
 import { AgentsOrchestrationVisual } from './AgentsOrchestrationVisual'
 import { ReviewAnimatedVisual } from './ReviewAnimatedVisual'
 import { GitHubRow, LinearRow } from '../onboarding/IntegrationsStep'
-import { OrchestrationSetupCard } from '../settings/OrchestrationSetupCard'
+import { OrchestrationSetupCard } from './OrchestrationSetupCard'
 import { BrowserUseSkillSetupCard } from './BrowserUseSkillSetupCard'
 import { UsageAccountsCard } from './agents-orchestration/UsageAccountsCard'
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
 import { KeepAwakeCard } from './KeepAwakeCard'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function FeatureWallBody(props: {
   selected: FeatureWallWorkflow
@@ -39,6 +40,7 @@ export function FeatureWallBody(props: {
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): JSX.Element {
+  const t = useTranslate()
   const {
     selected,
     posterUrl,
@@ -117,7 +119,6 @@ export function FeatureWallBody(props: {
                 ? 'max-w-[340px]'
                 : 'max-w-[400px]'
               : 'max-w-[480px]'
-  const setupTerminalHeightPx = source === 'onboarding' ? 140 : 240
   const settingContent = isTasks ? (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <LinearRow compact />
@@ -128,17 +129,9 @@ export function FeatureWallBody(props: {
   ) : isAgentsUsage ? (
     <UsageAccountsCard onAccountStateChange={onUsageAccountStateChange} />
   ) : isAgentsOrchestration ? (
-    <OrchestrationSetupCard
-      compact
-      terminalHeightPx={setupTerminalHeightPx}
-      skill={orchestrationSkill}
-    />
+    <OrchestrationSetupCard compact skill={orchestrationSkill} />
   ) : isWorkbenchBrowser ? (
-    <BrowserUseSkillSetupCard
-      compact
-      terminalHeightPx={setupTerminalHeightPx}
-      skill={browserUseSkill}
-    />
+    <BrowserUseSkillSetupCard compact skill={browserUseSkill} />
   ) : isReviewPrView ? (
     <GitHubRow compact />
   ) : isReviewShip ? (
@@ -147,8 +140,7 @@ export function FeatureWallBody(props: {
   const shouldUseOnboardingTourZones =
     source === 'onboarding' && hasAnimatedVisual && Boolean(settingContent)
   const shouldStickSetupToBottom = shouldUseOnboardingTourZones
-  // Why: several visuals expand/collapse internally; setup controls should sit
-  // after a stable stage so they do not jump with the animation loop.
+  // Reserve a stable stage so expanding visuals cannot move setup controls.
   const visualStageHeight = isTasks
     ? 'h-[288px]'
     : isWorkbenchEditor
@@ -244,7 +236,7 @@ export function FeatureWallBody(props: {
             posterUrl={posterUrl}
             gifUrl={gifUrl}
             showGif={showGif}
-            workflowTitle={selected.title}
+            workflowTitle={getLocalizedFeatureWallWorkflowCopy(selected.id).title}
           />
         ) : null}
 
@@ -268,7 +260,7 @@ export function FeatureWallBody(props: {
           >
             <>
               <div className="text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                {translate('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
+                {t('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
               </div>
               {settingContent}
             </>

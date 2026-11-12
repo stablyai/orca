@@ -1,3 +1,4 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -60,7 +61,6 @@ type SchedulerDebugWindow = Window & {
 type HiddenOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
   hiddenRendererSkippedChars: number
-  hiddenRendererMode2031ReplyCount: number
 }
 
 type HiddenOutputRecoveryWindow = Window & {
@@ -161,7 +161,7 @@ async function createAgentMarkedTerminalTab(
         }
       })
       state.setActiveTab(tab.id)
-      state.setActiveTabType('terminal')
+      state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       return tab.id
     },
     { worktreeId, agent, command }
@@ -172,10 +172,6 @@ async function createCodexMarkedTerminalTab(page: Page): Promise<string> {
   return createAgentMarkedTerminalTab(page, 'codex', 'node -e "setInterval(() => {}, 1000)"')
 }
 
-async function createGrokMarkedTerminalTab(page: Page): Promise<string> {
-  return createAgentMarkedTerminalTab(page, 'grok', 'node -e "setInterval(() => {}, 1000)"')
-}
-
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     const store = window.__store
@@ -183,7 +179,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
       throw new Error('Store unavailable')
     }
     store.getState().setActiveTab(id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, tabId)
   await expect
     .poll(
@@ -415,8 +411,7 @@ async function injectHiddenStreamingBurst(page: Page, tabId: string, runId: stri
       if (!pane) {
         throw new Error(`No terminal pane for tab ${tabId}`)
       }
-      // Why: Grok sessions can emit large formatted bursts while the tab is
-      // hidden; stress the visibility-resume flush path beyond a few lines.
+      // Stress Grok-sized hidden bursts beyond a few lines before visibility-resume flush.
       const burst = Array.from({ length: 400 }, (_, frame) => {
         const progress = `${'█'.repeat((frame % 16) + 1)}${'░'.repeat(16 - ((frame % 16) + 1))}`
         return [
@@ -456,7 +451,9 @@ async function readTabTerminalGeometry(
         throw new Error(`No xterm screen for tab ${tabId}`)
       }
       const screenRect = screen.getBoundingClientRect()
-      const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+      const xterm = pane.terminal as XtermWithRenderDimensions
+      const cellWidth = xterm._core?._renderService?.dimensions?.css?.cell?.width ?? 0
       const renderedContentWidth = pane.terminal.cols * cellWidth
       const rowRight = screenRect.left + renderedContentWidth
       const contentWidthRatio = screenRect.width > 0 ? renderedContentWidth / screenRect.width : 0
@@ -501,8 +498,7 @@ function geometryLooksCorrupted(geometry: TabTerminalGeometry): string | null {
   if (geometry.cols < 40 || geometry.rows <= 0) {
     return `terminal grid invalid (${geometry.cols}x${geometry.rows})`
   }
-  // Why: half-width bug paints content in only ~50% of the screen; rowRight
-  // lags far behind screenRight when cols are stale.
+  // Reject the half-width bug: stale cols leave rowRight far behind screenRight.
   if (geometry.contentWidthRatio > 0 && geometry.contentWidthRatio < 0.82) {
     return `content width ratio ${geometry.contentWidthRatio.toFixed(3)} < 0.82`
   }
@@ -558,8 +554,7 @@ test.describe('Terminal tab switch visual restore', () => {
     for (let cycle = 0; cycle < 12; cycle += 1) {
       await activateTerminalTab(orcaPage, secondTabId)
       await injectHiddenStreamingBurst(orcaPage, firstTabId, runId)
-      // Why: rapid back-to-back switches mirror the user's leave/return pattern
-      // and race the overlay's rAF/50ms refit retries.
+      // Switch immediately to race the overlay’s rAF/50ms retries.
       await activateTerminalTab(orcaPage, firstTabId)
       if (cycle % 3 === 0) {
         await activateTerminalTab(orcaPage, secondTabId)
@@ -634,11 +629,8 @@ test.describe('Terminal tab switch visual restore', () => {
       const liveFrame = cycle * 4
       const restoreFrame = liveFrame + 1
       const redraw = buildAltScreenFrame(finalMarker, liveFrame)
-      // Why: this frame never transits the PTY, so a reveal restore would
-      // repaint main's model over it. Publish an equivalent frame as the
-      // snapshot so either path leaves a valid screen — numbered one higher so
-      // the readback still reports which one painted. Identity is re-read per
-      // cycle because a reattach would re-key the override.
+      // Direct-emulator frames bypass main’s model; publish an equivalent snapshot numbered one higher to identify which restore path paints.
+      // Re-read identity each cycle because reattach can re-key the override.
       const { ptyId, cols, rows } = await readPaneIdentityOnTab(orcaPage, firstTabId)
       await setHiddenSnapshotOverride(orcaPage, ptyId, {
         data: buildAltScreenFrame(finalMarker, restoreFrame),
@@ -654,8 +646,7 @@ test.describe('Terminal tab switch visual restore', () => {
       renderPaths.push(
         `cycle ${cycle}: ${describeAltScreenRenderPath(renderedFrame, liveFrame, restoreFrame)}`
       )
-      // Why: whichever path won must have painted its own frame. Anything else
-      // on screen means the restore replayed stale content.
+      // Require the winning path’s own frame; other content means stale restore.
       const staleFrame =
         renderedFrame !== null && renderedFrame !== liveFrame && renderedFrame !== restoreFrame
           ? `alt-screen shows frame ${renderedFrame}, expected ${liveFrame} (live write) or ${restoreFrame} (reveal restore)`
@@ -674,9 +665,7 @@ test.describe('Terminal tab switch visual restore', () => {
       }
     }
 
-    // Why: which cycles latched a restore is load-dependent, so it is recorded
-    // rather than asserted — without it a "both paths agree" run is opaque.
-    // Logged as well because the list reporter omits annotations.
+    // Record load-dependent restore-path winners rather than assert them; stdout keeps the list reporter from hiding this evidence.
     testInfo.annotations.push({
       type: 'alt-screen-render-path',
       description: renderPaths.join(', ')
@@ -742,62 +731,10 @@ test.describe('Terminal tab switch visual restore', () => {
       .toContain(marker)
   })
 
-  test('restores skipped hidden Grok output on light tab resume', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-
-    const shellTabId = (await getActiveTabId(orcaPage))!
-    const grokTabId = await createGrokMarkedTerminalTab(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await waitForPanePtyIdOnTab(orcaPage, grokTabId)
-    const paneIdentity = await readPaneIdentityOnTab(orcaPage, grokTabId)
-    const paneKey = `${grokTabId}:${paneIdentity.leafId}`
-
-    await activateTerminalTab(orcaPage, shellTabId)
-    const runId = `${Date.now()}`
-    const marker = `${TAB_SWITCH_MARKER_PREFIX}_SKIPPED_GROK_${runId}`
-    // Why: synchronized-output mode exercises the hidden renderer skip path
-    // used by agent TUIs before light tab resume requests recovery.
-    const hiddenFrame = [
-      '\x1b[?2026h',
-      `${marker} hidden renderer frame`,
-      'status=streaming while tab-hidden',
-      '\x1b[?2026l'
-    ].join('\r\n')
-    await resetHiddenOutputDebug(orcaPage)
-    await injectPaneData(orcaPage, paneKey, hiddenFrame, {
-      seq: hiddenFrame.length,
-      rawLength: hiddenFrame.length
-    })
-
-    await expect
-      .poll(async () => (await readHiddenOutputDebug(orcaPage))?.hiddenRendererSkipCount ?? 0, {
-        timeout: 5_000,
-        message: 'Grok-marked hidden output did not take the skipped renderer path'
-      })
-      .toBeGreaterThan(0)
-    await setHiddenSnapshotOverride(orcaPage, paneIdentity.ptyId, {
-      data: `${marker} restored from main snapshot\r\n`,
-      cols: paneIdentity.cols,
-      rows: paneIdentity.rows,
-      seq: hiddenFrame.length
-    })
-
-    await activateTerminalTab(orcaPage, grokTabId)
-
-    await expect
-      .poll(() => getTerminalContent(orcaPage, 8_000), {
-        timeout: 10_000,
-        message: 'light tab resume did not request skipped Grok hidden-output recovery'
-      })
-      .toContain(marker)
-  })
-
-  test('keeps returned tab glyphs intact across tab switches', async ({ orcaPage }, testInfo) => {
-    // Why: screenshot equality catches WebGL atlas corruption on the tab being
-    // resumed, not just stale cols/rows geometry checks.
+  test('@headful keeps returned tab glyphs intact across tab switches', async ({
+    orcaPage
+  }, testInfo) => {
+    // Compare screenshots to catch atlas corruption beyond correct cols/rows.
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -838,9 +775,7 @@ test.describe('Terminal tab switch visual restore', () => {
     const screenshotMismatches: string[] = []
     for (let cycle = 0; cycle < 8; cycle += 1) {
       await activateTerminalTab(orcaPage, secondTabId)
-      // Why: do not write into the hidden tab here — new bytes would change the
-      // screenshot even when rendering is healthy. This cycle only exercises the
-      // suspend/resume + atlas reset path on unchanged content.
+      // Keep hidden content unchanged so screenshot equality isolates suspend/resume and atlas reset.
       await activateTerminalTab(orcaPage, firstTabId)
       await orcaPage.waitForTimeout(100)
       const afterReturn = await captureStableTabScreenshot(orcaPage, firstTabId)

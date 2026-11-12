@@ -1,12 +1,33 @@
 import { useEffect } from 'react'
-import { useAppStore, type AppState } from '@/store'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import {
+  subscribeStructuredChatTabNames,
+  getStructuredChatTabNames
+} from '@/runtime/native-chat/naming/structured-chat-name-observation'
+import { revealDashboardAgent } from './reveal-dashboard-agent'
+import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
+import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
-// Why: cap snapshot rebuilds during bursts of agent-status pings. The board is a
-// glanceable surface, so ~4 updates/sec is plenty and keeps the cross-worktree
-// rebuild off the hot path.
+// Throttle cross-worktree snapshot rebuilds to 4Hz during agent-status bursts.
 const PUBLISH_THROTTLE_MS = 250
+
+/** Compare immutable icon references before recloning data URLs; unchanged maps can otherwise resend megabytes at 4Hz. */
+export function repoIconsUnchanged(
+  next: Record<string, RepoIcon | null>,
+  previous: Record<string, RepoIcon | null> | null
+): boolean {
+  if (!previous) {
+    return false
+  }
+  const nextIds = Object.keys(next)
+  if (nextIds.length !== Object.keys(previous).length) {
+    return false
+  }
+  return nextIds.every((id) => id in previous && next[id] === previous[id])
+}
 
 type DashboardSnapshotWatchState = DashboardSnapshotState & Pick<AppState, 'agentStatusEpoch'>
 
@@ -15,10 +36,12 @@ export function dashboardSnapshotInputsChanged(
   previousState: DashboardSnapshotWatchState
 ): boolean {
   return (
+    state.activeWorktreeId !== previousState.activeWorktreeId ||
+    state.activeWorkspaceExecutionHostId !== previousState.activeWorkspaceExecutionHostId ||
     state.repos !== previousState.repos ||
-    state.worktreesByRepo !== previousState.worktreesByRepo ||
+    selectWorktreesByRepo(state) !== selectWorktreesByRepo(previousState) ||
     state.tabsByWorktree !== previousState.tabsByWorktree ||
-    state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey ||
+    state.unifiedTabsByWorktree !== previousState.unifiedTabsByWorktree ||
     state.retainedAgentsByPaneKey !== previousState.retainedAgentsByPaneKey ||
     state.migrationUnsupportedByPtyId !== previousState.migrationUnsupportedByPtyId ||
     state.runtimeAgentOrchestrationByPaneKey !== previousState.runtimeAgentOrchestrationByPaneKey ||
@@ -26,42 +49,62 @@ export function dashboardSnapshotInputsChanged(
     state.ptyIdsByTabId !== previousState.ptyIdsByTabId ||
     state.runtimePaneTitlesByTabId !== previousState.runtimePaneTitlesByTabId ||
     state.acknowledgedAgentsByPaneKey !== previousState.acknowledgedAgentsByPaneKey ||
-    // Why: tabAutoGenerateTitle decides whether cards may show generated names.
+    state.hostedReviewCache !== previousState.hostedReviewCache ||
+    state.prCache !== previousState.prCache ||
+    // Why: settings controls idle visibility and generated conversation names.
     state.settings !== previousState.settings ||
-    // Why: freshness can change a bucket without replacing any backing map.
-    state.agentStatusEpoch !== previousState.agentStatusEpoch
+    state.workspaceStatuses !== previousState.workspaceStatuses ||
+    // Relay live hooks directly; rebuild snapshots for host-profile changes too, since idle boards may have no later event to correct stale byte routing.
+    state.sshConnectionStates !== previousState.sshConnectionStates ||
+    state.sshStateByEnvironment !== previousState.sshStateByEnvironment ||
+    state.runtimeStatusByEnvironmentId !== previousState.runtimeStatusByEnvironmentId ||
+    state.paneForegroundAgentByPaneKey !== previousState.paneForegroundAgentByPaneKey ||
+    state.detectedWorktreesByRepo !== previousState.detectedWorktreesByRepo ||
+    // Folder workspace ownership uses folderWorkspaces/projectGroups rather than git-worktree rows.
+    state.folderWorkspaces !== previousState.folderWorkspaces ||
+    state.projectGroups !== previousState.projectGroups ||
+    state.sshTargetLabels !== previousState.sshTargetLabels ||
+    state.restoredRuntimeHostIdByWorkspaceSessionKey !==
+      previousState.restoredRuntimeHostIdByWorkspaceSessionKey ||
+    state.runtimeEnvironments !== previousState.runtimeEnvironments ||
+    state.runtimeEnvironmentCatalogHydrated !== previousState.runtimeEnvironmentCatalogHydrated ||
+    state.removedRuntimeEnvironmentIds !== previousState.removedRuntimeEnvironmentIds
   )
 }
 
-/**
- * Runs in the MAIN window (mount once in App). Two responsibilities:
- *  1. While the pop-out dashboard is open, derive the snapshot from the live
- *     store and publish it to the main process (which relays it to the popout).
- *     Does nothing while the popout is closed, so it's free in the common case.
- *  2. Handle click-to-focus reveal requests forwarded from the popout: activate
- *     the agent's worktree and focus its pane in this (main) window.
- */
+/** Keep subscription outside the effect to avoid react-doctor’s cleanup false positive; callers must invoke the returned disposer. */
+export function watchSnapshotInputs(onChanged: () => void): () => void {
+  const stopNames = subscribeStructuredChatTabNames(onChanged)
+  const unsubscribeStore = useAppStore.subscribe((state, previousState) => {
+    // Why: unrelated high-frequency store writes must not rebuild a cross-worktree snapshot.
+    if (dashboardSnapshotInputsChanged(state, previousState)) {
+      onChanged()
+    }
+  })
+  return () => {
+    stopNames()
+    unsubscribeStore()
+  }
+}
+
+/** Mount once in main to publish snapshots only while pop-out is open and handle relayed pane-reveal requests. */
 export function useDashboardPopoutBridge(enabled: boolean): void {
   useEffect(() => {
     if (!enabled) {
       return
     }
     return window.api.dashboard.onRevealAgent((args) => {
-      useAppStore.getState().setActiveWorktree(args.worktreeId)
-      activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+      revealDashboardAgent(args)
     })
   }, [enabled])
 
-  // Opening a card's terminal dialog in the popout acks the agent here — the
-  // same ack the sidebar's bold/mute treatment reads, keeping both in lockstep.
-  // ?. shields App mount from dev-HMR preload skew (preload updates only on
-  // app restart).
+  // Apply shared read acknowledgments here; optional IPC tolerates dev-HMR preload skew until restart.
   useEffect(() => {
     if (!enabled) {
       return
     }
-    return window.api.dashboard.onAckAgent?.((paneKey) => {
-      useAppStore.getState().acknowledgeAgents([paneKey])
+    return window.api.dashboard.onAckAgent?.((paneKey, intent) => {
+      useAppStore.getState().acknowledgeAgents([paneKey], undefined, intent)
     })
   }, [enabled])
 
@@ -74,10 +117,28 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     let unsubscribeStore: (() => void) | null = null
     let trailingTimer: ReturnType<typeof setTimeout> | null = null
     let lastPublishAt = 0
+    let lastPublishedRepoIcons: Record<string, RepoIcon | null> | null = null
 
-    const publishNow = (): void => {
+    // Force icons for new/requesting windows; throttle-time omissions retain their map. Cache worktree rows per bridge lifecycle.
+    const rowsCache = createWorktreeAgentRowsCache()
+    const publishNow = (withIcons: boolean): void => {
       lastPublishAt = Date.now()
-      const snapshot = buildDashboardSnapshot(useAppStore.getState(), lastPublishAt)
+      const state = useAppStore.getState()
+      const snapshot = buildDashboardSnapshot(
+        { ...state, chatNames: getStructuredChatTabNames() },
+        lastPublishAt,
+        {
+          rowsCache,
+          rowsGeneration: state.agentStatusEpoch
+        }
+      )
+      const icons = snapshot.repoIconsByRepoId ?? {}
+      if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {
+        const { repoIconsByRepoId: _omitted, ...withoutIcons } = snapshot
+        void window.api.dashboard.publishSnapshot(withoutIcons)
+        return
+      }
+      lastPublishedRepoIcons = icons
       void window.api.dashboard.publishSnapshot(snapshot)
     }
 
@@ -93,14 +154,14 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
           clearTimeout(trailingTimer)
           trailingTimer = null
         }
-        publishNow()
+        publishNow(false)
         return
       }
       if (!trailingTimer) {
         trailingTimer = setTimeout(() => {
           trailingTimer = null
           if (open && !disposed) {
-            publishNow()
+            publishNow(false)
           }
         }, PUBLISH_THROTTLE_MS - elapsed)
       }
@@ -113,14 +174,24 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       open = next
       if (open) {
         if (!unsubscribeStore) {
-          unsubscribeStore = useAppStore.subscribe((state, previousState) => {
-            // Why: unrelated high-frequency store writes must not rebuild a cross-worktree snapshot.
-            if (dashboardSnapshotInputsChanged(state, previousState)) {
+          const stopInputs = watchSnapshotInputs(publishThrottled)
+          const stopStatuses = useAppStore.getState().subscribeAgentStatusChanges((changes) => {
+            if (
+              changes.some(
+                ({ previous, current }) =>
+                  previous?.terminalResumeEligible === false ||
+                  current?.terminalResumeEligible === false
+              )
+            ) {
               publishThrottled()
             }
           })
+          unsubscribeStore = () => {
+            stopInputs()
+            stopStatuses()
+          }
         }
-        publishNow()
+        publishNow(true)
       } else {
         unsubscribeStore?.()
         unsubscribeStore = null
@@ -135,11 +206,10 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     // Popout mount asks for a fresh snapshot (its cached one may be stale).
     const offRequested = window.api.dashboard.onSnapshotRequested(() => {
       if (open) {
-        publishNow()
+        publishNow(true)
       }
     })
-    // Recover the open state when the main window (re)mounts while a pop-out is
-    // already open — e.g. after a renderer reload.
+    // Recover an already-open pop-out after the main renderer reloads.
     void window.api.dashboard.getPopoutOpen().then((isOpen) => {
       if (!disposed && isOpen) {
         setOpen(true)

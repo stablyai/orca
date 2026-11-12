@@ -1,4 +1,4 @@
-import type { GitHubAssignableUser } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
 import { isGitHubWorkItemOptionFilterQueryTooLarge } from './github-work-item-option-filter-bounds'
 
 export function filterGitHubWorkItemAssignees(

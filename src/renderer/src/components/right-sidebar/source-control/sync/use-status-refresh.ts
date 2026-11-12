@@ -1,0 +1,194 @@
+import { useSourceControlState, useSourceControlScope } from '../panel/worktree-scope'
+import { useCallback, useEffect } from 'react'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import { toast } from 'sonner'
+import {
+  resolveWorktreeGitCopyNow,
+  worktreeGitCopyHostId,
+  worktreeCopyPushTarget
+} from '@/lib/workspace/ownership/worktree-git-copy'
+import {
+  getLocalPathOpenOwnerForRoute,
+  isLocalPathOpenBlocked
+} from '@/lib/files/os-open/local-path-open-guard'
+import {
+  beginHugeRepoWarningProbe,
+  hasDismissedHugeRepoWarning,
+  markHugeRepoWarningDismissed
+} from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store/index'
+import type { GitPushTarget } from '../../../../../../shared/worktree/types'
+import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
+import type { PullRequestGenerationContext } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import { refreshGitStatusForWorktree } from './git-status-refresh'
+
+export type SourceControlStatusRefresh = {
+  refreshActiveGitStatus: (signal?: AbortSignal) => Promise<void>
+  refreshActiveGitStatusAfterMutation: () => Promise<void>
+  refreshGitStatusAfterPullRequestGeneration: (
+    context: PullRequestGenerationContext
+  ) => Promise<void>
+}
+
+export function useSourceControlStatusRefresh({
+  activeRepoTarget,
+  activeWorktreeId,
+  worktreePath,
+  activePushTarget,
+  isFolder,
+  repositoryHuge,
+  activeConnectionId,
+  activeWorktreeInstanceId
+}: {
+  activeRepoTarget: RuntimeClientTarget | null
+  activeWorktreeId: string | null
+  worktreePath: string | null
+  activePushTarget?: GitPushTarget
+  isFolder: boolean
+  repositoryHuge: { limit: number } | null | undefined
+  activeConnectionId: string | null
+  activeWorktreeInstanceId?: string
+}): SourceControlStatusRefresh {
+  const scope = useSourceControlScope()
+  const selectedCopyHostId = useSourceControlState((s) =>
+    !scope && activeWorktreeId ? worktreeGitCopyHostId(s, activeWorktreeId) : null
+  )
+  const activeCopyHostId = scope?.executionHostId ?? selectedCopyHostId
+  const localIgnoreBlocked = isLocalPathOpenBlocked(
+    getLocalPathOpenOwnerForRoute({
+      runtimeEnvironmentId:
+        activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null,
+      connectionId: activeConnectionId
+    })
+  )
+  const refreshActiveGitStatus = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      if (!activeWorktreeId || !worktreePath || isFolder || !activeRepoTarget) {
+        return
+      }
+      // Why the captured host: a mutation callback can outlive a switch to a same-path twin.
+      const copy = resolveWorktreeGitCopyNow(activeWorktreeId, activeCopyHostId)
+      if (!copy) {
+        return
+      }
+      await refreshGitStatusForWorktree({
+        target: copy.transport,
+        ownerHostId: copy.hostId,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: copy.connectionId,
+        pushTarget: activePushTarget,
+        deps: useAppStore.getState(),
+        request: { admissionTier: 'interactive', ...(signal ? { signal } : {}) }
+      })
+    },
+    [activeCopyHostId, activeRepoTarget, activeWorktreeId, activePushTarget, isFolder, worktreePath]
+  )
+  const refreshActiveGitStatusAfterMutation = useCallback(async (): Promise<void> => {
+    try {
+      await refreshActiveGitStatus()
+    } catch (error) {
+      console.warn('[SourceControl] post-mutation git status refresh failed', error)
+    }
+  }, [refreshActiveGitStatus])
+
+  // Offer huge-folder ignores once per desktop worktree; the probe/write is local and managed repos can lack connectionId.
+  useEffect(() => {
+    if (!repositoryHuge || !activeWorktreeId || !worktreePath || localIgnoreBlocked) {
+      return
+    }
+    const warningProbe = beginHugeRepoWarningProbe({
+      id: activeWorktreeId,
+      instanceId: activeWorktreeInstanceId
+    })
+    if (hasDismissedHugeRepoWarning(warningProbe)) {
+      return
+    }
+    let cancelled = false
+    void window.api.git
+      .findHugeFoldersToIgnore({ worktreePath })
+      .then((folders) => {
+        if (cancelled || folders.length === 0 || hasDismissedHugeRepoWarning(warningProbe)) {
+          return
+        }
+        if (!markHugeRepoWarningDismissed(warningProbe)) {
+          return
+        }
+        const folderName = folders[0]
+        toast.warning(
+          translate(
+            'auto.components.right.sidebar.SourceControl.hugeRepoIgnorePrompt',
+            'This repository has too many active changes. Add "{{value0}}" to .gitignore?',
+            { value0: folderName }
+          ),
+          {
+            action: {
+              label: translate(
+                'auto.components.right.sidebar.SourceControl.hugeRepoIgnoreAction',
+                'Add to .gitignore'
+              ),
+              onClick: () => {
+                // Toasts can outlive worktrees; a purged probe must not write into a same-path replacement.
+                if (!hasDismissedHugeRepoWarning(warningProbe)) {
+                  return
+                }
+                void window.api.git
+                  .appendGitignore({ worktreePath, folderName })
+                  .then(() => refreshActiveGitStatus())
+                  .catch((error) => console.warn('[SourceControl] add to .gitignore failed', error))
+              }
+            }
+          }
+        )
+      })
+      .catch((error) => {
+        if (!isWslDistroNotRunningRefusal(error)) {
+          console.warn('[SourceControl] findHugeFoldersToIgnore failed', error)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    repositoryHuge,
+    activeWorktreeId,
+    activeWorktreeInstanceId,
+    worktreePath,
+    localIgnoreBlocked,
+    refreshActiveGitStatus
+  ])
+
+  const refreshGitStatusAfterPullRequestGeneration = useCallback(
+    async (context: PullRequestGenerationContext): Promise<void> => {
+      if (!context.worktreeId || isFolder) {
+        return
+      }
+      try {
+        await refreshGitStatusForWorktree({
+          // Generation may finish after host navigation; refresh its original owner.
+          target: context.runtimeTarget,
+          ownerHostId: context.ownerHostId ?? null,
+          worktreeId: context.worktreeId,
+          worktreePath: context.worktreePath,
+          connectionId: context.connectionId,
+          pushTarget: worktreeCopyPushTarget(
+            useAppStore.getState(),
+            context.worktreeId,
+            context.ownerHostId ?? null
+          ),
+          deps: useAppStore.getState()
+        })
+      } catch (error) {
+        console.warn('[SourceControl] post-generation git status refresh failed', error)
+      }
+    },
+    [isFolder]
+  )
+
+  return {
+    refreshActiveGitStatus,
+    refreshActiveGitStatusAfterMutation,
+    refreshGitStatusAfterPullRequestGeneration
+  }
+}

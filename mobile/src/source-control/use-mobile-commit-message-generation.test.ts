@@ -1,0 +1,138 @@
+import { createElement, startTransition, Suspense, useRef, useState } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { MobileGenerateCommitMessageResult } from './mobile-commit-message-ai'
+
+vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
+const reply = vi.hoisted(() => {
+  const held: {
+    resolve: ((result: MobileGenerateCommitMessageResult) => void) | null
+    reject: ((error: Error) => void) | null
+    cancel: () => Promise<void>
+  } = { resolve: null, reject: null, cancel: async () => {} }
+  return held
+})
+vi.mock('./mobile-commit-message-ai', () => ({
+  requestMobileCommitMessage: () =>
+    new Promise<MobileGenerateCommitMessageResult>((resolve, reject) => {
+      reply.resolve = resolve
+      reply.reject = reject
+    }),
+  cancelMobileCommitMessage: () => reply.cancel()
+}))
+
+import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
+
+const client = stubRpcClient()
+const view: {
+  generating: boolean
+  message: string
+  error: string | null
+  type: ((next: string) => void) | null
+  generate: (() => Promise<void>) | null
+  cancel: (() => void) | null
+} = { generating: false, message: '', error: null, type: null, generate: null, cancel: null }
+
+const suspended = new Promise<void>(() => {})
+const suspendedRender = vi.fn()
+
+function Harness({
+  worktreeId = 'wt-1',
+  suspend
+}: {
+  worktreeId?: string
+  suspend?: boolean
+}): null {
+  const [message, setMessage] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const mountedRef = useRef(true)
+  const busyActionRef = useRef<string | null>(null)
+  const { generateCommitMessage, cancelGenerateCommitMessage } = useMobileCommitMessageGeneration({
+    client,
+    worktreeId,
+    generatingMessage: generating,
+    mountedRef,
+    busyActionRef,
+    setGeneratingMessage: setGenerating,
+    setCommitMessage: setMessage,
+    setActionError: setError
+  })
+  if (suspend) {
+    suspendedRender()
+    throw suspended
+  }
+  view.generating = generating
+  view.message = message
+  view.error = error
+  view.cancel = cancelGenerateCommitMessage
+  view.type = setMessage
+  view.generate = generateCommitMessage
+  return null
+}
+
+let renderer: ReactTestRenderer | null = null
+
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+  reply.resolve = null
+  reply.reject = null
+  reply.cancel = async () => {}
+})
+
+async function generateThen(typed: string | null): Promise<void> {
+  act(() => {
+    renderer = create(createElement(Harness))
+  })
+  let pending: Promise<void> | undefined
+  act(() => {
+    pending = view.generate?.()
+  })
+  if (typed !== null) {
+    act(() => view.type?.(typed))
+  }
+  await act(async () => {
+    reply.resolve?.({ success: true, message: 'feat: generated' })
+    await pending
+  })
+}
+
+describe('useMobileCommitMessageGeneration', () => {
+  it('keeps what the user typed while the agent ran, as desktop does', async () => {
+    await generateThen('fix: my own words')
+    expect(view.message).toBe('fix: my own words')
+  })
+
+  it('keeps the current generation when a workspace transition suspends before commit', async () => {
+    const render = (suspend?: boolean) =>
+      createElement(
+        Suspense,
+        { fallback: null },
+        createElement(Harness, {
+          worktreeId: suspend ? 'wt-2' : 'wt-1',
+          suspend
+        })
+      )
+    act(() => {
+      renderer = create(render())
+    })
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = view.generate?.()
+    })
+    suspendedRender.mockClear()
+    act(() => {
+      startTransition(() => renderer?.update(render(true)))
+    })
+    expect(suspendedRender).toHaveBeenCalled()
+    expect(view.generating).toBe(true)
+    await act(async () => {
+      reply.resolve?.({ success: true, message: 'current workspace' })
+      await pending
+    })
+    expect(view.message).toBe('current workspace')
+    expect(view.generating).toBe(false)
+  })
+})

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { decideWebPairingStartup, parseWebPairingInput, type WebPairingOffer } from './web-pairing'
+import {
+  decideWebPairingStartup,
+  parseWebPairingInput,
+  readPairingInputFromLocation,
+  type WebPairingOffer
+} from './web-pairing'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 
 describe('web pairing input', () => {
   const offer: WebPairingOffer = {
@@ -17,33 +23,28 @@ describe('web pairing input', () => {
       .replace(/=+$/, '')
   }
 
-  it('parses query-form pairing URLs', () => {
-    expect(parseWebPairingInput(`orca://pair?code=${encodeOffer()}`)).toEqual(offer)
+  it('rejects oversized raw codes, URLs, and location queries before parsing', () => {
+    const code = encodeOffer()
+    const oversizedRawCode = `${code}${' '.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const oversizedQuery = `?pairing=${code}&ignored=${'A'.repeat(PAIRING_INPUT_MAX_CHARACTERS)}`
+    const location = { search: oversizedQuery, hash: '' }
+
+    expect(parseWebPairingInput(oversizedRawCode)).toBeNull()
+    expect(
+      parseWebPairingInput(`orca://pair${oversizedQuery.replace('pairing=', 'code=')}`)
+    ).toBeNull()
+    expect(readPairingInputFromLocation(location)).toBeNull()
   })
 
-  it('still parses legacy hash-form pairing URLs', () => {
-    expect(parseWebPairingInput(`orca://pair#${encodeOffer()}`)).toEqual(offer)
-  })
+  it('preserves legacy padding and aliases with the same decoded offer', () => {
+    const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/` }
+    const code = encodeOffer(paddedOffer)
+    expect(code.length % 4).toBe(2)
+    const alias = `${code.slice(0, -1)}${base64Alias(code.at(-1)!)}`
 
-  it('preserves optional device scope metadata', () => {
-    expect(parseWebPairingInput(`orca://pair?code=${encodeOffer({ scope: 'mobile' })}`)).toEqual({
-      ...offer,
-      scope: 'mobile'
-    })
-  })
-
-  it.each([
-    ['wss://proxy.example:443/orca/runtime', 'wss://proxy.example:443/orca/runtime'],
-    ['https://proxy.example/orca/runtime', 'wss://proxy.example/orca/runtime'],
-    ['http://proxy.example:8080/orca/runtime', 'ws://proxy.example:8080/orca/runtime']
-  ])('preserves reverse-proxy endpoint routing for %s', (endpoint, expected) => {
-    expect(parseWebPairingInput(encodeOffer({ endpoint }))).toMatchObject({ endpoint: expected })
-  })
-
-  it('treats invalid device scope metadata as unknown', () => {
-    expect(parseWebPairingInput(`orca://pair?code=${encodeOffer({ scope: 'admin' })}`)).toEqual(
-      offer
-    )
+    expect(parseWebPairingInput(`${code}=`)).toEqual(paddedOffer)
+    expect(parseWebPairingInput(`${code}==`)).toEqual(paddedOffer)
+    expect(parseWebPairingInput(alias)).toEqual(paddedOffer)
   })
 
   it('rejects orca URLs outside the exact pairing route', () => {
@@ -51,38 +52,28 @@ describe('web pairing input', () => {
     expect(parseWebPairingInput(`orca://pair-extra?code=${encodeOffer()}`)).toBeNull()
   })
 
-  it('auto-saves scoped runtime offers during web startup', () => {
-    const input = `orca://pair?code=${encodeOffer({ scope: 'runtime' })}`
-    expect(
-      decideWebPairingStartup({ initialPairingInput: input, hasStoredEnvironment: false })
-    ).toEqual({
-      kind: 'auto-save-runtime-offer',
-      offer: { ...offer, scope: 'runtime' }
-    })
-  })
-
-  it('shows the connect screen for mobile-scope and legacy unknown-scope offers', () => {
-    const mobileInput = `orca://pair?code=${encodeOffer({ scope: 'mobile' })}`
-    const legacyInput = `orca://pair?code=${encodeOffer()}`
+  it('auto-saves a runtime link only when it targets the saved server', () => {
+    const storedEnvironment = {
+      id: 'web-1',
+      name: 'Home',
+      endpoints: [{ endpoint: offer.endpoint, publicKeyB64: offer.publicKeyB64 }]
+    }
+    const samePairing = encodeOffer({ scope: 'runtime', deviceToken: 'fresh-token' })
+    const otherPairing = encodeOffer({ scope: 'runtime', endpoint: 'wss://attacker.example' })
 
     expect(
-      decideWebPairingStartup({ initialPairingInput: mobileInput, hasStoredEnvironment: true })
-    ).toEqual({ kind: 'show-connect', initialPairingInput: mobileInput })
+      decideWebPairingStartup({ initialPairingInput: samePairing, storedEnvironment })
+    ).toMatchObject({ kind: 'auto-save-runtime-offer' })
     expect(
-      decideWebPairingStartup({ initialPairingInput: legacyInput, hasStoredEnvironment: true })
-    ).toEqual({ kind: 'show-connect', initialPairingInput: legacyInput })
-  })
-
-  it('uses a stored environment when no fresh valid pairing offer is present', () => {
+      decideWebPairingStartup({ initialPairingInput: otherPairing, storedEnvironment })
+    ).toEqual({ kind: 'confirm-replace-saved-server', initialPairingInput: otherPairing })
     expect(
-      decideWebPairingStartup({ initialPairingInput: null, hasStoredEnvironment: true })
-    ).toEqual({
-      kind: 'use-stored-environment'
-    })
-    expect(
-      decideWebPairingStartup({ initialPairingInput: 'not a code', hasStoredEnvironment: true })
-    ).toEqual({
-      kind: 'use-stored-environment'
-    })
+      decideWebPairingStartup({ initialPairingInput: otherPairing, storedEnvironment: null })
+    ).toMatchObject({ kind: 'auto-save-runtime-offer' })
   })
 })
+
+function base64Alias(character: string): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  return alphabet[alphabet.indexOf(character) + 1]!
+}

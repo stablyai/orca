@@ -1,24 +1,46 @@
+// COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react'
-import { track } from '@/lib/telemetry'
-import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
+import {
+  buildSkillCommandForRuntime,
+  buildSkillSetupTerminalCommand
+} from '../../lib/skills/runtime/skill-runtime-command'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
+import {
+  getOnboardingFeatureSetupAgentRuntime,
+  type OnboardingFeatureSetupRuntimeContext
+} from './onboarding-feature-setup-runtime'
 import {
   onboardingFeatureSetupTelemetrySelection,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type FeatureSetupInlineTerminalProps = {
   command: string
+  runtimeContext?: OnboardingFeatureSetupRuntimeContext
   selection: OnboardingFeatureSetupSelection
 }
 
 export function FeatureSetupInlineTerminal({
   command,
+  runtimeContext,
   selection
 }: FeatureSetupInlineTerminalProps): React.JSX.Element {
+  const t = useTranslate()
   const terminalOpenedTrackedRef = useRef(false)
   const terminalInteractedTrackedRef = useRef(false)
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const setupRuntime = runtimeContext ?? activeSkillRuntime
+  const agentRuntime = getOnboardingFeatureSetupAgentRuntime(setupRuntime)
+  const copiedCommand = buildSkillCommandForRuntime(command, agentRuntime)
+  const prepareCommandForShell = useCallback(
+    (terminalCommand: string, effectiveShell: string | undefined) =>
+      buildSkillSetupTerminalCommand(terminalCommand, effectiveShell, agentRuntime),
+    [agentRuntime]
+  )
 
   const selectionTelemetry = useMemo(
     () => onboardingFeatureSetupTelemetrySelection(selection),
@@ -43,8 +65,7 @@ export function FeatureSetupInlineTerminal({
       if (isContinueShortcut) {
         return
       }
-      // Why: auto-insert focuses the terminal programmatically; only count
-      // direct terminal activity, not the global continue shortcut.
+      // Why: auto-insert focuses programmatically; count only direct terminal activity.
       terminalInteractedTrackedRef.current = true
       track('onboarding_feature_setup_terminal_interacted', {
         ...selectionTelemetry,
@@ -56,16 +77,16 @@ export function FeatureSetupInlineTerminal({
 
   return (
     <OnboardingInlineCommandTerminal
-      command={command}
-      title={translate(
-        'auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061',
-        'Skill setup'
-      )}
-      ariaLabel={translate(
+      command={copiedCommand}
+      prepareCommandForShell={prepareCommandForShell}
+      shellOverride={setupRuntime.terminalShellOverride}
+      forceHostRuntime={Boolean(setupRuntime.installDisabledReason)}
+      title={t('auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061', 'Skill setup')}
+      ariaLabel={t(
         'auto.components.onboarding.FeatureSetupInlineTerminal.47fc6cc6dc',
         'Skill setup command'
       )}
-      description={translate(
+      description={t(
         'auto.components.onboarding.FeatureSetupInlineTerminal.789b59936e',
         'Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.'
       )}

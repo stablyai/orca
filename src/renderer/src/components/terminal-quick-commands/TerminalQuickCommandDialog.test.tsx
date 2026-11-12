@@ -2,13 +2,24 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import { fireEvent, getByRole } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
 
 const mountedRoots: Root[] = []
 
-async function renderDialog(command: TerminalQuickCommand): Promise<void> {
+async function renderDialog(
+  command: TerminalQuickCommand,
+  props: {
+    defaultAdvancedOpen?: boolean
+    agentPromptMaxLength?: number | null
+    onSave?: (command: TerminalQuickCommand) => Promise<boolean> | boolean
+    onOpenChange?: (open: boolean) => void
+  } = {}
+): Promise<void> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -21,24 +32,20 @@ async function renderDialog(command: TerminalQuickCommand): Promise<void> {
         mode="add"
         command={command}
         repos={[]}
-        onOpenChange={vi.fn()}
-        onSave={vi.fn()}
+        defaultAdvancedOpen={props.defaultAdvancedOpen}
+        agentPromptMaxLength={props.agentPromptMaxLength}
+        onOpenChange={props.onOpenChange ?? vi.fn()}
+        onSave={props.onSave ?? vi.fn(() => true)}
       />
     )
   })
 }
 
-function findAnimatedRowContaining(text: string): HTMLElement {
-  const row = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden]')).find(
-    (element) => element.textContent?.includes(text)
-  )
-  if (!row) {
-    throw new Error(`Could not find animated row containing ${text}`)
-  }
-  return row
-}
-
 describe('TerminalQuickCommandDialog animation structure', () => {
+  beforeEach(() => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+  })
+
   afterEach(async () => {
     await act(async () => {
       for (const root of mountedRoots.splice(0)) {
@@ -46,11 +53,12 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       }
     })
     document.body.innerHTML = ''
+    vi.unstubAllGlobals()
   })
 
-  it('keeps agent-only fields mounted as collapsed animated rows in terminal mode', async () => {
+  it('selects all text in editable fields with Cmd+A', async () => {
     await renderDialog({
-      id: 'qc-1',
+      id: 'qc-select-all',
       label: 'Start dev server',
       action: 'terminal-command',
       command: 'npm run dev',
@@ -58,13 +66,222 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       scope: { type: 'global' }
     })
 
-    const agentRow = findAnimatedRowContaining('Agent')
-    const promptHelpRow = findAnimatedRowContaining('Supports skills')
+    const fields = [
+      document.body.querySelector<HTMLInputElement>('input'),
+      document.body.querySelector<HTMLTextAreaElement>('textarea[aria-label="Command"]')
+    ]
 
-    expect(agentRow.getAttribute('aria-hidden')).toBe('true')
-    expect(agentRow.className).toContain('transition-[grid-template-rows]')
-    expect(agentRow.className).toContain('grid-rows-[0fr]')
-    expect(promptHelpRow.getAttribute('aria-hidden')).toBe('true')
-    expect(promptHelpRow.className).toContain('grid-rows-[0fr]')
+    for (const field of fields) {
+      expect(field).not.toBeNull()
+      if (!field) {
+        continue
+      }
+      field.setSelectionRange(field.value.length, field.value.length)
+      await act(async () => {
+        field.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'a',
+            code: 'KeyA',
+            metaKey: true,
+            bubbles: true,
+            cancelable: true
+          })
+        )
+      })
+
+      expect([field.selectionStart, field.selectionEnd]).toEqual([0, field.value.length])
+    }
+  })
+
+  it('refuses to save a prompt over an older host cap instead of truncating it', async () => {
+    const onSave = vi.fn()
+    await renderDialog(
+      {
+        id: 'qc-6',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'claude',
+        prompt: 'x'.repeat(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1),
+        scope: { type: 'global' }
+      },
+      { onSave, agentPromptMaxLength: LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH }
+    )
+
+    const save = Array.from(document.body.querySelectorAll('button')).find((button) =>
+      button.textContent?.startsWith('Save')
+    )
+    expect(save?.disabled).toBe(true)
+    const alert = document.body.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('Too long for this host')
+    const textareaEl = document.body.querySelector('textarea')
+    expect(textareaEl?.getAttribute('aria-invalid')).toBe('true')
+    expect(textareaEl?.getAttribute('aria-describedby')?.split(' ')).toContain(alert?.id)
+
+    const textarea = document.body.querySelector('textarea')!
+    await act(async () => {
+      textarea.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true })
+      )
+    })
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
+  it('locks the submitted draft until save settles, then permits editing and retry after refusal', async () => {
+    const prompt = 'x'.repeat(100_000)
+    const onOpenChange = vi.fn()
+    let answer: (saved: boolean) => void = () => {}
+    const onSave = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
+    await renderDialog(
+      {
+        id: 'qc-11',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'claude',
+        prompt,
+        scope: { type: 'global' }
+      },
+      { onSave, onOpenChange }
+    )
+    expect(document.body.textContent).not.toContain('characters')
+    expect(document.body.textContent).toContain('Drag corner to resize')
+    const textarea = document.body.querySelector('textarea')!
+    const cancel = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Cancel'
+    )!
+    const save = Array.from(document.body.querySelectorAll('button')).find((button) =>
+      button.textContent?.startsWith('Save')
+    )!
+    const submit = async (target: HTMLElement = textarea): Promise<void> => {
+      await act(async () => {
+        target.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Enter',
+            metaKey: true,
+            bubbles: true,
+            cancelable: true
+          })
+        )
+      })
+    }
+
+    const agentSelect = getByRole<HTMLButtonElement>(document.body, 'button', {
+      name: 'Select agent'
+    })
+    await submit(agentSelect)
+    expect(agentSelect.getAttribute('data-state')).toBe('open')
+    expect(onSave).not.toHaveBeenCalled()
+    const codex = getByRole(document.body, 'menuitem', { name: 'Codex' })
+    expect(textarea.closest('fieldset')?.contains(codex)).toBe(false)
+    await submit(codex)
+    expect(onSave).not.toHaveBeenCalled()
+    expect(agentSelect.textContent).toContain('Codex')
+
+    await submit(agentSelect)
+    await submit()
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', prompt }))
+    expect(agentSelect.disabled).toBe(true)
+    const options = Array.from(document.body.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+    expect(
+      options
+        .filter((option) => !option.textContent?.includes('Agent settings'))
+        .every((option) => option.getAttribute('aria-disabled') === 'true')
+    ).toBe(true)
+    await act(async () => options.find((option) => option.textContent?.includes('Claude'))?.click())
+    expect(agentSelect.textContent).toContain('Codex')
+    expect(textarea.closest('fieldset')?.disabled).toBe(true)
+    expect(cancel.disabled).toBe(true)
+    expect(save.disabled).toBe(true)
+    await act(async () => {
+      cancel.click()
+      textarea.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      )
+    })
+    await submit()
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onOpenChange).not.toHaveBeenCalled()
+
+    await act(async () => answer(false))
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
+    expect(document.body.querySelector('textarea')?.value).toBe(prompt)
+    expect(textarea.closest('fieldset')?.disabled).toBe(false)
+    expect(cancel.disabled).toBe(false)
+    expect(save.disabled).toBe(false)
+
+    const updatedPrompt = `${prompt}Keep this later edit.`
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+    await act(async () => {
+      setValue.call(textarea, updatedPrompt)
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    await submit()
+    await act(async () => answer(true))
+    expect(onSave).toHaveBeenCalledTimes(2)
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: updatedPrompt }))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('keeps shell and agent drafts independent and saves only the selected agent and prompt', async () => {
+    const onSave = vi.fn(() => false)
+    await renderDialog(
+      {
+        id: 'qc-picker',
+        label: 'Review',
+        action: 'terminal-command',
+        command: 'git diff\n',
+        appendEnter: false,
+        scope: { type: 'global' }
+      },
+      { onSave }
+    )
+
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Agent Prompt' }))
+    )
+    const prompt = getByRole(document.body, 'textbox', { name: 'Prompt' })
+    await act(async () =>
+      fireEvent.change(prompt, { target: { value: 'Review @src\n/goal careful' } })
+    )
+    const trigger = getByRole(document.body, 'button', { name: 'Select agent' })
+    await act(async () => fireEvent.keyDown(trigger, { key: 'Enter' }))
+    const unsupported = getByRole(document.body, 'menuitem', { name: /^Aider/ })
+    expect(unsupported.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => fireEvent.click(unsupported))
+    expect(onSave).not.toHaveBeenCalled()
+    await act(async () => fireEvent.keyDown(getByRole(document.body, 'menu'), { key: 'Escape' }))
+    const user = userEvent.setup()
+    act(() => trigger.focus())
+    await user.keyboard('co')
+    const search = getByRole<HTMLInputElement>(getByRole(document.body, 'menu'), 'textbox')
+    expect(document.activeElement).toBe(search)
+    expect(search.value).toBe('co')
+    expect(search.selectionStart).toBe(2)
+    await user.keyboard('{Enter}')
+    expect(onSave).not.toHaveBeenCalled()
+
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Terminal Command' }))
+    )
+    expect(
+      getByRole<HTMLTextAreaElement>(document.body, 'textbox', { name: 'Command' }).value
+    ).toBe('git diff\n')
+    expect(
+      getByRole(document.body, 'switch', { name: 'Toggle append Enter' }).getAttribute(
+        'aria-checked'
+      )
+    ).toBe('false')
+    await act(async () =>
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Agent Prompt' }))
+    )
+    await act(async () => fireEvent.click(getByRole(document.body, 'button', { name: /^Save/ })))
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      id: 'qc-picker',
+      label: 'Review',
+      action: 'agent-prompt',
+      agent: 'codex',
+      prompt: 'Review @src\n/goal careful',
+      scope: { type: 'global' }
+    })
   })
 })

@@ -1,4 +1,10 @@
-import React from 'react'
+import { useAppStateValue, useAppStateViewActive } from '@/store/retained-views/app-state-view'
+import React, { useCallback } from 'react'
+import { useAppStore } from '@/store/index'
+import {
+  getOverlayFocusOwners,
+  overlayFocusContains
+} from '@/lib/overlay-interaction/overlay-focus-ownership'
 import {
   Dialog,
   DialogContent,
@@ -6,59 +12,79 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { AgentsPane } from '@/components/settings/AgentsPane'
-import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { AgentsPane } from '@/components/settings/agents/AgentsPane'
+import { useTranslate } from '@/i18n/use-translate'
 import {
-  getWindowsTerminalCapabilityOwnerKey,
-  useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { isWebClientLocation } from '@/lib/web-client-location'
+  isWindowsTerminalCapabilityHost,
+  useLocalWindowsTerminalCapabilities
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
+import { resolveSettingsHostScope } from '@/components/settings/host-scope/settings-host-scope'
 
 type AgentSettingsDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onCloseAutoFocus?: React.ComponentProps<typeof DialogContent>['onCloseAutoFocus']
 }
 
 export default function AgentSettingsDialog({
   open,
-  onOpenChange
+  onOpenChange,
+  onCloseAutoFocus
 }: AgentSettingsDialogProps): React.JSX.Element | null {
-  const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const runtimeTarget = getActiveRuntimeTarget(settings)
-  const runtimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
-  const capabilitiesOwnerKey = getWindowsTerminalCapabilityOwnerKey(runtimeEnvironmentId)
+  const t = useTranslate()
+  const viewActive = useAppStateViewActive()
+  const settings = useAppStateValue((s) => s.settings)
+  const updateSettings = useCallback(
+    (...args: Parameters<ReturnType<typeof useAppStore.getState>['updateSettings']>) =>
+      useAppStore.getState().updateSettings(...args),
+    []
+  )
+  const runtimeEnvironments = useAppStateValue((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStateValue(
+    (s) => s.runtimeEnvironmentCatalogHydrated
+  )
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
   const isWebClient = isWebClientLocation()
-  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    open && (isWindowsRenderer || isWebClient || runtimeTarget.kind === 'environment'),
-    false,
-    capabilitiesOwnerKey,
-    runtimeTarget
+  const runtimeCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
+    settings?.activeRuntimeEnvironmentId
   )
-  const wslSupportedPlatform =
-    isWindowsRenderer || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const localCapabilityOwnerKey = isWebClient ? runtimeCapabilityOwnerKey : 'local'
+  const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(
+    viewActive && open && (isWindowsRenderer || isWebClient),
+    false,
+    localCapabilityOwnerKey
+  )
+  const wslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer,
+    isWebClient,
+    target: { kind: 'local' },
+    hostPlatform: localWindowsTerminalCapabilities.hostPlatform
+  })
 
   if (!settings) {
     return null
   }
+  // Why: no picker here; the pane names the default host it detects on.
+  const hostScope = resolveSettingsHostScope({
+    choice: null,
+    defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
+    savedEnvironmentIds: runtimeEnvironments.map((environment) => environment.id),
+    catalogHydrated: runtimeEnvironmentCatalogHydrated
+  })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Why: widen past the default sm:max-w-lg so the agent rows have room
-          for the name + pills + action cluster without wrapping, while a
-          bounded max-h plus overflow-y keeps the list scrollable when many
-          agents are detected. */}
-      <DialogContent className="sm:max-w-2xl">
+      {/* Allow name/pills/actions to fit; the agent list owns bounded height and scrolling. */}
+      <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
+            {t('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.agent.AgentSettingsDialog.50cdb57c03',
               'Manage AI agents, set a default, and customize commands.'
             )}
@@ -68,13 +94,37 @@ export default function AgentSettingsDialog({
           <AgentsPane
             settings={settings}
             updateSettings={updateSettings}
+            hostScope={hostScope}
             wslSupportedPlatform={wslSupportedPlatform}
-            wslAvailable={windowsTerminalCapabilities.wslAvailable}
-            wslDistros={windowsTerminalCapabilities.wslDistros}
-            wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+            wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
+            wslDistros={localWindowsTerminalCapabilities.wslDistros}
+            wslCapabilitiesLoading={localWindowsTerminalCapabilities.isLoading}
           />
         </div>
       </DialogContent>
     </Dialog>
   )
+}
+
+export function restoreAgentSettingsInvoker(event: Event, invoker: HTMLButtonElement | null): void {
+  if (event.defaultPrevented) {
+    return
+  }
+  event.preventDefault()
+  const active = document.activeElement
+  const dialog = event.target
+  if (
+    invoker?.isConnected &&
+    !invoker.disabled &&
+    !invoker.closest('[inert]') &&
+    (active === document.body ||
+      active === invoker ||
+      (dialog instanceof HTMLElement && active && overlayFocusContains(dialog, active))) &&
+    !getOverlayFocusOwners(invoker).some(
+      (owner) =>
+        owner !== dialog && !(dialog instanceof HTMLElement && overlayFocusContains(dialog, owner))
+    )
+  ) {
+    invoker.focus({ preventScroll: true })
+  }
 }

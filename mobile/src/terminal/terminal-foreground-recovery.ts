@@ -1,18 +1,19 @@
 import type { RefObject } from 'react'
-import type { ConnectionState } from '../transport/types'
+import type { TerminalResumeState } from './session/terminal-stream-resume'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import type { TerminalWebViewHandle } from './TerminalWebView'
 
 export const TERMINAL_FOREGROUND_RECOVERY_DELAY_MS = 120
 
-// 'deferred' = the socket wasn't connected at the foreground edge (it usually
-// dies after ~60-80s of background); the caller must re-run recovery once the
-// connection is back or a blanked WKWebView stays stale until a tab switch.
+// Deferred means disconnected at foreground; retry after reconnect or a blanked WKWebView stays stale.
 export type TerminalForegroundRecoveryOutcome = 'recovered' | 'deferred' | 'skipped'
 
 type TerminalForegroundRecoveryOptions = {
   activeHandleRef: RefObject<string | null>
+  visibleTerminalHandlesRef?: RefObject<readonly string[]>
   terminalRefs: RefObject<Map<string, TerminalWebViewHandle>>
   initializedHandlesRef: RefObject<Set<string>>
+  terminalResume: TerminalResumeState
   connStateRef: RefObject<ConnectionState>
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
@@ -34,46 +35,53 @@ export function shouldRecoverTerminalOnAppStateChange(
 
 export function recoverActiveTerminalAfterForeground({
   activeHandleRef,
+  visibleTerminalHandlesRef,
   terminalRefs,
   initializedHandlesRef,
+  terminalResume,
   connStateRef,
   unsubscribeTerminal,
   subscribeToTerminal,
   schedule,
   delayMs = TERMINAL_FOREGROUND_RECOVERY_DELAY_MS
 }: TerminalForegroundRecoveryOptions): TerminalForegroundRecoveryOutcome {
+  // A blanked WebView needs a snapshot: a resume would only append to it.
+  terminalResume.forget()
   if (connStateRef.current !== 'connected') {
     return 'deferred'
   }
   const initializedMountedHandles = Array.from(initializedHandlesRef.current).filter((handle) =>
     terminalRefs.current.has(handle)
   )
-  if (initializedMountedHandles.length === 0) {
+  const visible =
+    visibleTerminalHandlesRef?.current ?? (activeHandleRef.current ? [activeHandleRef.current] : [])
+  const recovering = visible.filter(
+    (handle) =>
+      initializedMountedHandles.includes(handle) ||
+      (terminalResume.isCatchingUp(handle) && terminalRefs.current.has(handle))
+  )
+  if (initializedMountedHandles.length === 0 && recovering.length === 0) {
     return 'skipped'
   }
-  const handle = activeHandleRef.current
-  const shouldRecoverActive =
-    !!handle && terminalRefs.current.has(handle) && initializedHandlesRef.current.has(handle)
 
-  // Why: inactive terminal WebViews stay mounted with opacity:0; iOS can blank
-  // those backing stores too, so their next activation must accept scrollback.
+  // Opacity-hidden WebViews can also lose iOS backing stores; their next activation must accept replay.
   for (const initializedHandle of initializedMountedHandles) {
     initializedHandlesRef.current.delete(initializedHandle)
   }
 
-  if (!shouldRecoverActive || !handle) {
-    return 'recovered'
+  for (const handle of recovering) {
+    unsubscribeTerminal(handle)
+    schedule(() => {
+      if (connStateRef.current !== 'connected') {
+        return
+      }
+      const stillVisible = visibleTerminalHandlesRef
+        ? visibleTerminalHandlesRef.current.includes(handle)
+        : activeHandleRef.current === handle
+      if (stillVisible && terminalRefs.current.has(handle)) {
+        subscribeToTerminal(handle)
+      }
+    }, delayMs)
   }
-
-  unsubscribeTerminal(handle)
-  schedule(() => {
-    if (connStateRef.current !== 'connected') {
-      return
-    }
-    if (activeHandleRef.current !== handle || !terminalRefs.current.has(handle)) {
-      return
-    }
-    subscribeToTerminal(handle)
-  }, delayMs)
   return 'recovered'
 }

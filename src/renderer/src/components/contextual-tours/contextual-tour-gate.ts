@@ -14,6 +14,7 @@ export type ContextualTourRequestDecision =
         | 'auto-disabled'
         | 'onboarding'
         | 'seen'
+        | 'already-progressed'
         | 'session-consumed'
         | 'active-tour'
         | 'modal'
@@ -72,15 +73,34 @@ export function hasContextualTourTarget(selector: string, root?: ParentNode): bo
 
 export function getContextualTourStartStepIndex(
   tour: ContextualTour,
-  targetExists: (selector: string) => boolean
+  targetExists: (selector: string) => boolean,
+  isStepDone: (step: ContextualTourStep) => boolean = () => false
 ): number | null {
-  const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
-  const startIndex = Math.max(requiredStepIndex, 0)
-  const step = tour.steps[startIndex]
-  if (!step || !targetExists(step.targetSelector)) {
-    return null
+  const requiredStepIndexes = tour.steps.flatMap((step, index) =>
+    step.requiredForStart === true ? [index] : []
+  )
+  const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
+  // Never start before the user's latest done step, so steps added ahead of it don't rewind the tour.
+  const lastDoneIndex = tour.steps.findLastIndex((step) => isStepDone(step))
+  for (const candidate of candidates) {
+    let startIndex = Math.max(candidate, lastDoneIndex)
+    while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
+      const nextIndex = getNextVisibleContextualTourStepIndex({
+        tour,
+        currentStepIndex: startIndex,
+        targetExists
+      })
+      if (nextIndex === null) {
+        return null
+      }
+      startIndex = nextIndex
+    }
+    const step = tour.steps[startIndex]
+    if (step && targetExists(step.targetSelector)) {
+      return startIndex
+    }
   }
-  return startIndex
+  return null
 }
 
 export function getVisibleContextualTourStepIndexes(
@@ -130,11 +150,13 @@ export function getContextualTourRequestDecision(args: {
   autoEligible: boolean
   onboardingVisible: boolean
   seenIds: readonly string[]
+  progressBlocked: boolean
   sessionConsumed: boolean
   activeTourId: string | null
   activeModal: string
   blockingSurfaceVisible: boolean
   targetExists: (selector: string) => boolean
+  isStepDone?: (step: ContextualTourStep) => boolean
 }): ContextualTourRequestDecision {
   if (!args.persistedUIReady) {
     return { kind: 'blocked', reason: 'persisted-ui-not-ready' }
@@ -147,6 +169,9 @@ export function getContextualTourRequestDecision(args: {
   }
   if (args.seenIds.includes(args.tour.id)) {
     return { kind: 'blocked', reason: 'seen' }
+  }
+  if (args.progressBlocked) {
+    return { kind: 'blocked', reason: 'already-progressed' }
   }
   if (args.sessionConsumed) {
     return { kind: 'blocked', reason: 'session-consumed' }
@@ -161,7 +186,7 @@ export function getContextualTourRequestDecision(args: {
     return { kind: 'blocked', reason: 'blocking-surface' }
   }
 
-  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists)
+  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists, args.isStepDone)
   if (stepIndex === null) {
     return { kind: 'blocked', reason: 'missing-start-target' }
   }
@@ -173,7 +198,7 @@ export function getContextualTourStepProgress(args: {
   stepIndex: number
 }): { current: number; total: number } | null {
   const visibleIndex = args.visibleStepIndexes.indexOf(args.stepIndex)
-  if (visibleIndex < 0) {
+  if (visibleIndex === -1) {
     return null
   }
   return { current: visibleIndex + 1, total: args.visibleStepIndexes.length }

@@ -1,0 +1,492 @@
+{
+  "source": "Real Claude Code 2.1.310 hook payloads for Orca's managed events plus PostToolBatch (claude -p, default permission mode), trimmed to the fields Orca reads; session ids, paths and tool output dropped. Each touch, and each Read outside the project, needs approval, no prompt is shown, and Claude denies it itself: no PostToolUse, PostToolUseFailure or PermissionDenied follows, only the batch end.",
+  "leadDenied": [
+    {
+      "hook_event_name": "SessionStart",
+      "source": "startup"
+    },
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "permission_mode": "default",
+      "prompt": "In a single response, call the Bash tool twice in parallel: one call running exactly: ls  and another call running exactly: touch /private/tmp/orca-permcap-marker . After both results come back, run exactly: pwd  with Bash, then reply with the word finished."
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "ls",
+        "description": "List files in current directory"
+      },
+      "tool_use_id": "toolu_01TG57U4mCJ27eDq7YfoLQSs",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "ls",
+        "description": "List files in current directory"
+      },
+      "tool_use_id": "toolu_01TG57U4mCJ27eDq7YfoLQSs",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "touch /private/tmp/orca-permcap-marker",
+        "description": "Create marker file in tmp"
+      },
+      "tool_use_id": "toolu_01QoxbM6nqxDCovVGfyQxLmJ",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PermissionRequest",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "touch /private/tmp/orca-permcap-marker",
+        "description": "Create marker file in tmp"
+      },
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolBatch",
+      "tool_calls": [
+        {
+          "tool_name": "Bash",
+          "tool_input": {
+            "command": "ls",
+            "description": "List files in current directory"
+          },
+          "tool_use_id": "toolu_01TG57U4mCJ27eDq7YfoLQSs"
+        },
+        {
+          "tool_name": "Bash",
+          "tool_input": {
+            "command": "touch /private/tmp/orca-permcap-marker",
+            "description": "Create marker file in tmp"
+          },
+          "tool_use_id": "toolu_01QoxbM6nqxDCovVGfyQxLmJ"
+        }
+      ],
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "pwd",
+        "description": "Print working directory"
+      },
+      "tool_use_id": "toolu_015gQi78eWUYGqRmWaWgqSHa",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "pwd",
+        "description": "Print working directory"
+      },
+      "tool_use_id": "toolu_015gQi78eWUYGqRmWaWgqSHa",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolBatch",
+      "tool_calls": [
+        {
+          "tool_name": "Bash",
+          "tool_input": {
+            "command": "pwd",
+            "description": "Print working directory"
+          },
+          "tool_use_id": "toolu_015gQi78eWUYGqRmWaWgqSHa"
+        }
+      ],
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "Stop",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "SessionEnd",
+      "reason": "other"
+    }
+  ],
+  "childDenied": [
+    {
+      "hook_event_name": "SessionStart",
+      "source": "startup"
+    },
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "permission_mode": "default",
+      "prompt": "Use the Agent tool exactly once (subagent_type general-purpose) with this prompt for the subagent: 'Run exactly this Bash command: touch /private/tmp/orca-permcap-marker2 ; then run exactly: pwd ; then reply done.' Do not run any tools yourself. When it returns, reply finished."
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Agent",
+      "tool_input": {
+        "description": "Touch marker and pwd",
+        "prompt": "Run exactly this Bash command: touch /private/tmp/orca-permcap-marker2 ; then run exactly: pwd ; then reply done.",
+        "subagent_type": "general-purpose",
+        "run_in_background": false
+      },
+      "tool_use_id": "toolu_01Di42VZZSD5BsDYgcx6keYQ",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "SubagentStart",
+      "agent_id": "a1585ba7d93704919",
+      "agent_type": "general-purpose"
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "agent_id": "a1585ba7d93704919",
+      "agent_type": "general-purpose",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "touch /private/tmp/orca-permcap-marker2",
+        "description": "Create marker file"
+      },
+      "tool_use_id": "toolu_01Dcj3M1WrcnrHYJdYrnhrEn",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PermissionRequest",
+      "agent_id": "a1585ba7d93704919",
+      "agent_type": "general-purpose",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "touch /private/tmp/orca-permcap-marker2",
+        "description": "Create marker file"
+      },
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "agent_id": "a1585ba7d93704919",
+      "agent_type": "general-purpose",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "pwd",
+        "description": "Print working directory"
+      },
+      "tool_use_id": "toolu_01Pbmvui8hyhG6AVgF5UGsKE",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolUse",
+      "agent_id": "a1585ba7d93704919",
+      "agent_type": "general-purpose",
+      "tool_name": "Bash",
+      "tool_input": {
+        "command": "pwd",
+        "description": "Print working directory"
+      },
+      "tool_use_id": "toolu_01Pbmvui8hyhG6AVgF5UGsKE",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolBatch",
+      "agent_id": "a1585ba7d93704919",
+      "agent_type": "general-purpose",
+      "tool_calls": [
+        {
+          "tool_name": "Bash",
+          "tool_input": {
+            "command": "touch /private/tmp/orca-permcap-marker2",
+            "description": "Create marker file"
+          },
+          "tool_use_id": "toolu_01Dcj3M1WrcnrHYJdYrnhrEn"
+        },
+        {
+          "tool_name": "Bash",
+          "tool_input": {
+            "command": "pwd",
+            "description": "Print working directory"
+          },
+          "tool_use_id": "toolu_01Pbmvui8hyhG6AVgF5UGsKE"
+        }
+      ],
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "SubagentStop",
+      "agent_id": "a1585ba7d93704919",
+      "agent_type": "general-purpose",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Agent",
+      "tool_input": {
+        "description": "Touch marker and pwd",
+        "prompt": "Run exactly this Bash command: touch /private/tmp/orca-permcap-marker2 ; then run exactly: pwd ; then reply done.",
+        "subagent_type": "general-purpose",
+        "run_in_background": false
+      },
+      "tool_use_id": "toolu_01Di42VZZSD5BsDYgcx6keYQ",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolBatch",
+      "tool_calls": [
+        {
+          "tool_name": "Agent",
+          "tool_input": {
+            "description": "Touch marker and pwd",
+            "subagent_type": "general-purpose",
+            "prompt": "Run exactly this Bash command: touch /private/tmp/orca-permcap-marker2 ; then run exactly: pwd ; then reply done.",
+            "run_in_background": false
+          },
+          "tool_use_id": "toolu_01Di42VZZSD5BsDYgcx6keYQ"
+        }
+      ],
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "Stop",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "SessionEnd",
+      "reason": "other"
+    }
+  ],
+  "leadParallelReads": [
+    {
+      "hook_event_name": "SessionStart",
+      "source": "startup"
+    },
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "permission_mode": "default",
+      "prompt": "In a single response, call the Read tool three times in parallel on exactly these paths: /home/dev/project/z.txt , /private/tmp/orca-permcap-outside.txt , and /home/dev/project/z.txt again. Then reply finished."
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/home/dev/project/z.txt"
+      },
+      "tool_use_id": "toolu_01P77R2YuA7uYTVKhqT44Nh4",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/home/dev/project/z.txt"
+      },
+      "tool_use_id": "toolu_01P77R2YuA7uYTVKhqT44Nh4",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/private/tmp/orca-permcap-outside.txt"
+      },
+      "tool_use_id": "toolu_01Qww1XTTD1PR4QinYpgQpAu",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/home/dev/project/z.txt"
+      },
+      "tool_use_id": "toolu_01E83dVWnskDmMYujT96N31H",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PermissionRequest",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/private/tmp/orca-permcap-outside.txt"
+      },
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/home/dev/project/z.txt"
+      },
+      "tool_use_id": "toolu_01E83dVWnskDmMYujT96N31H",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolBatch",
+      "tool_calls": [
+        {
+          "tool_name": "Read",
+          "tool_input": {
+            "file_path": "/home/dev/project/z.txt"
+          },
+          "tool_use_id": "toolu_01P77R2YuA7uYTVKhqT44Nh4"
+        },
+        {
+          "tool_name": "Read",
+          "tool_input": {
+            "file_path": "/private/tmp/orca-permcap-outside.txt"
+          },
+          "tool_use_id": "toolu_01Qww1XTTD1PR4QinYpgQpAu"
+        },
+        {
+          "tool_name": "Read",
+          "tool_input": {
+            "file_path": "/home/dev/project/z.txt"
+          },
+          "tool_use_id": "toolu_01E83dVWnskDmMYujT96N31H"
+        }
+      ],
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "Stop",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "SessionEnd",
+      "reason": "other"
+    }
+  ],
+  "childParallelReads": [
+    {
+      "hook_event_name": "SessionStart",
+      "source": "startup"
+    },
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "permission_mode": "default",
+      "prompt": "Use the Agent tool exactly once (subagent_type general-purpose) with this prompt for the subagent: 'In a single response call the Read tool twice in parallel on exactly these paths: /home/dev/project/z.txt and /private/tmp/orca-permcap-outside.txt ; then reply done.' Do not run any tools yourself. When it returns, reply finished."
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Agent",
+      "tool_input": {
+        "description": "Read two files in parallel",
+        "prompt": "In a single response call the Read tool twice in parallel on exactly these paths: /home/dev/project/z.txt and /private/tmp/orca-permcap-outside.txt ; then reply done.",
+        "subagent_type": "general-purpose",
+        "run_in_background": false
+      },
+      "tool_use_id": "toolu_01CvBpbMazwdsNw5pRnH2hzJ",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "SubagentStart",
+      "agent_id": "afa17a7125401d59b",
+      "agent_type": "general-purpose"
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "agent_id": "afa17a7125401d59b",
+      "agent_type": "general-purpose",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/home/dev/project/z.txt"
+      },
+      "tool_use_id": "toolu_01Ta5aX3G7yTAficvkQreXRD",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolUse",
+      "agent_id": "afa17a7125401d59b",
+      "agent_type": "general-purpose",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/home/dev/project/z.txt"
+      },
+      "tool_use_id": "toolu_01Ta5aX3G7yTAficvkQreXRD",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "agent_id": "afa17a7125401d59b",
+      "agent_type": "general-purpose",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/private/tmp/orca-permcap-outside.txt"
+      },
+      "tool_use_id": "toolu_01E32z7bwBBZ4qdSRLMZN8JD",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PermissionRequest",
+      "agent_id": "afa17a7125401d59b",
+      "agent_type": "general-purpose",
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/private/tmp/orca-permcap-outside.txt"
+      },
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolBatch",
+      "agent_id": "afa17a7125401d59b",
+      "agent_type": "general-purpose",
+      "tool_calls": [
+        {
+          "tool_name": "Read",
+          "tool_input": {
+            "file_path": "/home/dev/project/z.txt"
+          },
+          "tool_use_id": "toolu_01Ta5aX3G7yTAficvkQreXRD"
+        },
+        {
+          "tool_name": "Read",
+          "tool_input": {
+            "file_path": "/private/tmp/orca-permcap-outside.txt"
+          },
+          "tool_use_id": "toolu_01E32z7bwBBZ4qdSRLMZN8JD"
+        }
+      ],
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "SubagentStop",
+      "agent_id": "afa17a7125401d59b",
+      "agent_type": "general-purpose",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Agent",
+      "tool_input": {
+        "description": "Read two files in parallel",
+        "prompt": "In a single response call the Read tool twice in parallel on exactly these paths: /home/dev/project/z.txt and /private/tmp/orca-permcap-outside.txt ; then reply done.",
+        "subagent_type": "general-purpose",
+        "run_in_background": false
+      },
+      "tool_use_id": "toolu_01CvBpbMazwdsNw5pRnH2hzJ",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "PostToolBatch",
+      "tool_calls": [
+        {
+          "tool_name": "Agent",
+          "tool_input": {
+            "description": "Read two files in parallel",
+            "subagent_type": "general-purpose",
+            "prompt": "In a single response call the Read tool twice in parallel on exactly these paths: /home/dev/project/z.txt and /private/tmp/orca-permcap-outside.txt ; then reply done.",
+            "run_in_background": false
+          },
+          "tool_use_id": "toolu_01CvBpbMazwdsNw5pRnH2hzJ"
+        }
+      ],
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "Stop",
+      "permission_mode": "default"
+    },
+    {
+      "hook_event_name": "SessionEnd",
+      "reason": "other"
+    }
+  ]
+}

@@ -1,6 +1,11 @@
-import type { Automation, AutomationRun, AutomationRunUsage } from '../../shared/automations-types'
-import type { ClaudeUsageStore } from '../claude-usage/store'
-import type { CodexUsageStore } from '../codex-usage/store'
+import type { AutomationUsageClient } from '../../shared/backend-service-contract'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationRunUsage
+} from '../../shared/automations/history/automation-run'
+import type { Store } from '../persistence/loading-store/store'
+import type { AutomationRunWriter } from './automation-run-writer'
 
 function createUnavailableAutomationUsage(
   collectedAt: number,
@@ -48,8 +53,8 @@ export async function collectAutomationRunUsage({
 }: {
   automation: Automation | undefined
   run: AutomationRun
-  claudeUsage: ClaudeUsageStore | null
-  codexUsage: CodexUsageStore | null
+  claudeUsage: AutomationUsageClient | null
+  codexUsage: AutomationUsageClient | null
 }): Promise<AutomationRunUsage> {
   const collectedAt = Date.now()
   const unavailable = (
@@ -77,23 +82,59 @@ export async function collectAutomationRunUsage({
     if (!claudeUsage) {
       return unavailable('claude', 'scan_failed', 'Claude usage store is unavailable.')
     }
-    return claudeUsage.getAutomationRunUsage({
-      worktreeId: run.workspaceId,
-      terminalSessionId: run.terminalSessionId,
-      startedAt: run.startedAt,
-      completedAt: collectedAt
-    })
+    return claudeUsage
+      .getAutomationRunUsage({
+        worktreeId: run.workspaceId,
+        terminalSessionId: run.terminalSessionId,
+        startedAt: run.startedAt,
+        completedAt: collectedAt
+      })
+      .catch(() =>
+        unavailable('claude', 'scan_failed', 'Claude usage was unavailable when this run finished.')
+      )
   }
   if (automation.agentId === 'codex') {
     if (!codexUsage) {
       return unavailable('codex', 'scan_failed', 'Codex usage store is unavailable.')
     }
-    return codexUsage.getAutomationRunUsage({
-      worktreeId: run.workspaceId,
-      terminalSessionId: run.terminalSessionId,
-      startedAt: run.startedAt,
-      completedAt: collectedAt
-    })
+    return codexUsage
+      .getAutomationRunUsage({
+        worktreeId: run.workspaceId,
+        terminalSessionId: run.terminalSessionId,
+        startedAt: run.startedAt,
+        completedAt: collectedAt
+      })
+      .catch(() =>
+        unavailable('codex', 'scan_failed', 'Codex usage was unavailable when this run finished.')
+      )
   }
   return unavailable(null, 'provider_unsupported', 'This agent does not report usage to Orca yet.')
+}
+
+export async function writeAutomationRunUsage(input: {
+  store: Store
+  runs: AutomationRunWriter
+  run: AutomationRun
+  claudeUsage: AutomationUsageClient | null
+  codexUsage: AutomationUsageClient | null
+}): Promise<AutomationRun> {
+  const { store, run } = input
+  const usage = await collectAutomationRunUsage({
+    automation: store.listAutomations().find((entry) => entry.id === run.automationId),
+    run,
+    claudeUsage: input.claudeUsage,
+    codexUsage: input.codexUsage
+  })
+  // Retention may prune the finalized run while usage collection awaits.
+  if (!store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
+    return run
+  }
+  return input.runs.updateRun({
+    runId: run.id,
+    status: run.status,
+    workspaceId: run.workspaceId,
+    terminalSessionId: run.terminalSessionId,
+    usage,
+    error: run.error
+  })
 }

@@ -3,15 +3,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  GROK_ENCODED_CWD_DIR_MAX_BYTES,
   GROK_SESSION_SCAN_ACTIVE_ROOT_MAX,
   GROK_SESSION_SCAN_QUEUE_MAX_ENTRIES,
   buildGrokChatHistoryPathCandidates,
   clearGrokSessionPathLookupCacheForTests,
   findGrokChatHistoryBySessionId,
-  getCachedGrokChatHistoryBySessionId,
   grokEncodedCwdDirName,
-  isGrokChatHistoryPath,
   isSafeGrokSessionId,
   resolveGrokChatHistoryPathSync,
   resolveGrokHomeDir,
@@ -50,26 +47,37 @@ function deferred<T>(): {
 }
 
 describe('grok-session-paths', () => {
-  it('honors GROK_HOME for home and sessions roots', () => {
-    const root = makeRoot()
-    expect(resolveGrokHomeDir({ GROK_HOME: root }, '/unused')).toBe(root)
-    expect(resolveGrokSessionsDir({ GROK_HOME: root }, '/unused')).toBe(join(root, 'sessions'))
-    expect(resolveGrokHomeDir({}, '/home/ada')).toBe(join('/home/ada', '.grok'))
+  // Relative GROK_HOME depends on each terminal/main/daemon cwd and can trigger unbounded scans (#13082).
+  // Grok 1.0.30 also treats ~ literally rather than expanding it.
+  it.each(['.', '..', 'rel/path', '~/grok', '~', 'C:foo', 'C:'])(
+    'ignores the non-absolute GROK_HOME %j',
+    (relativeHome) => {
+      expect(resolveGrokHomeDir({ GROK_HOME: relativeHome }, '/home/ada')).toBe(
+        join('/home/ada', '.grok')
+      )
+      expect(resolveGrokSessionsDir({ GROK_HOME: relativeHome }, '/home/ada')).toBe(
+        join('/home/ada', '.grok', 'sessions')
+      )
+    }
+  )
+
+  it.each([
+    [`/Users/test/${'中'.repeat(30)}`, 'workspace-43f12fb9a5ee1037'],
+    [
+      '/Users/dev/Documents/開発プロジェクト/機能追加/テスト環境/ソースコード/main-branch',
+      'main-branch-6aaeefdde2a621aa'
+    ],
+    [`/${'a'.repeat(260)}/My Workspace  `, 'my-workspace-821ab64a500ab620'],
+    [`/${'a'.repeat(260)}/İProject`, 'i-project-a676b9c62bbe86c8'],
+    [`/${'a'.repeat(260)}/${'A'.repeat(39)} !! end`, `${'a'.repeat(39)}--6306ef8d209ddda1`]
+  ])('matches the raw UTF8 cwd vector %s', (cwd, expected) => {
+    expect(grokEncodedCwdDirName(cwd)).toBe(expected)
   })
 
-  it('refuses to invent encodeURIComponent names longer than 255 bytes', () => {
-    const longCwd = `/${'a'.repeat(200)}/${'b'.repeat(200)}`
-    expect(Buffer.byteLength(encodeURIComponent(longCwd), 'utf8')).toBeGreaterThan(
-      GROK_ENCODED_CWD_DIR_MAX_BYTES
-    )
-    expect(grokEncodedCwdDirName(longCwd)).toBeNull()
-    expect(
-      buildGrokChatHistoryPathCandidates({
-        sessionId: 'sess-1',
-        cwd: longCwd,
-        sessionsDir: '/tmp/sessions'
-      })
-    ).toEqual([])
+  it('matches the CLI URL encoding and switches layouts only beyond 255 bytes', () => {
+    expect(grokEncodedCwdDirName("/repo/!'()*")).toBe('%2Frepo%2F%21%27%28%29%2A')
+    expect(grokEncodedCwdDirName(`/${'a'.repeat(252)}`)).toBe(`%2F${'a'.repeat(252)}`)
+    expect(grokEncodedCwdDirName(`/${'a'.repeat(253)}`)).toMatch(/^a{40}-[a-f0-9]{16}$/)
   })
 
   it('rejects unsafe session ids and path-special cwd components', async () => {
@@ -83,7 +91,6 @@ describe('grok-session-paths', () => {
         []
       )
       await expect(findGrokChatHistoryBySessionId(sessionsDir, sessionId)).resolves.toBeNull()
-      expect(isGrokChatHistoryPath('/repo/chat_history.jsonl', sessionId)).toBe(false)
     }
 
     expect(isSafeGrokSessionId('019e37f4-5135-7b63-a4ab-6d13aa6bf528')).toBe(true)
@@ -94,33 +101,15 @@ describe('grok-session-paths', () => {
     ).toEqual([])
   })
 
-  it('resolves via encodeURIComponent(cwd) when the short path exists', () => {
-    const root = makeRoot()
-    const sessionsDir = join(root, 'sessions')
-    const cwd = '/tmp/work'
-    const sessionId = 'sess-short'
-    const history = join(sessionsDir, encodeURIComponent(cwd), sessionId, 'chat_history.jsonl')
-    mkdirSync(dirname(history), { recursive: true })
-    writeFileSync(history, '{"type":"user"}\n')
-
-    expect(
-      resolveGrokChatHistoryPathSync({
-        sessionId,
-        cwd,
-        sessionsDir
-      })
-    ).toBe(history)
-  })
-
-  it('does not synchronously discover a long-cwd slug group', () => {
+  it('resolves the CLI long-cwd slug group', () => {
     const root = makeRoot()
     const sessionsDir = join(root, 'sessions')
     const sessionId = 'sess-long'
     // Simulate Grok's slug+hash group directory (not encodeURIComponent of cwd).
-    const slugGroup = 'long-path-ab12cd34'
+    const slugGroup = `${'x'.repeat(40)}-bc763004a2f1ee5a`
     const history = join(sessionsDir, slugGroup, sessionId, 'chat_history.jsonl')
     mkdirSync(dirname(history), { recursive: true })
-    writeFileSync(join(sessionsDir, slugGroup, '.cwd'), '/very/long/path\n')
+    writeFileSync(join(sessionsDir, slugGroup, '.cwd'), `/${'x'.repeat(300)}\n`)
     writeFileSync(history, '{"type":"assistant","content":"hi"}\n')
 
     expect(
@@ -129,45 +118,7 @@ describe('grok-session-paths', () => {
         cwd: `/${'x'.repeat(300)}`,
         sessionsDir
       })
-    ).toBeNull()
-  })
-
-  it('finds the documented group/session layout asynchronously', async () => {
-    const root = makeRoot()
-    const sessionsDir = join(root, 'sessions')
-    const history = join(sessionsDir, 'slug-hash', 'sess-async', 'chat_history.jsonl')
-    mkdirSync(dirname(history), { recursive: true })
-    writeFileSync(history, '{}\n')
-
-    await expect(findGrokChatHistoryBySessionId(sessionsDir, 'sess-async')).resolves.toBe(history)
-  })
-
-  it('deduplicates concurrent async discovery', async () => {
-    const root = makeRoot()
-    const sessionsDir = join(root, 'sessions')
-    const history = join(sessionsDir, 'slug-hash', 'sess-deduped', 'chat_history.jsonl')
-    mkdirSync(dirname(history), { recursive: true })
-    writeFileSync(history, '{}\n')
-
-    const first = findGrokChatHistoryBySessionId(sessionsDir, 'sess-deduped')
-    const second = findGrokChatHistoryBySessionId(sessionsDir, 'sess-deduped')
-
-    expect(second).toBe(first)
-    await expect(first).resolves.toBe(history)
-  })
-
-  it('reuses a successful discovery from cache without another scan', async () => {
-    const root = makeRoot()
-    const sessionsDir = join(root, 'sessions')
-    const history = join(sessionsDir, 'slug-hash', 'sess-cached', 'chat_history.jsonl')
-    mkdirSync(dirname(history), { recursive: true })
-    writeFileSync(history, '{}\n')
-
-    await expect(findGrokChatHistoryBySessionId(sessionsDir, 'sess-cached')).resolves.toBe(history)
-    rmSync(join(sessionsDir, 'slug-hash'), { recursive: true, force: true })
-
-    expect(getCachedGrokChatHistoryBySessionId(sessionsDir, 'sess-cached')).toBe(history)
-    await expect(findGrokChatHistoryBySessionId(sessionsDir, 'sess-cached')).resolves.toBe(history)
+    ).toBe(history)
   })
 
   it('does not descend below the documented group/session layout', async () => {

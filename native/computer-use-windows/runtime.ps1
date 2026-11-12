@@ -1,9 +1,13 @@
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$OperationPath
+    [Parameter(Position = 0)]
+    [string]$OperationPath,
+    # Serve mode emits the Add-Type P/Invoke assembly once per session, avoiding per-operation compilation.
+    [switch]$Serve
 )
 
 $ErrorActionPreference = "Stop"
+# Progress records would corrupt the one-JSON-response-per-line serve pipe.
+$ProgressPreference = "SilentlyContinue"
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [Console]::InputEncoding = $utf8NoBom
 [Console]::OutputEncoding = $utf8NoBom
@@ -14,11 +18,24 @@ Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 
-Add-Type -TypeDefinition @"
+Add-Type -ReferencedAssemblies @(
+    'System.dll',
+    [System.Drawing.Bitmap].Assembly.Location,
+    [Windows.Automation.AutomationElement].Assembly.Location,
+    [Windows.Automation.AutomationIdentifier].Assembly.Location
+) -TypeDefinition @"
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 public static class OrcaDesktopWin32 {
+    // Default proxy discovery needs a typed caller before PowerShell's dynamic stack frames.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    public static void InitializeAutomation() {
+        System.Windows.Automation.ClientSettings.RegisterClientSideProviders(
+            new System.Windows.Automation.ClientSideProviderDescription[0]);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT {
         public int Left;
@@ -33,17 +50,53 @@ public static class OrcaDesktopWin32 {
         public int Y;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct INPUT {
+        public uint type;
+        public INPUTUNION data;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct INPUTUNION {
+        [FieldOffset(0)]
+        public MOUSEINPUT mouse;
+        [FieldOffset(0)]
+        public KEYBDINPUT keyboard;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint flags;
+        public uint time;
+        public UIntPtr extraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KEYBDINPUT {
+        public ushort virtualKey;
+        public ushort scanCode;
+        public uint flags;
+        public uint time;
+        public UIntPtr extraInfo;
+    }
+
     [DllImport("user32.dll")]
     public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
 
     [DllImport("user32.dll")]
     public static extern bool ScreenToClient(IntPtr hwnd, ref POINT point);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", EntryPoint = "PostMessageW")]
     public static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hwnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hwnd);
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hwnd);
@@ -56,8 +109,253 @@ public static class OrcaDesktopWin32 {
 
     [DllImport("user32.dll")]
     public static extern void mouse_event(uint dwFlags, uint dx, uint dy, int dwData, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    public static extern uint SendInput(uint count, INPUT[] inputs, int size);
+
+    [DllImport("user32.dll")]
+    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClientToScreen(IntPtr hwnd, ref POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+
+    [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
+    private static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsHungAppWindow(IntPtr hwnd);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint access, bool inheritHandle, int processId);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetTokenInformation(IntPtr token, int informationClass, IntPtr information, int length, out int returnLength);
+
+    [DllImport("advapi32.dll")]
+    private static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);
+
+    [DllImport("advapi32.dll")]
+    private static extern IntPtr GetSidSubAuthority(IntPtr sid, uint index);
+
+    // WM_NULL round trip; SMTO_ABORTIFHUNG returns at once for a window Windows already marks hung.
+    public static bool IsWindowHung(IntPtr hwnd, uint timeoutMilliseconds) {
+        IntPtr result;
+        if (SendMessageTimeout(hwnd, 0, IntPtr.Zero, IntPtr.Zero, 0x0002, timeoutMilliseconds, out result) != IntPtr.Zero) {
+            return false;
+        }
+        const int errorTimeout = 1460;
+        // Other failures (a closed window, UIPI refusing an elevated target) are not hangs.
+        return Marshal.GetLastWin32Error() == errorTimeout || IsHungAppWindow(hwnd);
+    }
+
+    // Mandatory integrity RID (0x2000 medium, 0x3000 high), or -1 when the process cannot be queried.
+    public static int GetProcessIntegrityLevel(int processId) {
+        const uint processQueryLimitedInformation = 0x1000;
+        const uint tokenQuery = 0x0008;
+        const int tokenIntegrityLevel = 25;
+        var process = OpenProcess(processQueryLimitedInformation, false, processId);
+        if (process == IntPtr.Zero) { return -1; }
+        var token = IntPtr.Zero;
+        var buffer = IntPtr.Zero;
+        try {
+            if (!OpenProcessToken(process, tokenQuery, out token)) { return -1; }
+            int length;
+            GetTokenInformation(token, tokenIntegrityLevel, IntPtr.Zero, 0, out length);
+            if (length <= 0) { return -1; }
+            buffer = Marshal.AllocHGlobal(length);
+            if (!GetTokenInformation(token, tokenIntegrityLevel, buffer, length, out length)) { return -1; }
+            var sid = Marshal.ReadIntPtr(buffer);
+            int count = Marshal.ReadByte(GetSidSubAuthorityCount(sid));
+            if (count <= 0) { return -1; }
+            return Marshal.ReadInt32(GetSidSubAuthority(sid, (uint)(count - 1)));
+        } finally {
+            if (buffer != IntPtr.Zero) { Marshal.FreeHGlobal(buffer); }
+            if (token != IntPtr.Zero) { CloseHandle(token); }
+            CloseHandle(process);
+        }
+    }
+
+    private sealed class WindowCapture {
+        private readonly object gate = new object();
+        private readonly IntPtr hwnd;
+        private readonly int width;
+        private readonly int height;
+        private bool abandoned;
+        private System.Drawing.Bitmap result;
+
+        public WindowCapture(IntPtr hwnd, int width, int height) {
+            this.hwnd = hwnd;
+            this.width = width;
+            this.height = height;
+        }
+
+        public void Run() {
+            System.Drawing.Bitmap bitmap = null;
+            try { bitmap = RenderWindow(hwnd, width, height); } catch {}
+            lock (gate) {
+                if (abandoned) {
+                    if (bitmap != null) { bitmap.Dispose(); }
+                } else {
+                    result = bitmap;
+                }
+            }
+        }
+
+        public System.Drawing.Bitmap Take() {
+            lock (gate) {
+                abandoned = true;
+                return result;
+            }
+        }
+    }
+
+    // Renders the window itself, so covering windows are not captured; null when the render is unusable or too slow.
+    public static System.Drawing.Bitmap CaptureWindow(IntPtr hwnd, int width, int height, int timeoutMilliseconds) {
+        var capture = new WindowCapture(hwnd, width, height);
+        var thread = new System.Threading.Thread(capture.Run);
+        thread.IsBackground = true;
+        thread.Start();
+        // Why: PrintWindow waits on the target's WM_PRINT with no timeout; a stuck render must not stall the serve loop.
+        thread.Join(timeoutMilliseconds);
+        return capture.Take();
+    }
+
+    private static System.Drawing.Bitmap RenderWindow(IntPtr hwnd, int width, int height) {
+        var previousDpiContext = IntPtr.Zero;
+        try {
+            // Per-monitor-aware V2: a DPI-unaware caller would get a scaled rect but a full-size render.
+            previousDpiContext = SetThreadDpiAwarenessContext(new IntPtr(-4));
+        } catch (EntryPointNotFoundException) {}
+        System.Drawing.Bitmap rendered = null;
+        try {
+            RECT rect;
+            if (!GetWindowRect(hwnd, out rect)) { return null; }
+            var renderedWidth = rect.Right - rect.Left;
+            var renderedHeight = rect.Bottom - rect.Top;
+            if (renderedWidth <= 0 || renderedHeight <= 0) { return null; }
+            rendered = new System.Drawing.Bitmap(renderedWidth, renderedHeight, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            var printed = false;
+            using (var graphics = System.Drawing.Graphics.FromImage(rendered)) {
+                var hdc = graphics.GetHdc();
+                try {
+                    // PW_RENDERFULLCONTENT includes DirectComposition content (Chromium, Electron, WinUI).
+                    printed = PrintWindow(hwnd, hdc, 2);
+                } finally {
+                    graphics.ReleaseHdc(hdc);
+                }
+            }
+            if (!printed) { return null; }
+            var whole = new System.Drawing.Rectangle(0, 0, renderedWidth, renderedHeight);
+            if (UniformColor(rendered, whole) >= 0) { return null; }
+            // A black client area inside a drawn frame means the content itself did not render.
+            var client = GetClientRegion(hwnd, rect, renderedWidth, renderedHeight);
+            if (client.Width > 0 && client.Height > 0 && UniformColor(rendered, client) == 0) { return null; }
+            if (renderedWidth == width && renderedHeight == height) {
+                var result = rendered;
+                rendered = null;
+                return result;
+            }
+            // Keep screenshot pixels in the same window coordinate space as element frames and clicks.
+            var scaled = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            using (var graphics = System.Drawing.Graphics.FromImage(scaled)) {
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+                graphics.DrawImage(rendered, 0, 0, width, height);
+            }
+            return scaled;
+        } finally {
+            if (rendered != null) { rendered.Dispose(); }
+            if (previousDpiContext != IntPtr.Zero) { SetThreadDpiAwarenessContext(previousDpiContext); }
+        }
+    }
+
+    // Uniform 24-bit color of the region, or -1 when it holds more than one color.
+    private static int UniformColor(System.Drawing.Bitmap bitmap, System.Drawing.Rectangle region) {
+        var data = bitmap.LockBits(region, System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+        try {
+            var row = new int[region.Width];
+            var first = Marshal.ReadInt32(data.Scan0) & 0xFFFFFF;
+            for (var y = 0; y < region.Height; y++) {
+                Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), row, 0, row.Length);
+                foreach (var pixel in row) {
+                    if ((pixel & 0xFFFFFF) != first) { return -1; }
+                }
+            }
+            return first;
+        } finally {
+            bitmap.UnlockBits(data);
+        }
+    }
+
+    // Client area in window-bitmap coordinates, clipped to the bitmap; empty when unknown.
+    private static System.Drawing.Rectangle GetClientRegion(IntPtr hwnd, RECT window, int width, int height) {
+        RECT client;
+        var origin = new POINT();
+        if (!GetClientRect(hwnd, out client) || !ClientToScreen(hwnd, ref origin)) { return System.Drawing.Rectangle.Empty; }
+        var region = new System.Drawing.Rectangle(origin.X - window.Left, origin.Y - window.Top, client.Right - client.Left, client.Bottom - client.Top);
+        region.Intersect(new System.Drawing.Rectangle(0, 0, width, height));
+        return region;
+    }
+
+    public static void SendModifiedClick(byte[] modifiers, uint mouseDown, uint mouseUp) {
+        const uint keyboardInput = 1;
+        const uint mouseInput = 0;
+        const uint keyUp = 0x0002;
+        var inputs = new List<INPUT>();
+        foreach (var modifier in modifiers) {
+            inputs.Add(KeyboardInput(keyboardInput, modifier, 0));
+        }
+        inputs.Add(MouseInput(mouseInput, mouseDown));
+        inputs.Add(MouseInput(mouseInput, mouseUp));
+        for (var index = modifiers.Length - 1; index >= 0; index--) {
+            inputs.Add(KeyboardInput(keyboardInput, modifiers[index], keyUp));
+        }
+        var values = inputs.ToArray();
+        var sent = SendInput((uint)values.Length, values, Marshal.SizeOf(typeof(INPUT)));
+        if (sent != (uint)values.Length) {
+            var releases = new List<INPUT>();
+            releases.Add(MouseInput(mouseInput, mouseUp));
+            for (var index = modifiers.Length - 1; index >= 0; index--) {
+                releases.Add(KeyboardInput(keyboardInput, modifiers[index], keyUp));
+            }
+            var releaseValues = releases.ToArray();
+            SendInput((uint)releaseValues.Length, releaseValues, Marshal.SizeOf(typeof(INPUT)));
+            throw new InvalidOperationException("SendInput did not complete the modified click");
+        }
+    }
+
+    private static INPUT KeyboardInput(uint type, byte virtualKey, uint flags) {
+        return new INPUT {
+            type = type,
+            data = new INPUTUNION {
+                keyboard = new KEYBDINPUT { virtualKey = virtualKey, flags = flags }
+            }
+        };
+    }
+
+    private static INPUT MouseInput(uint type, uint flags) {
+        return new INPUT {
+            type = type,
+            data = new INPUTUNION {
+                mouse = new MOUSEINPUT { flags = flags }
+            }
+        };
+    }
 }
 "@
+
+[OrcaDesktopWin32]::InitializeAutomation()
 
 $MaxNodes = 1200
 $MaxDepth = 64
@@ -66,6 +364,8 @@ $MaxScreenshotPngBytes = 900000
 $MaxScreenshotEdge = 1280
 $MinScreenshotScale = 0.25
 $ScreenshotScaleStep = 0.85
+# Windows' own hung-window threshold, so a briefly busy app is not reported as hung; still far under the request timeout.
+$WindowResponseTimeoutMilliseconds = 5000
 $BlockedAppFragments = @(
     "1password",
     "bitwarden",
@@ -97,6 +397,7 @@ $MouseEvents = @{
     MiddleDown = 0x0020
     MiddleUp = 0x0040
     Wheel = 0x0800
+    HorizontalWheel = 0x01000
 }
 
 function Write-OrcaJson($Payload) {
@@ -193,7 +494,18 @@ function Get-OrcaRootElement($Process) {
     if ($Process.MainWindowHandle -eq 0) {
         throw "No top-level UI Automation window is available for $($Process.ProcessName)."
     }
+    if ([OrcaDesktopWin32]::IsWindowHung([IntPtr]$Process.MainWindowHandle, $WindowResponseTimeoutMilliseconds)) {
+        throw "window_not_responding: $(Get-OrcaAppName $Process) is not responding; nothing was read from or sent to it"
+    }
     [Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Process.MainWindowHandle)
+}
+
+function Assert-OrcaInputAllowed($Process) {
+    $targetLevel = [OrcaDesktopWin32]::GetProcessIntegrityLevel([int]$Process.Id)
+    $ownLevel = [OrcaDesktopWin32]::GetProcessIntegrityLevel($PID)
+    # Why: UIPI silently drops input to a higher-integrity process; unknown levels proceed as before.
+    if ($targetLevel -lt 0 -or $ownLevel -lt 0 -or $targetLevel -le $ownLevel) { return }
+    throw "target_elevated: $(Get-OrcaAppName $Process) runs as administrator, so Windows blocks input to it from Orca; no input was sent"
 }
 
 function Get-OrcaWindowFrame($Process, $RootElement) {
@@ -242,7 +554,10 @@ function Assert-OrcaWindowTarget($Process, $WindowId, $WindowIndex) {
 
 function Restore-OrcaWindow($Process) {
     if ($Process.MainWindowHandle -eq 0) { return }
-    [void][OrcaDesktopWin32]::ShowWindow([IntPtr]$Process.MainWindowHandle, 9)
+    # Why: SW_RESTORE also un-maximizes, which moves the frame the agent targeted.
+    if ([OrcaDesktopWin32]::IsIconic([IntPtr]$Process.MainWindowHandle)) {
+        [void][OrcaDesktopWin32]::ShowWindow([IntPtr]$Process.MainWindowHandle, 9)
+    }
     [void][OrcaDesktopWin32]::SetForegroundWindow([IntPtr]$Process.MainWindowHandle)
 }
 
@@ -266,6 +581,17 @@ function Assert-OrcaKeyboardFocus([IntPtr]$WindowHandle, $Operation) {
         throw "window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused; bring it forward manually or check desktop permissions"
     }
     throw "window_not_focused: keyboard input requires the target window to be focused; retry with --restore-window"
+}
+
+function Assert-OrcaPointerFocus([IntPtr]$WindowHandle) {
+    if (Wait-OrcaWindowFocused $WindowHandle 500) { return }
+    throw "window_not_focused: window activation did not focus the target window; no pointer input was sent"
+}
+
+function Restore-OrcaPointerWindow($Process, $RootElement) {
+    Restore-OrcaWindow $Process
+    Assert-OrcaPointerFocus ([IntPtr]$Process.MainWindowHandle)
+    Get-OrcaWindowFrame $Process $RootElement
 }
 
 function Get-OrcaElementFrame($Element, $WindowFrame) {
@@ -460,6 +786,8 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         maxDepth = $MaxDepth
         maxDepthReached = $false
     }
+    # Tab compaction shrinks records mid-walk, so $records.Count would reuse retained indexes.
+    $nextIndex = [ref]0
 
     function Visit-OrcaNode($Node, [int]$Depth) {
         if ($records.Count -ge $MaxNodes -or $Depth -gt $MaxDepth) {
@@ -470,7 +798,7 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         $identity = try { (@($Node.GetRuntimeId()) -join ".") } catch { [Guid]::NewGuid().ToString() }
         if (-not $seen.Add($identity)) { return }
 
-        $record = New-OrcaElementRecord $Node $records.Count $WindowFrame
+        $record = New-OrcaElementRecord $Node $nextIndex.Value $WindowFrame
         $children = @()
         try {
             $children = @($Node.FindAll([Windows.Automation.TreeScope]::Children, [Windows.Automation.Condition]::TrueCondition))
@@ -479,10 +807,12 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         $title = if ([string]::IsNullOrWhiteSpace($record.name)) { $record.automationId } else { $record.name }
         $role = if ([string]::IsNullOrWhiteSpace($record.localizedControlType)) { $record.controlType } else { $record.localizedControlType }
         $roleKey = $role.ToLowerInvariant()
-        $snippets = @(Get-OrcaTextSnippets $Node 8 4)
         $genericSummary = $null
-        if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value) -and $snippets.Count -ge 2 -and (Test-OrcaPlainTextSubtree $Node)) {
-            $genericSummary = ($snippets -join " ")
+        if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value)) {
+            $snippets = @(Get-OrcaTextSnippets $Node 8 4)
+            if ($snippets.Count -ge 2 -and (Test-OrcaPlainTextSubtree $Node)) {
+                $genericSummary = ($snippets -join " ")
+            }
         }
         if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value) -and $meaningfulActions.Count -eq 0 -and $null -eq $genericSummary -and $children.Count -le 1) {
             for ($i = 0; $i -lt $children.Count; $i++) {
@@ -492,6 +822,7 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         }
 
         $records.Add($record)
+        $nextIndex.Value++
 
         $line = "$($record.index) $role $(Format-OrcaSnapshotText $title)".TrimEnd()
         $line += Format-OrcaValueSegment $roleKey $title $record.value
@@ -665,16 +996,20 @@ function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap) {
     }
 }
 
-function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame) {
+function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame, [IntPtr]$WindowHandle) {
     if (-not $IncludeScreenshot -or $null -eq $WindowFrame) { return $null }
     $bitmap = $null
     $graphics = $null
     try {
         $width = [int][Math]::Max(1, [Math]::Round($WindowFrame.width))
         $height = [int][Math]::Max(1, [Math]::Round($WindowFrame.height))
-        $bitmap = New-Object System.Drawing.Bitmap $width, $height
-        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-        $graphics.CopyFromScreen([int][Math]::Round($WindowFrame.x), [int][Math]::Round($WindowFrame.y), 0, 0, $bitmap.Size)
+        $bitmap = [OrcaDesktopWin32]::CaptureWindow($WindowHandle, $width, $height, $WindowResponseTimeoutMilliseconds)
+        if ($null -eq $bitmap) {
+            # Screen copy shows whatever is on top, so it is only the fallback for windows that render blank.
+            $bitmap = New-Object System.Drawing.Bitmap $width, $height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.CopyFromScreen([int][Math]::Round($WindowFrame.x), [int][Math]::Round($WindowFrame.y), 0, 0, $bitmap.Size)
+        }
         Get-OrcaBoundedScreenshotPayload $bitmap
     } catch {
         $null
@@ -686,12 +1021,13 @@ function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame) {
 
 function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = $null, $WindowIndex = $null, [bool]$RestoreWindow = $false) {
     $process = Find-OrcaProcess $Query
-    if ($RestoreWindow) { Restore-OrcaWindow $process }
     Assert-OrcaWindowTarget $process $WindowId $WindowIndex
+    # Root first: its hang probe must run before ShowWindow, which blocks on a hung window.
     $root = Get-OrcaRootElement $process
+    if ($RestoreWindow) { Restore-OrcaWindow $process }
     $windowFrame = Get-OrcaWindowFrame $process $root
     $tree = Render-OrcaTree $root $windowFrame (Test-OrcaBrowserProcess $process)
-    $screenshot = Get-OrcaScreenshot $IncludeScreenshot $windowFrame
+    $screenshot = Get-OrcaScreenshot $IncludeScreenshot $windowFrame ([IntPtr]$process.MainWindowHandle)
 
     [pscustomobject]@{
         snapshotId = [guid]::NewGuid().ToString()
@@ -912,8 +1248,7 @@ function Get-OrcaElementScreenPoint($Element) {
     $null
 }
 
-function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY, [string]$Button, [int]$Count) {
-    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+function Send-OrcaMouseClick([int]$ScreenX, [int]$ScreenY, [string]$Button, [int]$Count, [string]$Modifiers) {
     [void][OrcaDesktopWin32]::SetCursorPos($ScreenX, $ScreenY)
     $buttonName = if ([string]::IsNullOrWhiteSpace($Button)) { "left" } else { $Button.ToLowerInvariant() }
     switch ($buttonName) {
@@ -923,15 +1258,27 @@ function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY
         default { throw "unsupported mouse button: $Button" }
     }
 
-    for ($i = 0; $i -lt (Get-OrcaPositiveInteger $Count "click_count"); $i++) {
-        [OrcaDesktopWin32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero)
-        Start-Sleep -Milliseconds 35
-        [OrcaDesktopWin32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero)
+    $modifierKeys = @(Get-OrcaClickModifierVirtualKeys $Modifiers)
+    $clickCount = Get-OrcaPositiveInteger $Count "click_count"
+    if ($modifierKeys.Count -eq 0) {
+        for ($i = 0; $i -lt $clickCount; $i++) {
+            [OrcaDesktopWin32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 35
+            [OrcaDesktopWin32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero)
+        }
+        return
+    }
+    for ($i = 0; $i -lt $clickCount; $i++) {
+        [OrcaDesktopWin32]::SendModifiedClick(
+            [byte[]]$modifierKeys,
+            [uint32]$down,
+            [uint32]$up
+        )
+        if ($i + 1 -lt $clickCount) { Start-Sleep -Milliseconds 35 }
     }
 }
 
-function Send-OrcaDrag([IntPtr]$WindowHandle, $From, $To) {
-    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+function Send-OrcaDrag($From, $To) {
     $startX = [int]$From.x
     $startY = [int]$From.y
     $endX = [int]$To.x
@@ -990,18 +1337,35 @@ function Get-OrcaModifierVirtualKey([string]$Modifier) {
     }
 }
 
-function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
+function Get-OrcaClickModifierVirtualKeys([string]$Modifiers) {
+    if ([string]::IsNullOrWhiteSpace($Modifiers)) { return @() }
+    $parts = @($Modifiers.Split("+") | ForEach-Object { $_.Trim() })
+    $emptyParts = @($parts | Where-Object { [string]::IsNullOrWhiteSpace($_) })
+    if ($parts.Count -eq 0 -or $emptyParts.Count -gt 0) {
+        throw "Click modifiers require modifier keys only"
+    }
+    @($parts | ForEach-Object { Get-OrcaModifierVirtualKey $_ })
+}
+
+function ConvertTo-OrcaSendKeysHotkey([string]$KeySpec) {
     $parts = @($KeySpec.Split("+") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($parts.Count -eq 0) { throw "Unsupported key: $KeySpec" }
     $key = $parts[$parts.Count - 1]
     $prefix = ""
     if ($parts.Count -gt 1) {
+        # SendKeys adds Shift for an uppercase letter, turning Ctrl+A into Ctrl+Shift+A.
+        if ($key.Length -eq 1) { $key = $key.ToLowerInvariant() }
         foreach ($modifier in $parts[0..($parts.Count - 2)]) {
             $prefix += ConvertTo-OrcaSendKeysModifier $modifier
         }
     }
+    $prefix + (ConvertTo-OrcaSendKeysKey $key)
+}
+
+function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
+    $keys = ConvertTo-OrcaSendKeysHotkey $KeySpec
     [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
-    [System.Windows.Forms.SendKeys]::SendWait($prefix + (ConvertTo-OrcaSendKeysKey $key))
+    [System.Windows.Forms.SendKeys]::SendWait($keys)
 }
 
 function ConvertTo-OrcaSendKeysText([string]$Text) {
@@ -1086,9 +1450,10 @@ function Invoke-OrcaOperation($Operation) {
     }
 
     $process = Find-OrcaProcess $Operation.app
-    if ([bool]$Operation.restoreWindow) { Restore-OrcaWindow $process }
+    Assert-OrcaInputAllowed $process
     Assert-OrcaWindowTarget $process $Operation.windowId $Operation.windowIndex
     $root = Get-OrcaRootElement $process
+    if ([bool]$Operation.restoreWindow) { Restore-OrcaWindow $process }
     $windowFrame = if ($null -ne $Operation.windowBounds) { $Operation.windowBounds } else { Get-OrcaWindowFrame $process $root }
     $element = Find-OrcaElement $root $Operation.element
     $fromElement = Find-OrcaElement $root $Operation.fromElement
@@ -1101,18 +1466,18 @@ function Invoke-OrcaOperation($Operation) {
 
     switch ($Operation.tool) {
         "click" {
-            # Why: agents expect a click into a target app to make the next
-            # keyboard action safe, even when UI Automation handles the click.
-            Restore-OrcaWindow $process
             $handledByPattern = $false
             $clickCount = Get-OrcaPositiveInteger $Operation.click_count "click_count"
-            if ($null -ne $element -and $Operation.mouse_button -ne "right" -and $Operation.mouse_button -ne "middle" -and $clickCount -le 1) {
+            $hasModifiers = -not [string]::IsNullOrWhiteSpace([string]$Operation.modifiers)
+            if (-not $hasModifiers -and $null -ne $element -and $Operation.mouse_button -ne "right" -and $Operation.mouse_button -ne "middle" -and $clickCount -le 1) {
                 $handledByPattern = Invoke-OrcaPrimaryAction $element
             }
             if (-not $handledByPattern) {
+                # Why: mouse input lands on whichever window is on top at the point; UIA patterns need no focus.
+                $windowFrame = Restore-OrcaPointerWindow $process $root
                 $point = Get-OrcaElementScreenPoint $element
                 if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
-                Send-OrcaMouseClick $handle $point.x $point.y $Operation.mouse_button $clickCount
+                Send-OrcaMouseClick $point.x $point.y $Operation.mouse_button $clickCount $Operation.modifiers
                 $action = [pscustomobject]@{ path = "synthetic"; actionName = $null; fallbackReason = "actionUnsupported" }
             } else {
                 $action = [pscustomobject]@{ path = "accessibility"; actionName = "primaryAction"; fallbackReason = $null }
@@ -1127,19 +1492,26 @@ function Invoke-OrcaOperation($Operation) {
         }
         "scroll" {
             $delta = 120 * [int][Math]::Ceiling((Get-OrcaPositiveNumber $Operation.pages "pages"))
-            if ($Operation.direction -eq "down" -or $Operation.direction -eq "right") {
+            $mouseEvent = $MouseEvents.Wheel
+            if ($Operation.direction -eq "down") {
                 $delta = -1 * $delta
-            } elseif ($Operation.direction -ne "up" -and $Operation.direction -ne "left") {
+            } elseif ($Operation.direction -eq "left") {
+                $mouseEvent = $MouseEvents.HorizontalWheel
+                $delta = -1 * $delta
+            } elseif ($Operation.direction -eq "right") {
+                $mouseEvent = $MouseEvents.HorizontalWheel
+            } elseif ($Operation.direction -ne "up") {
                 throw "unsupported scroll direction: $($Operation.direction)"
             }
+            $windowFrame = Restore-OrcaPointerWindow $process $root
             $point = Get-OrcaElementScreenPoint $element
             if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
-            [void][OrcaDesktopWin32]::SetForegroundWindow($handle)
             [void][OrcaDesktopWin32]::SetCursorPos([int]$point.x, [int]$point.y)
-            [OrcaDesktopWin32]::mouse_event($MouseEvents.Wheel, 0, 0, $delta, [UIntPtr]::Zero)
+            [OrcaDesktopWin32]::mouse_event($mouseEvent, 0, 0, $delta, [UIntPtr]::Zero)
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "scroll"; fallbackReason = $null }
         }
         "drag" {
+            $windowFrame = Restore-OrcaPointerWindow $process $root
             $from = Get-OrcaElementScreenPoint $fromElement
             if ($null -eq $from -and $null -ne $Operation.fromElement) { throw "stale element frame; run get-app-state again and use a fresh element index" }
             if ($null -eq $from) {
@@ -1156,7 +1528,7 @@ function Invoke-OrcaOperation($Operation) {
                     y = $windowFrame.y + (Get-OrcaRequiredNumber $Operation.to_y "to_y")
                 }
             }
-            Send-OrcaDrag $handle $from $to
+            Send-OrcaDrag $from $to
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "drag"; fallbackReason = $null }
         }
         "type_text" {
@@ -1187,20 +1559,67 @@ function Invoke-OrcaOperation($Operation) {
     }
 
     try {
-        $snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex
-    } catch {
-        if ($null -eq $Operation.windowId -and $null -eq $Operation.windowIndex) { throw }
-        if ($null -eq $action.verification) {
-            $action | Add-Member -NotePropertyName verification -NotePropertyValue ([pscustomobject]@{ state = "unverified"; reason = "window_changed" })
+        try {
+            $snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex
+        } catch {
+            if ($_.Exception.Message -like "window_not_responding:*") { throw }
+            if ($null -eq $Operation.windowId -and $null -eq $Operation.windowIndex) { throw }
+            if ($null -eq $action.verification) {
+                $action | Add-Member -NotePropertyName verification -NotePropertyValue ([pscustomobject]@{ state = "unverified"; reason = "window_changed" })
+            }
+            $snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $null $null
         }
-        $snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $null $null
+    } catch {
+        # Why: the input was already sent, so the pre-action "nothing was sent" wording would invite a duplicate retry.
+        if ($_.Exception.Message -like "window_not_responding:*") {
+            throw "window_not_responding: $(Get-OrcaAppName $process) stopped responding after the action was sent; the action may already have been delivered"
+        }
+        throw
     }
     [pscustomobject]@{ ok = $true; action = $action; snapshot = $snapshot }
 }
 
-try {
-    $operation = Read-OrcaOperation $OperationPath
-    Write-OrcaJson (Invoke-OrcaOperation $operation)
-} catch {
-    Write-OrcaJson ([pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message })
+function Invoke-OrcaServeLoop {
+    # Announce readiness after Add-Type and before reading: absence proves no request ran and permits safe replay.
+    # A missing response cannot prove that; replay could duplicate input.
+    [Console]::Out.WriteLine('{"ready":true}')
+    [Console]::Out.Flush()
+    # NDJSON request/response lines may exceed 1 MiB with screenshots; console line IO is memory-bounded.
+    while ($true) {
+        $line = [Console]::In.ReadLine()
+        if ($null -eq $line) { break }
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $requestId = $null
+        try {
+            $operation = $line | ConvertFrom-Json
+            $requestId = $operation.requestId
+            $response = Invoke-OrcaOperation $operation
+        } catch {
+            $response = [pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message }
+            # ConvertFrom-Json can fail before reading id; recover it from raw input so the error reaches its request
+            # instead of tripping desync cleanup/cooldown and hiding the parse failure.
+            if ($null -eq $requestId -and $line -match '"requestId"\s*:\s*(\d+)') {
+                $requestId = [long]$Matches[1]
+            }
+        }
+        # Echo id to bind the response; unmatched replies indicate stream desynchronization.
+        if ($null -ne $requestId) {
+            $response | Add-Member -NotePropertyName requestId -NotePropertyValue $requestId -Force
+        }
+        [Console]::Out.WriteLine((ConvertTo-Json $response -Depth 100 -Compress))
+        [Console]::Out.Flush()
+    }
+}
+
+if ($Serve) {
+    Invoke-OrcaServeLoop
+} elseif ([string]::IsNullOrWhiteSpace($OperationPath)) {
+    Write-OrcaJson ([pscustomobject]@{ ok = $false; error = "runtime.ps1 requires an operation path or -Serve" })
+} else {
+    try {
+        $operation = Read-OrcaOperation $OperationPath
+        Write-OrcaJson (Invoke-OrcaOperation $operation)
+    } catch {
+        Write-OrcaJson ([pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message })
+    }
 }

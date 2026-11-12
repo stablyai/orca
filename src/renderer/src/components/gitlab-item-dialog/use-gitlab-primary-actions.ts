@@ -1,0 +1,200 @@
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
+import { useCallback } from 'react'
+import { toast } from 'sonner'
+import { getCommentBodySubmitState } from '@/lib/source-control/review/comments/comment-body-submit-state'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
+import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
+import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
+
+export function useGitLabPrimaryActions(
+  item: GitLabWorkItem | null,
+  itemId: string | null,
+  repoSelector: GitLabDialogRepoSelector | null,
+  state: GitLabItemDialogState,
+  handleRefresh: () => void
+) {
+  const {
+    claimDetailsOwner,
+    commentDraft,
+    mountedRef,
+    setActionInFlight,
+    setCommentDraftState,
+    setCommentSubmitting
+  } = state
+  const handleClose = useCallback(async (): Promise<void> => {
+    if (!item || !repoSelector || item.type !== 'mr') {
+      return
+    }
+    setActionInFlight('close')
+    const ownsResult = claimDetailsOwner()
+    try {
+      const res = await gitLabApiFor(repoSelector).closeMR({ ...repoSelector, iid: item.number })
+      if (res.ok) {
+        if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          toast.success(
+            translate('auto.components.GitLabItemDialog.9b11cd233f', 'Closed MR !{{value0}}', {
+              value0: item.number
+            })
+          )
+        }
+      } else {
+        if (mountedRef.current) {
+          toast.error(codeHostErrorText(res))
+        }
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
+    } finally {
+      // Only while this MR is still shown: a switched-to item keeps its own read and busy state.
+      if (ownsResult()) {
+        setActionInFlight(null)
+        // Why: a failed response doesn't prove the host kept the old state; reread on every attempted write.
+        handleRefresh()
+      }
+    }
+  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+
+  const handleReopen = useCallback(async (): Promise<void> => {
+    if (!item || !repoSelector || item.type !== 'mr') {
+      return
+    }
+    setActionInFlight('reopen')
+    const ownsResult = claimDetailsOwner()
+    try {
+      const res = await gitLabApiFor(repoSelector).reopenMR({ ...repoSelector, iid: item.number })
+      if (res.ok) {
+        if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          toast.success(
+            translate('auto.components.GitLabItemDialog.865ea2703e', 'Reopened MR !{{value0}}', {
+              value0: item.number
+            })
+          )
+        }
+      } else {
+        if (mountedRef.current) {
+          toast.error(codeHostErrorText(res))
+        }
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
+    } finally {
+      if (ownsResult()) {
+        setActionInFlight(null)
+        handleRefresh()
+      }
+    }
+  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+
+  const handleMerge = useCallback(async (): Promise<void> => {
+    if (!item || !repoSelector || item.type !== 'mr') {
+      return
+    }
+    setActionInFlight('merge')
+    const ownsResult = claimDetailsOwner()
+    try {
+      const res = await gitLabApiFor(repoSelector).mergeMR({ ...repoSelector, iid: item.number })
+      if (res.ok) {
+        if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          toast.success(
+            translate('auto.components.GitLabItemDialog.e089f62594', 'Merged MR !{{value0}}', {
+              value0: item.number
+            })
+          )
+        }
+      } else {
+        if (mountedRef.current) {
+          toast.error(codeHostErrorText(res))
+        }
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
+    } finally {
+      if (ownsResult()) {
+        setActionInFlight(null)
+        handleRefresh()
+      }
+    }
+  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+
+  const handleSubmitComment = useCallback(async (): Promise<void> => {
+    const bodyState = getCommentBodySubmitState(commentDraft)
+    if (bodyState.status === 'empty' || !item || !repoSelector) {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.GitLabItemDialog.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
+      return
+    }
+    setCommentSubmitting(true)
+    const ownsResult = claimDetailsOwner()
+    try {
+      const res =
+        item.type === 'mr'
+          ? await gitLabApiFor(repoSelector).addMRComment({
+              ...repoSelector,
+              iid: item.number,
+              body: bodyState.body
+            })
+          : await gitLabApiFor(repoSelector).addIssueComment({
+              ...repoSelector,
+              number: item.number,
+              body: bodyState.body
+            })
+      if (res.ok) {
+        if (mountedRef.current) {
+          setCommentDraftState((current) =>
+            current.itemId === itemId ? { itemId, value: '' } : current
+          )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          if (ownsResult()) {
+            handleRefresh()
+          }
+        }
+      } else {
+        if (mountedRef.current) {
+          toast.error(codeHostErrorText(res))
+        }
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
+    } finally {
+      if (ownsResult()) {
+        setCommentSubmitting(false)
+      }
+    }
+  }, [
+    claimDetailsOwner,
+    commentDraft,
+    handleRefresh,
+    item,
+    itemId,
+    mountedRef,
+    repoSelector,
+    setCommentDraftState,
+    setCommentSubmitting
+  ])
+
+  return { handleClose, handleMerge, handleReopen, handleSubmitComment }
+}
+
+export type GitLabPrimaryActions = ReturnType<typeof useGitLabPrimaryActions>

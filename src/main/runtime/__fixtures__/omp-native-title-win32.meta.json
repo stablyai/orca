@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-14T11:25:01.730Z",
+  "platform": "darwin",
+  "command": ["bun", "tests/tools/omp-native-title-capture.mjs", "<read-only-omp-checkout>"],
+  "cols": 100,
+  "rows": 30,
+  "note": "OMP source ne7546987ca526eac8f605fac19ef9805b8f01898 buildTerminalTitleWithState; explicit win32 argument on macOS PTY, synthetic state transitions, no model/account. Not a Windows runtime capture.",
+  "exitCode": 0
+}

@@ -1,20 +1,26 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useAppStore } from '@/store'
-import { getHasAnyWorktreesFromState } from '@/store/selectors'
-import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { useAppStore } from '@/store/index'
+import { getCachedHasAnyWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   mergeWorkspacePortScans,
-  runtimeTargetForExecutionHostId,
+  WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY,
   scanWorkspacePortsForTarget,
   workspacePortScanKeyForTarget
-} from '@/lib/workspace-port-actions'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
+} from '@/lib/workspace-ports/workspace-port-actions'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  installWindowVisibilityInterval,
+  isWindowVisible
+} from '@/lib/window-activity/window-visibility-interval'
 import {
   reconcileTransientPortScanFailures,
   type PortScanDebounceState
-} from '@/lib/workspace-port-scan-debounce'
+} from '@/lib/workspace-ports/workspace-port-scan-debounce'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
 const WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS = 1_000
@@ -24,6 +30,8 @@ type WorkspacePortScannerRefreshOptions = {
 }
 // Why: keep live ports through one dropped SSH/IPC scan while reachable empty scans clear now.
 const WORKSPACE_PORT_SCAN_FAILURE_THRESHOLD = 2
+// Why: advertised-URL events come from this app's own processes, whatever server is the default.
+const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 function makeUnavailableScan(reason: string): WorkspacePortScanResult {
   return {
@@ -37,11 +45,12 @@ function makeUnavailableScan(reason: string): WorkspacePortScanResult {
 export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }): null {
   const settings = useAppStore((s) => s.settings)
   const repos = useAppStore((s) => s.repos)
-  const hasWorktrees = useAppStore(getHasAnyWorktreesFromState)
+  const hasWorktrees = useAppStore((state) =>
+    getCachedHasAnyWorktrees(selectWorktreesByRepo(state))
+  )
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
   const setWorkspacePortScanProjection = useAppStore((s) => s.setWorkspacePortScanProjection)
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
-  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const inFlightRef = useRef<Promise<void> | null>(null)
   const generationRef = useRef(0)
@@ -50,12 +59,10 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
   const scanTargetsRef = useRef<RuntimeClientTarget[]>([])
   const portScanDebounceRef = useRef<PortScanDebounceState>(new Map())
 
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
-  const scanKey = workspacePortScanKeyForTarget(runtimeTarget)
   const scanTargets = useMemo(
     () =>
       buildExecutionHostRegistry({ repos, settings })
-        .map((host) => runtimeTargetForExecutionHostId(host.id))
+        .map((host) => runtimeRpcTargetForAuthorityKey(host.id))
         .filter((target): target is NonNullable<typeof target> => target !== null),
     [repos, settings]
   )
@@ -90,8 +97,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       const targets = options.force
         ? requestedTargets
         : requestedTargets.filter((target) => {
-            // Why: each host keeps its own cadence so a newly added runtime cannot restart
-            // healthy hosts' remote scans.
+            // Keep cadence per host so adding runtimes cannot restart healthy remote scans.
             const key = workspacePortScanKeyForTarget(target)
             const lastStartedAt = lastRefreshStartedAtByKeyRef.current.get(key)
             return (
@@ -115,7 +121,16 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
             return { key, result }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            return { key, result: makeUnavailableScan(message || 'Workspace port scan failed.') }
+            return {
+              key,
+              result: makeUnavailableScan(
+                message ||
+                  translate(
+                    'auto.components.right.sidebar.PortsPanel.740aca88ab',
+                    'Workspace port scan failed.'
+                  )
+              )
+            }
           }
         })
       )
@@ -124,40 +139,36 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
             const activeTargetKeys = new Set(
               allTargets.map((target) => workspacePortScanKeyForTarget(target))
             )
+            const publishedScans = useAppStore.getState().workspacePortScansByKey
             const reconciled = reconcileTransientPortScanFailures(
               results,
-              useAppStore.getState().workspacePortScansByKey,
+              publishedScans,
               portScanDebounceRef.current,
               WORKSPACE_PORT_SCAN_FAILURE_THRESHOLD,
               activeTargetKeys
             )
             const scansByKey = Object.fromEntries(
-              Object.entries(useAppStore.getState().workspacePortScansByKey).filter(([key]) =>
-                activeTargetKeys.has(key)
-              )
+              Object.entries(publishedScans).filter(([key]) => activeTargetKeys.has(key))
             )
-            let sourceChanged = false
+            // Late manual publishes can re-add pruned keys; remove inactive hosts again to prevent permanent unavailable notices.
+            let sourceChanged =
+              Object.keys(scansByKey).length !== Object.keys(publishedScans).length
             for (const { key, result } of reconciled) {
-              sourceChanged ||= scansByKey[key] !== result
+              if (!sourceChanged) {
+                sourceChanged = scansByKey[key] !== result
+              }
               scansByKey[key] = result
-              setWorkspacePortScanForKey(key, result)
             }
-            const activeScan = scansByKey[scanKey]
             const merged = mergeWorkspacePortScans(scansByKey)
             const projectionKey =
               allTargets.length > 1
-                ? 'all-hosts:all'
-                : activeScan
-                  ? scanKey
-                  : workspacePortScanKeyForTarget(allTargets[0])
+                ? WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY
+                : workspacePortScanKeyForTarget(allTargets[0])
             if (sourceChanged || useAppStore.getState().workspacePortScan?.key !== projectionKey) {
-              setWorkspacePortScanProjection(
-                merged
-                  ? {
-                      key: projectionKey,
-                      result: merged
-                    }
-                  : null
+              // Publish once per poll so large host sets cannot notify every subscriber once per host.
+              replaceWorkspacePortScans(
+                sourceChanged ? scansByKey : publishedScans,
+                merged ? { key: projectionKey, result: merged } : null
               )
             }
           }
@@ -173,14 +184,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       inFlightRef.current = promise
       return promise
     },
-    [
-      hasWorktrees,
-      scanKey,
-      setWorkspacePortScan,
-      setWorkspacePortScanProjection,
-      setWorkspacePortScanForKey,
-      setWorkspacePortScanRefreshing
-    ]
+    [hasWorktrees, setWorkspacePortScan, replaceWorkspacePortScans, setWorkspacePortScanRefreshing]
   )
 
   useEffect(() => {
@@ -215,9 +219,8 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         : Object.fromEntries(retainedEntries)
     const retainedProjection = mergeWorkspacePortScans(retainedScans)
     const retainedProjectionKey =
-      targetKeys.size > 1 ? 'all-hosts:all' : Object.keys(retainedScans)[0]
-    // Why: unchanged hosts stay visible while the replacement RPC runs; removed
-    // hosts and the old synthetic aggregate are excluded immediately.
+      targetKeys.size > 1 ? WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY : Object.keys(retainedScans)[0]
+    // Retain unchanged hosts during replacement RPCs; remove departed hosts and synthetic aggregates immediately.
     const nextProjection =
       retainedProjection && retainedProjectionKey
         ? { key: retainedProjectionKey, result: retainedProjection }
@@ -227,20 +230,16 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
     } else {
       replaceWorkspacePortScans(retainedScans, nextProjection)
     }
-    // Why: a scanner resumed after being disabled has no trustworthy cadence; a
-    // host-set change while it stays enabled only probes the new host.
+    // Resuming after disable requires fresh cadence; enabled host-set changes probe only additions.
     const targetsToRefresh = wasDisabled
       ? scanTargetsRef.current
       : scanTargetsRef.current.filter(
           (target) => !retainedScans[workspacePortScanKeyForTarget(target)]
         )
-    // Why: a visible target change should not restart retained hosts; a hidden
-    // addition still needs its targeted scan when the window becomes visible.
+    // Visible changes preserve retained hosts’ cadence; hidden additions get their targeted scan on reveal.
     let shouldRefreshOnlyNewTargets = isWindowVisible() || targetsToRefresh.length > 0
 
-    // Why: workspace port scans can cross runtime IPC or shell out remotely.
-    // Keep the timer stopped while no UI can display the result; visibility
-    // changes run one immediate refresh on return.
+    // Scans may invoke remote IPC/shells; pause without visible UI and refresh immediately on return.
     const stopVisibleInterval = installWindowVisibilityInterval({
       run: () => void refresh(),
       runOnVisible: () => {
@@ -253,6 +252,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         }
         void refresh({ force: true })
       },
+      slowWhileUnfocused: true,
       intervalMs: WORKSPACE_PORT_SCAN_INTERVAL_MS
     })
 
@@ -277,10 +277,8 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
     if (!enabled) {
       return
     }
-    if (runtimeTarget.kind !== 'local') {
-      return
-    }
 
+    let burstRefresh: Promise<void> | null = null
     let eventSequence = 0
     let disposed = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -297,19 +295,29 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       const sequence = eventSequence
       clearRetryTimer()
       if (!isWindowVisible()) {
+        burstRefresh = null
         return
       }
-      void refresh({ force: true, targets: [runtimeTarget] }).finally(() => {
-        if (disposed || sequence !== eventSequence || !isWindowVisible()) {
+      // Keep the leading scan through the quiet window so sequential events share it too.
+      if (burstRefresh == null) {
+        burstRefresh = refresh({ force: true, targets: [LOCAL_TARGET] })
+      }
+      void burstRefresh.finally(() => {
+        if (disposed || sequence !== eventSequence) {
           return
         }
-        // Why: some dev servers print their URL just before the listener is
-        // visible to lsof/netstat. One quiet settle scan catches that startup race.
+        if (!isWindowVisible()) {
+          burstRefresh = null
+          return
+        }
+        // URL output can precede lsof/netstat visibility; one settled rescan catches that startup race.
         retryTimer = setTimeout(() => {
+          retryTimer = null
+          burstRefresh = null
           if (disposed || sequence !== eventSequence || !isWindowVisible()) {
             return
           }
-          void refresh({ force: true, targets: [runtimeTarget] })
+          void refresh({ force: true, targets: [LOCAL_TARGET] })
         }, WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS)
       })
     })
@@ -319,7 +327,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       clearRetryTimer()
       unsubscribe()
     }
-  }, [enabled, refresh, runtimeTarget])
+  }, [enabled, refresh])
 
   return null
 }

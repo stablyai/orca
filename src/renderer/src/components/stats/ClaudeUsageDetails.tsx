@@ -5,9 +5,9 @@ import type {
   ClaudeUsageSummary
 } from '../../../../shared/claude-usage-types'
 import { ClaudeUsageDailyChart } from './ClaudeUsageDailyChart'
-import { ClaudeUsageRecentSessionsTable } from './ClaudeUsageRecentSessionsTable'
 import { UsageBreakdownSection } from './UsageBreakdownSection'
-import { translate } from '@/i18n/i18n'
+import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ClaudeUsageDetailsProps = {
   daily: ClaudeUsageDailyPoint[]
@@ -24,14 +24,15 @@ export function ClaudeUsageDetails({
   recentSessions,
   summary
 }: ClaudeUsageDetailsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <ClaudeUsageDailyChart daily={daily} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <UsageBreakdownSection
-          title={translate('auto.components.stats.ClaudeUsagePane.0f394c24e3', 'By model')}
-          topLabel={translate('auto.components.stats.ClaudeUsagePane.c3fdbc5474', 'Top model:')}
+          title={t('auto.components.stats.ClaudeUsagePane.0f394c24e3', 'By model')}
+          topLabel={t('auto.components.stats.ClaudeUsagePane.c3fdbc5474', 'Top model:')}
           topValue={summary?.topModel}
           rows={modelBreakdown.map((row) => ({
             key: row.key,
@@ -43,8 +44,8 @@ export function ClaudeUsageDetails({
           eventsOrTurns="turns"
         />
         <UsageBreakdownSection
-          title={translate('auto.components.stats.ClaudeUsagePane.7dc9e5613b', 'By project')}
-          topLabel={translate('auto.components.stats.ClaudeUsagePane.f97435845c', 'Top project:')}
+          title={t('auto.components.stats.ClaudeUsagePane.7dc9e5613b', 'By project')}
+          topLabel={t('auto.components.stats.ClaudeUsagePane.f97435845c', 'Top project:')}
           topValue={summary?.topProject}
           rows={projectBreakdown.map((row) => ({
             key: row.key,
@@ -57,7 +58,30 @@ export function ClaudeUsageDetails({
         />
       </div>
 
-      <ClaudeUsageRecentSessionsTable recentSessions={recentSessions} summary={summary ?? null} />
+      <UsageRecentSessionsTable
+        title={t('auto.components.stats.ClaudeUsagePane.7e76c84153', 'Recent sessions')}
+        description={
+          <>
+            {t('auto.components.stats.ClaudeUsagePane.abfc4a4943', 'Cache reuse rate:')}{' '}
+            {summary?.cacheReuseRate !== null && summary?.cacheReuseRate !== undefined
+              ? `${Math.round(summary.cacheReuseRate * 100)}%`
+              : t('auto.components.stats.ClaudeUsagePane.7765a4c3e1', 'n/a')}
+          </>
+        }
+        headings={[
+          t('auto.components.stats.ClaudeUsagePane.01476891c7', 'Last active'),
+          t('auto.components.stats.ClaudeUsagePane.c17bed0416', 'Project'),
+          t('auto.components.stats.ClaudeUsagePane.1afc25eb06', 'Model'),
+          t('auto.components.stats.ClaudeUsagePane.0f03975d59', 'Turns'),
+          t('auto.components.stats.ClaudeUsagePane.faf3444859', 'Input'),
+          t('auto.components.stats.ClaudeUsagePane.a8b7487ff7', 'Output'),
+          t('auto.components.stats.ClaudeUsagePane.21ea00bfa8', 'Cache')
+        ]}
+        unknownModel={t('auto.components.stats.ClaudeUsagePane.cfe2282ffa', 'Unknown')}
+        rows={recentSessions}
+        getActivity={(row) => row.turns}
+        getTrailingTokens={(row) => row.cacheReadTokens + row.cacheWriteTokens}
+      />
     </>
   )
 }

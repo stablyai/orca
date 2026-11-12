@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T04:35:06.866Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy TUI 1.2.0; /model picker opened then dismissed with esc, settled before stop",
+  "exitCode": 0
+}

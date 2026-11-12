@@ -1,0 +1,78 @@
+import { writeNativeChatFontSize } from '@/components/native-chat/appearance/native-chat-font-size-write'
+import { applyUIZoom } from '@/app-shell/chrome/ui-zoom'
+import {
+  computeEditorFontSize,
+  nextEditorFontZoomLevel
+} from '../../../../shared/editor/editor-font-zoom'
+import { resolveEditorBaseFontSize } from '../../../../shared/editor/editor-typography'
+import { zoomLevelToPercent, stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
+import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
+
+import { useAppStore } from '../../store/index'
+import { focusedBrowserPageId, resolveZoomTarget } from '../resolve-zoom-target'
+import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/browser-page-zoom'
+import {
+  requestFrontDialogViewerZoom,
+  requestViewerZoom
+} from '@/components/editor/viewer-zoom-request'
+
+export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
+  unsubs.push(
+    window.api.ui.onTerminalZoom((direction) => {
+      const store = useAppStore.getState()
+      const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
+        store
+      const target = resolveZoomTarget({
+        activeView,
+        activeTabType,
+        activeElement: document.activeElement
+      })
+      if (target === 'chat') {
+        void writeNativeChatFontSize(
+          direction === 'in' ? 'increase' : direction === 'out' ? 'decrease' : 'reset'
+        )
+        return
+      }
+      if (target === 'terminal') {
+        return
+      }
+      if (target === 'browser') {
+        const browserPageId = focusedBrowserPageId(document.activeElement)
+        if (browserPageId) {
+          dispatchBrowserPageZoom({ browserPageId, direction })
+        }
+        return
+      }
+      if (target === 'editor') {
+        // Why: a PDF or image owns its zoom; editor font zoom would change nothing visible.
+        if (requestViewerZoom(direction)) {
+          return
+        }
+        const next = nextEditorFontZoomLevel(editorFontZoomLevel, direction)
+        setEditorFontZoomLevel(next)
+        void window.api.ui.set({ editorFontZoomLevel: next })
+
+        // Why: mirror the editor's base font + clamping so the overlay percent matches the rendered size.
+        const baseFontSize = resolveEditorBaseFontSize(settings)
+        const actual = computeEditorFontSize(baseFontSize, next)
+        const percent = Math.round((actual / baseFontSize) * 100)
+        dispatchZoomLevelChanged('editor', percent)
+        return
+      }
+      // Why: viewer dialogs are portaled outside every pane, so only the editor branch above reached them.
+      if (requestFrontDialogViewerZoom(direction)) {
+        return
+      }
+
+      const current = window.api.ui.getZoomLevel()
+      const next = stepUIZoomLevel(current, direction)
+
+      applyUIZoom(next)
+      void window.api.ui.set({ uiZoomLevel: next })
+
+      dispatchZoomLevelChanged('ui', zoomLevelToPercent(next))
+    })
+  )
+
+  // Why: re-parse main-process agent status here so the renderer applies the same normalization regardless of hook vs OSC source.
+}

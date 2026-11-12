@@ -1,126 +1,138 @@
 import React from 'react'
 import {
   AlertTriangle,
-  Check,
-  ChevronDown,
-  Clock3,
-  EyeOff,
+  CircleDot,
   FileWarning,
-  GitBranch,
   GitPullRequest,
-  Search,
-  SquareTerminal,
-  Trash2,
-  type LucideIcon
+  Loader2,
+  Lock,
+  Monitor,
+  SquareTerminal
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { Checkbox } from '@/components/ui/checkbox'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   canQueueWorkspaceCleanupCandidate,
   type WorkspaceCleanupCandidate
-} from '../../../../shared/workspace-cleanup'
-import {
-  getWorkspaceCleanupGitLabel,
-  type WorkspaceCleanupReviewInfo
-} from './workspace-cleanup-presentation'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
 import { CandidateRowDetails } from './workspace-cleanup-candidate-row-details'
 import {
   formatBranchSafetyDetails,
   formatContextDetails,
-  formatGitStatus,
-  getCandidateStatus,
+  getCandidateFactStatuses,
   getContextCount,
   getDirtyGitLabel,
-  getReviewPillTone,
-  getWorkspaceCleanupBlockerLabels,
-  shouldShowGitMetadataChip,
-  type StatusPillTone
+  getWorkspaceCleanupBlockerLabels
 } from './workspace-cleanup-candidate-row-data'
+import {
+  getReviewStateIcon,
+  getReviewStateTone
+} from '@/components/github/review-state-presentation'
 import { StatusPill } from './workspace-cleanup-status-pill'
+import {
+  WorkspaceCleanupMetadataChip,
+  WorkspaceCleanupMetadataText
+} from './workspace-cleanup-metadata-chip'
+import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { resolveRepoHeaderColor } from '@/components/sidebar/worktree-list/rows/project-header-color'
+import type { Repo } from '../../../../shared/repo-types'
+import { CandidateRowTrailing } from './workspace-cleanup-candidate-row-trailing'
+import {
+  getWorkspaceCleanupCandidateAccessibleName,
+  getWorkspaceCleanupCandidateHostLabel
+} from './workspace-cleanup-host-label'
+import { getReviewTooltip } from './workspace-cleanup-row-labels'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
+
+export type WorkspaceCleanupDeletionPhase = 'deleting' | 'queued'
+
+// Beyond this many flags, collapse the tail into a "+N" that opens the details listing them all.
+const FLAG_LIMIT = 3
 
 type CandidateRowProps = {
   candidate: WorkspaceCleanupCandidate
+  /** Host-qualified row key; the same `worktreeId` can appear once per host. */
+  identity: string
+  deletionPhase?: WorkspaceCleanupDeletionPhase
   expanded: boolean
-  failure?: string
+  failure?: WorkspaceCleanupFailure
+  /** A focused git re-scan is in flight, so "Not checked" is provisional. */
+  gitEvidencePending?: boolean
   last: boolean
   lastActivityLabel: string
   removing?: boolean
+  /** Joined from the workspace-space scan; null when that scan has not run. */
+  sizeLabel?: string | null
+  /** User-configured status label; null when this broad-scan row is not in renderer state. */
+  workspaceStatusLabel?: string | null
   reviewInfo: WorkspaceCleanupReviewInfo
+  /** Store record for the row's project; null when the repo is not loaded in this renderer. */
+  repo: Pick<Repo, 'badgeColor' | 'repoIcon'> | null
+  /** Host repeats on every row when the fleet is single-host, so it only shows once hosts differ. */
+  showHostLabel: boolean
+  /** False until any row has a measured size; the scan card is the action to fill it. */
+  showSizeColumn: boolean
   selected: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
+  onRestore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
-  onToggleExpanded: (worktreeId: string) => void
-  onToggleSelected: (worktreeId: string) => void
+  onForgetLocally?: (candidate: WorkspaceCleanupCandidate) => void
+  onDeleteAnyway?: (candidate: WorkspaceCleanupCandidate) => void
+  onToggleExpanded: (identity: string) => void
+  onToggleSelected: (identity: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
 }
 
-function MetadataIconChip({
-  icon: Icon,
-  label,
-  value,
-  tone = 'neutral'
-}: {
-  icon: LucideIcon
-  label: string
-  value?: string
-  tone?: StatusPillTone
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn(
-            'inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5 text-[11px] font-medium',
-            'border-border bg-background text-muted-foreground',
-            tone === 'ready' &&
-              'border-[color:color-mix(in_srgb,var(--git-decoration-added)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--git-decoration-added)_10%,transparent)] text-[var(--git-decoration-added)]',
-            tone === 'review' && 'bg-muted text-foreground',
-            tone === 'destructive' && 'border-destructive/30 text-destructive'
-          )}
-          aria-label={label}
-        >
-          <Icon className="size-3" aria-hidden="true" />
-          {value ? <span>{value}</span> : null}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-// Why: the cleanup list re-renders on every checkbox/expand/search keystroke;
-// memo keeps each unchanged row from re-rendering. Effective only while the
-// parent passes stable (useCallback) handlers — see WorkspaceCleanupDialog.
-// Scan stream-in still re-renders rows (candidates change, so the reviewInfo
-// prop identity changes); virtualization, not memo, bounds that cost.
+// Memoize unchanged rows with stable parent handlers; streaming candidate changes still render, so virtualization bounds that cost.
 export const CandidateRow = React.memo(function CandidateRow({
   candidate,
+  identity,
+  deletionPhase,
   expanded,
   failure,
+  gitEvidencePending = false,
   last,
   lastActivityLabel,
   removing = false,
+  sizeLabel = null,
+  workspaceStatusLabel = null,
   reviewInfo,
+  repo,
+  showHostLabel,
+  showSizeColumn,
   selected,
   onIgnore,
+  onRestore,
   onRemove,
+  onForgetLocally,
+  onDeleteAnyway,
   onToggleExpanded,
   onToggleSelected,
   onView
 }: CandidateRowProps): React.JSX.Element {
-  const selectable = canQueueWorkspaceCleanupCandidate(candidate) && !removing
-  const ignored = candidate.blockers.includes('dismissed')
+  const t = useTranslate()
+  useUiLanguageRevision()
+  const deleting = deletionPhase !== undefined
+  // Queued/deleting state must disable row actions even when removing was omitted.
+  const queueable = canQueueWorkspaceCleanupCandidate(candidate)
+  const selectable = queueable && !removing && !deleting
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
-  const contextDetails = formatContextDetails(candidate)
-  const branchSafetyDetails = formatBranchSafetyDetails(candidate)
-  const status = getCandidateStatus(candidate)
-  const dirtyLabel = getDirtyGitLabel(candidate)
-  const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
+  const contextDetails = formatContextDetails(candidate, t)
+  const branchSafetyDetails = formatBranchSafetyDetails(candidate, t)
+  const facts = getCandidateFactStatuses(candidate, t)
+  const gitStatuses = facts.filter((fact) => fact.git)
+  const flags = facts.filter((fact) => !fact.git).map((fact) => fact.label)
+  // Clean is the default, so only non-clean git states get a chip. Main/folder/disconnected
+  // rows are never queued and git is not read for them; "unknown" would be a false alarm.
+  const showGitChip = queueable && gitStatuses.length === 0
+  const dirtyLabel = getDirtyGitLabel(candidate, t)
   const contextCount = getContextCount(candidate)
+  const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate, t)
+  const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate, t)
   const hasExpandableDetails =
     blockers.length > 0 ||
     candidate.path.length > 0 ||
@@ -128,220 +140,222 @@ export const CandidateRow = React.memo(function CandidateRow({
     contextDetails !== null ||
     branchSafetyDetails.length > 0
 
+  const visibleFlags = flags.length > FLAG_LIMIT ? flags.slice(0, FLAG_LIMIT - 1) : flags
+  const hiddenFlagCount = flags.length - visibleFlags.length
+
   return (
     <div
+      // Pointer shortcut for the checkbox; controls and the details panel keep their own clicks.
+      onClick={
+        selectable
+          ? (event) => {
+              if (
+                event.target instanceof Element &&
+                !event.target.closest('button, a, input, [data-workspace-cleanup-row-details]') &&
+                window.getSelection()?.isCollapsed !== false
+              ) {
+                onToggleSelected(identity)
+              }
+            }
+          : undefined
+      }
       className={cn(
-        'group w-full border-b border-border/60 px-3 py-2.5 text-left text-foreground transition-colors hover:bg-accent/40',
+        'group/row w-full border-b border-border/60 px-4 py-2.5 text-left text-foreground transition-colors hover:bg-accent/40',
+        selectable && 'cursor-pointer select-none',
         selected && 'bg-accent/30',
+        deleting && 'opacity-70',
         last && 'border-b-0'
       )}
     >
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2.5 gap-y-1">
-        {selectable ? (
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={selected}
-            aria-label={translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bbb1ab6a6f',
-              'Select {{value0}}',
-              { value0: candidate.displayName }
-            )}
-            onClick={() => onToggleSelected(candidate.worktreeId)}
-            className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            {selected ? <Check className="size-3" strokeWidth={3} /> : null}
-          </button>
-        ) : (
-          <div className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        )}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3">
+        <div className="flex h-6 items-center">
+          {selectable ? (
+            <Checkbox
+              checked={selected}
+              aria-label={t(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bbb1ab6a6f',
+                'Select {{value0}}',
+                { value0: candidateAccessibleName }
+              )}
+              onCheckedChange={() => onToggleSelected(identity)}
+            />
+          ) : deleting ? (
+            <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : !queueable ? (
+            <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
+              <Lock className="size-3.5 text-muted-foreground/70" />
+            </span>
+          ) : (
+            <div className="size-4 shrink-0" aria-hidden="true" />
+          )}
+        </div>
 
         <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
-            <StatusPill tone={status.tone}>{status.label}</StatusPill>
-            <MetadataIconChip
-              icon={Clock3}
-              label={`${translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
-                'Last active'
-              )} ${lastActivityLabel}`}
-              value={formatCompactActivityLabel(lastActivityLabel)}
-            />
-            {dirtyLabel && showGitMetadataChip ? (
-              <MetadataIconChip icon={FileWarning} label={dirtyLabel} tone="destructive" />
-            ) : showGitMetadataChip ? (
-              <MetadataIconChip
-                icon={GitBranch}
-                label={formatGitStatus(candidate)}
-                tone={getWorkspaceCleanupGitLabel(candidate) === 'Clean' ? 'ready' : 'review'}
+          <div className="flex h-6 min-w-0 items-center gap-2">
+            <span data-workspace-cleanup-row-name className="min-w-0 truncate text-sm font-medium">
+              {candidate.displayName}
+            </span>
+            <span
+              className="inline-flex min-w-0 max-w-48 shrink-[4] items-center gap-1 text-xs text-muted-foreground"
+              aria-label={t(
+                'components.workspace.cleanup.browse.projectNamed',
+                'Project: {{value0}}',
+                { value0: candidate.repoName }
+              )}
+            >
+              <RepoIconGlyph
+                repoIcon={repo?.repoIcon}
+                color={resolveRepoHeaderColor(repo?.badgeColor)}
+                className="size-3 shrink-0"
+                iconClassName="size-3"
+              />
+              <span className="truncate">{candidate.repoName}</span>
+            </span>
+            {showHostLabel ? (
+              <WorkspaceCleanupMetadataText
+                icon={Monitor}
+                label={t('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
+                  value0: hostLabel
+                })}
+                value={hostLabel}
+                className="min-w-0 max-w-40 shrink-[4]"
+              />
+            ) : null}
+          </div>
+
+          <div className="mt-0.5 flex min-h-5 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            {deletionPhase ? (
+              <StatusPill tone="destructive">
+                {deletionPhase === 'queued'
+                  ? t(
+                      'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.e1135728e3',
+                      'Queued for deletion'
+                    )
+                  : t(
+                      'auto.components.workspace.cleanup.workspace.cleanup.candidate.row.b5d2b33e47',
+                      'Deleting…'
+                    )}
+              </StatusPill>
+            ) : (
+              gitStatuses.map((status) => (
+                <StatusPill key={status.label} tone={status.tone}>
+                  {status.label}
+                </StatusPill>
+              ))
+            )}
+            {gitEvidencePending ? (
+              <span
+                role="status"
+                className="inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground"
+              >
+                <Loader2
+                  className="size-3 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+                {t('components.workspace.cleanup.browse.checkingGitRow', 'Checking git status')}
+              </span>
+            ) : showGitChip && dirtyLabel ? (
+              <WorkspaceCleanupMetadataChip
+                icon={FileWarning}
+                label={dirtyLabel}
+                value={dirtyLabel}
+                tone="destructive"
+              />
+            ) : null}
+            {!deletionPhase && visibleFlags.length > 0 ? (
+              <span className="inline-flex h-5 min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                <span className="truncate">{visibleFlags.join(' · ')}</span>
+                {hiddenFlagCount > 0 ? (
+                  <Button
+                    variant="link"
+                    size="inline"
+                    aria-expanded={expanded}
+                    aria-label={t(
+                      'components.workspace.cleanup.browse.moreFlags',
+                      'Show {{value0}} more flags',
+                      { value0: hiddenFlagCount }
+                    )}
+                    onClick={() => onToggleExpanded(identity)}
+                  >
+                    <span className="text-xs">+{hiddenFlagCount}</span>
+                  </Button>
+                ) : null}
+              </span>
+            ) : null}
+            {workspaceStatusLabel ? (
+              <WorkspaceCleanupMetadataText
+                icon={CircleDot}
+                label={t(
+                  'components.workspace.cleanup.browse.workspaceStatus',
+                  'Workspace status: {{value0}}',
+                  { value0: workspaceStatusLabel }
+                )}
+                value={workspaceStatusLabel}
               />
             ) : null}
             {contextDetails ? (
-              <MetadataIconChip
+              <WorkspaceCleanupMetadataText
                 icon={SquareTerminal}
                 label={contextDetails}
                 value={String(contextCount)}
               />
             ) : null}
             {reviewInfo.label ? (
-              <MetadataIconChip
-                icon={GitPullRequest}
+              <WorkspaceCleanupMetadataChip
+                icon={getReviewStateIcon(reviewInfo.state) ?? GitPullRequest}
                 label={getReviewTooltip(reviewInfo)}
                 value={reviewInfo.label}
-                tone={getReviewPillTone(reviewInfo)}
+                toneClassName={getReviewStateTone(reviewInfo.state)}
               />
             ) : null}
           </div>
 
           {failure ? (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
+            <div className="mt-1 flex min-h-5 items-center gap-1.5 text-xs text-destructive">
               <AlertTriangle className="size-3.5" />
-              {failure}
+              <span>{failure.message}</span>
+              {failure.canDeleteAnyway && onDeleteAnyway ? (
+                <Button
+                  variant="link"
+                  size="xs"
+                  className="h-auto px-1 text-destructive"
+                  onClick={() => onDeleteAnyway(candidate)}
+                >
+                  {t('components.workspace.cleanup.browse.deleteAnyway', 'Delete anyway')}
+                </Button>
+              ) : null}
             </div>
           ) : null}
 
           {hasExpandableDetails ? (
             <CandidateRowDetails
-              blockers={blockers}
+              flags={flags}
               branchSafetyDetails={branchSafetyDetails}
               candidate={candidate}
               contextDetails={contextDetails}
               expanded={expanded}
+              gitChecked={queueable}
             />
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5">
-          {hasExpandableDetails ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={
-                    expanded
-                      ? translate(
-                          'auto.components.workspace.cleanup.candidateRow.collapseDetails',
-                          'Collapse details'
-                        )
-                      : translate(
-                          'auto.components.workspace.cleanup.candidateRow.expandDetails',
-                          'Expand details'
-                        )
-                  }
-                  aria-expanded={expanded}
-                  onClick={() => onToggleExpanded(candidate.worktreeId)}
-                >
-                  <ChevronDown
-                    className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {expanded
-                  ? translate(
-                      'auto.components.workspace.cleanup.candidateRow.collapseDetails',
-                      'Collapse details'
-                    )
-                  : translate(
-                      'auto.components.workspace.cleanup.candidateRow.expandDetails',
-                      'Expand details'
-                    )}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1bffc07ba7',
-                  'View {{value0}}',
-                  { value0: candidate.displayName }
-                )}
-                onClick={() => onView(candidate)}
-              >
-                <Search className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.ee81adfcef',
-                'View'
-              )}
-            </TooltipContent>
-          </Tooltip>
-          {!ignored ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a9957007eb',
-                    'Ignore {{value0}}',
-                    { value0: candidate.displayName }
-                  )}
-                  onClick={() => onIgnore(candidate)}
-                >
-                  <EyeOff className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4d0b72481c',
-                  'Ignore'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {selectable ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.3828408538',
-                    'Remove {{value0}}',
-                    { value0: candidate.displayName }
-                  )}
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => onRemove(candidate)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9cc26c019d',
-                  'Remove'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </div>
+        <CandidateRowTrailing
+          candidate={candidate}
+          identity={identity}
+          expanded={expanded}
+          hasExpandableDetails={hasExpandableDetails}
+          selectable={selectable}
+          lastActivityLabel={lastActivityLabel}
+          sizeLabel={sizeLabel}
+          showSizeColumn={showSizeColumn}
+          onIgnore={onIgnore}
+          onRestore={onRestore}
+          onRemove={onRemove}
+          onForgetLocally={onForgetLocally}
+          onToggleExpanded={onToggleExpanded}
+          onView={onView}
+        />
       </div>
     </div>
   )
 })
-
-function formatCompactActivityLabel(label: string): string {
-  if (label === 'Just now') {
-    return 'now'
-  }
-  return label.replace(/ ago$/, '')
-}
-
-function getReviewTooltip(reviewInfo: WorkspaceCleanupReviewInfo): string {
-  const parts = [reviewInfo.label]
-  if (reviewInfo.state) {
-    parts.push(reviewInfo.state)
-  }
-  if (reviewInfo.title) {
-    parts.push(reviewInfo.title)
-  }
-  return parts.filter(Boolean).join(' · ')
-}

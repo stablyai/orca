@@ -1,0 +1,359 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { OrcaRuntimeService } from '../../../../orca-runtime'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import { ORCHESTRATION_METHODS } from '../orchestration'
+import { isStreamingMethod, eraseRpcMethods } from '../../../core'
+import { registerBoundPty } from '../../../../orca-runtime-tests/bind-first-pane.test-fixture'
+
+// Host contact loss never proves worker exit; relay only confirmed stops as settled.
+
+const HOME_FINGERPRINT = 'home-peer-fingerprint'
+const DISPATCH_ID = 'ctx_federation_verdict'
+const HANDLE = 'term_remote_worker'
+const PANE_KEY = 'tab_remote:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const INCARNATION = 'runtime:pty:7'
+
+const REAL_PTY_ID = 'pty-federation-liveness'
+const REAL_WORKTREE_ID = 'repo-federation::/tmp/federation-liveness'
+
+function realRuntimeStore() {
+  let session = getDefaultWorkspaceSession()
+  return {
+    getWorkspaceSession: vi.fn(() => session),
+    setWorkspaceSession: vi.fn((next: typeof session) => {
+      session = next
+    }),
+    getWorkspaceSessionHostIds: vi.fn(() => ['local']),
+    getRepos: vi.fn(() => [
+      {
+        id: 'repo-federation',
+        path: '/tmp/federation-liveness',
+        displayName: 'federation-liveness',
+        badgeColor: '#000000',
+        addedAt: 0
+      }
+    ]),
+    getAllWorktreeMeta: vi.fn(() => ({})),
+    getWorktreeMeta: vi.fn(() => undefined),
+    setWorktreeMeta: vi.fn(),
+    removeWorktreeMeta: vi.fn(),
+    getSettings: vi.fn(() => ({ workspaceDir: '/tmp/workspaces' })),
+    getProjects: vi.fn(() => [])
+  }
+}
+
+describe('federation host liveness verdicts', () => {
+  let db: OrchestrationDb
+  let runtime: OrcaRuntimeService
+
+  beforeEach(() => {
+    db = new OrchestrationDb(':memory:')
+    runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(PANE_KEY)
+    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue(INCARNATION)
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: HANDLE,
+      worktreeId: 'repo::remote-worktree',
+      connected: false,
+      status: 'exited'
+    } as never)
+    db.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: DISPATCH_ID,
+      taskId: 'task_remote',
+      homePeerFingerprint: HOME_FINGERPRINT,
+      protocolVersion: ORCHESTRATION_CONTRACT_VERSION,
+      runtimeEpoch: runtime.getRuntimeId(),
+      mutationReceipt: {
+        callerFingerprint: HOME_FINGERPRINT,
+        requestId: 'rpc_attach',
+        method: 'orchestration.federationStart',
+        payloadHash: 'hash'
+      }
+    })
+    db.prepareRemoteAttachmentAuthority({
+      dispatchId: DISPATCH_ID,
+      paneKey: PANE_KEY,
+      processIncarnation: INCARNATION,
+      worktreeId: 'repo::remote-worktree',
+      terminalHandle: HANDLE,
+      setupState: 'not_applicable',
+      effects: [{ kind: 'terminal', action: 'created', id: HANDLE }],
+      terminalOwnership: 'created'
+    })
+    db.markRemoteAttachmentReady(DISPATCH_ID)
+  })
+
+  afterEach(() => db.close())
+
+  async function call(name: string, params: Record<string, unknown>) {
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+      (candidate) => candidate.name === name
+    )
+    if (!method || isStreamingMethod(method)) {
+      throw new Error(`Method not found: ${name}`)
+    }
+    return method.handler(method.params!.parse(params), {
+      runtime,
+      authenticatedCallerFingerprint: HOME_FINGERPRINT
+    } as never)
+  }
+
+  async function createRealHost(connectionId: string | null = null) {
+    const hostDb = new OrchestrationDb(':memory:')
+    const hostRuntime = new OrcaRuntimeService(realRuntimeStore() as never)
+    hostRuntime.setOrchestrationDb(hostDb)
+    hostRuntime.attachWindow(1)
+    hostRuntime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    registerBoundPty(hostRuntime, REAL_PTY_ID, REAL_WORKTREE_ID, connectionId, {
+      tabId: 'tab_federation_liveness',
+      leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      incarnationId: 'incarnation-real'
+    })
+    const terminal = (await hostRuntime.listTerminals(`id:${REAL_WORKTREE_ID}`)).terminals[0]
+    if (!terminal) {
+      throw new Error('Expected the real runtime PTY to be listed')
+    }
+    const paneKey = hostRuntime.getTerminalPaneKey(terminal.handle)
+    if (!paneKey) {
+      throw new Error('Expected the real runtime PTY to resolve a stable pane key')
+    }
+    hostDb.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: DISPATCH_ID,
+      taskId: 'task_remote',
+      homePeerFingerprint: HOME_FINGERPRINT,
+      protocolVersion: ORCHESTRATION_CONTRACT_VERSION,
+      runtimeEpoch: hostRuntime.getRuntimeId(),
+      mutationReceipt: {
+        callerFingerprint: HOME_FINGERPRINT,
+        requestId: 'rpc_real_attach',
+        method: 'orchestration.federationStart',
+        payloadHash: 'real-hash'
+      }
+    })
+    hostDb.prepareRemoteAttachmentAuthority({
+      dispatchId: DISPATCH_ID,
+      paneKey,
+      processIncarnation: hostRuntime.getTerminalProcessIncarnation(terminal.handle)!,
+      worktreeId: REAL_WORKTREE_ID,
+      terminalHandle: terminal.handle,
+      setupState: 'not_applicable',
+      effects: [{ kind: 'terminal', action: 'created', id: terminal.handle }],
+      terminalOwnership: 'created'
+    })
+    hostDb.markRemoteAttachmentReady(DISPATCH_ID)
+    const callHost = async (name: string, params: Record<string, unknown>) => {
+      const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+        (candidate) => candidate.name === name
+      )
+      if (!method || isStreamingMethod(method)) {
+        throw new Error(`Method not found: ${name}`)
+      }
+      return method.handler(method.params!.parse(params), {
+        runtime: hostRuntime,
+        authenticatedCallerFingerprint: HOME_FINGERPRINT
+      } as never)
+    }
+    return { hostDb, hostRuntime, terminal, callHost }
+  }
+
+  it('publishes positive owning-host inventory as live without a test verdict stub', async () => {
+    const host = await createRealHost()
+    try {
+      host.hostRuntime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        hasPty: () => true,
+        listProcesses: async () => [
+          {
+            id: REAL_PTY_ID,
+            worktreeId: REAL_WORKTREE_ID,
+            incarnationId: 'incarnation-real'
+          }
+        ],
+        getForegroundProcess: async () => null
+      } as never)
+      await host.hostRuntime.listTerminals(`id:${REAL_WORKTREE_ID}`)
+      expect(host.hostRuntime.getPtyLivenessVerdict(REAL_PTY_ID)).toEqual({
+        status: 'live',
+        ptyIds: [REAL_PTY_ID]
+      })
+      await expect(
+        host.callHost('orchestration.federationShow', { dispatchId: DISPATCH_ID })
+      ).resolves.toMatchObject({ observation: { status: 'live', exactWorker: true } })
+      await expect(
+        host.callHost('orchestration.federationFleetSnapshot', { dispatchIds: [DISPATCH_ID] })
+      ).resolves.toMatchObject({
+        items: [{ dispatchId: DISPATCH_ID, observation: { status: 'live' } }]
+      })
+    } finally {
+      host.hostDb.close()
+    }
+  })
+
+  it('keeps real SSH contact loss unverifiable through federation show', async () => {
+    const host = await createRealHost('ssh-real-host')
+    try {
+      host.hostRuntime.onPtyExit(REAL_PTY_ID, -1, 'incarnation-real')
+
+      await expect(
+        host.callHost('orchestration.federationShow', { dispatchId: DISPATCH_ID })
+      ).resolves.toMatchObject({
+        observation: { status: 'unverifiable', exactWorker: true }
+      })
+    } finally {
+      host.hostDb.close()
+    }
+  })
+
+  // New local PTYs lack register verdicts until inventory; fleet must use host-owned evidence meanwhile.
+  it('reads a freshly spawned local pane from its own connected flag before any verdict', async () => {
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: HANDLE,
+      worktreeId: 'repo::remote-worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
+
+    await expect(
+      call('orchestration.federationFleetSnapshot', { dispatchIds: [DISPATCH_ID] })
+    ).resolves.toMatchObject({
+      items: [{ dispatchId: DISPATCH_ID, observation: { status: 'live', exactWorker: true } }]
+    })
+  })
+
+  it('still reports its own workers when one requested Dispatch belongs to an earlier pairing', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: observation reads only these terminal fields.
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: HANDLE,
+      worktreeId: 'repo::remote-worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: observation reads only the host scope.
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
+
+    const earlierPane = 'tab_earlier:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_earlier_worker' ? earlierPane : PANE_KEY
+    )
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
+      handle === 'term_earlier_worker' ? 'runtime:pty:earlier' : INCARNATION
+    )
+    // Started for this server's earlier pairing with the home, so it is held under another fingerprint.
+    db.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: 'ctx_from_an_earlier_pairing',
+      taskId: 'task_earlier',
+      homePeerFingerprint: 'earlier-pairing-fingerprint',
+      protocolVersion: ORCHESTRATION_CONTRACT_VERSION,
+      runtimeEpoch: runtime.getRuntimeId(),
+      mutationReceipt: {
+        callerFingerprint: 'earlier-pairing-fingerprint',
+        requestId: 'rpc_attach_earlier',
+        method: 'orchestration.federationStart',
+        payloadHash: 'hash'
+      }
+    })
+    db.prepareRemoteAttachmentAuthority({
+      dispatchId: 'ctx_from_an_earlier_pairing',
+      paneKey: earlierPane,
+      processIncarnation: 'runtime:pty:earlier',
+      worktreeId: 'repo::remote-worktree',
+      terminalHandle: 'term_earlier_worker',
+      setupState: 'not_applicable',
+      effects: [],
+      terminalOwnership: 'created'
+    })
+    db.markRemoteAttachmentReady('ctx_from_an_earlier_pairing')
+
+    await expect(
+      call('orchestration.federationFleetSnapshot', {
+        dispatchIds: ['ctx_from_an_earlier_pairing', DISPATCH_ID]
+      })
+    ).resolves.toMatchObject({
+      items: [
+        {
+          dispatchId: 'ctx_from_an_earlier_pairing',
+          // Nothing of another fingerprint's Dispatch is read or returned.
+          observation: { status: 'unverifiable', exactWorker: false }
+        },
+        { dispatchId: DISPATCH_ID, observation: { status: 'live', exactWorker: true } }
+      ]
+    })
+    await expect(
+      call('orchestration.federationFleetSnapshot', {
+        dispatchIds: ['ctx_from_an_earlier_pairing']
+      })
+    ).resolves.toEqual({
+      runtimeEpoch: runtime.getRuntimeId(),
+      items: [
+        {
+          dispatchId: 'ctx_from_an_earlier_pairing',
+          observation: { status: 'unverifiable', exactWorker: false }
+        }
+      ]
+    })
+  })
+
+  it('keeps a disconnected verdict-less pane unverifiable rather than exited', async () => {
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(null)
+
+    await expect(
+      call('orchestration.federationShow', { dispatchId: DISPATCH_ID })
+    ).resolves.toMatchObject({
+      observation: { status: 'unverifiable', exactWorker: true, reason: 'missing_liveness_verdict' }
+    })
+  })
+
+  it('keeps a verdict-less pane the host reaches over SSH unverifiable', async () => {
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: HANDLE,
+      worktreeId: 'repo::remote-worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      hostScope: { kind: 'ssh', targetId: 'ssh-hop' }
+    } as never)
+
+    await expect(
+      call('orchestration.federationShow', { dispatchId: DISPATCH_ID })
+    ).resolves.toMatchObject({
+      observation: { status: 'unverifiable', exactWorker: true, reason: 'missing_liveness_verdict' }
+    })
+  })
+
+  it('still settles a confirmed close as a stop', async () => {
+    vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
+      handle: HANDLE,
+      tabId: 'tab_remote',
+      ptyKilled: true
+    })
+
+    const stopped = (await call('orchestration.federationStop', { dispatchId: DISPATCH_ID })) as {
+      state: string
+      processAction: string
+    }
+
+    expect(stopped.state).toBe('stopped')
+    expect(stopped.processAction).toBe('closed_agent_terminal')
+  })
+})

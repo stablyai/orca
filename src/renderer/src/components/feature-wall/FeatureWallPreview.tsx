@@ -6,8 +6,10 @@ import {
   type FeatureWallWorkflow
 } from '../../../../shared/feature-wall-workflows'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
-import { track } from '@/lib/telemetry'
-import { translate } from '@/i18n/i18n'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { useTranslate } from '@/i18n/use-translate'
+import { getLocalizedFeatureWallTileTitle } from './feature-wall-tour-localized-copy'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PreviewMedia(props: {
   posterUrl: string | null
@@ -57,6 +59,7 @@ export function RelatedFeatures(props: {
   workflow: FeatureWallWorkflow
   source: FeatureWallOpenSourceTelemetry
 }): JSX.Element | null {
+  const t = useTranslate()
   const { workflow, source } = props
   const items = workflow.relatedTileIds
     .map((id) => getFeatureWallMediaTile(id))
@@ -67,28 +70,25 @@ export function RelatedFeatures(props: {
   return (
     <div className="border-t border-border pt-3.5">
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {translate(
-          'auto.components.feature.wall.FeatureWallPreview.a666384798',
-          'Also in this workflow'
-        )}
+        {t('auto.components.feature.wall.FeatureWallPreview.a666384798', 'Also in this workflow')}
       </h4>
       <ul className="flex flex-col gap-1" role="list">
         {items.map((tile) => (
           <li key={tile.id}>
             <button
               type="button"
-              onClick={() => {
+              onClick={(event) => {
                 track('feature_wall_docs_clicked', {
                   group_id: workflow.id,
                   tile_id: tile.id,
                   source
                 })
                 track('feature_wall_tile_clicked', { tile_id: tile.id })
-                void window.api.shell.openUrl(tile.docsUrl)
+                openAppHttpLink(tile.docsUrl, { event })
               }}
               className="inline-flex items-center gap-1.5 text-left text-[13px] hover:underline hover:underline-offset-2"
             >
-              {tile.title}
+              {getLocalizedFeatureWallTileTitle(tile.id)}
               <ChevronRight className="size-3 text-muted-foreground" />
             </button>
           </li>

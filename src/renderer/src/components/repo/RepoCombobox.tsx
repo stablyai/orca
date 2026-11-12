@@ -9,17 +9,17 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { searchRepos } from '@/lib/repo-search'
-import { cn } from '@/lib/utils'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
+import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import RepoBadgeLabel from './RepoBadgeLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RepoComboboxProps = {
-  repos: Repo[]
+  repos: readonly Repo[]
   value: string
   onValueChange: (repoId: string) => void
   onValueSelected?: (repoId: string) => void
@@ -43,11 +43,10 @@ export default function RepoCombobox({
   invalid = false,
   describedBy
 }: RepoComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(autoOpenOnMount)
   const [query, setQuery] = useState('')
-  // Why: controlled cmdk selection so hovering the footer (which lives outside
-  // the cmdk tree) can clear the list's highlighted item — otherwise cmdk keeps
-  // the last-hovered repo visually selected while the mouse is on the footer.
+  // Control cmdk selection so hovering the external footer can clear the last repo highlight.
   const [commandValue, setCommandValue] = useState(() => (autoOpenOnMount ? value : ''))
   const addRepo = useAppStore((s) => s.addRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
@@ -89,9 +88,7 @@ export default function RepoCombobox({
         return
       }
       repoSearchInput.focus()
-      // Why: when a printable keydown on the trigger seeded the query, the
-      // user expects the next keystroke to append to what they typed — not
-      // replace it — so drop the caret at the end instead of selecting all.
+      // Seeded trigger typing must append on the next key; place the caret at the query’s end.
       const end = repoSearchInput.value.length
       repoSearchInput.setSelectionRange(end, end)
     })
@@ -105,9 +102,7 @@ export default function RepoCombobox({
         return
       }
       cancelFocusFrame()
-      // Why: the create-worktree dialog delays its own field reset until after
-      // close animation, so the repo picker must clear its local filter here or a
-      // stale query can reopen to an apparently missing repo list.
+      // Clear local filtering on close; the dialog’s delayed reset could otherwise reopen with an apparently missing list.
       setQuery('')
     },
     [cancelFocusFrame, value]
@@ -123,11 +118,7 @@ export default function RepoCombobox({
     [onValueChange, onValueSelected]
   )
 
-  // Why: the button-style trigger treats the current value as a confirmed
-  // selection — plain focus does not open the dropdown. We only open on
-  // explicit intent: ArrowDown/ArrowUp opens without filtering, and a printable
-  // non-whitespace character opens *and* seeds the search query (treating the
-  // keystroke as the start of a new search per the combobox pattern).
+  // Button focus keeps the committed pick; arrows explicitly open, while printable keys open a new seeded search.
   const handleTriggerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>) => {
       if (open) {
@@ -142,9 +133,7 @@ export default function RepoCombobox({
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return
       }
-      // Why: restrict to visible characters so whitespace/Enter keep their
-      // native button semantics (Space/Enter = click = open-without-filter via
-      // the PopoverTrigger) instead of leaking into the query as a stray char.
+      // Preserve native Space/Enter click semantics instead of inserting whitespace into search.
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
         setCommandValue(value)
@@ -209,7 +198,7 @@ export default function RepoCombobox({
                 {selectedRepo.connectionId && (
                   <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                     <Server className="size-2.5" />
-                    {translate('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
+                    {t('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
                   </span>
                 )}
               </span>
@@ -231,7 +220,7 @@ export default function RepoCombobox({
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
               ref={setInputNode}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.repo.RepoCombobox.a0c48f5f29',
                 'Search projects/folders...'
               )}
@@ -240,7 +229,7 @@ export default function RepoCombobox({
             />
             <CommandList>
               <CommandEmpty>
-                {translate(
+                {t(
                   'auto.components.repo.RepoCombobox.e7ed739236',
                   'No projects/folders match your search.'
                 )}
@@ -268,7 +257,7 @@ export default function RepoCombobox({
                       {repo.connectionId && (
                         <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                           <Server className="size-2.5" />
-                          {translate('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
+                          {t('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
                         </span>
                       )}
                     </span>
@@ -277,9 +266,7 @@ export default function RepoCombobox({
                 </CommandItem>
               ))}
             </CommandList>
-            {/* Why: keep the in-list add action available for users who open
-                the picker expecting the historical footer affordance, while
-                the separate header icon covers the compact one-click path. */}
+            {/* Retain the historical Add footer alongside the compact header action. */}
             <div className="border-t border-border">
               <Button
                 type="button"
@@ -293,8 +280,8 @@ export default function RepoCombobox({
                 <FolderPlus className="size-3.5 text-muted-foreground" />
                 <span>
                   {isAdding
-                    ? translate('auto.components.repo.RepoCombobox.116812151a', 'Adding project…')
-                    : translate('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')}
+                    ? t('auto.components.repo.RepoCombobox.116812151a', 'Adding project…')
+                    : t('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')}
                 </span>
               </Button>
             </div>
@@ -303,8 +290,7 @@ export default function RepoCombobox({
       </Popover>
 
       {showStandaloneAddButton ? (
-        /* Why: keep the add-project action visible even when the project selector is
-            collapsed so adding a new source stays one click away in the compact composer header. */
+        /* Keep Add project reachable when the compact composer hides the selector. */
         <Button
           type="button"
           variant="outline"
@@ -314,8 +300,8 @@ export default function RepoCombobox({
           className="size-9 shrink-0 p-0"
           aria-label={
             isAdding
-              ? translate('auto.components.repo.RepoCombobox.b4a235e886', 'Adding project')
-              : translate('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')
+              ? t('auto.components.repo.RepoCombobox.b4a235e886', 'Adding project')
+              : t('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')
           }
         >
           <FolderPlus className="size-3.5" />

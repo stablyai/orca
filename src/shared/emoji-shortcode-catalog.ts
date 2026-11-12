@@ -1,30 +1,77 @@
-import emojiShortcodes from 'emojibase-data/en/shortcodes/github.json'
-
 export type StandardEmojiShortcodeEntry = {
   emoji: string
   shortcode: string
 }
 
-export const STANDARD_EMOJI_SHORTCODE_ENTRIES: readonly StandardEmojiShortcodeEntry[] =
-  Object.entries(emojiShortcodes).flatMap(([hexcode, value]) => {
-    const shortcodes = typeof value === 'string' ? [value] : value
-    const emoji = hexcodeToEmoji(hexcode)
-    return shortcodes.map((shortcode) => ({ emoji, shortcode }))
-  })
+/** Shape of `emojibase-data/en/shortcodes/emojibase.json`: hexcode -> shortcode or aliases. */
+export type EmojiShortcodeDataset = Readonly<Record<string, string | readonly string[]>>
 
-const PRIMARY_SHORTCODE_BY_EMOJI = new Map(
-  Object.entries(emojiShortcodes).map(([hexcode, value]) => {
-    const shortcodes = typeof value === 'string' ? [value] : value
-    const shortcode = shortcodes.find((candidate) => /^[a-z]/i.test(candidate)) ?? shortcodes[0]
-    return [normalizeEmojiLookup(hexcodeToEmoji(hexcode)), shortcode]
-  })
-)
+let loadDataset: (() => EmojiShortcodeDataset) | null = null
 
-const EMOJI_SEGMENTER = new Intl.Segmenter('en', { granularity: 'grapheme' })
+/** Renderer needs eager synchronous data or it persists literal :wink: during load. Inject main’s lazy require to avoid bundling/parsing 166KB at launch. */
+export function setEmojiShortcodeDatasetLoader(load: () => EmojiShortcodeDataset): void {
+  loadDataset = load
+}
+
+// Skin-tone aliases (`wave_tone3`) are ~40% of the dataset and would drown the suggestion list.
+const SKIN_TONE_SHORTCODE = /_tone\d(?:-\d)?$/
+
+type EmojiShortcodeCatalog = {
+  entries: readonly StandardEmojiShortcodeEntry[]
+  primaryShortcodeByEmoji: ReadonlyMap<string, string>
+  segmenter: Intl.Segmenter
+}
+
+let catalog: EmojiShortcodeCatalog | null = null
+
+// Defer ~3,900-shortcode traversal until first colon/name sanitization, memoizing once instead of charging every launch.
+function loadCatalog(): EmojiShortcodeCatalog {
+  if (catalog) {
+    return catalog
+  }
+  if (!loadDataset) {
+    throw new Error('Emoji shortcode dataset loader was never registered')
+  }
+  const grouped = Object.entries(loadDataset()).flatMap(([hexcode, value]) => {
+    const shortcodes = (typeof value === 'string' ? [value] : value).filter(
+      (shortcode) => !SKIN_TONE_SHORTCODE.test(shortcode)
+    )
+    return shortcodes.length > 0 ? [{ emoji: hexcodeToEmoji(hexcode), shortcodes }] : []
+  })
+  catalog = {
+    entries: grouped.flatMap(({ emoji, shortcodes }) =>
+      shortcodes.map((shortcode) => ({ emoji, shortcode }))
+    ),
+    primaryShortcodeByEmoji: new Map(
+      grouped.map(({ emoji, shortcodes }) => [
+        normalizeEmojiLookup(emoji),
+        primaryShortcode(shortcodes)
+      ])
+    ),
+    segmenter: new Intl.Segmenter('en', { granularity: 'grapheme' })
+  }
+  return catalog
+}
+
+export function getStandardEmojiShortcodeEntries(): readonly StandardEmojiShortcodeEntry[] {
+  return loadCatalog().entries
+}
+
+/** Prefer spelled-out names over symbolic +1/-1, cryptic no/v and flag_xx namespaces for branch/directory labels. */
+function primaryShortcode(shortcodes: readonly string[]): string {
+  const named = shortcodes.filter((candidate) => /^[a-z]/i.test(candidate))
+  return (
+    named.find((candidate) => candidate.length >= 3 && !candidate.startsWith('flag_')) ??
+    named.find((candidate) => candidate.length >= 3) ??
+    named[0] ??
+    shortcodes[0]
+  )
+}
 
 export function replaceKnownEmojiWithShortcodes(input: string): string {
-  return Array.from(EMOJI_SEGMENTER.segment(input), ({ segment }) => {
-    const shortcode = PRIMARY_SHORTCODE_BY_EMOJI.get(normalizeEmojiLookup(segment))
+  const { primaryShortcodeByEmoji, segmenter } = loadCatalog()
+  return Array.from(segmenter.segment(input), ({ segment }) => {
+    const shortcode = primaryShortcodeByEmoji.get(normalizeEmojiLookup(segment))
     return shortcode ? ` ${shortcode.replaceAll('_', '-')} ` : segment
   }).join('')
 }

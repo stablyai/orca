@@ -1,6 +1,13 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
+import { WORKTREE_CREATE_COMMAND_SPEC } from './worktree-create'
+import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
 import { SERVE_COMMAND_SPECS } from './serve'
+import { REPO_COMMAND_SPECS } from './repo'
+import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
+import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_SET_PANE_TITLE_COMMAND_SPEC } from './terminal-set-pane-title'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -16,6 +23,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show app/runtime/graph readiness',
     usage: 'orca status [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      "caller.orcaSessionId is this agent's Orca session ID, as Orca resolved it, when the agent runs as an Orca session; otherwise caller is omitted."
+    ],
     examples: ['orca status', 'orca status --json']
   },
   {
@@ -30,47 +40,30 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
   },
-  {
-    path: ['repo', 'list'],
-    summary: 'List repos registered in Orca',
-    usage: 'orca repo list [--json]',
-    allowedFlags: [...GLOBAL_FLAGS]
-  },
-  {
-    path: ['repo', 'add'],
-    summary: 'Add a project to Orca by filesystem path',
-    usage: 'orca repo add --path <path> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path']
-  },
-  {
-    path: ['repo', 'show'],
-    summary: 'Show one registered repo',
-    usage: 'orca repo show --repo <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo']
-  },
-  {
-    path: ['repo', 'set-base-ref'],
-    summary: "Set the repo's default base ref for future worktrees",
-    usage: 'orca repo set-base-ref --repo <selector> --ref <ref> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'ref']
-  },
-  {
-    path: ['repo', 'search-refs'],
-    summary: 'Search branch/tag refs within a repo',
-    usage: 'orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'query', 'limit']
-  },
+  ...REPO_COMMAND_SPECS,
   {
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',
     usage: 'orca worktree list [--repo <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['worktree', 'show'],
     summary: 'Show one worktree',
     usage: 'orca worktree show --worktree <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+  },
+  {
+    path: ['worktree', 'activate'],
+    summary: 'Open a worktree on its host, waking a sleeping recipe VM behind it',
+    usage: 'orca worktree activate --worktree <selector> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'With --environment naming a recipe VM that is asleep, Orca on this computer wakes the VM first and waits for it.',
+      'Folder workspaces cannot be activated from the CLI yet; open them from the Orca sidebar.'
+    ],
+    examples: ['orca worktree activate --worktree branch:fix-login --environment sandbox']
   },
   {
     path: ['worktree', 'current'],
@@ -82,106 +75,54 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: ['orca worktree current', 'orca worktree current --json']
   },
-  {
-    path: ['worktree', 'create'],
-    summary: 'Create a new Orca-managed worktree',
-    usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'repo',
-      'project',
-      'host',
-      'project-host-setup',
-      'name',
-      'agent',
-      'prompt',
-      'base-branch',
-      'issue',
-      'linear-issue',
-      'comment',
-      'setup',
-      'parent-worktree',
-      'no-parent',
-      'run-hooks',
-      'activate'
-    ],
-    notes: [
-      'This creates a new checkout. For a fresh agent in an existing worktree, use `orca terminal create --worktree active --command "codex"` instead.',
-      'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
-      'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
-      'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
-      'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
-      'Use --no-parent when the new worktree should be independent of the current context.',
-      '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
-      'By default this creates the worktree and its first terminal without switching the active Orca view.',
-      'Pass --agent to launch an agent in the first terminal; --prompt sends initial work to that agent.',
-      'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
-      'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
-      'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
-      'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.'
-    ],
-    examples: [
-      'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
-      'orca worktree create --repo id:<repoId> --name related-task --json',
-      'orca worktree create --project github:stablyai/orca --host runtime:gpu --name benchmark --json',
-      'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',
-      'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
-      'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
-      'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
-      'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
-    ]
-  },
-  {
-    path: ['worktree', 'set'],
-    summary: 'Update Orca metadata for a worktree',
-    usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'worktree',
-      'display-name',
-      'issue',
-      'linear-issue',
-      'comment',
-      'workspace-status',
-      'parent-worktree',
-      'no-parent'
-    ],
-    notes: [
-      'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.'
-    ],
-    examples: [
-      'orca worktree set --worktree active --linear-issue STA-335 --json',
-      'orca worktree set --worktree active --linear-issue null --json'
-    ]
-  },
+  WORKTREE_CREATE_COMMAND_SPEC,
+  WORKTREE_SET_COMMAND_SPEC,
   {
     path: ['worktree', 'rm'],
-    // Why: agents reach for git's `remove`/`delete` verbs; accept them as
-    // aliases so a conventional guess resolves instead of dead-ending.
     aliases: [
       ['worktree', 'remove'],
       ['worktree', 'delete']
     ],
     destructive: true,
-    summary: 'Remove a worktree from Orca and git',
-    usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
-    notes: ['Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.']
+    summary: 'Remove a Git worktree or a folder workspace entry from Orca',
+    usage:
+      'orca worktree rm --worktree <selector> [--force] [--delete-branch] [--run-hooks] [--allow-failed-archive-hook] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'worktree',
+      'force',
+      'delete-branch',
+      'run-hooks',
+      'allow-failed-archive-hook'
+    ],
+    notes: [
+      'Needs an explicit workspace: --worktree current and active are refused, and the error names the selector they resolve to right now, as `git worktree remove` needs a path. For a non-root folder workspace, removes its Orca entry and stops its sessions without deleting the folder or touching Git. The folder project root cannot be removed with this command. For a group folder workspace (folder:<id>, or a path:/name: selector that matches one), Orca forgets it and the folder stays on disk; --delete-branch, --run-hooks and --allow-failed-archive-hook are refused for it.',
+      'Use --worktree "id:<full-instance-id>" with the full id from orca worktree list --json to select one folder workspace; several entries can share the same path.',
+      'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
+      'With --run-hooks, a failed archive hook blocks the removal: nothing is stopped, deleted or deregistered, and the command exits non-zero with error code worktree_archive_hook_failed. --force does not waive this.',
+      'Pass --allow-failed-archive-hook to delete anyway after the hook has run and failed; the waived failure is reported back on result.archiveHookOverride. It requires --run-hooks and is rejected without it, because with no hook running there is no failure to waive.',
+      'On newer hosts with branch-choice support, Git worktree removal keeps the local branch, including with --force. Pass --delete-branch to attempt safe branch deletion, including branches that predated the worktree. Branches whose changes Orca cannot prove are already merged are retained. Older hosts keep their existing branch policy and print a warning; keep-by-default and --delete-branch do not apply there. A removal result without branch evidence does not confirm branch deletion.'
+    ]
   },
   {
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
-    usage: 'orca worktree ps [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit']
+    usage: 'orca worktree ps [--limit <n>] [--agent-wait] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'agent-wait'],
+    notes: [
+      ...WORKTREE_LISTING_SCOPE_NOTES,
+      'JSON omits agentWait by default; pass --agent-wait to add the `terminal show` wait verdict to each terminal-backed agent row on the returned page.'
+    ]
   },
   {
     path: ['terminal', 'list'],
     summary: 'List live Orca-managed terminals',
-    usage: 'orca terminal list [--worktree <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit']
+    usage:
+      'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
+    notes: [
+      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.'
+    ]
   },
   {
     path: ['terminal', 'show'],
@@ -192,26 +133,30 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
-    usage: 'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit'],
+    usage:
+      'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen'],
     notes: [
       'Omit --terminal to target the active terminal in the current worktree.',
-      'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
-      'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
+      'By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.',
+      'Use --screen to read what the terminal actually renders. Prefer it whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output.',
+      'The result reports source: stream when it is accumulated output, screen when it is the rendered screen, and screen-unavailable when a screen was asked for but none could be rendered and the accumulated output is being returned instead. An absent source means the host predates the field.',
+      'When present, draft is UI-only composer text excluded from tail; never treat it as terminal output or a submitted instruction.',
+      '--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.',
+      'With --json, fields are under result.terminal: handle, status (running | exited | unknown), tail (output lines), tailRows (row-wrap metadata aligned with tail), truncated, limited, oldestCursor, nextCursor, latestCursor, returnedLineCount (lines in tail), source, draft. Fields other than handle, status, tail, truncated, and nextCursor may be absent.',
+      'truncated means requested or older output is no longer retained; limited means the line limit (--limit, default 120 for tail previews) or the size budget cut this response short.',
+      'Use --cursor with the nextCursor value from a previous read to get only new output since that read. nextCursor is null when the terminal has no line cursors to page.',
+      'latestCursor is the end of retained output, not a paging token: after a cursor read, keep paging with nextCursor while limited is true and nextCursor differs from latestCursor.',
+      'Use --limit to request more retained lines for long agent responses; when a tail preview is limited and line cursors are available, page retained output from its start with --cursor <oldestCursor> --limit <n>.',
       'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
     ],
     examples: [
       'orca terminal read --json',
-      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json'
+      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json',
+      'orca terminal read --terminal term_abc123 --screen --json'
     ]
   },
-  {
-    path: ['terminal', 'send'],
-    summary: 'Send input to a live terminal',
-    usage:
-      'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt']
-  },
+  TERMINAL_SEND_COMMAND_SPEC,
   {
     path: ['terminal', 'wait'],
     summary: 'Wait for a terminal condition',
@@ -221,50 +166,47 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'stop'],
-    summary: 'Stop terminals for a worktree',
+    hidden: true,
+    summary: 'Deprecated compatibility command for stopping terminal processes',
     usage: 'orca terminal stop --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'Deprecated: use terminal close --worktree <selector> --all to stop the processes and durably remove their terminal surfaces.'
+    ]
   },
   {
     path: ['terminal', 'create'],
     summary: 'Create a terminal session in the current worktree',
     usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--shell <shell>] [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'shell', 'title', 'focus'],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.'
+      'This creates a terminal and runs --command in it. To start an agent, use `orca agent launch` (or `orca worktree create --agent` for a new checkout), which follows your Chat | CLI choice.',
+      '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
+      'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.'
     ],
     examples: [
       'orca terminal create --json',
-      'orca terminal create --worktree active --command "codex" --json',
-      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"',
-      'orca terminal create --worktree path:/projects/myapp --command "opencode" --focus'
+      'orca terminal create --worktree active --command "pnpm dev" --json',
+      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "npm test"',
+      'orca terminal create --worktree path:/projects/myapp --command "pnpm dev" --focus',
+      'orca terminal create --worktree path:C:/src/app --shell cmd.exe --json'
     ]
   },
   {
     path: ['terminal', 'switch'],
-    // Why: `focus` is the legacy verb for this action; keep it working as an
-    // alias rather than a duplicate spec + handler registration.
+    // Preserve the legacy focus verb.
     aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
+    ],
     examples: ['orca terminal switch --terminal term_abc123']
   },
-  {
-    path: ['terminal', 'close'],
-    summary: 'Close a terminal pane/session, or its whole tab with --tab',
-    usage: 'orca terminal close [--terminal <handle>] [--tab] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab'],
-    notes: [
-      'Without --tab, preserves the existing pane/session close behavior. With --tab, waits until the whole tab is durably removed.'
-    ],
-    examples: [
-      'orca terminal close --terminal term_abc123',
-      'orca terminal close --terminal term_abc123 --tab --json'
-    ]
-  },
+  TERMINAL_CLOSE_COMMAND_SPEC,
   {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',
@@ -276,12 +218,16 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal rename --terminal term_abc123 --json'
     ]
   },
+  TERMINAL_SET_PANE_TITLE_COMMAND_SPEC,
   {
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',
     usage:
-      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
+      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--retry-split <leafId>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command', 'retry-split'],
+    notes: [
+      'A timeout does not mean the split failed: the pane may still open and run --command. Re-run the same command with --retry-split <leafId> from the error to wait for that pane instead of splitting again.'
+    ],
     examples: [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',
       'orca terminal split --terminal term_abc123 --command "codex"'
