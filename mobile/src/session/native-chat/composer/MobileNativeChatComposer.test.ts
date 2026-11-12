@@ -8,6 +8,7 @@ import {
 } from './mobile-native-chat-draft-store'
 
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
+import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
 import {
   findAllByHostType,
   findByHostType
@@ -42,6 +43,7 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
     Platform: { OS: 'ios' },
+    useWindowDimensions: () => ({ width: 390, height: 844, scale: 1, fontScale: 1 }),
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
@@ -64,6 +66,7 @@ vi.mock('lucide-react-native', () => ({
   Mic: 'Mic',
   Package: 'Package',
   Plus: 'Plus',
+  Search: 'Search',
   ShieldAlert: 'ShieldAlert',
   Square: 'Square',
   Terminal: 'Terminal',
@@ -306,7 +309,8 @@ describe('MobileNativeChatComposer', () => {
         createNodeMock: (element) => (element.type === 'TextInput' ? { focus } : null)
       })
     })
-    const field = () => findByHostType(renderer!.root, 'TextInput')
+    const field = () =>
+      findByHostType(renderer!.root.findByType(MobileNativeChatComposerField), 'TextInput')
     const press = async (label: string) =>
       act(async () => renderer!.root.findByProps({ accessibilityLabel: label }).props.onPress())
     expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)

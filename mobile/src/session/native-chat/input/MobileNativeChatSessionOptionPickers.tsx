@@ -11,7 +11,7 @@ import {
   type LucideIcon
 } from 'lucide-react-native'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
-import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../components/list/ListGroup'
+import { ListGroup, LIST_LEADING_INSET } from '../../../components/list/ListGroup'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import { colors } from '../../../theme/mobile-theme'
@@ -20,7 +20,6 @@ import { translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMoreModelsShown } from './use-more-models-shown'
 import {
-  isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
   type SessionOptionValue
@@ -36,14 +35,10 @@ import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-op
 import {
   descriptorRowElements,
   ModelPill,
-  SessionOptionCaption,
-  SessionOptionSummaryRow,
-  showsSessionOptionAsSwitch
+  SessionOptionCaption
 } from './MobileNativeChatSessionOptionRows'
-import {
-  SessionOptionSegments,
-  showsSessionOptionAsSegments
-} from './MobileNativeChatSessionOptionSegments'
+import { MobileNativeChatModelList } from './MobileNativeChatModelList'
+import { MobileNativeChatModelOptions } from './MobileNativeChatModelOptions'
 import { sortNativeChatSessionOptions } from '../../../../../src/shared/native-chat/input/native-chat-session-option-snapshot'
 import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
@@ -179,8 +174,7 @@ export function MobileNativeChatSessionOptionPickers({
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
   const permissionIcon =
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
-  const segmentOptions = options.filter(showsSessionOptionAsSegments)
-  const rowOptions = options.filter((descriptor) => !segmentOptions.includes(descriptor))
+  const modelHome = homeView && model !== undefined
   const primary = model
     ? nativeChatModelPillLabel(model, say)
     : mobileSessionOptionSummaryValue(home)
@@ -257,9 +251,12 @@ export function MobileNativeChatSessionOptionPickers({
           moreModels.reset()
           onDrawerAfterClose?.()
         }}
+        fillAvailable={modelHome}
+        contentScrollable={!modelHome}
+        dragContentToDismiss={!modelHome}
       >
         {activeDescriptor ? (
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, modelHome && styles.modelSheet]}>
             <View style={styles.header}>
               <SheetHeader
                 title={nativeChatSessionOptionLabel(activeDescriptor, say)}
@@ -301,24 +298,32 @@ export function MobileNativeChatSessionOptionPickers({
                 </View>
               </View>
             ) : null}
-            {homeView && model ? (
-              <SectionHeader title={nativeChatSessionOptionLabel(model, say)} first />
+            {modelHome ? (
+              <MobileNativeChatModelList
+                descriptor={model}
+                moreChoices={moreModels}
+                disabled={locked(model)}
+                onSetOption={(value) => applyOption(model, value)}
+                onInvokeAction={() => invokeAction(model)}
+              />
             ) : (
-              <View style={styles.pageTop} />
+              <>
+                <View style={styles.pageTop} />
+                <ListGroup separatorInset={permissionView ? LIST_LEADING_INSET : undefined}>
+                  {descriptorRowElements(
+                    {
+                      descriptor: activeDescriptor,
+                      disabled: locked(activeDescriptor),
+                      onSetOption: (value) => applyOption(activeDescriptor, value),
+                      onInvokeAction: () => invokeAction(activeDescriptor),
+                      moreChoices: moreModels,
+                      ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
+                    },
+                    t
+                  )}
+                </ListGroup>
+              </>
             )}
-            <ListGroup separatorInset={permissionView ? LIST_LEADING_INSET : undefined}>
-              {descriptorRowElements(
-                {
-                  descriptor: activeDescriptor,
-                  disabled: locked(activeDescriptor),
-                  onSetOption: (value) => applyOption(activeDescriptor, value),
-                  onInvokeAction: () => invokeAction(activeDescriptor),
-                  moreChoices: moreModels,
-                  ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
-                },
-                t
-              )}
-            </ListGroup>
             {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
               <SessionOptionCaption>
                 {t(
@@ -328,90 +333,20 @@ export function MobileNativeChatSessionOptionPickers({
               </SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
-            {homeView && model ? (
-              <>
-                {segmentOptions.map((descriptor) => (
-                  <SessionOptionSegments
-                    key={descriptor.id}
-                    descriptor={descriptor}
-                    disabled={locked(descriptor)}
-                    onSetOption={(value) => applyOption(descriptor, value)}
-                  />
-                ))}
-                <OptionRows
-                  descriptors={[...rowOptions, ...(permission ? [permission] : [])]}
-                  permission={permission}
-                  permissionColor={permissionColor}
-                  locked={locked}
-                  onNavigate={onNavigate}
-                  onSetOption={applyOption}
-                />
-              </>
+            {modelHome ? (
+              <MobileNativeChatModelOptions
+                key={model.kind.currentValue?.toString()}
+                options={options}
+                permission={permission}
+                permissionColor={permissionColor}
+                locked={locked}
+                onNavigate={onNavigate}
+                onSetOption={applyOption}
+              />
             ) : null}
           </View>
         ) : null}
       </BottomDrawer>
     </View>
-  )
-}
-
-function OptionRows({
-  descriptors,
-  permission,
-  permissionColor,
-  locked,
-  onNavigate,
-  onSetOption
-}: {
-  descriptors: readonly SessionOptionDescriptor[]
-  permission: SessionOptionDescriptor | undefined
-  permissionColor: string | undefined
-  locked: (descriptor: SessionOptionDescriptor) => boolean
-  onNavigate: (page: string) => void
-  onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
-}): React.JSX.Element | null {
-  const t = useMobileTranslation()
-  if (descriptors.length === 0) {
-    return null
-  }
-  return (
-    <>
-      <SectionHeader title={t('chat.sessionOptionPickers.optionsSection', 'Options')} />
-      <ListGroup>
-        {descriptors.flatMap((descriptor) => {
-          const isPermission = descriptor === permission
-          const disabled = locked(descriptor) || !descriptor.settable
-          if (showsSessionOptionAsSwitch(descriptor)) {
-            return descriptorRowElements(
-              {
-                descriptor,
-                disabled,
-                onSetOption: (value) => onSetOption(descriptor, value),
-                onInvokeAction: () => onNavigate(descriptor.id)
-              },
-              t
-            )
-          }
-          return [
-            <SessionOptionSummaryRow
-              key={descriptor.id}
-              label={
-                isPermission
-                  ? t('chat.sessionOptionPickers.permissions', 'Permissions')
-                  : nativeChatSessionOptionLabel(descriptor, say)
-              }
-              value={mobileSessionOptionSummaryValue(descriptor)}
-              valueColor={isPermission ? permissionColor : undefined}
-              disabled={disabled}
-              onPress={
-                isReadOnlySessionOptionValue(descriptor)
-                  ? undefined
-                  : () => onNavigate(descriptor.id)
-              }
-            />
-          ]
-        })}
-      </ListGroup>
-    </>
   )
 }
