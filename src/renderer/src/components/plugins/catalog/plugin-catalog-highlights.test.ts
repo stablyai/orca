@@ -187,7 +187,7 @@ describe('pickNewlyAddedPlugins', () => {
     ).toEqual([])
   })
 
-  it('offers up to nine, as the website does', () => {
+  it('offers up to two rows of the four-column grid', () => {
     const entries = Array.from({ length: 12 }, (_, index) =>
       entry(`acme.p${index}`, {
         addedAt: new Date(NOW - (index + 1) * 3_600_000).toISOString()
@@ -195,7 +195,7 @@ describe('pickNewlyAddedPlugins', () => {
     )
 
     expect(pickNewlyAddedPlugins(entries, null, NOW).map((item) => item.pluginKey)).toEqual(
-      Array.from({ length: 9 }, (_, index) => `acme.p${index}`)
+      Array.from({ length: 8 }, (_, index) => `acme.p${index}`)
     )
   })
 })

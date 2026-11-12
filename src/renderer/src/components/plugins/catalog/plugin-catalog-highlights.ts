@@ -9,6 +9,12 @@ import { pluginListedAt } from '../list/plugin-listed-at'
  */
 export const PLUGIN_FEATURED_LIMIT = 4
 
+/**
+ * Cards the Newly added row renders: two full rows of the widest (four-column) grid. The grid shows
+ * two full rows of its current column count, so a ninth card would never show.
+ */
+export const PLUGIN_NEWLY_ADDED_LIMIT = 8
+
 /** A plugin someone could install from a highlight row right now. */
 function isOfferable(entry: PluginListEntry, orcaVersion: string | null): boolean {
   const listing = entry.listing
@@ -77,7 +83,7 @@ export function pickFeaturedPlugins(
 }
 
 /**
- * Newest listings first, inside the website's 30-day window, up to the website's nine. Empty hides
+ * Newest listings first, inside the website's 30-day window, up to two four-column rows. Empty hides
  * the row: no plugin has an estimated listing date, or none is recent and installable.
  */
 export function pickNewlyAddedPlugins(
@@ -88,7 +94,8 @@ export function pickNewlyAddedPlugins(
   return pickNewPlugins(
     entries.filter((entry) => isOfferable(entry, orcaVersion)),
     pluginListedAt,
-    now
+    now,
+    { limit: PLUGIN_NEWLY_ADDED_LIMIT }
   )
 }
 

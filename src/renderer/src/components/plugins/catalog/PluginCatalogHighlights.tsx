@@ -48,7 +48,7 @@ export function PluginCatalogHighlights({
       {featured.length > 0 ? (
         <PluginListGroup
           layout="grid"
-          singleRow
+          maxRows={1}
           title={t('auto.components.plugins.PluginCatalogHighlights.featured', 'Featured')}
           detail={t(
             'auto.components.plugins.PluginCatalogHighlights.featuredDetail',
@@ -61,8 +61,11 @@ export function PluginCatalogHighlights({
         </PluginListGroup>
       ) : null}
       {newlyAdded.length > 0 ? (
+        // Why two full rows: at phone width nine stacked cards pushed the catalogs 3.5 screens
+        // down. Cards past them stay listed in their catalog group, so there's no See all.
         <PluginListGroup
           layout="grid"
+          maxRows={2}
           title={t('auto.components.plugins.PluginCatalogHighlights.newlyAdded', 'Newly added')}
           detail={t(
             'auto.components.plugins.PluginCatalogHighlights.newlyAddedDetail',

@@ -185,6 +185,18 @@ const undated = entries.map((item) =>
   item.listing ? { ...item, listing: { ...item.listing, addedAt: undefined } } : item
 )
 
+// Why five: an odd count that leaves a partial last row at two, three and four columns.
+const fiveNew = (() => {
+  let dated = 0
+  return entries.map((item) => {
+    if (!item.listing?.addedAt) {
+      return item
+    }
+    dated += 1
+    return dated <= 5 ? item : { ...item, listing: { ...item.listing, addedAt: undefined } }
+  })
+})()
+
 /** Highlights over the catalog groups, as the plugins page lays them out. */
 function renderPage(pageEntries: readonly PluginListEntry[]): () => React.JSX.Element {
   const groups = [
@@ -226,3 +238,13 @@ export const emptyNewlyAdded1440 = defineFixture({
   setup,
   render: renderPage(undated)
 })
+
+export const fiveNewlyAdded1440 = defineFixture({
+  width: 1440,
+  setup,
+  render: renderPage(fiveNew)
+})
+
+export const fiveNewlyAdded900 = defineFixture({ width: 900, setup, render: renderPage(fiveNew) })
+
+export const fiveNewlyAdded600 = defineFixture({ width: 600, setup, render: renderPage(fiveNew) })
