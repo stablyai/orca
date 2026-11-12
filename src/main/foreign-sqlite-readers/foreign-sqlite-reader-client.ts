@@ -13,7 +13,7 @@ import {
 } from './opencode-binder-sessions-result'
 import type {
   ForeignSqliteReaderKind,
-  ForeignSqliteReaderRequest,
+  ForeignSqliteWorkerRequest,
   ForeignSqliteReaderResponse
 } from './foreign-sqlite-reader-protocol'
 import {
@@ -22,6 +22,11 @@ import {
   type OpenCodePromptFailureQuery,
   type OpenCodePromptFailureResult
 } from './opencode-prompt-failure-result'
+import {
+  parseHermesSessionsResult,
+  type HermesSessionsQuery,
+  type HermesSessionsResult
+} from './hermes-sessions-result'
 
 // Foreign SQLite opens can block on WAL rebuilds; isolate each reader so slow databases cannot stall main or peers.
 
@@ -29,14 +34,16 @@ const READ_TIMEOUT_MS: Record<ForeignSqliteReaderKind, number> = {
   // Allow margin beyond observed 4–6s WAL-index rebuilds.
   cursorProfile: 10_000,
   openCodeBinderSessions: 60_000,
-  openCodePromptFailure: 2_000
+  openCodePromptFailure: 2_000,
+  hermesSessions: 60_000
 }
 // Keep workers alive across poll intervals to avoid spawning on every round.
 const DEFAULT_IDLE_TEARDOWN_MS: Record<ForeignSqliteReaderKind, number> = {
   cursorProfile: 30_000,
   // The binder polls once per minute.
   openCodeBinderSessions: 120_000,
-  openCodePromptFailure: 30_000
+  openCodePromptFailure: 30_000,
+  hermesSessions: 30_000
 }
 const MAX_CONSECUTIVE_DEATHS = 2
 const MAX_QUEUED_READS = 8
@@ -51,7 +58,7 @@ type LaneSettings = {
 
 export class ForeignSqliteReaderLane<T> {
   private readonly queue: WorkerThreadRequestQueue<
-    ForeignSqliteReaderRequest,
+    ForeignSqliteWorkerRequest,
     ForeignSqliteReaderResponse
   >
   private readonly inFlight = new Map<string, Promise<T>>()
@@ -59,7 +66,7 @@ export class ForeignSqliteReaderLane<T> {
   constructor(
     private readonly kind: ForeignSqliteReaderKind,
     private readonly parse: (value: unknown) => T | null,
-    private readonly failure: () => T,
+    private readonly failure: (error: Error) => T,
     private readonly settings: LaneSettings
   ) {
     this.queue = new WorkerThreadRequestQueue({
@@ -83,7 +90,7 @@ export class ForeignSqliteReaderLane<T> {
   }
 
   /** Concurrent reads share a key, so it must encode every input that can change the result. */
-  read(key: string, buildRequest: (id: number) => ForeignSqliteReaderRequest): Promise<T> {
+  read(key: string, buildRequest: (id: number) => ForeignSqliteWorkerRequest): Promise<T> {
     const pending = this.inFlight.get(key)
     if (pending) {
       return pending
@@ -100,7 +107,7 @@ export class ForeignSqliteReaderLane<T> {
     this.inFlight.clear()
   }
 
-  private async dispatch(buildRequest: (id: number) => ForeignSqliteReaderRequest): Promise<T> {
+  private async dispatch(buildRequest: (id: number) => ForeignSqliteWorkerRequest): Promise<T> {
     const { kind, settings } = this
     const deadline = settings.deadlineIncludesQueue ? new AbortController() : undefined
     const timer = deadline ? setTimeout(() => deadline.abort(), settings.timeoutMs) : undefined
@@ -109,18 +116,18 @@ export class ForeignSqliteReaderLane<T> {
       const response = await this.queue.dispatch(buildRequest, settings.timeoutMs, deadline?.signal)
       if (!response.ok) {
         settings.log(`Foreign SQLite reader ${kind} failed: ${response.error}`)
-        return this.failure()
+        return this.failure(new Error(response.error))
       }
       const value = this.parse(response.value)
       if (value === null) {
         settings.log(`Foreign SQLite reader ${kind} returned a malformed result.`)
-        return this.failure()
+        return this.failure(new Error(`Foreign SQLite reader ${kind} returned a malformed result.`))
       }
       return value
     } catch (err) {
       // A failed worker read must never fall back to blocking the main thread.
       settings.log(`Foreign SQLite reader ${kind} did not answer: ${errorText(err)}`)
-      return this.failure()
+      return this.failure(err instanceof Error ? err : new Error(errorText(err)))
     } finally {
       clearTimeout(timer)
     }
@@ -131,6 +138,7 @@ export class ForeignSqliteReaderClient {
   private readonly cursorProfile: ForeignSqliteReaderLane<CursorDesktopProfileReadResult>
   private readonly openCodeBinderSessions: ForeignSqliteReaderLane<BinderSessionRow[]>
   private readonly openCodePromptFailure: ForeignSqliteReaderLane<OpenCodePromptFailureResult>
+  private readonly hermesSessions: ForeignSqliteReaderLane<HermesSessionsResult>
 
   constructor(options: {
     workerFactory: WorkerThreadFactory
@@ -162,6 +170,14 @@ export class ForeignSqliteReaderClient {
       openCodePromptFailureUnavailable,
       { ...settings('openCodePromptFailure'), deadlineIncludesQueue: true }
     )
+    this.hermesSessions = new ForeignSqliteReaderLane(
+      'hermesSessions',
+      parseHermesSessionsResult,
+      (error) => {
+        throw error
+      },
+      settings('hermesSessions')
+    )
   }
 
   readCursorProfile(dbPath: string): Promise<CursorDesktopProfileReadResult> {
@@ -187,6 +203,7 @@ export class ForeignSqliteReaderClient {
     this.cursorProfile.dispose()
     this.openCodeBinderSessions.dispose()
     this.openCodePromptFailure.dispose()
+    this.hermesSessions.dispose()
   }
 
   readOpenCodePromptFailure(
@@ -198,6 +215,18 @@ export class ForeignSqliteReaderClient {
       kind: 'openCodePromptFailure',
       ...query
     }))
+  }
+
+  async readHermesSessions(query: HermesSessionsQuery): Promise<HermesSessionsResult> {
+    const result = await this.hermesSessions.read(JSON.stringify(query), (id) => ({
+      ...query,
+      id,
+      kind: 'hermesSessions'
+    }))
+    if (result.operation !== query.operation) {
+      throw new Error('Hermes SQLite reader did not return the requested session data.')
+    }
+    return result
   }
 }
 

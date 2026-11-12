@@ -82,7 +82,7 @@ export function hermesDiscoveries(
       list(),
       walksScope ? list(options.scopePaths) : undefined
     ])
-    return { candidates, scopeCandidates, sessionIds: listHermesSqliteSessionIds(dbPaths) }
+    return { candidates, scopeCandidates, sessionIds: await listHermesSqliteSessionIds(dbPaths) }
   })
 
   return [

@@ -1,3 +1,4 @@
+import '../../../foreign-sqlite-readers/foreign-sqlite-reader.test-fixture'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type * as Os from 'node:os'

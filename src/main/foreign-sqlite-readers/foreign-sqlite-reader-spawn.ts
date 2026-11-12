@@ -11,6 +11,7 @@ import type {
   OpenCodePromptFailureQuery,
   OpenCodePromptFailureResult
 } from './opencode-prompt-failure-result'
+import type { HermesSessionsQuery, HermesSessionsResult } from './hermes-sessions-result'
 
 function defaultWorkerFactory(): Worker {
   const workerPath = resolveForeignSqliteReaderEntryPath(currentWorkerEntryLayout(__dirname))
@@ -29,6 +30,10 @@ function getSharedClient(): ForeignSqliteReaderClient {
 
 export function readCursorDesktopProfile(dbPath: string): Promise<CursorDesktopProfileReadResult> {
   return getSharedClient().readCursorProfile(dbPath)
+}
+
+export function readHermesSessions(query: HermesSessionsQuery): Promise<HermesSessionsResult> {
+  return getSharedClient().readHermesSessions(query)
 }
 
 export function readOpenCodePromptFailure(

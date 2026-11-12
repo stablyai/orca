@@ -1,3 +1,4 @@
+import '../../../foreign-sqlite-readers/foreign-sqlite-reader.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -182,7 +183,7 @@ describe('Hermes SQLite support', () => {
         },
         platform: process.platform
       })
-    ).rejects.toThrow()
+    ).rejects.toThrow('file is not a database')
 
     expect(message).not.toHaveBeenCalled()
     expect(finish).toHaveBeenCalledExactlyOnceWith({
