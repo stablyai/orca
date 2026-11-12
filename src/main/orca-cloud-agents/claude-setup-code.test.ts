@@ -176,6 +176,9 @@ describe('service: the code from the strip, Settings or the chat UI', () => {
       canReopen: true
     })
     expect(service.submitClaudeCode('not a code')).toEqual({ ok: false, error: 'invalid_code' })
+    // A paste that isn't a code shows the refusal; the CLI never sees it.
+    expect(service.setups().claude).toMatchObject({ phase: 'browser', code: 'rejected' })
+    expect(children[0]!.writes).toEqual([])
     expect(service.submitClaudeCode(`  ${CODE} `)).toEqual({ ok: true, value: true })
     expect(service.setups().claude).toMatchObject({ phase: 'browser', code: 'checking' })
     expect(children[0]!.writes[0]).toBe(CODE)

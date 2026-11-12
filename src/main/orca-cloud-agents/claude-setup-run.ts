@@ -13,6 +13,8 @@ export type ClaudeSetupRun = {
   url: () => string | null
   /** Types a (normalized) code into the waiting CLI; false when it can't take one now. */
   submit: (code: string) => boolean
+  /** A paste that isn't a code at all: shown like a refused code, and the CLI never sees it. */
+  refuse: () => void
   /** Abandons the run (cancel, sign-out, paste instead); nothing it reports afterwards lands. */
   stop: () => void
 }
@@ -104,6 +106,11 @@ export function startClaudeSetupRun(args: {
       }
       browser({ code: 'checking' })
       return true
+    },
+    refuse: () => {
+      if (live && submitter) {
+        browser({ code: 'rejected' })
+      }
     },
     stop: () => {
       live = false

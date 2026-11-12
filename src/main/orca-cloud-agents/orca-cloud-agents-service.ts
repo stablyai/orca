@@ -275,6 +275,7 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
     submitClaudeCode: (raw: string): OrcaCloudAgentsResult<true> => {
       const code = normalizeClaudeSetupCode(raw)
       if (!code) {
+        claudeRun?.refuse()
         return { ok: false, error: 'invalid_code' }
       }
       return claudeRun?.submit(code)
