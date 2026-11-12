@@ -37,7 +37,10 @@ export function getCandidateFactStatuses(
 ): CandidateFactStatus[] {
   const landed = getLandedFactStatus(candidate, t)
   if (candidate.blockers.length > 0) {
-    return [...candidate.blockers.map((blocker) => getBlockerFactStatus(candidate, blocker, t)), ...(landed ? [landed] : [])]
+    return [
+      ...candidate.blockers.map((blocker) => getBlockerFactStatus(candidate, blocker, t)),
+      ...(landed ? [landed] : [])
+    ]
   }
   if (landed) {
     return [landed]
