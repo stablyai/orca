@@ -3,7 +3,7 @@ import { readGitCommandFailureStderr } from '../../shared/git/commands/git-comma
 import type { GitCommitActionResult } from '../../shared/git/commands/git-commit-action'
 import { withCheckoutLock } from './branch-switch'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
 export async function createBranch(

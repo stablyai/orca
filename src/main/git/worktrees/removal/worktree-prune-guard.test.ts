@@ -34,7 +34,7 @@ vi.mock('../../../../shared/wsl-paths', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   wslDistroForCommand: wslDistroForCommandMock
 }))
-vi.mock('../../command-runner/wsl-linked-worktree-git-routing', () => ({
+vi.mock('../../command-runner/host-routing/wsl-linked-worktree-git-routing', () => ({
   usesHostGitForWslLinkedWorktree: () => false
 }))
 vi.mock('../../wsl-drive-checkout-git-routing', () => ({

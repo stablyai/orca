@@ -1,4 +1,4 @@
-import type { GitAdmissionTier } from './command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 
 export type GitRuntimeOptions = {
   wslDistro?: string

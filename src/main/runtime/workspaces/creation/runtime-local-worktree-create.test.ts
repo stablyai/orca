@@ -7,7 +7,7 @@ import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operati
 import {
   acquireGitAdmission,
   _resetGitAdmissionForTests
-} from '../../../git/command-runner/git-subprocess-admission'
+} from '../../../git/command-runner/admission/git-subprocess-admission'
 import { GitAdmissionScheduler } from '../../../../shared/git/admission/git-admission-scheduler'
 
 const {

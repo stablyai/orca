@@ -3,7 +3,7 @@ import type {
   BranchSwitchCreation
 } from '../../shared/git/branch-switch-target'
 import { isBranchNameValid } from '../../shared/git/branch-switch-target'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
 import { readGitCommandFailureStderr } from '../../shared/git/commands/git-command-failure-text'
 

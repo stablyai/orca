@@ -1,4 +1,6 @@
-import { extractExecError, ghExecFileAsync, gitExecFileAsync } from './runner'
+import { extractExecError } from './exec-error'
+import { ghExecFileAsync } from './command-runner/hosted-cli/gh-exec-file'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { parseHostedRemote } from './remotes/hosted-remote-url'
 import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-base-ref'
 import { createGitConfigSnapshotRunner } from '../../shared/git/commands/git-config-snapshot-runner'

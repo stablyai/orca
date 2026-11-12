@@ -8,7 +8,7 @@ import type {
 import { readGitCommandFailureStderr } from '../../shared/git/commands/git-command-failure-text'
 import { gitFailureLine, withCheckoutLock } from './branch-switch'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 import { bulkPathspecCommands } from './source-control/git-pathspec'
 import { resolveGitDir } from './source-control/resolve-git-dir'

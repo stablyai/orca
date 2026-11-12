@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyGhHostToArgs, collectGhArgvHostSignals } from './command-runner/gh-host-args'
+import {
+  applyGhHostToArgs,
+  collectGhArgvHostSignals
+} from './command-runner/hosted-cli/gh-host-args'
 
 describe('applyGhHostToArgs', () => {
   it('does not rewrite free-text flag values that merely start with -R', () => {

@@ -1,6 +1,6 @@
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { driveCheckoutSuspectsWithin } from './drive-checkout-suspect-status'
 import { bulkPathspecCommands } from './git-pathspec'
 

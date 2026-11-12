@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { gitExecFileAsync, ghExecFileAsync } from '../git/runner'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 // Import pure parsing outside runner so runner-mocked tests retain the real implementation.
 import { extractExecError, parseRetryAfterMs } from '../git/exec-error'
 

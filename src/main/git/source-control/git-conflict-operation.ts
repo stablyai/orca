@@ -3,7 +3,7 @@ import * as path from 'node:path'
 import type { GitConflictOperation } from '../../../shared/git/status/git-status-types'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from './git-read-cache-invalidation'
 import { resolveGitDir } from './resolve-git-dir'
 

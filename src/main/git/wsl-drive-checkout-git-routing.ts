@@ -1,9 +1,9 @@
-import type { GitAdmissionTier } from './command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import {
   isWslLinkedWorktreeGitRoutingCandidate,
   prepareWslLinkedWorktreeGitRouting,
   usesHostGitForWslLinkedWorktree
-} from './command-runner/wsl-linked-worktree-git-routing'
+} from './command-runner/host-routing/wsl-linked-worktree-git-routing'
 import { pendingWslWindowsCheckoutGitConfig } from './wsl-windows-checkout-git-probe'
 
 /** Settle checkout ownership and Windows-Git config before synchronous routing; null means no drive-checkout command. */

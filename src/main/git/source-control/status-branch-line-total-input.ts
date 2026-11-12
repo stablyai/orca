@@ -9,7 +9,8 @@ import {
 } from '../../../shared/git/status/git-branch-line-total'
 
 import { type GitRuntimeOptions, gitReadOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 import type { GetStatusOptions } from './get-status-options'
 

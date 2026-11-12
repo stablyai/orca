@@ -2,7 +2,7 @@ import type { GitStatusEntry } from '../../../shared/git/status/git-status-types
 import { isWorktreeUndiscardableGitlink } from '../../../shared/source-control/listing/source-control-discard-all-sequence'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 
 /** Plain `git restore` recurses into submodules when submodule.recurse is on, so those gitlinks stay discardable. */
 export async function markRecursiveSubmoduleRestores(

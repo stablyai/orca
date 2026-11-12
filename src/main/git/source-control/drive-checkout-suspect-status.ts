@@ -8,8 +8,9 @@ import {
   findCoveringLocalWatchRoot,
   observeLocalWatcherEvents
 } from '../../ipc/filesystem/watchers/local-watcher-event-observers'
-import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { usesHostGitForWslLinkedWorktree } from '../command-runner/wsl-linked-worktree-git-routing'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
+import { gitStreamStdout } from '../command-runner/git-stream-stdout'
+import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import {
   withWslWindowsCheckoutGitConfig,
   wslWindowsCheckoutKey

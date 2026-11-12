@@ -12,13 +12,11 @@ vi.mock('node:child_process', () => ({
   execFileSync: execFileSyncMock,
   spawn: spawnMock
 }))
-import {
-  commandExecFileAsync,
-  gitExecFileAsync,
-  glabExecFileAsync,
-  gitStreamStdout
-} from './runner'
-import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
+import { commandExecFileAsync } from './command-runner/process-capture/command-exec-file'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
+import { glabExecFileAsync } from './command-runner/hosted-cli/glab-exec-file'
+import { gitStreamStdout } from './command-runner/git-stream-stdout'
+import { _resetGitAdmissionForTests } from './command-runner/admission/git-subprocess-admission'
 
 afterEach(() => _resetGitAdmissionForTests())
 

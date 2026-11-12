@@ -6,7 +6,7 @@ import {
   completeFakeSpawn,
   createFakeSpawnedChild
 } from '../../../../shared/__fixtures__/fake-spawned-child'
-import * as capture from '../../../git/command-runner/exec-file-capture'
+import * as capture from '../../../git/command-runner/process-capture/exec-file-capture'
 import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'
 import { GITHUB_PULL_REQUEST_METHODS } from '../../../runtime/rpc/methods/source-control/github/github-pull-request-methods'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
