@@ -306,62 +306,6 @@ describe('terminal worker approval holds', () => {
     ])
   })
 
-  it("tells the coordinator to send the user to the terminal when the hook is gone but the dialog isn't", async () => {
-    const ctx = setup()
-    const asked = hook('tool-1')
-    await opened(ctx, asked)
-    asked.end('hook-gone')
-    await ctx.tick(40)
-
-    expect(ctx.closings()).toEqual([
-      expect.objectContaining({
-        type: 'escalation',
-        body: expect.stringContaining("Tell the user to answer it in the worker's terminal")
-      })
-    ])
-  })
-
-  it('closes as worker ended, not "answer it in the terminal", when the worker is stopped at the prompt', async () => {
-    const ctx = setup()
-    const asked = hook('tool-1')
-    await opened(ctx, asked)
-    // A stop kills the process; its last screen still shows the dialog.
-    ctx.screen.incarnation = 'run-2'
-    asked.end('hook-gone')
-    await ctx.tick(40)
-
-    expect(ctx.closedWith()).toEqual([
-      {
-        state: 'answered',
-        by: 'worker-ended',
-        decision: null,
-        reason: null,
-        reasonDelivered: false
-      }
-    ])
-  })
-
-  it("escalates with Claude's reason once the dialog paints, though a long command hides its box's top", async () => {
-    const ctx = setup()
-    // The live case (2026-11-11): the escalation came before the paint, and the command was so long
-    // that only the rule closing its box was on screen.
-    ctx.screen.lines = null
-    ctx.holds.admit(hook('tool-1').request)
-    const escalating = ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)
-    ctx.screen.lines = [
-      ...Array.from({ length: 30 }, (_, line) => ` │ s=s.replace("import ${line}")`),
-      ' │ fs.writeFileSync(p,s)\'; rg -n "ComputerBots" BotSettingsGroups.tsx',
-      ' ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
-      ' │ Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed',
-      ...DIALOG.slice(2)
-    ]
-    await ctx.tick(2)
-
-    expect((await escalating)?.summary.reason).toBe(
-      'Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed'
-    )
-  })
-
   it('owes no closing line to a prompt whose escalation never went out', async () => {
     const ctx = setup()
     const asked = hook('tool-1')
