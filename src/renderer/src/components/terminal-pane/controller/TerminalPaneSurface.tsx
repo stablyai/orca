@@ -137,6 +137,11 @@ export function TerminalPaneSurface({
     worktreeId,
     activePaneRuntimeEnvironmentId
   )
+  const dismissDialogOnClose = (dismiss: () => void) => (open: boolean) => {
+    if (!open) {
+      dismiss()
+    }
+  }
 
   return (
     <>
@@ -273,6 +278,8 @@ export function TerminalPaneSurface({
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
         onCopy={() => void contextMenu.onCopy()}
+        canCopyCommandBlock={contextMenu.canCopyCommandBlock}
+        onCopyCommandBlock={(part) => void contextMenu.onCopyCommandBlock(part)}
         addToChat={
           contextMenu.open
             ? terminalPaneMenuAddToChat(contextMenu.menuPane, tabId, worktreeId)
@@ -325,21 +332,13 @@ export function TerminalPaneSurface({
       <TerminalAgentSessionForkDialog
         open={agentSessionFork !== null}
         fork={agentSessionFork}
-        onOpenChange={(open) => {
-          if (!open) {
-            setAgentSessionFork(null)
-          }
-        }}
+        onOpenChange={dismissDialogOnClose(() => setAgentSessionFork(null))}
       />
       {agentSessionContinuation ? (
         <AgentSessionContinuationDialog
           open
           request={agentSessionContinuation}
-          onOpenChange={(open) => {
-            if (!open) {
-              setAgentSessionContinuation(null)
-            }
-          }}
+          onOpenChange={dismissDialogOnClose(() => setAgentSessionContinuation(null))}
         />
       ) : null}
       <TerminalPaneHeaderOverlay

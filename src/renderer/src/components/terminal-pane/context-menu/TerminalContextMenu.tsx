@@ -40,6 +40,7 @@ import { ClearPaneTitleMenuItem } from '../titles/ClearPaneTitleMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from '../quick-commands/TerminalQuickCommandsSubmenu'
 import { AddToChatSubmenu } from '../../native-chat/selection-quotes/AddToChatMenu'
+import type { TerminalCommandBlockPart } from '../emulation/commands/terminal-command-block-text'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -87,6 +88,8 @@ type TerminalContextMenuProps = {
   canCopyAgentSessionId: boolean
   onCopyAgentSessionId: () => void
   onRestoreTerminalFocus: () => void
+  canCopyCommandBlock: boolean
+  onCopyCommandBlock: (part: TerminalCommandBlockPart) => void
 }
 
 export default function TerminalContextMenu(props: TerminalContextMenuProps): React.JSX.Element {
@@ -185,7 +188,9 @@ function TerminalContextMenuItems({
   onCopyTerminalId,
   onCopyPaneId,
   canCopyAgentSessionId,
-  onCopyAgentSessionId
+  onCopyAgentSessionId,
+  canCopyCommandBlock,
+  onCopyCommandBlock
 }: TerminalContextMenuProps): React.JSX.Element {
   const t = useTranslate()
   // Why: one primary binding prevents Windows/Linux shortcut labels from forcing row wraps.
@@ -214,6 +219,27 @@ function TerminalContextMenuItems({
         <Copy />
         {t('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
         <DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onSelect={() => onCopyCommandBlock('command')}
+        disabled={!canCopyCommandBlock}
+      >
+        <SquareTerminal />
+        {t('auto.components.terminal.pane.TerminalContextMenu.copyCommand', 'Copy Command')}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onSelect={() => onCopyCommandBlock('output')}
+        disabled={!canCopyCommandBlock}
+      >
+        <SquareTerminal />
+        {t('auto.components.terminal.pane.TerminalContextMenu.copyCommandOutput', 'Copy Output')}
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => onCopyCommandBlock('both')} disabled={!canCopyCommandBlock}>
+        <SquareTerminal />
+        {t(
+          'auto.components.terminal.pane.TerminalContextMenu.copyCommandBoth',
+          'Copy Command and Output'
+        )}
       </DropdownMenuItem>
       {addToChat ? (
         <AddToChatSubmenu {...addToChat} launchSource="terminal_context_menu" />

@@ -1,6 +1,7 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import {
   copyTerminalPaneMenuAgentSessionId,
+  copyTerminalPaneMenuCommandBlock,
   copyTerminalPaneMenuPaneId,
   copyTerminalPaneMenuSelection,
   copyTerminalPaneMenuTerminalId
@@ -9,15 +10,29 @@ import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
 import type { UseTerminalPaneContextMenuDeps } from '../context-menu/terminal-pane-context-menu-types'
+import type { TerminalCommandBlockPart } from '../emulation/commands/terminal-command-block-text'
+import type { TrackedCommandBlock } from '../emulation/commands/terminal-command-block-tracker'
 
 export function createTerminalPaneMenuCopyActions({
   paneTransportsRef,
   tabId,
-  resolveMenuPane
+  resolveMenuPane,
+  resolveMenuBufferRow,
+  resolveMenuCommandBlock
 }: Pick<UseTerminalPaneContextMenuDeps, 'paneTransportsRef' | 'tabId'> & {
   resolveMenuPane: () => ManagedPane | null
+  resolveMenuBufferRow: () => number | null
+  resolveMenuCommandBlock: () => TrackedCommandBlock | null
 }) {
   const onCopy = async (): Promise<void> => copyTerminalPaneMenuSelection(resolveMenuPane())
+
+  const onCopyCommandBlock = async (part: TerminalCommandBlockPart): Promise<void> =>
+    copyTerminalPaneMenuCommandBlock(
+      resolveMenuPane(),
+      resolveMenuCommandBlock(),
+      resolveMenuBufferRow(),
+      part
+    )
 
   const onSelectAll = (): void => {
     const pane = resolveMenuPane()
@@ -43,5 +58,12 @@ export function createTerminalPaneMenuCopyActions({
       : null
     return copyTerminalPaneMenuAgentSessionId(pane, sessionId)
   }
-  return { onCopy, onSelectAll, onCopyPaneId, onCopyTerminalId, onCopyAgentSessionId }
+  return {
+    onCopy,
+    onSelectAll,
+    onCopyPaneId,
+    onCopyTerminalId,
+    onCopyAgentSessionId,
+    onCopyCommandBlock
+  }
 }
