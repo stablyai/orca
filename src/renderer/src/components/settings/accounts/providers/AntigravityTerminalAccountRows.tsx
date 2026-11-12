@@ -56,7 +56,13 @@ export function AntigravityTerminalAccountRows({
           <Button
             variant="ghost"
             size="xs"
-            aria-label={t('accounts.antigravity.usage', 'Refresh usage')}
+            aria-label={
+              reading && !reading.error
+                ? t('accounts.antigravity.usageWithReading', 'Refresh usage ({{reading}})', {
+                    reading: formatUsageReading(reading, t)
+                  })
+                : t('accounts.antigravity.usage', 'Refresh usage')
+            }
             disabled={busy}
             onClick={() => run('Usage')}
           >

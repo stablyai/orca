@@ -176,11 +176,11 @@ export function AntigravityAccountsSection({
   const terminalInfo = windowsHost
     ? t(
         'accounts.antigravity.terminalInfoWindows',
-        'Run agy to sign in, then save the login here. Selecting applies to the host default agy credential.'
+        'Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.'
       )
     : t(
         'accounts.antigravity.terminalInfo',
-        'Run agy to sign in, then save the login here. Applies to new agy sessions.'
+        'Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.'
       )
   const runtimeRow =
     chats && chatRuntime.kind === 'active' ? (
