@@ -1,62 +1,18 @@
-import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
-import { confirmBrowserPasswordOwner } from '../browser-passwords/browser-password-reauth'
-import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { listSystemFontFamilies } from '../window/desktop-integration/system-fonts'
 import { registerSettingsImportHandlers } from './settings-import-handlers'
-import { setMainUiLanguage } from '../i18n/main-i18n'
-import { rebuildAppMenu } from '../menu/register-app-menu'
-import { rebuildSystemTrayMenu } from '../tray/system-tray'
-import { track } from '../telemetry/client'
-import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
+import { applyDesktopSettingsUpdate } from './desktop-settings-update'
 import type { AgentAwakeService } from '../power/agent-awake-service'
-import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
-import { applyAgentStatusHooksEnabled } from '../agent-hooks/installation/managed-agent-hook-controls'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { recordManagedHookInstallFailure } from '../agent-hooks/installation/install-telemetry'
-import { applyElectronProxySettings } from '../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../browser/sessions/proxy/browser-session-proxy'
-import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
-import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
-import { sanitizeNetworkSettings } from './network-settings-sanitization'
-import { normalizeAppIconId } from '../../shared/app-icon'
-import { normalizeUiLanguage } from '../../shared/ui-language'
-import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import { registerCustomAppIconHandlers } from './custom-app-icon'
-import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'
-import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal/replay/terminal-scrollback-policy'
-import { normalizeTerminalLineHeight } from '../../shared/terminal/appearance/terminal-line-height-settings'
-import { prepareLocalWorktreeRootsForRepos } from '../workspaces/creation/worktree-root-preparation'
-import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktrees/creation/worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
-import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
-import {
-  normalizeMobilePairingCustomAddress,
-  normalizeMobilePairingCustomAddresses
-} from '../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
-import {
-  computerAwakeSettingsForMode,
-  normalizeComputerAwakeMode
-} from '../../shared/computer-awake-mode'
-import { resolveAiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
-import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 
-const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
 const registryRoot = getRuntimeEnvironmentRegistryRoot
-
-// Electron menus do not react to settings; rebuild appearance checkboxes after writes.
-const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
-  'showTasksButton',
-  'showAutomationsButton',
-  'showMobileButton',
-  'showTitlebarAppName'
-]
 
 export function registerSettingsHandlers(
   store: Store,
@@ -107,184 +63,12 @@ export function registerSettingsHandlers(
     event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   })
 
-  ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
-    const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
-    // Generic settings writers cannot change the server preference owned by Advanced controls.
-    delete sanitizedArgs.activeRuntimeEnvironmentId
-    // Only the main-process directory picker may grant trusted floating-workspace paths.
-    delete sanitizedArgs.floatingTerminalTrustedCwds
-    if ('computerAwakeMode' in sanitizedArgs) {
-      Object.assign(
-        sanitizedArgs,
-        computerAwakeSettingsForMode(
-          normalizeComputerAwakeMode(
-            sanitizedArgs.computerAwakeMode,
-            sanitizedArgs.keepComputerAwakeWhileAgentsRun
-          )
-        )
-      )
-    } else if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
-      Object.assign(
-        sanitizedArgs,
-        computerAwakeSettingsForMode(sanitizedArgs.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off')
-      )
-    }
-    if (typeof args.floatingTerminalCwd === 'string') {
-      sanitizedArgs.floatingTerminalCwd = await sanitizeFloatingWorkspaceDirectorySetting(
-        store,
-        args.floatingTerminalCwd
-      )
-    }
-    sanitizeNetworkSettings(args, sanitizedArgs)
-    if ('appIcon' in args) {
-      sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
-    }
-    if ('aiVaultSearch' in args) {
-      sanitizedArgs.aiVaultSearch = resolveAiVaultSearchSettings(args)
-    }
-    if ('terminalCustomThemes' in args) {
-      sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
-    }
-    if ('terminalScrollbackRows' in args) {
-      sanitizedArgs.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
-        args.terminalScrollbackRows
-      )
-    }
-    if ('terminalLineHeight' in args) {
-      sanitizedArgs.terminalLineHeight = normalizeTerminalLineHeight(args.terminalLineHeight)
-    }
-    if ('uiLanguage' in args) {
-      sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
-    }
-    if ('mobilePairingCustomAddress' in args) {
-      sanitizedArgs.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
-        args.mobilePairingCustomAddress
-      )
-    }
-    if ('mobilePairingCustomAddresses' in args) {
-      sanitizedArgs.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
-        args.mobilePairingCustomAddresses
-      )
-    }
-    if (args.theme) {
-      nativeTheme.themeSource = args.theme
-    }
-    if (
-      sanitizedArgs.browserPasswordsFillRequiresReauth === false &&
-      (store.getSettings().browserPasswordsFillRequiresReauth !== true ||
-        !(await confirmBrowserPasswordOwner('turn off saved password fill authentication', {
-          always: true
-        })))
-    ) {
-      delete sanitizedArgs.browserPasswordsFillRequiresReauth
-    }
-    // No-op UI saves must not inflate settings_changed adoption telemetry.
-    const before = store.getSettings()
-    const updateOptions = {
-      notifyListeners: true,
+  ipcMain.handle('settings:set', (event, args: Partial<GlobalSettings>) =>
+    applyDesktopSettingsUpdate(store, args, {
+      agentAwakeService,
       originWebContentsId: event.sender.id
-    }
-    const result =
-      'alwaysForceDeleteWorktrees' in sanitizedArgs ||
-      'alwaysForceDeletePreservedBranches' in sanitizedArgs
-        ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
-        : store.updateSettings(sanitizedArgs, updateOptions)
-    if (
-      'experimentalAgentDashboardPopout' in sanitizedArgs &&
-      before.experimentalAgentDashboardPopout !== result.experimentalAgentDashboardPopout
-    ) {
-      track('agent_dashboard_enabled', {
-        enabled: result.experimentalAgentDashboardPopout === true
-      })
-    }
-    const proxySettingsChanged =
-      ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
-      ('httpProxyBypassRules' in sanitizedArgs &&
-        before.httpProxyBypassRules !== result.httpProxyBypassRules)
-    if (proxySettingsChanged) {
-      // Start every authority before yielding so requests cannot enter between their barriers.
-      const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
-        applyElectronProxySettings(result),
-        applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), result),
-        applyProxyToElectronUpdaterSession(result)
-      ])
-      if (defaultSessionResult.status === 'rejected') {
-        console.warn('[settings] failed to apply network proxy settings')
-      }
-      if (browserSessionsResult.status === 'rejected') {
-        console.warn('[settings] failed to apply network proxy settings to browser sessions')
-      }
-    }
-    if (
-      'computerAwakeMode' in sanitizedArgs ||
-      'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
-    ) {
-      agentAwakeService?.setMode(
-        normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
-      )
-    }
-    await getClaudeAgentViewService().reconcile(result)
-    const hookSettingChanged =
-      ('agentStatusHooksEnabled' in sanitizedArgs &&
-        before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
-      ('disabledTuiAgents' in sanitizedArgs &&
-        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
-    if (hookSettingChanged) {
-      try {
-        await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
-          userInitiated: true,
-          shouldHydrateShellPath: app.isPackaged,
-          onInstallError: recordManagedHookInstallFailure,
-          shouldContinue: (agent) => isAgentStatusHooksEnabledForAgent(store.getSettings(), agent)
-        })
-      } catch (error) {
-        console.warn('[settings] failed to reconcile managed agent hooks:', error)
-      }
-    }
-    if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
-      await setMainUiLanguage(result.uiLanguage)
-      rebuildAppMenu()
-      rebuildSystemTrayMenu()
-    }
-    if (
-      ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
-      ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces)
-    ) {
-      void prepareLocalWorktreeRootsForRepos(store)
-      scheduleCurrentWorktreeBaseDirectoryWatcherSync()
-    }
-    if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
-      rebuildAppMenu()
-    }
-    if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
-      applyAppIcon(result.appIcon)
-    }
-    if ('aiVaultSearch' in sanitizedArgs) {
-      applySessionSearchSettingsChange(before, result)
-    }
-
-    // Emit only allowlisted keys without raw values; new value kinds require matching schema support.
-    for (const key of Object.keys(sanitizedArgs)) {
-      if (!SETTINGS_CHANGED_WHITELIST_SET.has(key)) {
-        continue
-      }
-      const beforeValue = (before as Record<string, unknown>)[key]
-      const afterValue = (result as Record<string, unknown>)[key]
-      if (beforeValue === afterValue) {
-        continue
-      }
-      if (typeof afterValue !== 'boolean') {
-        // Unsupported value kinds must not be guessed.
-        continue
-      }
-      track('settings_changed', {
-        setting_key: key as SettingsChangedKey,
-        value_kind: 'bool'
-      })
-    }
-
-    return store.getSettings()
-  })
+    })
+  )
 
   ipcMain.handle(
     'settings:set-active-runtime-environment-preference',

@@ -25,6 +25,7 @@ import {
 // Keep schema/PersistedUIState parity assertions in the typecheck graph so drift fails before reaching paired clients.
 
 import { TerminalQuickCommandsUpdate } from '../../../../../shared/rpc-contract/terminal-quick-command-params'
+import { PortableSettingsImport } from '../../../../../shared/rpc-contract/portable-settings-params'
 import { AgentLaunchSettingsMutation } from '../../../../../shared/rpc-contract/agent-launch-settings-params'
 import {
   assertTerminalQuickCommandMutationReadableForClient,
@@ -104,6 +105,18 @@ export const CLIENT_UI_METHODS = [
     handler: async (params, { runtime }) => ({
       settings: await runtime.updateClientSettings(params)
     })
+  }),
+  defineMethod({
+    name: 'settings.exportPortable',
+    permission: 'workspace',
+    params: null,
+    handler: (_params, { runtime }) => ({ settings: runtime.getClientPortableSettings() })
+  }),
+  defineMethod({
+    name: 'settings.importPortable',
+    permission: 'settings-write',
+    params: PortableSettingsImport,
+    handler: (params, { runtime }) => runtime.importClientPortableSettings(params)
   }),
   defineMethod({
     name: 'settings.getTerminalQuickCommands',

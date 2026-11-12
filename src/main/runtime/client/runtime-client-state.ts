@@ -24,6 +24,15 @@ import type {
 } from '../../../shared/agent-status/presentation/agent-list-status'
 import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
 import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
+import {
+  exportPortableSettings,
+  importPortableSettings,
+  type DesktopSettingsWriter
+} from './settings/runtime-portable-settings'
+import type {
+  PortableSettings,
+  PortableSettingsImportResult
+} from '../../../shared/portable-settings'
 import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import type { TerminalQuickCommandMutation } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
@@ -231,6 +240,23 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   async updateClientSettings(updates: RuntimeClientSettingsUpdate) {
     return await this.clientSettings.update(updates)
+  }
+
+  private desktopSettingsWriter: DesktopSettingsWriter | null = null
+
+  setDesktopSettingsWriter(writer: DesktopSettingsWriter | null): void {
+    this.desktopSettingsWriter = writer
+  }
+
+  getClientPortableSettings(): PortableSettings {
+    return exportPortableSettings(this.store)
+  }
+
+  importClientPortableSettings(args: {
+    settings: Record<string, unknown>
+    dryRun?: boolean
+  }): Promise<PortableSettingsImportResult> {
+    return importPortableSettings(this.store, this.desktopSettingsWriter, args)
   }
 
   getClientTerminalQuickCommands(): TerminalQuickCommand[] {
