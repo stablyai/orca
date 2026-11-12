@@ -226,8 +226,18 @@ export function releaseCommitFieldsForStoredArchive(
 export function releaseCommitFieldsForCapturedArchive(captured: WorkerOutputArchiveCapture) {
   return {
     kind: captured.kind,
-    content: JSON.stringify(captured.content),
+    content: JSON.stringify({ ...captured.content, ...olderReaderFields(captured.kind) }),
     archiveSource: summarizeReferenceKind(captured.kind).source,
     archiveStatus: captured.status
   }
+}
+
+const OLDER_READER_NOTE =
+  'This version of Orca reads released output from the saved copy only. Read it with a newer Orca, or see its report (worker_done) or task result.'
+
+/** Empty copy fields, so a downgraded Orca shows a note instead of failing on a reference row. */
+function olderReaderFields(kind: WorkerTerminalArchiveKind) {
+  return kind === 'terminal_tail'
+    ? { lines: [], truncated: false, terminalStatus: 'exited', warnings: [OLDER_READER_NOTE] }
+    : { messages: [], limited: true, warnings: [OLDER_READER_NOTE] }
 }
