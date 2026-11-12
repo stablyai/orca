@@ -191,10 +191,10 @@ export function registerWorkerReleaseArchiveTests(): void {
         archive: { source: string | null; status: string | null } | null
       }
 
-      expect(release.archive).toEqual({ source: 'terminal', status: 'unavailable' })
+      expect(release.archive).toEqual({ source: 'terminal', status: 'captured' })
       expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
         archive_source: 'terminal',
-        archive_status: 'unavailable'
+        archive_status: 'captured'
       })
     })
   })

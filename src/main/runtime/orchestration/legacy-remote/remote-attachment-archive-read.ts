@@ -23,10 +23,7 @@ export async function readRemoteAttachmentArchive(args: {
     resource: {
       id: `remote-attachment:${args.attachment.dispatch_id}`,
       terminal_handle: args.attachment.terminal_handle,
-      release_state: args.attachment.stage === 'released' ? 'released' : 'releasing',
-      // Rows released before references locate their transcript through the host's resume record.
-      resume_session:
-        db.getWorkerTerminalResourceByOwner(args.attachment.dispatch_id)?.resume_session ?? null
+      release_state: args.attachment.stage === 'released' ? 'released' : 'releasing'
     },
     source: args.source,
     cursor: args.cursor,

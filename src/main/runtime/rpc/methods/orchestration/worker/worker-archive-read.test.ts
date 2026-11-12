@@ -111,7 +111,7 @@ describe('reading a released terminal worker', () => {
     })
   })
 
-  it('reads the original for a row that saved a copy before references', async () => {
+  it('keeps serving the saved copy of a row released before references', async () => {
     db.storeWorkerTerminalArchive({
       dispatchId: 'ctx_1',
       resourceId: 'res_1',
@@ -127,20 +127,10 @@ describe('reading a released terminal worker', () => {
         warnings: []
       })
     })
-    const resumeSession = JSON.stringify({
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: 'session-1', transcriptPath },
-      connectionId: null
-    })
 
-    const output = await readArchivedWorkerOutput({
-      db,
-      dispatchId: 'ctx_1',
-      workerState: 'succeeded',
-      resource: { ...RELEASED, resume_session: resumeSession }
-    })
+    const output = JSON.stringify(await read())
 
-    expect(JSON.stringify(output)).toContain('the final answer')
-    expect(JSON.stringify(output)).not.toContain('saved copy')
+    expect(output).toContain('saved copy')
+    expect(output).not.toContain('the final answer')
   })
 })

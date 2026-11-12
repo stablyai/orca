@@ -1,4 +1,6 @@
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
+import type { WorkerStructuredJournalArchive } from './structured-worker-journal-archive'
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
 import {
   ORCHESTRATION_WORKER_READ_FALLBACK_REASONS,
@@ -29,6 +31,35 @@ export type WorkerOutputReference = {
   wslDistro?: string
   /** Why a terminal worker left no transcript to read. */
   fallbackReason?: OrchestrationWorkerReadFallbackReason
+}
+
+/** Output copies saved by releases before references; their rows stay readable as they were. */
+export type WorkerTranscriptSnapshotArchive = {
+  version: 2
+  agent: AgentType
+  processIncarnation: string
+  messages: NativeChatMessage[]
+  limited: boolean
+  clipping?: string[]
+  warnings: string[]
+}
+
+export type WorkerTerminalTailArchive = {
+  lines: string[]
+  draft?: string
+  truncated: boolean
+  terminalStatus: string
+  warnings: string[]
+  /** Transcript-first attempt provenance preserved across release handoff. */
+  fallbackReason?: OrchestrationWorkerReadFallbackReason
+  clipping?: string[]
+}
+
+/** References serialize `version` first, so this never parses a saved copy. */
+export function isWorkerOutputReference(
+  archive: Pick<WorkerTerminalArchiveRow, 'content'>
+): boolean {
+  return archive.content.startsWith('{"version":3,') || archive.content === '{"version":3}'
 }
 
 export type WorkerOutputArchiveStatus = Extract<
@@ -101,7 +132,7 @@ function transcriptUnreachableReason(
   return resolveNativeChatTranscriptAgent(session.agent) ? null : 'provider_unsupported'
 }
 
-/** The reference a row holds; rows written before references held a copy carrying the same fields. */
+/** The reference a row holds; check isWorkerOutputReference first. */
 export function readWorkerOutputReference(
   archive: WorkerTerminalArchiveRow
 ): WorkerOutputReference {
@@ -137,14 +168,43 @@ export function readWorkerOutputReference(
   return fallbackReason ? { ...reference, fallbackReason } : reference
 }
 
-export function summarizeWorkerOutputArchive(archive: Pick<WorkerTerminalArchiveRow, 'kind'>): {
+export function summarizeWorkerOutputArchive(
+  archive: Pick<WorkerTerminalArchiveRow, 'kind' | 'content'>
+): {
+  source: 'transcript' | 'terminal'
+  status: WorkerTerminalArchiveStatus
+} {
+  if (!isWorkerOutputReference(archive)) {
+    return summarizeSavedOutputCopy(archive)
+  }
+  return summarizeReferenceKind(archive.kind)
+}
+
+function summarizeReferenceKind(kind: WorkerTerminalArchiveKind): {
   source: 'transcript' | 'terminal'
   status: WorkerOutputArchiveStatus
 } {
   // Report chat history as transcript output to preserve the existing paired-client source union.
-  return archive.kind === 'terminal_tail'
+  return kind === 'terminal_tail'
     ? { source: 'terminal', status: 'unavailable' }
     : { source: 'transcript', status: 'captured' }
+}
+
+function summarizeSavedOutputCopy(archive: Pick<WorkerTerminalArchiveRow, 'kind' | 'content'>): {
+  source: 'transcript' | 'terminal'
+  status: 'captured' | 'empty'
+} {
+  if (archive.kind === 'transcript_pin') {
+    return { source: 'transcript', status: 'captured' }
+  }
+  if (archive.kind === 'structured_journal') {
+    const journal = JSON.parse(archive.content) as WorkerStructuredJournalArchive
+    return { source: 'transcript', status: journal.messages.length > 0 ? 'captured' : 'empty' }
+  }
+  const content = JSON.parse(archive.content) as WorkerTerminalTailArchive
+  const empty =
+    content.lines.every((line) => line.trim() === '') && (content.draft?.trim() ?? '') === ''
+  return { source: 'terminal', status: empty ? 'empty' : 'captured' }
 }
 
 /** Errors at compile time if a capture kind is ever added that the durable row cannot store. */
@@ -156,7 +216,7 @@ export type WorkerOutputArchiveCaptureKind = AssertAssignable<
 
 /** Archive fields a release commit records for an archive an earlier attempt already stored. */
 export function releaseCommitFieldsForStoredArchive(
-  archive: Pick<WorkerTerminalArchiveRow, 'kind'>
+  archive: Pick<WorkerTerminalArchiveRow, 'kind' | 'content'>
 ) {
   const stored = summarizeWorkerOutputArchive(archive)
   return { archiveSource: stored.source, archiveStatus: stored.status }
@@ -167,6 +227,7 @@ export function releaseCommitFieldsForCapturedArchive(captured: WorkerOutputArch
   return {
     kind: captured.kind,
     content: JSON.stringify(captured.content),
-    ...releaseCommitFieldsForStoredArchive(captured)
+    archiveSource: summarizeReferenceKind(captured.kind).source,
+    archiveStatus: captured.status
   }
 }

@@ -6,6 +6,8 @@ import type { OrchestrationWorkerReadTranscriptResult } from '../../../../../../
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import type { WorkerStructuredJournalArchive } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
+import type { WorkerTerminalReleaseState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import {
   readStructuredLineageJournalPage,
   type StructuredLineageJournalPage
@@ -214,6 +216,47 @@ function structuredJournalPrefixIdentity(args: {
       .slice(0, args.position)
       .flatMap(({ index, revision }) => [itemKey(index), String(revision)])
   ])
+}
+
+export function readArchivedStructuredJournal(args: {
+  dispatchId: string
+  workerState: string
+  resourceId: string
+  createdAt: string
+  /** Only a SETTLED release proves the session is gone; `releasing` and `unknown` never do. */
+  releaseState: WorkerTerminalReleaseState
+  archive: WorkerStructuredJournalArchive
+  cursor?: string | number
+  limit?: number
+}): OrchestrationWorkerReadTranscriptResult {
+  const sourceIdentity = createWorkerOutputSourceIdentity([
+    'released-structured-journal',
+    args.resourceId,
+    args.archive.processIncarnation,
+    args.createdAt
+  ])
+  const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
+  if (cursor && (cursor.source !== 'transcript' || cursor.sourceIdentity !== sourceIdentity)) {
+    throw new OrchestrationError(
+      'source_changed',
+      'The worker output source changed. Start a fresh worker-read without the old cursor.'
+    )
+  }
+  return pageMessages({
+    messages: args.archive.messages,
+    warnings: args.archive.warnings,
+    limited: args.archive.limited,
+    dispatchId: args.dispatchId,
+    workerState: args.workerState,
+    agent: args.archive.agent,
+    // Frozen archives cannot revise under a cursor, so their identity is constant.
+    identityAt: () => sourceIdentity,
+    start: cursor?.position ?? 0,
+    limit: args.limit,
+    archived: true,
+    // Archives precede close and prove no exit; only settled release can certify death (docs/reference/ssh-execution-boundary.md).
+    liveness: args.releaseState === 'released' ? 'exited' : 'unverifiable'
+  })
 }
 
 function pageMessages(input: {

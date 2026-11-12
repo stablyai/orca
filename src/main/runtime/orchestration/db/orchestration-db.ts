@@ -21,9 +21,6 @@ import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-work
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 
-// Truncate the WAL back to 8 MiB after a checkpoint, as the other app databases do; otherwise it stays at its high-water size.
-export const ORCHESTRATION_JOURNAL_SIZE_LIMIT_BYTES = 8 * 1024 * 1024
-
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
   db: Database.Database
@@ -42,11 +39,11 @@ class OrchestrationDbCore {
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
-    // First, so opening waits out a background writer's transaction instead of failing.
-    this.db.pragma('busy_timeout = 5000')
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
-    this.db.pragma(`journal_size_limit = ${ORCHESTRATION_JOURNAL_SIZE_LIMIT_BYTES}`)
+    this.db.pragma('busy_timeout = 5000')
+    // Truncate the WAL back to 8 MiB after a checkpoint, as the other app databases do; otherwise it stays at its high-water size.
+    this.db.pragma('journal_size_limit = 8388608')
     // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
     this.db.pragma('temp_store = MEMORY')
     createTables.call(this as unknown as OrchestrationDb)

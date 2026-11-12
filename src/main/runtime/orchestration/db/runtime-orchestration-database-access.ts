@@ -3,7 +3,6 @@ import { OrchestrationDb } from './orchestration-db'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
 import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
-import { scheduleWorkerOutputCopyRemoval } from './worker-terminal/worker-output-copy-removal'
 import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persisted-surfaces/automation-api-operations'
 
 export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWithAutomationApiOperations {
@@ -31,12 +30,6 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       this.continueRestoredWorkerMail(this._orchestrationDb)
       // No terminal prompt's hold survives a restart; its card must not stay answerable.
       closeOrphanedTerminalApprovals(this._orchestrationDb)
-      const opened = this._orchestrationDb
-      scheduleWorkerOutputCopyRemoval(
-        opened,
-        this.orchestrationDbPath(),
-        () => this._orchestrationDb === opened
-      )
     }
     return this._orchestrationDb
   }
