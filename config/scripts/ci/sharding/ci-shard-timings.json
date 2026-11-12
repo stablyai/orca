@@ -6616,7 +6616,6 @@
       "src/shared/plugins/images/plugin-image-url.test.ts": 42,
       "src/shared/plugins/installation/plugin-file-validation.test.ts": 363,
       "src/shared/plugins/manifest/plugin-display-text.test.ts": 285,
-      "src/shared/plugins/manifest/plugin-manifest-source-module-floor.test.ts": 212,
       "src/shared/plugins/manifest/plugin-manifest-v2-rules.test.ts": 239,
       "src/shared/plugins/manifest/plugin-manifest.test.ts": 234,
       "src/shared/plugins/view/plugin-editor-shot-acts.test.ts": 112,
