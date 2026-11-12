@@ -1,4 +1,5 @@
 import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
+import { useIsPairedCloudPrimaryRow } from '@/lib/orca-cloud/cloud-host-rows'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
@@ -153,12 +154,16 @@ export function useWorktreeContextMenuModel({
       unifiedTabsByWorktree
     ]
   )
+  // A paired cloud workspace can be running with nothing open here: its Sleep reaches the sandbox.
+  const pairedCloudSleepable = useIsPairedCloudPrimaryRow(worktree) && !isMultiContext
   const sleepableWorktrees = useMemo(
     () =>
-      activeContextWorktrees.filter((item) =>
-        hasSleepableWorkspaceActivity(item.id, sleepActivity)
+      activeContextWorktrees.filter(
+        (item) =>
+          hasSleepableWorkspaceActivity(item.id, sleepActivity) ||
+          (pairedCloudSleepable && item.id === worktree.id)
       ),
-    [activeContextWorktrees, sleepActivity]
+    [activeContextWorktrees, sleepActivity, pairedCloudSleepable, worktree.id]
   )
   const lineageMenuActions = useWorkspaceLineageMenuActions({
     enabled: menuOpen && !isMultiContext,

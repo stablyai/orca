@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { toastCloudSleepFailure } from '@/lib/orca-cloud/cloud-sleep-failure-toast'
+import { sleepPairedCloudSandboxes } from '@/lib/orca-cloud/paired-cloud-sleep'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -95,16 +96,15 @@ export async function runSleepWorktrees(
   for (const id of unsleptWorktreeIds) {
     releaseWorktreeSleepView(id)
   }
+  // A paired cloud workspace's sandbox sleeps through the control plane (PAIRED-SLEEP).
+  const unslept = new Set(unsleptWorktreeIds)
+  const pairedStillRunning = await sleepPairedCloudSandboxes(
+    worktreeIds.filter((id) => !unslept.has(id))
+  )
+  const stillRunningIds = [...vmStillRunningIds, ...pairedStillRunning]
   // An Orca Cloud sandbox left running gets the cloud copy (sandbox hours, Try again) instead.
-  const cloudToasted = toastCloudSleepFailure(
-    vmStillRunningIds,
-    (ids) => void runSleepWorktrees(ids)
-  )
-  toastSleepFailures(
-    new Set(worktreeIds).size,
-    errors,
-    vmStillRunningIds.length > 0 && !cloudToasted
-  )
+  const cloudToasted = toastCloudSleepFailure(stillRunningIds, (ids) => void runSleepWorktrees(ids))
+  toastSleepFailures(new Set(worktreeIds).size, errors, stillRunningIds.length > 0 && !cloudToasted)
   // A slept Orca Cloud sandbox won't restart, so its restart warning no longer applies.
   for (const result of results) {
     if (result.completed) {

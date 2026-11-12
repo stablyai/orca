@@ -5,9 +5,11 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { getCloudWorkspaceSnapshot } from './orca-cloud-workspace-store'
+import { isPairedCloudSleepTarget } from './paired-cloud-sleep'
 
 export function isCloudWorkspaceId(worktreeId: string): boolean {
-  return getCloudWorkspaceSnapshot().ids.has(worktreeId)
+  // Paired workspaces' sandboxes too: their failed Sleep leaves a sandbox running just the same.
+  return getCloudWorkspaceSnapshot().ids.has(worktreeId) || isPairedCloudSleepTarget(worktreeId)
 }
 
 function workspaceName(worktreeId: string): string {
