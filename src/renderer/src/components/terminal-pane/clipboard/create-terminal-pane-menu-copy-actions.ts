@@ -7,6 +7,7 @@ import {
 } from './terminal-pane-menu-copy-actions'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { toHostSessionPaneKey } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
 import type {
   TerminalPaneAgentIdCopy,
@@ -62,7 +63,8 @@ export function createTerminalPaneMenuCopyActions({
       const result = await callRuntimeRpc<{ orcaSessionId: string | null }>(
         target,
         'terminal.agentId',
-        { paneKey: makePaneKey(tabId, pane.leafId), worktreeId }
+        // The host matches its own pane keys, not this client's mirrored ones.
+        { paneKey: toHostSessionPaneKey(makePaneKey(tabId, pane.leafId)), worktreeId }
       )
       return result.orcaSessionId
     },
