@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { HandlerContext } from '../../dispatch'
+import type { HandlerContext } from '../../dispatch/dispatch'
 import { printPluginResult } from '../plugin-cli-output'
 import { RuntimeClientError } from '../../runtime/types'
 import { callPlugins } from '../plugin-runtime'

@@ -2,7 +2,7 @@ import type React from 'react'
 import { CheckCircle2, ChevronLeft, CircleDot, Copy, Search } from 'lucide-react'
 
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 

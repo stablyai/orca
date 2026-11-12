@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
-import type { CommandHandler, HandlerContext } from '../dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printPluginResult, requirePluginPathArg } from './plugin-cli-output'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import {

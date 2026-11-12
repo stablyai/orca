@@ -3,7 +3,7 @@
 # collector (file-wide). Not counted: destructuring off a global object, a self-rescheduling setTimeout (it must back off or pause while hidden).
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing intervals: pnpm check:recurring-timer-ratchet --prune
-1 src/cli/handlers/orchestration/check-keepalive.ts
+1 src/cli/orchestration/messages/check-keepalive.ts
 1 src/cli/runtime/mac-app-update-bundle.ts
 1 src/cli/runtime/serve-supervised-service.ts
 1 src/main/agent-hooks/server/server-opencode-binder.ts

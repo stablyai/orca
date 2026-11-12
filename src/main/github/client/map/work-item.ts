@@ -1,4 +1,4 @@
-import type { OwnerRepo } from '../../gh-utils'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import {
   authorFieldsFromUnknown,
   extractHeadOwnerLogin,

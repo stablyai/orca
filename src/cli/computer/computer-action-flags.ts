@@ -10,7 +10,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 import {
   validateDragTarget,

@@ -1,4 +1,4 @@
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 
 export type EmulatorPermissionRequest = {

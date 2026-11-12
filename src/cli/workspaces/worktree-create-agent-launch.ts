@@ -22,7 +22,7 @@ import {
   SURFACE_UNSUPPORTED_MESSAGE
 } from '../agents/agent-launch-request'
 import { formatWorktreeShow } from './workspace-format'
-import { printResult } from '../command-result-output'
+import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeClient } from '../runtime/client'
 import { printLineageSummary } from './worktree-lineage-summary'

@@ -17,11 +17,11 @@ import {
   ARTIFACT_SHARING_DISABLED_MESSAGE,
   ARTIFACT_SHARING_DISABLED_NEXT_STEPS
 } from '../../shared/artifacts/artifact-sharing-gate'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { RuntimeClientError } from '../runtime/types'
 import { formatArtifactListPage, formatArtifactShared } from './artifact-format'
-import { printResult } from '../command-result-output'
+import { printResult } from '../output/command-result-output'
 
 function stringFlag(ctx: HandlerContext, name: string): string | undefined {
   const value = ctx.flags.get(name)

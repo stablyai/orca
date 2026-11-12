@@ -8,7 +8,7 @@ import { triggerError, triggerSuccess } from '../../platform/haptics'
 import {
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
-} from '../../../../src/shared/github/links'
+} from '../../../../src/shared/github/repositories/links'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
 import { TextField } from '../composer-input/TextField'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

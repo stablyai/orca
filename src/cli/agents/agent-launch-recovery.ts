@@ -3,7 +3,7 @@ import { classifyAgentLaunchReplayRefusal } from '../../shared/agent-launch/cont
 import {
   recoverableOrchestrationArgs,
   resolveOrchestrationCliExecutable
-} from '../runtime/orchestration-recovery-command'
+} from '../orchestration/recovery/orchestration-recovery-command'
 
 /** A lost reply never authorizes a new launch, even on hosts without a replay ledger. */
 export async function withCliAgentLaunchRecovery<T>(

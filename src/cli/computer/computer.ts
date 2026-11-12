@@ -5,12 +5,12 @@ import type {
   ComputerProviderCapabilities,
   ComputerSnapshotResult
 } from '../../shared/computer-use-runtime-types'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import { queryComputerTreeText } from './computer-tree-query'
 import { RuntimeClientError } from '../runtime/types'
 import {
@@ -19,7 +19,7 @@ import {
   formatListApps,
   formatListWindows
 } from './computer-format'
-import { printResult } from '../command-result-output'
+import { printResult } from '../output/command-result-output'
 import { getComputerCommandTarget } from './computer-command-target'
 import {
   getComputerActionObserveFlags,

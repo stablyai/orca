@@ -52,8 +52,8 @@ vi.mock('../../shared/windows-console-input', () => ({
 }))
 
 import { ACCOUNT_HANDLERS } from './account'
-import { REPEATED_FLAG_SEPARATOR } from '../args'
-import type { HandlerContext } from '../dispatch'
+import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
+import type { HandlerContext } from '../dispatch/dispatch'
 import type { RuntimeClient } from '../runtime/client'
 import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,

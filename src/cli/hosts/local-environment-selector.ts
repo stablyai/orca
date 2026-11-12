@@ -1,7 +1,7 @@
 import { normalizeTypedName } from '../../shared/typed-name-normalization'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 /** `--environment local`: the caller's own Orca, even over an ambient ORCA_ENVIRONMENT or pairing code. */
 export const LOCAL_ENVIRONMENT = 'local'

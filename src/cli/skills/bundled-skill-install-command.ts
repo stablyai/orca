@@ -1,10 +1,10 @@
 import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import { getDefaultUserDataPath } from '../runtime/metadata'
-import { getRepeatedStringFlag } from '../flags'
-import { writeStdoutLine } from '../stdout-line'
+import { getRepeatedStringFlag } from '../arguments/flags'
+import { writeStdoutLine } from '../output/stdout-line'
 import { skillsCliAgentAliases } from './skills-cli-agent-aliases'
 import { loadCanonicalGuides, type BundledSkillGuide } from './bundled-skill-guide-table'
 import type {

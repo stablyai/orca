@@ -1,5 +1,5 @@
 import type { RuntimeFileOpenResult } from '../../shared/file-access/runtime-editor-file-open'
-import type { HandlerContext } from '../dispatch'
+import type { HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 

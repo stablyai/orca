@@ -6,7 +6,7 @@ import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { withProjectRef } from './merge-request-project-resolution'
 import { codeHostFailure } from '../../../shared/code-host-failure-copy'
-import { invalidateReviewLookupsAfterPRMutation } from '../../github/pr-mutation-review-invalidation'
+import { invalidateReviewLookupsAfterPRMutation } from '../../github/pull-requests/refresh/pr-mutation-review-invalidation'
 
 // Why: glab's MRCheckErrors refuses a no-op close/reopen with these fixed texts; every other
 // failure, including "has already been merged", must surface.
