@@ -35,7 +35,7 @@ function seedMessageDefaults(session: CodexSession): void {
           label: 'Model A',
           isDefault: false,
           defaultEffort: 'low',
-          serviceTiers: [{ value: 'priority', label: 'Priority' }],
+          serviceTiers: [{ value: 'priority', label: 'Fast' }],
           efforts: [
             { value: 'low', label: 'Low' },
             { value: 'high', label: 'High' }
