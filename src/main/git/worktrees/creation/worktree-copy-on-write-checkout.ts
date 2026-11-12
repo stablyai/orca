@@ -183,13 +183,13 @@ async function cloneFiles(
   const batches: { targetDirectory: string; sources: string[] }[] = []
   for (const [directory, sources] of byDirectory) {
     const targetDirectory = join(worktreePath, directory)
-    await mkdir(targetDirectory, { recursive: true })
     for (let i = 0; i < sources.length; i += CLONE_BATCH_SIZE) {
       batches.push({ targetDirectory, sources: sources.slice(i, i + CLONE_BATCH_SIZE) })
     }
   }
   // Probe with one file: an unsupported filesystem fails here, before any batch runs.
   const [first] = batches
+  await mkdir(first.targetDirectory, { recursive: true })
   await runClone(method, first.sources.slice(0, 1), first.targetDirectory, options)
   first.sources = first.sources.slice(1)
   let next = 0
@@ -198,6 +198,7 @@ async function cloneFiles(
       options.signal?.throwIfAborted()
       const batch = batches[next++]
       if (batch.sources.length > 0) {
+        await mkdir(batch.targetDirectory, { recursive: true })
         // A file missing or changed in the main checkout fails alone; Git rewrites it below.
         await runClone(method, batch.sources, batch.targetDirectory, options).catch(() => {})
       }
