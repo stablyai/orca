@@ -27760,7 +27760,6 @@
     "ago": "{{ago}} ago",
     "wake": "Wake",
     "error": {
-      "seePlans": "See plans",
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
       "generic": "Something went wrong. Try again."
     },

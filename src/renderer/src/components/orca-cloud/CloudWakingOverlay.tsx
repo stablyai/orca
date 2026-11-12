@@ -9,11 +9,8 @@ import { cn } from '@/lib/class-names'
 import { wakeElapsedSeconds } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { TERMINAL_CONTENT_INSET_PX, useTerminalContentInset } from './use-terminal-content-inset'
 import { useBillingSummary } from '@/components/billing/billing-summary-store'
-import {
-  cloudWakeBillingCopy,
-  cloudWakeBillingFixLabel,
-  runCloudWakeBillingFix
-} from './cloud-wake-billing'
+import { cloudWakeBillingCopy } from './cloud-wake-billing'
+import { CloudWakeBillingFixButton } from './CloudWakeBillingFixButton'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
 /** After this long the pill says it's slower than usual; after STUCK_S it offers recovery inline. */
@@ -263,11 +260,7 @@ export function CloudWakingOverlay({
               >
                 {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
               </Button>
-              {billingFix ? (
-                <Button size="sm" onClick={() => runCloudWakeBillingFix(billingFix)}>
-                  {cloudWakeBillingFixLabel(billingFix, t)}
-                </Button>
-              ) : null}
+              {billingFix ? <CloudWakeBillingFixButton fix={billingFix} onRetry={onRetry} /> : null}
             </div>
           </div>
         ) : (
