@@ -1077,6 +1077,10 @@ final class Provider {
         guard let verification = try TextInput.replaceSelection(record.element, with: text, property: "elementText") else {
             throw ProviderError.coded("accessibility_error", "text insertion into element \(record.index) did not confirm; run get-app-state to check the field before retrying")
         }
+        // Why: a secure field can read back masked, so its value neither disproves the write nor gets shown.
+        if verification["state"] as? String != "verified", AXSnapshotReader().isSecureTextElement(record.element) {
+            return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: unverifiedAction(reason: "readback_unsupported"))
+        }
         return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
     }
 

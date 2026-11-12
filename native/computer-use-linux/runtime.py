@@ -1791,10 +1791,12 @@ def insert_text(node, value, verified_property):
                 or attempt(lambda: Atspi.Text.get_caret_offset(text)) != caret):
             raise RuntimeError("text_caret_unconfirmed: text was inserted but caret movement did not confirm success; inspect state before retrying")
     action = {"path": "accessibility", "actionName": "insertText", "fallbackReason": None}
-    if attempt(lambda: Atspi.Text.get_text(text, start, caret)) == value:
+    readback = attempt(lambda: Atspi.Text.get_text(text, start, caret))
+    if readback == value:
         action["verification"] = {"state": "verified", "property": verified_property}
     else:
-        action["verification"] = {"state": "unverified", "reason": "accessibility_action_unasserted"}
+        reason = "readback_unsupported" if readback is None else "accessibility_action_unasserted"
+        action["verification"] = {"state": "unverified", "reason": reason}
     return action
 
 
