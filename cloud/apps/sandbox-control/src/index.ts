@@ -265,6 +265,16 @@ export type Deps = {
   trialNotifier?: TrialGitHubNotifier
 }
 
+/**
+ * RESUME-STUCK: a wake outlives its request. A client that quits mid-wake cancels the request, not
+ * the wake (ctx.waitUntil), so the row reaches `running` (or back to `suspended`) instead of
+ * staying `resuming`.
+ */
+function outlivingRequest<T>(life: LifecycleDeps, work: Promise<T>): Promise<T> {
+  life.background?.(work.catch(() => undefined))
+  return work
+}
+
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
   const days = Number(env.ARCHIVE_TTL_DAYS)
   let centsPerHour: WorkspaceConfig['centsPerHour']
@@ -865,6 +875,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
     secrets: await secretsDeps(env),
     memberIdentity: await memberIdentityFor(env, deps),
     now: deps.now ?? Date.now,
+    sleep: deps.sleep,
     retention: deps.retention ?? retentionFromEnv(env),
     background: deps.waitUntil,
     publicRepoCheck: deps.publicRepoCheck ?? ((repoUrl) => githubRepoIsPublic(repoUrl)),
@@ -1705,12 +1716,12 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return json({ sandbox: view(suspended) })
       }
       case 'POST resume': {
-        const ready = await resumeSandbox(life, row)
+        const ready = await outlivingRequest(life, resumeSandbox(life, row))
         await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return readyResponse(ready)
       }
       case 'POST rollover': {
-        const ready = await rolloverSandbox(life, row)
+        const ready = await outlivingRequest(life, rolloverSandbox(life, row))
         await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return readyResponse(ready)
       }
@@ -1719,7 +1730,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       case 'POST restart': {
         // User-triggered and unbounded otherwise: shares the per-account start rate limit.
         await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
-        const ready = await restartSandbox(life, row)
+        const ready = await outlivingRequest(life, restartSandbox(life, row))
         await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return json(readyView(ready.row, ready.connection))
       }
@@ -2108,7 +2119,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         return json({ ...answer, endpoint: null })
       }
       // Never returns the owner's pairing offer; teammates get in through their own grant.
-      const ready = await resumeSandbox(life, row)
+      const ready = await outlivingRequest(life, resumeSandbox(life, row))
       return json({ workspace: await view(ready.row) })
     }
     case 'POST lease': {
