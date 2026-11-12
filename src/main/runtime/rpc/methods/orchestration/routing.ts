@@ -129,7 +129,7 @@ export function resolveMessageRun(
 }
 
 export function legacyWorkerDeliveryContract(
-  runtime: OrcaRuntimeService,
+  runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb'>,
   runId: string | undefined,
   recipient: string
 ): 'legacy_direct' | undefined {

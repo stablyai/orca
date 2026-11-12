@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { structuredAgentSessionDomainFingerprint } from './lifecycle/structured-agent-session-mutation'
 
 export const agentSessionAdvisoryPolicySchema = z
   .object({
@@ -28,3 +29,11 @@ export const agentSessionAdvisoryPolicySchema = z
   )
 
 export type AgentSessionAdvisoryPolicy = z.infer<typeof agentSessionAdvisoryPolicySchema>
+
+export function agentSessionAdvisoryPolicyFingerprint(policy: AgentSessionAdvisoryPolicy): string {
+  return structuredAgentSessionDomainFingerprint({
+    domain: 'agentSession.advisoryPolicy.v1',
+    sessionId: '',
+    fields: { policy }
+  })
+}

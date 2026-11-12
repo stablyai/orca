@@ -36,6 +36,11 @@ export function workerStartOptionsAgent(json: string): string | null {
   return workerLaunchAgent(options.launch) || (isTuiAgent(options.agent) ? options.agent : null)
 }
 
+export function workerStartOptionsAdvisoryPolicyFingerprint(json: string): string | null {
+  const value = startOptions(json).advisoryPolicyFingerprint
+  return typeof value === 'string' ? value : null
+}
+
 /** Enrich the existing launch concept without rewriting the person's selector or preferences. */
 export function mergeWorkerLaunchObservation(json: string, observation: unknown): string {
   let options: Record<string, unknown>

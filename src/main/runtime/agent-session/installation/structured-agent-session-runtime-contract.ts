@@ -15,8 +15,10 @@ import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-suppo
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import type { AgentSessionAdvisoryReporterFactory } from '../../../../shared/agent-session/agent-session-advisory-report'
 
 export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
+  prepareAdvisoryReporter?: AgentSessionAdvisoryReporterFactory
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
   legacySessionTabIds?: readonly string[]

@@ -73,7 +73,12 @@ export async function openClaudeStreamJsonConnection(
   )
   const inbox = createClaudeUserMessageQueue()
   const advisory = launch.advisoryPolicy
-    ? createClaudeAdvisoryControls(launch.advisoryPolicy, sdk, launch.options)
+    ? createClaudeAdvisoryControls(
+        launch.advisoryPolicy,
+        sdk,
+        launch.options,
+        handlers.onAdvisoryReport
+      )
     : undefined
   const session = (queryImpl ?? sdk.query)({
     prompt: inbox.messages,
@@ -98,7 +103,6 @@ export async function openClaudeStreamJsonConnection(
   let faultReported = false
   let exitReported = false
   let closePromise: Promise<boolean> | null = null
-  let advisoryTimer: ReturnType<typeof setTimeout> | undefined
   let readingBarrier: Promise<void> | null = null
   let releaseReadingBarrier: (() => void) | null = null
   const pauseReading = (): void => {
@@ -141,7 +145,6 @@ export async function openClaudeStreamJsonConnection(
 
   const handleUnexpectedEnd = (cause?: Error): void => {
     advisory?.end()
-    clearTimeout(advisoryTimer)
     resumeReading()
     if (!terminalError) {
       const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
@@ -226,14 +229,9 @@ export async function openClaudeStreamJsonConnection(
         )
       )
     }
-    try {
-      advisory?.admitInput()
-    } catch (error) {
-      return Promise.reject(
-        claudeUnwrittenUserMessageError(
-          error instanceof Error ? error : new Error('Advisor input refused.')
-        )
-      )
+    const refused = advisory?.admitInput()
+    if (refused) {
+      return Promise.reject(refused)
     }
     startup.finish()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch constructs the SDK user envelope after mapping every content block.
@@ -249,7 +247,6 @@ export async function openClaudeStreamJsonConnection(
     closePromise ??= (async () => {
       closing = true
       advisory?.end()
-      clearTimeout(advisoryTimer)
       resumeReading()
       // Capture before stopping: exited roots can leave reparented descendants undiscoverable.
       await (tree.refresh?.() ?? tree.capture())
@@ -282,17 +279,7 @@ export async function openClaudeStreamJsonConnection(
     return closePromise
   }
 
-  if (advisory) {
-    advisoryTimer = setTimeout(() => {
-      advisory.end()
-      const stopped = close({ grace: 'brief' })
-      handlers.onFault?.(new Error('Advisor deadline reached.'))
-      void stopped.catch((error: unknown) => {
-        handlers.onFault?.(error instanceof Error ? error : new Error('Advisor stop failed.'))
-      })
-    }, advisory.remaining)
-    advisoryTimer.unref()
-  }
+  advisory?.bindClose(close, handlers.onFault)
 
   const controls = createClaudeControlSurface(session)
   return {

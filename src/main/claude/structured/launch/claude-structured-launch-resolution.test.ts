@@ -5,6 +5,8 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { adapterFor, fakeClaude } from '../claude-structured-session-test-support'
+import { ClaudeStructuredSessionAdapter } from '../claude-structured-session-adapter'
+import type { AgentSessionAdvisoryReporter } from '../../../../shared/agent-session/agent-session-advisory-report'
 
 const ADVISORY = {
   schema: 1 as const,
@@ -77,6 +79,31 @@ const RESUMABLE = record({
 })
 
 describe('claude structured launch resolution', () => {
+  it('refuses advisory acquisition before spawning when native report authority is absent', async () => {
+    const launch = await resolverFor(record({ schemaVersion: 3, advisoryPolicy: ADVISORY }))({
+      identity: IDENTITY
+    })
+    const claude = fakeClaude({ initSessionId: launch.providerSessionId })
+    try {
+      await expect(
+        adapterFor(claude, launch).acquire({
+          identity: {
+            sessionId: SESSION_ID,
+            workspaceId: 'workspace-1',
+            hostId: 'local',
+            agent: 'claude',
+            providerHandle: null
+          },
+          fence: 1,
+          spawnToken: 'advisor-spawn'
+        })
+      ).rejects.toThrow('Advisory report authority unavailable.')
+      expect(claude.connections).toEqual([])
+    } finally {
+      claude.dispose()
+    }
+  })
+
   it('carries an immutable advisory snapshot through composed launch and acquisition', async () => {
     const saved = record({ schemaVersion: 3, advisoryPolicy: structuredClone(ADVISORY) })
     const launch = await resolverFor(saved)({ identity: IDENTITY })
@@ -87,7 +114,19 @@ describe('claude structured launch resolution', () => {
     saved.advisoryPolicy!.artifacts[0]!.text = 'changed after resolution'
     const claude = fakeClaude({ initSessionId: launch.providerSessionId })
     try {
-      const adapter = adapterFor(claude, launch)
+      const reports: unknown[] = []
+      let publish: AgentSessionAdvisoryReporter | undefined
+      const adapter = new ClaudeStructuredSessionAdapter({
+        resolveLaunch: async () => launch,
+        openConnection: (childLaunch, handlers) => {
+          publish = handlers?.onAdvisoryReport
+          return claude.openConnection(childLaunch, handlers)
+        },
+        readProcessStartTime: async () => 1_700_000_000_000,
+        prepareAdvisoryReporter: () => async (report) => {
+          reports.push(report)
+        }
+      })
       await adapter.acquire({
         identity: {
           sessionId: SESSION_ID,
@@ -103,6 +142,11 @@ describe('claude structured launch resolution', () => {
         maxModelCalls: 4,
         artifacts: [{ text: 'hello' }]
       })
+      if (!publish) {
+        throw new Error('Advisory report was not connected.')
+      }
+      await publish({ status: 'inconclusive' })
+      expect(reports).toEqual([{ status: 'inconclusive' }])
     } finally {
       claude.dispose()
     }

@@ -2,6 +2,9 @@ import type * as ClaudeSdk from '@anthropic-ai/claude-agent-sdk'
 import { agentSessionAdvisoryPolicySchema } from '../../../shared/agent-session/agent-session-advisory-policy'
 import { createClaudeAdvisoryArtifactServer } from './claude-advisory-artifacts'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAdvisoryReporter } from '../../../shared/agent-session/agent-session-advisory-report'
+import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection-types'
+import { claudeUnwrittenUserMessageError } from '../claude-agent-sdk-user-message-queue'
 
 const TOOLS = new Set(['mcp__orca_advisor__read_artifact', 'mcp__orca_advisor__search_artifacts'])
 
@@ -28,7 +31,8 @@ export function createClaudeAdvisoryControls(
   selected: Pick<
     ClaudeSdk.Options,
     'model' | 'effort' | 'sessionId' | 'resume' | 'forkSession' | 'resumeSessionAt'
-  >
+  >,
+  publish?: AgentSessionAdvisoryReporter
 ) {
   const parsed = agentSessionAdvisoryPolicySchema.safeParse(input)
   if (!parsed.success || selected.resume || selected.forkSession || selected.resumeSessionAt) {
@@ -40,7 +44,35 @@ export function createClaudeAdvisoryControls(
   }
   const controller = new AbortController()
   const ended = () => controller.signal.aborted || Date.now() >= parsed.data.deadlineAt
-  const server = createClaudeAdvisoryArtifactServer(parsed.data, sdk, controller.signal)
+  let close: ClaudeStreamJsonConnection['close'] | undefined
+  let onFault: ((error: Error) => void) | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const stop = (reason?: Error) => {
+    controller.abort()
+    const stopped = close?.({ grace: 'brief' })
+    if (reason) {
+      onFault?.(reason)
+    }
+    void stopped?.catch((error: unknown) =>
+      onFault?.(error instanceof Error ? error : new Error('Advisor stop failed.'))
+    )
+  }
+  const server = createClaudeAdvisoryArtifactServer(
+    parsed.data,
+    sdk,
+    controller.signal,
+    publish &&
+      (async (report) => {
+        if (!close) {
+          throw new Error('Advisor report unavailable.')
+        }
+        try {
+          await publish(report)
+        } finally {
+          stop()
+        }
+      })
+  )
   let inputAdmitted = false
   const options: ClaudeSdk.Options = {
     model: selected.model,
@@ -71,7 +103,8 @@ export function createClaudeAdvisoryControls(
                 !ended() &&
                 !signal.aborted &&
                 event.hook_event_name === 'PreToolUse' &&
-                TOOLS.has(event.tool_name) &&
+                (TOOLS.has(event.tool_name) ||
+                  Boolean(publish && event.tool_name === 'mcp__orca_advisor__report_advice')) &&
                 event.mcp_server?.name === 'orca_advisor' &&
                 event.mcp_server.source === 'sdk'
               return {
@@ -89,8 +122,17 @@ export function createClaudeAdvisoryControls(
   }
   return {
     options,
-    get remaining() {
-      return Math.max(0, Math.min(remaining, parsed.data.deadlineAt - Date.now()))
+    bindClose: (
+      ownedClose: ClaudeStreamJsonConnection['close'],
+      fault?: (error: Error) => void
+    ) => {
+      close = ownedClose
+      onFault = fault
+      timer = setTimeout(
+        () => stop(new Error('Advisor deadline reached.')),
+        Math.max(0, Math.min(remaining, parsed.data.deadlineAt - Date.now()))
+      )
+      timer.unref()
     },
     beforeWrite: async (
       initialized: () => Promise<unknown>,
@@ -114,13 +156,17 @@ export function createClaudeAdvisoryControls(
     },
     admitInput: () => {
       if (ended()) {
-        throw new Error('Advisor access ended.')
+        return claudeUnwrittenUserMessageError(new Error('Advisor access ended.'))
       }
       if (inputAdmitted) {
-        throw new Error('Advisor input already admitted.')
+        return claudeUnwrittenUserMessageError(new Error('Advisor input already admitted.'))
       }
       inputAdmitted = true
+      return null
     },
-    end: () => controller.abort()
+    end: () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
   }
 }

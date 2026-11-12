@@ -58,6 +58,7 @@ import {
 import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
+import { createAdvisoryReportPublisher } from '../../orchestration/workers/reports/agent-session-advisory-report'
 import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
 import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
@@ -305,6 +306,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         now: () => Date.now()
       }),
       onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
+      prepareAdvisoryReporter: createAdvisoryReportPublisher(this),
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)

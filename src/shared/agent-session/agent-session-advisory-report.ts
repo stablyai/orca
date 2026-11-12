@@ -22,3 +22,9 @@ export const agentSessionAdvisoryReportSchema = z
 
 export type AgentSessionAdvisoryReport = z.infer<typeof agentSessionAdvisoryReportSchema>
 export type AgentSessionAdvisoryReporter = (report: AgentSessionAdvisoryReport) => Promise<void>
+export type AgentSessionAdvisoryReporterFactory = (binding: {
+  sessionId: string
+  fence: number
+  spawnToken: string
+  currentGeneration: () => string | null
+}) => AgentSessionAdvisoryReporter

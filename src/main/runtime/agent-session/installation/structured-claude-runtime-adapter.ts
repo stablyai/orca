@@ -22,6 +22,7 @@ import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-suppo
 import { prewarmClaudeCliFlags } from '../../../claude/claude-cli-flag-prewarm'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
+  prepareAdvisoryReporter?: ClaudeStructuredSessionAdapterDeps['prepareAdvisoryReporter']
   store: AgentSessionRecordStore
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveAccountHome?: ClaudeAtRestCommandsDeps['resolveAccountHome']
@@ -97,6 +98,9 @@ export function createStructuredClaudeRuntimeAdapter(
       ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
+    ...(deps.prepareAdvisoryReporter
+      ? { prepareAdvisoryReporter: deps.prepareAdvisoryReporter }
+      : {}),
     ...(deps.namingInputs
       ? {
           namingInputs: deps.namingInputs,

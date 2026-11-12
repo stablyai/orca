@@ -1,5 +1,5 @@
 import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
+import { openClaudeAcquisitionConnection } from './claude-structured-acquisition-connection'
 import { claudeLaunchPermissions } from './claude-structured-inbound-control'
 import {
   resolveClaudeReplayTurn,
@@ -9,7 +9,6 @@ import { claudeStartedUnechoedSend } from '../claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
 import * as proof from './claude-structured-init-proof'
-import { claudeConfigDirEnvPatch } from '../claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from '../claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from './launch/claude-structured-spawn-options'
@@ -25,7 +24,6 @@ import { resolveClaudeAcquisitionError } from './claude-structured-session-close
 import { claudeStartupError, claudeStartupExit } from './claude-structured-session-startup-exit'
 import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
 import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
-import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 import * as acquisitionLaunch from './launch/claude-structured-acquisition-launch'
 import * as journal from './journal/claude-structured-session-journal-control'
 import { isRootClaudeFrame } from '../claude-turn-opening'
@@ -190,41 +188,35 @@ export async function acquireClaudeSession({
     naming?.launch(launch)
     attempt.account = launch.account
     observedLeafUuid = launch.resumeLeafUuid
-    const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      (deps.openConnection ?? openClaudeStreamJsonConnection)(
-        {
-          pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
-          prefixArgs: launch.prefixArgs,
-          options: launch.options,
-          ...(launch.advisoryPolicy ? { advisoryPolicy: launch.advisoryPolicy } : {}),
-          cwd: launch.cwd,
-          env: {
-            ...launch.env,
-            // The saved account directory must override a conflicting environment overlay.
-            ...claudeConfigDirEnvPatch(launch.claudeConfigDir, { env: launch.env })
-          },
-          ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {})
-        },
-        {
-          onMessage,
-          ...permissions.handlers,
-          onFault: childFailed,
-          onExit: permissions.closeThen((error, exit) => {
-            if (exit?.expected) {
-              naming?.failed()
-              callbacks.finishClose(sessionId, attempt)
-              return
-            }
-            childFailed(...claudeStartupExit(error, attempt.connection, input.events))
-            if (exits.get(sessionId)?.connection === attempt.connection) {
-              callbacks.finishClose(sessionId, attempt)
-            } else {
-              callbacks.handleExit(sessionId, attempt, error)
-            }
-          })
-        }
-      )
-    )
+    const connection = await openClaudeAcquisitionConnection({
+      launch,
+      input,
+      deps,
+      currentGeneration: () =>
+        liveSession &&
+        sessions.get(sessionId) === liveSession &&
+        attempt.connection === liveSession.connection
+          ? liveSession.acquisitionGeneration
+          : null,
+      handlers: {
+        onMessage,
+        ...permissions.handlers,
+        onFault: childFailed,
+        onExit: permissions.closeThen((error, exit) => {
+          if (exit?.expected) {
+            naming?.failed()
+            callbacks.finishClose(sessionId, attempt)
+            return
+          }
+          childFailed(...claudeStartupExit(error, attempt.connection, input.events))
+          if (exits.get(sessionId)?.connection === attempt.connection) {
+            callbacks.finishClose(sessionId, attempt)
+          } else {
+            callbacks.handleExit(sessionId, attempt, error)
+          }
+        })
+      }
+    })
     attempt.connection = connection
     naming?.attach(connection)
     unbindReadingControl = journal.bindClaudeConnectionJournalControls(
