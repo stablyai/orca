@@ -1,21 +1,14 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer, type Range } from '@tanstack/react-virtual'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { extractPinnedVirtualRange } from '@/lib/list-interaction/pinned-virtual-range'
 import { AgentKanbanCard } from './AgentKanbanCard'
 import {
   focusAgentKanbanCardEdge,
   resolveAgentKanbanTabBridge,
   type AgentKanbanCardEdge
 } from './agent-kanban-lane-tab-bridge'
+import { useAgentKanbanLaneVirtualizer } from './use-agent-kanban-lane-virtualizer'
 
-// Estimates follow the card's fixed rows; measurement replaces them for message/question variants.
-const AGENT_CARD_ESTIMATED_HEIGHT = 104
-const AGENT_CARD_SUBAGENT_TOGGLE_HEIGHT = 22
-const AGENT_CARD_SUBAGENT_ROW_HEIGHT = 25
-const AGENT_CARD_GAP = 8
-const AGENT_CARD_OVERSCAN = 6
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 
 type PendingTabTarget = { paneKey: string; edge: AgentKanbanCardEdge; origin: EventTarget }
@@ -54,15 +47,17 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
   const [pendingTab, setPendingTab] = useState<PendingTabTarget | null>(null)
 
   // Leaving the lane resets disclosure, matching the unmount that bucket moves and filtering caused before windowing.
-  useEffect(() => {
-    setExpandedPaneKeys((current) => {
-      const retained = [...current].filter((paneKey) => indexByPaneKey.has(paneKey))
-      return retained.length === current.size ? current : new Set(retained)
-    })
-    setFocusedPaneKey((current) =>
-      current !== null && !indexByPaneKey.has(current) ? null : current
-    )
-  }, [indexByPaneKey])
+  const [prunedFor, setPrunedFor] = useState(indexByPaneKey)
+  if (prunedFor !== indexByPaneKey) {
+    setPrunedFor(indexByPaneKey)
+    const retained = [...expandedPaneKeys].filter((paneKey) => indexByPaneKey.has(paneKey))
+    if (retained.length !== expandedPaneKeys.size) {
+      setExpandedPaneKeys(new Set(retained))
+    }
+    if (focusedPaneKey !== null && !indexByPaneKey.has(focusedPaneKey)) {
+      setFocusedPaneKey(null)
+    }
+  }
 
   const toggleSubagents = useCallback((paneKey: string) => {
     setExpandedPaneKeys((current) => {
@@ -77,43 +72,13 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
   const focusedIndex = focusedPaneKey === null ? undefined : indexByPaneKey.get(focusedPaneKey)
   const dialogIndex = dialogPaneKey === null ? undefined : indexByPaneKey.get(dialogPaneKey)
   const pendingIndex = pendingTab ? indexByPaneKey.get(pendingTab.paneKey) : undefined
-  // Lane endpoints stay mounted so native Tab enters and leaves the lane at its logical first and last cards.
-  const rangeExtractor = useCallback(
-    (range: Range) =>
-      extractPinnedVirtualRange(range, [
-        0,
-        range.count - 1,
-        focusedIndex,
-        dialogIndex,
-        pendingIndex
-      ]),
-    [dialogIndex, focusedIndex, pendingIndex]
-  )
-  const estimateSize = useCallback(
-    (index: number) => {
-      const subagentCount = cards[index]?.subagents?.length ?? 0
-      if (subagentCount === 0) {
-        return AGENT_CARD_ESTIMATED_HEIGHT
-      }
-      const expanded = expandedPaneKeys.has(cards[index].paneKey)
-      return (
-        AGENT_CARD_ESTIMATED_HEIGHT +
-        AGENT_CARD_SUBAGENT_TOGGLE_HEIGHT +
-        (expanded ? subagentCount * AGENT_CARD_SUBAGENT_ROW_HEIGHT : 0)
-      )
-    },
-    [cards, expandedPaneKeys]
-  )
-  const virtualizer = useVirtualizer({
-    count: cards.length,
-    getScrollElement: () => scrollElement,
-    estimateSize,
-    getItemKey: useCallback((index: number) => cards[index]?.paneKey ?? index, [cards]),
-    overscan: AGENT_CARD_OVERSCAN,
-    gap: AGENT_CARD_GAP,
-    rangeExtractor,
-    // Async renders plus overscan avoid blocking wheel events with rich-card flushes.
-    useFlushSync: false
+  const { virtualItems, totalSize, measureElement, scrollToIndex } = useAgentKanbanLaneVirtualizer({
+    cards,
+    scrollElement,
+    expandedPaneKeys,
+    focusedIndex,
+    dialogIndex,
+    pendingIndex
   })
 
   // Settle a bridged Tab on the commit that mounts its target; anything stale cancels instead of retrying.
@@ -130,9 +95,9 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
     if (!row || row.ownerDocument.activeElement !== pendingTab.origin) {
       return
     }
-    virtualizer.scrollToIndex(index, { align: 'auto' })
+    scrollToIndex(index, { align: 'auto' })
     focusAgentKanbanCardEdge(row, pendingTab.edge)
-  }, [indexByPaneKey, pendingTab, virtualizer])
+  }, [indexByPaneKey, pendingTab, scrollToIndex])
 
   const handleFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const paneKey = laneRow(event.target)?.dataset.paneKey
@@ -183,11 +148,11 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
       ref={listRef}
       role="list"
       className="relative w-full"
-      style={{ height: `${virtualizer.getTotalSize()}px` }}
+      style={{ height: `${totalSize}px` }}
       onFocus={handleFocus}
       onKeyDown={handleKeyDown}
     >
-      {virtualizer.getVirtualItems().map((virtualItem) => {
+      {virtualItems.map((virtualItem) => {
         const card = cards[virtualItem.index]
         if (!card) {
           return null
@@ -195,7 +160,7 @@ export const AgentKanbanLaneCardList = memo(function AgentKanbanLaneCardList({
         return (
           <div
             key={virtualItem.key}
-            ref={virtualizer.measureElement}
+            ref={measureElement}
             data-index={virtualItem.index}
             data-pane-key={card.paneKey}
             role="listitem"

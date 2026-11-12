@@ -57,6 +57,7 @@ afterEach(() => {
   cleanup()
   useAppStore.setState(initialState, true)
   vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 describe('Dashboard and retained sidebar destination contract', () => {
@@ -179,6 +180,8 @@ describe('Dashboard and retained sidebar destination contract', () => {
       if (!card) {
         throw new Error('Expected a card from the production snapshot builder')
       }
+      // Give the virtual lane a viewport; happy-dom has no layout.
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(600)
       const view = render(
         <TooltipProvider>
           <AgentKanbanBoard
