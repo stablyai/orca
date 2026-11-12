@@ -402,6 +402,7 @@ export function NativeChatResolvedView({
           onSlashCommand={onSlashCommand}
           onSubmitted={revealLatest}
           answerCommandLocally={answerLocally}
+          contextMessages={sessionAfterCommandBoundaries.messages}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft, readTerminalDraft }}

@@ -1,10 +1,15 @@
 import type { StructuredAgentContextUsage } from '../agent-session/structured-agent-session-context-usage'
+import {
+  deriveNativeChatContextUsage,
+  type NativeChatContextWindowLookup
+} from './native-chat-context-usage'
+import type { NativeChatMessage } from './native-chat-types'
 
 /** Reduce provider context breakdowns to the rows shown by the composer ring. */
 export type NativeChatContextUsageSummary = {
   usedTokens: number
-  windowTokens: number
-  percentage: number
+  windowTokens: number | null
+  percentage: number | null
   estimated: boolean
   /** Largest first, as a share of the window; empty rows are dropped, and deferred rows sit outside the used total. */
   rows: readonly { name: string; tokens: number; percentage: number; deferred?: true }[]
@@ -18,14 +23,23 @@ export function contextUsageRingReadout(usage: NativeChatContextUsageSummary): {
   filled: number
   critical: boolean
   used: string
-  window: string
+  window: string | null
 } {
   return {
-    filled: Math.min(Math.max(usage.percentage, 0), 100),
-    critical: usage.percentage >= CRITICAL_PERCENTAGE,
+    filled: Math.min(Math.max(usage.percentage ?? 0, 0), 100),
+    critical: usage.percentage !== null && usage.percentage >= CRITICAL_PERCENTAGE,
     used: formatContextTokenCount(usage.usedTokens),
-    window: formatContextTokenCount(usage.windowTokens)
+    window: usage.windowTokens === null ? null : formatContextTokenCount(usage.windowTokens)
   }
+}
+
+/** A terminal's last response sizes its prompt; an unknown window still leaves a useful token count. */
+export function summarizeTranscriptContextUsage(
+  messages: readonly NativeChatMessage[],
+  windowFor: NativeChatContextWindowLookup
+): NativeChatContextUsageSummary | null {
+  const usage = deriveNativeChatContextUsage(messages, windowFor)
+  return usage ? { ...usage, estimated: true, rows: [] } : null
 }
 
 function rowPercentage(tokens: number, windowTokens: number): number {

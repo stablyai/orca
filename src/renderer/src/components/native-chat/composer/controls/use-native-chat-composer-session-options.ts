@@ -1,5 +1,6 @@
 import { useNativeChatSessionOptionCommand } from '../../session/options/terminal/use-native-chat-session-option-command'
 import { useNativeChatSessionOptions } from '../../session/options/terminal/use-native-chat-session-options'
+import { useNativeChatContextUsageSummary } from '../../usage/use-native-chat-context-usage-summary'
 import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type {
   SessionOptionDescriptor,
@@ -17,6 +18,7 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSwitchToTerminal'
   | 'readTerminalScreen'
   | 'structuredTransport'
+  | 'contextMessages'
 > &
   Pick<Parameters<typeof useNativeChatSessionOptionCommand>[0], 'disabled' | 'resolveTarget'>
 
@@ -31,12 +33,14 @@ export function useNativeChatComposerSessionOptions({
   onSwitchToTerminal,
   readTerminalScreen,
   paneKey,
-  structuredTransport
+  structuredTransport,
+  contextMessages
 }: ComposerSessionOptionsArgs): {
   isDispatching: boolean
   pty: ReturnType<typeof useNativeChatSessionOptions>
   surface: SessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
+  contextUsage: ReturnType<typeof useNativeChatContextUsageSummary>
 } {
   const { dispatch, isDispatching } = useNativeChatSessionOptionCommand({
     agent,
@@ -54,7 +58,13 @@ export function useNativeChatComposerSessionOptions({
     readTerminalScreen,
     paneKey
   })
+  const contextUsage = useNativeChatContextUsageSummary(structuredTransport, {
+    agent,
+    messages: contextMessages,
+    surface: pty.surface
+  })
   return {
+    contextUsage,
     isDispatching,
     pty,
     surface: structuredTransport?.optionsSurface ?? pty.surface,

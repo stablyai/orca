@@ -95,6 +95,21 @@ function pointer(type: 'pointerover' | 'pointerout', pointerType: string): Point
 }
 
 describe('NativeChatContextUsageRing', () => {
+  it('shows the compact usage readout without opening the detail card', async () => {
+    const trigger = await renderRing()
+
+    expect(trigger.textContent).toBe('42k/200k')
+    expect(card()).toBeNull()
+  })
+
+  it('shows measured tokens without a made-up percentage when the window is unknown', async () => {
+    const trigger = await renderRing({ ...USAGE, windowTokens: null, percentage: null, rows: [] })
+
+    expect(trigger.textContent).toBe('42k')
+    await click(trigger)
+    expect(card()?.querySelector('[role="progressbar"]')).toBeNull()
+  })
+
   it('stays open while the pointer crosses the gap from the ring into the card', async () => {
     const trigger = await renderRing()
     const hoverTarget = trigger.parentElement!

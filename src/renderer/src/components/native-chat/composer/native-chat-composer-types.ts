@@ -7,6 +7,7 @@ import type { NativeChatStructuredComposerTransport } from './submit/native-chat
 import type { NativeChatComposerNotice } from './controls/native-chat-composer-notice'
 import type { NativeChatRecallSource } from '../drafts/native-chat-sent-prompt-history'
 import type { OrchestrationAgentReference } from '../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
@@ -54,6 +55,8 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
+  /** Current terminal conversation, after local /clear boundaries. */
+  contextMessages?: readonly NativeChatMessage[]
   /** Compose against the source checkout until the new workspace and session exist. */
   workspacePending?: true
   /** The first prompt in an agent's launch panel: one line that grows, Attach as its only control,
