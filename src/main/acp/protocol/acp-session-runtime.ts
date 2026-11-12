@@ -317,23 +317,17 @@ export class AcpSessionRuntime {
 
   /** Filter peer notifications through the optional prompt-turn tracker before delivery. */
   private handleNotification(method: string, params: unknown): void {
-    const sid =
-      params && typeof params === 'object' && 'sessionId' in params ? params.sessionId : undefined
     if (
-      method === 'session/update' &&
-      this.started?.sessionId &&
-      typeof sid === 'string' &&
-      sid !== this.started.sessionId
+      (method === 'session/update' &&
+        this.started?.sessionId &&
+        (!params ||
+          typeof params !== 'object' ||
+          !('sessionId' in params) ||
+          params.sessionId !== this.started.sessionId)) ||
+      this.options.turnTracker?.beforeNotification(method, params) === false
     ) {
       return
     }
-    if (this.options.turnTracker?.beforeNotification(method, params) !== false) {
-      this.emitFrame(method, params)
-    }
-  }
-
-  /** Deliver an ACP notification frame to subscribers or the extension notification callback. */
-  private emitFrame(method: string, params: unknown): void {
     deliverAcpNotificationFrame(
       method,
       params,
