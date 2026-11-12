@@ -28,6 +28,33 @@ export const getOpenaiTranscriptionSearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getVoiceControlSearchEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate('auto.components.settings.voice.pane.search.37e26bbd94', 'Voice control'),
+  description: translate(
+    'auto.components.settings.voice.pane.search.797db8a2ad',
+    'Talk to your agents hands-free with an open mic.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+    ...translateSearchKeyword('auto.components.settings.voice.pane.search.52216ee03b', 'control'),
+    ...translateSearchKeyword(
+      'auto.components.settings.voice.pane.search.6df24eff92',
+      'voice control'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.voice.pane.search.decb067e17',
+      'hands-free'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.voice.pane.search.763dce1026',
+      'hands free'
+    ),
+    ...translateSearchKeyword('auto.components.settings.voice.pane.search.a493d3131e', 'open mic'),
+    ...translateSearchKeyword('auto.components.settings.voice.pane.search.cbcb82fd2e', 'realtime'),
+    ...translateSearchKeyword('auto.components.settings.voice.pane.search.04c25a6fb0', 'openai')
+  ]
+}))
+
 export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.voice.pane.search.dictationTitle', 'Dictation'),
@@ -233,6 +260,7 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   getOpenaiTranscriptionSearchEntry(),
+  getVoiceControlSearchEntry(),
   {
     title: translate('auto.components.settings.voice.pane.search.7f5a2416a6', 'Speech model'),
     description: translate(

@@ -13,6 +13,7 @@ import {
 import { createMainLocaleSubsetPlugin } from './config/build-plugins/main-locale-subset'
 import { createSucraseUnusedTransformersPlugin } from './config/build-plugins/sucrase-unused-transformers'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
+import { createVadModelAssetsPlugin } from './config/build-plugins/vad-model-assets'
 import { createProcessHostDevRebuildPlugin } from './config/build-plugins/process-host-dev-rebuild'
 import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
 import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
@@ -288,6 +289,7 @@ export const electronViteConfig: UserConfig = {
       react(reactPluginOptions()),
       tailwindcss(),
       createPdfjsViewerAssetsPlugin(),
+      createVadModelAssetsPlugin(),
       createViteCacheRetentionPlugin()
     ],
     worker: {

@@ -11,6 +11,10 @@ export function sendResolvedWindowShortcutAction(
     case 'dictationKeyDown':
       mainWindow.webContents.send('ui:dictationKeyDown')
       return
+    // The renderer's VoiceControlController only exists while the control feature gate is on.
+    case 'voiceControlToggle':
+      mainWindow.webContents.send('ui:voiceControlToggle')
+      return
     case 'zoom':
       mainWindow.webContents.send('terminal:zoom', action.direction)
       return
