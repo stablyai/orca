@@ -92,21 +92,64 @@ export class CrashReportStore {
 
   async record(input: CrashReportCreateInput): Promise<CrashReportRecord> {
     return this.withWrite(async (reports) => {
-      const report: CrashReportRecord = {
-        ...input,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-        status: 'pending',
-        details: sanitizeCrashReportDetails(input.details),
-        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)?.map(
-          ({ origin: _origin, ...breadcrumb }) => breadcrumb
-        )
-      }
+      const report = this.createRecord(input)
       return {
         reports: [report, ...reports].slice(0, MAX_REPORTS),
         result: report
       }
     })
+  }
+
+  async claimHangPrompt(options: {
+    existingReportId?: string
+    input?: CrashReportCreateInput
+    claim: () => Promise<boolean>
+  }): Promise<CrashReportRecord | null> {
+    return this.withWrite(async (reports) => {
+      const pendingCrash = reports.find(
+        (report) => report.status === 'pending' && report.reason !== 'main-thread-hang'
+      )
+      if (pendingCrash) {
+        return { reports, result: pendingCrash }
+      }
+      const existing = options.existingReportId
+        ? reports.find(
+            (report) =>
+              report.id === options.existingReportId &&
+              report.status === 'pending' &&
+              report.reason === 'main-thread-hang'
+          )
+        : null
+      if ((!existing && !options.input) || !(await options.claim())) {
+        return { reports, result: null }
+      }
+      const report: CrashReportRecord = {
+        ...(existing ?? this.createRecord(options.input!)),
+        status: 'dismissed'
+      }
+      const retained = reports.map((item) =>
+        item.reason === 'main-thread-hang' && item.status === 'pending'
+          ? { ...item, status: 'dismissed' as const }
+          : item
+      )
+      return {
+        reports: existing ? retained : [report, ...retained].slice(0, MAX_REPORTS),
+        result: report
+      }
+    })
+  }
+
+  private createRecord(input: CrashReportCreateInput): CrashReportRecord {
+    return {
+      ...input,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      details: sanitizeCrashReportDetails(input.details),
+      breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)?.map(
+        ({ origin: _origin, ...breadcrumb }) => breadcrumb
+      )
+    }
   }
 
   /** Crashpad may finish writing after process-gone; merge its signature into the existing report. */
@@ -203,7 +246,9 @@ export class CrashReportStore {
       // Reading directly avoids waiting on the write chain this callback already owns.
       const reports = await this.readReportsFromDisk()
       const { reports: nextReports, result } = await mutate(reports)
-      await this.writeReports(nextReports)
+      if (nextReports !== reports) {
+        await this.writeReports(nextReports)
+      }
       return result
     })
     this.writeChain = run.then(

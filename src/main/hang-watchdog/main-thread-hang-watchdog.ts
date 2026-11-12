@@ -1,9 +1,11 @@
 import type { Worker } from 'node:worker_threads'
+import os from 'node:os'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { app, powerMonitor } from 'electron'
 import { hangDetectionMarkerPath } from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
 import { getTraceFilePath, resolveObservabilityConsent } from '../observability'
+import { nativeHangCaptureDirectory } from './native-hang-capture-store'
 import {
   HANG_WATCHDOG_CHECK_INTERVAL_MS,
   HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS,
@@ -16,6 +18,7 @@ import {
 export type MainThreadHangWatchdogHandle = {
   stop: () => void
   worker: Worker
+  setMenuBarIconSetting: (enabled: boolean) => void
 }
 
 function positiveTiming(value: string | undefined, fallback: number): number {
@@ -41,6 +44,15 @@ export function installMainThreadHangWatchdog(options: {
     parentPid: process.pid,
     markerPath: hangDetectionMarkerPath(options.userDataPath),
     tracePath: getTraceFilePath(),
+    artifactDirectory: nativeHangCaptureDirectory(options.userDataPath),
+    processMetadata: {
+      appVersion: app.getVersion(),
+      electronVersion: process.versions.electron ?? 'unknown',
+      chromeVersion: process.versions.chrome ?? 'unknown',
+      arch: os.arch(),
+      osRelease: os.release(),
+      osVersion: os.version()
+    },
     timeoutMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS, HANG_WATCHDOG_TIMEOUT_MS),
     checkIntervalMs: positiveTiming(
       process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS,
@@ -117,5 +129,9 @@ export function installMainThreadHangWatchdog(options: {
   })
   worker.unref()
   app.on('will-quit', stop)
-  return { stop, worker }
+  return {
+    stop,
+    worker,
+    setMenuBarIconSetting: (enabled) => postMessage({ type: 'menu-bar-setting', enabled })
+  }
 }
