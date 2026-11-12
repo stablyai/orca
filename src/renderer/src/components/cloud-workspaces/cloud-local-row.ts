@@ -21,7 +21,7 @@ export function hasLocalSidebarRow(local: {
   // The runtime host's row, or the one row with that id (a record from before host-qualified rows).
   return Boolean(
     getWorktreeOnHostFromState(state, local.worktreeId, host) ??
-    getWorktreeOnHostFromState(state, local.worktreeId)
+    getWorktreeOnHostFromState(state, local.worktreeId, undefined)
   )
 }
 
