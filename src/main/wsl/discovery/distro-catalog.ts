@@ -27,6 +27,7 @@ import {
   type RunningWslDistroReadOptions
 } from './wsl-running-distro-cache'
 import { clearWslHomeCache, getCachedWslHome, rememberWslHome } from './wsl-home-cache'
+import { notifyWslDiscoveryChanged } from './wsl-discovery-change'
 
 // Measured on a slow PC: a cold systemd distro takes 4-11 s to answer its first exec, and killing
 // wsl.exe mid-boot leaves the distro failing every call with Wsl/Service/E_UNEXPECTED for 14+ s.
@@ -80,6 +81,9 @@ function cacheWslDistroList(rawDistros: string[], probeSequence: number): string
     dropStaleWslAvailabilityFailure()
   }
   wslDistroCacheSequence = probeSequence
+  if (wslDistroCache?.join('\0') !== userDistros.join('\0')) {
+    notifyWslDiscoveryChanged()
+  }
   wslDistroCache = userDistros
   if (wslDistroCache.length === 0) {
     armWslDistroListRetry()

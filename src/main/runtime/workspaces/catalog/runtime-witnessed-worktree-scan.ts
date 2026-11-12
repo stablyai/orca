@@ -13,6 +13,7 @@ import {
   claimRuntimeLineagePrune,
   observationForRuntimeResult
 } from './runtime-worktree-catalog-read'
+import { isCurrentWorktreeCatalogObservation } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 import { claimWorktreeCatalogHygiene } from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
 
 export type WitnessedRuntimeWorktreeScan = RuntimeWorktreeScanResult & {
@@ -22,6 +23,8 @@ export type WitnessedRuntimeWorktreeScan = RuntimeWorktreeScanResult & {
   metadataPruneExpectation: NativeLocalWorktreeMetadataScanExpectation | undefined
   /** Lineage prunes once per observation; null when another read of these rows already did. */
   lineagePrune: { scanGeneration: number } | null
+  /** Owner authority for these rows, rechecked after awaits before destructive work. */
+  authorityCurrent: () => boolean
 }
 
 /** Refuse destructive pruning on unresolved routes or WSL, whose Linux paths v1 cannot equate with stored UNC aliases. */
@@ -52,6 +55,7 @@ async function scanRuntimeWorktreesWithMutationWitness(
   let scanGeneration = getLocalWorktreeScanGeneration(repo.id)
   let metadataPruneExpectation: NativeLocalWorktreeMetadataScanExpectation | undefined
   let lineagePrune: { scanGeneration: number } | null = null
+  let authorityCurrent = (): boolean => true
   let scan: RuntimeWorktreeScanResult
   try {
     scan = await scanRepo(repo)
@@ -62,9 +66,11 @@ async function scanRuntimeWorktreesWithMutationWitness(
   if (observation) {
     // Shared observations carry their own pre-scan witness; older rows never get today's expectations.
     scanGeneration = observation.generation
-    const claim = isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration)
-      ? claimWorktreeCatalogHygiene(observation)
-      : null
+    authorityCurrent = () => isCurrentWorktreeCatalogObservation(observation)
+    const claim =
+      isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration) && authorityCurrent()
+        ? claimWorktreeCatalogHygiene(observation)
+        : null
     metadataPruneExpectation = claim?.expectation as
       | NativeLocalWorktreeMetadataScanExpectation
       | undefined
@@ -76,10 +82,13 @@ async function scanRuntimeWorktreesWithMutationWitness(
   return {
     ...scan,
     // Failed scans are already non-authoritative.
-    superseded: scan.ok && !isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration),
+    superseded:
+      scan.ok &&
+      (!isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration) || !authorityCurrent()),
     scanGeneration,
     metadataPruneExpectation,
-    lineagePrune
+    lineagePrune,
+    authorityCurrent
   }
 }
 

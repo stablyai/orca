@@ -7,7 +7,6 @@ import type {
   WorktreeCatalogOutcome,
   WorktreeCatalogObservation,
   WorktreeCatalogFlightPlan,
-  WorktreeCatalogVerifier,
   WorktreeCatalogRequirement,
   WorktreeCatalogRead
 } from './repo-worktree-catalog-observation'
@@ -17,6 +16,8 @@ import {
   onLocalWorktreeScanGenerationBump
 } from './local-worktree-scan-generation'
 import { isLiveWorktreeCatalogRoute } from './repo-worktree-catalog-route'
+import { verify } from './repo-worktree-catalog-verification'
+import { onWslDiscoveryChanged } from '../../wsl/discovery/wsl-discovery-change'
 
 type Flight = {
   revision: number
@@ -38,8 +39,10 @@ type Entry = {
 const entries = new Map<string, Entry>()
 
 onWorktreeScanGenerationBump((repoPath) => invalidateWorktreeCatalogForRepoPath(repoPath))
-// Route-changing writes retire obsolete owners even when no reader arrives afterwards.
+// Route-changing writes and WSL discovery answers retire obsolete owners even when no reader follows.
 onLocalWorktreeScanGenerationBump(() => retireObsoleteWorktreeCatalogs())
+onWslDiscoveryChanged(() => retireObsoleteWorktreeCatalogs())
+const entryByObservation = new WeakMap<WorktreeCatalogObservation, Entry>()
 
 /** Owner identity: repo, host and the project runtime that runs Git (distro, selected Git, repair state). */
 function entryKey(repoId: string, hostId: string, runtimeKey: string): string {
@@ -148,6 +151,7 @@ function startFlight(
           witness,
           confirmedAt: startedAt
         }
+        entryByObservation.set(observation, entry)
         if (entry.flight === flight) {
           entry.flight = null
         }
@@ -186,43 +190,6 @@ function publish(
   if (isCurrent(entry, observation)) {
     plan.observed?.(observation)
   }
-}
-
-type Verification = { reuse: true } | { reuse: false; probe: Promise<string | null> | null }
-
-/** Reuse when a probe proves, or cannot yet disprove (#19312), that rows fingerprinted before their scan still hold. */
-async function verify(
-  observation: WorktreeCatalogObservation,
-  verifier: WorktreeCatalogVerifier,
-  now: number
-): Promise<Verification> {
-  // Without a fingerprint from before its scan, no probe can certify these rows.
-  if (
-    observation.outcome.kind !== 'rows' ||
-    !observation.adminFingerprint ||
-    now - observation.startedAt >= verifier.ceilingMs
-  ) {
-    return { reuse: false, probe: null }
-  }
-  const probe = verifier.probe()
-  if (probe === 'in-flight') {
-    verifier.onUnknown?.('previous probe still pending')
-    return { reuse: true }
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<'timeout'>((resolve) => {
-    timer = setTimeout(() => resolve('timeout'), verifier.timeoutMs)
-  })
-  const current = await Promise.race([probe, timeout]).finally(() => clearTimeout(timer))
-  if (current === 'timeout') {
-    // Unknown is not proof, but rescanning slow mounts on every read amplifies load (#19312).
-    verifier.onUnknown?.('probe expired')
-    return { reuse: true }
-  }
-  // A mismatching probe was taken before the rescan, so it becomes that scan's fingerprint.
-  return current !== null && (await observation.adminFingerprint) === current
-    ? { reuse: true }
-    : { reuse: false, probe }
 }
 
 function acceptable(
@@ -304,6 +271,14 @@ export function peekWorktreeCatalog(
     return null
   }
   return { observation, current: isCurrent(entry, observation) }
+}
+
+/** Destructive consumers recheck this after their own awaits, with the owner's own authority rules. */
+export function isCurrentWorktreeCatalogObservation(
+  observation: WorktreeCatalogObservation
+): boolean {
+  const entry = entryByObservation.get(observation)
+  return entry !== undefined && isCurrent(entry, observation)
 }
 
 /** Stops readers from reusing settled rows; joiners of an older flight follow the next one. */

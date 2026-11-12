@@ -162,7 +162,7 @@ export class RuntimeManagedWorktreeQueries {
       this.deps.scanRepo(target)
     )
     // Publish overtaken scans as non-authoritative: throwing would drop client rows. Prune nothing; the overtaking mutation's event requests a fresh listing.
-    if (scan.ok && !scan.superseded) {
+    if (scan.ok && !scan.superseded && scan.authorityCurrent()) {
       // Headless hosts lack ipcMain listings; runtime must sweep its own metadata too (#17776).
       if (scan.metadataPruneExpectation && canPruneAuthoritativeLocalMetadata(store)) {
         await pruneMetadataMissingFromAuthoritativeLocalScan({
@@ -173,7 +173,7 @@ export class RuntimeManagedWorktreeQueries {
           scanGeneration: scan.scanGeneration
         })
       }
-      if (scan.lineagePrune) {
+      if (scan.lineagePrune && scan.authorityCurrent()) {
         pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, scan.lineagePrune)
       }
     }

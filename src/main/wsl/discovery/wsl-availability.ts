@@ -2,6 +2,7 @@ import { runProcess } from '@orca/process-host'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
 import { wslExeProcessSpec } from '../execution/wsl-exe-process'
+import { notifyWslDiscoveryChanged } from './wsl-discovery-change'
 
 type WslAvailabilityCache =
   | { available: true }
@@ -52,8 +53,12 @@ function previousWslAvailabilityFailures(): number {
 }
 
 function writeWslAvailabilityCache(cache: WslAvailabilityCache | null): void {
+  const changed = (wslAvailableCache?.available ?? null) !== (cache?.available ?? null)
   wslAvailableCache = cache
   wslAvailabilityCacheGeneration += 1
+  if (changed) {
+    notifyWslDiscoveryChanged()
+  }
 }
 
 type WslProbeFailure = { retryable: boolean }

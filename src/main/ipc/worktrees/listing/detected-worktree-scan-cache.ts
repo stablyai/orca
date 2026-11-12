@@ -29,6 +29,7 @@ import {
 import {
   _resetWorktreeCatalogOwnerForTests,
   invalidateWorktreeCatalogForRepo,
+  isCurrentWorktreeCatalogObservation,
   readWorktreeCatalog
 } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 import { resolveWorktreeScanRuntime } from '../../../runtime/workspaces/catalog/runtime-worktree-scan-cache'
@@ -45,6 +46,8 @@ export type DetectedWorktreeSideEffectToken = Readonly<{
   generation: number
   authorizedRootsRevision: number
   wslDistro?: string
+  /** Owner authority for the observation, rechecked after every await before destructive work. */
+  authorityCurrent?: () => boolean
 }>
 
 export type DetectedWorktreeMetadataPrune = Readonly<{
@@ -138,7 +141,10 @@ export async function listDetectedGitWorktrees(
   const gitWorktrees = observation.outcome.kind === 'rows' ? observation.outcome.worktrees : []
   const generationCurrent = isLocalWorktreeScanGenerationCurrent(repo.id, observation.generation)
   // Side effects belong to the first reader of a still-current observation, whoever started its scan.
-  const claim = !superseded && generationCurrent ? claimWorktreeCatalogHygiene(observation) : null
+  const claim =
+    !superseded && generationCurrent && isCurrentWorktreeCatalogObservation(observation)
+      ? claimWorktreeCatalogHygiene(observation)
+      : null
   return {
     gitWorktrees,
     fresh: claim !== null,
@@ -149,7 +155,8 @@ export async function listDetectedGitWorktrees(
           sideEffectToken: {
             generation: claim.generation,
             authorizedRootsRevision: claim.authorizedRootsRevision,
-            ...localWorktreeGitOptions
+            ...localWorktreeGitOptions,
+            authorityCurrent: () => isCurrentWorktreeCatalogObservation(observation)
           },
           hygieneDue: claim.hygieneDue,
           ...(claim.expectation ? { metadataPrune: { expectation: claim.expectation } } : {})
@@ -174,7 +181,8 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
   const { isCurrent = () => true, sideEffectToken, signal, hygieneDue = true } = options
   const generationCurrent = () =>
     sideEffectToken === undefined ||
-    isLocalWorktreeScanGenerationCurrent(repo.id, sideEffectToken.generation)
+    (isLocalWorktreeScanGenerationCurrent(repo.id, sideEffectToken.generation) &&
+      (sideEffectToken.authorityCurrent?.() ?? true))
   if (!generationCurrent() || !isCurrent()) {
     return false
   }
