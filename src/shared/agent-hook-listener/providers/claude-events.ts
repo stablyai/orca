@@ -1,7 +1,3 @@
-import {
-  AGENT_MODEL_MAX_LENGTH,
-  normalizeOptionalField
-} from '../../agent-status/contracts/agent-status-field-normalization'
 import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
 import { CLAUDE_NEW_SESSION_START_SOURCES } from './claude-session-start-sources'
 import {
@@ -28,6 +24,7 @@ import {
 } from './claude-lifecycle-events'
 import {
   getOrCreateClaudeSubagentRoster,
+  readClaudeLeadModel,
   setClaudeMainAgentTurnState,
   updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
@@ -43,10 +40,6 @@ import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-
 import { recordClaudeTeammateSpawn } from './claude-teammate-spawn'
 
 const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
-
-function claudeReportedModel(hookPayload: Record<string, unknown>): string | undefined {
-  return normalizeOptionalField(hookPayload.model, AGENT_MODEL_MAX_LENGTH)
-}
 
 export function normalizeClaudeEvent(
   state: HookListenerState,
@@ -64,6 +57,7 @@ export function normalizeClaudeEvent(
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
   voidClaimsOfReplacedClaudeSession(state, eventName, eventAgentId, paneKey, hookPayload)
+  const leadModel = eventAgentId === undefined ? readClaudeLeadModel(hookPayload) : undefined
   if (eventName === 'SessionStart') {
     // SessionStart supplies resume identity before prompts; mark idle/sessionBoundary to avoid phantom work/completion notifications (STA-3386).
     const sessionStartSource = hookPayload['source']
@@ -76,12 +70,11 @@ export function normalizeClaudeEvent(
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
-    // New sessions start a new main-agent clock. An omitted model keeps the last reported one.
-    const model = claudeReportedModel(hookPayload)
+    // New sessions start a new main-agent clock.
     setClaudeMainAgentTurnState(state, paneKey, {
       state: 'done',
       stateStartedAt: Date.now(),
-      ...(model ? { model } : {})
+      model: leadModel
     })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       stateName: 'done',
@@ -311,7 +304,6 @@ export function normalizeClaudeEvent(
       ? Date.now()
       : undefined
 
-  const reportedModel = eventAgentId === undefined ? claudeReportedModel(hookPayload) : undefined
   setClaudeMainAgentTurnState(state, paneKey, {
     state: reportedStateName,
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
@@ -320,7 +312,7 @@ export function normalizeClaudeEvent(
     ...claudeWaitRequest(eventName, isAskUserQuestionWait, eventToolUseId, previousLead),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
     ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),
-    ...(reportedModel ? { model: reportedModel } : {})
+    model: leadModel
   })
 
   const effectiveRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
