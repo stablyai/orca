@@ -17,13 +17,27 @@ import {
   type StagedTestMedia
 } from './media-picker-test-shell'
 
-const state = vi.hoisted(() => ({ verbs: null as unknown }))
+// Only the verbs the picker calls; the rest of NativeVerbs never runs in these tests.
+type PickerVerbs = Pick<
+  NativeVerbs,
+  | 'canPickMedia'
+  | 'canNameMedia'
+  | 'canPickLargeFile'
+  | 'pickMedia'
+  | 'pickLargeFile'
+  | 'readMedia'
+  | 'releaseMedia'
+  | 'nameMedia'
+>
+
+const state = vi.hoisted((): { verbs: PickerVerbs | null } => ({ verbs: null }))
 
 vi.mock('../mobile-web-shell/bridge/use-native-verbs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../mobile-web-shell/bridge/use-native-verbs')>()),
   useNativeVerbs: () => state.verbs
 }))
 
+import type { NativeVerbs } from '../mobile-web-shell/bridge/use-native-verbs'
 import { NativeVerbError } from '../mobile-web-shell/bridge/use-native-verbs'
 import { useMediaPicker } from './media-picker.web'
 
@@ -37,10 +51,7 @@ function mountPicker(shell: MediaTestShell, options: { large: boolean }): MediaP
       return parse(await shell.serveNativeVerb(verb, params))
     } catch (error) {
       if (error instanceof BridgeNativeVerbRefusedError) {
-        throw new NativeVerbError(
-          error.code as ConstructorParameters<typeof NativeVerbError>[0],
-          error.message
-        )
+        throw new NativeVerbError(error.code, error.message)
       }
       throw error
     }

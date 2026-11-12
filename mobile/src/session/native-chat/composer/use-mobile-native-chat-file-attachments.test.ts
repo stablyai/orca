@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { stubRpcClient } from '../../../transport/rpc/rpc-client-test-stub'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 import type { PickedMobileFile } from '../../../platform/media-picker-contract'
 import {
@@ -11,11 +12,11 @@ import {
 } from './mobile-native-chat-draft-inputs'
 import { useMobileNativeChatFileAttachments } from './use-mobile-native-chat-file-attachments'
 
-const picked = vi.hoisted(() => ({ files: [] as unknown[] }))
+const picked = vi.hoisted((): { files: PickedMobileFile[] } => ({ files: [] }))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({
     pickFiles: async function* () {
-      yield* picked.files as PickedMobileFile[]
+      yield* picked.files
     }
   })
 }))
@@ -62,13 +63,18 @@ describe('useMobileNativeChatFileAttachments', () => {
     hook = null
   })
 
-  function mount(client: Pick<RpcClient, 'sendRequest'>, showToast = vi.fn()): void {
+  function mount(
+    client: Pick<RpcClient, 'sendRequest'>,
+    showToast = vi.fn(),
+    overrides: Partial<Args> = {}
+  ): void {
     const args: Args = {
-      client: client as RpcClient,
-      target: { kind: 'terminal', getConnectionId: async () => 'conn-1' },
+      client: stubRpcClient(client),
+      target: { kind: 'terminal', getConnectionId: async () => null },
       scopeKey: SCOPE,
       enabled: true,
-      showToast
+      showToast,
+      ...overrides
     }
     act(() => {
       renderer = create(createElement(Harness, { args }))
@@ -150,8 +156,53 @@ describe('useMobileNativeChatFileAttachments', () => {
     expect(readMobileNativeChatDraftInputs(SCOPE).pending).toBe(0)
   })
 
+  it('closing the draft mid-transfer aborts the file instead of committing it', async () => {
+    const methods: string[] = []
+    const client: Pick<RpcClient, 'sendRequest'> = {
+      sendRequest: vi.fn(async (method: string) => {
+        methods.push(method)
+        return method === 'terminalFileUpload.start'
+          ? ok({ uploadId: 'up-1' })
+          : ok({ aborted: true })
+      })
+    }
+    const showToast = vi.fn()
+    let release!: () => void
+    picked.files = [makeFile(new Promise<void>((resolve) => (release = resolve)))]
+    mount(client, showToast)
+
+    let attaching!: Promise<void>
+    await act(async () => {
+      attaching = hook!.attachFiles()
+      for (let i = 0; i < 50 && !methods.includes('terminalFileUpload.append'); i++) {
+        await Promise.resolve()
+      }
+    })
+
+    await act(async () => {
+      closeMobileNativeChatEditInputs(SCOPE)
+      release()
+      await attaching
+    })
+
+    expect(methods).toContain('terminalFileUpload.abort')
+    expect(methods).not.toContain('terminalFileUpload.commit')
+    expect(showToast).not.toHaveBeenCalled()
+  })
+
   it('offers no pasted-text attachment for a terminal target', () => {
     mount({ sendRequest: vi.fn() })
     expect(hook!.attachPastedText).toBeNull()
+  })
+
+  it('reports files can be attached only with a client, a storage target, a scope and the lease', () => {
+    mount({ sendRequest: vi.fn() })
+    expect(hook!.canAttachFiles).toBe(true)
+    act(() => renderer?.unmount())
+    mount({ sendRequest: vi.fn() }, vi.fn(), { target: null })
+    expect(hook!.canAttachFiles).toBe(false)
+    act(() => renderer?.unmount())
+    mount({ sendRequest: vi.fn() }, vi.fn(), { enabled: false })
+    expect(hook!.canAttachFiles).toBe(false)
   })
 })

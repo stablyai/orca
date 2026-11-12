@@ -18,6 +18,30 @@ export type PendingNativeChatFile = {
 
 type StoredNativeChatFile = { readonly name: string; readonly path: string }
 
+/**
+ * The stored files a send carries, plus the text to send. A terminal agent reads files from `@path`
+ * text, while a structured chat sends them as attachments. Null while a terminal chat's file is still
+ * uploading: Send holds until the host has stored it.
+ */
+export function nativeChatSendFiles(
+  files: readonly PendingNativeChatFile[],
+  text: string,
+  structured: boolean
+): { sentFiles: (PendingNativeChatFile & { path: string })[]; text: string } | null {
+  if (!structured && files.some((file) => file.path === null)) {
+    return null
+  }
+  const sentFiles = files.filter(
+    (file): file is PendingNativeChatFile & { path: string } => file.path !== null
+  )
+  if (structured || sentFiles.length === 0) {
+    return { sentFiles, text }
+  }
+  // Claude Code opens its file suggestions on an @token under the cursor, and the Enter written after
+  // the paste would pick a suggestion instead of submitting; a closing space ends the token first.
+  return { sentFiles, text: `${nativeChatTextWithFileReferences(text, sentFiles)} ` }
+}
+
 export function nativeChatTextWithFileReferences(
   text: string,
   files: readonly { readonly path: string }[]

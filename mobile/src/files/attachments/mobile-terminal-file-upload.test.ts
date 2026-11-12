@@ -34,12 +34,13 @@ function fakeHost(failSecondAppend = false) {
       if (method === 'terminalFileUpload.append') {
         appends += 1
         if (failSecondAppend && appends === 2) {
-          return {
+          const failure: RpcResponse = {
             id: 'r',
             ok: false,
             error: { code: 'failed', message: 'disk full' },
             _meta: { runtimeId: 'runtime-1' }
-          } as RpcResponse
+          }
+          return failure
         }
         return ok({ receivedLength: 0 })
       }
