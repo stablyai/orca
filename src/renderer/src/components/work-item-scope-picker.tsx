@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { Button } from './ui/button'
@@ -47,7 +47,9 @@ export function WorkItemScopePicker<T>({
   returnFocusRef?: React.RefObject<HTMLElement | null>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const returnFocusOnCloseRef = useRef(false)
   const select = (value: T | null) => {
+    returnFocusOnCloseRef.current = true
     onChange(value)
     setOpen(false)
   }
@@ -62,6 +64,7 @@ export function WorkItemScopePicker<T>({
           aria-label={label}
           aria-expanded={open}
           disabled={disabled}
+          onKeyDown={(event) => event.stopPropagation()}
           className={cn('justify-between', size === 'xs' ? 'min-w-0 max-w-full' : 'w-full')}
         >
           <span className="truncate">{selectedLabel ?? allLabel}</span>
@@ -74,8 +77,13 @@ export function WorkItemScopePicker<T>({
         align="start"
         className="z-[70] w-64"
         onKeyDown={(event) => event.stopPropagation()}
+        onEscapeKeyDown={() => {
+          returnFocusOnCloseRef.current = true
+        }}
         onCloseAutoFocus={(event) => {
-          if (!returnFocusRef?.current) {
+          const shouldReturnFocus = returnFocusOnCloseRef.current
+          returnFocusOnCloseRef.current = false
+          if (!shouldReturnFocus || !returnFocusRef?.current) {
             return
           }
           event.preventDefault()
