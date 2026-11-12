@@ -1,6 +1,6 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { labelFromModelId } from '../../model-id-label'
-import { isCoveredModelAlias } from '../../model-alias-rows'
+import { legacyAgentModelIds } from '../../legacy-agent-models'
 import type {
   AgentSessionOptionCatalog,
   CatalogMidSessionApply,
@@ -215,8 +215,12 @@ export type NativeChatShownModel = {
 /** The model descriptor, then the controls that apply, each showing the chat's value for it.
  *  Values and controls arrive apart, so a caller decides which model's controls apply. */
 export function nativeChatSessionOptionDescriptors(args: {
+  agent: string
   catalog: AgentSessionOptionCatalog
   models: readonly CatalogModel[]
+  /** Listed rows legacy folding classifies, so a stable catalog is classified once; defaults to models.
+   *  A tracked-only stand-in never marks listed rows legacy. */
+  legacyInventory?: readonly CatalogModel[]
   mode: NativeChatSessionOptionMode
   modelLabel: string
   liveTransport: NativeChatLiveOptionTransport
@@ -225,16 +229,15 @@ export function nativeChatSessionOptionDescriptors(args: {
   values: Readonly<Record<string, TrackedNativeChatSessionOption | undefined>>
   modelIsCliDefault: boolean
 }): SessionOptionDescriptor[] {
-  const { catalog, models, mode, modelLabel, liveTransport, model } = args
+  const { agent, catalog, models, mode, modelLabel, liveTransport, model } = args
   // Callers reconcile tracked models into choices first; the trigger must never show an unlisted selection.
-  // An alias whose versioned row is listed stays reachable by search, unless the chat is on it.
-  const modelChoices = models.map(({ id, label, description, resolvedModel }) => ({
+  // Legacy rows fold away like the launch picker's; a picker opens the section when the chat is on one.
+  const legacy = legacyAgentModelIds(agent, args.legacyInventory ?? models)
+  const modelChoices = models.map(({ id, label, description }) => ({
     value: id,
     label,
     ...(description ? { description } : {}),
-    ...(id !== model.currentId && isCoveredModelAlias({ id, resolvedModel }, models)
-      ? { searchOnly: true as const }
-      : {})
+    ...(legacy.has(id) ? { legacy: true as const } : {})
   }))
   const modelAction = actionForApply(catalog.modelApply, model.tracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [
@@ -273,6 +276,8 @@ export function nativeChatSessionOptionDescriptors(args: {
 export function buildNativeChatSessionOptionSnapshot(args: {
   catalog: AgentSessionOptionCatalog
   models: readonly CatalogModel[]
+  /** Discovered rows before tracked stand-ins are added; see nativeChatSessionOptionDescriptors. */
+  legacyInventory?: readonly CatalogModel[]
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   modelLabel: string
@@ -289,6 +294,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const model = models.find((candidate) => candidate.id === effectiveModelId)
   return nativeChatSessionOptionDescriptors({
     ...args,
+    agent: record.agent,
     model: {
       currentId: effectiveModelId,
       valueSource: record.model?.source ?? (defaultModelId ? 'default' : 'unknown'),
