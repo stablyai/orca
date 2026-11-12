@@ -12780,7 +12780,8 @@
           "title": "Remove {{value0}}?",
           "description": "Its data is removed too.",
           "cancel": "Cancel",
-          "remove": "Remove"
+          "remove": "Remove",
+          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again."
         },
         "PluginRollbackDialog": {
           "title": "Roll back {{value0}}?",
@@ -18511,7 +18512,8 @@
           "notRunYet": "Not run yet",
           "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
           "createdBy": "Created by",
-          "createdByPluginTitle": "Plugin {{plugin}}"
+          "createdByPluginTitle": "Plugin {{plugin}}",
+          "createdByEndedTitle": "Plugin {{plugin}}, since removed or disabled; it can no longer change this automation without asking"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -25200,7 +25202,9 @@
       "delete": "Delete",
       "changeAutomation": "{{plugin}} wants to change the automation “{{automation}}”",
       "changeAutomationDetail": "The plugin did not create it. It would change: {{fields}}.",
-      "change": "Change"
+      "change": "Change",
+      "changeElevatedAutomationDetail": "It runs its agent with extra settings you chose (arguments, a permission mode or a precheck command). It would change: {{fields}}.",
+      "newPrompt": "New prompt: “{{prompt}}”"
     }
   },
   "checks": {

@@ -24,7 +24,14 @@ export type AutomationPrecheck = {
 
 /** Who created an automation, when Orca knows it was not the person. Set by Orca, never by the
  *  creator; `name` is the plugin's name then, so the label survives the plugin's removal. */
-export type AutomationCreator = { kind: 'plugin'; pluginKey: string; name: string }
+export type AutomationCreator = {
+  kind: 'plugin'
+  pluginKey: string
+  name: string
+  /** When the plugin was removed, disabled or blocked: it no longer owns the automation, and a
+   *  plugin installed later under the same key does not either. */
+  endedAt?: number
+}
 
 export type Automation = {
   id: string
@@ -127,5 +134,6 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'dtstart'
     | 'enabled'
     | 'missedRunGraceMinutes'
+    | 'createdBy'
   >
 >

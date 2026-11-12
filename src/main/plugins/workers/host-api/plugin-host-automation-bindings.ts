@@ -17,6 +17,8 @@ import {
 import { resolvePluginProject } from './plugin-host-project-target'
 import {
   automationAnswer,
+  automationRunsElevated,
+  pluginOwnsAutomation,
   projectPluginAutomations,
   type PluginAutomationRecord
 } from './plugin-automation-projection'
@@ -55,24 +57,25 @@ async function listedWorkspaceIds(
 }
 
 /**
- * Null when the plugin may go ahead: it created the automation, or the person allowed it. An
- * automation someone else made is the person's, so Orca asks them; headless serve cannot ask.
+ * Null when the plugin may go ahead: `question` asks nothing, or the person allowed it. Headless
+ * serve cannot ask.
  */
 async function refusalFor(
   ctx: PluginHostMethodContext,
   automationId: string,
-  subject: (name: string) => PluginConfirmationSubject
+  question: (automation: PluginAutomationRecord, own: boolean) => PluginConfirmationSubject | null
 ): Promise<Refusal | null> {
   const { automation } = automationShowAnswer.parse(
     await rpc(ctx.services)('automation.show', { id: automationId })
   )
-  if (automation.createdBy?.kind === 'plugin' && automation.createdBy.pluginKey === ctx.pluginId) {
+  const subject = question(automation, pluginOwnsAutomation(automation, ctx.pluginId))
+  if (!subject) {
     return null
   }
   if (!ctx.services.confirm) {
     return { reason: 'consent-unavailable' }
   }
-  const answer = await ctx.services.confirm(ctx.pluginId, subject(automation.name), ctx.scope)
+  const answer = await ctx.services.confirm(ctx.pluginId, subject, ctx.scope)
   return answer === 'allowed'
     ? null
     : { reason: answer === 'cancelled' ? 'cancelled' : 'consent-unavailable' }
@@ -129,11 +132,22 @@ export const PLUGIN_AUTOMATION_HANDLERS = {
     const fields = (['name', 'prompt', 'schedule', 'timezone', 'enabled'] as const).filter(
       (field) => params[field] !== undefined
     )
-    const refused = await refusalFor(ctx, automationId, (current) => ({
-      kind: 'automation.update',
-      name: current,
-      fields
-    }))
+    // Another's automation is the person's. One that runs its agent with extra settings (its
+    // arguments, permission mode or a precheck) is asked about even for its own creator when a
+    // change would make it run something new: a new prompt, a new schedule, or resuming.
+    const startsNewRun = prompt !== undefined || schedule !== undefined || enabled === true
+    const refused = await refusalFor(ctx, automationId, (current, own) => {
+      const elevated = automationRunsElevated(current) && startsNewRun
+      return own && !elevated
+        ? null
+        : {
+            kind: 'automation.update',
+            name: current.name,
+            fields,
+            ...(elevated ? { elevated: true } : {}),
+            ...(elevated && prompt !== undefined ? { prompt } : {})
+          }
+    })
     if (refused) {
       return { updated: false, ...refused }
     }
@@ -150,10 +164,9 @@ export const PLUGIN_AUTOMATION_HANDLERS = {
     return { updated: true }
   }),
   'automation.delete': bind(api['automation.delete'], async ({ automationId }, ctx) => {
-    const refused = await refusalFor(ctx, automationId, (name) => ({
-      kind: 'automation.delete',
-      name
-    }))
+    const refused = await refusalFor(ctx, automationId, (current, own) =>
+      own ? null : { kind: 'automation.delete', name: current.name }
+    )
     if (refused) {
       return { deleted: false, ...refused }
     }

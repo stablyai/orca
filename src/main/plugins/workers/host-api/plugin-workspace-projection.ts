@@ -39,6 +39,8 @@ export type PluginAgentStatusRow = {
   agentType?: string
   stateStartedAt: number
   providerSessionOnly?: boolean
+  /** The SSH connection the pane runs on; null or absent on this machine. */
+  connectionId?: string | null
   /** The agent's own session, which a resume names. */
   providerSession?: { id: string; transcriptPath?: string }
 }

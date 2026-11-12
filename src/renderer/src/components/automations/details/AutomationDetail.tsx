@@ -233,12 +233,25 @@ export function AutomationDetail({
           {
             key: 'createdBy',
             label: t('auto.components.automations.AutomationDetail.createdBy', 'Created by'),
-            value: automation.createdBy.name,
-            title: t(
-              'auto.components.automations.AutomationDetail.createdByPluginTitle',
-              'Plugin {{plugin}}',
-              { plugin: automation.createdBy.pluginKey }
-            )
+            value: (
+              <span className="flex min-w-0 items-baseline gap-1.5">
+                <span className="truncate">{automation.createdBy.name}</span>
+                <span className="truncate font-mono text-xs text-muted-foreground">
+                  {automation.createdBy.pluginKey}
+                </span>
+              </span>
+            ),
+            title: automation.createdBy.endedAt
+              ? t(
+                  'auto.components.automations.AutomationDetail.createdByEndedTitle',
+                  'Plugin {{plugin}}, since removed or disabled; it can no longer change this automation without asking',
+                  { plugin: automation.createdBy.pluginKey }
+                )
+              : t(
+                  'auto.components.automations.AutomationDetail.createdByPluginTitle',
+                  'Plugin {{plugin}}',
+                  { plugin: automation.createdBy.pluginKey }
+                )
           }
         ]
       : []),

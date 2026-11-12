@@ -25,10 +25,18 @@ const OWN = {
   createdBy: { kind: 'plugin', pluginKey: 'samples.demo', name: 'Demo' }
 }
 
+const OWN_ELEVATED = { ...OWN, id: 'a3', launchPreferences: { permissionMode: 'bypass' } }
+const ENDED = {
+  ...AUTOMATION,
+  id: 'a4',
+  createdBy: { kind: 'plugin', pluginKey: 'samples.demo', name: 'Demo', endedAt: 5 }
+}
+const BY_ID: Record<string, unknown> = { a2: OWN, a3: OWN_ELEVATED, a4: ENDED }
+
 function runtime() {
   const answers: Record<string, unknown> = {
     'repo.list': { repos: [{ id: 'r1', executionHostId: 'local' }] },
-    'automation.list': { automations: [AUTOMATION, OWN] },
+    'automation.list': { automations: [AUTOMATION, OWN, ENDED] },
     'worktree.list': { worktrees: [{ id: 'r1::/src/r1', identity: { key: 'wt2:local:i1' } }] },
     'automation.create': { automation: { id: 'new' } },
     'automation.update': { automation: AUTOMATION },
@@ -36,9 +44,8 @@ function runtime() {
   }
   return vi.fn<PluginRuntimeRpc>(async (method, params) => {
     if (method === 'automation.show') {
-      const own =
-        typeof params === 'object' && params !== null && 'id' in params && params.id === OWN.id
-      return { automation: own ? OWN : AUTOMATION }
+      const id = typeof params === 'object' && params !== null && 'id' in params ? params.id : ''
+      return { automation: BY_ID[String(id)] ?? AUTOMATION }
     }
     return answers[method]
   })
@@ -80,7 +87,9 @@ describe('automation.list', () => {
           lastRunAt: null,
           createdByThisPlugin: false
         },
-        expect.objectContaining({ id: 'a2', createdByThisPlugin: true })
+        expect.objectContaining({ id: 'a2', createdByThisPlugin: true }),
+        // Its plugin was removed or disabled since: the plugin no longer owns it.
+        expect.objectContaining({ id: 'a4', createdByThisPlugin: false })
       ],
       truncated: false
     })
@@ -179,6 +188,36 @@ describe('automation.update and automation.delete', () => {
     ).toEqual({
       ok: true,
       value: { deleted: true }
+    })
+  })
+
+  it("ask before a new prompt or resuming for one that runs with extra agent settings, even the plugin's own", async () => {
+    const confirm = vi.fn().mockResolvedValue('allowed')
+    const rpc = runtime()
+    await call('automation.update', { automationId: 'a3', prompt: 'Do more' }, rpc, { confirm })
+    expect(confirm).toHaveBeenCalledWith(
+      'samples.demo',
+      {
+        kind: 'automation.update',
+        name: 'Nightly sweep',
+        fields: ['prompt'],
+        elevated: true,
+        prompt: 'Do more'
+      },
+      expect.anything()
+    )
+    confirm.mockClear()
+    // A rename runs nothing new.
+    await call('automation.update', { automationId: 'a3', name: 'Renamed' }, rpc, { confirm })
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it('ask once the plugin that made it was removed or disabled', async () => {
+    const confirm = vi.fn().mockResolvedValue('cancelled')
+    const rpc = runtime()
+    expect(await call('automation.delete', { automationId: 'a4' }, rpc, { confirm })).toEqual({
+      ok: true,
+      value: { deleted: false, reason: 'cancelled' }
     })
   })
 })

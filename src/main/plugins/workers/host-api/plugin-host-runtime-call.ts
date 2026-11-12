@@ -60,7 +60,7 @@ export function pluginRuntimeFailure(error: unknown): unknown {
       : undefined
   const [failureCode, message] =
     (code && RUNTIME_FAILURES.get(code)) || RUNTIME_FAILURES.get(detail) || UNKNOWN_FAILURE
-  return new PluginRuntimeCallError(failureCode, message, undefined, detail)
+  return new PluginRuntimeCallError(failureCode, message, undefined, detail, { cause: error })
 }
 
 export function pluginHostRenderer(services: PluginHostServices): PluginHostRendererActions {
@@ -103,4 +103,20 @@ export function pluginHostEffect(
  */
 export function pluginWorkspaceSelector(workspaceId: string): string {
   return workspaceId.startsWith('identity:') ? workspaceId : `id:${workspaceId}`
+}
+
+/** Whether `error`, or an error it was caused by, is an instance of `type`. */
+export function pluginRuntimeErrorIs(
+  error: unknown,
+  type: abstract new (...args: never[]) => Error
+): boolean {
+  let current: unknown = error
+  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    const cause: unknown = current.cause
+    if (current instanceof type) {
+      return true
+    }
+    current = cause
+  }
+  return false
 }

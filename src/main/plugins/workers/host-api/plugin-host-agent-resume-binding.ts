@@ -1,0 +1,75 @@
+import { z } from 'zod'
+import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
+import { pluginResumeKey } from '../../../../shared/plugins/workers/plugin-agent-resume-key'
+import { ProviderSession } from '../../../../shared/rpc-contract/agent-session-params'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
+import {
+  pluginHostEffect as effect,
+  pluginHostRpc as rpc,
+  pluginWorkspaceSelector as workspaceSelector
+} from './plugin-host-runtime-call'
+import { recordPluginOpenedTerminal } from './plugin-opened-terminals'
+import type { PluginAgentStatusRow } from './plugin-workspace-projection'
+
+const worktreeShowAnswer = z.object({
+  worktree: z.object({ id: z.string(), hostId: z.string().optional() })
+})
+const ensureSessionAnswer = z.object({
+  terminal: z.object({ handle: z.string() }),
+  disposition: z.enum(['created', 'adopted'])
+})
+
+/** The transcript a live row of this session in this workspace reports, which some agents
+ *  resume from; a same-id session elsewhere is another agent's. */
+function liveTranscript(
+  rows: readonly PluginAgentStatusRow[],
+  match: { agent: string; sessionId: string; worktreeId: string; hostId: string }
+): string | undefined {
+  const row = rows.find(
+    (candidate) =>
+      candidate.agentType === match.agent &&
+      candidate.providerSession?.id === match.sessionId &&
+      candidate.worktreeId === match.worktreeId &&
+      getConnectionExecutionHostId(candidate.connectionId) === match.hostId
+  )
+  const transcript = ProviderSession.shape.transcriptPath.safeParse(
+    row?.providerSession?.transcriptPath
+  )
+  return transcript.success ? transcript.data : undefined
+}
+
+export const PLUGIN_AGENT_RESUME_HANDLERS = {
+  'agent.resume': bind(
+    PLUGIN_HOST_API['agent.resume'],
+    async ({ workspaceId, agent, sessionId }, ctx) => {
+      const worktree = workspaceSelector(workspaceId)
+      const shown = worktreeShowAnswer.parse(
+        await rpc(ctx.services)('worktree.show', { worktree })
+      ).worktree
+      const transcriptPath = liveTranscript(ctx.services.listAgentStatuses(), {
+        agent,
+        sessionId,
+        worktreeId: shown.id,
+        hostId: shown.hostId ?? 'local'
+      })
+      const answer = ensureSessionAnswer.parse(
+        await effect(ctx, 'terminal.ensureAgentSession', {
+          kind: 'explicit',
+          worktree,
+          agent,
+          providerSession: {
+            // The params schema admits only agents that resume by session id.
+            key: pluginResumeKey(agent) ?? 'session_id',
+            id: sessionId,
+            ...(transcriptPath ? { transcriptPath } : {})
+          },
+          // A mod works beside the person: never take their focus.
+          presentation: 'background'
+        })
+      )
+      recordPluginOpenedTerminal(ctx.pluginId, answer.terminal.handle)
+      return { terminalId: answer.terminal.handle, started: answer.disposition === 'created' }
+    }
+  )
+} satisfies Record<string, BoundPluginHostMethod>

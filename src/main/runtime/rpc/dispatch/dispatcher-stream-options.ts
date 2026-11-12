@@ -36,6 +36,8 @@ export type RpcDispatchStreamingOptions = Pick<
   /** In-process callers: runs after admission and feature waits, just before the handler; a throw
    *  refuses the call (a plugin revoked while its call waited). */
   beforeInvoke?: () => void
+  /** In-process callers: sees a unary handler's own throw before it becomes an error answer. */
+  onHandlerError?: (error: unknown) => void
 }
 
 export function rpcContextFromTransport(

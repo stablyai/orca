@@ -12,7 +12,8 @@ import {
 } from '../../workers/host-api/plugin-host-call-scope'
 import { markPluginSavedFileAsDownloaded } from './plugin-save-as-download-mark'
 import { confirmPluginExternalOpen } from './plugin-external-open-consent'
-import { confirmPluginAction } from '../../consent/plugin-action-confirmation'
+import { canConfirmInWindow, confirmPluginAction } from '../../consent/plugin-action-confirmation'
+import { createPluginConfirmationGate } from '../../consent/plugin-confirmation-gate'
 import { pluginConfirmationCopy } from '../../consent/plugin-confirmation-copy'
 import type { Store } from '../../../persistence/loading-store/store'
 import { translateMain } from '../../../i18n/main-i18n'
@@ -29,6 +30,7 @@ const DESKTOP_FRAME_RATE_LIMIT = {
 const hostWindows = new Set<BrowserWindow>()
 const budgets = new Map<string, PanelMessageBudget>()
 let services: PluginDesktopFrameServices | null = null
+const askOnce = createPluginConfirmationGate()
 
 /** Null in headless serve and before a main window exists: the methods then fail. */
 export function getPluginDesktopFrameServices(): PluginDesktopFrameServices | null {
@@ -49,13 +51,13 @@ function callingWindow(scope: PluginHostCallScope): BrowserWindow {
 }
 
 /** Where a host confirmation shows: the calling frame's window; for workers, Orca's focused
- *  main window, else its first. */
+ *  main window, else the first one the person can see. */
 function confirmationWindow(scope: PluginHostCallScope): BrowserWindow | null {
   if (scope.callerWebContentsId !== undefined) {
     return callingWindow(scope)
   }
   const windows = [...hostWindows].filter((window) => !window.isDestroyed())
-  return windows.find((window) => window.isFocused()) ?? windows[0] ?? null
+  return windows.find((window) => window.isFocused()) ?? windows.find(canConfirmInWindow) ?? null
 }
 
 function admit(window: BrowserWindow, pluginId: string): void {
@@ -93,13 +95,20 @@ export function installPluginDesktopFrameServices(
   }
   services = {
     async confirm(pluginId, subject, scope) {
-      const { answer } = await confirmPluginAction(
-        confirmationWindow(scope),
-        pluginConfirmationCopy(scope.pluginName ?? pluginId, subject)
-      )
-      // The question may have stayed open while the plugin was disabled or removed.
-      scope.assertActive()
-      return answer
+      const window = confirmationWindow(scope)
+      if (!canConfirmInWindow(window)) {
+        return 'unavailable'
+      }
+      return askOnce(pluginId, async () => {
+        admit(window, pluginId)
+        const { answer } = await confirmPluginAction(
+          window,
+          pluginConfirmationCopy(scope.pluginName ?? pluginId, subject)
+        )
+        // The question may have stayed open while the plugin was disabled or removed.
+        scope.assertActive()
+        return answer
+      })
     },
     async openExternal(pluginId, url, scope) {
       // Re-checked here: the shared schema already refused other schemes, but this is the sink.

@@ -1,21 +1,19 @@
 import { z } from 'zod'
 import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-api'
-import {
-  PLUGIN_WORKSPACE_LIST_LIMIT,
-  pluginWorkspaceId
-} from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
-import { pluginResumeKey } from '../../../../shared/plugins/workers/plugin-agent-resume-key'
+import { pluginWorkspaceId } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
 import { suggestCreatureNameForPaths } from '../../../../shared/worktree-name-suggestion'
-import { ProviderSession } from '../../../../shared/rpc-contract/agent-session-params'
+import { WorktreeCreateSetupChoiceRefusedError } from '../../../runtime/workspaces/creation/worktree-create-setup-choice-refusal'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
 import {
   pluginHostEffect as effect,
   pluginHostRpc as rpc,
-  pluginWorkspaceSelector as workspaceSelector,
+  pluginRuntimeErrorIs,
   type PluginRuntimeRpc
 } from './plugin-host-runtime-call'
-import { resolvePluginProject } from './plugin-host-project-target'
+import { resolvePluginProject, type PluginProjectTarget } from './plugin-host-project-target'
+import { recordPluginOpenedTerminal } from './plugin-opened-terminals'
+import { PLUGIN_AGENT_RESUME_HANDLERS } from './plugin-host-agent-resume-binding'
 
 const api = PLUGIN_HOST_API
 
@@ -31,22 +29,30 @@ const agentLaunchAnswer = z.object({
   outcome: z.object({ handle: z.string() })
 })
 const worktreeListAnswer = z.object({
-  worktrees: z.array(z.object({ repoId: z.string(), path: z.string() }))
-})
-const ensureSessionAnswer = z.object({
-  terminal: z.object({ handle: z.string() }),
-  disposition: z.enum(['created', 'adopted'])
+  worktrees: z.array(
+    worktreeRecord.extend({ repoId: z.string(), path: z.string(), hostId: z.string().optional() })
+  )
 })
 
-/** A name Orca would pick in its own create dialog: a creature no workspace of the project uses. */
-async function generatedName(call: PluginRuntimeRpc, projectId: string): Promise<string> {
+const listedId = (worktree: z.output<typeof worktreeRecord>): string =>
+  pluginWorkspaceId({ id: worktree.id, identityKey: worktree.identity?.key })
+
+/** Every worktree of the project on its host; the list is not paged, so none is missed. */
+async function projectWorktrees(call: PluginRuntimeRpc, project: PluginProjectTarget) {
   const { worktrees } = worktreeListAnswer.parse(
-    await call('worktree.list', { limit: PLUGIN_WORKSPACE_LIST_LIMIT })
+    await call('worktree.list', { limit: Number.MAX_SAFE_INTEGER })
   )
-  return suggestCreatureNameForPaths(
-    worktrees.filter((worktree) => worktree.repoId === projectId).map((worktree) => worktree.path)
+  return worktrees.filter(
+    (worktree) =>
+      worktree.repoId === project.id && (!project.hostId || worktree.hostId === project.hostId)
   )
 }
+
+const setupDecisionRequired = (): PluginHostCallError =>
+  new PluginHostCallError(
+    'action_failed',
+    "this project's setup script needs a decision; pass setup: 'skip' or create it in Orca"
+  )
 
 export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
   'workspace.create': bind(api['workspace.create'], async (params, ctx) => {
@@ -60,8 +66,10 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
     if (project.kind === 'folder') {
       throw new PluginHostCallError('action_failed', 'folder projects have no worktrees')
     }
+    const existing = await projectWorktrees(call, project)
     const open = params.open === true
-    const name = params.name?.trim() || (await generatedName(call, project.id))
+    // A creature no workspace of the project uses; a later clash gets a suffix from the host.
+    const name = params.name?.trim() || suggestCreatureNameForPaths(existing.map((w) => w.path))
     // Never `run`, an approved setup hash or a startup command: those approve or run repository
     // code the person has not. Absent, setup follows the project's settings and approvals.
     const create = {
@@ -77,11 +85,18 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
       // A plugin moves this window only: paired clients are not steered.
       ...(open ? { navigation: 'host' } : {})
     }
+    // Told apart by the class the runtime threw, never by its wording.
+    const setupRefusal = (error: unknown): unknown =>
+      pluginRuntimeErrorIs(error, WorktreeCreateSetupChoiceRefusedError)
+        ? setupDecisionRequired()
+        : error
     if (!params.agent) {
-      const { worktree } = worktreeCreateAnswer.parse(await effect(ctx, 'worktree.create', create))
-      return {
-        workspaceId: pluginWorkspaceId({ id: worktree.id, identityKey: worktree.identity?.key })
-      }
+      const { worktree } = worktreeCreateAnswer.parse(
+        await effect(ctx, 'worktree.create', create).catch((error: unknown) => {
+          throw setupRefusal(error)
+        })
+      )
+      return { workspaceId: listedId(worktree) }
     }
     // The agent starts after setup, in the terminal setup ran in, as `orca worktree create
     // --agent` does; the prompt rides its launch.
@@ -93,39 +108,45 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
         presentation: open ? 'focused' : 'background',
         launchSource: 'plugin',
         ...(params.prompt ? { prompt: { text: params.prompt, delivery: 'submit' } } : {})
+      }).catch(async (error: unknown) => {
+        const refusal = setupRefusal(error)
+        throw refusal === error
+          ? await withCreatedWorkspace(call, project, existing, error)
+          : refusal
       })
     )
+    recordPluginOpenedTerminal(ctx.pluginId, launched.outcome.handle)
     const { worktree } = worktreeShowAnswer.parse(
       await call('worktree.show', { worktree: `id:${launched.worktreeId}` })
     )
-    return {
-      workspaceId: pluginWorkspaceId({ id: worktree.id, identityKey: worktree.identity?.key }),
-      terminalId: launched.outcome.handle
-    }
+    return { workspaceId: listedId(worktree), terminalId: launched.outcome.handle }
   }),
-  'agent.resume': bind(api['agent.resume'], async ({ workspaceId, agent, sessionId }, ctx) => {
-    const key = pluginResumeKey(agent)
-    if (!key) {
-      throw new PluginHostCallError('invalid_params', 'this agent cannot resume by session id')
-    }
-    // A live row of the same session knows its transcript, which some agents resume from.
-    const transcript = ProviderSession.shape.transcriptPath.safeParse(
-      ctx.services
-        .listAgentStatuses()
-        .find((row) => row.agentType === agent && row.providerSession?.id === sessionId)
-        ?.providerSession?.transcriptPath
-    )
-    const transcriptPath = transcript.success ? transcript.data : undefined
-    const answer = ensureSessionAnswer.parse(
-      await effect(ctx, 'terminal.ensureAgentSession', {
-        kind: 'explicit',
-        worktree: workspaceSelector(workspaceId),
-        agent,
-        providerSession: { key, id: sessionId, ...(transcriptPath ? { transcriptPath } : {}) },
-        // A mod works beside the person: never take their focus.
-        presentation: 'background'
-      })
-    )
-    return { terminalId: answer.terminal.handle, started: answer.disposition === 'created' }
-  })
+  ...PLUGIN_AGENT_RESUME_HANDLERS
 } satisfies Record<string, BoundPluginHostMethod>
+
+/**
+ * A launch can fail after its worktree exists; the refusal then names that workspace, so the
+ * plugin can use or remove it. Found as the one worktree of the project that is new.
+ */
+async function withCreatedWorkspace(
+  call: PluginRuntimeRpc,
+  project: PluginProjectTarget,
+  before: readonly { id: string }[],
+  error: unknown
+): Promise<unknown> {
+  const known = new Set(before.map((worktree) => worktree.id))
+  const created = await projectWorktrees(call, project).then(
+    (after) => after.filter((worktree) => !known.has(worktree.id)),
+    () => []
+  )
+  if (created.length !== 1 || !(error instanceof PluginHostCallError)) {
+    return error
+  }
+  return new PluginHostCallError(
+    error.code,
+    `${error.message}; the workspace was created: ${listedId(created[0])}`,
+    error.retryAfterMs,
+    error.detail,
+    { cause: error }
+  )
+}

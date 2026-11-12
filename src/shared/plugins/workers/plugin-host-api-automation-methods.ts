@@ -113,7 +113,7 @@ const automationDeleteParams = z.strictObject({ automationId })
 const automationDeleteResult = z.object({ deleted: z.boolean(), reason: refusal })
 
 const CONFIRMS =
-  'Orca first asks the person about an automation this plugin did not create; if they decline or cannot be asked, nothing changes and `reason` says why.'
+  'Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, nothing changes and `reason` says why.'
 
 export const PLUGIN_AUTOMATION_API = {
   'automation.list': spec({
@@ -139,7 +139,7 @@ export const PLUGIN_AUTOMATION_API = {
     result: automationCreateResult
   }),
   'automation.update': spec({
-    summary: `Changes an automation's name, prompt, schedule, time zone or whether it is enabled. ${CONFIRMS}`,
+    summary: `Changes an automation's name, prompt, schedule, time zone or whether it is enabled. ${CONFIRMS} Orca also asks before a new prompt or schedule, or resuming, for any automation whose runs use extra agent settings the person chose.`,
     since: 8,
     scope: 'any-workspace',
     capability: 'automation:write',

@@ -25,9 +25,42 @@ export const automationAnswer = z.object({
   enabled: z.boolean(),
   nextRunAt: z.number(),
   lastRunAt: z.number().optional(),
-  createdBy: z.object({ kind: z.string(), pluginKey: z.string().optional() }).optional()
+  createdBy: z
+    .object({
+      kind: z.string(),
+      pluginKey: z.string().optional(),
+      endedAt: z.number().optional()
+    })
+    .optional(),
+  // Read only to tell whether runs use extra agent settings; never projected.
+  precheck: z.object({ command: z.string() }).nullable().optional(),
+  agentArgs: z.string().nullable().optional(),
+  extraAgentArgs: z.string().optional(),
+  launchPreferences: z.record(z.string(), z.unknown()).optional()
 })
 export type PluginAutomationRecord = z.output<typeof automationAnswer>
+
+/** The plugin created it and still owns it: its removal or disabling ends that. */
+export function pluginOwnsAutomation(
+  automation: PluginAutomationRecord,
+  pluginId: string
+): boolean {
+  const creator = automation.createdBy
+  return (
+    creator?.kind === 'plugin' && creator.pluginKey === pluginId && creator.endedAt === undefined
+  )
+}
+
+/** Runs start the agent with more than the person's defaults: arguments, launch choices such as a
+ *  permission mode, or a precheck command. Only the person can set these. */
+export function automationRunsElevated(automation: PluginAutomationRecord): boolean {
+  return Boolean(
+    automation.precheck ||
+    automation.agentArgs ||
+    automation.extraAgentArgs?.trim() ||
+    Object.keys(automation.launchPreferences ?? {}).length > 0
+  )
+}
 
 /** `automation.list`: rows as plugins see them; `workspaceIds` maps raw worktree ids to listed ones. */
 export function projectPluginAutomations(
@@ -59,8 +92,7 @@ export function projectPluginAutomations(
         enabled: automation.enabled,
         nextRunAt: automation.enabled ? automation.nextRunAt : null,
         lastRunAt: automation.lastRunAt ?? null,
-        createdByThisPlugin:
-          automation.createdBy?.kind === 'plugin' && automation.createdBy.pluginKey === pluginId
+        createdByThisPlugin: pluginOwnsAutomation(automation, pluginId)
       }
     }),
     truncated: automations.length > PLUGIN_AUTOMATION_LIST_LIMIT

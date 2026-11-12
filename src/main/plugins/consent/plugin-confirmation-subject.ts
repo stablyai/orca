@@ -9,5 +9,9 @@ export type PluginConfirmationSubject =
       name: string
       /** The fields the change touches. */
       fields: readonly ('name' | 'prompt' | 'schedule' | 'timezone' | 'enabled')[]
+      /** Its runs use extra agent settings the person chose (arguments, permission mode, precheck). */
+      elevated?: true
+      /** The new prompt, shown when `elevated`. */
+      prompt?: string
     }
   | { kind: 'automation.delete'; name: string }

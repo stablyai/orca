@@ -232,7 +232,7 @@ declare module 'orca/host' {
       result: { closed: true }
       surfaces: "worker"
     }
-    /** Creates a workspace (a new branch and worktree) in a Git project, local or SSH, and returns its id; with `agent`, starts that agent there once setup has run, in the background unless `open`. Orca's workspace-create and agent hooks run as for any create. Since host API 1.8. */
+    /** Creates a workspace (a new branch and worktree) in a Git project, local or SSH, and returns its id; with `agent`, starts that agent there once setup has run, in the background unless `open`; if the agent fails after the workspace exists, the error names its id. Orca's workspace-create and agent hooks run as for any create. Since host API 1.8. */
     "workspace.create": {
       params: { projectId: string; hostId?: string; name?: string; baseBranch?: string; agent?: string; prompt?: string; setup?: "skip"; open?: boolean }
       result: { workspaceId: string; terminalId?: string }
@@ -256,13 +256,13 @@ declare module 'orca/host' {
       result: { automationId: string }
       surfaces: "worker"
     }
-    /** Changes an automation's name, prompt, schedule, time zone or whether it is enabled. Orca first asks the person about an automation this plugin did not create; if they decline or cannot be asked, nothing changes and `reason` says why. Since host API 1.8. */
+    /** Changes an automation's name, prompt, schedule, time zone or whether it is enabled. Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, nothing changes and `reason` says why. Orca also asks before a new prompt or schedule, or resuming, for any automation whose runs use extra agent settings the person chose. Since host API 1.8. */
     "automation.update": {
       params: { automationId: string; name?: string; prompt?: string; schedule?: string; timezone?: string; enabled?: boolean }
       result: { updated: boolean; reason?: "cancelled" | "consent-unavailable" }
       surfaces: "worker"
     }
-    /** Deletes an automation. Orca first asks the person about an automation this plugin did not create; if they decline or cannot be asked, nothing changes and `reason` says why. Since host API 1.8. */
+    /** Deletes an automation. Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, nothing changes and `reason` says why. Since host API 1.8. */
     "automation.delete": {
       params: { automationId: string }
       result: { deleted: boolean; reason?: "cancelled" | "consent-unavailable" }
