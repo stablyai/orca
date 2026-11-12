@@ -14,6 +14,7 @@ import {
 } from '../editor/review-note-delivery/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
+import type { DiffCommentComposerSession, DiffCommentFileSession } from './diff-comment-session'
 
 export function getRenderSignature(
   comment: DecoratedDiffComment,
@@ -60,6 +61,7 @@ export type DiffCommentZoneCardContext = {
   resizeZone: (commentId: string) => void
   lifetime?: AbortSignal
   preventScrollOnFocus?: boolean
+  session?: DiffCommentFileSession
   onDeleteCommentRef: RefObject<(commentId: string) => void>
   onUpdateCommentRef: RefObject<((commentId: string, body: string) => Promise<boolean>) | undefined>
   clearDeliveredDiffComments: (
@@ -80,6 +82,7 @@ export function renderDiffCommentZoneCard(
     resizeZone,
     lifetime,
     preventScrollOnFocus,
+    session,
     onDeleteCommentRef,
     onUpdateCommentRef,
     clearDeliveredDiffComments
@@ -90,6 +93,8 @@ export function renderDiffCommentZoneCard(
     <TranslationScopeProvider>
       <TooltipProvider>
         <DiffCommentCard
+          session={session}
+          commentId={comment.id}
           lifetime={lifetime}
           preventScrollOnFocus={preventScrollOnFocus}
           lineNumber={comment.lineNumber}
@@ -110,13 +115,13 @@ export function renderDiffCommentZoneCard(
           }
           onSubmitEdit={
             onUpdateCommentRef.current && comment.canEdit !== false
-              ? async (body) => {
+              ? (body) => {
                   if (lifetime?.aborted) {
-                    return false
+                    return Promise.resolve(false)
                   }
                   const fn = onUpdateCommentRef.current
                   if (!fn) {
-                    return false
+                    return Promise.resolve(false)
                   }
                   return fn(comment.id, body)
                 }
@@ -163,6 +168,7 @@ export type DiffCommentDraftCardContext = {
   onSubmit: (body: string) => Promise<boolean>
   autoFocus?: boolean
   lifetime?: AbortSignal
+  session?: DiffCommentComposerSession
 }
 
 export function renderDiffCommentDraftCard(
@@ -179,13 +185,15 @@ export function renderDiffCommentDraftCard(
     onCancel,
     onSubmit,
     autoFocus,
-    lifetime
+    lifetime,
+    session
   }: DiffCommentDraftCardContext
 ): void {
   root.render(
     <TranslationScopeProvider>
       <TooltipProvider>
         <DiffCommentDraftCard
+          session={session}
           autoFocus={autoFocus}
           lifetime={lifetime}
           imageUploadAddress={imageUploadAddress}

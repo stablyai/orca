@@ -12,15 +12,12 @@ import {
   requestDiffCommentZoneMeasurement
 } from './diff-comment-zone-measurement'
 import { renderDiffCommentDraftCard } from './diff-comment-zone-card'
-import {
-  resizeDiffCommentZone,
-  type DraftZoneEntry,
-  type RestoreDiffCommentDraft
-} from './diff-comment-view-zone-entry'
+import { resizeDiffCommentZone, type DraftZoneEntry } from './diff-comment-view-zone-entry'
+import type { DiffCommentCreate, DiffCommentFileSession } from './diff-comment-session'
 
 type DraftZoneCardContext = {
   draftZoneRef: RefObject<DraftZoneEntry | null>
-  onCreateCommentRef: RefObject<DraftZoneEntry['createComment'] | undefined>
+  onCreateCommentRef: RefObject<DiffCommentCreate | undefined>
   monacoModelIdentity?: string
   combined: boolean
   focusOnOpen: boolean
@@ -28,8 +25,8 @@ type DraftZoneCardContext = {
   imageUploadAddress?: GitHubImageIntake['address']
   draftPlaceholder?: string
   draftSubmitLabel?: string
-  disposeDraftZone: (focusEditor?: boolean) => void
-  restoreFailedSubmit: RestoreDiffCommentDraft
+  cancelDraftZone: (entry: DraftZoneEntry) => void
+  fileSession: DiffCommentFileSession
 }
 
 export function renderDiffCommentDraftZoneCard(
@@ -44,11 +41,12 @@ export function renderDiffCommentDraftZoneCard(
     imageUploadAddress,
     draftPlaceholder,
     draftSubmitLabel,
-    disposeDraftZone,
-    restoreFailedSubmit
+    cancelDraftZone,
+    fileSession
   }: DraftZoneCardContext
 ): void {
-  const { editor, zoneId, domNode: dom, lifetime, draft } = entry
+  const { editor, zoneId, domNode: dom, lifetime, session } = entry
+  const draft = session.target
   let openingRequested = !focusOnOpen
   untilDiffCommentZoneRemoved(
     lifetime.signal,
@@ -145,51 +143,28 @@ export function renderDiffCommentDraftZoneCard(
   }
   renderDiffCommentDraftCard(entry.root, draft, {
     lifetime: lifetime.signal,
-    autoFocus: !combined,
+    autoFocus: !combined && focusOnOpen,
+    session,
     imageUploadAddress,
     placeholder: draftPlaceholder,
     submitLabel: draftSubmitLabel,
-    initialBody: entry.body,
-    onBodyChange: (body) => {
-      if (draftZoneRef.current === entry) {
-        entry.body = body
-      }
-    },
     resizeZone,
     onCancel: () => {
       if (draftZoneRef.current === entry) {
-        disposeDraftZone(true)
+        cancelDraftZone(entry)
       }
     },
-    onSubmit: async (body) => {
+    onSubmit: (body) => {
       if (lifetime.signal.aborted || draftZoneRef.current !== entry) {
-        return false
+        return Promise.resolve(false)
       }
-      const createComment = captureCreateComment ? entry.createComment : onCreateCommentRef.current
+      const createComment = captureCreateComment
+        ? session.createComment
+        : onCreateCommentRef.current
       if (!createComment) {
-        return false
+        return Promise.resolve(false)
       }
-      entry.submitting = true
-      let succeeded = false
-      try {
-        const result = await createComment({
-          lineNumber: draft.lineNumber,
-          startLine: draft.startLine,
-          body
-        })
-        succeeded = result !== false
-        return result
-      } finally {
-        entry.submitting = false
-        if (succeeded) {
-          if (draftZoneRef.current === entry) {
-            // Restore Monaco focus only if this card still owns it when the save settles.
-            disposeDraftZone(entry.domNode.contains(document.activeElement))
-          }
-        } else if (draftZoneRef.current !== entry) {
-          restoreFailedSubmit(draft, body, entry.createComment)
-        }
-      }
+      return fileSession.submitDraft(session, createComment, body)
     }
   })
 }

@@ -10,6 +10,8 @@ import {
   type FakeDiffCommentEditor
 } from './diff-comment-editor-test-fixture'
 
+import { DiffCommentFileSession } from './diff-comment-session'
+
 const DRAFT_LINE = 5
 const OTHER_LINE = 9
 const BODY = 'Needs revision'
@@ -201,6 +203,7 @@ describe('useDiffCommentDraftZone in-flight submit', () => {
     expect(fake.zones.size).toBe(0)
 
     await settle(false)
+    pumpFrames()
 
     const { textarea } = draftCard(fake)
     expect(textarea.value).toBe(BODY)
@@ -259,4 +262,74 @@ describe('useDiffCommentDraftZone teardown', () => {
     pumpFrames()
     expect(fake.zones.size).toBe(0)
   })
+})
+
+it.each([true, false])(
+  'retains a whole detached draft and uses the authorized create action (captured=%s)',
+  async (captureCreateComment) => {
+    const session = new DiffCommentFileSession()
+    const first = createFakeDiffCommentEditor()
+    const firstAction = vi.fn().mockResolvedValue(true)
+    const currentAction = vi.fn().mockResolvedValue(true)
+    const hook = renderHook(() =>
+      useDiffCommentDraftZone({
+        editor: first.editor,
+        onCreateComment: firstAction,
+        captureCreateComment,
+        session
+      })
+    )
+    act(() =>
+      hook.result.current.onAddCommentClickRef.current({ lineNumber: 5, startLine: 3, top: 0 })
+    )
+    typeDraft(first, 'Detached draft text')
+    const other = document.createElement('input')
+    document.body.append(other)
+    other.focus()
+    hook.unmount()
+    await act(async () => {})
+    const replacement = createFakeDiffCommentEditor()
+    const rebound = renderHook(() =>
+      useDiffCommentDraftZone({
+        editor: replacement.editor,
+        onCreateComment: currentAction,
+        captureCreateComment,
+        session
+      })
+    )
+    expect(rebound.result.current.isDraftOpen()).toBe(true)
+    pumpFrames()
+    expect(draftCard(replacement).textarea.value).toBe('Detached draft text')
+    expect(document.activeElement).toBe(other)
+    fireEvent.click(within(draftCard(replacement).dom).getByRole('button', { name: 'Add note' }))
+    await act(async () => {})
+    expect(captureCreateComment ? firstAction : currentAction).toHaveBeenCalledWith({
+      lineNumber: 5,
+      startLine: 3,
+      body: 'Detached draft text'
+    })
+    expect(captureCreateComment ? currentAction : firstAction).not.toHaveBeenCalled()
+    rebound.unmount()
+    session.dispose()
+  }
+)
+
+it('does not let an old physical Cancel terminate its semantic replacement', () => {
+  const session = new DiffCommentFileSession()
+  const fake = createFakeDiffCommentEditor()
+  const action = vi.fn().mockResolvedValue(true)
+  const hook = renderHook(() =>
+    useDiffCommentDraftZone({ editor: fake.editor, onCreateComment: action, session })
+  )
+  act(() => hook.result.current.onAddCommentClickRef.current({ lineNumber: 5, top: 0 }))
+  const oldCancel = within(draftCard(fake).dom).getByRole('button', { name: 'Cancel' })
+  act(() => {
+    session.openDraft({ lineNumber: 9 }, action)!.setBody('Successor text')
+    fireEvent.click(oldCancel)
+  })
+  pumpFrames()
+  expect(draftCard(fake).textarea.value).toBe('Successor text')
+  expect([...fake.zones.values()][0].afterLineNumber).toBe(9)
+  hook.unmount()
+  session.dispose()
 })

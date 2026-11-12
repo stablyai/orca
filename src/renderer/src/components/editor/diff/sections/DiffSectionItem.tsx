@@ -1,3 +1,4 @@
+import { useDiffCommentFileSession } from '../../../diff-comments/diff-comment-session-registry'
 import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
 import { consumeDiffCommentScrollCommand } from '../../../diff-comments/diff-comment-scroll-command'
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
@@ -48,6 +49,7 @@ export function DiffSectionItem({
   modifiedEditorsRef,
   handleSectionSaveRef
 }: DiffSectionItemProps): React.JSX.Element {
+  const commentSession = useDiffCommentFileSession(section.key)
   const diffTypography = useEditorTypography('diff')
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
@@ -118,6 +120,7 @@ export function DiffSectionItem({
   )
 
   useDiffCommentDecorator({
+    session: commentSession,
     imageUploadAddress,
     captureCreateComment: !onAddLineComment,
     commentOwner,

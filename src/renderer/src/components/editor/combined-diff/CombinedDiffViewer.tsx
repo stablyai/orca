@@ -1,5 +1,8 @@
+import { DiffCommentSessionScope } from '../../diff-comments/diff-comment-session-registry'
+import { useDiffCommentView } from '../../diff-comments/use-diff-comment-owner'
+import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
 import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-worktree-diff-comments'
@@ -37,15 +40,35 @@ import { useCombinedDiffSectionActions } from './review-controls/use-combined-di
 import { useCombinedDiffViewPreferences } from './review-controls/use-combined-diff-view-preferences'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
-export default function CombinedDiffViewer({
-  file,
-  viewStateKey,
-  viewStateScopeId
-}: {
+type CombinedDiffViewerProps = {
   file: OpenFile
   viewStateKey: string
   viewStateScopeId?: string
-}): React.JSX.Element {
+}
+
+export default function CombinedDiffViewer(props: CombinedDiffViewerProps): React.JSX.Element {
+  const { owner, comments } = useDiffCommentView(props.file.worktreeId, props.file)
+  const previousScope = useRef('unresolved')
+  const scope = owner ? diffCommentOwnerKey(owner) : previousScope.current
+  if (owner) {
+    previousScope.current = scope
+  }
+  const knownNoteIds = useMemo(
+    () => (comments ? new Set(comments.map((note) => note.id)) : undefined),
+    [comments]
+  )
+  return (
+    <DiffCommentSessionScope scope={scope} knownNoteIds={knownNoteIds}>
+      <CombinedDiffViewerBody {...props} />
+    </DiffCommentSessionScope>
+  )
+}
+
+function CombinedDiffViewerBody({
+  file,
+  viewStateKey,
+  viewStateScopeId
+}: CombinedDiffViewerProps): React.JSX.Element {
   const combinedDiffFileTreeVisibleByDefault = useAppStore(
     (s) => s.settings?.combinedDiffFileTreeVisibleByDefault
   )

@@ -438,6 +438,12 @@ test.describe('Combined diff scroll restore', () => {
       await openCombinedDiff(orcaPage, worktreeId, fixture.repoPath)
       const viewport = orcaPage.locator('[data-combined-diff-viewport]')
       await expect(viewport).toBeVisible()
+      const filter = orcaPage.getByPlaceholder('Filter files...')
+      if (!(await filter.isVisible())) {
+        await orcaPage.getByRole('button', { name: 'Show file tree', exact: true }).click()
+      }
+      await expect(filter).toBeVisible()
+      await expect(filter).toBeEnabled()
       const line = orcaPage
         .locator('.modified-in-monaco-diff-editor .view-line')
         .filter({ hasText: 'export const changed_0_5 = 5' })
@@ -455,7 +461,11 @@ test.describe('Combined diff scroll restore', () => {
         }
         const textarea = card.locator('textarea')
         await expect(textarea).toBeFocused()
-        await textarea.fill('alpha beta gamma')
+        const originalBody =
+          kind === 'saved' ? 'alpha beta gamma UNSAVED_41116' : 'alpha beta gamma DRAFT_41116'
+        const editedBody =
+          kind === 'saved' ? 'alpha FOCUS gamma UNSAVED_41116' : 'alpha FOCUS gamma DRAFT_41116'
+        await textarea.fill(originalBody)
         await textarea.press('Home')
         for (let step = 0; step < 6; step++) {
           await orcaPage.keyboard.press('ArrowRight')
@@ -483,21 +493,32 @@ test.describe('Combined diff scroll restore', () => {
           focused: true,
           start: 6,
           end: 10,
-          body: 'alpha beta gamma'
+          body: originalBody
         })
         const bounds = await viewport.boundingBox()
         if (!bounds) {
           throw new Error('combined viewport bounds missing')
         }
         await viewport.hover({ position: { x: 8, y: 100 } })
-        const distance = kind === 'draft' ? 1600 : 6000
+        const distance = 6000
         await orcaPage.mouse.wheel(0, distance)
         await expect(textarea).not.toBeInViewport()
+        {
+          const fileRow = orcaPage.locator('[data-combined-diff-section-row]').filter({
+            has: textarea
+          })
+          await expect(fileRow).toHaveCount(1)
+          await expect(fileRow).not.toBeInViewport()
+          await testInfo.attach(`${kind}-owning-file-offscreen`, {
+            body: await orcaPage.screenshot(),
+            contentType: 'image/png'
+          })
+        }
         await expect.poll(selection).toEqual({
           focused: true,
           start: 6,
           end: 10,
-          body: 'alpha beta gamma'
+          body: originalBody
         })
         await orcaPage.mouse.wheel(0, -distance)
         await expect(textarea).toBeInViewport()
@@ -505,29 +526,32 @@ test.describe('Combined diff scroll restore', () => {
           focused: true,
           start: 6,
           end: 10,
-          body: 'alpha beta gamma'
+          body: originalBody
         })
         await orcaPage.keyboard.insertText('FOCUS')
-        await expect(textarea).toHaveValue('alpha FOCUS gamma')
+        await expect(textarea).toHaveValue(editedBody)
         await testInfo.attach(`${kind}-focus-after-return`, {
           body: await orcaPage.screenshot(),
           contentType: 'image/png'
         })
+        await viewport.hover({ position: { x: 8, y: 100 } })
+        await orcaPage.mouse.wheel(0, distance)
+        await expect(textarea).not.toBeInViewport()
+        await orcaPage.getByPlaceholder('Filter files...').click()
+        await expect(filter).toBeFocused()
+        await viewport.hover({ position: { x: 8, y: 100 } })
+        await expect(filter).toBeFocused()
+        await orcaPage.mouse.wheel(0, -distance)
+        await expect(textarea).toBeInViewport()
+        await expect(textarea).toHaveValue(editedBody)
+        await expect(textarea).not.toBeFocused()
+        await expect(orcaPage.getByPlaceholder('Filter files...')).toBeFocused()
         if (kind === 'draft') {
+          await textarea.click()
           await orcaPage.keyboard.press('Enter')
-          await expect(orcaPage.locator('.orca-diff-comment-card')).toContainText(
-            'alpha FOCUS gamma'
-          )
+          await expect(orcaPage.locator('.orca-diff-comment-card')).toContainText(editedBody)
         } else {
-          await viewport.hover({ position: { x: 8, y: 100 } })
-          await orcaPage.mouse.wheel(0, distance)
-          await expect(textarea).not.toBeInViewport()
-          await viewport.click({ position: { x: 8, y: 100 } })
-          await expect(textarea).not.toBeFocused()
-          await orcaPage.mouse.wheel(0, -distance)
-          await expect(textarea).toBeInViewport()
-          await expect(textarea).not.toBeFocused()
-          await card.getByRole('button', { name: /cancel/i }).click()
+          await card.getByRole('button', { name: /cancel/i, includeHidden: true }).click()
           await expect(textarea).toHaveCount(0)
         }
       }

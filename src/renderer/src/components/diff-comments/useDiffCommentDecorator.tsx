@@ -1,8 +1,4 @@
-import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import {
-  diffCommentOwnerKey,
-  type DiffCommentOwner
-} from '@/store/slices/diff-comments/diff-comment-owner'
+import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
@@ -34,46 +30,16 @@ import {
   ZONE_MIN_PX,
   type ZoneEntry
 } from './diff-comment-view-zone-entry'
-import type { DiffCommentLineRange, DiffCommentLineTarget } from './diff-comment-line-range'
+import type { DiffCommentLineRange } from './diff-comment-line-range'
 import { useDiffCommentDraftZone, type DiffCommentDraft } from './diff-comment-draft-zone'
 import type { DiffCommentScrollCommand } from './diff-comment-scroll-command'
 
+import type { DiffCommentDecoratorArgs } from './diff-comment-decorator-props'
+
 export type { DiffCommentDraft }
 
-type DecoratorArgs = {
-  captureCreateComment?: boolean
-  commentOwner?: DiffCommentOwner | null
-  editor: monacoEditor.ICodeEditor | null
-  // Monaco destroys model-scoped view zones on model swap, so rebuild even though the editor object is stable.
-  monacoModelIdentity?: string
-  filePath: string
-  worktreeId: string
-  comments: readonly DecoratedDiffComment[]
-  commentableLineNumbers?: readonly number[]
-  addButtonLabel?: string
-  pendingCommentTarget?: DiffCommentLineTarget | null
-  // Markdown editors already bind this chord through their input bindings.
-  addNoteShortcutEnabled?: boolean
-  onCreateComment?: (args: {
-    lineNumber: number
-    startLine?: number
-    body: string
-  }) => Promise<boolean>
-  imageUploadAddress?: GitHubImageIntake['address']
-  draftPlaceholder?: string
-  draftSubmitLabel?: string
-  canOpenDraft?: boolean
-  onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
-  onDeleteComment: (commentId: string) => void
-  // Present only on surfaces that allow editing (local diffs); PR review notes are remote and can't be edited here.
-  onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
-  formatCommentPrompt?: (comment: DecoratedDiffComment) => string
-  // Pending scroll-to-note id from the sidebar; decorator reveals the line and acks so the same id can be re-requested later.
-  pendingScrollCommentId?: string | null
-  onPendingScrollConsumed?: (id: string) => void
-}
-
 export function useDiffCommentDecorator({
+  session,
   captureCreateComment = false,
   commentOwner = null,
   editor,
@@ -99,7 +65,7 @@ export function useDiffCommentDecorator({
   formatCommentPrompt,
   pendingScrollCommentId,
   onPendingScrollConsumed
-}: DecoratorArgs): void {
+}: DiffCommentDecoratorArgs): void {
   const ownerKey = commentOwner ? diffCommentOwnerKey(commentOwner) : null
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const activeGroupId = useAppStore((s) =>
@@ -130,6 +96,7 @@ export function useDiffCommentDecorator({
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
 
   const { onAddCommentClickRef, isDraftOpen } = useDiffCommentDraftZone({
+    session,
     imageUploadAddress,
     captureCreateComment,
     editor,
@@ -310,6 +277,7 @@ export function useDiffCommentDecorator({
 
     const renderCard = (root: Root, comment: DecoratedDiffComment): void => {
       renderDiffCommentZoneCard(root, comment, {
+        session,
         owner: commentOwner,
         worktreeId,
         filePath,
@@ -423,6 +391,7 @@ export function useDiffCommentDecorator({
     // Teardown belongs to the editor-scoped effect; per-comment cleanup would wipe every zone and flicker.
   }, [
     activeGroupId,
+    session,
     cancelScrollToZoneFrame,
     clearDeliveredDiffComments,
     commentOwner,

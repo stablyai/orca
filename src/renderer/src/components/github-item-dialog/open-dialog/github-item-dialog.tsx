@@ -1,3 +1,7 @@
+import {
+  DiffCommentSessionScope,
+  useDiffCommentSessionRegistry
+} from '@/components/diff-comments/diff-comment-session-registry'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { GitHubWorkItemTargetContext } from '../load-item-details/github-work-item-target-context'
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
@@ -31,7 +35,15 @@ export default function GitHubItemDialog(props: GitHubItemDialogProps): React.JS
   return <GitHubItemDialogItem key={key} {...props} />
 }
 
-function GitHubItemDialogItem({
+function GitHubItemDialogItem(props: GitHubItemDialogProps): React.JSX.Element {
+  return (
+    <DiffCommentSessionScope>
+      <GitHubItemDialogItemBody {...props} />
+    </DiffCommentSessionScope>
+  )
+}
+
+function GitHubItemDialogItemBody({
   workItem,
   repoPath,
   repoId,
@@ -43,6 +55,7 @@ function GitHubItemDialogItem({
   onReviewRequestsChange,
   onClose
 }: GitHubItemDialogProps): React.JSX.Element {
+  const noteSessions = useDiffCommentSessionRegistry()
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
   const workItemId = workItem?.id
@@ -279,7 +292,12 @@ function GitHubItemDialogItem({
             onCommentAdded={appendOptimisticComment}
             onReviewRequestsChange={onReviewRequestsChange}
             tab={tab}
-            setTab={setTab}
+            setTab={(next) => {
+              if (next !== 'files') {
+                noteSessions?.clear()
+              }
+              setTab(next)
+            }}
             pendingViewedPaths={pendingViewedPaths}
             onViewedChange={handlePRFileViewedChange}
           />
