@@ -121,15 +121,15 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'press-key'],
     summary: 'Press a single key such as Return or Escape',
     usage:
-      'orca computer press-key --app <app> --key <key> [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
-    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key']
+      'orca computer press-key --app <app> --key <key> [--window-id <id> | --window-index <n>] [--allow-system-shortcut] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
+    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key', 'allow-system-shortcut']
   },
   {
     path: ['computer', 'hotkey'],
     summary: 'Press a platform-aware key combination',
     usage:
-      'orca computer hotkey --app <app> --key <key-combo> [--window-id <id> | --window-index <n>] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
-    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key']
+      'orca computer hotkey --app <app> --key <key-combo> [--window-id <id> | --window-index <n>] [--allow-system-shortcut] [--restore-window] [--no-screenshot] [--full-tree] [--json]',
+    allowedFlags: [...COMPUTER_ACTION_FLAGS, 'key', 'allow-system-shortcut']
   },
   {
     path: ['computer', 'paste-text'],
