@@ -61,6 +61,8 @@ it('discovers a newly installed global skill when the same chat reopens its pick
   rerender(false)
   await installSkill()
   rerender(true)
+  // Reopening shows the last answer while the host is asked again, not a loading flash.
+  expect(result.current.status).toBe('ready')
   await waitFor(() =>
     expect(result.current.skills.map((skill) => skill.name)).toEqual(['installed-later'])
   )

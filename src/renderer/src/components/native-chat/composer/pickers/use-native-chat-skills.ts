@@ -80,7 +80,10 @@ export function useNativeChatSkills(
   )
   const [state, setState] = useState<StoredDiscoveryState>(IDLE_STATE)
   const [retryGeneration, setRetryGeneration] = useState(0)
+  // Last answer per pane, shown at once on reopen while the host is asked again.
   const paneDiscoveryCache = useRef(new Map<string, SkillDiscoveryResult>())
+  // Panes already asked during this open; store churn re-runs the effect and must not re-query.
+  const checkedThisOpen = useRef(new Set<string>())
   // Consume retry intent once; a generation-wide force flag would leak across pane switches.
   const forceNextDiscovery = useRef(false)
   const profile = getNativeChatAgentProfile(agent)
@@ -90,8 +93,8 @@ export function useNativeChatSkills(
     if (!profile || !enabled || !context) {
       // Without a current pane, discard retry intent before it can force another pane’s scan.
       forceNextDiscovery.current = false
-      // The owning host already caches scans; renderer snapshots must not outlive the picker.
-      paneDiscoveryCache.current.clear()
+      // The next open asks the host again so skills installed meanwhile appear.
+      checkedThisOpen.current.clear()
       setState(IDLE_STATE)
       return
     }
@@ -113,7 +116,7 @@ export function useNativeChatSkills(
 
     const paneCacheKey = context.key
     const cached = paneDiscoveryCache.current.get(paneCacheKey)
-    if (cached) {
+    if (cached && checkedThisOpen.current.has(paneCacheKey)) {
       emitNativeChatSkillDiscovery({
         agent,
         outcome: 'ready',
@@ -122,17 +125,23 @@ export function useNativeChatSkills(
       setState({ status: 'ready', skills: cached.skills, error: null, contextKey: context.key })
       return
     }
-    setState({ status: 'loading', skills: [], error: null, contextKey: context.key })
+    setState(
+      cached
+        ? { status: 'ready', skills: cached.skills, error: null, contextKey: context.key }
+        : { status: 'loading', skills: [], error: null, contextKey: context.key }
+    )
     // Explicit Retry bypasses shared host scans; passive discovery reuses them.
     const forced = forceNextDiscovery.current
     forceNextDiscovery.current = false
     const request = getOrStartDiscovery(context, forced)
     void request.then(
       (result) => {
+        // A scan that settles after close must not count as this open's check.
         if (cancelled) {
           return
         }
         paneDiscoveryCache.current.set(paneCacheKey, result)
+        checkedThisOpen.current.add(paneCacheKey)
         emitNativeChatSkillDiscovery({
           agent,
           outcome: 'ready',
@@ -151,6 +160,11 @@ export function useNativeChatSkills(
           outcome: timedOut ? 'timeout' : 'error',
           executionHostKind: context.executionHostKind
         })
+        checkedThisOpen.current.add(paneCacheKey)
+        if (cached) {
+          // A failed recheck keeps the last good list rather than hiding it behind an error.
+          return
+        }
         setState({
           status: 'error',
           skills: [],
