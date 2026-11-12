@@ -169,14 +169,19 @@ export function verifyDesktopAction(
 }
 
 // Why: runtime.ps1 and runtime.py show secure fields as "[redacted]" and cut values past 500
-// characters to 500 plus "...", so such a read-back can neither prove nor disprove the write.
+// characters (UTF-16 units / code points) to a prefix plus "...", which can't prove or disprove the write.
 const PROVIDER_VALUE_TEXT_LIMIT = 500
 
 function readbackCannotDecide(actual: string, expected: string): boolean {
+  if (actual === '[redacted]') {
+    return true
+  }
+  const shown = actual.endsWith('...') ? actual.slice(0, -3) : undefined
   return (
-    actual === '[redacted]' ||
-    (expected.length > PROVIDER_VALUE_TEXT_LIMIT &&
-      actual === `${expected.slice(0, PROVIDER_VALUE_TEXT_LIMIT)}...`)
+    shown !== undefined &&
+    shown.length >= PROVIDER_VALUE_TEXT_LIMIT &&
+    shown.length < expected.length &&
+    expected.startsWith(shown)
   )
 }
 

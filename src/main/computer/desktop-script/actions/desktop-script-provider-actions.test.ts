@@ -54,7 +54,8 @@ describe('DesktopScriptProviderClient actions', () => {
 
   it.each([
     ['a redacted secure field', 'hunter2', '[redacted]'],
-    ['a value cut at the provider text limit', 'x'.repeat(600), `${'x'.repeat(500)}...`]
+    ['a value cut at the provider text limit', 'x'.repeat(600), `${'x'.repeat(500)}...`],
+    ['a value cut at 500 code points', '😀'.repeat(600), `${'😀'.repeat(500)}...`]
   ])('does not report %s as a failed set-value', async (_case, value, readback) => {
     mockBridgeResponse({ ok: true, snapshot: sampleBridgeSnapshot('Login', 'initial') })
     mockBridgeResponse({ ok: true, capabilities: sampleCapabilities() })
