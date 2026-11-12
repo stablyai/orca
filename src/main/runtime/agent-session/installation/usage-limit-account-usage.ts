@@ -6,7 +6,7 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/cross-plat
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
-import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
+import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/runtime-auth/environment'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 
