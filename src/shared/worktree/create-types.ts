@@ -32,6 +32,7 @@ import type {
   WorktreeCreateExecutionHost
 } from './create-timing-vocabulary'
 import type {
+  LocalBaseRefDriftWarning,
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion,
   WorktreeBaseStatusEvent
@@ -210,6 +211,7 @@ export type CreateWorktreeResult = {
   warning?: string
   baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent
+  localBaseRefDriftWarning?: LocalBaseRefDriftWarning
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
   startupTerminal?: {

@@ -1,7 +1,13 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { addWorktreeMock, getBranchConflictKindStrictMock } from './worktrees-test-module-mocks'
-import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import {
+  addWorktreeMock,
+  getBranchConflictKindStrictMock,
+  listWorktreesMock,
+  computeWorktreePathMock,
+  gitExecFileAsyncMock
+} from './worktrees-test-module-mocks'
+import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
@@ -209,4 +215,56 @@ describe('worktrees:create exact name', () => {
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
+})
+
+it('reports stale local base drift through the desktop create path', async () => {
+  const runtime = setupWorktreeHandlers()
+  store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: 'develop' })
+  runtime.resolveRemoteTrackingBase.mockResolvedValue(null)
+  addWorktreeMock.mockResolvedValueOnce({ upstreamWarning: 'Upstream setup unavailable' })
+  listWorktreesMock.mockResolvedValue([
+    {
+      path: '/workspace/local-stale-base',
+      head: 'created-sha',
+      branch: 'local-stale-base',
+      isBare: false,
+      isMainWorktree: false
+    }
+  ])
+  computeWorktreePathMock.mockReturnValue('/workspace/local-stale-base')
+  gitExecFileAsyncMock.mockImplementation(async (args) => {
+    if (args[0] === 'rev-list') {
+      return { stdout: '0\t692\n', stderr: '' }
+    }
+    if (args.includes('refs/heads/develop^{commit}')) {
+      return { stdout: 'develop-sha\n', stderr: '' }
+    }
+    return { stdout: '', stderr: '' }
+  })
+
+  const result = await handlers['worktrees:create'](null, {
+    repoId: 'repo-1',
+    name: 'local-stale-base'
+  })
+
+  expect(addWorktreeMock).toHaveBeenCalledWith(
+    '/workspace/repo',
+    '/workspace/local-stale-base',
+    'local-stale-base',
+    'develop',
+    false,
+    false,
+    {}
+  )
+  expect(result).toMatchObject({
+    localBaseRefDriftWarning: {
+      baseRef: 'develop',
+      defaultBaseRef: 'origin/main',
+      ahead: 0,
+      behind: 692,
+      relation: 'behind'
+    },
+    warning: expect.stringContaining('develop is 692 commit(s) behind origin/main')
+  })
+  expect(result).toMatchObject({ warning: expect.stringContaining('Upstream setup unavailable') })
 })

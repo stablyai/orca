@@ -27,6 +27,7 @@ import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/re
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
+import { baseDriftWarningResult } from '../../../git/worktrees/creation/worktree-base-drift-warning'
 import type { RuntimeWorkspaceCreateEvents } from '../../../workspaces/creation/workspace-create-telemetry'
 
 import {
@@ -202,7 +203,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
     })
     const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
-    let { warning } = preparedSetup
+    const { warning } = preparedSetup
 
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
@@ -235,7 +236,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning,
       ports: this.localWorktreeTerminalPorts(args, activationCallbacks.local, worktree)
     })
-    warning = terminalWarning
     this.emitWorktreeLifecycle({
       kind: 'created',
       worktreeId: worktree.id,
@@ -264,7 +264,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
-      ...(warning ? { warning } : {}),
+      ...baseDriftWarningResult(localCreate.localBaseRefDriftWarning, terminalWarning),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
       ...(addResult.localBaseRefRefresh
         ? { localBaseRefRefresh: addResult.localBaseRefRefresh }

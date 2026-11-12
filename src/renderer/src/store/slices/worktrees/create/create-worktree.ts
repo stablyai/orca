@@ -267,7 +267,7 @@ export function createCreateWorktree(
             holdCreatedSidebarWorkspace({ worktree: created })
           }
           const { result } = outcome
-          showWorktreeCreateWarningToast(result.warning)
+          showWorktreeCreateWarningToast(result)
           reviewSetupTrustMismatch(get, repoId, creationHostId, result, target)
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
