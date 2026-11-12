@@ -8,6 +8,10 @@ import { useAutomationsPageHistory } from './use-automations-page-history'
 
 const list: AutomationsPageLocation = { page: 'list' }
 const detail: AutomationsPageLocation = { page: 'detail', automationId: 'a1' }
+type Props = { location: AutomationsPageLocation | null }
+const onDetail: Props = { location: detail }
+const onList: Props = { location: list }
+
 const entry = (location: AutomationsPageLocation): WorktreeNavHistoryEntry => ({
   kind: 'automations-page',
   location
@@ -31,9 +35,8 @@ afterEach(() => {
 it('does not record the page Back left while the replay is still applying', () => {
   const goToLocation = vi.fn()
   const { rerender } = renderHook(
-    ({ location }: { location: AutomationsPageLocation | null }) =>
-      useAutomationsPageHistory({ location, navigation: { goToLocation } }),
-    { initialProps: { location: detail } }
+    ({ location }: Props) => useAutomationsPageHistory({ location, navigation: { goToLocation } }),
+    { initialProps: onDetail }
   )
 
   // Titlebar Back: the history index moves to the list entry and asks the page to show it.
@@ -56,9 +59,8 @@ it('records a sub-page the user opens', () => {
   useAppStore.setState({ worktreeNavHistory: ['skills', entry(list)], worktreeNavHistoryIndex: 1 })
   const goToLocation = vi.fn()
   const { rerender } = renderHook(
-    ({ location }: { location: AutomationsPageLocation | null }) =>
-      useAutomationsPageHistory({ location, navigation: { goToLocation } }),
-    { initialProps: { location: list } }
+    ({ location }: Props) => useAutomationsPageHistory({ location, navigation: { goToLocation } }),
+    { initialProps: onList }
   )
   rerender({ location: detail })
   const state = useAppStore.getState()
