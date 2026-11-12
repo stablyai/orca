@@ -152,7 +152,10 @@ export function getComputerKeyActionFlags(flags: Map<string, string | boolean>):
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
-  return { key, ...(flags.has('allow-system-shortcut') ? { allowSystemShortcut: true } : {}) }
+  return {
+    key,
+    ...(flags.get('allow-system-shortcut') === true ? { allowSystemShortcut: true } : {})
+  }
 }
 
 export function getComputerHotkeyActionFlags(flags: Map<string, string | boolean>): {
@@ -164,7 +167,10 @@ export function getComputerHotkeyActionFlags(flags: Map<string, string | boolean
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
-  return { key, ...(flags.has('allow-system-shortcut') ? { allowSystemShortcut: true } : {}) }
+  return {
+    key,
+    ...(flags.get('allow-system-shortcut') === true ? { allowSystemShortcut: true } : {})
+  }
 }
 
 export async function getComputerSetValueActionFlags(

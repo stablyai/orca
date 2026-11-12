@@ -86,11 +86,12 @@ const LINUX_RULES: PlatformKeyRules = {
     option: 'alt',
     shift: 'shift'
   },
-  keyAliases: SHARED_KEY_ALIASES,
-  // Xlib and GDK resolve 0x/U hex keysyms and drop an optional XF86 prefix; xdotool reads
-  // a multi-digit number as a raw keycode. Fold those first.
+  // X11 names F11 and F12 L1 and L2 too.
+  keyAliases: { ...SHARED_KEY_ALIASES, l1: 'f11', l2: 'f12' },
+  // Xlib and GDK resolve 0x/U hex keysyms and drop an optional XF86 prefix; xdotool reads any
+  // other token starting with a digit as a raw keycode (atoi ignores trailing text).
   canonicalKey: (key) =>
-    /^(0x[0-9a-f]+|u[0-9a-f]+|\d{2,})$/.test(key) ? NUMERIC_KEYSYM : key.replace(/^xf86_?/, ''),
+    /^(\d.+|u[0-9a-f]+)$/.test(key) ? NUMERIC_KEYSYM : key.replace(/^xf86_?/, ''),
   blocked: [
     {
       modifiers: [],
@@ -103,6 +104,12 @@ const LINUX_RULES: PlatformKeyRules = {
       effect: 'power off, suspend or log out of the session'
     },
     { modifiers: [], keys: ['screensaver'], effect: 'lock the screen' },
+    {
+      modifiers: [],
+      keys: Array.from({ length: 12 }, (_, index) => `switch_vt_${index + 1}`),
+      effect: 'switch to another virtual terminal'
+    },
+    { modifiers: [], keys: ['terminate_server'], effect: 'end the X session' },
     {
       modifiers: ['ctrl', 'alt'],
       keys: ['delete'],
