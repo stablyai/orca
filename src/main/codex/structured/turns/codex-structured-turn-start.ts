@@ -245,7 +245,12 @@ export async function startCodexTurn(
   host.appliedTurnOptions = { ...previousApplied, ...requested }
   host.appliedTurnInputOptions = codexMessageInputOptions(
     inputChoices,
-    { serviceTier: 'default', ...requestControls, ...previousInput },
+    {
+      serviceTier: 'default',
+      ...requestControls,
+      ...previousInput,
+      interactionMode: requestControls.interactionMode
+    },
     requested
   )
   return { turnId: readCodexTurnId(answer), via: 'start' }

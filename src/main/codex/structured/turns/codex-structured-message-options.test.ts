@@ -13,13 +13,24 @@ import {
   readCodexAppliedInputOptions,
   resolvedCodexMessageOptions
 } from './codex-structured-message-options'
-import { codexTurnOptionsDiffer } from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
+import {
+  codexTurnOptionsDiffer,
+  waitsForCodexTurnOptions
+} from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 import { startCodexTurn } from './codex-structured-turn-start'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
 import { changeCodexThreadGoalWithSettings } from '../threads/codex-structured-thread-goal'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
-import { USER_MESSAGE } from '../session-lifecycle/codex-structured-session-adapter-fixture'
+import {
+  USER_MESSAGE,
+  fakeCodex,
+  adapterFor,
+  acquireReadyCodexForTest,
+  identityFor,
+  answerWithOpenedTurn
+} from '../session-lifecycle/codex-structured-session-adapter-fixture'
+import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 function seedMessageDefaults(session: CodexSession): void {
   const store = new AgentModelCatalogStore()
@@ -271,6 +282,81 @@ it.each(['priority', 'default'])(
     expect(differs({ ...choices, serviceTier: 'default' })).toBe(true)
   }
 )
+
+it('holds Plan behind a successful sparse Default start, then starts Plan after completion', async () => {
+  const codex = fakeCodex()
+  const adapter = adapterFor(codex)
+  const bodies: AgentJournalItemBody[] = []
+  const acquisition = await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn',
+    events: {
+      appendItem: (_identity, body) => bodies.push(body),
+      appendTombstone: () => {},
+      publish: () => {}
+    }
+  })
+  const dispatch = (id: string, options: Record<string, string>) =>
+    adapter.dispatch({
+      sessionId: 'session-1',
+      fence: 7,
+      clientMessageId: id,
+      body: USER_MESSAGE,
+      executionOptions: options
+    })
+  const complete = (turnId: string) =>
+    codex.connections[0].handlers.onNotification?.('turn/completed', {
+      threadId: 'thread-abc',
+      turn: { id: turnId, status: 'completed' }
+    })
+  const held = (interactionMode: string) =>
+    waitsForCodexTurnOptions(
+      { provider: 'codex', sessionId: 'session-1' },
+      {
+        newestTurn: () => bodies.findLast((body) => body.kind === 'turn') ?? null,
+        itemBody: () => USER_MESSAGE
+      },
+      {
+        clientMessageId: 'next-plan',
+        fence: 7,
+        payloadFingerprint: 'fingerprint',
+        dispatchState: 'pending',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null,
+        options: { interactionMode }
+      },
+      { fence: 7, generation: acquisition.acquisitionGeneration, phase: 'ready' },
+      adapter
+    )
+  try {
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'plan-first')
+    expect(await dispatch('first', { interactionMode: 'plan' })).toMatchObject({
+      state: 'admitted'
+    })
+    complete('plan-first')
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'default-second')
+    expect(await dispatch('second', {})).toMatchObject({ state: 'admitted' })
+    expect(
+      codex.connections[0].calls.findLast((call) => call.method === 'turn/start')?.params
+    ).toMatchObject({ collaborationMode: { mode: 'default' } })
+    expect(held('plan')).toBe(true)
+    expect(held('default')).toBe(false)
+    complete('default-second')
+    expect(held('plan')).toBe(false)
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'plan-third')
+    expect(await dispatch('third', { interactionMode: 'plan' })).toMatchObject({
+      state: 'admitted'
+    })
+    expect(
+      codex.connections[0].calls.findLast((call) => call.method === 'turn/start')?.params
+    ).toMatchObject({ collaborationMode: { mode: 'plan' } })
+  } finally {
+    await adapter.closeAll()
+  }
+})
 
 it('uses exact successful start controls when the first message omits model and effort', async () => {
   const session = optionSession(vi.fn(async () => ({ turn: { id: 'first-turn' } })))

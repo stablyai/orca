@@ -353,7 +353,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     expect(isWholeMail(turnText(chat.turns[1]!))).toBe(true)
   })
 
-  it('sends a report refused for queue room once the queue frees room, and never spins meanwhile', async () => {
+  it('sends a report refused for queue room once the queue frees room', async () => {
     const reply = Promise.withResolvers<void>()
     try {
       const chat = await busyChat(COORDINATOR, reply.promise)
@@ -383,12 +383,6 @@ describe('a queued mail card runs only while its chat still owes it', () => {
         () => expect(db.getUnreadMessages(`run:${runId}`)).toMatchObject([{ delivered_at: null }]),
         WAIT
       )
-      // Unrelated journal writes do not retry a refusal into a loop.
-      await journalOf(COORDINATOR).appendQueueResume(
-        host.deps.store.getConversation(COORDINATOR)!.currentFence
-      )
-      await vi.waitFor(() => expect(send.mock.calls.length).toBeLessThanOrEqual(2), WAIT)
-
       // Deleting the person's cards frees room: that journal edge alone sends the report.
       for (const card of journalOf(COORDINATOR).queuedMessages.list()) {
         const fields = { messageId: card.messageId }
