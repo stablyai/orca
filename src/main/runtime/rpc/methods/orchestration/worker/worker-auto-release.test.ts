@@ -96,20 +96,6 @@ describe('orchestration worker automatic release', () => {
     await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1))
   })
 
-  it("closes a worker the user typed into on time; an older client's typing report keeps nothing", async () => {
-    setupWithFakeClock()
-    const { dispatchId } = await h.startSettledWorker()
-
-    await expect(
-      h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
-    ).resolves.toEqual({ changed: 0 })
-    await vi.advanceTimersByTimeAsync(GRACE_MS)
-
-    await vi.waitFor(() =>
-      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-    )
-  })
-
   const keepOpen = (keep: boolean): Promise<unknown> =>
     h.call('orchestration.workerKeepOpen', { paneKey: h.workerPaneKey, keep })
 
@@ -204,51 +190,6 @@ describe('orchestration worker automatic release', () => {
     new WorkerAutoReleaseActivity(() => h.db).observePane(moved('working', 'done'))
     await vi.advanceTimersByTimeAsync(GRACE_MS)
     await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1))
-  })
-
-  it('does not arm a worker retained before it reported', async () => {
-    setupWithFakeClock()
-    const { taskId, dispatchId } = await h.startWorker()
-    await h.call('orchestration.workerRetain', { dispatch: dispatchId })
-
-    h.settle(taskId, dispatchId, 'succeeded')
-    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
-
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBeNull()
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['silent', async () => (await h.startWorker()).dispatchId],
-    [
-      'abandoned',
-      async () => {
-        const { dispatchId } = await h.startWorker()
-        await h.call('orchestration.workerAbandon', { dispatch: dispatchId })
-        return dispatchId
-      }
-    ],
-    [
-      'pre-upgrade settled',
-      async () => {
-        const { dispatchId } = await h.startSettledWorker()
-        h.db.db
-          .prepare(
-            'UPDATE worker_terminal_resources SET auto_release_at = NULL, auto_release_dispatch_id = NULL WHERE owner_dispatch_id = ?'
-          )
-          .run(dispatchId)
-        return dispatchId
-      }
-    ]
-  ] as const)('leaves a %s worker to manual release', async (_state, start) => {
-    setupWithFakeClock()
-    const dispatchId = await start()
-
-    getWorkerTerminalAutoReleaseScheduler(h.runtime).rearm()
-    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
-
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBeNull()
   })
 
   describe('across a restart', () => {

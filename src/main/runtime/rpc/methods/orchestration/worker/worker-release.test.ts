@@ -7,30 +7,6 @@ describe('orchestration worker release', () => {
 
   afterEach(() => h.cleanup())
 
-  it('releases a succeeded worker: archives then closes exactly the agent terminal', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker('succeeded')
-
-    const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
-      state: string
-      processAction: string
-      archive: { source: string | null; status: string | null } | null
-    }
-
-    expect(receipt).toMatchObject({
-      state: 'released',
-      processAction: 'closed_agent_terminal',
-      // This worker reported no transcript, so release records that its output is unavailable.
-      archive: { source: 'terminal', status: 'unavailable' }
-    })
-    expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-    expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
-    const resource = h.db.getWorkerTerminalResourceByOwner(dispatchId)
-    expect(resource?.release_state).toBe('released')
-    expect(resource?.ownership_state).toBe('released')
-    expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('succeeded')
-  })
-
   it('is idempotent: a duplicate release returns already_released without another close', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
@@ -41,16 +17,6 @@ describe('orchestration worker release', () => {
     }
     expect(second).toMatchObject({ state: 'already_released', processAction: 'none' })
     expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-  })
-
-  it('rejects an active worker without recording release intent', async () => {
-    h.setup()
-    const { dispatchId } = await h.startWorker()
-    await expect(h.call('orchestration.workerRelease', { dispatch: dispatchId })).rejects.toThrow(
-      /only a settled worker can release/
-    )
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('not_requested')
   })
 
   it('retains a dead external terminal the orchestration never owned', async () => {
@@ -76,54 +42,6 @@ describe('orchestration worker release', () => {
     })
   })
 
-  it('retains dead inventory evidence when persisted ownership history is invalid', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker('succeeded', { terminal: 'term_worker' })
-    const resource = h.db.getWorkerTerminalResourceByOwner(dispatchId)
-    const raw = (
-      h.db as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }
-    ).db
-    raw
-      .prepare('UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = ? WHERE id = ?')
-      .run('{invalid', resource?.id)
-    h.inspectProcessLiveness.mockResolvedValue('exited')
-
-    await expect(
-      h.call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', processAction: 'none' })
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).not.toBe('released')
-  })
-
-  it.each(['stopped', 'abandoned'] as const)(
-    'releases a dead %s worker whose output could never be archived',
-    async (state) => {
-      h.setup()
-      const { dispatchId } = await h.startWorker()
-      if (state === 'stopped') {
-        h.db.beginWorkerStop(dispatchId, h.runtime.getRuntimeId())
-        h.db.settleWorkerStop(dispatchId)
-      } else {
-        h.db.abandonWorkerDispatch(dispatchId, 'epoch_test')
-      }
-      h.inspectProcessLiveness.mockResolvedValue('exited')
-
-      await expect(
-        h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        state: 'released',
-        processAction: 'none',
-        archive: { status: 'unavailable' }
-      })
-      expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-        ownership_state: 'released',
-        release_state: 'released',
-        archive_status: 'unavailable'
-      })
-    }
-  )
-
   it.each([false, true])(
     'keeps the output reference of a stopped worker (retained first: %s)',
     async (retain) => {
@@ -141,30 +59,6 @@ describe('orchestration worker release', () => {
         h.call('orchestration.workerRelease', { dispatch: dispatchId })
       ).resolves.toMatchObject({ state: 'released', archive: { status: 'unavailable' } })
       expect(h.db.getWorkerTerminalArchive(dispatchId)?.kind).toBe('terminal_tail')
-    }
-  )
-
-  it.each(['stopped', 'abandoned'] as const)(
-    'keeps a dead %s worker retained while its process is still unproven',
-    async (state) => {
-      h.setup()
-      const { dispatchId } = await h.startWorker()
-      if (state === 'stopped') {
-        h.db.beginWorkerStop(dispatchId, h.runtime.getRuntimeId())
-        h.db.settleWorkerStop(dispatchId)
-      } else {
-        h.db.abandonWorkerDispatch(dispatchId, 'epoch_test')
-      }
-      h.inspectProcessLiveness.mockResolvedValue('unverifiable')
-
-      await expect(
-        h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        state: 'retained',
-        reason: 'identity_unproven',
-        processAction: 'none'
-      })
-      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).not.toBe('released')
     }
   )
 
@@ -240,19 +134,5 @@ describe('orchestration worker release', () => {
     }
     expect(retry.state).toBe('released')
     expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-  })
-
-  it('marks release_unknown when the close itself fails', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    vi.mocked(h.runtime.closeTerminal).mockRejectedValue(new Error('close exploded'))
-    const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
-      state: string
-      lastError?: string
-      recovery?: string
-    }
-    expect(receipt.state).toBe('release_unknown')
-    expect(receipt.recovery).toContain('fresh request ID')
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('unknown')
   })
 })

@@ -1,4 +1,4 @@
-import { extname, isAbsolute } from 'node:path'
+import { isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   agentSessionFailureFact,
@@ -11,7 +11,10 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { IMAGE_FILE_MIME_TYPES } from '../../../shared/file-preview/image-mime-types'
+import {
+  agentInlineImageMimeType,
+  isAgentInlineImageMimeType
+} from '../../../shared/agent-inline-image-types'
 import type { NativeChatImageRefBlock } from '../../../shared/native-chat/native-chat-types'
 import {
   NodeFileReadTooLargeError,
@@ -24,7 +27,6 @@ import type { AcpStructuredConnection } from '../process/acp-structured-connecti
 import { acpSessionAcceptsImages } from '../protocol/acp-image-capability'
 import type { ContentBlock } from '../generated/acp-protocol.generated'
 
-const ACP_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
 // Reserve space for the JSON-RPC envelope around the prompt blocks.
 const ACP_PROMPT_LINE_BUDGET = ACP_MAX_LINE_BYTES - 64 * 1024
 // Budget raw images for base64's 4:3 expansion and leave room for text.
@@ -65,7 +67,7 @@ async function imageBlock(
 ): Promise<{ block: ContentBlock; bytes: number }> {
   if (block.url?.startsWith('data:')) {
     const match = /^data:(image\/[a-z]+);base64,([A-Za-z0-9+/]*={0,2})$/.exec(block.url)
-    if (!match || !ACP_IMAGE_MIME_TYPES.has(match[1]) || match[2].length % 4 !== 0) {
+    if (!match || !isAgentInlineImageMimeType(match[1]) || match[2].length % 4 !== 0) {
       throw attachmentProblem({ reason: 'unsupportedType' })
     }
     const bytes = Buffer.byteLength(match[2], 'base64')
@@ -84,13 +86,13 @@ async function imageBlock(
   if (!path) {
     throw attachmentProblem({ reason: 'noSource' })
   }
-  const mimeType = IMAGE_FILE_MIME_TYPES[extname(path).toLowerCase()]
+  const mimeType = agentInlineImageMimeType(path)
   const fallback = {
     block: { type: 'text' as const, text: formatNativeChatFileReference(path) },
     bytes: 0
   }
   const maxBytes = Math.min(remainingBytes, ACP_PROMPT_PER_IMAGE_MAX_BYTES)
-  if (!mimeType || !ACP_IMAGE_MIME_TYPES.has(mimeType) || maxBytes <= 0) {
+  if (!mimeType || maxBytes <= 0) {
     return fallback
   }
   let data: Buffer
@@ -155,7 +157,7 @@ export async function acpPromptBlocks(
     }
     const previousBytes = blockBytes(blocks[index]!)
     const path = hostImagePath(block)
-    const mimeType = IMAGE_FILE_MIME_TYPES[extname(path ?? '').toLowerCase()] ?? ''
+    const mimeType = agentInlineImageMimeType(path ?? '') ?? ''
     const overhead = blockBytes({ type: 'image', mimeType, data: '' })
     const encodedCapacity =
       encodedBytes > ACP_PROMPT_LINE_BUDGET

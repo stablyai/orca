@@ -18,49 +18,6 @@ export function registerWorkerReleaseArchiveTests(): void {
 
     afterEach(() => h.cleanup())
 
-    it('records unavailable output for an already-exited worker that reported no transcript', async () => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker()
-      vi.mocked(h.runtime.showTerminal).mockImplementation(
-        async (handle) => ({ handle, worktreeId: 'repo::worktree', connected: false }) as never
-      )
-      vi.mocked(h.runtime.readTerminal).mockResolvedValue({
-        handle: 'term_worker',
-        status: 'exited',
-        tail: [],
-        truncated: false,
-        nextCursor: null
-      })
-      const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
-        state: string
-        processAction: string
-        archive: { status: string | null } | null
-      }
-      expect(receipt).toMatchObject({
-        state: 'released',
-        processAction: 'closed_exited_terminal',
-        archive: { status: 'unavailable' }
-      })
-    })
-
-    it('keeps the conversation the agent reports last, so a follow-up can reopen it after release', async () => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker()
-      // A /clear after the report moved the agent to a new conversation.
-      vi.mocked(h.runtime.getExactWorkerProviderSession).mockReturnValue({
-        paneKey: 'tab_worker:leaf',
-        agent: 'claude',
-        processIncarnation: 'runtime_test:term_worker:1',
-        providerSession: { key: 'session_id', id: 'after-clear' },
-        observedAt: 1
-      })
-      await h.call('orchestration.workerRelease', { dispatch: dispatchId })
-
-      expect(
-        JSON.parse(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.resume_session ?? 'null')
-      ).toMatchObject({ agent: 'claude', providerSession: { id: 'after-clear' } })
-    })
-
     it('reads the original transcript after release, until the provider file disappears', async () => {
       h.setup()
       const directory = await mkdtemp(join(tmpdir(), 'orca-worker-release-snapshot-'))

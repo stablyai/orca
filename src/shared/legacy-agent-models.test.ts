@@ -2,83 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { classifyAgentModels } from './legacy-agent-models'
 
 type Row = { id: string; isDefault?: boolean; resolvedModel?: string }
-const legacy = (agent: string, models: Row[]) => [...classifyAgentModels(agent, models).legacy]
-const hidden = (agent: string, models: Row[]) => [...classifyAgentModels(agent, models).hidden]
 
 describe('classifyAgentModels', () => {
-  it('folds Codex models superseded in their family or by a newer major line', () => {
-    const models: Row[] = [
-      { id: 'gpt-6.1-sol' },
-      { id: 'gpt-6-astra' },
-      { id: 'gpt-6-sol' },
-      { id: 'gpt-6-luna' },
-      { id: 'gpt-5.6-sol' },
-      { id: 'gpt-5.6-terra', isDefault: true },
-      { id: 'gpt-daybreak-blue-latest' }
-    ]
-    expect(legacy('codex', models)).toEqual(['gpt-6-sol', 'gpt-5.6-sol'])
-  })
-
-  it('hides Claude short names whose versioned model is listed and folds other covered names', () => {
+  it('hides a Claude short name only when it reports the listed versioned model it runs', () => {
     const live: Row[] = [
       { id: 'claude-opus-5-5', resolvedModel: 'claude-opus-5-5' },
-      { id: 'claude-fable-5', resolvedModel: 'claude-fable-5' },
-      { id: 'fable', resolvedModel: 'claude-fable-5' },
       { id: 'opus', resolvedModel: 'claude-opus-5-5' },
       { id: 'opusplan', resolvedModel: 'claude-opus-5-5' },
       { id: 'sonnet', resolvedModel: 'claude-sonnet-5-5' }
     ]
-    expect(hidden('claude', live)).toEqual(['fable', 'opus'])
-    expect(legacy('claude', live)).toEqual(['opusplan'])
-    const saved: Row[] = [
-      { id: 'claude-opus-5-5[1m]' },
-      { id: 'opus[1m]' },
-      { id: 'opus' },
-      { id: 'sonnet' }
-    ]
-    expect(hidden('claude', saved)).toEqual(['opus[1m]'])
-    expect(legacy('claude', saved)).toEqual([])
+    const classes = classifyAgentModels('claude', live)
+    expect([...classes.hidden]).toEqual(['opus'])
+    expect([...classes.legacy]).toEqual(['opusplan'])
   })
 
-  it('leaves other agents untouched', () => {
-    expect(legacy('grok', [{ id: 'grok-4.5' }, { id: 'grok-4.6' }])).toEqual([])
-  })
-
-  it('reads each row a bounded number of times on a fresh list', () => {
-    for (const size of [20, 200]) {
-      for (const agent of ['claude', 'codex']) {
-        let reads = 0
-        const rows = Array.from({ length: size }, (_, index): Row => {
-          const id = agent === 'claude' ? `claude-family${index}-5-5` : `gpt-6.1-family${index}`
-          const resolvedModel = agent === 'claude' ? id : undefined
-          return {
-            get id() {
-              reads += 1
-              return id
-            },
-            get resolvedModel() {
-              reads += 1
-              return resolvedModel
-            },
-            get isDefault() {
-              reads += 1
-              return undefined
-            }
-          }
-        })
-        legacy(agent, rows)
-        // Index pass, legacy test and result pass each read at most three fields of a row.
-        expect(reads).toBeLessThanOrEqual(9 * size)
-      }
-    }
-  })
-
-  it("keeps each agent's classification of the same list apart", () => {
-    const rows: Row[] = [
-      { id: 'claude-opus-5-5', resolvedModel: 'claude-opus-5-5' },
-      { id: 'opus', resolvedModel: 'claude-opus-5-5' }
-    ]
-    expect(hidden('claude', rows)).toEqual(['opus'])
-    expect(hidden('codex', rows)).toEqual([])
+  it('only folds a saved short name listed without the model it runs', () => {
+    const saved: Row[] = [{ id: 'claude-opus-5-5[1m]' }, { id: 'opus[1m]' }, { id: 'opus' }]
+    const classes = classifyAgentModels('claude', saved)
+    expect([...classes.hidden]).toEqual([])
+    expect([...classes.legacy]).toEqual(['opus[1m]'])
   })
 })

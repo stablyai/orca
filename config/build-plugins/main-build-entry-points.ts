@@ -16,7 +16,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   'computer-sidecar': resolve('src/main/computer/computer-sidecar.ts'),
   'claude-conversation-fork-worker-entry': resolve(
-    'src/main/claude/claude-conversation-fork-worker-entry.ts'
+    'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts'
   ),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
