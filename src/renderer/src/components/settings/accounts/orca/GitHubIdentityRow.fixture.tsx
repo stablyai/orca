@@ -14,7 +14,13 @@ function row(state: GitHubIdentityState) {
     width,
     render: () => (
       <div className="bg-background px-8 py-6">
-        <GitHubIdentityRowView state={state} onConnect={noop} onCancel={noop} onDisconnect={noop} />
+        <GitHubIdentityRowView
+          state={state}
+          onConnect={noop}
+          onCancel={noop}
+          onDisconnect={noop}
+          onRetryDisconnect={noop}
+        />
       </div>
     )
   })
@@ -28,6 +34,14 @@ export const pending = row({ kind: 'pending' })
 
 /** Connected: the GitHub mark (no avatar; the renderer doesn't load them by user id), and Disconnect. */
 export const connected = row({ kind: 'connected', login: 'octocat', githubUserId: 583231 })
+
+/** A confirmed Disconnect failed: still connected, and Try again re-runs it without asking. */
+export const connectedDisconnectFailed = row({
+  kind: 'connected',
+  login: 'octocat',
+  githubUserId: 583231,
+  disconnectFailed: true
+})
 
 /** Connect failed, or the browser never finished: Try again. */
 export const error = row({ kind: 'error' })

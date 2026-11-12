@@ -13185,7 +13185,8 @@
             "tryAgain": "Try again",
             "description": "Connect your GitHub so commits and pushes in cloud workspaces show your name. Until then they use Orca Cloud's.",
             "connect": "Connect GitHub",
-            "title": "GitHub"
+            "title": "GitHub",
+            "disconnectError": "Couldn't disconnect GitHub."
           }
         },
         "automations": {

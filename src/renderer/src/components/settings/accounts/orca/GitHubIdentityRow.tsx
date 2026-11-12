@@ -30,6 +30,7 @@ export type GitHubIdentityRowViewProps = {
   onConnect: () => void
   onCancel: () => void
   onDisconnect: () => void
+  onRetryDisconnect: () => void
 }
 
 /** One state of the row; renders nothing until the first status read answers. */
@@ -38,7 +39,8 @@ export function GitHubIdentityRowView({
   disconnecting = false,
   onConnect,
   onCancel,
-  onDisconnect
+  onDisconnect,
+  onRetryDisconnect
 }: GitHubIdentityRowViewProps): React.JSX.Element | null {
   const t = useTranslate()
   if (state.kind === 'unknown') {
@@ -56,6 +58,23 @@ export function GitHubIdentityRowView({
     action = (
       <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
         {t('auto.components.settings.orcaAccount.github.cancel', 'Cancel')}
+      </Button>
+    )
+  } else if (state.kind === 'connected' && state.disconnectFailed) {
+    detail = t(
+      'auto.components.settings.orcaAccount.github.disconnectError',
+      "Couldn't disconnect GitHub."
+    )
+    action = (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disconnecting}
+        onClick={onRetryDisconnect}
+      >
+        {disconnecting ? <Loader2 className="size-4 animate-spin" /> : null}
+        {t('auto.components.settings.orcaAccount.github.tryAgain', 'Try again')}
       </Button>
     )
   } else if (state.kind === 'connected') {
@@ -133,6 +152,7 @@ export function GitHubIdentityRow(): React.JSX.Element | null {
       onConnect={() => void identity.connect()}
       onCancel={identity.cancel}
       onDisconnect={() => void identity.disconnect()}
+      onRetryDisconnect={() => void identity.retryDisconnect()}
     />
   )
 }

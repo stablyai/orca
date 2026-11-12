@@ -12,7 +12,13 @@ export type GitHubIdentityState =
   | { kind: 'disconnected' }
   /** Connect opened the browser; the row waits for status to say connected. */
   | { kind: 'pending' }
-  | { kind: 'connected'; login: string; githubUserId: number }
+  | {
+      kind: 'connected'
+      login: string
+      githubUserId: number
+      /** A confirmed Disconnect failed; the row offers Try again (no second confirm). */
+      disconnectFailed?: true
+    }
   | { kind: 'error' }
 
 export type GitHubIdentityEvent =
@@ -24,6 +30,7 @@ export type GitHubIdentityEvent =
   /** Five minutes in the browser without a connection. */
   | { type: 'pendingExpired' }
   | { type: 'disconnected' }
+  | { type: 'disconnectFailed' }
 
 export const initialGitHubIdentityState: GitHubIdentityState = { kind: 'unknown' }
 
@@ -34,7 +41,17 @@ export function gitHubIdentityReducer(
   switch (event.type) {
     case 'status':
       if (event.user.connected) {
-        return { kind: 'connected', login: event.user.login, githubUserId: event.user.githubUserId }
+        // A re-read of the same identity keeps a failed Disconnect on screen until retried.
+        const keepFailure =
+          state.kind === 'connected' &&
+          state.disconnectFailed === true &&
+          state.githubUserId === event.user.githubUserId
+        return {
+          kind: 'connected',
+          login: event.user.login,
+          githubUserId: event.user.githubUserId,
+          ...(keepFailure ? { disconnectFailed: true as const } : {})
+        }
       }
       // "Not connected yet" says nothing while the browser is still open, and doesn't clear an
       // error the person hasn't acted on.
@@ -48,5 +65,7 @@ export function gitHubIdentityReducer(
       return state.kind === 'pending' ? { kind: 'disconnected' } : state
     case 'disconnected':
       return { kind: 'disconnected' }
+    case 'disconnectFailed':
+      return state.kind === 'connected' ? { ...state, disconnectFailed: true } : state
   }
 }

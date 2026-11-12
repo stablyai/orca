@@ -130,6 +130,32 @@ it('shows the error when Connect fails or the browser never finishes, and Try ag
   expect(hook.result.current.state).toEqual({ kind: 'error' })
 })
 
+it('keeps a failed disconnect on screen as connected, and Try again succeeds without asking', async () => {
+  getGitHubUser.mockResolvedValue(CONNECTED)
+  disconnectGitHubUser.mockResolvedValueOnce({ ok: false, code: 'unavailable', message: 'x' })
+  const { hook, confirm } = await mount()
+
+  await act(() => hook.result.current.disconnect())
+  expect(hook.result.current.state).toEqual({
+    kind: 'connected',
+    login: 'octocat',
+    githubUserId: 583231,
+    disconnectFailed: true
+  })
+
+  // Coming back to the window doesn't hide the failure.
+  await act(async () => {
+    window.dispatchEvent(new Event('focus'))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(hook.result.current.state).toMatchObject({ kind: 'connected', disconnectFailed: true })
+
+  await act(() => hook.result.current.retryDisconnect())
+  expect(confirm).toHaveBeenCalledOnce()
+  expect(disconnectGitHubUser).toHaveBeenCalledTimes(2)
+  expect(hook.result.current.state).toEqual({ kind: 'disconnected' })
+})
+
 it('disconnects only after the confirm, then shows not connected', async () => {
   getGitHubUser.mockResolvedValue(CONNECTED)
   const confirm = vi.fn(async () => false)

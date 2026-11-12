@@ -23,6 +23,8 @@ export type GitHubIdentity = {
   cancel: () => void
   /** Asks first (`confirm`); disconnects only on yes. */
   disconnect: () => Promise<void>
+  /** After a failed Disconnect: tries again without asking, since it was already confirmed. */
+  retryDisconnect: () => Promise<void>
 }
 
 /**
@@ -85,20 +87,19 @@ export function useGitHubIdentity(confirm: () => Promise<boolean>): GitHubIdenti
 
   const cancel = useCallback((): void => dispatch({ type: 'cancel' }), [])
 
-  const disconnect = useCallback(async (): Promise<void> => {
-    if (!(await confirm())) {
-      return
-    }
+  const runDisconnect = useCallback(async (): Promise<void> => {
     setDisconnecting(true)
     const result = await bridgeCall(() => window.api.orcaCloudWorkspace.disconnectGitHubUser())
     setDisconnecting(false)
-    if (result?.ok === true) {
-      dispatch({ type: 'disconnected' })
-    } else {
-      // Still connected as far as we know: show what the control plane says now.
-      void refresh()
-    }
-  }, [confirm, refresh])
+    // Failed: still connected as far as we know, and the row says the disconnect didn't happen.
+    dispatch({ type: result?.ok === true ? 'disconnected' : 'disconnectFailed' })
+  }, [])
 
-  return { state, disconnecting, connect, cancel, disconnect }
+  const disconnect = useCallback(async (): Promise<void> => {
+    if (await confirm()) {
+      await runDisconnect()
+    }
+  }, [confirm, runDisconnect])
+
+  return { state, disconnecting, connect, cancel, disconnect, retryDisconnect: runDisconnect }
 }
