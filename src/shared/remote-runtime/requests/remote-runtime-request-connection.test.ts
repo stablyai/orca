@@ -141,7 +141,11 @@ describe('RemoteRuntimeRequestConnection', () => {
       })
       return child
     })
-    const server = await createServer(() => getRemoteFileUrl('/repo', 'a.ts', 10, 20, routing))
+    const server = await createServer((method) =>
+      method === 'git.remoteFileUrl'
+        ? getRemoteFileUrl('/repo', 'a.ts', 10, 20, routing)
+        : { method }
+    )
     const connection = new RemoteRuntimeRequestConnection(server.pairing)
     // ast-grep-ignore: test-no-wall-clock -- Measures the real encrypted RPC cancellation deadline.
     const start = Date.now()
