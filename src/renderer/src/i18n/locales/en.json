@@ -21579,6 +21579,7 @@
         "moveSectionDown": "Move section down",
         "linkCopiedShort": "Link copied",
         "copyLinkTo": "Copy link to {{number}}",
+        "copyLinkHint": "Teammates with access can open this workspace",
         "unpin": "Unpin",
         "pin": "Pin",
         "moveUp": "Move up",
