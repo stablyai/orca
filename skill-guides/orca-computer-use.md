@@ -46,6 +46,12 @@ In a large window, look for one control with `get-app-state --query <text>`: it 
 ORCA computer get-app-state --app com.apple.finder --query Downloads --json
 ```
 
+A snapshot reads at most `truncation.maxNodes` elements and `maxDepth` levels. When it stops early, `truncation.truncated` is true and each cut-off place shows a `... N more not shown (snapshot limit)` line, indented like the children it stands for. To read them, pass the parent element's index (the nearest line above with less indentation) as `get-app-state --element-index <n>`: it reads only that element and its descendants, with the full limit. Elements already shown keep their indexes and hidden ones get new ones, and you can act on them. Action results show the whole window again, so read the subtree again before acting on another hidden element.
+
+```text
+ORCA computer get-app-state --app com.apple.Safari --element-index 312 --json
+```
+
 ## Waiting
 
 Never `sleep` between actions. When the UI changes on its own after an action (a save finishes, a dialog opens, a button becomes clickable), wait for the change with `wait`. It returns as soon as the condition holds and prints the matching elements or windows; it fails with `wait_timeout` if the condition does not hold in time (default 10 s, `--timeout <ms>` up to 120000).
