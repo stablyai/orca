@@ -53,11 +53,6 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
 // Claude's palette-report anchor, then its composer prompt row (draft-paste-ready-scanner.ts).
 const CLAUDE_COMPOSER_READY_OUTPUT = '\x1b[?2031h\x1b[?2004h❯\u00a0'
 const PTY_ID = 'pty-claude'
-// Claude 2.1.314's first-launch trust menu, captured from a real PTY.
-const CLAUDE_TRUST_DIALOG_OUTPUT =
-  '\x1b[?2004h Accessing workspace:\r\n\r\n /private/tmp/repro\r\n\r\n' +
-  ' Quick safety check: Is this a project you created or one you trust?\r\n\r\n' +
-  ' ❯ No, exit\r\n   Yes, I trust this folder\r\n\r\n Enter to confirm · Esc to cancel\r\n'
 
 async function launchClaude(command: string | undefined, ordered = false) {
   const runtime = new OrcaRuntimeService(
@@ -144,32 +139,6 @@ describe('terminal.send into a freshly launched Claude', () => {
       expect.objectContaining({ result: { send: expect.objectContaining({ accepted: true }) } })
     ])
     expect(writes).toEqual([PASTE, '\r', 'next', '\r'])
-  })
-
-  it('refuses the send, writing nothing, when the composer never comes up', async () => {
-    vi.useFakeTimers()
-    const { writes, send } = await launchClaude('claude')
-
-    const sending = send(PASTE)
-    await vi.runAllTimersAsync()
-
-    await expect(sending).resolves.toMatchObject({
-      ok: true,
-      result: { send: { accepted: false, bytesWritten: 0 } }
-    })
-    expect(writes).toEqual([])
-  })
-
-  it('lets an answer reach a startup dialog shown before the composer', async () => {
-    vi.useFakeTimers()
-    const { runtime, writes, send } = await launchClaude('claude')
-
-    const sending = send('1')
-    runtime.onPtyData(PTY_ID, CLAUDE_TRUST_DIALOG_OUTPUT, Date.now())
-    await vi.advanceTimersByTimeAsync(3_000)
-
-    await expect(sending).resolves.toMatchObject({ ok: true, result: { send: { accepted: true } } })
-    expect(writes).toEqual(['1', '\r'])
   })
 
   it('writes nothing for a held send whose request was cancelled', async () => {

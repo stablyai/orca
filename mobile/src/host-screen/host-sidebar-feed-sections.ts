@@ -21,6 +21,7 @@ import {
 } from '../worktree/worktree-host-context-labels'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
 import { rowFiltersForView, type MobileViewState } from '../worktree/workspace-view-settings'
+import type { HiddenProjects } from '../../../src/shared/hidden-projects'
 
 export type HostFeedListSources = {
   rows: readonly HostSectionRow[]
@@ -271,12 +272,15 @@ export function buildPreFeedSections(sources: {
   search: string
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   lastVisited: LastVisitedWorktreeOnHost | null
+  /** The catalog's hidden projects; this fallback leaves them out as the feed's rows do. */
+  hiddenProjects: HiddenProjects
 }): Section[] {
   const rows = filterWorktrees(
     sources.rows,
     rowFiltersForView(sources.view),
     sources.search,
-    sources.repoHostIdByRepoId
+    sources.repoHostIdByRepoId,
+    sources.hiddenProjects
   ).map((row) => ({
     // Replaces worktree.ps's mark, which is the desktop's selection.
     row: { ...row, isActive: isLastVisitedWorktreeRow(row, sources.lastVisited) },

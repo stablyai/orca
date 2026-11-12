@@ -72,6 +72,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
+          hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
         }
       }
@@ -211,6 +212,15 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           !Number.isFinite(updates.externalWorktreeDiscoverySuppressedAt))
       ) {
         delete updates.externalWorktreeDiscoverySuppressedAt
+      }
+      if ('hiddenAt' in updates && updates.hiddenAt === null) {
+        updates.hiddenAt = undefined
+      } else if (
+        'hiddenAt' in updates &&
+        updates.hiddenAt !== undefined &&
+        (typeof updates.hiddenAt !== 'number' || !Number.isFinite(updates.hiddenAt))
+      ) {
+        delete updates.hiddenAt
       }
       if (
         'externalWorktreeInboxBaselinePaths' in updates &&

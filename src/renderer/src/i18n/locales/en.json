@@ -228,6 +228,30 @@
       "existingTitle": "Add on the {{distro}} host (recommended)",
       "existingWhy": "{{distro}} already runs as a host, so Git, files and terminals run natively in Linux instead of across the Windows file share.",
       "existingAccept": "Add on host"
+    },
+    "hiddenProjects": {
+      "hidden": "{{name}} hidden",
+      "hiddenDescription": "Its terminals and agents keep running. Show it again from Hidden projects below the list.",
+      "undo": "Undo",
+      "hideFailed": "Couldn't hide {{name}}. Its host may need an Orca update.",
+      "showFailed": "Couldn't show {{name}} again.",
+      "listLabel": "Hidden projects",
+      "show": "Show",
+      "showAriaLabel": "Show {{name}} in the sidebar",
+      "settingsTitle": "Hide from sidebar",
+      "settingsDescription": "Hides this host's copy of the project from the sidebar, project pickers and the workspace switcher. Its terminals, agents and automations keep running. On a paired Orca server, this hides it for everyone connected to that server.",
+      "settingsToggleLabel": "Hide {{name}} from the sidebar",
+      "keywordHide": "hide",
+      "keywordHidden": "hidden",
+      "keywordSidebar": "sidebar",
+      "hideFromSidebar": "Hide from Sidebar",
+      "sectionTitle": "Hidden projects ({{count}})",
+      "allHidden": "Every project is hidden. Show one from Hidden projects below.",
+      "undoGone": "{{name}} was removed from Orca.",
+      "settingsGroup": "Sidebar",
+      "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
+      "keywordShow": "show",
+      "keywordUnhide": "unhide"
     }
   },
   "app": {

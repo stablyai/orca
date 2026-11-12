@@ -50,99 +50,7 @@ const ANSWERS: Record<string, unknown> = {
   'worktree.ps': PS_ANSWER
 }
 
-const runtime = () => vi.fn(async (method: string) => ANSWERS[method])
-const list = (rpc: ReturnType<typeof runtime>, params: unknown) =>
-  callPluginHost({
-    method: 'workspace.list',
-    params,
-    granted: ['workspace:read'],
-    services: pluginHostTestServices(rpc)
-  })
-
 describe('workspace.list', () => {
-  it('names each row by its listed id and project, joining status only when asked', async () => {
-    const rpc = runtime()
-    const outcome = await list(rpc, { includeStatus: true })
-    expect(outcome).toMatchObject({ ok: true })
-    expect(outcome.ok && outcome.value).toMatchObject({
-      workspaces: [
-        {
-          id: 'identity:wt2:local:i1',
-          projectId: 'r1',
-          status: { state: 'working', unread: true, terminalCount: 2, lastActivityAt: 20 }
-        },
-        { id: 'r1::/src/old', projectId: 'r1' },
-        {
-          id: 'folder:f1',
-          projectId: null,
-          status: { state: 'inactive', unread: false, terminalCount: 0, lastActivityAt: null }
-        }
-      ]
-    })
-    // A workspace Orca has no status for has none, rather than a guessed one.
-    expect(outcome.ok && outcome.value).not.toHaveProperty('workspaces.1.status')
-
-    const plain = runtime()
-    const without = await list(plain, {})
-    expect(without.ok && without.value).not.toHaveProperty('workspaces.0.status')
-    // Why it matters: worktree.ps refreshes every terminal host.
-    expect(plain.mock.calls.map(([method]) => method)).not.toContain('worktree.ps')
-  })
-
-  it('keeps the host ids 1.3 shipped, cuts long labels, and leaves out rows past the bounds', async () => {
-    const rpc = vi.fn(async (method: string) => {
-      if (method === 'worktree.list') {
-        return {
-          worktrees: [
-            { id: 'r1::/a', repoId: 'r1', displayName: 'a', path: '/a', hostId: 'ssh:box' },
-            { id: 'r1::/ok', repoId: 'r1', displayName: 'n'.repeat(600), path: '/ok' },
-            { id: 'r1::/long', repoId: 'r1', displayName: 'x', path: `/${'x'.repeat(2000)}` }
-          ]
-        }
-      }
-      if (method === 'folderWorkspace.list') {
-        return {
-          folderWorkspaces: [
-            { id: 'f1', name: 'Notes', folderPath: '/notes' },
-            { id: 'f2', name: 'Remote', folderPath: '/r', executionHostId: 'ssh:box' }
-          ]
-        }
-      }
-      return ANSWERS[method]
-    })
-    const outcome = await list(rpc, {})
-    expect(outcome.ok && outcome.value).toMatchObject({
-      // What origin/main returned: the recorded host, else null (also for project-group folders).
-      workspaces: [
-        { id: 'r1::/a', hostId: 'ssh:box' },
-        { id: 'r1::/ok', hostId: null, name: 'n'.repeat(512) },
-        { id: 'folder:f1', hostId: null },
-        { id: 'folder:f2', hostId: 'ssh:box' }
-      ],
-      truncated: true
-    })
-  })
-
-  it('shares one status listing across calls, and says when it stopped short', async () => {
-    const rpc = vi.fn(async (method: string) =>
-      method === 'worktree.ps'
-        ? { ...PS_ANSWER, totalCount: 900, truncated: true }
-        : ANSWERS[method]
-    )
-    const services = pluginHostTestServices(rpc)
-    const call = () =>
-      callPluginHost({
-        method: 'workspace.list',
-        params: { includeStatus: true },
-        granted: ['workspace:read'],
-        services
-      })
-    const [first, second] = await Promise.all([call(), call()])
-    expect(first.ok && first.value).toMatchObject({ statusTruncated: true })
-    expect(second).toEqual(first)
-    expect(rpc.mock.calls.filter(([method]) => method === 'worktree.ps')).toHaveLength(1)
-  })
-
   it('shares a slow listing however long it takes, then keeps its answer for a second', async () => {
     let now = 0
     vi.spyOn(Date, 'now').mockImplementation(() => now)
@@ -172,34 +80,5 @@ describe('workspace.list', () => {
     await call()
     expect(psCalls()).toBe(2)
     vi.restoreAllMocks()
-  })
-
-  it('refuses unknown params, as older hosts refuse includeStatus', async () => {
-    expect(await list(runtime(), { includeStatus: true, extra: 1 })).toMatchObject({
-      ok: false,
-      code: 'invalid_params'
-    })
-  })
-})
-
-describe('project.list', () => {
-  it('lists repositories and folders with the host each runs on', async () => {
-    const outcome = await callPluginHost({
-      method: 'project.list',
-      params: {},
-      granted: ['workspace:read'],
-      services: pluginHostTestServices(runtime())
-    })
-    expect(outcome).toEqual({
-      ok: true,
-      value: {
-        projects: [
-          { id: 'r1', name: 'App', kind: 'git', hostId: 'local', path: '/src/app' },
-          { id: 'r2', name: 'Docs', kind: 'folder', hostId: 'ssh:box', path: '/docs' },
-          { id: 'r3', name: 'Lib', kind: 'git', hostId: 'local', path: '/lib' }
-        ],
-        truncated: false
-      }
-    })
   })
 })

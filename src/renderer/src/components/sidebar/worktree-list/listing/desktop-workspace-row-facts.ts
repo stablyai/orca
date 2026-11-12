@@ -14,10 +14,16 @@ import {
 import { isWorkspaceOwnedBySomeoneElse } from '../../../../../../shared/workspace-creator-visibility'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import {
+  hiddenProjectRowFacts,
+  type HiddenProjects
+} from '../../../../../../shared/hidden-projects'
 import { isInactiveWorkspace } from '@/lib/workspace/activity/worktree-activity-state'
 
 export type DesktopWorkspaceRowFactInputs = {
   repoMap: ReadonlyMap<string, Repo>
+  /** indexHiddenProjects over every repo row; repoMap keeps one row per id. */
+  hiddenProjects: HiddenProjects
   defaultHostId: ExecutionHostId
   pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
@@ -32,14 +38,16 @@ export type DesktopWorkspaceRowFactInputs = {
 export function buildDesktopWorkspaceRowFactReader(
   inputs: DesktopWorkspaceRowFactInputs
 ): WorkspaceRowFactReader<Worktree> {
+  const hostId = (worktree: Worktree): ExecutionHostId | null => {
+    const repo = inputs.repoMap.get(worktree.repoId)
+    return repo ? getWorktreeExecutionHostId(worktree, repo, inputs.defaultHostId) : null
+  }
   return {
     isArchived: (worktree) => worktree.isArchived,
+    ...hiddenProjectRowFacts(inputs.hiddenProjects),
     isFolderWorkspace: (worktree) => parseWorkspaceKey(worktree.id)?.type === 'folder',
     repoId: (worktree) => worktree.repoId,
-    hostId: (worktree) => {
-      const repo = inputs.repoMap.get(worktree.repoId)
-      return repo ? getWorktreeExecutionHostId(worktree, repo, inputs.defaultHostId) : null
-    },
+    hostId,
     isOtherClient: (worktree) =>
       isWorkspaceOwnedBySomeoneElse(worktree, inputs.pairedDeviceIdsByEnvironment),
     isDefaultBranch: (worktree) =>
