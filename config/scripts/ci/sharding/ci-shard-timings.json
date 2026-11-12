@@ -4699,7 +4699,6 @@
       "src/renderer/src/components/github/code-host-rate-limit-stopped-wsl.test.tsx": 2457,
       "src/renderer/src/components/github/github-mention-option-filter.test.ts": 52,
       "src/renderer/src/components/github/github-pr-reviewer-candidate-filter.test.ts": 47,
-      "src/renderer/src/components/github/github-work-item-issue-target.test.ts": 324,
       "src/renderer/src/components/github/github-work-item-mutation-target.test.ts": 348,
       "src/renderer/src/components/github/use-image-input.test.ts": 2619,
       "src/renderer/src/components/gitlab-item-dialog/use-gitlab-primary-actions.test.ts": 2141,
