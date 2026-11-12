@@ -79,7 +79,7 @@ function workspaceFixture({
     },
     setup: () => {
       useAppStore.setState((state) => ({
-        settings: { ...getDefaultSettings(), ...state.settings, machineName }
+        settings: { ...getDefaultSettings('/home/fixture'), ...state.settings, machineName }
       }))
     },
     render: () => (
