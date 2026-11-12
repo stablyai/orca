@@ -1,4 +1,5 @@
 import type { RemoteDesktopPageState } from '../../../shared/hosted-sandbox/cloud-remote-desktop'
+import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
@@ -85,6 +86,11 @@ export type BrowserApi = {
       request: BrowserClientPageRendererRequest
     ) => BrowserClientPageRendererOutcome | Promise<BrowserClientPageRendererOutcome>
   ) => () => void
+  getGuestMetadata: (args: {
+    browserPageId: string
+    webContentsId: number
+  }) => Promise<BrowserGuestMetadata | null | undefined>
+  onGuestMetadata: (callback: (state: BrowserGuestMetadata) => void) => () => void
   registerGuest: (args: {
     browserPageId: string
     workspaceId: string

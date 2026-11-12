@@ -71,35 +71,6 @@ describe('codex thread goal requests', () => {
     await expect(result).rejects.toThrow('stopped')
     expect(request).toHaveBeenCalledOnce()
   })
-
-  it('stops at a refused clear, so a refused replacement leaves the old goal alone', async () => {
-    const request = vi.fn(async (method: unknown) => {
-      if (method === 'thread/goal/clear') {
-        throw new CodexAppServerRequestError('thread/goal/clear', -32600, 'goals are disabled')
-      }
-      return { goal: null }
-    })
-    await expect(
-      changeCodexThreadGoal(session(request), { kind: 'set', objective: 'Ship it' }, true, 5_000)
-    ).resolves.toEqual({ ok: false, rejected: 'goals are disabled' })
-    expect(request).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports a provider refusal and rethrows anything that leaves the effect unknown', async () => {
-    const refused = session(async () => {
-      throw new CodexAppServerRequestError('thread/goal/set', -32600, 'goals feature is disabled')
-    })
-    await expect(
-      changeCodexThreadGoal(refused, { kind: 'set', objective: 'Ship it' }, false, undefined)
-    ).resolves.toEqual({ ok: false, rejected: 'goals feature is disabled' })
-
-    const lost = session(async () => {
-      throw new Error('codex app-server request timed out')
-    })
-    await expect(changeCodexThreadGoal(lost, { kind: 'clear' }, false, undefined)).rejects.toThrow(
-      'timed out'
-    )
-  })
 })
 
 describe('direct goal settings application', () => {

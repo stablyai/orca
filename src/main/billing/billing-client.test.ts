@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import {
   BillingServiceError,
   assertStripeHostedUrl,

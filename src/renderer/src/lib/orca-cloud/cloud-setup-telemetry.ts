@@ -1,7 +1,7 @@
 // N10: setup telemetry derived from the rows the tracker already renders, so every source (the
 // setup session or rows derived from billing) reports the same way. Enum-only: no email, team,
 // repository or session id leaves this file (see telemetry-cloud-setup-event-schemas).
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import type {
   CLOUD_SETUP_DURATION_BUCKETS,
   CLOUD_SETUP_HOURS_SOURCE_VALUES

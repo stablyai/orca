@@ -185,20 +185,20 @@ function matchesClipboardBinding(
 }
 
 /**
- * On macOS an unselected Cmd+C belongs to an app that negotiated Kitty keyboard
- * reporting: apps like Codex capture the mouse, so their highlight is never an
- * xterm selection. Without negotiation, unselected Cmd+C still sends nothing.
+ * Unselected dedicated copy chords belong to an app that negotiated Kitty keyboard
+ * reporting: apps like Claude Code and Codex capture the mouse, so their highlight is
+ * never an xterm selection. Without negotiation, unselected copy chords still send nothing.
  */
 export function isAppOwnedCopyChord(
   event: XtermBypassEvent,
   options: Pick<XtermBypassOptions, 'isMac' | 'hasSelection' | 'kittyKeyboardFlags'>
 ): boolean {
-  return (
-    options.isMac &&
-    !options.hasSelection &&
-    (options.kittyKeyboardFlags ?? 0) !== 0 &&
-    matchesClipboardBinding('Mod+C', event, 'darwin')
-  )
+  if (options.hasSelection || (options.kittyKeyboardFlags ?? 0) === 0) {
+    return false
+  }
+  return options.isMac
+    ? matchesClipboardBinding('Mod+C', event, 'darwin')
+    : matchesClipboardBinding('Ctrl+Shift+C', event, 'linux')
 }
 
 export function shouldHandleTerminalInterruptKeyboardEvent(

@@ -82,15 +82,6 @@ focus change, and singleton accessibility/native counts do not establish an atom
 identity mapping if a window closes or the accessibility tree is stale. The probe
 covers stable fixtures and detected ambiguity, not those concurrent lifecycle races.
 
-## Headless contract checks
-
-```sh
-ORCA_BACKGROUND_LAUNCH=1 python3 -m unittest discover -s config/benchmarks/computer-use -p 'test_*.py'
-```
-
-These checks protect the historical false-success cases and process-tree cleanup.
-They do not import desktop observers or generate native input.
-
 Transports, fixtures and observers were adapted from the historical
 `bench/computer-cua` prototype at `68a68ccf0f16c0a7f952d55adfe21850247b8ee9`.
 Historical checkouts and result artifacts remain unchanged.

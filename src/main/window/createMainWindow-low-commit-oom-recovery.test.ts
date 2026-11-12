@@ -21,13 +21,13 @@ vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime',
 })
 
 import { createMainWindow } from './createMainWindow'
-import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
+import { resetExpectedTeardownStateForTest } from '../crash-reporting/process-exits/expected-teardown-state'
 import {
   resetPreGoneSystemMemorySamplingForTest,
   samplePreGoneSystemMemory
-} from '../crash-reporting/pre-gone-host-memory'
-import { setSystemMemoryInfoReaderForTest } from '../crash-reporting/system-memory-details'
-import { setSwapVolumeFreeSpaceReaderForTest } from '../crash-reporting/swap-volume-free-space'
+} from '../crash-reporting/memory/pre-gone-host-memory'
+import { setSystemMemoryInfoReaderForTest } from '../crash-reporting/memory/system-memory-details'
+import { setSwapVolumeFreeSpaceReaderForTest } from '../crash-reporting/memory/swap-volume-free-space'
 import {
   createRendererRecoveryWindowHarness,
   resetMainWindowMocks,

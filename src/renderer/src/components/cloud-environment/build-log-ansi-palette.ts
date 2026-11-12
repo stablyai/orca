@@ -1,5 +1,5 @@
 import type { ITheme } from '@xterm/xterm'
-import { getBuiltinTheme } from '@/lib/terminal-theme'
+import { getBuiltinTheme } from '@/lib/terminal/appearance/terminal-theme'
 import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT

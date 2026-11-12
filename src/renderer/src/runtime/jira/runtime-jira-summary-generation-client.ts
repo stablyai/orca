@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { localizeTextGenerationResult } from '@/lib/text-generation-error-copy'
+import { localizeTextGenerationResult } from '@/lib/text-generation/text-generation-error-copy'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,

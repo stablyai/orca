@@ -6,7 +6,7 @@ import type {
   TerminalLeafMoveResult,
   TerminalPaneMoveToNewTabReply,
   TerminalPaneMoveToNewTabRequest
-} from '../../shared/workspace-layout/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { holdRelayedPaneMove, type RelayedPaneMove } from './terminal-pane-move-commit-fence'

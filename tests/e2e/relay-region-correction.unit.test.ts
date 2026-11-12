@@ -15,7 +15,7 @@ import { RELAY_PROTOCOL_LIMITS } from '../../cloud/packages/relay-contract/src/p
 import type * as AdminTokenVerifier from '../../cloud/apps/relay/src/authentication/admin-token-verifier'
 import { RelayOriginPool } from '../../src/main/runtime/mobile-cloud-relay/relay-origin-pool'
 import { RELAY_HOST_CAPABILITY_HEADERS } from '../../src/main/runtime/mobile-cloud-relay/relay-control-protocol'
-import type { MobileSocketTransport } from '../../src/main/runtime/rpc/mobile-socket-wiring'
+import type { MobileSocketTransport } from '../../src/main/runtime/rpc/mobile/mobile-socket-wiring'
 import { createRelayExecutionProcess } from './helpers/relay-execution-process'
 
 vi.mock('../../cloud/apps/relay/src/authentication/relay-token-verifier', () => ({

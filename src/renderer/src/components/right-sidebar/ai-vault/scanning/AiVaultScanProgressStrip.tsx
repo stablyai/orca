@@ -7,7 +7,7 @@ import { useNow } from '@/hooks/use-now'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   AiVaultScanAgentProgress,
   AiVaultScanProgress

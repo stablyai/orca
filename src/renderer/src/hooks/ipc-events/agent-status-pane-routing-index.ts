@@ -1,5 +1,6 @@
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -218,7 +219,7 @@ export function resolvePaneKeyFromRoutingIndex(
     let leafIds = index.leafIdsByRoot.get(layout.root)
     if (!leafIds) {
       agentStatusPaneRoutingIndexCounters.leafSetBuilds += 1
-      leafIds = new Set(collectLeafIdsInOrder(layout.root))
+      leafIds = new Set(collectLayoutLeafIdsInOrder(layout.root))
       index.leafIdsByRoot.set(layout.root, leafIds)
     }
     if (!leafIds.has(leafId)) {

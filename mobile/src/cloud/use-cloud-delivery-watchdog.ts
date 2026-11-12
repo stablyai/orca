@@ -1,7 +1,7 @@
 import { useEffect, type MutableRefObject } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { removeHostAndCloseClient } from '../transport/hosts/host-removal-lifecycle'
+import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
 import { markWaitingCloudPromptsFailed } from './cloud-prompt-queue'
 import { cloudStaleHostAction } from './cloud-host-pruning'
 import { useCloudHostRemoval } from './cloud-session'

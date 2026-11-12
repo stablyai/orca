@@ -6,7 +6,7 @@ import type {
 } from '../../shared/feedback-submit-contract'
 
 // Main-process HTTP avoids CORS preflights rejected by feedback when packaged renderers use file origins.
-export const FEEDBACK_API_URL = 'https://www.onorca.dev/v1/feedback'
+export const FEEDBACK_API_URL = 'https://orca.dev/v1/feedback'
 const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000
 const DIAGNOSTIC_BUNDLE_CONTENT_TYPE = 'application/x-ndjson'
 

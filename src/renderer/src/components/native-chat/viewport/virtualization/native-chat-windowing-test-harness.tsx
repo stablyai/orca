@@ -7,6 +7,7 @@ import { NativeChatMessageList } from '../../NativeChatMessageList'
 import { transcriptRowOffset, transcriptWindowHeight } from './native-chat-window-test-layout'
 import {
   estimateNativeChatRowHeight,
+  nativeChatRowHeightWithControlsInFlow,
   NATIVE_CHAT_ROW_GAP_PX,
   nativeChatRowContentMetrics
 } from './native-chat-row-height-estimate'
@@ -44,11 +45,15 @@ export function marker(index: number): NativeChatMessage {
   }
 }
 
-export const ROW_PX = estimateNativeChatRowHeight(nativeChatRowContentMetrics(marker(0)), {
-  hasReceipt: false,
-  hasStatus: false,
-  hasTurnDiff: false
-})
+// Another agent row follows every marker but the last, so its response controls keep their own
+// height; rows measure at this height wherever they sit.
+export const ROW_PX = nativeChatRowHeightWithControlsInFlow(
+  estimateNativeChatRowHeight(nativeChatRowContentMetrics(marker(0)), {
+    hasReceipt: false,
+    hasStatus: false,
+    hasTurnDiff: false
+  })
+)
 export const ROW_PITCH_PX = ROW_PX + NATIVE_CHAT_ROW_GAP_PX
 
 export function overrideLayoutProperty(name: string, descriptor: PropertyDescriptor): () => void {

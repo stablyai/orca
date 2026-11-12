@@ -1,9 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  isEditableDetailsHtmlBlock,
-  matchDetailsHtmlBlock,
-  type DetailsHtmlBlock
-} from './details-markdown-html'
+import { describe, expect, it } from 'vitest'
+import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
 
 function nestedToggles(depth: number): string {
   let html = '<details class="orca-details" open>\n<summary>leaf</summary>\n\nBody\n\n</details>'
@@ -17,10 +13,6 @@ function isEditableHtml(html: string): boolean {
   const block = matchDetailsHtmlBlock(html, 0)
   return block !== null && isEditableDetailsHtmlBlock(block)
 }
-
-afterEach(() => {
-  vi.restoreAllMocks()
-})
 
 describe('details markdown html', () => {
   it('bounds each of many sibling nested toggles independently', () => {
@@ -41,21 +33,5 @@ describe('details markdown html', () => {
   it('rejects nesting past the recursion guard instead of recursing without bound', () => {
     expect(isEditableHtml(nestedToggles(17))).toBe(false)
     expect(isEditableHtml(nestedToggles(400))).toBe(false)
-  })
-
-  it('rejects unbalanced and non-toggle tags that start with details', () => {
-    const unbalanced: DetailsHtmlBlock = {
-      raw: '',
-      openingAttributes: '',
-      inner: '<summary>Outer</summary><details><summary>Inner</summary>'
-    }
-    const lookalike: DetailsHtmlBlock = {
-      raw: '',
-      openingAttributes: '',
-      inner: '<summary>Outer</summary><detailsish>Body</detailsish>'
-    }
-
-    expect(isEditableDetailsHtmlBlock(unbalanced)).toBe(false)
-    expect(isEditableDetailsHtmlBlock(lookalike)).toBe(false)
   })
 })

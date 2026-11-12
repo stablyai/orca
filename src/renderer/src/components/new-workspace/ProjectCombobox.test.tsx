@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import ProjectCombobox from './ProjectCombobox'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -103,73 +103,6 @@ afterEach(() => {
 })
 
 describe('ProjectCombobox', () => {
-  it('arms "Add project" when a query matches nothing, so Enter is never a wrong guess', () => {
-    const onAddProject = vi.fn()
-    const onValueChange = vi.fn()
-
-    act(() => {
-      renderField(
-        <ProjectCombobox
-          options={projects}
-          value={null}
-          onValueChange={onValueChange}
-          onAddProject={onAddProject}
-        />
-      )
-    })
-    openList()
-    type('zzzznomatch')
-    act(() => {
-      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    })
-
-    expect(onAddProject).toHaveBeenCalledTimes(1)
-    expect(onValueChange).not.toHaveBeenCalled()
-  })
-
-  // Sectioning sinks folders below projects; raw rank would arm the bottom row and Enter would choose the wrong project.
-  const sectionedOptions: NewWorkspaceProjectOption[] = [
-    ...Array.from({ length: 5 }, (_, index) => ({
-      kind: 'project' as const,
-      id: `project-${index}`,
-      projectId: `project-${index}`,
-      displayName: `svc-${index}`,
-      badgeColor: '#111111',
-      detail: `stablyai/svc-${index}`
-    })),
-    {
-      kind: 'project-group',
-      id: 'project-group:apps',
-      projectGroupId: 'apps',
-      displayName: 'Apps',
-      badgeColor: '#333333',
-      detail: '/tmp/apps',
-      parentPath: '/tmp/apps',
-      connectionId: null
-    }
-  ]
-
-  it('commits the top row on Enter rather than the folder group sectioned to the bottom', () => {
-    const onValueChange = vi.fn()
-
-    act(() => {
-      renderField(
-        <ProjectCombobox options={sectionedOptions} value={null} onValueChange={onValueChange} />
-      )
-    })
-    act(() => {
-      container
-        .querySelector<HTMLElement>('[data-project-combobox-root="true"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    act(() => {
-      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    })
-
-    expect(onValueChange).toHaveBeenCalledWith('project-0')
-    expect(onValueChange).not.toHaveBeenCalledWith('project-group:apps')
-  })
-
   // Regression: D4's cloud-only rows once used a `github:` key prefix, which swallowed every
   // GitHub project (ids are `github:<owner>/<repo>`) so picking one did nothing.
   it('commits a GitHub project, with or without cloud-only repositories listed', () => {

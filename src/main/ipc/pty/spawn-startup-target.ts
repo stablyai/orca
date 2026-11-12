@@ -10,7 +10,7 @@ import {
 } from '../../../shared/shell/launch/terminal-startup-cwd'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { isWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
-import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
+import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import { resolveWslSessionContext } from '../../daemon/pty-subprocess/wsl-session-context'
 import {
   resolvePlainTerminalWorkspace,

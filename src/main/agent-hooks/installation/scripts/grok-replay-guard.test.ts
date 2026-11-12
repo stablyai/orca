@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/userData' } }))
 
-import { getManagedScript as getClaudeManagedScript } from '../../../claude/hook-service'
+import { getManagedScript as getClaudeManagedScript } from '../../../claude/hooks/hook-script'
 import { getManagedScript as getCursorManagedScript } from '../../../cursor/hook-script'
 import { runVendorHook } from './testing/vendor-hook-delivery.test-fixture'
 

@@ -34,14 +34,18 @@ const mocks: {
 
 export { mocks }
 
-vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  mkdir: mocks.mkdir
+}))
 vi.mock('../orcad/orcad-data-root-locality', () => ({ orcadDataRootIsOnLocalDisk: () => true }))
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreeGraph: mocks.listWorktreeGraph
 }))
-vi.mock('../git/worktrees/creation/worktree-create-preparation', () => ({
+vi.mock('../git/worktrees/creation/worktree-create-preparation', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   prepareWorktreeCreateCheckout: mocks.prepareCheckout,
   finalizePreparedWorktree: mocks.finalize,
   discardPreparedWorktree: mocks.discard,
@@ -90,10 +94,14 @@ export const store = { getSettings: () => ({}) } as unknown as Store
 beforeEach(() => {
   mocks.mkdir.mockReset().mockResolvedValue(undefined)
   mocks.listWorktreeGraph.mockReset().mockResolvedValue([])
-  mocks.prepareCheckout.mockReset().mockResolvedValue(undefined)
+  mocks.prepareCheckout
+    .mockReset()
+    .mockImplementation(async (repo, path, _base, reason, _options, _barrier, operation) => {
+      operation?.setDiscard((options) => mocks.discard(repo, path, options, reason, null))
+    })
   mocks.refreshTip.mockReset().mockResolvedValue(undefined)
   mocks.finalize.mockReset().mockResolvedValue({})
-  mocks.discard.mockReset().mockResolvedValue(undefined)
+  mocks.discard.mockReset().mockResolvedValue('removed')
   mocks.unlock.mockReset().mockResolvedValue(undefined)
   mocks.getWorktreeOptions.mockReset().mockReturnValue({})
   mocks.measureDivergence.mockReset().mockResolvedValue('within')

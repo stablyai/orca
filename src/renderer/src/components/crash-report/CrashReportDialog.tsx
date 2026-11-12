@@ -1,10 +1,10 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT,
   takePendingReactErrorBoundaryReport
-} from '@/lib/react-error-boundary-reporting'
+} from '@/diagnostics/crash-reporting/react-error-boundary-reporting'
 import type { CrashReportRecord } from '../../../../shared/crash-reporting'
 
 const CrashReportDialogSurface = lazy(() =>

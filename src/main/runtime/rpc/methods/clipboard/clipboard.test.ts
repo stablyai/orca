@@ -16,7 +16,7 @@ import { CLIPBOARD_METHODS, resetClipboardImageUploadsForTest } from './clipboar
 import {
   hasMobileClipboardImagePath,
   resetMobileClipboardImageProvenanceForTest
-} from '../../mobile-clipboard-image-provenance'
+} from '../../clipboard/mobile-clipboard-image-provenance'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }

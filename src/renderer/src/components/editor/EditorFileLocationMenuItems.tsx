@@ -3,12 +3,12 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
+import { isRevealOrEditorOpenBlocked } from '@/lib/files/os-open/local-path-open-guard'
 import {
   getRevealInFileManagerLabel,
   getOpenFileRevealOwner,
   revealInFileManager
-} from '@/lib/reveal-in-file-manager'
+} from '@/lib/files/os-open/reveal-in-file-manager'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function EditorFileLocationMenuItems({

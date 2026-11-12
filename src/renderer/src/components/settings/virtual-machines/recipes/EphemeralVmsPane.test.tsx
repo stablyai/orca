@@ -81,6 +81,7 @@ describe('EphemeralVmsPane', () => {
               ]
             }
           ]),
+          listCredentialEnvNames: vi.fn().mockResolvedValue(['ANTHROPIC_API_KEY', 'GITHUB_TOKEN']),
           doctor: vi.fn().mockResolvedValue({
             recipeId: 'cloud-sandbox',
             repoPath: '/repo',

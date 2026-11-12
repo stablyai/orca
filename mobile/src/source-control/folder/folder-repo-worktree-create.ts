@@ -2,8 +2,8 @@ import { WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE } from '../../../../src/shared/ne
 import { hasRuntimeRpcErrorCode } from '../../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
-import { readNewWorktreeRuntimeCapabilities } from '../../tasks/worktree-create-capability'
-import { createWorktreeWithNameRetry } from '../../tasks/worktree-create-retry'
+import { readNewWorktreeRuntimeCapabilities } from '../../new-workspace/creation/worktree-create-capability'
+import { createWorktreeWithNameRetry } from '../../new-workspace/creation/worktree-create-retry'
 
 // The host's refusal before creating, when the repo asks to run or skip setup; desktop matches the same text.
 const SETUP_DECISION_REQUIRED = 'Setup decision required for this repository'

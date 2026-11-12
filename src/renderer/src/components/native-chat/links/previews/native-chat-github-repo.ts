@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
-import { resolveRepoSlug } from '@/lib/repo-slug-index'
+import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 import {
   readRepoSlugCache,
   REPO_SLUG_FAILURE_TTL_MS,
   repoSlugCacheKey
-} from '@/lib/repo-slug-cache'
+} from '@/lib/workspace/catalog/repo-slug-cache'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'

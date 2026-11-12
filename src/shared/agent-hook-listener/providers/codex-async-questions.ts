@@ -24,8 +24,7 @@ export type CodexPendingAsyncQuestion = { toolName: string; prompt: string }
 /**
  * Codex asks a non-blocking question mid-turn: its status stays working, PostToolUse lands ~20 ms
  * after PreToolUse, and each answer arrives as a UserPromptSubmit reply. Only the hooks show it,
- * so track it here. A skip (Ctrl+]) sends no hook and stays pending until the turn ends or the
- * user sends a plain message.
+ * so track it here. A skip (Ctrl+]) sends no hook; Orca infers it from the keystroke.
  */
 export function trackCodexAsyncQuestions(
   state: HookListenerState,
@@ -56,6 +55,27 @@ export function pendingCodexAsyncQuestion(
   const calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
   const newest = calls ? [...calls.values()].at(-1) : undefined
   return newest ? { toolName: CODEX_ASYNC_QUESTION_TOOL, prompt: newest.prompt } : undefined
+}
+
+/** Codex's TUI skips the focused question, which is the oldest unless the user navigated. */
+export function skipCodexAsyncQuestion(state: HookListenerState, paneKey: string): boolean {
+  const calls = state.codexAsyncQuestionsByPaneKey.get(paneKey)
+  const oldest = calls?.entries().next().value
+  if (!calls || !oldest) {
+    return false
+  }
+  const [callId, call] = oldest
+  const index = call.unanswered.values().next().value
+  if (index !== undefined) {
+    call.unanswered.delete(index)
+  }
+  if (call.unanswered.size === 0) {
+    calls.delete(callId)
+  }
+  if (calls.size === 0) {
+    state.codexAsyncQuestionsByPaneKey.delete(paneKey)
+  }
+  return true
 }
 
 function openCall(

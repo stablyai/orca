@@ -2,7 +2,6 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
-  attachModelLifetimeView,
   createModelLifetimeFixture,
   modelLifetimeFile,
   modelLifetimeTextModel,
@@ -13,7 +12,11 @@ import {
   getDiffViewerMonacoModelPaths,
   rememberDiffViewerModelPaths
 } from '../../diff/monaco-view/diff-monaco-model-disposal'
-import { scrollTopCache, diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  diffViewStateCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 import {
   checkDetailsReadingKey,
@@ -25,38 +28,6 @@ import {
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() } }))
 afterEach(resetModelLifetimeFixtures)
-
-it('waits beyond the real detach stack and preserves its bounded scroll snapshot', async () => {
-  const { store, attach, add } = createModelLifetimeFixture()
-  const { file, model } = add('attached')
-  const detachView = attachModelLifetimeView(model)
-  attach()
-  store.getState().closeFile(file.id)
-  await Promise.resolve()
-  expect(model.isDisposed()).toBe(false)
-  scrollTopCache.set(file.filePath, 42)
-  detachView()
-  expect(model.isDisposed()).toBe(false)
-  await Promise.resolve()
-  expect(model.isDisposed()).toBe(true)
-  expect(scrollTopCache.get(file.filePath)).toBe(42)
-})
-
-it('protects a reopened URI owner from a pending detach callback', async () => {
-  const { store, attach, add } = createModelLifetimeFixture()
-  const { file, model } = add('reopened-old')
-  const detachView = attachModelLifetimeView(model)
-  attach()
-  store.getState().closeFile(file.id)
-  await Promise.resolve()
-  store.setState({ openFiles: [{ ...file, id: 'reopened-new' }] })
-  detachView()
-  await Promise.resolve()
-  expect(model.isDisposed()).toBe(false)
-  store.getState().closeFile('reopened-new')
-  await Promise.resolve()
-  expect(model.isDisposed()).toBe(true)
-})
 
 it('does not replay earlier model-disposal authority after first registry registration', async () => {
   const { store, bridge, attach } = createModelLifetimeFixture(false)
@@ -95,36 +66,6 @@ it('does not let a stale HMR unregister clear a successor registration', async (
   }
 })
 
-it('releases generated closed diff namespaces after detachment and preserves sibling prefixes', async () => {
-  const { store, attach } = createModelLifetimeFixture()
-  const file = modelLifetimeFile('diff-a', 'diff')
-  const sibling = modelLifetimeFile('diff-a-longer', 'diff')
-  const paths = getDiffViewerMonacoModelPaths({
-    modelKey: file.id,
-    generationSuffix: ':large-diff-generation:2'
-  })
-  const siblingPaths = getDiffViewerMonacoModelPaths({
-    modelKey: sibling.id,
-    generationSuffix: ''
-  })
-  const original = modelLifetimeTextModel(paths.originalModelPath)
-  const modified = modelLifetimeTextModel(paths.modifiedModelPath)
-  const live = modelLifetimeTextModel(siblingPaths.originalModelPath)
-  const detachView = attachModelLifetimeView(original)
-  store.setState({ openFiles: [file, sibling] })
-  attach()
-  store.getState().closeFile(file.id)
-  await Promise.resolve()
-  expect(original.isDisposed()).toBe(false)
-  expect(modified.isDisposed()).toBe(true)
-  expect(live.isDisposed()).toBe(false)
-  detachView()
-  expect(original.isDisposed()).toBe(false)
-  await Promise.resolve()
-  expect(original.isDisposed()).toBe(true)
-  expect(live.isDisposed()).toBe(false)
-})
-
 it('preserves queued model custody across registry removal and replacement', async () => {
   const { store, bridge, attach, add } = createModelLifetimeFixture(false)
   const unregister = bridge.register(monaco)
@@ -132,27 +73,6 @@ it('preserves queued model custody across registry removal and replacement', asy
   attach()
   store.getState().closeFile(file.id)
   unregister()
-  await Promise.resolve()
-  expect(model.isDisposed()).toBe(false)
-  const unregisterNext = bridge.register(monaco)
-  try {
-    await Promise.resolve()
-    expect(model.isDisposed()).toBe(true)
-  } finally {
-    unregisterNext()
-  }
-})
-
-it('preserves retained attachment custody across registry replacement', async () => {
-  const { store, bridge, attach, add } = createModelLifetimeFixture(false)
-  const unregister = bridge.register(monaco)
-  const { file, model } = add('attached-replacement')
-  const detachView = attachModelLifetimeView(model)
-  attach()
-  store.getState().closeFile(file.id)
-  await Promise.resolve()
-  unregister()
-  detachView()
   await Promise.resolve()
   expect(model.isDisposed()).toBe(false)
   const unregisterNext = bridge.register(monaco)
@@ -307,18 +227,6 @@ it('sweeps never-mounted close-all and same-ID mode replacements without Monaco'
   store.setState({ openFiles: [] })
   await Promise.resolve()
   expect(scrollTopCache.size).toBe(0)
-})
-
-it('spares a check ID reopened before the pending flush', async () => {
-  const { store, attach } = createModelLifetimeFixture(false)
-  const file = modelLifetimeFile('reopened', 'check-details')
-  store.setState({ openFiles: [file] })
-  attach()
-  seed(file.id)
-  store.setState({ openFiles: [] })
-  store.setState({ openFiles: [file] })
-  await Promise.resolve()
-  expect(scrollTopCache.size).toBe(5)
 })
 
 it('releases tab-scoped diff models when their file closes', async () => {

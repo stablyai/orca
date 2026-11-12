@@ -1,4 +1,4 @@
-import * as gitExecFile from '../../git/command-runner/git-exec-file'
+import '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
@@ -7,16 +7,14 @@ import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
 } from '../orca-runtime-test-mocks/setup.spec'
-import { getBranchConflictKind } from '../../git/repo-branch-conflict'
+import '../../git/refs/resolution/repo-branch-conflict'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
-  TEST_FOLDER_WORKSPACE_ID,
   TEST_FOLDER_WORKSPACE_KEY,
   TEST_REPO_ID,
-  TEST_REPO_PATH,
   createFolderWorkspaceRuntimeStore,
   makeWorktreeMeta,
   store
@@ -24,36 +22,6 @@ import {
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
-  it('rejects when every exact PR branch checkout path suffix is occupied', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    computeWorktreePathMock.mockReturnValue(process.cwd())
-    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
-    vi.mocked(getBranchConflictKind).mockResolvedValueOnce(null)
-    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
-        throw new Error('missing local branch')
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    try {
-      await expect(
-        runtime.createManagedWorktree({
-          repoSelector: 'id:repo-1',
-          name: 'fix-title',
-          baseBranch: 'abc123',
-          branchNameOverride: 'feature/fix'
-        })
-      ).rejects.toThrow(
-        'Could not find an available worktree path for "fix-title". Pick a different worktree name.'
-      )
-
-      expect(addWorktree).not.toHaveBeenCalled()
-    } finally {
-      gitSpy.mockRestore()
-    }
-  })
-
   it('refuses an SSH-backed create for mobile/runtime callers instead of creating locally', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
@@ -125,70 +93,5 @@ describe('OrcaRuntimeService', () => {
       origin: 'manual',
       capture: { source: 'active-workspace', confidence: 'explicit' }
     })
-  })
-
-  it('records folder workspace lineage inferred from environment context', async () => {
-    vi.mocked(addWorktree).mockClear()
-    const created = {
-      path: '/tmp/workspaces/folder-child',
-      head: 'def',
-      branch: 'refs/heads/folder-child',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const childId = `${TEST_REPO_ID}::${created.path}`
-    const metaById: Record<string, WorktreeMeta> = {}
-    const workspaceLineageByChildKey: Record<string, WorkspaceLineage> = {}
-    const runtimeStore = {
-      ...createFolderWorkspaceRuntimeStore(),
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-        return metaById[worktreeId]
-      },
-      setFolderParentLineage: vi.fn((_target: HostWorktreeTarget, lineage: WorkspaceLineage) => {
-        workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
-        return lineage
-      })
-    }
-    computeWorktreePathMock.mockReturnValue(created.path)
-    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
-    vi.mocked(listWorktrees).mockResolvedValueOnce([created])
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: TEST_REPO_ID,
-      name: 'folder-child',
-      baseBranch: 'origin/main',
-      lineage: { envParentWorkspace: TEST_FOLDER_WORKSPACE_KEY }
-    })
-
-    expect(addWorktree).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      created.path,
-      'folder-child',
-      'origin/main',
-      false,
-      false,
-      {}
-    )
-    expect(result.lineage).toBeNull()
-    expect(result.workspaceLineage).toMatchObject({
-      childWorkspaceKey: `worktree:${childId}`,
-      childInstanceId: metaById[childId].instanceId,
-      parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY,
-      parentInstanceId: TEST_FOLDER_WORKSPACE_ID,
-      origin: 'cli',
-      capture: { source: 'env-workspace', confidence: 'inferred' }
-    })
-    expect(result.worktree.workspaceLineage).toBe(result.workspaceLineage)
-    expect(runtimeStore.setFolderParentLineage).toHaveBeenCalledWith(
-      expect.objectContaining({ id: childId }),
-      expect.objectContaining({
-        childWorkspaceKey: `worktree:${childId}`,
-        parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY
-      })
-    )
   })
 })

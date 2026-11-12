@@ -1,8 +1,15 @@
+import type { LinearLinkedIssueUpdated } from './linear-api'
 import { ipcRenderer } from 'electron'
 import type { LinearProjectDetail } from '../../shared/linear/project-types'
 import type { PreloadApi } from '../api-types'
 
 export const linearApi = {
+  onLinkedIssueUpdated: (callback: (event: LinearLinkedIssueUpdated) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, update: LinearLinkedIssueUpdated): void =>
+      callback(update)
+    ipcRenderer.on('linear:linkedIssueUpdated', listener)
+    return () => ipcRenderer.removeListener('linear:linkedIssueUpdated', listener)
+  },
   connect: (args: { apiKey: string }) => ipcRenderer.invoke('linear:connect', args),
 
   disconnect: (args?: { workspaceId?: string }): Promise<void> =>

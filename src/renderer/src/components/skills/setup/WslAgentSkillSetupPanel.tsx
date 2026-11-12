@@ -5,19 +5,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../../integration-status-pill'
-import { SkillFreshnessStatusPill } from '../SkillFreshnessStatusPill'
+import { SkillFreshnessStatusPill } from '../freshness/SkillFreshnessStatusPill'
 import { OnboardingInlineCommandTerminal } from '../../onboarding/OnboardingInlineCommandTerminal'
 import { AgentSkillSetupFailureNotice } from './AgentSkillSetupFailureNotice'
-import { createTerminalSnapshot, type SkillTerminalSnapshot } from '@/lib/skill-terminal-snapshot'
+import {
+  createTerminalSnapshot,
+  type SkillTerminalSnapshot
+} from '@/components/skills/setup/skill-terminal-snapshot'
 import type { WslAgentSkillSetupPanelProps } from './wsl-agent-skill-setup-panel-props'
 import { Button } from '../../ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   recheckSurfacesAfterAgentSkillInstall,
   syncSurfacesAfterAgentSkillRecheck
-} from '../../../hooks/agent-skill-recheck-surface-sync'
+} from './agent-skill-recheck-surface-sync'
 import { isOrcaCliAvailableOnPath } from '@/lib/skills/installation/agent-skill-cli-prerequisite'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function WslAgentSkillSetupPanel({

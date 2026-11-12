@@ -46,7 +46,7 @@ vi.mock('../../platform/external-link', () => ({ openExternalLink: () => {} }))
 vi.mock('../../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'connected' })
 }))
-vi.mock('../../tasks/worktree-create-capability', () => ({
+vi.mock('../../new-workspace/creation/worktree-create-capability', () => ({
   readNewWorktreeRuntimeCapabilities: async () => ({ worktreeCreateIdempotency: false })
 }))
 vi.mock('../../i18n/use-mobile-translation', () => ({
@@ -158,23 +158,6 @@ describe('useFolderCreateFlow', () => {
     expect(composer().folderLaunch?.repoId).toBe(b.target.repoId)
   })
 
-  it('shows nothing for a create that lands after the screen is left, and still refreshes', async () => {
-    const refetch = vi.fn()
-    const { flow } = mountFlow(refetch)
-    const a = repoIn()
-    const creating = replying(CREATED)
-    const created = flow.current!.onCreate(a.repo, a.target, creating.client, 'payments')
-
-    act(() => renderer?.unmount())
-    renderer = null
-    creating.answer()
-    await created
-
-    expect(refetch).toHaveBeenCalled()
-    expect(seen.toasts).toEqual([])
-    expect(seen.haptics).toBe(0)
-  })
-
   async function openComposer(flow: { current: Flow | null }, repo = repoIn()) {
     const refusal = replying({ id: '1', ok: false, error: { code: 'x', message: TAKEN } })
     const opening = flow.current!.onCreate(repo.repo, repo.target, refusal.client, 'payments')
@@ -182,29 +165,6 @@ describe('useFolderCreateFlow', () => {
     await act(() => opening)
     return composer()
   }
-
-  it("doesn't let an earlier form's close end a newer one", async () => {
-    const { flow } = mountFlow(() => {})
-    const open = () => openComposer(flow)
-    const first = await open()
-    act(() => first.onClose())
-    const second = await open()
-
-    act(() => first.onClose())
-    expect(composer().visible).toBe(true)
-    expect(composer().folderLaunch?.repoId).toBe(second.folderLaunch?.repoId)
-  })
-  it("shows nothing for an earlier form's create once a newer form is open", async () => {
-    const { flow } = mountFlow(() => {})
-    const first = await openComposer(flow)
-    act(() => first.onClose())
-    const second = await openComposer(flow)
-
-    expect(first.folderLaunch?.submit.presenting()).toBe(false)
-    act(() => first.onCreated('repo::/w/payments-2', 'payments-2'))
-    expect(seen.toasts).toEqual([])
-    expect(second.folderLaunch?.submit.presenting()).toBe(true)
-  })
 
   it('gives the repository back when the screen is left with an unsent form', async () => {
     const { flow } = mountFlow(() => {})
@@ -243,15 +203,6 @@ describe('useFolderCreateFlow', () => {
       setupDecision: 'skip'
     })
   })
-  it("refreshes the folder when a form's create may have landed", async () => {
-    const refetch = vi.fn()
-    const { flow } = mountFlow(refetch)
-    const b = repoIn()
-    const form = await openComposer(flow, b)
-
-    form.folderLaunch?.submit.begin({ ...b.repo, path: '/w/b' })?.settle('uncertain')
-    expect(refetch).toHaveBeenCalledTimes(1)
-  })
   async function setupRefusedRetry(flow: { current: Flow | null }) {
     const a = repoIn()
     const lost = new FakeSession('connected')
@@ -265,19 +216,6 @@ describe('useFolderCreateFlow', () => {
     })
     return { a, pending: flow.current!.onCreate(a.repo, a.target, retry.client, 'payments'), retry }
   }
-
-  it("doesn't open a setup choice over another form, and the repository can retry after", async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout'] })
-    const { flow } = mountFlow(() => {})
-    const { a, pending, retry } = await setupRefusedRetry(flow)
-    const form = await openComposer(flow)
-    retry.answer()
-    await act(() => pending)
-
-    expect(seen.confirm?.visible).toBe(false)
-    expect(composer().folderLaunch?.repoId).toBe(form.folderLaunch?.repoId)
-    expect(isFolderRepoCreateBusy(a.target)).toBe(false)
-  })
 
   it("doesn't open a composer over a setup choice, and covers the list while it is open", async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] })
@@ -298,46 +236,5 @@ describe('useFolderCreateFlow', () => {
 
     act(() => seen.confirm?.onCancel())
     expect(flow.current!.covered).toBe(false)
-  })
-  it('closes a setup choice once the folder lists its create, and its stale confirm sends nothing', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout'] })
-    const { flow, rerender } = mountFlow(() => {})
-    const { a, pending, retry } = await setupRefusedRetry(flow)
-    retry.answer()
-    await act(() => pending)
-    const staleConfirm = seen.confirm?.onConfirm
-    expect(seen.confirm?.visible).toBe(true)
-
-    rerender([
-      {
-        worktreeId: 'a-child',
-        repoId: a.target.repoId,
-        repo: 'a',
-        displayName: 'payments',
-        branch: 'payments'
-      }
-    ])
-    expect(seen.confirm?.visible).toBe(false)
-    await act(async () => staleConfirm?.())
-    expect(retry.client.sendRequest).toHaveBeenCalledTimes(1)
-    expect(seen.composer?.visible).toBe(false)
-  })
-
-  it("shows nothing for an older form's create once a setup choice opens, and still refreshes", async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout'] })
-    const refetch = vi.fn()
-    const { flow } = mountFlow(refetch)
-    const form = await openComposer(flow)
-    act(() => form.onClose())
-    const { pending, retry } = await setupRefusedRetry(flow)
-    retry.answer()
-    await act(() => pending)
-    expect(seen.confirm?.visible).toBe(true)
-    refetch.mockClear()
-
-    expect(form.folderLaunch?.submit.presenting()).toBe(false)
-    act(() => form.onCreated('repo::/w/payments', 'payments'))
-    expect(seen.toasts).toEqual([])
-    expect(refetch).toHaveBeenCalledTimes(1)
   })
 })

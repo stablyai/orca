@@ -7,7 +7,7 @@ import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   StyleSheet: {
-    absoluteFillObject: {
+    absoluteFill: {
       bottom: 0,
       left: 0,
       position: 'absolute',

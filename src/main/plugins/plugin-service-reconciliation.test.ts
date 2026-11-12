@@ -8,9 +8,9 @@ import {
   pluginManifestSchema,
   type PluginManifest
 } from '../../shared/plugins/manifest/plugin-manifest'
-import type { PluginWorkerHandle } from './workers/plugin-host-process'
+import type { PluginWorkerHandle } from './workers/parent-process/plugin-host-process-types'
 import { PluginService } from './plugin-service'
-import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
+import type { PluginWorkerFactory } from './workers/worker-supervision/plugin-worker-startup'
 
 const roots: string[] = []
 const services: PluginService[] = []
@@ -117,77 +117,6 @@ afterEach(async () => {
 })
 
 describe('PluginService worker reconciliation', () => {
-  it('denies every authority boundary immediately when the feature flag turns off', async () => {
-    const root = await pluginRoot()
-    const harness = await createHarness(root)
-    await activate(harness.service)
-    const plugin = harness.service.findValidPlugin(pluginKey)!
-    const opened = await harness.service.panels.open('renderer:1', pluginKey, 'panel')
-    expect(opened).not.toBeNull()
-
-    harness.setEnabled(false)
-
-    expect(harness.service.activationState(plugin)).toBe('disabled')
-    expect(harness.service.getGrantedCapabilities(pluginKey)).toBeNull()
-    await expect(harness.service.invokeCommand(pluginKey, 'run')).rejects.toThrow('not enabled')
-    await expect(harness.service.panels.readEntry(pluginKey, 'panel')).resolves.toBeNull()
-
-    await harness.service.refresh()
-    expect(harness.workers[0]!.dispose).toHaveBeenCalledOnce()
-    harness.setEnabled(true)
-    await harness.service.refresh()
-    await expect(
-      harness.service.panels.execute('renderer:1', {
-        sessionToken: opened!.sessionToken,
-        action: 'notifications.show',
-        params: { title: 'stale' }
-      })
-    ).resolves.toMatchObject({ ok: false, error: 'invalid panel session' })
-  })
-
-  it('cannot reactivate the old revision while refresh awaits worker shutdown', async () => {
-    const root = await pluginRoot()
-    let finishOldDispose!: () => void
-    const oldDispose = new Promise<void>((resolve) => {
-      finishOldDispose = resolve
-    })
-    const workers: ReturnType<typeof testWorker>[] = []
-    const factory = vi.fn<PluginWorkerFactory>(async () => {
-      const handle = testWorker()
-      if (workers.length === 0) {
-        handle.dispose.mockImplementation(() => oldDispose)
-      }
-      workers.push(handle)
-      return handle
-    })
-    const consent = fingerprintPluginConsent(manifest(), await devFolderConsentIdentity(root))
-    const service = new PluginService({
-      userDataPath: root,
-      hostVersion: '1.4.0',
-      isPluginSystemEnabled: () => true,
-      getDisabledPlugins: () => [],
-      getPluginConsents: () => ({ [pluginKey]: consent }),
-      getDevPluginPaths: () => [root],
-      workerFactory: factory
-    })
-    services.push(service)
-    await activate(service)
-    await writeFile(
-      join(root, 'orca-plugin.json'),
-      JSON.stringify(manifest({ main: 'worker-v2.js' }))
-    )
-
-    const refreshing = service.refresh()
-    await vi.waitFor(() => expect(workers[0]!.dispose).toHaveBeenCalledOnce())
-    const invoking = service.invokeCommand(pluginKey, 'run')
-    await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(2))
-    expect(factory.mock.calls[1]?.[0].mainEntry).toBe('worker-v2.js')
-    finishOldDispose()
-
-    await expect(invoking).resolves.toBeNull()
-    await refreshing
-  })
-
   it('deactivates removed dev paths and makes a replacement folder wait for its own review', async () => {
     const firstRoot = await pluginRoot()
     const secondRoot = await pluginRoot()

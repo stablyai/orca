@@ -17,7 +17,7 @@ import {
 import { formatAbsoluteTime, formatRelativeFromNow, formatRunDuration } from './cloud-api-format'
 import { CloudApiErrorNotice, RoutineRunStatusPill } from './cloud-api-parts'
 import { isActiveRunStatus } from './routine-run-status'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 export type LoadRoutineRuns = (
   routineId: string,

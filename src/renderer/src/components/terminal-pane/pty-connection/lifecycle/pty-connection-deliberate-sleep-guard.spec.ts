@@ -50,7 +50,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     afterEach(async () => {
-      const { clearWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
+      const { clearWorktreeSleepIntent } = await import('@/lib/workspace/sleep/worktree-sleep-intent')
       clearWorktreeSleepIntent('wt-1')
       await restoreTerminalTestGlobals()
     })
@@ -61,7 +61,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
         '@/lib/agent-status/aggregation/worktree-agent-status'
       )
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
-        await import('@/lib/worktree-sleep-intent')
+        await import('@/lib/workspace/sleep/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -154,7 +154,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
         '@/lib/agent-status/aggregation/worktree-agent-status'
       )
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
-        await import('@/lib/worktree-sleep-intent')
+        await import('@/lib/workspace/sleep/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       let releaseCwd: (cwd: string) => void = () => {}
@@ -189,7 +189,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     })
 
     it('drops the wake listener when a waiting pane is disposed', async () => {
-      const sleepIntent = await import('@/lib/worktree-sleep-intent')
+      const sleepIntent = await import('@/lib/workspace/sleep/worktree-sleep-intent')
       const subscribe = sleepIntent.onWorktreeSleepIntentCleared
       const paneWakeListener = vi.fn()
       const subscribeSpy = vi

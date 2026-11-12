@@ -114,40 +114,48 @@ it('retains the init context suffix when the response reports the same bare mode
   }
 })
 
-it('keeps a model picked during a turn over that turn’s later replies until a turn runs it', async () => {
-  const claude = fakeClaude({ initModel: 'claude-sonnet-5-5' })
+it('retires the answered model on a saved pick until a turn carries that pick', async () => {
+  const claude = fakeClaude({ initModel: 'claude-opus-5-5' })
   const adapter = await acquired(claude)
   const connection = claude.connections[0]!
   const read = async () => (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
-  const reply = (uuid: string, model: string) =>
+  const answer = (uuid: string, model: string) =>
     claudeFrame(connection, {
       type: 'assistant',
       uuid,
       message: { role: 'assistant', model, content: [] }
     })
+  const turn = async (clientMessageId: string, model: string) => {
+    claudeFrame(connection, { type: 'system', subtype: 'session_state_changed', state: 'idle' })
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId,
+      body: USER_MESSAGE,
+      executionOptions: { model },
+      fence: 7
+    })
+  }
   try {
-    await adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: 'running',
-      body: USER_MESSAGE,
-      fence: 7
-    })
-    claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-sonnet-5-5' })
-    reply('before-pick', 'claude-sonnet-5-5')
-    await adapter.setOption({ sessionId: 'session-1', fence: 7, key: 'model', value: 'haiku' })
-    reply('same-turn', 'claude-sonnet-5-5')
-    expect(await read()).toMatchObject({ model: 'haiku' })
-    expect((await read()).reportedModel).toBeUndefined()
-    expect(connection.calls).toContainEqual({ subtype: 'set_model', params: { model: 'haiku' } })
+    claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-opus-5-5' })
+    answer('fallback', 'claude-opus-4-8')
+    expect((await read()).reportedModel).toBe('claude-opus-4-8')
 
-    await adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: 'next',
-      body: USER_MESSAGE,
-      fence: 7
-    })
-    reply('next-turn', 'claude-haiku-5-5')
-    expect(await read()).toMatchObject({ model: 'haiku', reportedModel: 'claude-haiku-5-5' })
+    adapter.noteOptionPick({ sessionId: 'session-1', fence: 7, key: 'model', value: 'sonnet' })
+    answer('same-turn', 'claude-opus-4-8')
+    expect((await read()).reportedModel).toBeUndefined()
+    expect((await read()).confirmed ?? []).not.toContain('model')
+
+    // A message accepted before the pick runs the model it captured.
+    await turn('queued-before-pick', 'opus')
+    claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-opus-5-5' })
+    answer('queued-answer', 'claude-opus-5-5')
+    expect((await read()).reportedModel).toBeUndefined()
+
+    await turn('carries-pick', 'sonnet')
+    expect(connection.calls).toContainEqual({ subtype: 'set_model', params: { model: 'sonnet' } })
+    claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-sonnet-5-5' })
+    answer('next-fallback', 'claude-opus-4-8')
+    expect((await read()).reportedModel).toBe('claude-opus-4-8')
   } finally {
     await adapter.closeAll()
   }

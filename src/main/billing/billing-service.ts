@@ -14,8 +14,8 @@ import type {
   OrcaBillingTrialClaimResult,
   OrcaBillingUsageHistoryResult
 } from '../../shared/orca-billing'
-import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
-import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
+import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import { runWithFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   BillingServiceError,
@@ -32,7 +32,7 @@ import { getBillingEndpoints } from './billing-config'
 import { fetchUsageHistory } from './billing-usage-client'
 import { getBillingDevKeyFile, mintDevBillingToken } from './billing-dev-token'
 import { cleanCloudServiceUrl } from '../../shared/cloud-service-url'
-import { listOrcaProfileOrgMembers } from '../orca-profiles/profile-cloud-org-members-service'
+import { listOrcaProfileOrgMembers } from '../orca-profiles/cloud-org/profile-cloud-org-members-service'
 
 type Ready =
   | {

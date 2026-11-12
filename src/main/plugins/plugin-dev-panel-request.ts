@@ -10,7 +10,7 @@ import { assertPluginSystemEnabled, resolveDevPlugin } from './plugin-dev-event-
 import type { PluginDevFolderLookup, PluginDevFolderTarget } from './plugin-dev-folders'
 import { isInvalidDiscoveredPlugin, type ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginPanelRequest } from './panels/plugin-panel-bridge'
-import { PluginHostCallError } from './workers/plugin-host-call-scope'
+import { PluginHostCallError } from './workers/host-api/plugin-host-call-scope'
 
 export type PluginDevRequestService = PluginDevFolderLookup & {
   options: { isPluginSystemEnabled: () => boolean }

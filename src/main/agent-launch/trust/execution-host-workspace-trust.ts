@@ -14,7 +14,7 @@ import { awaitAgentTrustWriteWithinDeadline } from './agent-trust-write-deadline
 import {
   type ClaudeTrustConfigTarget,
   grantClaudeWorkspaceTrust
-} from '../../claude/claude-folder-trust-file'
+} from '../../claude/configuration/claude-folder-trust-file'
 import { isTooBroadToPreTrust } from '../../../shared/agent-launch/permissions/workspace-pretrust-scope'
 
 /** Resolve trust on the agent’s execution host, including WSL guests and SSH relays. */

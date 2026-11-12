@@ -1,6 +1,6 @@
 import type { GitCommitAction } from '../../../shared/git/commands/git-commit-action'
-import { applyCommit, recoverSequencer } from '../../git/commit-actions'
-import { createBranch } from '../../git/create-branch'
+import { applyCommit, recoverSequencer } from '../../git/worktrees/checkout/commit-actions'
+import { createBranch } from '../../git/worktrees/checkout/create-branch'
 import { ipcMain } from 'electron'
 import { commitChanges, completeMerge } from '../../git/source-control/commit-changes'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'

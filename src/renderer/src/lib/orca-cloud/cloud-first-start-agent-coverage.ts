@@ -1,6 +1,6 @@
 // Cloud-start telemetry: the share of first cloud starts where the agent was already covered.
 // Enum-only, once per install; the composer's Agent row notes what it showed, the start reports it.
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import type { OrcaCloudAgentSetupRowModel } from './orca-cloud-agent-setup-row'
 
 const REPORTED_KEY = 'orca.cloud.firstStartAgentCoverageReported'

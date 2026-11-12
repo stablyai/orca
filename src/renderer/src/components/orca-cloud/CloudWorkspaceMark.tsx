@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { HostGlyph } from '@/components/host-row-icon'
 import { FOCUS_RING } from './cloud-focus'
 import { cloudGlyphStateLabel } from './cloud-state-copy'

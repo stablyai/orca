@@ -13,7 +13,7 @@ import {
 } from '../../../workspaces/catalog/provisioned-root-checkout'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
 export type RuntimeProvisionedRootRequest = ProvisionedRootRequest & { expectedPath: string }

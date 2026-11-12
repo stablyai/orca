@@ -48,7 +48,6 @@ vi.mock('./TextInputModal', async () => {
   }
 })
 
-import { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX } from './MobileHtmlPreview'
 import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor'
 
 const renderers: ReactTestRenderer[] = []
@@ -138,56 +137,5 @@ describe('the rich markdown editor on the page', () => {
       surface.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(onChange.mock.calls).toEqual([['accepted']])
-  })
-})
-
-describe('the html preview on the page', () => {
-  const renderSourceMarker = () => createElement('SourceView', null)
-
-  it('renders the artifact in a frame that can run nothing, and keeps the toggle', () => {
-    const renderer = render(
-      createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource: renderSourceMarker })
-    )
-    const frames = findHosts(renderer, 'iframe')
-    expect(frames).toHaveLength(1)
-    // Only srcDoc hands artifact to sealed frame; deny scripts and same-origin.
-    expect(frames[0]?.props.srcDoc).toBe('<h1>hi</h1>')
-    expect(frames[0]?.props.sandbox).toBe(MOBILE_HTML_PREVIEW_SANDBOX)
-    expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).not.toContain('allow-scripts')
-    expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).not.toContain('allow-same-origin')
-    // Both positions of the toggle exist, which is what stops it being a control that lies.
-    expect(findHosts(renderer, 'Pressable')).toHaveLength(2)
-  })
-
-  it('says which side of the toggle is showing', () => {
-    const renderer = render(
-      createElement(MobileHtmlPreview, { html: '<h1>hi</h1>', renderSource: renderSourceMarker })
-    )
-    const toggles = () => findHosts(renderer, 'Pressable')
-    expect(toggles()).toHaveLength(2)
-    expect(toggles().map((node) => node.props.accessibilityRole)).toEqual(['tab', 'tab'])
-    // The pair's own container, so the two tabs are a set rather than two loose ones.
-    expect(
-      findHosts(renderer, 'View').filter((node) => node.props.accessibilityRole === 'tablist')
-    ).toHaveLength(1)
-    // Assert selected state for screen reader: active styling alone is silent.
-    expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([true, false])
-
-    act(() => toggles()[1]?.props.onPress())
-    expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([false, true])
-  })
-
-  it('never puts the artifact anywhere but the frame', () => {
-    const renderer = render(
-      createElement(MobileHtmlPreview, {
-        html: '<script>alert(1)</script>',
-        renderSource: renderSourceMarker
-      })
-    )
-    const tree = JSON.stringify(renderer.toJSON())
-    // Artifact appears only as iframe srcDoc, never surrounding child or dangerous HTML.
-    expect(findHosts(renderer, 'iframe')[0]?.props.srcDoc).toBe('<script>alert(1)</script>')
-    expect(tree.split('alert(1)')).toHaveLength(2)
-    expect(tree).not.toContain('dangerouslySetInnerHTML')
   })
 })

@@ -8,7 +8,7 @@ import type {
   EventProps,
   FeatureWallOpenSourceTelemetry
 } from '../../../../shared/telemetry-events'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 
 export type FeatureWallTourTelemetryState = {
   open: boolean

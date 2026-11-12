@@ -1,7 +1,7 @@
 /** Read authority-qualified row keys and render order from the mocked list panel, matching real clicks rather than synthesizing identity. */
 
-import type { AutomationListRow } from './automation-list-row-identity'
-import type { ExternalAutomationListEntry } from './external-automation-list-entries'
+import type { AutomationListRow } from './listing/automation-list-row-identity'
+import type { ExternalAutomationListEntry } from './external/external-automation-list-entries'
 import { mocks } from './automations-page-test-harness'
 
 function listedItems() {

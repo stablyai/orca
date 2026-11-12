@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View, type HostInstance } from 'react-native'
 import { Bot, ListFilter } from 'lucide-react-native'
 import { colors, pressedStyle, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -49,7 +49,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
   )
   const [hideBots, setHideBots] = useState(false)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
-  const filterRef = useRef<View>(null)
+  const filterRef = useRef<HostInstance>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [resolvedLimit, setResolvedLimit] = useState(COMMENT_PAGE)
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)

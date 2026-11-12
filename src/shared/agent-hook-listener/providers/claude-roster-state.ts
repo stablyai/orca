@@ -1,3 +1,7 @@
+import {
+  AGENT_MODEL_MAX_LENGTH,
+  normalizeOptionalField
+} from '../../agent-status/contracts/agent-status-field-normalization'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type {
   AgentStatusState,
@@ -107,6 +111,10 @@ export function updateClaudeRunningNonAgentTask(
   }
 }
 
+export function readClaudeLeadModel(hookPayload: Record<string, unknown>): string | undefined {
+  return normalizeOptionalField(hookPayload.model, AGENT_MODEL_MAX_LENGTH)
+}
+
 /** Keep same-state lead clocks continuous; explicit restored stash times take precedence. */
 export function setClaudeMainAgentTurnState(
   state: HookListenerState,
@@ -115,10 +123,13 @@ export function setClaudeMainAgentTurnState(
   now = Date.now()
 ): ClaudeLeadTurnState {
   const previous = state.claudeLeadStateByPaneKey.get(paneKey)
-  const { state: nextState, outcome, stateStartedAt, ...rest } = next
+  const { state: nextState, outcome, stateStartedAt, model, ...rest } = next
+  // Lead events that omit the model keep the last reported one.
+  const retainedModel = model || previous?.model
   const record: ClaudeLeadTurnState = {
     ...rest,
-    ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now)
+    ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now),
+    ...(retainedModel ? { model: retainedModel } : {})
   }
   state.claudeLeadStateByPaneKey.set(paneKey, record)
   return record

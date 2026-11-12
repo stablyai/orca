@@ -1,5 +1,5 @@
 import { BoundedMap } from '../../shared/bounded-map'
-import { extractExecError } from '../git/exec-error'
+import { extractExecError } from '../git/command-runner/process-capture/exec-error'
 import { ghExecFileAsync } from './gh-utils'
 import { githubReadExecutionScope } from './github-read-execution-scope'
 import {

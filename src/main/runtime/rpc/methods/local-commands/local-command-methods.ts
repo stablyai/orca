@@ -20,7 +20,7 @@ import {
 import { isCloudWorkspaceOrcad } from '../../../secrets/session-env-names'
 import { isGrantedDevice } from '../../../local-commands/grant-device-ledger'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
-import { isAgentRpcCaller } from '../../rpc-caller-identity'
+import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
 import { resolveSecretRequestCaller } from '../secrets/secret-requests'
 import { verifiedCallerTerminalHandle } from '../orchestration/turn-sender'
 

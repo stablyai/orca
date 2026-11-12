@@ -74,7 +74,9 @@ export const ReplyParams = z.object({
 export const InboxParams = z.object({
   limit: OptionalFiniteNumber,
   // Filter inbox by handle to agree with check --all.
-  terminal: OptionalString
+  terminal: OptionalString,
+  // Only this Run's mail; a paired Orca's inbox is always narrowed to its Run.
+  run: OptionalString
 })
 
 export const TaskCreateParams = z.object({

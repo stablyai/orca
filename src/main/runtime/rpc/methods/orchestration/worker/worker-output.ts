@@ -12,7 +12,11 @@ import {
   encodeWorkerOutputCursor
 } from '../../../../orchestration/workers/transcripts/worker-output-cursor'
 import { redactWorkerTerminalView } from '../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
-import { readWorkerTranscript } from '../../../../orchestration/workers/transcripts/worker-transcript-read'
+import {
+  readWorkerTranscript,
+  type WorkerTranscriptReadSuccess
+} from '../../../../orchestration/workers/transcripts/worker-transcript-read'
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isWslHookRelayConnectionId } from '../../../../../../shared/wsl-hook-relay-contract'
 
 export async function readExactWorkerOutput(args: {
@@ -102,18 +106,40 @@ export async function readExactWorkerOutput(args: {
   ) {
     throw sourceChanged()
   }
+  return workerTranscriptReadResult({
+    dispatchId: args.dispatchId,
+    sourceIdentity,
+    agent: session.agent,
+    transcript,
+    status: {
+      worker: args.workerState,
+      terminal: args.terminalStatus,
+      ...(args.terminalLiveness ? { liveness: args.terminalLiveness } : {})
+    }
+  })
+}
+
+/** A transcript page in the shape worker-read serves, with a cursor pinned to its source. */
+export function workerTranscriptReadResult(args: {
+  dispatchId: string
+  sourceIdentity: string
+  agent: AgentType
+  transcript: WorkerTranscriptReadSuccess
+  status: OrchestrationWorkerReadResult['status']
+}): OrchestrationWorkerReadResult {
+  const { transcript } = args
   const nextCursor = encodeWorkerOutputCursor(
     args.dispatchId,
     'transcript',
-    sourceIdentity,
+    args.sourceIdentity,
     transcript.nextOffset,
     transcript.boundaryCheckpoint
   )
   return {
     dispatchId: args.dispatchId,
     source: 'transcript',
-    sourceIdentity,
-    provider: session.agent,
+    sourceIdentity: args.sourceIdentity,
+    provider: args.agent,
     transcript: {
       messages: transcript.messages,
       nextCursor,
@@ -121,11 +147,7 @@ export async function readExactWorkerOutput(args: {
       returnedMessageCount: transcript.messages.length
     },
     cursor: nextCursor,
-    status: {
-      worker: args.workerState,
-      terminal: args.terminalStatus,
-      ...(args.terminalLiveness ? { liveness: args.terminalLiveness } : {})
-    },
+    status: args.status,
     fallbackReason: null,
     warnings: transcript.warnings,
     sourceExact: true,
@@ -231,7 +253,7 @@ export function orchestrationTimestampToMs(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function sourceChanged(): OrchestrationError {
+export function sourceChanged(): OrchestrationError {
   return new OrchestrationError(
     'source_changed',
     'The worker output source changed. Start a fresh worker-read without the old cursor.'

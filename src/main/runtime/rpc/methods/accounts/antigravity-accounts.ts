@@ -1,5 +1,5 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
-import { rpcCallerOperationKey } from '../../rpc-caller-identity'
+import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AntigravityAccountMutationParams,

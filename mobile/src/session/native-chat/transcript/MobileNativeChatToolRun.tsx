@@ -3,12 +3,12 @@ import {
   Animated,
   Pressable,
   Platform,
-  type ScrollView,
   Text,
   useWindowDimensions,
   View,
   type NativeScrollEvent,
-  type NativeSyntheticEvent
+  type NativeSyntheticEvent,
+  type ScrollViewInstance
 } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { useWorkingPulse } from '../../../components/use-working-motion'
@@ -33,7 +33,7 @@ import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
-import { MobileNativeChatDiffCard } from '../MobileNativeChatDiffCard'
+import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import { MobileNativeChatTaskList } from '../input/MobileNativeChatTaskList'
 import { MobileNativeChatOpenedDetailContext } from '../visual/mobile-native-chat-opened-detail'
 import {
@@ -42,7 +42,7 @@ import {
   useMobileNativeChatDisclosure
 } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
-import { mobileNativeChatMemberId } from '../../mobile-native-chat-reading-place'
+import { mobileNativeChatMemberId } from './mobile-native-chat-reading-place'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import type {
   MobileNativeChatToolRunAsides,
@@ -95,7 +95,7 @@ function ToolRunMembers({
   const [remembered] = useState(() =>
     memoryKey === undefined ? undefined : runScroll?.get(memoryKey)
   )
-  const scroller = useRef<ScrollView>(null)
+  const scroller = useRef<ScrollViewInstance>(null)
   const followsEnd = useRef(remembered?.followsEnd ?? startsAtEnd)
   const pendingRestore = useRef(remembered !== undefined && !remembered.followsEnd)
   // Decide follow in the work update so later detail expansion cannot inherit it.

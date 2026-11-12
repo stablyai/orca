@@ -9,7 +9,7 @@ import {
   BUNDLED_ORCA_SKILL_RENAMES_CAPABILITY
 } from '../../../../../shared/skill-install-capability'
 import { bundledSkillNames } from '../../../../../shared/bundled-skill-names'
-import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
+import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 

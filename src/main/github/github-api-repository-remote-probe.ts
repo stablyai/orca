@@ -1,5 +1,6 @@
 import { withGitHubRepoExecution } from './github-repository-identity'
 import type { GitHubApiRepository } from './github-api-repository'
+import { shouldProbeGitRemote } from '../git/remotes/remote-name-listing'
 import {
   getOwnerRepoForRemote,
   type GitHubRemoteIdentityProbeOptions,
@@ -49,6 +50,13 @@ export async function getGitHubApiRepositoryForRemote(
   probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<GitHubApiRepository | null> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    // Why: skip remotes the listing says are absent; origin stays unconditional so its absence is definitive.
+    if (
+      remoteName !== 'origin' &&
+      !(await shouldProbeGitRemote(repoPath, remoteName, connectionId, localGitOptions))
+    ) {
+      return null
+    }
     // Generic PR resolution prefers upstream; this entry point must honor the selected remote.
     const requireVerifiedSshProbe = probeOptions.requireVerifiedSshProbe === true
     const verifiedIdentityArgs = requireVerifiedSshProbe ? ([probeOptions] as const) : []

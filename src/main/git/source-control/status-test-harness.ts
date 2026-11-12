@@ -3,9 +3,13 @@ import type * as BoundedFileReader from '../../../shared/file-content/node-bound
 
 type MockFn = Mock
 
-export type GitRunnerMocks = {
+export type GitExecFileMocks = {
   gitExecFileAsyncMock: MockFn
   gitExecFileAsyncBufferMock: MockFn
+}
+
+export type GitStreamStdoutMocks = {
+  gitExecFileAsyncMock: MockFn
   gitStreamOptionsMock: MockFn
 }
 
@@ -19,10 +23,17 @@ export type FsPromisesMocks = {
   accessMock?: MockFn
 }
 
-export function createGitRunnerModuleMock(mocks: GitRunnerMocks): Record<string, unknown> {
+export function createGitExecFileModuleMock(mocks: GitExecFileMocks): Record<string, unknown> {
   return {
     gitExecFileAsync: mocks.gitExecFileAsyncMock,
-    gitExecFileAsyncBuffer: mocks.gitExecFileAsyncBufferMock,
+    gitExecFileAsyncBuffer: mocks.gitExecFileAsyncBufferMock
+  }
+}
+
+export function createGitStreamStdoutModuleMock(
+  mocks: GitStreamStdoutMocks
+): Record<string, unknown> {
+  return {
     // Feed queued exec responses into the status stream, preserving existing argv-based mocks.
     gitStreamStdout: async (
       args: string[],
@@ -32,7 +43,12 @@ export function createGitRunnerModuleMock(mocks: GitRunnerMocks): Record<string,
       const { stdout } = await mocks.gitExecFileAsyncMock(args)
       const stoppedEarly = options.onStdout(stdout ?? '') === true
       return { stoppedEarly }
-    },
+    }
+  }
+}
+
+export function createGitProcessEnvModuleMock(): Record<string, unknown> {
+  return {
     gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
       ...env,
       GIT_OPTIONAL_LOCKS: '0'

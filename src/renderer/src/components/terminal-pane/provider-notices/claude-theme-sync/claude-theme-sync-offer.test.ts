@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
-vi.mock('@/lib/desktop-window-chrome', () => ({ isPairedWebClientWindow: () => false }))
+vi.mock('@/app-shell/chrome/desktop-window-chrome', () => ({ isPairedWebClientWindow: () => false }))
 
 import { useAppStore } from '@/store/index'
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'

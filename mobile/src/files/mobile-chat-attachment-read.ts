@@ -8,7 +8,7 @@ import {
   type AttachmentTextRead
 } from '../../../src/shared/attachment-text/attachment-text-source'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 // Match the shared wire identifier without importing the host capability aggregate into this route.
 const AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY = 'native-chat.text-attachment-read.v1'
@@ -23,7 +23,7 @@ const textRead = bindDeferredRpcOperation(
   })
 )
 
-type AttachmentReaderClient = RpcOperationSender &
+type AttachmentReaderClient = UnvalidatedRpcRequestPort &
   Pick<RpcClient, 'getState' | 'getLastConnectedAt' | 'getGeneration'>
 
 export function createMobileChatAttachmentReader(

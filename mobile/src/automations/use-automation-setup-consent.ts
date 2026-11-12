@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { ComponentProps } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import type { OrcaHookTrustDrawer, OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
-import { persistSetupHookTrustApproval } from '../tasks/setup-hook-trust'
+import { persistSetupHookTrustApproval } from '../new-workspace/creation/setup-hook-trust'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { prepareAutomationSetup } from './automation-setup-preparation'
 import type { AutomationDraft } from './automation-draft'

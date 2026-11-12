@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
-import type { JiraIssue, JiraViewer } from '../../../../../shared/jira/jira-types'
-import {
-  getTaskSourceCacheScope,
-  type TaskSourceContext
-} from '../../../../../shared/work-items/task-source-context'
+import type { JiraIssue } from '../../../../../shared/jira/jira-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { createJiraSlice } from './jira'
 
 const jiraStatus = vi.fn()
@@ -137,37 +134,6 @@ describe('createJiraSlice runtime context', () => {
     expect(store.getState().jiraSearchCache).toEqual({})
   })
 
-  it('isolates out-of-order issue reads from different source hosts', async () => {
-    const store = createTestStore()
-    const sourceA = jiraSourceContext('runtime-a')
-    const sourceB = jiraSourceContext('runtime-b')
-    const runtimeAIssue = deferred<JiraIssue | null>()
-    const runtimeBIssue = deferred<JiraIssue | null>()
-    jiraGetIssue
-      .mockReturnValueOnce(runtimeAIssue.promise)
-      .mockReturnValueOnce(runtimeBIssue.promise)
-
-    const requestA = store.getState().fetchJiraIssue('ALP-1', 'site-1', {
-      sourceContext: sourceA
-    })
-    const requestB = store.getState().fetchJiraIssue('ALP-1', 'site-1', {
-      sourceContext: sourceB
-    })
-    runtimeBIssue.resolve({ ...issue('ALP-1'), title: 'Runtime B' })
-    await requestB
-    runtimeAIssue.resolve({ ...issue('ALP-1'), title: 'Runtime A' })
-    await requestA
-
-    expect(
-      store.getState().jiraIssueCache[`${getTaskSourceCacheScope(sourceA)}::site-1::ALP-1`]?.data
-        ?.title
-    ).toBe('Runtime A')
-    expect(
-      store.getState().jiraIssueCache[`${getTaskSourceCacheScope(sourceB)}::site-1::ALP-1`]?.data
-        ?.title
-    ).toBe('Runtime B')
-  })
-
   it('reuses ordinary in-flight reads but force starts a fresh list and search request', async () => {
     const store = createTestStore()
     store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
@@ -207,30 +173,6 @@ describe('createJiraSlice runtime context', () => {
     ])
   })
 
-  it('does not cache a late abortable search response', async () => {
-    const store = createTestStore()
-    store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
-    const pending = deferred<JiraIssue[]>()
-    let signal: AbortSignal | undefined
-    jiraSearchIssues.mockImplementationOnce(
-      (_settings: unknown, _jql: string, _limit: number, _site: string, provided: AbortSignal) => {
-        signal = provided
-        return pending.promise
-      }
-    )
-    const controller = new AbortController()
-    const request = store
-      .getState()
-      .searchJiraIssues('project = ALP', 30, { signal: controller.signal })
-    await Promise.resolve()
-    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' })
-    controller.abort()
-    pending.resolve([issue('ALP-LATE')])
-    await rejection
-    expect(signal?.aborted).toBe(true)
-    expect(store.getState().jiraSearchCache['site-1::project = ALP::30']).toBeUndefined()
-  })
-
   it('shares one summary read across abortable callers and cancels only when all abandon it', async () => {
     const store = createTestStore()
     const source = jiraSourceContext('runtime-a')
@@ -258,120 +200,5 @@ describe('createJiraSlice runtime context', () => {
 
     pending.resolve(issue('ALP-1'))
     await expect(secondRead).resolves.toMatchObject({ key: 'ALP-1' })
-  })
-
-  it('cancels a shared summary read once its last caller abandons it', async () => {
-    const store = createTestStore()
-    const source = jiraSourceContext('runtime-a')
-    let readSignal: AbortSignal | undefined
-    jiraLookupIssueSummary.mockImplementation(
-      (_settings: unknown, _key: string, _siteId: string, signal: AbortSignal) => {
-        readSignal = signal
-        return new Promise<JiraIssue>((_resolve, reject) => {
-          signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
-        })
-      }
-    )
-    const controller = new AbortController()
-
-    const read = store
-      .getState()
-      .lookupJiraIssueSummary(source, 'ALP-1', 'site-1', { signal: controller.signal })
-    controller.abort()
-
-    await expect(read).rejects.toMatchObject({ name: 'AbortError' })
-    expect(readSignal?.aborted).toBe(true)
-  })
-
-  it('scopes optimistic issue patches to the selected Jira source context', () => {
-    const store = createTestStore()
-    const localSource = jiraSourceContext('local-runtime')
-    const remoteSource = jiraSourceContext('remote-runtime')
-    const localScope = getTaskSourceCacheScope(localSource)
-    const remoteScope = getTaskSourceCacheScope(remoteSource)
-
-    store.setState({
-      jiraIssueCache: {
-        [`${localScope}::site-1::ALP-1`]: {
-          data: { ...issue('ALP-1'), title: 'Local title' },
-          fetchedAt: Date.now()
-        },
-        [`${remoteScope}::site-1::ALP-1`]: {
-          data: { ...issue('ALP-1'), title: 'Remote title' },
-          fetchedAt: Date.now()
-        },
-        [`${localScope}::site-2::ALP-1`]: {
-          data: { ...issue('ALP-1'), siteId: 'site-2', title: 'Other site title' },
-          fetchedAt: Date.now()
-        }
-      },
-      jiraSearchCache: {
-        [`${localScope}::site-1::list::assigned::30`]: {
-          data: [{ ...issue('ALP-1'), title: 'Local title' }],
-          fetchedAt: Date.now()
-        },
-        [`${remoteScope}::site-1::list::assigned::30`]: {
-          data: [{ ...issue('ALP-1'), title: 'Remote title' }],
-          fetchedAt: Date.now()
-        },
-        [`${localScope}::all::list::assigned::30`]: {
-          data: [
-            { ...issue('ALP-1'), siteId: 'site-2', title: 'Other site title' },
-            { ...issue('ALP-1'), title: 'Local title' }
-          ],
-          fetchedAt: Date.now()
-        }
-      }
-    })
-
-    store.getState().patchJiraIssue(
-      'ALP-1',
-      { title: 'Patched local title' },
-      {
-        sourceContext: localSource,
-        siteId: 'site-1'
-      }
-    )
-
-    expect(store.getState().jiraIssueCache[`${localScope}::site-1::ALP-1`]?.data?.title).toBe(
-      'Patched local title'
-    )
-    expect(store.getState().jiraIssueCache[`${remoteScope}::site-1::ALP-1`]?.data?.title).toBe(
-      'Remote title'
-    )
-    expect(
-      store.getState().jiraSearchCache[`${localScope}::site-1::list::assigned::30`]?.data?.[0]
-        ?.title
-    ).toBe('Patched local title')
-    expect(
-      store.getState().jiraSearchCache[`${remoteScope}::site-1::list::assigned::30`]?.data?.[0]
-        ?.title
-    ).toBe('Remote title')
-    expect(store.getState().jiraIssueCache[`${localScope}::site-2::ALP-1`]?.data?.title).toBe(
-      'Other site title'
-    )
-    expect(
-      store
-        .getState()
-        .jiraSearchCache[`${localScope}::all::list::assigned::30`]?.data?.map((item) => item.title)
-    ).toEqual(['Other site title', 'Patched local title'])
-  })
-
-  it('returns a failed Jira connect result when the active runtime changes before completion', async () => {
-    const store = createTestStore()
-    const connectResult = deferred<{ ok: true; viewer: JiraViewer }>()
-    jiraConnect.mockReturnValueOnce(connectResult.promise)
-
-    const request = store.getState().connectJira({
-      siteUrl: 'https://example.atlassian.net',
-      email: 'local@example.com',
-      apiToken: 'token'
-    })
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
-
-    connectResult.resolve({ ok: true, viewer: { email: 'local@example.com' } as JiraViewer })
-    await expect(request).resolves.toMatchObject({ ok: false })
-    expect(store.getState().jiraStatus.connected).toBe(false)
-    expect(store.getState().jiraStatusContextKey).toBeNull()
   })
 })

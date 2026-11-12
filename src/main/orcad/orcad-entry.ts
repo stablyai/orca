@@ -27,9 +27,9 @@ import { orcadWsPortOptions } from './orcad-ws-port-policy'
 import { createOrcadStartupTiming } from './orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
-import { installOrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readiness'
+import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
-import { startOrcadEventLoopWatchdog } from './orcad-event-loop-watchdog'
+import { activateBackendServices } from '../backend/service-composition'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { installOrcadWorkProbes } from './orcad-work-verdict'
 import { startOrcadWorkVerdictBeacon } from './orcad-work-verdict-beacon'
@@ -47,7 +47,12 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   process.env.ORCA_USER_DATA_PATH = userDataPath
   const { readiness, instance, stop } = await startOrcadWithHost(
     userDataPath,
-    (registerCleanup) => startOrcadRuntime(options, registerCleanup),
+    (registerCleanup) =>
+      activateBackendServices({
+        supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1',
+        registerCleanup,
+        activate: (cleanup) => activateOrcadRuntime(options, cleanup)
+      }),
     async () => {
       try {
         runOrcadQuitHandlers()
@@ -63,16 +68,11 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
 }
 
-async function startOrcadRuntime(
+async function activateOrcadRuntime(
   options: OrcadOptions,
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
 ): Promise<Pick<OrcadHandle, 'readiness'>> {
   const { time: timed, report: reportStartupTiming } = createOrcadStartupTiming()
-  // Read before startOrcadDaemon consumes the supervised flag; only a supervised server exits on a long stall.
-  const eventLoopWatchdog = startOrcadEventLoopWatchdog({
-    supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1'
-  })
-  registerCleanup(() => eventLoopWatchdog?.stop())
   // Overlap login-shell probing with imports and store startup.
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
   const { startOrcadDaemon, stopOrcadDaemon, daemonLaunchHeadStart } =
@@ -232,6 +232,8 @@ async function startOrcadRuntime(
   paneGridsForShutdown = runtime
 
   accountLaunch?.attachToRuntime(runtime)
+  const { wireGitHubIssueLinkTitleFill } = await import('../github/github-issue-link-title-wiring')
+  registerCleanup(wireGitHubIssueLinkTitleFill(profileStore, runtime))
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
 
@@ -290,6 +292,7 @@ async function startOrcadRuntime(
   // Recovery establishes terminal/dispatch identities before fencing observations.
   observedStatusCapture.attach(runtime)
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
+  agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
   // First RPC clients must see a fully published graph.
   const { publishHeadlessRuntimeGraph } =
     await import('../runtime/session-graph/headless-runtime-graph')

@@ -115,6 +115,7 @@ export function buildExecutionHostRegistry(args: {
   hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
   /** Defaults to this process's platform, which only the host itself may use. */
   localHostLabel?: string
+  localHostLabelIsDefault?: boolean
   /** VM runtime records by the server they host; their lifecycle outranks transport health. */
   ephemeralVmHosts?: readonly EphemeralVmHostLifecycle[]
 }): ExecutionHostRegistryEntry[] {
@@ -123,6 +124,7 @@ export function buildExecutionHostRegistry(args: {
     id: LOCAL_EXECUTION_HOST_ID,
     kind: 'local',
     label: args.localHostLabel ?? getLocalExecutionHostLabel(),
+    isDefaultLocalLabel: args.localHostLabelIsDefault ?? args.localHostLabel == null,
     detail: 'This computer',
     health: 'local'
   })
@@ -229,6 +231,8 @@ export function buildExecutionHostRegistry(args: {
     const label =
       overrides.get(host.id) ??
       host.aliasHostIds?.map((aliasHostId) => overrides.get(aliasHostId)).find(Boolean)
-    return label ? { ...host, label } : host
+    return label
+      ? { ...host, label, ...(host.kind === 'local' ? { isDefaultLocalLabel: false } : {}) }
+      : host
   })
 }

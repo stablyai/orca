@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
 import { statusLabel } from './plan-billing-copy'
 

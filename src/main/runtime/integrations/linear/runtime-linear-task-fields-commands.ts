@@ -1,11 +1,11 @@
 import {
   getTeamMembersOrThrow as getLinearTeamMembersOrThrow,
   getTeamStatesOrThrow as getLinearTeamStatesOrThrow
-} from '../../../linear/teams'
+} from '../../../linear/teams/linear-team-queries'
 import { isLinearUuid } from '../../../../shared/linear/uuid'
-import { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/linear-issue-lookups'
-import { linearError } from '../../../linear/issue-context/errors'
-import { readLinearIssueContext } from '../../../linear/issue-context/read-context'
+import { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/issues/linear-issue-lookups'
+import { linearError } from '../../../linear/issues/context/linear-access-errors'
+import { readLinearIssueContext } from '../../../linear/issues/context/read-issue-context'
 import type {
   LinearIssueTaskUpdateRequest,
   LinearSaveIssueRequest,

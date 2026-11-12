@@ -182,7 +182,8 @@ export function createRepoRemovalActions(
           repoMatchesHostIdentity(repo, projectId, ownerHostId)
         )?.path
         get().evictGitHubRepoCaches(projectId, repoPath, ownerHostId)
-        const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
+        const { clearRepoSlugCacheEntry } =
+          await import('../../lib/workspace/catalog/repo-slug-index')
         clearRepoSlugCacheEntry(projectId)
 
         const worktreeIds = [

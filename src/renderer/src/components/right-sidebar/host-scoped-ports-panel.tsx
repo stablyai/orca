@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { cn } from '@/lib/class-names'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import {
   killWorkspacePortOnExecutionHost,
   scanWorkspacePortsOnExecutionHost,

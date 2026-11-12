@@ -23,6 +23,7 @@ import {
   runCheckDetailsCall
 } from './check-details-admission-lifetime'
 import { snapshotCheckJobLogExecution } from './check-job-log-execution'
+import { isCheckRunsPermissionDenied } from './rest-pr-check-pages'
 export async function getPRCheckDetails(
   repoPath: string,
   args: {
@@ -80,11 +81,20 @@ export async function getPRCheckDetails(
     let checkRun: Record<string, unknown> | null = null
     let output: Record<string, unknown> | null = null
     let annotations: PRCheckRunDetails['annotations'] = []
+    let checkRunReadRefused = false
     if (args.checkRunId) {
-      const { stdout } = await fetchMetadata([
-        'api',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`
-      ])
+      const checkRunPath = `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${args.checkRunId}`
+      const { stdout } = await fetchMetadata(['api', checkRunPath]).catch((err: unknown) => {
+        if (!isCheckRunsPermissionDenied(err)) {
+          throw err
+        }
+        // Why: fine-grained tokens can't read check runs, but a job's id is its check run's id.
+        checkRunReadRefused = true
+        return fetchMetadata([
+          'api',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/jobs/${args.checkRunId}`
+        ])
+      })
       const parsed: unknown = JSON.parse(stdout)
       checkRun =
         parsed && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -94,7 +104,10 @@ export async function getPRCheckDetails(
         checkRun?.output && typeof checkRun.output === 'object'
           ? Object.fromEntries(Object.entries(checkRun.output))
           : null
-      if (checkRun?.status !== 'completed' || output?.annotations_count !== 0) {
+      if (
+        !checkRunReadRefused &&
+        (checkRun?.status !== 'completed' || output?.annotations_count !== 0)
+      ) {
         try {
           const annotationsResult = await fetchMetadata([
             'api',

@@ -14,12 +14,12 @@ vi.mock('../../command-runner/git-exec-file-sync', async (importOriginal) => ({
   gitExecFileSync: vi.fn()
 }))
 
-vi.mock('../../command-runner/wsl-path-translation', async (importOriginal) => ({
+vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   translateWslOutputPaths: (output: string) => output
 }))
 
-import { clearGitCapabilityStateForTests } from '../../command-runner/git-capability-state'
+import { clearGitCapabilityStateForTests } from '../../command-runner/host-routing/git-capability-state'
 import { listWorktrees } from './worktree-scan-cache'
 
 const WORKTREE_LIST_OUTPUT = `worktree /repo

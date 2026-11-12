@@ -1,4 +1,4 @@
-import { withoutGitGraph } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
+import { withoutGitGraph } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

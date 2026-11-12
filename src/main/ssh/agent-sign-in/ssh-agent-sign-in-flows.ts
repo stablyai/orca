@@ -12,7 +12,7 @@ import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
 import {
   DEVICE_AUTH_TIMEOUT_MS,
   parseCodexDeviceAuthPrompt
-} from '../../codex-accounts/codex-device-auth-prompt'
+} from '../../codex-accounts/login/codex-device-auth-prompt'
 
 const CLAUDE_LOGIN_TIMEOUT_MS = 600_000
 // Output is read line by line: a line is capped, the window holds the last few lines (Codex prints

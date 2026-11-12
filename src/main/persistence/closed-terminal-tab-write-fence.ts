@@ -1,4 +1,4 @@
-import { hasClosedTerminalTabRecord } from '../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import {
   closeTerminalTabInWorkspaceSession,
   workspaceSessionListsTerminalTab

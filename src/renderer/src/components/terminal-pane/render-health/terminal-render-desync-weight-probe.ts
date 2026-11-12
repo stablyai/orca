@@ -1,6 +1,6 @@
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
-import { hasDeferredPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
+import { hasDeferredPaneMetricOptions } from '@/lib/pane-manager/terminal-fit/pane-metric-options-deferral'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { BufferLike } from './terminal-render-desync-frame'
 

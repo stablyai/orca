@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file-operations'
 import {
   ensureOwnedTempStagingRoot,

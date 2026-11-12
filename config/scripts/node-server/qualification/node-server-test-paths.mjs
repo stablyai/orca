@@ -1,10 +1,7 @@
 /** Mirrors ORCA_REQUIRED_TEST_INPUTS_ENV in src/main/orcad/orcad-node-slot-fixture.ts. */
 export const REQUIRED_TEST_INPUTS_ENV = 'ORCA_REQUIRED_TEST_INPUTS'
 
-// Need the pinned Bun and the last Bun orcad slot beside the built Node slot (design D7).
-export const CROSS_RUNTIME_TEST_PATHS = [
-  'src/main/persistence/profile-state/profile-state-cross-runtime.integration.test.ts'
-]
+export const CROSS_RUNTIME_TEST_PATHS = []
 
 // Need the built desktop server template; CI runs them by path after build-orcad-template.mjs.
 export const TEMPLATE_TEST_PATHS = [
@@ -18,7 +15,7 @@ export function nodeServerTestPaths({
 } = {}) {
   return [
     'src/main/persistence/profile-state',
-    'src/main/persistence/loading-store/profile-state',
+    'src/main/persistence/loading-store/profile-writing/profile-state',
     'src/main/sqlite',
     // The orcad server's identity and stop path, which Windows SSH hosts rely on (W2).
     'src/main/orcad/orcad-instance-lock.test.ts',

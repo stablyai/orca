@@ -15,7 +15,7 @@ import {
   mergeLayoutTitlesByLeafId,
   retainLayoutScrollback
 } from './terminal-pane-layout-snapshot-merge'
-import { retireLeavesFromTerminalLayout } from '../../../../../../shared/workspace-layout/terminal-layout-leaf-retirement'
+import { retireLeavesFromTerminalLayout } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-layout-leaf-retirement'
 
 export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
   const {

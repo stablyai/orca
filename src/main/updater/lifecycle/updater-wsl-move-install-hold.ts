@@ -2,7 +2,7 @@ import { translateMain } from '../../i18n/main-i18n'
 import {
   isAnyWslMoveRunning,
   isWslMoveUndoRunning
-} from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 
 /**
  * Why an install must wait: quitting would interrupt a move (it recovers, but the projects stay

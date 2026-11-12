@@ -1,0 +1,6 @@
+id: claude-entrypoint-key-owner
+valid:
+  - "const binary = 'orca'"
+invalid:
+  - "env[CLAUDE_ENTRYPOINT_ENV] = 'orca'"
+  - "import { CLAUDE_ENTRYPOINT_ENV as key } from './claude-chat-entrypoint'"

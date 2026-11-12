@@ -3,7 +3,7 @@ import type { GitHubAssignableUser } from '../../../../../shared/github/pull-req
 import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState, useMemo, useRef, useCallback } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
 import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
@@ -17,7 +17,7 @@ import {
   getGitHubPRReviewerRows,
   getGitHubPRReviewLabel
 } from '../../../../../shared/github/pr-reviewer-display'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverTrigger } from '@/components/ui/popover'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'

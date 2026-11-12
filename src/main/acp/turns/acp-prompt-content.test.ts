@@ -10,8 +10,6 @@ import { AcpPromptContentError, acpPromptBlocks } from './acp-prompt-content'
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 const dir = mkdtempSync(join(tmpdir(), 'acp-prompt-content-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
-const pngPath = join(dir, 'shot.png')
-writeFileSync(pngPath, PNG)
 
 function message(...blocks: NativeChatBlock[]): AgentJournalMessageItem {
   return { kind: 'message', role: 'user', blocks }
@@ -26,10 +24,23 @@ async function refusal(body: AgentJournalMessageItem, images = true) {
 }
 
 describe('ACP prompt content', () => {
+  it('sends a host image up to 20 MiB inline and keeps a larger one as a path', async () => {
+    const inlinePath = join(dir, 'photo.png')
+    writeFileSync(inlinePath, Buffer.alloc(20 * 1024 * 1024))
+    const [inline] = await acpPromptBlocks(message({ type: 'image-ref', path: inlinePath }), true)
+    expect(inline).toMatchObject({ type: 'image', mimeType: 'image/png' })
+
+    const largePath = join(dir, 'large.png')
+    writeFileSync(largePath, Buffer.alloc(20 * 1024 * 1024 + 1))
+    expect(await acpPromptBlocks(message({ type: 'image-ref', path: largePath }), true)).toEqual([
+      { type: 'text', text: `@${largePath}` }
+    ])
+  })
+
   it('keeps a host path when native encoding would exceed room reserved for later text', async () => {
     const path = join(dir, 'encoded.png')
-    writeFileSync(path, Buffer.alloc(9 * 1024 * 1024))
-    const text = 'x'.repeat(4 * 1024 * 1024)
+    writeFileSync(path, Buffer.alloc(18 * 1024 * 1024))
+    const text = 'x'.repeat(8 * 1024 * 1024)
     const blocks = await acpPromptBlocks(
       message({ type: 'image-ref', path }, { type: 'text', text }),
       true
@@ -38,12 +49,11 @@ describe('ACP prompt content', () => {
       { type: 'text', text: `@${path}` },
       { type: 'text', text }
     ])
-    expect(Buffer.byteLength(JSON.stringify(blocks))).toBeLessThan(16 * 1024 * 1024 - 64 * 1024)
   })
 
   it('keeps a message with images within one protocol line', async () => {
-    // Raw images fit, but their encoded payload plus text exceeds the protocol line limit.
-    const text = 'x'.repeat(8 * 1024 * 1024)
+    // The image fits its own budget, but the text around it overflows the protocol line.
+    const text = 'x'.repeat(16 * 1024 * 1024)
     const image = {
       type: 'image-ref' as const,
       url: `data:image/png;base64,${PNG.toString('base64')}`

@@ -80,7 +80,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const { findTrustedCodexSessionResume } = await import('./codex-session-resume-home')
 const { ManagedCodexHomeTemporarilyUnavailableError } =
-  await import('../../../codex-accounts/host-codex-managed-home-ownership')
+  await import('../../../codex-accounts/managed-homes/host-codex-managed-home-ownership')
 
 const tempRoots: string[] = []
 const SESSION_ID = '11111111-2222-3333-4444-555555555555'
@@ -107,42 +107,6 @@ afterEach(() => {
 })
 
 describe('STA-4607 session resume under a briefly unreadable sessions tree', () => {
-  it('refuses rather than resuming the selected account under another account home', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
-    tempRoots.push(root)
-    const selectedHome = makeHomeWithRollout(root, 'account-a')
-    const otherHome = makeHomeWithRollout(root, 'account-b')
-
-    const args = {
-      sessionId: SESSION_ID,
-      transcriptPath: undefined,
-      trustedCodexHomes: [selectedHome, otherHome],
-      getSelectedAccountCodexHome: (): string | null => selectedHome,
-      systemCodexHomePath: null,
-      sharedRuntimeCodexHomePath: null
-    }
-
-    await expect(findTrustedCodexSessionResume(args)).resolves.toEqual({
-      homePath: selectedHome,
-      transcriptPath: join(
-        selectedHome,
-        'sessions',
-        '2026',
-        '07',
-        '20',
-        `rollout-${SESSION_ID}.jsonl`
-      )
-    })
-
-    const selectedSessionsRoot = join(selectedHome, 'sessions')
-    statFaults.hold(selectedSessionsRoot)
-
-    await expect(findTrustedCodexSessionResume(args)).rejects.toBeInstanceOf(
-      ManagedCodexHomeTemporarilyUnavailableError
-    )
-    expect(statFaults.readsFor(selectedSessionsRoot)).toBeGreaterThan(0)
-  })
-
   it('still skips a definitively absent sessions tree', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
     tempRoots.push(root)

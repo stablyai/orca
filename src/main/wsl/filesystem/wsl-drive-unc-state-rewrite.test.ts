@@ -9,7 +9,7 @@ import {
   WSL_MOVER_DISTRO,
   type WslMoverPaths
 } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-profile-rows'
-import type { WslMoveProjectionInput } from '../../persistence/moving-wsl-projects/wsl-move-state-projection'
+import type { WslMoveProjectionInput } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-state-projection'
 import { WslDriveUncKeyCollisionError } from './wsl-drive-unc-identity-rewrite'
 import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'
 

@@ -6,7 +6,7 @@
 // wake. The mark lives outside the layout (asleepBrowserWorktreeIds), so sleep writes no layout.
 import { useAppStore } from '@/store'
 import { destroyWorktreeBrowserGuests } from '@/store/slices/browser/cleanup/browser-webview-cleanup'
-import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   isWorktreeGoingToSleep,
   isWorktreeSleepViewHeld,

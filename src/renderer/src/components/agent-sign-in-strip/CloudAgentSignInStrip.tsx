@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { BANNER_BODY_TEXT, BANNER_TONE, type BannerSeverity } from '@/components/ui/banner-tone'
 import { useReservePaneTopSpace } from '../terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner'
 import type {

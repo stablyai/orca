@@ -4,6 +4,7 @@ import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } fro
 import type { RuntimeWorktreeListResult } from '../../../shared/runtime-worktree-contracts'
 import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { stopMissingWorktreeTerminals } from './removal/missing-worktree-terminal-reconciliation'
 import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -92,13 +93,15 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
     worktree: Worktree,
     worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
     sourceDefaultsSupported = true,
-    providedSettings?: ReturnType<RuntimeStore['getSettings']>
+    providedSettings?: ReturnType<RuntimeStore['getSettings']>,
+    repoLookup?: RepoRowExecutionHostLookup<Repo>
   ): boolean {
     return this.managedWorktreeQueries.isVisible(
       worktree,
       worktreeVisibilitySourceMatcher,
       sourceDefaultsSupported,
-      providedSettings
+      providedSettings,
+      repoLookup
     )
   }
 

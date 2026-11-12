@@ -17,7 +17,7 @@ import {
   type CloudSshStatus
 } from '../../shared/cloud-ssh'
 import type { OpenInApplication } from '../../shared/ui-chrome-types'
-import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
+import { prependOrcaCliDirToChildPath } from '../cli/launchers/orca-cli-child-path'
 import {
   launchExternalEditor,
   resolveExternalEditorExecutable

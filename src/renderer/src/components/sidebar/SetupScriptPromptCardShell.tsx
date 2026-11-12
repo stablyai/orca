@@ -11,7 +11,7 @@ import {
 } from './SetupScriptPromptCardViews'
 import { SetupScriptReviewDialog } from './SetupScriptReviewDialog'
 import { useTranslate } from '@/i18n/use-translate'
-import type { DetectedSetupPreviewContent } from '@/lib/setup-script-prompt'
+import type { DetectedSetupPreviewContent } from '@/runtime/repo-hooks/setup-script-prompt'
 
 type SetupScriptPromptCardShellProps = {
   repoBadgeColor: string

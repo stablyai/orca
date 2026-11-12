@@ -14,14 +14,14 @@ import { translate } from '@/i18n/i18n'
 import {
   getWorkspaceFileBrowserOpenTarget,
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
-} from '@/lib/workspace-file-browser-open-target'
+} from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { routeWorkspaceDocAddressSubmission } from './workspace-doc-address-submission'
 import {
   getWorkspaceFileDragRejectionMessage,
   readWorkspaceFileDragPaths,
   readWorkspaceFileDragSource,
   WORKSPACE_FILE_PATH_MIME
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
 import { resolveBrowserAddressBarSubmission } from './browser-address-bar-navigation'
 import { navigateBrowserPageToUrl } from './navigate-browser-page-url'

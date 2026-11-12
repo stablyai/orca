@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { CLOUD_DOT_CLASS } from '@/components/orca-cloud/CloudStateDot'
 import {
   runUnarchiveCloudWorkspace,

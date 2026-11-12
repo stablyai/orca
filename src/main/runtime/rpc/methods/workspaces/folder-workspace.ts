@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { resolveRpcWorkspaceCreatorProvenance } from '../../workspace-creator-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   FolderWorkspaceCreate,
   FolderWorkspaceDelete,

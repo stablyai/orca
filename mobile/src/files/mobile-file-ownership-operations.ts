@@ -8,7 +8,7 @@ import {
 // All ownership reads must succeed before a write: refusal or malformed replies abort with a named error rather than risking the wrong host.
 
 // Reuse the Tasks runtime-status operation; this gate needs the same fields.
-export { taskRuntimeStatusRead as fileOwnershipRuntimeStatusRead } from '../tasks/mobile-task-runtime-operations'
+export { taskRuntimeStatusRead as fileOwnershipRuntimeStatusRead } from '../tasks/screen-state/mobile-task-runtime-operations'
 
 export const fileOwnershipWorktreeRead = bindDeferredRpcOperation(
   defineRpcOperation({

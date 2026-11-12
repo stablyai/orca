@@ -4,7 +4,7 @@ import {
   cancelPendingPaneSizeRefreshFrames,
   restoreExpandedLayoutFrom
 } from '../expand/expanded-pane-layout'
-import { safeFit } from '@/lib/pane-manager/pane-fit'
+import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import type { TerminalPaneCloseController } from '../close/use-terminal-pane-close-actions'
 

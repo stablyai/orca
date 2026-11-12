@@ -5,7 +5,7 @@ import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution
 import {
   readCanonicalPtyOwners,
   resolveCanonicalPtyClaim
-} from '../../../../shared/workspace-layout/legacy-terminal-row-claims'
+} from '../../../../shared/workspace-layout/terminal-topology/legacy-terminal-row-claims'
 import {
   cloneTerminalLayoutSnapshot,
   collectPersistedTerminalLeafIds,

@@ -8,8 +8,11 @@ import {
   useHostStructuredAgentsVersion
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
-import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import {
+  readChatProgram,
+  resolveChatProgramContext
+} from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { Card, CardContent } from '../../ui/card'

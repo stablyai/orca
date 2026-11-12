@@ -1,0 +1,20 @@
+id: claude-chat-entrypoint-owner
+snapshots:
+  "const env = { CLAUDE_CODE_ENTRYPOINT: 'orca' }":
+    labels:
+      - source: CLAUDE_CODE_ENTRYPOINT
+        style: primary
+        start: 14
+        end: 36
+  const identity = 'sdk-cli':
+    labels:
+      - source: sdk-cli
+        style: primary
+        start: 18
+        end: 25
+  "env['claude_code_entrypoint'] = 'other'":
+    labels:
+      - source: claude_code_entrypoint
+        style: primary
+        start: 5
+        end: 27

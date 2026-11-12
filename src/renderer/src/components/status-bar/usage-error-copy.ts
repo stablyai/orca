@@ -1,6 +1,7 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { formatRateLimitUserFacingError } from '@/components/status-bar/usage-errors/rate-limit-user-facing-error'
 import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up-copy'
 
@@ -183,7 +184,7 @@ export function getProviderUsageErrorMessage(
           'Claude sign-in is being refreshed. Agent sessions may still be signed in.'
         )
       case 'missing-scope':
-        return p.error
+        return formatRateLimitUserFacingError(p.error) || p.error
       case 'network':
         return t(
           'auto.components.status.bar.tooltip.c06c1d215d',
@@ -215,7 +216,7 @@ export function getProviderUsageErrorMessage(
     }
   }
   if (isUsageRateLimitError(p)) {
-    return p.error
+    return formatRateLimitUserFacingError(p.error) || p.error
   }
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
     return p.usageMetadata.credentialSource === 'api-key'
@@ -240,5 +241,5 @@ export function getProviderUsageErrorMessage(
       { value0: name }
     )
   }
-  return p.error
+  return formatRateLimitUserFacingError(p.error) || p.error
 }

@@ -1,28 +1,23 @@
-import {
-  projectedStructuredChatTabName,
-  type StructuredChatTabNames
-} from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import { structuredChatTabById } from '../../structured-chat-tab-index'
-import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AppState } from '@/store/types'
+import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import { structuredChatTabById } from '../tab-identity/structured-chat-tab-index'
 import {
   isTerminalLeafId,
   makePaneKey
 } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
-import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import {
-  resolveRuntimePaneTitleLeafResolution,
-  type RuntimePaneTitleLeafResolution
-} from '../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
+import type { RuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
 import {
   deriveRunningAgentSendTargets,
   deriveStatuslessStructuredAgentSendTargets,
-  runningAgentMessageTarget,
-  type RunningAgentSendTarget,
-  type RunningAgentTargetState
+  runningAgentMessageTarget
 } from './running-agent-targets'
+import type { RunningAgentSendTarget, RunningAgentTargetState } from './running-agent-targets'
+import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { AppState } from '@/store/types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentMessageTarget } from './agent-message-target'
 
 export type NotesSendAgentTargetState = RunningAgentTargetState &

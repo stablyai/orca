@@ -2,9 +2,9 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ClaudeHookEventVersions from '../claude-hook-event-versions'
+import type * as ClaudeHookEventVersions from '../cli-capabilities/claude-hook-event-versions'
 
-vi.mock('../claude-hook-event-versions', async (importOriginal) => ({
+vi.mock('../cli-capabilities/claude-hook-event-versions', async (importOriginal) => ({
   ...(await importOriginal<typeof ClaudeHookEventVersions>()),
   probeRecentClaudeCliVersion: () => Promise.resolve(claudeVersion)
 }))

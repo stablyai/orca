@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { getTerminalInputByteLength } from '../../../src/shared/terminal/input/terminal-input'
 import {
   UNFRAMED_AGENT_INPUT_MAX_BYTES,
@@ -29,7 +29,7 @@ type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly framesLivePaste?: (handle: string) => boolean
   readonly onFieldSessionEnded?: (handle: string) => void
   readonly onSendFailure?: (failure: TerminalLiveInputFailure) => void
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TextInputInstance | null>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
 }

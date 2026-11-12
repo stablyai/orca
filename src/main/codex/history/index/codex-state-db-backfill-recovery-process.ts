@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { buildWslCodexAppServerArgs } from '../../../codex-accounts/wsl-codex-command'
+import { buildWslCodexAppServerArgs } from '../../../codex-cli/wsl-codex-command'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { terminateCodexProbeChild } from '../../../codex-cli/codex-probe-termination'
 import {

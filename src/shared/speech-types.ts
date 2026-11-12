@@ -130,6 +130,8 @@ export type VoiceSettings = {
   microphoneDeviceLabel: string | null
   /** Minutes an idle on-device model stays loaded; 0 unloads after each dictation, null never unloads. */
   unloadModelAfterMinutes: number | null
+  /** Seconds of silence that end a toggled dictation; null never does. Absent = 60. */
+  stopAfterSilenceSeconds?: number | null
   /** 'off' keeps on-device recognition on the CPU, for machines whose GPU driver hard-crashes. Absent = 'auto'. */
   speechGpu?: SpeechGpuMode
   /** Personal dictionary, used in every repo; each repo adds its own Repo.dictationTerms. */

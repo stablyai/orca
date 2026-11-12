@@ -7,7 +7,7 @@ import type {
 import { UpdateErrorCardContent } from './UpdateErrorCardContent'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { linuxPackageCommandUnavailableText } from '@/lib/updater-message-copy'
+import { linuxPackageCommandUnavailableText } from '@/app-shell/updates/updater-message-copy'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
 function copiedNote(packageFileName: string): string {

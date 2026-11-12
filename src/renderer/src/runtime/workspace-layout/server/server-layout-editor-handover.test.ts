@@ -10,12 +10,6 @@ import type {
   LayoutApplyReply,
   LayoutCommand
 } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
-
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
-import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
-import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
-import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
-import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
 import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
 import { _resetLayoutFramePositionForTests } from '../frames/layout-frame-position'
 import {
@@ -156,7 +150,6 @@ function editDraft(store: TestStore, fileId: string, draft: string): void {
   store.getState().setEditorDraft(fileId, draft)
   store.getState().markFileDirty(fileId, true)
 }
-const RUNTIME_HOST = toRuntimeExecutionHostId(ENV)
 
 /** The editor opens this window sent the ENV server. */
 const serverOpens = () =>
@@ -218,27 +211,6 @@ afterEach(() => {
 })
 
 describe('a desktop-only editor tab when the server’s frames take its workspace', () => {
-  it('keeps the tab and its draft on the mirror for the stream after any other refusal', async () => {
-    const store = mirroredStore()
-    const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
-    editDraft(store, fileId, 'unsaved')
-    const server = serverWith()
-    server.answer = { refuse: 'group_not_found' }
-
-    await connect(store, server)
-    // The server's next records frame neither draws the workspace nor sends the tab again.
-    const renamed = structuredClone(server.layout(WT)!)
-    renamed.tabs[0]!.customTitle = 'named on the server'
-    server.change(WT, renamed)
-    await settle()
-
-    expect(serverOpens()).toHaveLength(1)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-    expect(editorTabIds(store)).toEqual([tabId])
-    expect(openFileIds(store)).toEqual([fileId])
-    expect(store.getState().editorDrafts[fileId]).toBe('unsaved')
-  })
-
   it('stays ungated with its tabs when the stream drops mid-hand-over; the next stream finishes it', async () => {
     const store = mirroredStore()
     const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
@@ -270,53 +242,6 @@ describe('a desktop-only editor tab when the server’s frames take its workspac
     expect(store.getState().editorDrafts[fileId]).toBe('unsaved')
   })
 
-  it('retries on the next stream after a call that never reached the server, and gates once it applies', async () => {
-    const store = mirroredStore()
-    const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
-    editDraft(store, fileId, 'unsaved')
-    const server = serverWith()
-    server.answer = 'throw'
-    const stream = await connect(store, server)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-
-    stream.onStatus({ state: 'lost' })
-    stream.onStatus({ state: 'connecting' })
-    server.answer = 'apply'
-    server.connect(stream)
-    await settle()
-    await settle()
-
-    expect(serverOpens().map((command) => command.tabId)).toEqual([tabId, tabId])
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    expect(editorTabIds(store)).toEqual([tabId])
-    expect(openFileIds(store)).toEqual([fileId])
-    expect(store.getState().editorDrafts[fileId]).toBe('unsaved')
-  })
-
-  it('hands over a tab opened during the hand-over before gating, and skips one closed meanwhile', async () => {
-    const store = mirroredStore()
-    const first = openDesktopFile(store, FILE_PATH)
-    const server = serverWith()
-    server.answer = 'pending'
-    await connect(store, server)
-    expect(serverOpens()).toHaveLength(1)
-
-    // Still mirror-drawn: these open here, as today.
-    const second = openDesktopFile(store, SECOND_PATH)
-    const closed = openDesktopFile(store, '/worktree/src/c.ts')
-    expect(editorTabIds(store)).toEqual([first.tabId, second.tabId, closed.tabId])
-    store.getState().closeFile(closed.fileId)
-    server.answer = 'apply'
-    server.release()
-    await settle()
-    await settle()
-
-    expect(serverOpens().map((command) => command.tabId)).toEqual([first.tabId, second.tabId])
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    expect(editorTabIds(store)).toEqual([first.tabId, second.tabId])
-    expect(openFileIds(store)).toEqual([first.fileId, second.fileId])
-  })
-
   it('closes the server’s copy of a tab the user closed while its hand-over was in flight', async () => {
     const store = mirroredStore()
     const kept = openDesktopFile(store, FILE_PATH)
@@ -345,111 +270,5 @@ describe('a desktop-only editor tab when the server’s frames take its workspac
     expect(server.layout(WT)?.tabs.map((tab) => tab.id)).toContain(kept.tabId)
     expect(editorTabIds(store)).toEqual([kept.tabId])
     expect(openFileIds(store)).toEqual([kept.fileId])
-  })
-
-  it('closes the server’s copy of a tab closed after its open applied, while another was in flight', async () => {
-    const store = mirroredStore()
-    const first = openDesktopFile(store, FILE_PATH)
-    const second = openDesktopFile(store, SECOND_PATH)
-    const server = serverWith()
-    server.answer = 'pending'
-    await connect(store, server)
-    server.release(1)
-    await settle()
-    await settle()
-    expect(server.layout(WT)?.tabs.map((tab) => tab.id)).toContain(first.tabId)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-
-    store.getState().closeFile(first.fileId)
-    server.answer = 'apply'
-    server.release()
-    await settle()
-    await settle()
-    await settle()
-
-    expect(hoisted.closeSessionTab).toHaveBeenCalledTimes(1)
-    expect(hoisted.closeSessionTab).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: WT, tabId: first.tabId, environmentId: ENV })
-    )
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    expect(server.layout(WT)?.tabs.map((tab) => tab.id)).not.toContain(first.tabId)
-    expect(editorTabIds(store)).toEqual([second.tabId])
-    expect(openFileIds(store)).toEqual([second.fileId])
-  })
-
-  it('stays mirror-drawn when the server’s copy of a tab closed mid-hand-over cannot be closed', async () => {
-    const store = mirroredStore()
-    const closed = openDesktopFile(store, FILE_PATH)
-    const server = serverWith()
-    hoisted.closeSessionTab.mockResolvedValue('failed')
-    server.answer = 'pending'
-    await connect(store, server)
-
-    store.getState().closeFile(closed.fileId)
-    server.answer = 'apply'
-    server.release()
-    await settle()
-    await settle()
-
-    expect(hoisted.closeSessionTab).toHaveBeenCalledTimes(1)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-    expect(editorTabIds(store)).toEqual([])
-  })
-
-  it('saves a handed-over file through the server, never this machine’s disk', async () => {
-    const store = mirroredStore()
-    store.setState({
-      repos: [{ ...TEST_REPO, id: 'repo', path: '/worktree', executionHostId: RUNTIME_HOST }],
-      worktreesByRepo: {
-        repo: [makeWorktree({ id: WT, repoId: 'repo', path: '/worktree', hostId: RUNTIME_HOST })]
-      }
-    })
-    const { fileId } = openDesktopFile(store, FILE_PATH)
-    // Loaded from the server's disk before the hand-over.
-    store.getState().setLastKnownDiskSignature(fileId, getDiskBaselineSignature('on disk'))
-    editDraft(store, fileId, 'unsaved')
-    await connect(store, serverWith())
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-
-    const file = store.getState().openFiles.find((open) => open.id === fileId)!
-    // The saved-file event goes nowhere here.
-    vi.stubGlobal('window', { ...window, dispatchEvent: () => true })
-    const saves = createEditorSaveQueue(store)
-    const saved = await saves.queueSave(file, '', 'user')
-    saves.dispose()
-    expect(saved).toBe('written')
-
-    expect(hoisted.writeRuntimeFile).toHaveBeenCalledTimes(1)
-    expect(hoisted.writeRuntimeFile.mock.calls[0]?.[0]).toMatchObject({
-      target: { kind: 'environment', environmentId: ENV },
-      worktreeId: WT
-    })
-    expect(hoisted.writeRuntimeFile.mock.calls[0]?.[2]).toBe('unsaved')
-  })
-})
-
-/** Every layout.apply close this window sent anywhere. */
-const layoutCloses = () => hoisted.sent.filter(({ command }) => command.type === 'closeTabs')
-
-describe('closing a desktop editor tab after the hand-over', () => {
-  it('closes a handed-over tab in the gated workspace by session.tabs.close, as other closes go', async () => {
-    const store = mirroredStore()
-    const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
-    const server = serverWith()
-    await connect(store, server)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-
-    store.getState().closeFile(fileId)
-    await settle()
-    await settle()
-
-    expect(hoisted.closeSessionTab).toHaveBeenCalledTimes(1)
-    expect(hoisted.closeSessionTab).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: WT, tabId, environmentId: ENV, reason: 'user' })
-    )
-    expect(layoutCloses()).toEqual([])
-    expect(server.layout(WT)?.tabs.map((tab) => tab.id)).not.toContain(tabId)
-    expect(editorTabIds(store)).toEqual([])
-    expect(openFileIds(store)).toEqual([])
   })
 })

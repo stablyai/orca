@@ -1,4 +1,7 @@
-import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
+import {
+  createRepoRowExecutionHostLookup,
+  type RepoRowExecutionHostLookup
+} from '../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -75,16 +78,18 @@ export function resolveWorktreeMetaOwner(
     getWorktreeMeta: (worktreeId: string) => { hostId?: ExecutionHostId } | undefined
     getRepos: () => readonly Repo[]
   },
-  worktreeId: string
+  worktreeId: string,
+  repoLookup?: RepoRowExecutionHostLookup<Repo>
 ): HostWorktreeTarget | undefined {
   // Local-only IDs have no backing repo from which to infer an owner.
   if (isLocalOnlyWorktreeMetaId(worktreeId)) {
     return hostWorktreeTarget({ id: worktreeId, hostId: LOCAL_EXECUTION_HOST_ID })
   }
+  const repos = repoLookup ?? createRepoRowExecutionHostLookup(store.getRepos())
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const owners = store.getRepos().filter((repo) => repo.id === repoId)
+  const owners = repos.rowsFor(repoId)
   // The first writer stamp cannot disambiguate same-id repos on multiple hosts.
-  if (getRepoRegistrationHostIds(owners, repoId).size > 1) {
+  if (repos.registrationHostsFor(repoId).size > 1) {
     return undefined
   }
   const stamped = store.getWorktreeMeta(worktreeId)?.hostId

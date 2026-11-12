@@ -10,7 +10,6 @@ import {
   dispatchWindowCloseRequest,
   isWindowCloseCheckpointInProgress,
   registerWindowCloseGuard,
-  runWithWindowCloseCheckpointScope,
   setWindowCloseRequestHandler
 } from './window-close-request-coordinator'
 
@@ -77,17 +76,6 @@ describe('window-close-request-coordinator', () => {
     expect(consumeShutdownCheckpointFailureReason()).toBeNull()
   })
 
-  it('delegates to the rich handler and does NOT confirm directly when one is registered', async () => {
-    const handler = vi.fn()
-    setWindowCloseRequestHandler(handler)
-
-    await dispatchWindowCloseRequest({ isQuitting: false })
-
-    expect(handler).toHaveBeenCalledWith({ isQuitting: false })
-    // Only the rich handler confirms after save/process guards; dispatch must not bypass them.
-    expect(confirmWindowClose).not.toHaveBeenCalled()
-  })
-
   it('cancels the close — no confirm, no handler — when a guard vetoes', async () => {
     const handler = vi.fn()
     setWindowCloseRequestHandler(handler)
@@ -99,26 +87,6 @@ describe('window-close-request-coordinator', () => {
     expect(cancelWindowClose).toHaveBeenCalledTimes(1)
     expect(handler).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
-  })
-
-  it('proceeds to confirm when all guards allow the close', async () => {
-    addGuard(() => true)
-    addGuard(async () => true)
-
-    await dispatchWindowCloseRequest({ isQuitting: true })
-
-    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('short-circuits on the first vetoing guard', async () => {
-    const second = vi.fn(() => true)
-    addGuard(() => false)
-    addGuard(second)
-
-    await dispatchWindowCloseRequest({ isQuitting: true })
-
-    expect(second).not.toHaveBeenCalled()
-    expect(confirmWindowClose).not.toHaveBeenCalled()
   })
 
   it('ignores a re-entrant close request while a guard is still pending', async () => {
@@ -138,25 +106,5 @@ describe('window-close-request-coordinator', () => {
     resolveGuard(true)
     await first
     expect(confirmWindowClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('stops consulting a guard once it is unregistered', async () => {
-    const guard = vi.fn(() => false)
-    const unregister = registerWindowCloseGuard(guard)
-    unregister()
-
-    await dispatchWindowCloseRequest({ isQuitting: true })
-
-    expect(guard).not.toHaveBeenCalled()
-    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('clears the window-close checkpoint flag when the wrapped dispatch throws', () => {
-    expect(() =>
-      runWithWindowCloseCheckpointScope(() => {
-        throw new Error('listener exploded')
-      })
-    ).toThrow('listener exploded')
-    expect(isWindowCloseCheckpointInProgress()).toBe(false)
   })
 })

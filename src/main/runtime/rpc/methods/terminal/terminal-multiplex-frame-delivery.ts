@@ -16,7 +16,7 @@ import {
   isMultiplexStreamAttached,
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
-import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+import type { TerminalOutputFrameChunk } from '../../terminal/terminal-output-frame-chunks'
 import type { TerminalStreamInputOutcome } from './terminal-input-delivery'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import {
@@ -25,7 +25,7 @@ import {
   chargeAckWindow,
   noteAckGatedSend
 } from './terminal-multiplex-ack-window'
-import type { RpcBinarySendResult } from '../../rpc-binary-sender'
+import type { RpcBinarySendResult } from '../../transports/rpc-binary-sender'
 
 export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection): void {
   const { sendBinary, emit } = state

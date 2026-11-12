@@ -2,7 +2,7 @@
 // (never by the message text). Agents ask for their own entry through `orchestration.turnSender`,
 // which identifies the asking terminal/session from orcad's own launch evidence, not from params.
 // Shared cloud workspaces use it so `git push` runs as the teammate who asked for the work.
-import type { RpcCallerIdentity } from '../rpc/rpc-caller-identity'
+import type { RpcCallerIdentity } from '../rpc/callers/rpc-caller-identity'
 
 export type DrivingDevice = { deviceId: string; at: number }
 

@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { InlineError } from '@/components/ui/inline-error'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   CLOUD_MOVE_STEPS,
   effectiveArchiveAfter,

@@ -1,5 +1,4 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
@@ -8,28 +7,33 @@ import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { getGitCloneFailureMessage } from '../../../shared/git/remotes/git-clone-failure-message'
-import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../../git/runner'
-import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
-import { checkCloneTarget } from '../../git/clone-target-check'
+import { gitSpawnAfterWindowsEnvironmentReady } from '../../git/command-runner/git-spawn'
+import { promptGuardGitEnv } from '../../git/command-runner/git-environment/git-process-env'
+import { reuseSavedCloneTarget } from '../../git/repositories/cloning/saved-clone-target'
+import { checkCloneTarget } from '../../git/repositories/cloning/clone-target-check'
 import type { CloneTargetArgs } from '../../../shared/git/clone/clone-target-check'
-import { getRepoName, inspectGitRepoForRegistrationAsync } from '../../git/repo'
-import type { ClaimedCloneTarget } from '../../git/repo-clone-path'
+import { getRepoName } from '../../git/repositories/repository-name'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+
 import {
+  type ClaimedCloneTarget,
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
   getClonePathComparisonKey,
   getSavedProjectPathKeys
-} from '../../git/repo-clone-path'
+} from '../../git/repositories/cloning/repo-clone-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
+import { emitCloneProgressFromText } from './repo-clone-progress'
 import { resolveClonedFolderConversion } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
+import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
 
 type ActiveCloneMetadata = {
   path: string
@@ -48,18 +52,6 @@ const pendingLocalCloneControllers = new Set<AbortController>()
 let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
 const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
-
-function emitCloneProgressFromText(mainWindow: BrowserWindow, text: string): void {
-  for (const line of text.split(/[\r\n]+/)) {
-    const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-    if (match && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('repos:clone-progress', {
-        phase: match[1].trim(),
-        percent: Number.parseInt(match[2], 10)
-      })
-    }
-  }
-}
 
 async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<void> {
   if (!metadata.claimedTarget.canCleanup || !metadata.claimedTarget.ownedDirectoryIdentity) {
@@ -102,7 +94,11 @@ function settleCloneAbortCleanup(metadata: ActiveCloneMetadata): void {
   metadata.resolvePendingAbortCleanup = null
 }
 
-export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoCloneHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+): void {
   ipcMain.handle('repos:cloneAbort', async () => {
     for (const controller of pendingLocalCloneControllers) {
       controller.abort()
@@ -136,7 +132,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
     const clonePathKey = getClonePathComparisonKey(clonePath)
     let savedPathKeys: string[] = []
     const findSaved = (): Repo | undefined => findLocalSaved(savedPathKeys)
-    return runWithClonePathLock(clonePathKey, async () => {
+    const repo = await runWithClonePathLock(clonePathKey, async () => {
       await pendingAbortCleanupByPath.get(clonePathKey)
       // Read after the lock so lookup sees what a queued clone of this path registered.
       savedPathKeys = await getSavedProjectPathKeys(clonePath)
@@ -299,7 +295,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
 
         // Register Git's checkout path so the clone stays its own selected checkout.
         const repoPath = (await inspectGitRepoForRegistrationAsync(clonePath)).rootPath
-        const detected = await detectRepoIconAndUpstream({
+        const detected = await detectRepoLocalMetadata({
           repoPath,
           kind: 'git',
           executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -329,5 +325,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
         }
       }
     })
+    enqueueMetadata([repo])
+    return repo
   })
 }

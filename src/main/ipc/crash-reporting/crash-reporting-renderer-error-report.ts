@@ -10,9 +10,9 @@ import {
   UNRELIABLE_BOUNDARY_ATTRIBUTION,
   UNRELIABLE_BOUNDARY_ATTRIBUTION_NOTE
 } from '../../../shared/react-update-depth-attribution'
-import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-breadcrumb-origin'
-import { getCrashBreadcrumbSnapshot } from '../../crash-reporting/crash-breadcrumb-store'
+import { getCrashBreadcrumbSnapshot } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 
 export const recentRendererErrorReportKeys = new Map<string, number>()
 

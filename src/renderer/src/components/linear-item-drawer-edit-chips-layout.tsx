@@ -4,7 +4,7 @@ import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
@@ -13,6 +13,7 @@ import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 import {
   LINEAR_EDIT_CHIP_CLASS,
   LINEAR_EDIT_MENU_ITEM_CLASS,
@@ -233,7 +234,7 @@ export function renderLinearIssueChipsLayout(
               onClick={() => handleAssigneeChange('__unassign__')}
               className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, !localAssignee && 'bg-accent/50')}
             >
-              {t('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
+              {translateUnassignedLabel()}
             </button>
             {members.error ? (
               <div className="px-2 py-3 text-center text-[12px] text-destructive">

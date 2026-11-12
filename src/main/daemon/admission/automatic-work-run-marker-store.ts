@@ -62,9 +62,13 @@ export class AutomaticWorkRunMarker {
     const previous = readPreviousMarker(this.path)
     this.currentMode = decideStartupAutomaticWorkMode(previous, boot, now)
     if (this.currentMode.kind === 'paused') {
+      // A carried-over pause names an earlier death; previousExit says whether this start follows one.
       this.log('automatic-work-paused', {
         reason: this.currentMode.reason,
-        carriedOver: previous?.mode.kind === 'paused'
+        carriedOver: previous?.mode.kind === 'paused',
+        pausedSince: new Date(this.currentMode.since).toISOString(),
+        previousExit:
+          previous === null ? 'none' : previous.state === 'running' ? 'unclean' : 'clean'
       })
     }
     this.writeSync(this.armRequested ? 'running' : 'clean-exit')

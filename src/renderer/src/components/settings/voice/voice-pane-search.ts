@@ -30,10 +30,7 @@ export const getOpenaiTranscriptionSearchEntry = createLocalizedCatalog(
 
 export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate(
-      'auto.components.settings.voice.pane.search.a5fb30e4da',
-      'Enable voice dictation'
-    ),
+    title: translate('auto.components.settings.voice.pane.search.dictationTitle', 'Dictation'),
     description: translate(
       'auto.components.settings.voice.pane.search.698376a38d',
       'Master toggle for voice dictation features.'
@@ -50,6 +47,24 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
         'microphone'
       ),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.10d45a9fce', 'stt')
+    ]
+  },
+  {
+    title: translate('auto.components.settings.voice.pane.search.shortcutTitle', 'Shortcut'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.shortcutDescription',
+      'The key that starts dictation.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.shortcutKeyword',
+        'keyboard'
+      )
     ]
   },
   {
@@ -158,8 +173,29 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.voice.pane.search.b3920972d4',
-      'Unload speech model'
+      'auto.components.settings.voice.pane.search.silenceStopTitle',
+      'Stop after silence'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.silenceStopDescription',
+      'Choose how long dictation keeps listening when you stop talking.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.silenceStopKeyword',
+        'silence'
+      )
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.keepLoadedTitle',
+      'Keep model loaded'
     ),
     description: translate(
       'auto.components.settings.voice.pane.search.modelUnloadDescription',
@@ -175,6 +211,24 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword(
         'auto.components.settings.voice.pane.search.modelMemoryKeyword',
         'memory'
+      )
+    ]
+  },
+  {
+    title: translate('auto.components.settings.VoicePane.speechGpuLabel', 'Use GPU'),
+    description: translate(
+      'components.settings.voice.gpu.description',
+      'Turn off if dictation freezes your computer.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.gpuKeyword',
+        'graphics card'
       )
     ]
   },

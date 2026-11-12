@@ -1,3 +1,4 @@
+import { publishBrowserGuestMetadata } from '../../navigation/browser-guest-metadata'
 import { webContents } from 'electron'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
 import { isWorkspaceDocPageId } from '../../../document-preview/doc-preview-guest-policy'
@@ -83,6 +84,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.siteDisplayController?.onGuestRegistered(guest, sessionProfileId ?? null)
     // Earlier audio events had no page; this report also cues the renderer to re-apply a tab's mute.
     this.notifyAudioStateChanged(browserTabId, guest.isCurrentlyAudible())
+    publishBrowserGuestMetadata(guest)
 
     this.setupContextMenu(browserTabId, guest)
     this.setupGrabShortcut(browserTabId, guest)

@@ -2,7 +2,6 @@ import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../../../../shared/tab-title-resolution'
-import type { Tab } from '../../../../../../shared/tab-types'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { buildPaletteTabDocument } from '../../../../../../shared/palette-match/tab-document'
 import {
@@ -10,20 +9,15 @@ import {
   isPaletteCurrentWorktree,
   resolvePaletteRepoForWorktree
 } from '../palette-repo-resolution'
-import { resolveOpenTabOccupantAgent } from '../../../open-tab-occupant-agent'
+import { resolveOpenTabOccupantAgent } from '../../../agent-session/tab-identity/open-tab-occupant-agent'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '../../../worktree-default-display-name'
+} from '../../display/worktree-default-display-name'
 import {
   buildAgentMetadataTabIndex,
   collectAgentMetadataFromIndex
 } from './workspace-tab-agent-metadata'
-import type {
-  BuildSearchableWorkspaceTabsOptions,
-  SearchableWorkspaceTab,
-  WorkspaceTabContentType
-} from './workspace-tab-search-types'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds,
@@ -32,12 +26,18 @@ import {
   isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
 } from '../../ownership/unified-tab-host-ownership'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
 import { getActiveUnifiedTabId, isCurrentWorkspaceTab } from './workspace-tab-palette-current-tab'
 import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import type { Tab } from '../../../../../../shared/tab-types'
+import type {
+  BuildSearchableWorkspaceTabsOptions,
+  SearchableWorkspaceTab,
+  WorkspaceTabContentType
+} from './workspace-tab-search-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 export function buildSearchableWorkspaceTabEntries({
   worktrees,

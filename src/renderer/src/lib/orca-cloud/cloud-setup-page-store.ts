@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react'
 import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
 import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import { cancelCloudCreateIntent } from './cloud-create-intent'
 
 export type CloudSetupPageRequest = {

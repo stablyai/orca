@@ -26,6 +26,7 @@ export type HostHeaderRow = {
   hostId: ExecutionHostId
   kind: ExecutionHostKind
   label: string
+  isDefaultLocalLabel?: boolean
   detail: string
   health: ExecutionHostHealth
   // Keep skew direction to deep-link the appropriate client/server update guidance.
@@ -45,6 +46,7 @@ export type HostSectionOption = {
   id: ExecutionHostId
   kind: ExecutionHostKind
   label: string
+  isDefaultLocalLabel?: boolean
   detail: string
   health: ExecutionHostHealth
   compatibility?: RuntimeCompatVerdict
@@ -79,6 +81,7 @@ function getFallbackHost(hostId: ExecutionHostId, localHostLabel: string): HostS
     id: hostId,
     kind: isLocal ? 'local' : hostId.startsWith('ssh:') ? 'ssh' : 'runtime',
     label: isLocal ? localHostLabel : hostId,
+    isDefaultLocalLabel: isLocal,
     detail: isLocal ? 'This computer' : 'Host',
     health: isLocal ? 'local' : 'available'
   }
@@ -290,6 +293,7 @@ export function addHostSectionRows(args: {
       hostId: host.id,
       kind: host.kind,
       label: host.label,
+      isDefaultLocalLabel: host.isDefaultLocalLabel,
       detail: host.detail,
       health: host.health,
       compatibility: host.compatibility,

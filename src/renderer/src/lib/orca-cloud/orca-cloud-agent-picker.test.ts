@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ORCA_CLOUD_IMAGE_AGENTS } from '../../../../shared/hosted-sandbox/orca-cloud-image-agents'
-import { resolveQuickWorkspaceAgentSelection } from '@/lib/quick-workspace-agent-selection'
+import { resolveQuickWorkspaceAgentSelection } from '@/lib/workspace/creation/quick-workspace-agent-selection'
 import {
   ORCA_CLOUD_AGENT_IDS,
   orcaCloudAgentMenuModel,

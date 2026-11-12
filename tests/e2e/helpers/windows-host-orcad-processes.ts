@@ -51,7 +51,7 @@ export async function listHostOrcadProcesses(home: string): Promise<HostProcess[
 /** The orcad server itself, without the terminal daemon and workers it forks from the same slot. */
 export async function listHostOrcadServerProcesses(home: string): Promise<HostProcess[]> {
   return (await listHostOrcadProcesses(home)).filter((entry) =>
-    /[\\/]orcad\.js(?=["\s]|$)/iu.test(entry.commandLine)
+    /[\\/]orcad(?:-server)?\.js(?=["\s]|$)/iu.test(entry.commandLine)
   )
 }
 

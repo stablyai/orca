@@ -1,6 +1,6 @@
 import type { PRRefreshErrorType } from '../../shared/github/pull-request-refresh-types'
 import { classifyGitHubUnavailable } from '../../shared/github/api-availability'
-import { extractExecError } from '../git/exec-error'
+import { extractExecError } from '../git/command-runner/process-capture/exec-error'
 
 /** Classify runner failures before UI rendering; rate-limit 403s precede permissions, and repo 404s precede network heuristics. */
 export function classifyPRRefreshError(err: unknown): PRRefreshErrorType {

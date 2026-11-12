@@ -25,7 +25,10 @@ vi.mock('os', async (importOriginal) => {
 
 import '../installation/hook-service'
 import { CodexHookService } from '../installation/codex-hook-service-implementation'
-import { getCodexManagedHookInstallMaterial } from '../definitions/codex-hook-definition'
+import {
+  getCodexManagedHookInstallMaterial,
+  getCodexManagedHookStatusMessage
+} from '../definitions/codex-hook-definition'
 import {
   _internals as reconcileInternals,
   reconcileCodexHooks,
@@ -65,6 +68,7 @@ function seedSharedEntry(): void {
     handlerIndex: 0,
     command: material.command,
     timeoutSec: 10,
+    statusMessage: getCodexManagedHookStatusMessage(material.command),
     trustedHash: 'sha256:codex-granted-stop'
   }
   writeFileSync(join(systemCodexHome(), 'config.toml'), 'model = "user-model"\n')

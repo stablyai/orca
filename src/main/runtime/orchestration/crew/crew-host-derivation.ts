@@ -9,12 +9,10 @@ import { readCrewAssignments, type CrewAssignmentRow } from './crew-query'
 import { createCrewSourceInputs } from './crew-source-inputs'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 
-export function createCrewHostDerivation(
-  deps: CrewReadDependencies,
-  now: number,
-  capacity?: () => number
-) {
+export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: () => number) {
   const { statuses, ...sources } = captureCrewIdentityInputs(deps)
+  // Reading statuses can refresh the same source; capture its cutoff afterwards.
+  const now = deps.now ?? Date.now()
   const registry = createCrewPartyRegistry({ ...sources, statuses })
   const { alias } = registry
   const identity = deps.openIdentityRead?.()

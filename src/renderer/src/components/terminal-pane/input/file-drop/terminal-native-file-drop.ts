@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { translate } from '@/i18n/i18n'
@@ -21,6 +21,7 @@ import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { toLocalWslDropPath } from './terminal-drop-local-wsl'
+import { terminalFileDropErrorMessage } from './terminal-native-file-drop-error'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export async function deliverNativeTerminalFileDrop(
@@ -161,7 +162,7 @@ async function uploadRuntimeDropPaths(
       results.filter((result) => result.status === 'failed')
     )
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
+    toast.error(terminalFileDropErrorMessage(err, 'upload'))
   } finally {
     toast.dismiss(pending)
   }
@@ -183,7 +184,7 @@ async function pasteLocalDropPaths(
       await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: 'posix' })
       reportTerminalDropUploadSkipsAndFailures(skipped, failed)
     } catch (err) {
-      toast.error(extractIpcErrorMessage(err, 'Failed to resolve dropped files.'))
+      toast.error(terminalFileDropErrorMessage(err, 'resolve'))
     }
     return
   }
@@ -221,7 +222,7 @@ async function uploadRemoteDropPaths(
     await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: args.targetShell })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
+    toast.error(terminalFileDropErrorMessage(err, 'upload'))
   } finally {
     toast.dismiss(pending)
   }

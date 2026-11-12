@@ -69,6 +69,18 @@ export function mobileCommitDropdownCopy(t: Translate): CommitDropdownCopy {
         case 'Enter a commit message to commit':
           return t('sourceControl.commitDropdown.enterMessage', 'Enter a commit message to commit')
       }
-    }
+    },
+    commitDisabledStatus: (reason) => {
+      switch (reason) {
+        case 'Resolve conflicts before committing':
+          return t('sourceControl.commitDropdown.statusConflicts', 'Conflicts')
+        case 'Stage at least one file to commit':
+          return t('sourceControl.commitDropdown.statusNothingStaged', 'Nothing staged')
+        case 'Enter a commit message to commit':
+          return t('sourceControl.commitDropdown.statusNeedsMessage', 'Needs message')
+      }
+    },
+    statusNotPublished: t('sourceControl.commitDropdown.statusNotPublished', 'Not published'),
+    statusNoBranch: t('sourceControl.commitDropdown.statusNoBranch', 'No branch')
   }
 }

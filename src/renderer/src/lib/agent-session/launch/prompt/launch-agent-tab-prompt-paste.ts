@@ -1,6 +1,6 @@
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import { deliverLaunchPromptToAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
-import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
+import { seedCommandCodeSubmittedPromptStatus } from '@/lib/agent-status/evidence/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
 /** Share readiness/paste delivery and outcome reporting for both window-spawned and agent.launch-owned tab PTYs. */

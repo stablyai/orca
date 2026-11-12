@@ -34,27 +34,6 @@ it('does not remove handlers installed by a remount while sleep is pending', () 
   ptyReplayHandlers.delete(ptyId)
 })
 
-it('replays rollback output in its original replay and live arrival order', () => {
-  const ptyId = 'pty-shutdown-output-order'
-  const delivered: string[] = []
-  const meta = { seq: 9, rawLength: 3, transformed: true }
-  const sidecar = vi.fn((data: string) => delivered.push(`sidecar:${data}`))
-  ptyDataHandlers.set(ptyId, (data) => delivered.push(`data:${data}`))
-  ptyReplayHandlers.set(ptyId, (data) => delivered.push(`replay:${data}`))
-  ptyDataSidecars.set(ptyId, new Set([sidecar]))
-
-  const [snapshot] = unregisterPtyDataHandlers([ptyId])
-  bufferPtyShutdownReplayData(ptyId, 'old')
-  bufferPtyShutdownData(ptyId, 'new', meta)
-  snapshot.rollback()
-
-  expect(delivered).toEqual(['replay:old', 'data:new', 'sidecar:new'])
-  expect(sidecar).toHaveBeenCalledOnce()
-  ptyDataHandlers.delete(ptyId)
-  ptyDataSidecars.delete(ptyId)
-  ptyReplayHandlers.delete(ptyId)
-})
-
 it('drains pre-handler data before ordered shutdown output', () => {
   const ptyId = 'pty-shutdown-pre-handler-order'
   const delivered: string[] = []

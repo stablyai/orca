@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { openCloudWorkspace } from '@/components/cloud-workspaces/open-cloud-workspace'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -63,7 +63,7 @@ export async function startCloudWorkspaceFromGitHub(
     : await resolveDefaultAgentForWorktree(useAppStore.getState, worktreeId).catch(() => null)
   if (agent) {
     launchAgentInNewTabWithOutcome({
-      requestId: newAgentLaunchRequestId(),
+      requestId: createNonSecureContextUuid(),
       ...captureAgentTabLaunchContext(worktreeId),
       agent,
       worktreeId,

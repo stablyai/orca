@@ -9,6 +9,7 @@ import type {
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
 import type { PreloadApi } from '../api-types'
+import type { WorkspaceMetadataSet } from '../../shared/worktree/workspace-metadata-set'
 
 export const worktreesApi = {
   listRetiredNames: (args) => ipcRenderer.invoke('worktrees:listRetiredNames', args),
@@ -103,6 +104,12 @@ export const worktreesApi = {
     ) => callback(data)
     ipcRenderer.on('worktrees:headIdentitiesChanged', listener)
     return () => ipcRenderer.removeListener('worktrees:headIdentitiesChanged', listener)
+  },
+
+  onMetadataSet: (callback: (set: WorkspaceMetadataSet) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, set: WorkspaceMetadataSet) => callback(set)
+    ipcRenderer.on('worktrees:metadataSet', listener)
+    return () => ipcRenderer.removeListener('worktrees:metadataSet', listener)
   },
 
   onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void): (() => void) => {

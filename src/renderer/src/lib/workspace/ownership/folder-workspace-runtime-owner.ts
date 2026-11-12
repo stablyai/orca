@@ -16,7 +16,7 @@ import {
 } from './worktree-runtime-owner-index'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { SingleRuntimeLegacyOwnerState } from './single-runtime-legacy-owner'
-import { getPairedWebClientEnvironmentId } from '../../paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '../../../app-shell/platform/paired-web-client-host'
 
 type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 

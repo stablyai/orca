@@ -1,5 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { isSettingsNavigationTarget } from '../../../lib/settings-navigation-types'
+import { isSettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 
 export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {

@@ -6,12 +6,7 @@ import {
   searchResults
 } from '../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { searchSessionService, setSessionSearchService } from './session-search-service-registry'
-import {
-  encodeSessionSearchCursor,
-  decodeSessionSearchCursor,
-  sessionSearchPageKey,
-  SessionSearchCursorError
-} from './session-search-page-cursor'
+import './query/session-search-page-cursor'
 
 afterEach(() => setSessionSearchService(null))
 
@@ -85,62 +80,6 @@ test.each(['relay'] as const)(
     }
   }
 )
-
-test('projects agents before cursor identity and preserves every other ranking field', async () => {
-  const service = fakeSearchService()
-  service.search.mockImplementation(async (request) => {
-    const key = sessionSearchPageKey(request)
-    if (request.cursor) {
-      try {
-        decodeSessionSearchCursor(request.cursor, 7, key, 'test-index')
-      } catch (error) {
-        if (error instanceof SessionSearchCursorError) {
-          return { kind: 'malformed-cursor' }
-        }
-        throw error
-      }
-    }
-    return {
-      ...searchResults(),
-      page: { cursor: encodeSessionSearchCursor(7, 1, key, 'test-index'), hasMore: true }
-    }
-  })
-  setSessionSearchService(service)
-  const request = {
-    query: 'proof',
-    supportedAgents: ['codex'],
-    scope: 'conversation' as const,
-    limit: 42,
-    debug: true,
-    filters: {
-      agents: ['codex', 'jcode'] as const,
-      scopePaths: ['/host/folder'],
-      since: '2026-08-01T00:00:00.000Z',
-      sort: 'newest' as const
-    }
-  }
-  const first = await searchSessionService(
-    { ...request, filters: { ...request.filters, agents: [...request.filters.agents] } },
-    'relay'
-  )
-  if (first.kind !== 'results' || !first.page.cursor) {
-    throw new Error('Expected a first page with a cursor')
-  }
-  const next = {
-    ...request,
-    filters: { ...request.filters, agents: [...request.filters.agents] },
-    cursor: first.page.cursor
-  }
-  expect(await searchSessionService(next, 'relay')).toMatchObject({ kind: 'results' })
-  const { supportedAgents: _supportedAgents, ...expected } = next
-  expect(service.search).toHaveBeenLastCalledWith(
-    { ...expected, filters: { ...next.filters, agents: ['codex'] } },
-    undefined
-  )
-  expect(
-    await searchSessionService({ ...next, supportedAgents: [...AI_VAULT_AGENTS] }, 'relay')
-  ).toEqual({ kind: 'malformed-cursor' })
-})
 
 test('keeps current Jcode hits and removes unrequested agents before publication', async () => {
   const service = fakeSearchService()

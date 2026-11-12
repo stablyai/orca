@@ -8,19 +8,22 @@ import {
   totalCount
 } from '../ratchet-baseline/ratchet-baseline.mjs'
 import { createGatedCallCollector } from './gated-call-use-collector.mjs'
+import { isMainBlockingSource } from './main-blocking-source-paths.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
 // Synchronous launches freeze all Electron windows; Windows antivirus magnifies the delay. Count launch APIs and synchronous wrappers per file.
 
 const ROOT = path.resolve(import.meta.dirname, '../../..', '..')
 const BASELINE_PATH = 'config/main-sync-spawn-baseline.txt'
-const SCAN_DIRECTORIES = ['src/main', 'src/shared']
+const SCAN_DIRECTORIES = ['src/main', 'src/shared', 'src/preload']
 const PROCESS_ADVICE = 'use runProcess or spawnProcess from @orca/process-host'
 const SECURE_ADVICE = `rewrites a DACL on the calling thread, and a directory rewrite blocks on its whole subtree; use restrictWindowsDirectory for a directory, or raise this file's count in ${BASELINE_PATH} (or add a row)`
 // Include package/repo re-exporters so moving an import cannot bypass the gate.
 const GATED_FAMILIES = [
   {
     modules: ['child_process', 'node:child_process'],
+    exportPattern: /Sync$/,
+    defaultAdvice: PROCESS_ADVICE,
     advice: { execFileSync: PROCESS_ADVICE, spawnSync: PROCESS_ADVICE, execSync: PROCESS_ADVICE }
   },
   { modules: ['@orca/process-host'], advice: { runProcessSync: PROCESS_ADVICE } },
@@ -31,8 +34,7 @@ const GATED_FAMILIES = [
   {
     modules: [
       'src/main/git/command-runner/git-exec-file',
-      'src/main/git/command-runner/git-exec-file-sync',
-      'src/main/git/runner'
+      'src/main/git/command-runner/git-exec-file-sync'
     ],
     advice: { gitExecFileSync: 'use gitExecFileAsync' }
   },
@@ -84,6 +86,7 @@ export const adviceFor = collector.adviceFor
 export function isRatchetedSourcePath(file) {
   return (
     SCAN_DIRECTORIES.some((directory) => file.startsWith(`${directory}/`)) &&
+    isMainBlockingSource(file) &&
     !file.endsWith('.d.ts') &&
     !isTestOnlySourcePath(file)
   )

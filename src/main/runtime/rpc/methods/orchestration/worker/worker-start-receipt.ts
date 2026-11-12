@@ -3,6 +3,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { WorkerDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
+import { reportFailedWorkerStart } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import {
   isUnknownWorkerStartOutcome,
   type createStructuredWorkerSessionForWorktree,
@@ -88,6 +89,11 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
+  if (!unknown) {
+    reportFailedWorkerStart(args.db, worker, (handle, type) =>
+      args.runtime.notifyMessageArrived(handle, type)
+    )
+  }
   // Offer cleanup for this start's still-owned resource, including a chat retaining its refused task.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
   const releasable = residual?.ownership_state === 'owned'

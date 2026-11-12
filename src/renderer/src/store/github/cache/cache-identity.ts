@@ -14,7 +14,6 @@ import {
 } from '../../../../../shared/execution-host'
 import {
   composeRepoCacheKey,
-  getGitHubPRCacheKey,
   getGitHubRepoCacheKey,
   repoCacheKeyHostId,
   type RuntimeFocusSettings
@@ -112,26 +111,6 @@ export function issueCacheKey(
   )
 }
 
-export function runtimeScopedRepoCacheKey(
-  repoPath: string,
-  repoId: string | undefined,
-  suffix: string,
-  settings?: RuntimeFocusSettings,
-  connectionId?: string | null,
-  executionHostId?: string | null,
-  hasRepoOwner = false
-): string {
-  return getGitHubRepoCacheKey(
-    repoPath,
-    repoId,
-    suffix,
-    settings,
-    connectionId,
-    executionHostId,
-    hasRepoOwner
-  )
-}
-
 export function sourceScopedRepoCacheKey(
   repoPath: string,
   repoId: string | undefined,
@@ -145,30 +124,10 @@ export function sourceScopedRepoCacheKey(
   if (sourceContext?.provider === 'github') {
     return composeRepoCacheKey(getTaskSourceCacheScope(sourceContext), repoId ?? repoPath, suffix)
   }
-  return runtimeScopedRepoCacheKey(
+  return getGitHubRepoCacheKey(
     repoPath,
     repoId,
     suffix,
-    settings,
-    connectionId,
-    executionHostId,
-    hasRepoOwner
-  )
-}
-
-export function prCacheKey(
-  repoPath: string,
-  repoId: string | undefined,
-  branch: string,
-  settings?: RuntimeFocusSettings,
-  connectionId?: string | null,
-  executionHostId?: string | null,
-  hasRepoOwner = false
-): string {
-  return getGitHubPRCacheKey(
-    repoPath,
-    repoId,
-    branch,
     settings,
     connectionId,
     executionHostId,

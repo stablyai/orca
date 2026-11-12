@@ -1,4 +1,8 @@
 import {
+  agentPickerModelMenu,
+  agentPickerUsesComposerModelMenu
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
+import {
   TEXT_ACTION_DEFAULT_MODEL,
   textActionArgumentsOwnEffort
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
@@ -90,80 +94,98 @@ export function agentLaunchSetupOptionRows(
       argumentsOwnedRow('effort', options[0]?.label ?? 'Reasoning effort', 'thought_level', t)
     ]
   }
-  return options.map((option) => {
-    const effortInArguments =
-      entry.textGeneration?.effortInArguments &&
-      (!draft.textChanges?.includes('effort') || entry.textGeneration.effortArgumentsUnrecognized)
-    const liveModel = models.find((model) => model.id === currentModel)
-    const current =
-      argumentsView.choices.options?.[option.id] ??
-      (currentModel && !defaultsPending && !draft.delegated?.includes(option.id)
-        ? option.kind.type === 'boolean'
-          ? String(option.kind.defaultValue)
-          : option.id === 'effort'
-            ? liveModel?.defaultEffort
-            : option.kind.defaultIsCliDefault
-              ? option.kind.defaultValue
-              : undefined
-        : undefined)
-    if (argumentsView.context.analysis.opaqueKeys.has(option.id)) {
-      return argumentsOwnedRow(option.id, option.label, option.category, t)
-    }
-    const valueKnown =
-      current !== undefined ||
-      (option.id === 'serviceTier' &&
-        entry.catalog.origin !== 'unknown' &&
-        Boolean(liveModel?.serviceTiers?.length))
-    return {
-      id: option.id,
-      label: option.label,
-      category: option.category,
-      kind:
-        option.kind.type === 'boolean'
-          ? { type: 'boolean', currentValue: current === 'true' }
-          : {
-              type: 'select',
-              choices: entry.textGeneration
-                ? [
-                    ...(effortInArguments
-                      ? [
-                          {
-                            value: 'arguments',
-                            label: t('agentPicker.setByArguments', 'Set by your Arguments')
-                          }
-                        ]
-                      : []),
-                    ...(entry.textGeneration.defaultLabel !== undefined
-                      ? [
-                          {
-                            value: TEXT_ACTION_DEFAULT_MODEL,
-                            label: textEffortDefaultLabel(option.kind, t)
-                          }
-                        ]
-                      : []),
-                    ...option.kind.choices
-                  ]
-                : option.id !== 'serviceTier' &&
-                    current &&
-                    !option.kind.choices.some((choice) => choice.value === current)
-                  ? [...option.kind.choices, { value: current, label: current }]
-                  : option.kind.choices,
-              currentValue: effortInArguments ? 'arguments' : current
-            },
-      valueSource: valueKnown ? 'default' : 'unknown',
-      transport: 'agent-session',
-      settable:
-        !disabled &&
-        !defaultsPending &&
-        // A settled level the agent picks itself shows unselected but stays pickable.
-        (valueKnown ||
-          option.kind.type === 'select' ||
-          Boolean(currentModel && draft.delegated?.includes(option.id))) &&
-        (!(option.id === 'fastMode' || option.id === 'serviceTier') ||
-          !entry.surfaces.includes('terminal') ||
-          argumentsKnown)
-    }
-  })
+  const effort = agentPickerModelMenu(entry, draft.surface, {
+    ...(currentModel ? { model: currentModel } : {}),
+    ...argumentsView.choices.options
+  }).descriptors.find((row) => row.id === 'effort')
+  const sharedEffort = agentPickerUsesComposerModelMenu(entry, draft.surface) ? effort : undefined
+  const rows: SessionOptionDescriptor[] = options
+    .filter((option) => !sharedEffort || option.id !== 'effort')
+    .map((option) => {
+      const effortInArguments =
+        entry.textGeneration?.effortInArguments &&
+        (!draft.textChanges?.includes('effort') || entry.textGeneration.effortArgumentsUnrecognized)
+      const liveModel = models.find((model) => model.id === currentModel)
+      const current =
+        argumentsView.choices.options?.[option.id] ??
+        (currentModel && !defaultsPending && !draft.delegated?.includes(option.id)
+          ? option.kind.type === 'boolean'
+            ? String(option.kind.defaultValue)
+            : option.id === 'effort'
+              ? liveModel?.defaultEffort
+              : option.kind.defaultIsCliDefault
+                ? option.kind.defaultValue
+                : undefined
+          : undefined)
+      if (argumentsView.context.analysis.opaqueKeys.has(option.id)) {
+        return argumentsOwnedRow(option.id, option.label, option.category, t)
+      }
+      const valueKnown =
+        current !== undefined ||
+        (option.id === 'serviceTier' &&
+          entry.catalog.origin !== 'unknown' &&
+          Boolean(liveModel?.serviceTiers?.length))
+      return {
+        id: option.id,
+        label: option.label,
+        category: option.category,
+        kind:
+          option.kind.type === 'boolean'
+            ? { type: 'boolean', currentValue: current === 'true' }
+            : {
+                type: 'select',
+                choices: entry.textGeneration
+                  ? [
+                      ...(effortInArguments
+                        ? [
+                            {
+                              value: 'arguments',
+                              label: t('agentPicker.setByArguments', 'Set by your Arguments')
+                            }
+                          ]
+                        : []),
+                      ...(entry.textGeneration.defaultLabel !== undefined
+                        ? [
+                            {
+                              value: TEXT_ACTION_DEFAULT_MODEL,
+                              label: textEffortDefaultLabel(option.kind, t)
+                            }
+                          ]
+                        : []),
+                      ...option.kind.choices
+                    ]
+                  : option.id !== 'serviceTier' &&
+                      current &&
+                      !option.kind.choices.some((choice) => choice.value === current)
+                    ? [...option.kind.choices, { value: current, label: current }]
+                    : option.kind.choices,
+                currentValue: effortInArguments ? 'arguments' : current
+              },
+        valueSource: valueKnown ? 'default' : 'unknown',
+        transport: 'agent-session',
+        settable:
+          !disabled &&
+          !defaultsPending &&
+          // A settled level the agent picks itself shows unselected but stays pickable.
+          (valueKnown ||
+            option.kind.type === 'select' ||
+            Boolean(currentModel && draft.delegated?.includes(option.id))) &&
+          (!(option.id === 'fastMode' || option.id === 'serviceTier') ||
+            !entry.surfaces.includes('terminal') ||
+            argumentsKnown)
+      }
+    })
+  if (sharedEffort) {
+    rows.push(
+      argumentsView.context.analysis.opaqueKeys.has('effort')
+        ? argumentsOwnedRow('effort', sharedEffort.label, sharedEffort.category, t)
+        : {
+            ...sharedEffort,
+            settable: sharedEffort.settable && !disabled && !defaultsPending
+          }
+    )
+  }
+  return rows
 }
 
 /** Speed rows sit apart from the rest; launch also lifts level rows onto speed's line. */
@@ -246,18 +268,21 @@ export function agentLaunchSetupCatalogState(
   return { hasModels, catalogPending, catalogMessage }
 }
 
-/** Visible model rows, plus the model the list starts on. */
+/** Visible model rows, the expanded legacy rows below their toggle, and the model the list starts on. */
 export function agentLaunchSetupModelRows(
   models: readonly AgentPickerModel[],
   currentModel: string | undefined,
   query: string,
-  legacy: boolean,
+  legacyExpanded: boolean,
   modelInArguments: boolean
 ) {
-  const rows: { id: string; label: string; unlisted?: true }[] = models.filter(
-    (model) =>
-      !model.hidden && (model.id === currentModel || query || Boolean(model.isLegacy) === legacy)
-  )
+  type Row = { id: string; label: string; unlisted?: true }
+  const listed = models.filter((model) => !model.hidden)
+  // Membership ignores the selection, so picking a model never moves rows in the open list.
+  const folded = (model: AgentPickerModel) => !query && Boolean(model.isLegacy)
+  const rows: Row[] = listed.filter((model) => !folded(model))
+  const legacyRows: Row[] = listed.filter(folded)
+  const shownLegacy = legacyExpanded ? legacyRows : []
   // Why one keyed list: when the catalog later lists an unlisted current model, its row keeps
   // its identity, so the highlight stays on it instead of jumping to the first model.
   if (currentModel && !models.some((model) => model.id === currentModel)) {
@@ -265,6 +290,13 @@ export function agentLaunchSetupModelRows(
   }
   // An Arguments-owned text action has no current model row, so it starts on its default as before.
   const start =
-    !modelInArguments && rows.some((row) => row.id === currentModel) ? currentModel : undefined
-  return { rows, start }
+    !modelInArguments && [...rows, ...shownLegacy].some((row) => row.id === currentModel)
+      ? currentModel
+      : undefined
+  return {
+    rows,
+    legacyRows: shownLegacy,
+    legacyCount: legacyRows.length,
+    start
+  }
 }

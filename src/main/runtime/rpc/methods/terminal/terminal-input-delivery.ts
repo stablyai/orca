@@ -3,7 +3,7 @@ import {
   TerminalInputPausedError,
   type TerminalInputSource
 } from '../../../terminal/input/terminal-input-admission'
-import type { RpcCallerIdentity } from '../../rpc-caller-identity'
+import type { RpcCallerIdentity } from '../../callers/rpc-caller-identity'
 import { InvalidArgumentError } from '../../core'
 import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../orca-runtime'

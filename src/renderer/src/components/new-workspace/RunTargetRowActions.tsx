@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle, LoaderCircle } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useTranslate } from '@/i18n/use-translate'

@@ -7,6 +7,7 @@ import { isJcodeIdentityTerminalTitle } from '../title/providers/jcode-terminal-
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from '../title/synthetic-agent-title'
 import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import { resolveTabNameSource } from '../../tab-title-resolution'
+import { aiVaultTitleOfSession } from '../../ai-vault/contracts/ai-vault-session-title'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
@@ -111,19 +112,12 @@ export function getAgentRowConversationName(
 ): string | null {
   const liveTitle =
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
-  // Provider titles belong to their session, not every pane in the tab.
-  const aiVaultTitle = tab.aiVaultTitle
   const named = resolveTabNameSource(
     {
       customTitle: tab.customTitle,
       quickCommandLabel: tab.quickCommandLabel,
       liveTitle,
-      sessionTitle:
-        aiVaultTitle &&
-        aiVaultTitle.agent === agentType &&
-        aiVaultTitle.sessionId === providerSessionId
-          ? aiVaultTitle
-          : null,
+      sessionTitle: aiVaultTitleOfSession(tab.aiVaultTitle, agentType, providerSessionId),
       generatedTitle: tab.generatedTitle
     },
     generatedTitlesEnabled

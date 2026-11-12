@@ -1,9 +1,9 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useRef, useState } from 'react'
-import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
+import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/agent-session-approval-detail-preview'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { approvalBlockedPathToShow } from '../../../../../shared/agent-session/agent-session-approval-blocked-path'
@@ -26,17 +26,32 @@ export type NativeChatApprovalCardProps = {
   onCollapse?: () => void
   /** A choice is being delivered: the options wait for its answer. */
   isSubmitting?: boolean
+  /** The option being sent, while `isSubmitting`: its button shows that it is working. */
+  submittingOption?: string
   shouldFocus?: boolean
+  /** Shown when the card has no options: only the terminal can answer it. */
+  onOpenTerminal?: () => void
+  /** A worker's prompt shown in its coordinator's chat: names the worker under the title. */
+  worker?: { name: string; onOpen: () => void }
+  /** Live time left before the agent decides on its own, shown only when its screen shows it. */
+  countdown?: string
+  /** `stacked`: one of several cards above the composer, not the chat's own slot (no slot height, no focus). */
+  placement?: 'composer' | 'stacked'
 }
 
-/** PTY options are literal replies; structured options are journal ids. Style the first option as primary. */
+/** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
 export function NativeChatApprovalCard({
   approval,
   onChoose,
   onCancel,
   onCollapse,
   isSubmitting = false,
-  shouldFocus = false
+  submittingOption,
+  shouldFocus = false,
+  onOpenTerminal,
+  worker,
+  countdown,
+  placement = 'composer'
 }: NativeChatApprovalCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -44,20 +59,27 @@ export function NativeChatApprovalCard({
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
+  const stacked = placement === 'stacked'
   const hasContext = Boolean(
+    countdown ||
     approval.description ||
     approval.decisionReason ||
     neededPath ||
     approval.subject ||
     approval.detail
   )
-  useNativeChatPromptCardFocus(cardRef, shouldFocus)
+  useNativeChatPromptCardFocus(cardRef, shouldFocus && !stacked)
   const escape = onCancel ?? (isSubmitting ? undefined : onCollapse)
 
   return (
     <SecuritySurface>
-      <div className="min-h-0 shrink overflow-hidden bg-chat-pane">
-        <div className="mx-auto flex h-full min-h-0 max-h-full w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
+      <div className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}>
+        <div
+          className={cn(
+            'mx-auto flex w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4',
+            !stacked && 'h-full min-h-0 max-h-full'
+          )}
+        >
           <div
             ref={cardRef}
             data-native-chat-prompt-card-focus={shouldFocus || undefined}
@@ -80,6 +102,23 @@ export function NativeChatApprovalCard({
                 <p className="line-clamp-2 break-words text-sm font-semibold text-foreground">
                   {approval.title}
                 </p>
+                {worker ? (
+                  <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="truncate">
+                      {t('components.native-chat.approval.worker', 'Worker · {{name}}', {
+                        name: worker.name
+                      })}
+                    </span>
+                    <span aria-hidden>·</span>
+                    <button
+                      type="button"
+                      onClick={worker.onOpen}
+                      className="shrink-0 rounded-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {t('components.native-chat.approval.openWorker', 'Open worker')}
+                    </button>
+                  </p>
+                ) : null}
               </div>
               {onCancel ? (
                 <button
@@ -105,6 +144,7 @@ export function NativeChatApprovalCard({
                 tabIndex={0}
                 className="min-h-0 max-h-72 shrink space-y-2 overflow-auto text-sm text-muted-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
+                {countdown ? <p className="tabular-nums">{countdown}</p> : null}
                 {approval.description ? (
                   <p className="whitespace-pre-wrap break-words">{approval.description}</p>
                 ) : null}
@@ -167,14 +207,30 @@ export function NativeChatApprovalCard({
                   onClick={() => onChoose(opt.send)}
                   className={cn(
                     'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                    i === 0
+                    i === 0 && !approval.neutralOptions
                       ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
                   )}
                 >
-                  {opt.label}
+                  {isSubmitting && opt.send === submittingOption ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                      {opt.label}
+                    </span>
+                  ) : (
+                    opt.label
+                  )}
                 </button>
               ))}
+              {approval.options.length === 0 && onOpenTerminal ? (
+                <button
+                  type="button"
+                  onClick={onOpenTerminal}
+                  className="rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

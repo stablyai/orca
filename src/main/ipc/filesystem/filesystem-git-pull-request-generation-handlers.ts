@@ -18,7 +18,7 @@ import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import { gitExecFileAsync } from '../../git/runner'
+import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { withLinkedIssueDraftContext } from '../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import { resolveSourceControlAiLinkedIssueMeta } from '../source-control/source-control-ai-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../../source-control/pull-request-template'

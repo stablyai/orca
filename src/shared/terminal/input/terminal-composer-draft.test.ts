@@ -170,6 +170,28 @@ describe('detectTerminalComposerDraft', () => {
     ).toBeNull()
   })
 
+  it.each(['gpt-5.4 high · ~/repo', 'gpt-5.4 high Fast · ~/repo'])(
+    'recognizes a Codex composer whose undimmed footer reads %s',
+    (footer) => {
+      expect(
+        detectTerminalComposerDraft({
+          rows: ['› review the change'],
+          typedRows: ['› review the change'],
+          promptGlyphBoldRows: [true],
+          rowsBelow: ['', `  ${footer}`],
+          typedRowsBelow: ['', `  ${footer}`],
+          rowsBelowWrapped: [false, false],
+          rowsBelowCustomForeground: [false, false],
+          beforeCursor: '› review the change',
+          afterCursor: '',
+          rawAfterCursor: '',
+          cursorHidden: false,
+          cursorViewportRow: 4
+        })
+      ).toMatchObject({ text: 'review the change', promptGlyph: '›' })
+    }
+  )
+
   it('rejects a hidden-cursor dialog even when its selected row uses a composer glyph', () => {
     expect(
       detectTerminalComposerDraft({

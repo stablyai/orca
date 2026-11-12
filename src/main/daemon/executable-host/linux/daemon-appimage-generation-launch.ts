@@ -7,7 +7,7 @@ import { resolveAppImageRuntimeIdentity } from '../../../updater/linux-package/a
 import {
   isAppImageExtractionComplete,
   resolveAppImageExtractedRoot
-} from '../../../cli/appimage-extracted-root'
+} from '../../../cli/appimage/appimage-extracted-root'
 import { envWithoutAppImageRuntime } from '../../../pty/shell-startup/appimage-terminal-env'
 import type { DurableDaemonScopeCommand } from '../../process-scopes/daemon-cgroup-scope'
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
 import { pairedServerMirrors } from '@/runtime/workspace-layout/frames/paired-server-workspace'
 import {

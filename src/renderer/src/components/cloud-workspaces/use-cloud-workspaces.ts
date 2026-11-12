@@ -5,7 +5,7 @@ import type {
   CloudWorkspaceRoutineRuns
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { availabilityRetryDelay } from '@/lib/availability-retry'
-import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
+import { installWindowVisibilityTimeoutPoller } from '@/lib/window-activity/window-visibility-timeout-poller'
 import { rememberCloudWorkspaces } from './cloud-workspace-identity'
 
 /** Presence is live; the list re-reads on this beat while visible (and on focus). */

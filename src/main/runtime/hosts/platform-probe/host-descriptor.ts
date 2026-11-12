@@ -5,7 +5,7 @@ import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
 } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
-import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/access/profile-state-access-identity'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
 import type { RuntimeSourceStamp } from '../../../../shared/runtime-source-env'
 

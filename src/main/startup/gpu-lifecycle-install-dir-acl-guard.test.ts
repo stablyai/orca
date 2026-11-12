@@ -31,7 +31,7 @@ import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker
-} from '../crash-reporting/gpu-crash-fallback-decision'
+} from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import {
   readGpuFallbackMarker,
   writeGpuFallbackMarker,

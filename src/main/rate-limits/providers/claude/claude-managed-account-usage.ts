@@ -2,7 +2,7 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import {
   getClaudeProfileRouter,
   getClaudeWslProfileRouter
-} from '../../../claude-accounts/claude-profile-installed-router'
+} from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { toWindowsWslPath } from '../../../../shared/wsl-paths'
 import type { ClaudeManagedAccountUsageOptions } from './claude-usage-fetch-options'
 import { fetchActiveClaudeRateLimits } from './claude-active-usage-fetch'

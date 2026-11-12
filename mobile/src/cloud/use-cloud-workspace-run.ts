@@ -32,7 +32,7 @@ import {
 } from './cloud-workspace-host-operations'
 import { ownerForCloudError, roleForCloudError } from './cloud-entitlement-copy'
 import { cloudWorkspaceProjectRoot } from './cloud-workspace-links'
-import { removeHostAndCloseClient } from '../transport/hosts/host-removal-lifecycle'
+import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
 import { useCloudDeliveryWatchdog } from './use-cloud-delivery-watchdog'
 import { useInvalidateCloudWorkspaces } from './use-cloud-workspaces'
 

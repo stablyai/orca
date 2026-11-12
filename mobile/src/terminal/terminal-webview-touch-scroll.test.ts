@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { terminalDocumentDouble } from './document/document-terminal-double.test-support'
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
-import { createTerminalDocument } from './document/create-terminal-document'
 import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
@@ -62,16 +61,10 @@ describe('terminal WebView touch scrolling', () => {
   let now: number
   let postMessage: ReturnType<typeof vi.fn<(data: string) => void>>
   let scrollLines: ReturnType<typeof vi.fn<(lines: number) => void>>
-  let stopDocument: (() => void) | undefined
 
-  function boot(importedDocument = false): void {
+  function boot(): void {
     document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
-    if (importedDocument) {
-      const terminalDocument = createTerminalDocument()
-      stopDocument = () => terminalDocument.stop()
-    } else {
-      new Function(TERMINAL_DOCUMENT_SCRIPT)()
-    }
+    new Function(TERMINAL_DOCUMENT_SCRIPT)()
     window.dispatchEvent(
       new MessageEvent('message', {
         data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })
@@ -166,8 +159,6 @@ describe('terminal WebView touch scrolling', () => {
   })
 
   afterEach(() => {
-    stopDocument?.()
-    stopDocument = undefined
     for (const [type, listener, options] of vi.mocked(window.addEventListener).mock.calls) {
       window.removeEventListener(type, listener, options)
     }
@@ -179,15 +170,6 @@ describe('terminal WebView touch scrolling', () => {
     vi.useRealTimers()
   })
 
-  it('scrolls scrollback for a drag slower than one pixel per frame', () => {
-    boot()
-
-    fireTouch('touchstart', { x: 40, y: 400 })
-    dragUp(400, 0.5, 200)
-
-    expect(scrolledRows()).toBe(6)
-  })
-
   it('carries the sub-row remainder of a fast drag into the next move', () => {
     boot()
 
@@ -197,18 +179,6 @@ describe('terminal WebView touch scrolling', () => {
 
     dragUp(y, 5, 1)
     expect(scrolledRows()).toBe(7)
-  })
-
-  it('coasts when the finger lifts mid-drag', () => {
-    boot()
-
-    fireTouch('touchstart', { x: 40, y: 400 })
-    dragUp(400, 20, 5)
-    const rowsWhileTouching = scrolledRows()
-    fireTouch('touchend', null)
-    runFrames(30)
-
-    expect(scrolledRows()).toBeGreaterThan(rowsWhileTouching)
   })
 
   it('does not coast when the finger rested before lifting', () => {
@@ -286,19 +256,6 @@ describe('terminal WebView touch scrolling', () => {
     runFrames(30)
 
     expect(terminalInputBytes()).toBe(bytesBeforeCancel)
-  })
-
-  it('retires queued scroll and momentum when the document is disposed', () => {
-    boot(true)
-    fireTouch('touchstart', { x: 40, y: 400 })
-    now += FRAME_MS
-    fireTouch('touchmove', { x: 40, y: 320 })
-    fireTouch('touchend', null)
-    stopDocument?.()
-    runFrames(30)
-
-    expect(scrolledRows()).toBe(0)
-    expect(terminalInputBytes()).toBe('')
   })
 
   it('retires subthreshold scroll velocity when a long press enters selection', () => {

@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   beginTerminalScrollIntentBufferRebuild,
   endTerminalScrollIntentBufferRebuild
-} from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
-import { getTerminalScrollIntentKind } from '@/lib/pane-manager/terminal-scroll-intent'
+} from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-rebuild'
+import { getTerminalScrollIntentKind } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import { keepWakeScrollPlace } from './wake-scroll-place'
 
 afterEach(() => vi.unstubAllGlobals())

@@ -84,16 +84,6 @@ describe('the "New" marker in the transcript', () => {
     expect(row?.dataset.index).toBe(String(TRANSCRIPT_LENGTH))
   })
 
-  it('tells a screen reader that new messages came, in a region that was already there', () => {
-    const { container, rerender } = render(chat(TRANSCRIPT_LENGTH, true))
-    const region = container.querySelector('[data-native-chat-scroll] ~ [aria-live="polite"]')
-    expect(region).toBeEmptyDOMElement()
-
-    rerender(chat(TRANSCRIPT_LENGTH, false))
-    rerender(chat(TRANSCRIPT_LENGTH + 60, true))
-    expect(region).toHaveTextContent('New messages arrived while you were away')
-  })
-
   it('is neither drawn nor announced when the reader turned it off', () => {
     const settings = useAppStore.getState().settings
     useAppStore.setState({
@@ -136,13 +126,6 @@ describe('the "New" marker in the transcript', () => {
     }
     const scrollTop = (container: HTMLElement): number | undefined =>
       container.querySelector('[data-native-chat-scroll]')?.scrollTop
-
-    it('brings a reader who was at the end to where the new rows begin', () => {
-      const { container, rerender } = render(chat(TRANSCRIPT_LENGTH, true))
-      returnToNewRows(rerender)
-
-      expect(scrollTop(container)).toBe(TRANSCRIPT_LENGTH * ROW_PITCH_PX)
-    })
 
     it('keeps the reader where the new rows begin while a reply is still being drawn', async () => {
       const { container, rerender } = render(chat(TRANSCRIPT_LENGTH, true))

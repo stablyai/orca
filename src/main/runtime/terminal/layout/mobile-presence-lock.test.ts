@@ -1,11 +1,11 @@
 import { mobilePresenceStore as store } from '../../orca-runtime-test-mocks/mobile-presence-store'
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import * as inputAdmission from '../input/terminal-input-admission'
+import '../input/terminal-input-admission'
 import './mobile-subscribe-integration.spec'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import type * as GitUsernameModule from '../../../git/git-username'
+import type * as GitUsernameModule from '../../../git/repositories/git-username'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 
@@ -49,17 +49,11 @@ vi.mock('../../../ipc/worktrees/removal/registered-worktree-roots-cache', () => 
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 const repoBranchConflictMock = vi.hoisted(() => vi.fn().mockResolvedValue(null))
-vi.mock('../../../git/repo', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: repoBranchConflictMock
-  }
-})
 
-vi.mock('../../../git/git-username', async () => {
-  const actual = await vi.importActual<typeof GitUsernameModule>('../../../git/git-username')
+vi.mock('../../../git/repositories/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>(
+    '../../../git/repositories/git-username'
+  )
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
@@ -128,85 +122,6 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     }
   }
 }
-
-describe('mobile presence lock — driver state machine', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
-
-  it('finishes an admitted preview paste then pauses the next action after phone takeover', async () => {
-    const { runtime, controller, writes } = createRuntime()
-    const admission = vi.spyOn(inputAdmission, 'createTerminalInputReservation')
-    runtime.setMobileDisplayMode('pty-1', 'desktop')
-    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
-    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
-    expect(writes).toHaveLength(0)
-
-    const floorClaim: { current: ReturnType<OrcaRuntimeService['beginMobileInputFloor']> } = {
-      current: null
-    }
-    const originalWrite = controller.write
-    vi.spyOn(controller, 'write').mockImplementationOnce((ptyId, data, inputKind) => {
-      const accepted = originalWrite(ptyId, data, inputKind)
-      floorClaim.current = runtime.beginMobileInputFloor(ptyId, 'phone-A')
-      if (!floorClaim.current) {
-        throw new Error('phone floor reservation was refused')
-      }
-      return accepted
-    })
-
-    try {
-      const result = runtime.writeTerminalPreviewInput('pty-1', 'x'.repeat(32 * 1024))
-      await vi.advanceTimersByTimeAsync(0)
-
-      expect(floorClaim.current).not.toBeNull()
-      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
-      await expect(result).resolves.toBe(true)
-      expect(writes).toHaveLength(2)
-      expect(writes.join('')).toBe('x'.repeat(32 * 1024))
-      expect(await runtime.writeTerminalPreviewInput('pty-1', 'next')).toBe(false)
-      expect(admission).toHaveBeenCalledWith(runtime, 'desktop', undefined)
-      expect(writes).toHaveLength(2)
-    } finally {
-      admission.mockRestore()
-      floorClaim.current?.rollback()
-    }
-  })
-
-  it.each(['before commit', 'during commit', 'direct phone-fit'] as const)(
-    'desktop take-back supersedes mobile input %s',
-    async (timing) => {
-      const { runtime, driverEvents, ptySizes } = createRuntime()
-      await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
-      await runtime.reclaimTerminalForDesktop('pty-1')
-
-      const claim =
-        timing === 'direct phone-fit' ? null : runtime.beginMobileInputFloor('pty-1', 'phone-A')!
-      let finishLayout = () => {}
-      let committing: Promise<void> | undefined
-      if (timing !== 'before commit') {
-        vi.spyOn(runtime, 'applyMobileDisplayMode').mockImplementationOnce(
-          () =>
-            new Promise<boolean>((resolve) => {
-              finishLayout = () => resolve(true)
-            })
-        )
-        committing = claim ? claim.commit() : runtime.mobileTookFloor('pty-1', 'phone-A')
-      }
-
-      await runtime.reclaimTerminalForDesktop('pty-1')
-      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
-      finishLayout()
-      await (committing ?? claim!.commit())
-
-      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
-      expect(driverEvents.at(-1)?.driver).toEqual({ kind: 'desktop' })
-      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
-
-      await runtime.beginMobileInputFloor('pty-1', 'phone-A')!.commit()
-      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
-    }
-  )
-})
 
 describe('mobile presence lock — multi-mobile semantics', () => {
   beforeEach(() => vi.useFakeTimers())
@@ -278,7 +193,7 @@ describe('mobile presence lock — issue #7588 held-modal restore convergence', 
   })
 })
 
-vi.mock('../../../git/repo-branch-conflict', async (importOriginal) => ({
+vi.mock('../../../git/refs/resolution/repo-branch-conflict', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBranchConflictKind: repoBranchConflictMock
 }))

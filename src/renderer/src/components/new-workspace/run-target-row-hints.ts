@@ -1,5 +1,5 @@
 import type { Translate } from '@/i18n/use-translate'
-import type { NeedsSetupProjectHostOption } from '@/lib/project-host-setup-options'
+import type { NeedsSetupProjectHostOption } from '@/lib/workspace/creation/project-host-setup-options'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 
 // Run on rows are options inside one listbox: their inline actions ("Connect", "Set project

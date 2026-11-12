@@ -6,11 +6,14 @@ import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
-import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
+import {
+  preservedBranchCleanupKey,
+  type PreservedBranchCleanup
+} from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import type { ForceDeleteWorktreeBranchResult } from '../../../../../../shared/worktree/create-types'
-import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
+
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
-import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/workspace/ownership/duplicate-paired-servers'
 
 export function createForceDeletePreservedBranch(
   _set: WorktreeSliceSet,

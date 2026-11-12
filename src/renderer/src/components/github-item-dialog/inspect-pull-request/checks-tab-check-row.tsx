@@ -1,6 +1,6 @@
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   CHECK_COLOR,
   CHECK_ICON,

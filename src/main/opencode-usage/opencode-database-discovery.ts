@@ -5,7 +5,7 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import {
   resolveOpenCodeDataDirectory,
   resolveOpenCodeDatabasePath
-} from '../opencode/opencode-data-directory'
+} from '../opencode/accounts/opencode-data-directory'
 import type { OpenCodeUsageProcessedDatabase } from './types'
 
 type OpenCodeDatabaseOverride = {

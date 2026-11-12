@@ -18,7 +18,7 @@ import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle
 import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { withCrossStoreChildKey } from '../../../shared/worktree/cross-store-lineage-records'
 import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
-import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
+import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-scope'
 import { withoutDiscoveryShadows } from './wsl-drive-unc-discovery-shadows'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 import {

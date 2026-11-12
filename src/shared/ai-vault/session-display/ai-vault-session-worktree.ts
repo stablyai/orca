@@ -84,15 +84,28 @@ function resolveWorktreeInfoFromCandidates(
   session: AiVaultSession,
   candidates: readonly WorktreeCandidate[]
 ): AiVaultSessionWorktreeInfo | null {
+  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
+  const hostCandidates = candidates.filter(
+    (candidate) => !sessionHostId || candidate.hostId === sessionHostId
+  )
+  // A live recorded workspace beats cwd because folder workspaces can share one path.
+  const recorded = hostCandidates.find(
+    (candidate) =>
+      candidate.worktree.id === session.structuredSession?.workspaceId &&
+      !candidate.worktree.isArchived
+  )
+  if (recorded) {
+    return worktreeInfoFromCandidate(recorded)
+  }
+
   if (!session.cwd) {
     return null
   }
 
-  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
   const matched = matchAiVaultSessionCwdCandidates(
     session,
     session.cwd,
-    candidates.filter((candidate) => !sessionHostId || candidate.hostId === sessionHostId),
+    hostCandidates,
     compareWorktreeCandidates
   )
 
@@ -105,11 +118,15 @@ function resolveWorktreeInfoFromCandidates(
     }
   }
 
+  return worktreeInfoFromCandidate(best)
+}
+
+function worktreeInfoFromCandidate(candidate: WorktreeCandidate): AiVaultSessionWorktreeInfo {
   return {
-    status: best.status,
-    label: best.worktree.displayName || aiVaultWorktreeCompactPath(best.path),
-    path: best.path,
-    worktreeId: best.worktree.id
+    status: candidate.status,
+    label: candidate.worktree.displayName || aiVaultWorktreeCompactPath(candidate.path),
+    path: candidate.path,
+    worktreeId: candidate.worktree.id
   }
 }
 

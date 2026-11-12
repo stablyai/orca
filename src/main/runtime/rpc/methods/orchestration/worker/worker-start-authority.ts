@@ -4,7 +4,7 @@ import { liveDispatchCreatorEvaluation } from '../../../../orchestration/db/disp
 import { selectExistingWorkerStartRun } from './worker-start-run-authority'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type {
   DispatchContextRow,
@@ -27,7 +27,7 @@ export function resolveWorkerStartRun(
   args: {
     coordinator: OrchestrationCallerIdentity | null
     from: string
-    callerSession: OrchestrationSessionCaller | undefined
+    callerSession: OrchestrationEntryCaller | undefined
     runId: string | undefined
     /** Objective for a Run this start may create; absent when it names an existing Task. */
     objective: string | undefined
@@ -120,7 +120,7 @@ export function qualifyLiveWorkerFollowUp(
   runtime: OrcaRuntimeService,
   coordinator: OrchestrationCallerIdentity | null,
   from: string,
-  session: OrchestrationSessionCaller | undefined,
+  session: OrchestrationEntryCaller | undefined,
   runId: string,
   followUp: Parameters<ReturnType<typeof createWorkerFollowUpQualification>>[1]
 ) {

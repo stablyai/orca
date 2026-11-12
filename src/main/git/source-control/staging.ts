@@ -1,6 +1,8 @@
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 import { gitReportedPath, literalPathspec } from './git-pathspec'
 import { encodeGitPathspecs } from '../../../shared/git/paths/git-pathspec-stdin'

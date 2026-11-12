@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   BrowserExtensionContextMenuItem,
   BrowserExtensionContextMenuPayload

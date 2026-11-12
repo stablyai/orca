@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type ScrollViewInstance,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
 import { triggerSelection } from '../platform/haptics'
 import { resolveTabStripScrollOffset } from '../session/tabs/tab-strip-scroll'
 import { colors, concentricRadius, feedback, radii, spacing } from '../theme/mobile-theme'
@@ -38,7 +46,7 @@ type Props<Value extends string> = {
 export function MobileSegmentedControl<Value extends string>(props: Props<Value>) {
   useMobileColorScheme()
   const [trackWidth, setTrackWidth] = useState(0)
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
   const scrollX = useRef(0)
   const [widths] = useState(() => new Map<string, number>())
   const revealSelected = (): void => {

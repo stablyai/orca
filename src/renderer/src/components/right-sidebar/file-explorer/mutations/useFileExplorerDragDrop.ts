@@ -5,7 +5,7 @@ import {
   getWorkspaceFileDragRejectionMessage,
   readWorkspaceFileDragPaths,
   WORKSPACE_FILE_PATH_MIME
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import { useFileExplorerDragEdgeScroll } from './useFileExplorerDragEdgeScroll'
 import { useFileExplorerMoveDrop } from './useFileExplorerMoveDrop'

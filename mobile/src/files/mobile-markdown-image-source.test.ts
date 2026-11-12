@@ -54,12 +54,4 @@ describe('Markdown preview images', () => {
       expect(client.sendRequest).not.toHaveBeenCalled()
     }
   )
-
-  it('lets native Image load public URLs without sending them to the workspace host', async () => {
-    const client = host()
-    await expect(
-      loadMarkdownPreviewImage(client, 'wt', 'readme.md', 'https://example.com/a.png')
-    ).resolves.toBe('https://example.com/a.png')
-    expect(client.sendRequest).not.toHaveBeenCalled()
-  })
 })

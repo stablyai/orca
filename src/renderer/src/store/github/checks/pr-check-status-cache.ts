@@ -4,11 +4,8 @@ import type { AppState } from '../../types'
 import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import { derivePRCheckStatus as deriveCheckStatusFromChecks } from '../../../../../shared/source-control/checks/pr-check-status'
-import {
-  getPRChecksCacheTtl,
-  prChecksCacheSuffix,
-  runtimeScopedRepoCacheKey
-} from '../cache/cache-identity'
+import { getPRChecksCacheTtl, prChecksCacheSuffix } from '../cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/github-cache-key'
 
 export function applyCachedChecksStatus(
   state: AppState,
@@ -33,7 +30,7 @@ export function applyCachedChecksStatus(
       ? [
           ...(pr.headSha
             ? [
-                runtimeScopedRepoCacheKey(
+                getGitHubRepoCacheKey(
                   alias.repoPath,
                   alias.repoId,
                   prChecksCacheSuffix(pr.number, pr.prRepo, pr.headSha),
@@ -44,7 +41,7 @@ export function applyCachedChecksStatus(
                 )
               ]
             : []),
-          runtimeScopedRepoCacheKey(
+          getGitHubRepoCacheKey(
             alias.repoPath,
             alias.repoId,
             prChecksCacheSuffix(pr.number, pr.prRepo),
@@ -57,7 +54,7 @@ export function applyCachedChecksStatus(
       : []),
     ...(pr.headSha
       ? [
-          runtimeScopedRepoCacheKey(
+          getGitHubRepoCacheKey(
             alias.repoPath,
             undefined,
             prChecksCacheSuffix(pr.number, pr.prRepo, pr.headSha),
@@ -68,7 +65,7 @@ export function applyCachedChecksStatus(
           )
         ]
       : []),
-    runtimeScopedRepoCacheKey(
+    getGitHubRepoCacheKey(
       alias.repoPath,
       undefined,
       prChecksCacheSuffix(pr.number, pr.prRepo),

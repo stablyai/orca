@@ -3,8 +3,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
-} from '../../../codex-accounts/managed-codex-auth-readiness'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
+} from '../../../codex-accounts/credentials/managed-codex-auth-readiness'
+import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
 import {
   forgetCodexPaneAccount,
   getCodexPaneAccount,

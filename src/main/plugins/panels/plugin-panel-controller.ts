@@ -27,7 +27,7 @@ import {
   PluginPanelSessions,
   type PluginPanelSessionBinding,
   type ResolvedPluginPanelSession
-} from './plugin-panel-sessions'
+} from './panel-lifetime/plugin-panel-sessions'
 import type { PluginPanelCaller } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 type PluginPanelControllerOptions = {

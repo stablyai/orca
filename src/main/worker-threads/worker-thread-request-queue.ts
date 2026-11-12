@@ -129,8 +129,12 @@ export class WorkerThreadRequestQueue<
     }
   }
 
+  retired(): Promise<void> {
+    return this.host.retired()
+  }
+
   private pump(): void {
-    if (this.active || this.queue.length === 0) {
+    if (this.disposed || this.active || this.queue.length === 0) {
       return
     }
     // A shared signal is already aborted before its remaining listeners run.

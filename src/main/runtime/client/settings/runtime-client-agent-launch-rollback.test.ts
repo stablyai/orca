@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import {
   fixture,
   withReopenedProfileStore
-} from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
+} from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
 import {
   agentPermissionChoices,

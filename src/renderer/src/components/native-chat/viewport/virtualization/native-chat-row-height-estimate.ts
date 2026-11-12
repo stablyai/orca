@@ -4,6 +4,7 @@ import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/
 import { NATIVE_CHAT_TURN_DIFF_FILE_LIMIT } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { agentMessageIsCompact } from '../../../../../../shared/agent-session/agent-message-presentation'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { withoutSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
@@ -61,7 +62,8 @@ const TURN_DIFF_PX = 28
 /** The opened-PR card: its heading, then one row per pull request. */
 const OPENED_PULL_REQUEST_ROW_PX = 30
 const RECEIPT_PX = 56
-/** How far assistant prose's controls hang below the row (`-mb-5`) outside a section. */
+/** How far assistant prose's controls hang below the row (`-mb-5`) when they may; a row that keeps
+ *  them in flow is that much taller. */
 const AGENT_CONTROLS_OVERHANG_PX = 20
 const ROW_MIN_PX = 24
 /** Charge internal gap-5 only; the virtualizer owns inter-row gaps, which would otherwise compound drift. */
@@ -110,7 +112,7 @@ export function nativeChatRowContentMetrics(
   ) {
     return cached.metrics
   }
-  const content = deriveNativeChatRowContent(message.blocks)
+  const content = deriveNativeChatRowContent(withoutSentImagePromptMarkers(message))
   const maxLines = Math.ceil(ROW_MAX_PX / typography.lineHeightPx)
   const markdown = nativeChatProseToMarkdown(
     content.prose,
@@ -146,6 +148,17 @@ export function nativeChatWorkRunContentMetrics(
     toolCount: 1,
     subagentGroupCount: 0
   }
+}
+
+/** A row estimate with its response controls in flow, for a row estimated with them hanging. */
+export function nativeChatRowHeightWithControlsInFlow(
+  estimatedHeight: number,
+  typography = DEFAULT_ROW_TYPOGRAPHY
+): number {
+  return Math.min(
+    ROW_MAX_PX,
+    estimatedHeight + AGENT_CONTROLS_OVERHANG_PX * typography.spacingScale
+  )
 }
 
 export function estimateNativeChatRowHeight(

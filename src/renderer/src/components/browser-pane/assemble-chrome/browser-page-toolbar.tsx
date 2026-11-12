@@ -1,3 +1,4 @@
+import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -151,7 +152,7 @@ export function BrowserPageToolbar({
         // Guest replacement loses history; Back/Forward cross the conversion once guest history runs out.
         goBack: () => {
           if (canGoBack) {
-            webviewRef.current?.goBack()
+            issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack())
             return
           }
           if (convertedFrom) {
@@ -160,7 +161,7 @@ export function BrowserPageToolbar({
         },
         goForward: () => {
           if (canGoForward) {
-            webviewRef.current?.goForward()
+            issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward())
             return
           }
           if (convertedTo) {

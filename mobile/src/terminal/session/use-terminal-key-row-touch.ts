@@ -3,7 +3,7 @@ import type {
   GestureResponderEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  ScrollView
+  ScrollViewInstance
 } from 'react-native'
 import {
   sameSmartKeySet,
@@ -35,7 +35,7 @@ export function useTerminalKeyRowTouch({
   latest,
   cancelAccessoryRepeat
 }: {
-  scrollRef: RefObject<ScrollView | null>
+  scrollRef: RefObject<ScrollViewInstance | null>
   latest: AgentSmartKeySet | null
   cancelAccessoryRepeat: () => void
 }) {

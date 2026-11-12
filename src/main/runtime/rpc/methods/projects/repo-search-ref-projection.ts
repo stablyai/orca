@@ -3,7 +3,7 @@ import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../../../sh
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'
 import type { RuntimeRepoSearchRefs } from '../../../../../shared/runtime-worktree-contracts'
 
-import { isQualifiedBaseRef } from '../../../../git/base-ref-search-selector'
+import { isQualifiedBaseRef } from '../../../../git/refs/resolution/base-ref-search-selector'
 
 export function includesQualifiedSearchRefs(
   clientCapabilities: readonly RuntimeCapability[] | undefined

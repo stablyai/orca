@@ -1,6 +1,7 @@
 import { AppState, type AppStateStatus } from 'react-native'
+import { currentAppStateStatus } from '../platform/app-state-status'
 
-function outsideForeground(state: AppStateStatus): boolean {
+function outsideForeground(state: AppStateStatus | null): boolean {
   return state === 'background' || state === 'inactive'
 }
 
@@ -17,7 +18,7 @@ export function setForegroundTimer(run: () => void, delayMs: number): () => void
     handle ??= setTimeout(() => {
       handle = null
       // A fire queued behind a not-yet-delivered background change must wait for the next activation.
-      if (outsideForeground(AppState.currentState)) {
+      if (outsideForeground(currentAppStateStatus())) {
         return
       }
       subscription.remove()
@@ -31,7 +32,7 @@ export function setForegroundTimer(run: () => void, delayMs: number): () => void
       arm()
     }
   })
-  if (!outsideForeground(AppState.currentState)) {
+  if (!outsideForeground(currentAppStateStatus())) {
     arm()
   }
   return () => {

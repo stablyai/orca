@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaBillingOpenResult } from '../../../../../shared/orca-billing'
 import { getBillingGeneration, recordBillingStatusIfCurrent } from '../billing-summary-store'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import {
   activeCloudSetupSessionId,
   startCloudSetupSession

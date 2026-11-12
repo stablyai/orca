@@ -29,7 +29,7 @@ import {
   type TaskSourceHostAvailability
 } from '../task-source-context-summary'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import type { Translate } from '@/i18n/use-translate'
 export function isGitLabMRFilter(

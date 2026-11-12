@@ -7,7 +7,7 @@ afterEach(() => {
 describe('main-process fatal error guards (issue #9441)', () => {
   it('never throws when the breadcrumb sink fails', async () => {
     vi.resetModules()
-    vi.doMock('../crash-reporting/durable-crash-breadcrumb', () => ({
+    vi.doMock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
       recordDurableCrashBreadcrumb: vi.fn(() => {
         throw new Error('sink offline')
       })
@@ -26,7 +26,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
   it('bounds and isolates console formatting for hostile rejection values', async () => {
     vi.resetModules()
     const record = vi.fn()
-    vi.doMock('../crash-reporting/durable-crash-breadcrumb', () => ({
+    vi.doMock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
       recordDurableCrashBreadcrumb: record
     }))
     const { recordFatalMainProcessError } = await import('./main-process-error-guards')
@@ -61,7 +61,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
   it('caps oversized rejection diagnostics before recording or logging', async () => {
     vi.resetModules()
     const record = vi.fn()
-    vi.doMock('../crash-reporting/durable-crash-breadcrumb', () => ({
+    vi.doMock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
       recordDurableCrashBreadcrumb: record
     }))
     const { recordFatalMainProcessError } = await import('./main-process-error-guards')
@@ -82,7 +82,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
 
   it('rethrows non-pipe errors outside the uncaughtException handler', async () => {
     vi.resetModules()
-    vi.doMock('../crash-reporting/durable-crash-breadcrumb', () => ({
+    vi.doMock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
       recordDurableCrashBreadcrumb: vi.fn()
     }))
     const { installUncaughtPipeErrorGuard } = await import('./main-process-error-guards')

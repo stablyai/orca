@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { EphemeralVmWorkspaceLifecycleResult } from '../../../../../shared/ephemeral-vm-runtimes'
-import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { ephemeralVmFailureFromError } from '../../../../../shared/ephemeral-vm-failure-copy'
 import {
   getCloudWorkspaceSnapshot,
@@ -30,7 +30,7 @@ import {
   releaseWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
 import { requestWakeAfterSleep } from '@/lib/worktree-sleep-wake-request'
-import { markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { markWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { holdActiveCloudSleepView } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-view-hold'
 
 /** Coded failures render through the catalog; a thrown IPC error only has its message. */

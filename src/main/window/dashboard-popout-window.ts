@@ -15,6 +15,7 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
+import { isMacAppPasteInput } from './mac-app-paste-input'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
@@ -192,8 +193,14 @@ export function createOrFocusDashboardPopout(
     }
   })
 
-  // No renderer shortcut routing exists here; handle zoom chords and yield everything else.
+  // No renderer shortcut routing exists here; handle paste and zoom chords and yield everything else.
   window.webContents.on('before-input-event', (event, input) => {
+    if (isMacAppPasteInput(input)) {
+      // Kitty-mode xterm encodes Cmd+V as CSI u and consumes it, so the Edit menu accelerator never fires.
+      event.preventDefault()
+      window.webContents.send('ui:appMenuPaste')
+      return
+    }
     if (input.type !== 'keyDown') {
       return
     }

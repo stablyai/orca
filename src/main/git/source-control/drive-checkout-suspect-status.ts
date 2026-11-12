@@ -8,16 +8,17 @@ import {
   findCoveringLocalWatchRoot,
   observeLocalWatcherEvents
 } from '../../ipc/filesystem/watchers/local-watcher-event-observers'
-import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { usesHostGitForWslLinkedWorktree } from '../command-runner/wsl-linked-worktree-git-routing'
+import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
+import { gitStreamStdout } from '../command-runner/git-stream-stdout'
+import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import {
   withWslWindowsCheckoutGitConfig,
   wslWindowsCheckoutKey
-} from '../wsl-windows-checkout-git-config'
+} from '../command-runner/host-routing/wsl-windows-checkout-git-config'
 import { DriveCheckoutSuspectPaths } from './drive-checkout-suspect-paths'
 import { bulkPathspecCommands } from './git-pathspec'
 import type { GetStatusOptions } from './get-status-options'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 // Why: the later `-c` overrides the injected `core.checkStat=minimal` for just these paths.
 const TARGETED_STATUS_ARGS = [

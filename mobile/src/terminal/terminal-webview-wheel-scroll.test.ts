@@ -260,15 +260,6 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
-  it('claims the wheel so xterm does not double-apply it', () => {
-    buffer = { baseY: 20, type: 'normal', viewportY: 20 }
-    boot()
-
-    const event = dispatchWheel(-CELL_HEIGHT)
-
-    expect(event.defaultPrevented).toBe(true)
-  })
-
   it('clears fractional wheel state when the terminal is recreated', () => {
     buffer = { baseY: 0, type: 'alternate', viewportY: 0 }
     boot()

@@ -100,6 +100,8 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   target: CodexAccountSelectionTarget
   before: ClaudeAccountSnapshot
   after: ClaudeAccountSnapshot
+  /** Switched from a phone or the CLI, where no one can answer a dialog on this computer. */
+  madeElsewhere?: true
 }): Promise<'show-confirmation' | 'handled'> {
   const fromAccountId = claudeLaunchAccountId(args.before.state, args.before.accountId)
   const toAccountId = claudeLaunchAccountId(args.after.state, args.after.accountId)
@@ -150,7 +152,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     return 'handled'
   }
   // Why re-read: the setting may change while the scan runs.
-  const policy = readPolicy()
+  const policy = readPolicy(args.madeElsewhere)
   if (policy === 'keep') {
     return 'show-confirmation'
   }
@@ -270,8 +272,10 @@ function warnSharedSessions(count: number, previous: string): void {
   )
 }
 
-function readPolicy(): ClaudeAccountSwitchRunningSessions {
-  return useAppStore.getState().settings?.claudeAccountSwitchRunningSessions ?? 'ask'
+function readPolicy(madeElsewhere?: true): ClaudeAccountSwitchRunningSessions {
+  const policy = useAppStore.getState().settings?.claudeAccountSwitchRunningSessions ?? 'ask'
+  // Why: no one at the phone sees a dialog here; restarts still wait for each turn to end.
+  return policy === 'ask' && madeElsewhere ? 'restart' : policy
 }
 
 export function resetClaudeAccountSwitchSessionsForTests(): void {

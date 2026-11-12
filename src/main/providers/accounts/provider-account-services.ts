@@ -15,14 +15,14 @@ import { inactiveCodexHomeUnlessStopped } from '../../rate-limits/inactive-codex
 import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
-import { readOpenCodeGoApiKey } from '../../opencode/opencode-go-api-key-store'
+import { readOpenCodeGoApiKey } from '../../opencode/accounts/opencode-go-api-key-store'
 import {
   getAntigravityAccountService,
   setAntigravityNativeCredentialChangeListener
 } from '../../antigravity/native-account-host'
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
-import { normalizeCodexRuntimeSelection } from '../../codex-accounts/runtime-selection'
-import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/runtime-selection'
+import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
+import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {

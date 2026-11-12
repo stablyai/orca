@@ -22,7 +22,7 @@ import type {
   StructuredAgentLaunchHooks,
   StructuredAgentLaunchSettlement
 } from './continuation/structured-agent-launch-settlement'
-import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
+import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { LaunchAgentInNewTabArgs } from './new-tab/launch-agent-in-new-tab-args'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'

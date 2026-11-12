@@ -1,6 +1,6 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,

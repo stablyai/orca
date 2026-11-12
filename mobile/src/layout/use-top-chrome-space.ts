@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useWindowDimensions, type View } from 'react-native'
+import { useWindowDimensions, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ReservedRect } from '../../modules/orca-reserved-regions/src'
 import { useReservedRegions } from './reserved-regions'
 import { topChromeSpace } from './top-chrome-space'
 
 export function useTopChromeSpace() {
-  const ref = useRef<View>(null)
+  const ref = useRef<HostInstance>(null)
   const [frame, setFrame] = useState<ReservedRect | null>(null)
   const dimensions = useWindowDimensions()
   const { top } = useSafeAreaInsets()

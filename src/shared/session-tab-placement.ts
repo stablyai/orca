@@ -1,4 +1,7 @@
-import { insertTabIdIntoOrder, partitionPinnedTabOrder } from './workspace-layout/tab-order'
+import {
+  insertTabIdIntoOrder,
+  partitionPinnedTabOrder
+} from './workspace-layout/tab-groups/tab-order'
 
 /** Call-local neighbors survive an anchor retiring while creation is awaited. */
 export type CapturedSessionTabPlacement = { preceding: string[]; following: string[] }

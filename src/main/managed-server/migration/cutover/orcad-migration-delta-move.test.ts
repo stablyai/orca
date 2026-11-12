@@ -26,19 +26,19 @@ import {
   listOrcadMigrationCutoverChainForTarget,
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { fakeOrcadMigrationDestination } from './testing/orcad-migration-destination-fake'
 import { keepOrcadServerVersion, runOrcadDeltaMove } from './orcad-migration-delta-move'
 import { orcadSourceStoreWithout, planOrcadDeltaMove } from './orcad-migration-delta-plan'
 import {
   createOrcadMigrationManifest,
   orcadMigrationCatalogIds
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+} from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 
 import { MAX_ORCAD_MIGRATION_MANIFEST_BYTES } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
-import { retainOrcadMigrationSource } from '../../../persistence/migrating-orcad-catalog/orcad-migration-source-retention'
-import { reconcileManagedOrcadSshTargets } from '../../../persistence/migrating-orcad-catalog/orcad-retained-source'
-import { visibleRepos } from '../../../persistence/migrating-orcad-catalog/orcad-source-visibility'
+import { retainOrcadMigrationSource } from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
+import { reconcileManagedOrcadSshTargets } from '../../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
+import { visibleRepos } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import { SshConnectionStore } from '../../../ssh/targets/ssh-connection-store'
 import { resolveHostServerOnConnect } from '../../../ssh/host-server/ssh-host-server-on-connect'
 import { hostServerDepsStub } from '../../../ssh/host-server/testing/ssh-host-server-on-connect-test-deps'

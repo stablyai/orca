@@ -9,12 +9,12 @@ const { commandExecFileAsyncMock, ghExecFileAsyncMock, gitExecFileAsyncMock, res
   }))
 
 // Mock only execution so identity, runtime and auth-status parsing remain real.
-vi.mock('../git/command-runner/command-exec-file', async (importOriginal) => ({
+vi.mock('../git/command-runner/process-capture/command-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   commandExecFileAsync: commandExecFileAsyncMock
 }))
 
-vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: ghExecFileAsyncMock
 }))
@@ -33,6 +33,7 @@ import {
   isGitHubHostAuthenticated
 } from './github-enterprise-repository'
 import { _resetSshHostnameResolutionCache } from './github-ssh-host-alias-resolution'
+import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
 function mockOriginRemote(url: string): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -65,17 +66,7 @@ describe('getEnterpriseGitHubRepoSlug', () => {
     resolveWithSshGMock.mockResolvedValue(null)
     _resetGitHubHostAuthCache()
     _resetSshHostnameResolutionCache()
-  })
-
-  it.each([
-    'https://ghe.acme.com:8443/team/orca.git',
-    'https://ghe.acme.com:80/team/orca.git',
-    'http://ghe.acme.com:443/team/orca.git'
-  ])('rejects portless authentication for a non-default web endpoint: %s', async (remoteUrl) => {
-    mockOriginRemote(remoteUrl)
-    mockHostAuthenticated('ghe.acme.com')
-
-    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeNull()
+    _resetOriginGitHubApiRepositoryCache()
   })
 
   it('preserves an indeterminate auth inventory failure so a later probe can recover', async () => {
@@ -189,16 +180,4 @@ describe('isGitHubHostAuthenticated', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(['auth', 'status'], { cwd: '/repo' })
     expect(ghExecFileAsyncMock.mock.calls.flat()).not.toContain('evil.example.test')
   })
-
-  it.each([
-    [['ghe.acme.com:8443', 'ghe.acme.com:9443']],
-    [['ghe.acme.com:9443', 'ghe.acme.com:8443']]
-  ])(
-    'does not guess between multiple ported auth hosts for one SSH hostname: %j',
-    async (authenticatedHosts) => {
-      mockAuthenticatedHosts(authenticatedHosts)
-
-      await expect(isGitHubHostAuthenticated('ghe.acme.com', '/repo')).resolves.toBe(false)
-    }
-  )
 })

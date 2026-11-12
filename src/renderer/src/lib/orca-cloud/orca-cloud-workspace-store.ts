@@ -13,7 +13,7 @@ import {
   endWorkspaceWake
 } from '@/components/terminal-pane/input/wake-input-buffer'
 import { useSyncExternalStore } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import type {
   CloudOomEvent,
   CloudWakeProgressEvent,

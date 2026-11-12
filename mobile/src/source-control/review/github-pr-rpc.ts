@@ -2,7 +2,7 @@ import { GITHUB_CONNECTION_CHANGED, githubOperationResponse } from './github-tar
 import { captureMobilePRCheckContract } from './pr-check-observation-contract'
 import { acceptPRCheckObservation } from '../../../../src/shared/github/complete-pr-check-owner'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { withGitHubTargetOperation } from '../../tasks/github-work-item-operation'
+import { withGitHubTargetOperation } from './github-work-item-operation'
 import { requireGitHubWorkItemTargetDetails } from '../../../../src/shared/github/work-item-target'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../src/shared/github/check-types'
 import type {
@@ -28,7 +28,7 @@ import {
 } from './github-pr-read-operations'
 import type { GitHubPrSettleableOperation } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { translate } from '../../i18n/mobile-i18n'
 
 export type GitHubPrReadOutcome<T> = { ok: true; result: T } | { ok: false; error: string }
@@ -64,7 +64,7 @@ async function settleGithubPrRead<Value>(
 
 // Gate the PR icon on a GitHub remote independently of whether this branch has an open PR.
 export function fetchGithubRepoSlug(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string
 ): Promise<GitHubPrReadOutcome<GitHubPrRepoSlug | null>> {
   return settleGithubPrRead(githubPrRepoSlugRead, () =>
@@ -76,7 +76,7 @@ export function fetchGithubRepoSlug(
 }
 
 export function fetchHostedReviewForBranch(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { branch: string; linkedGitHubPR?: number | null }
 ): Promise<GitHubPrReadOutcome<HostedReviewInfo | null>> {
@@ -94,7 +94,7 @@ export function fetchHostedReviewForBranch(
 
 // Raise decoded upstream-error here so the sidebar retains host text; it is not a protocol decode failure.
 export async function fetchPRForBranch(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     branch: string
@@ -224,7 +224,7 @@ export async function fetchWorkItemDetails(
 }
 
 export function fetchPRChecks(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     prNumber: number
@@ -251,7 +251,7 @@ export function fetchPRChecks(
 }
 
 export function fetchPRCheckDetails(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     checkRunId?: number

@@ -17,7 +17,7 @@ import {
   getProviderChecksOutcome
 } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { CHECK_COLOR } from './check-presentation'
 import {
   getBrokenChecks,

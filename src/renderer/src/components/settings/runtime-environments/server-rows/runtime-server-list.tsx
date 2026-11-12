@@ -8,7 +8,7 @@ import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/manag
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { duplicatePairedServerNames } from '@/lib/duplicate-paired-servers'
+import { duplicatePairedServerNames } from '@/lib/workspace/ownership/duplicate-paired-servers'
 import { LoadingSpinner } from '../../../LoadingSpinner'
 import { Button } from '../../../ui/button'
 import { migrationPhaseLabel } from '../managed-servers/managed-server-copy'

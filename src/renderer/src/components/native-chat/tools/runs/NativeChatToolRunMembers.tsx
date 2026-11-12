@@ -1,10 +1,10 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   distanceFromBottom,
   NATIVE_CHAT_FOLLOW_REARM_PX
 } from '../../viewport/scroll/native-chat-autoscroll'
-import { setWithLRU } from '@/lib/scroll-cache'
+import { setWithLRU } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import {
   MAX_NATIVE_CHAT_DISCLOSURES,
   NativeChatDisclosureContext

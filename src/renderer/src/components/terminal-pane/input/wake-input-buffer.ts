@@ -7,7 +7,7 @@
 // and other control keys are dropped. Held typing is dropped when the wake fails, a while after it
 // settles without a terminal to take it, and when the workspace wakes again.
 
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { applyWakeInput } from './wake-input-text'
 import { noteUserInputForPane, pruneUserInput, resetPaneUserInputForTests } from './pane-user-input'
 

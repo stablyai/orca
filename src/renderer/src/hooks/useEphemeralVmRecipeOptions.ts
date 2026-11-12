@@ -4,7 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/e
 import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
 import { useAppStore } from '@/store'
 import type { EphemeralVmFailure } from '../../../shared/ephemeral-vm-failure-copy'
-import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { takeOrcaCloudSelectionAfterSignIn } from '@/lib/orca-cloud-select-after-sign-in'
 import { onOrcaCloudCheckoutReturn } from '@/lib/orca-cloud-after-checkout'

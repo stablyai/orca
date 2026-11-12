@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import { buildStructuredJournalArchive } from './structured-worker-journal-archive'
+import { boundStructuredJournalTail } from './structured-worker-journal-archive'
 import { foldToolMessages } from '../../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { pairToolBlocks } from '../../../../../shared/native-chat/tools/native-chat-tool-pairs'
 
@@ -28,16 +28,9 @@ function longJournal(count: number): AgentJournalRenderItem[] {
   )
 }
 
-function archive(items: AgentJournalRenderItem[], hasOlder = false) {
-  return buildStructuredJournalArchive({
-    agent: 'claude',
-    processIncarnation: 'structured:session-1',
-    items,
-    hasOlder
-  })
-}
+const archive = boundStructuredJournalTail
 
-describe('buildStructuredJournalArchive', () => {
+describe('boundStructuredJournalTail', () => {
   it('keeps the worker final answer when the journal exceeds the bound', () => {
     // Forward bounding keeps early exploration; archive tail bounding must retain the final answer.
     const items = longJournal(200)

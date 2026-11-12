@@ -19,7 +19,7 @@ import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
 import { readOrcadProcessIncarnation } from './orcad-process-start-time'
 import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 import { resolveUserDataPath } from './orcad-app-paths'
-import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 import { readRuntimeMetadata } from '../runtime/rpc/server/runtime-metadata'
 import {
   RUNTIME_SOCKET_NAME_REGEX,

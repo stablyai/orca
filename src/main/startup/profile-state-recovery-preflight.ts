@@ -12,8 +12,8 @@ import {
   type ProfileStateRecoveryResponse
 } from '../../shared/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from '../i18n/main-i18n'
-import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
-import { rollbackProfileState } from '../persistence/profile-state/profile-state-recovery-command'
+import { acquireProfileStateMaintenance } from '../persistence/profile-state/access/profile-state-access'
+import { rollbackProfileState } from '../persistence/profile-state/recovery/profile-state-recovery-command'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
 import { acquireSingleInstanceLock } from './single-instance-lock'
 

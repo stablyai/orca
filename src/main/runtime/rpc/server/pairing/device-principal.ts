@@ -1,5 +1,5 @@
 import type { DeviceEntry } from './device-entry'
-import type { RpcCallerScope } from '../../rpc-caller-scope'
+import type { RpcCallerScope } from '../../callers/rpc-caller-scope'
 import { createHash } from 'node:crypto'
 
 /** Socket revoke/close uses deviceId; per-client drivers, dictation and file grants use clientId. */

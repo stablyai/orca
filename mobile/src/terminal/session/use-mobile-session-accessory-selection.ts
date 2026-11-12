@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { getRepoIdFromWorktreeId } from '../../../../src/shared/worktree/id'
-import { AppState, Keyboard, Platform, type View } from 'react-native'
+import { AppState, Keyboard, Platform, type HostInstance } from 'react-native'
 import {
   createTerminalAccessoryRepeatController,
   createTerminalAccessoryRepeatSender
@@ -127,7 +127,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     [accessoryRepeat]
   )
   const setMobileSessionRootRef = useCallback(
-    (node: View | null): void => {
+    (node: HostInstance | null): void => {
       if (node !== null) {
         return
       }

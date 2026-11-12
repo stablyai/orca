@@ -326,7 +326,7 @@ public enum BackgroundInputTransport {
         }
     }
 
-    private static func isChromiumNode(_ element: AXUIElement) -> Bool {
+    public static func isChromiumNode(_ element: AXUIElement) -> Bool {
         var names: CFArray?
         guard AXUIElementCopyAttributeNames(element, &names) == .success, let names = names as? [String] else {
             return false

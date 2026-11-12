@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
-import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { HostedTerminalQuickCommand } from './use-terminal-quick-command-hosts'
 

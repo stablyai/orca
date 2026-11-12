@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { ephemeralVmCleanupErrorText, ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { ephemeralVmCleanupErrorText, ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { CLOUD_ASLEEP_DELETE_REFUSAL } from '../../../../../../shared/worktree/removal'
@@ -8,7 +8,7 @@ import type { RemoveWorktreeOptions } from './worktree-removal-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 
 type Preflight = Awaited<
   ReturnType<NonNullable<typeof window.api.ephemeralVm.preflightCloudDelete>>

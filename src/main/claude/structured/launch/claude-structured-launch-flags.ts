@@ -11,7 +11,7 @@ import {
   type ClaudeCliFlagFact,
   type ClaudeCliFlagSupport,
   type ClaudeCliLaunch
-} from '../../claude-cli-flag-support'
+} from '../../cli-capabilities/claude-cli-flag-support'
 
 const THINKING_DISPLAY_ARGS: Readonly<Record<string, string>> = { 'thinking-display': 'summarized' }
 

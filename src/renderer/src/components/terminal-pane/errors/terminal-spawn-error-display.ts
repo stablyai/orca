@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
+import { resolveClientEnvironmentFooter } from '@/app-shell/platform/client-environment-info'
 import {
   LEGACY_PTY_ALLOCATION_HINT,
   LEGACY_TERMINAL_PROCESS_LIMIT_HINT,

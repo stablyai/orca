@@ -48,13 +48,13 @@ vi.mock('../github/github-enterprise-repository', () => ({
   getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
 
-vi.mock('../gitlab/client', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-lookup', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: vi.fn(),
   getMergeRequest: vi.fn()
 }))
 
-vi.mock('../gitlab/merge-request-creation', () => ({
+vi.mock('../gitlab/merge-requests/merge-request-creation', () => ({
   createGitLabMergeRequest: createGitLabMergeRequestMock
 }))
 
@@ -93,10 +93,16 @@ vi.mock('../github/gh-utils', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../gitlab/gl-utils', () => ({
+vi.mock('../gitlab/requests/glab-request-admission', () => ({
   acquire: vi.fn(),
-  release: vi.fn(),
-  glabExecFileAsync: glabExecFileAsyncMock,
+  release: vi.fn()
+}))
+
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', () => ({
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
   glabRepoExecOptions: (repoPath: string, connectionId?: string | null) =>
     connectionId ? {} : { cwd: repoPath }
 }))

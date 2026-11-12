@@ -1,5 +1,5 @@
-import { claudeBuildPermissionMode } from '../../claude-plan-approval-mode'
-import { claudeStartedUnechoedSend } from '../../claude-command-lifecycle'
+import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
+import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
 import { claudeExecutionObservations } from '../claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../claude-structured-dispatch'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
@@ -30,6 +30,10 @@ export async function applyClaudeMessageOptions(
 ): Promise<void> {
   throwIfSignalAborted(signal)
   const model = options.model
+  // Only a turn carrying the newest pick reports on it; earlier captured sends run the replaced model.
+  if (model === session.modelPickAwaitingTurn) {
+    delete session.modelPickAwaitingTurn
+  }
   if (model && session.appliedInputOptions.get('model') !== model) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'model', value: model }, timeoutMs),

@@ -1,4 +1,4 @@
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../../../shared/startup-cwd-fallback'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

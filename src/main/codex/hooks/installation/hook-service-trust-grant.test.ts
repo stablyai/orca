@@ -45,7 +45,10 @@ vi.mock('../../../codex-cli/command', () => ({ resolveCodexCommand: resolveCodex
 
 import './hook-service'
 import { CodexHookService } from './codex-hook-service-implementation'
-import { getCodexManagedHookInstallMaterial } from '../definitions/codex-hook-definition'
+import {
+  getCodexManagedHookInstallMaterial,
+  getCodexManagedHookStatusMessage
+} from '../definitions/codex-hook-definition'
 
 let tmpHome: string
 let userDataDir: string
@@ -117,6 +120,7 @@ describe('CodexHookService opt-out of the real-home entry', () => {
       handlerIndex: 0,
       command: material.command,
       timeoutSec: 10,
+      statusMessage: getCodexManagedHookStatusMessage(material.command),
       trustedHash
     }
     const trustKey = computeTrustKey(entry)

@@ -129,6 +129,7 @@ export async function installCodexHooksExclusively(
       handlerIndex: 0,
       command,
       timeoutSec: hook.timeout,
+      statusMessage: hook.statusMessage,
       trustedHash,
       // Orca's setting overrides Codex's /hooks off switch for this hook.
       enabled: true

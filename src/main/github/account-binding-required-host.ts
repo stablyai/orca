@@ -25,12 +25,12 @@ export async function resolveGhAccountRequiredHost(
   resolveAlias: SshAliasHostnameResolver = resolveSshConfigHostname
 ): Promise<string | undefined> {
   const host = githubHostFromIdentityKey(repo.gitRemoteIdentity?.canonicalKey)
-  // Why: only SSH transport reads ~/.ssh/config; a dotless HTTPS host is literal.
+  // Why: only SSH transport reads ~/.ssh/config; an HTTPS host is literal.
   const remoteUrl = repo.gitRemoteIdentity?.remoteUrl ?? ''
-  if (!host || !isUnresolvedSshHostAlias(host) || !remoteUrlUsesSshTransport(remoteUrl)) {
+  if (!host || host === 'github.com' || !remoteUrlUsesSshTransport(remoteUrl)) {
     return host
   }
-  // Expand SSH aliases in the runtime that runs gh; aliases themselves are not gh login hosts.
+  // Expand SSH aliases in the runtime that runs gh; aliases are not gh login hosts.
   const context: SshConfigResolutionContext = {
     repoPath: repo.path,
     connectionId: repo.connectionId ?? null,
@@ -39,7 +39,13 @@ export async function resolveGhAccountRequiredHost(
   // Why raw: the canonical key is lowercased, but OpenSSH matches Host patterns case-sensitively.
   const alias = rawSshTransportHost(remoteUrl) ?? host
   const resolved = await resolveAlias(alias, context).catch(() => null)
-  const hostname = resolved?.hostname?.trim().toLowerCase()
+  const expanded = resolved?.hostname?.trim().toLowerCase()
+  // Why: a dotted host is its own gh login host (a GHE HostName may be an IP) unless it aliases github.com.
+  const hostname =
+    isUnresolvedSshHostAlias(host) ||
+    (expanded && foldComparableGitHubHost(expanded) === 'github.com')
+      ? expanded
+      : host
   if (!hostname || isUnresolvedSshHostAlias(hostname)) {
     return undefined
   }

@@ -9,7 +9,7 @@ import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-cha
 import {
   notifyStructuredLaunchListeners,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 
 /** Completing the caller leaves uncertain opening content independent of live startup work. */
 export function trackStructuredLaunchPromptOutcome(

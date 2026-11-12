@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { ANTIGRAVITY_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-antigravity'
 import { CLAUDE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
@@ -40,4 +41,20 @@ it('shows the actual fallback in the shared composer pill while capturing the or
     current: { model: 'claude-opus-5-5' }
   })
   expect(oldHost.reportedModel).toBeUndefined()
+})
+
+it('shows Auto when the session lists no models, without capturing it for Send', () => {
+  for (const current of [{ acceptedInputSources: {} }, {}]) {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('antigravity', ANTIGRAVITY_SESSION_OPTION_CATALOG),
+      ANTIGRAVITY_SESSION_OPTION_CATALOG,
+      { models: [], current }
+    )
+    const model = structuredAgentSessionOptionSnapshot(state).find(
+      (option) => option.id === 'model'
+    )!
+    expect(nativeChatModelPillLabel(model, sayNativeChatSessionOptionEnglish)).toBe('Auto')
+    expect(model.settable).toBe(false)
+    expect(structuredAgentSessionMessageSelection(state)).not.toHaveProperty('model')
+  }
 })

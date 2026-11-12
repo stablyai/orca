@@ -49,6 +49,8 @@ export type EphemeralVmApi = {
   >
   /** Names (never values) of this computer's env that recipe create scripts receive. */
   forwardedEnvSummary: () => Promise<RecipeForwardedEnvSummary>
+  /** Credential-like variable names (never values) recipe scripts would inherit from Orca. */
+  listCredentialEnvNames: () => Promise<string[]>
   doctor: (args: { repoId: string; recipeId: string }) => Promise<EphemeralVmRecipeDoctorResult>
   provision: (args: {
     repoId: string

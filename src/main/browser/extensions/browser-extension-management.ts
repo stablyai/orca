@@ -48,7 +48,7 @@ import { notifyChromeWebStoreUninstalled } from './web-store/browser-extension-w
 
 async function settle(action: () => Promise<void>): Promise<BrowserExtensionActionResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { ok: false, error: 'Turn on browser extensions in Settings › Experimental' }
+    return { ok: false, error: 'Turn on browser extensions in Settings › Browser › Extensions' }
   }
   try {
     await action()

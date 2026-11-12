@@ -29,7 +29,7 @@ vi.mock('../pairing/pre-profile-pairing-coordinator', () => ({
     dispose: () => undefined
   })
 }))
-vi.mock('../transport/hosts/host-store', () => ({
+vi.mock('../host-catalog/host-store', () => ({
   updateHostNameAndEndpoint: async () => undefined
 }))
 vi.mock('./cloud-workspace-links', () => ({

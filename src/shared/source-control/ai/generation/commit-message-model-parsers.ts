@@ -181,13 +181,19 @@ function isPiModelTableWhitespace(code: number): boolean {
 export function parseCursorModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
   for (const rawLine of iterateModelOutputLines(stdout)) {
-    const match = /^([^\s]+)\s+-\s+(.+)$/.exec(rawLine.trim())
-    if (!match) {
+    // Rows read `id - Name`, or a bare `id` when the model has no name, optionally ending in
+    // `(current)`, `(default)` or `(current, default)`.
+    const match =
+      /^(\S+)(?:\s+-\s+(.+?))?(?:\s+\(((?:current|default)(?:,\s*(?:current|default))?)\))?$/i.exec(
+        rawLine.trim()
+      )
+    if (!match || (!match[2] && !/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/i.test(match[1]))) {
       continue
     }
     models.push({
       id: match[1],
-      label: match[2].replace(/\s+\((?:default|current)\)$/i, ''),
+      label: match[2] ?? match[1],
+      ...(/default/i.test(match[3] ?? '') ? { isDefault: true } : {}),
       ...withOpenAiThinking(match[1])
     })
   }

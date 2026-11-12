@@ -1,6 +1,6 @@
 import type { Store } from '../persistence/loading-store/store'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
-import { getOtherProfileWorktreeIdsForHistoryGc } from '../orca-profiles/other-profile-workspace-catalog'
+import { getOtherProfileWorktreeIdsForHistoryGc } from '../orca-profiles/catalog/other-profile-workspace-catalog'
 
 /** Include git and folder:<id> PTY workspace keys; omitting folder workspaces makes their live shell history appear orphaned. */
 export function getKnownWorktreeIdsForHistoryGc(

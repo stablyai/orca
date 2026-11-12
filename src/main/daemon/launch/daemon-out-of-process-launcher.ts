@@ -25,7 +25,7 @@ import {
   resolveAppImageDaemonLaunch
 } from '../executable-host/linux/daemon-appimage-launch'
 import { resolveAppImageGenerationDaemonLaunch } from '../executable-host/linux/daemon-appimage-generation-launch'
-import { waitForAppImageCopyPreExtraction } from '../../cli/appimage-copy-pre-extraction'
+import { waitForAppImageCopyPreExtraction } from '../../cli/appimage/appimage-copy-pre-extraction'
 import { launchMacDaemonFromStableBundle } from '../executable-host/macos/macos-daemon-launchd'
 import { DAEMON_RECOVERY_BUDGET_MS, daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { cleanupDaemonForProtocol } from './daemon-protocol-cleanup'

@@ -1,6 +1,6 @@
 import React from 'react'
 import { CircleSlash } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { Translate } from '@/i18n/use-translate'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'

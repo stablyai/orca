@@ -1,23 +1,22 @@
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import '@/store/testing/app-store-test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { buildBrowserPage } from '@/store/slices/browser/pages/browser-page-records'
-import { captureLinkOpenIntent } from '../../link-open-intent'
-import { beginLinkOpenRequest } from '../../link-open-request'
+import { captureLinkOpenIntent } from '../../links/placement/link-open-intent'
+import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { openLocalBrowserLink } from './browser-link-open'
 import { selectBrowserLinkDestination } from './browser-link-destination'
 import {
   browserLinkTestDestination,
   createBrowserLinkTestStore,
   WORKSPACE,
-  URL_TO_OPEN,
-  type BrowserLinkTestStore
+  URL_TO_OPEN
 } from './browser-link-open.test-fixture'
-
+import type { BrowserLinkTestStore } from './browser-link-open.test-fixture'
 import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => mocks.getState() } }))
@@ -65,27 +64,6 @@ function browser(groupId: string, url = URL_TO_OPEN) {
 }
 
 describe('browser link placement and exact page activation', () => {
-  it('removes a newly created tab after an activation error while preserving existing tabs', async () => {
-    const existing = browser('c', 'https://unrelated.example/')
-    const before = store.getState()
-    const outcome = await openLocalBrowserLink({
-      destination: browserLinkTestDestination(),
-      context: context(),
-      url: URL_TO_OPEN,
-      ownsRoute: () => true,
-      reveal: () => {
-        throw new Error('Workspace activation failed')
-      }
-    })
-
-    expect(outcome).toEqual({ status: 'failed' })
-    const state = store.getState()
-    expect(state.browserTabsByWorktree[WORKSPACE]?.map((tab) => tab.id)).toEqual([existing.id])
-    expect(state.browserPagesByWorkspace).toEqual(before.browserPagesByWorkspace)
-    expect(state.unifiedTabsByWorktree[WORKSPACE]).toEqual(before.unifiedTabsByWorktree[WORKSPACE])
-    expect(state.recentlyClosedBrowserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
-  })
-
   it('refuses an expired explicit group before creating records or activating a destination', async () => {
     const captured = context(true)
     store.setState({

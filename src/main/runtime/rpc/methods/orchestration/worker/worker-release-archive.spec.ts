@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,119 +18,7 @@ export function registerWorkerReleaseArchiveTests(): void {
 
     afterEach(() => h.cleanup())
 
-    it('records an explicitly empty archive for an already-exited worker process', async () => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker()
-      vi.mocked(h.runtime.showTerminal).mockImplementation(
-        async (handle) => ({ handle, worktreeId: 'repo::worktree', connected: false }) as never
-      )
-      vi.mocked(h.runtime.readTerminal).mockResolvedValue({
-        handle: 'term_worker',
-        status: 'exited',
-        tail: [],
-        truncated: false,
-        nextCursor: null
-      })
-      const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
-        state: string
-        processAction: string
-        archive: { status: string | null } | null
-      }
-      expect(receipt).toMatchObject({
-        state: 'released',
-        processAction: 'closed_exited_terminal',
-        archive: { status: 'empty' }
-      })
-    })
-
-    it('keeps a bounded tail when one terminal line exceeds the archive budget', async () => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker()
-      const suffix = 'meaningful-tail'
-      vi.mocked(h.runtime.readTerminal).mockResolvedValue({
-        handle: 'term_worker',
-        status: 'running',
-        tail: [`${'x'.repeat(300_000)}${suffix}`],
-        truncated: false,
-        nextCursor: '1'
-      })
-
-      const release = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
-        archive: { status: string | null } | null
-      }
-      const read = (await h.call('orchestration.workerRead', { dispatch: dispatchId })) as {
-        terminal: { tail: string[]; truncated: boolean }
-        warnings: string[]
-      }
-
-      expect(release.archive?.status).toBe('captured')
-      expect(read.terminal.tail).toHaveLength(1)
-      expect(read.terminal.tail[0]).toMatch(new RegExp(`${suffix}$`))
-      expect(read.terminal.truncated).toBe(true)
-      expect(read.warnings).not.toContain(
-        'The live terminal buffer was empty at release; structured transcript output was unavailable.'
-      )
-    })
-
-    it('serves the frozen redacted archive through worker-read after release, with cursors', async () => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker()
-      vi.mocked(h.runtime.readTerminal).mockResolvedValue({
-        handle: 'term_worker',
-        status: 'running',
-        tail: ['first line', `capability dcap_${'a'.repeat(24)} leaked`, 'last line'],
-        draft: `send --dispatch-capability dcap_${'b'.repeat(24)}`,
-        truncated: false,
-        nextCursor: '3'
-      })
-      await h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      vi.mocked(h.runtime.readTerminal).mockClear()
-
-      const page1 = (await h.call('orchestration.workerRead', {
-        dispatch: dispatchId,
-        limit: 2
-      })) as {
-        archived?: boolean
-        terminal: { tail: string[]; draft?: string }
-        cursor: string | null
-      }
-      expect(page1.terminal.tail).toEqual([
-        'first line',
-        'capability [dispatch capability redacted] leaked'
-      ])
-      expect(page1.terminal.draft).toBe('send --dispatch-capability [dispatch capability redacted]')
-      expect(page1.cursor).not.toBeNull()
-
-      const page2 = (await h.call('orchestration.workerRead', {
-        dispatch: dispatchId,
-        cursor: page1.cursor as string
-      })) as { terminal: { tail: string[]; draft?: string }; cursor: string | null }
-      expect(page2.terminal.tail).toEqual(['last line'])
-      expect(page2.terminal.draft).toBeUndefined()
-      expect(page2.cursor).toBeNull()
-      // The live terminal is never consulted after release.
-      expect(h.runtime.readTerminal).not.toHaveBeenCalled()
-    })
-
-    it('keeps the conversation the agent reports last, so a follow-up can reopen it after release', async () => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker()
-      // A /clear after the report moved the agent to a new conversation.
-      vi.mocked(h.runtime.getExactWorkerProviderSession).mockReturnValue({
-        paneKey: 'tab_worker:leaf',
-        agent: 'claude',
-        processIncarnation: 'runtime_test:term_worker:1',
-        providerSession: { key: 'session_id', id: 'after-clear' },
-        observedAt: 1
-      })
-      await h.call('orchestration.workerRelease', { dispatch: dispatchId })
-
-      expect(
-        JSON.parse(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.resume_session ?? 'null')
-      ).toMatchObject({ agent: 'claude', providerSession: { id: 'after-clear' } })
-    })
-
-    it('reads an immutable transcript snapshot after the provider file disappears', async () => {
+    it('reads the original transcript after release, until the provider file disappears', async () => {
       h.setup()
       const directory = await mkdtemp(join(tmpdir(), 'orca-worker-release-snapshot-'))
       const transcriptPath = join(directory, 'rollout.jsonl')
@@ -150,26 +38,39 @@ export function registerWorkerReleaseArchiveTests(): void {
         } as never)
         const { dispatchId } = await h.startSettledWorker()
         await h.call('orchestration.workerRelease', { dispatch: dispatchId })
-        await rm(transcriptPath)
+        expect(h.db.getWorkerTerminalArchive(dispatchId)?.content).not.toContain('frozen')
 
-        const page = (await h.call('orchestration.workerRead', {
-          dispatch: dispatchId,
-          limit: 1
-        })) as { cursor: string }
+        // Like a live read, the first page is the newest messages; a cursor then follows the file.
+        const page = await h.call('orchestration.workerRead', { dispatch: dispatchId })
+        const cursor =
+          typeof page === 'object' && page !== null && 'cursor' in page ? page.cursor : null
         expect(page).toMatchObject({
           archived: true,
           source: 'transcript',
           transcript: {
-            messages: [{ id: 'snapshot-one', blocks: [{ type: 'text', text: 'frozen first' }] }]
+            messages: [
+              { id: 'snapshot-one', blocks: [{ type: 'text', text: 'frozen first' }] },
+              { id: 'snapshot-two', blocks: [{ type: 'text', text: 'frozen second' }] }
+            ]
           }
         })
+        await appendFile(transcriptPath, `${codexMessage('resumed', 'after a resume')}\n`)
         await expect(
-          h.call('orchestration.workerRead', { dispatch: dispatchId, cursor: page.cursor })
+          h.call('orchestration.workerRead', { dispatch: dispatchId, cursor })
         ).resolves.toMatchObject({
           transcript: {
-            messages: [{ id: 'snapshot-two', blocks: [{ type: 'text', text: 'frozen second' }] }]
+            messages: [{ id: 'resumed', blocks: [{ type: 'text', text: 'after a resume' }] }]
           }
         })
+        // A cursor from the live terminal belongs to output that was released.
+        await expect(
+          h.call('orchestration.workerRead', { dispatch: dispatchId, cursor: 1 })
+        ).rejects.toThrow(/source changed/i)
+
+        await rm(transcriptPath)
+        await expect(
+          h.call('orchestration.workerRead', { dispatch: dispatchId })
+        ).rejects.toMatchObject({ code: 'archive_unavailable' })
       } finally {
         await rm(directory, { recursive: true, force: true })
       }
@@ -221,16 +122,6 @@ export function registerWorkerReleaseArchiveTests(): void {
       } finally {
         await rm(directory, { recursive: true, force: true })
       }
-    })
-
-    it('rejects a legacy live-terminal cursor after output moves to the archive', async () => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker()
-      await h.call('orchestration.workerRelease', { dispatch: dispatchId })
-
-      await expect(
-        h.call('orchestration.workerRead', { dispatch: dispatchId, cursor: 1 })
-      ).rejects.toThrow(/source changed/i)
     })
 
     it('recovers archive metadata when a prior attempt committed only the archive row', async () => {

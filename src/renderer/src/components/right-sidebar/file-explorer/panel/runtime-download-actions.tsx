@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
+import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/files/os-open/reveal-in-file-manager'
 import {
   isKnownCloudEnvironment,
   refreshCloudEnvironmentIds

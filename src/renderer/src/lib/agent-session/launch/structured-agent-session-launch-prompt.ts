@@ -10,22 +10,9 @@ import {
   handBackStagedLaunchPrompt,
   type StagedStructuredLaunchPrompt,
   type StagedDelivery,
-  type StructuredLaunchPromptOptions,
-  type StructuredPromptDeliveryResult
+  type StructuredLaunchPromptOptions
 } from './structured-agent-session-staged-prompt'
-export {
-  stageStructuredLaunchPrompt,
-  discardStructuredLaunchPrompts,
-  discardStructuredAgentSessionChatSends,
-  takeBackLegacyStructuredLaunchPrompts,
-  prepareLegacyStructuredLaunchPrompts,
-  prepareStructuredLaunchPromptForCreate,
-  issueStructuredLaunchPromptForCreate,
-  hasStagedStructuredLaunchPrompt,
-  type StagedStructuredLaunchPrompt,
-  type StructuredLaunchPromptOptions,
-  type StructuredPromptDeliveryResult
-} from './structured-agent-session-staged-prompt'
+import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
 
 function promptDeliveryResult(outcome: StagedDelivery): StructuredPromptDeliveryResult {
   return {

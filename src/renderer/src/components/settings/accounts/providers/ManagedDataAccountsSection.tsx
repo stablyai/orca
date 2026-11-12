@@ -7,7 +7,7 @@ import type {
   ManagedDataAccountsState
 } from '../../../../../../shared/managed-account-types'
 import { ChevronDown } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
 import { Badge } from '../../../ui/badge'

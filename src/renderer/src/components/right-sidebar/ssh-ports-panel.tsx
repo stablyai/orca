@@ -1,10 +1,10 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, Plus, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
-import { cn } from '@/lib/utils'
-import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-ports/workspace-port-actions'
+import { cn } from '@/lib/class-names'
+import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-ports/workspace-port-browser-open'
 import { browserUrlForPortForwardEntry } from '@/lib/workspace-ports/workspace-port-urls'
 import type {
   EnrichedDetectedPort,

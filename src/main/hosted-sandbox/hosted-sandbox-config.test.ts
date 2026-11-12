@@ -10,7 +10,7 @@ import { isEnvironmentProviderError } from '../environment-providers/environment
 import {
   linkOrcaProfileToCloud,
   unlinkOrcaProfileFromCloud
-} from '../orca-profiles/profile-cloud-index'
+} from '../orca-profiles/cloud-auth/profile-cloud-index'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getHostedSandboxConfig } from './hosted-sandbox-config'
 

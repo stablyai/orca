@@ -8,7 +8,7 @@ import {
   leaveHomeSparePage,
   prepareHomeSparePage
 } from '../mobile-web-shell/home-spare-page'
-import { processGenerationStore } from '../mobile-web-shell/process-generation-store'
+import { processGenerationStore } from '../mobile-web-shell/generations/process-generation-store'
 
 // Past Home's first paint and its first reads, so the boot never competes with them.
 const HOME_SPARE_IDLE_MS = 1000

@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
+import { consumeFloatingTerminalOpenMaximizedIntent } from '@/components/floating-terminal/floating-terminal'
 import {
   getMaximizedFloatingTerminalBounds,
   resolveFloatingTerminalPanelBounds,

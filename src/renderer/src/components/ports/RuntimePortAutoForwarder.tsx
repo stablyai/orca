@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import {
   publishWorkspacePortScanForHost,
   scanWorkspacePortsForTarget,

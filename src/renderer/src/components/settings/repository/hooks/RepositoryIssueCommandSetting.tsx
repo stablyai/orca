@@ -23,7 +23,7 @@ export function RepositoryIssueCommandSetting({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
+    <div className="space-y-3">
       <div className="space-y-1">
         <h5 className="text-sm font-semibold">
           {t(

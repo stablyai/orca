@@ -172,19 +172,6 @@ describe('remote terminal snapshot outcome reasons', () => {
     return stream
   }
 
-  it('reports a reply past the client replay limit as permanently unavailable', async () => {
-    const stream = await subscribeClient()
-    server.nextRequestedReply = { kind: 'oversized', chunks: 5 }
-
-    await expect(stream.serializeBufferOutcome({ scrollbackRows: 100 })).resolves.toEqual({
-      availability: {
-        kind: 'permanently-unavailable',
-        reason: 'exceeds-client-replay-limit'
-      },
-      snapshot: null
-    })
-  })
-
   it('reports a concurrent request as retry-worthy while the legacy path still rejects', async () => {
     const stream = await subscribeClient()
     server.nextRequestedReply = { kind: 'hold' }

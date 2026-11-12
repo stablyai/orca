@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { parseInteractivePrompt } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { z } from 'zod'
+import { RpcDispatcher } from '../../rpc/dispatcher'
+import { TERMINAL_METHODS } from '../../rpc/methods/terminal/terminal'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
@@ -13,25 +17,31 @@ function fixture(name: string): { recording: string; cols: number; rows: number 
   return { recording: readFileSync(url('txt'), 'utf8'), cols: meta.cols, rows: meta.rows }
 }
 
-const CODEX_COMPOSER = '\x1b[2J\x1b[H\u203a Ask Codex to do anything\r\n  gpt-5 \u00b7 ~/repo\r\n'
-const SHELL_PROMPT = '\x1b[J\r\nuser@host repo $ '
+const SEND_RESULT = z.object({ send: z.object({ accepted: z.boolean() }) })
 
-async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'claude') {
+async function createTrustDialogPane(
+  name: string,
+  launchAgent: TuiAgent = 'claude',
+  overrides: Partial<Parameters<typeof createTranscriptPane>[0]> = {}
+) {
   const { recording, cols, rows: gridRows } = fixture(name)
   const rows = new Map<string, AgentStatusIpcPayload>()
   const published: string[] = []
+  const prompts: (string | undefined)[] = []
   let receivedAt = 0
-  const { runtime } = await createTranscriptPane(
+  const { runtime, handle } = await createTranscriptPane(
     {
       paneTitle: 'Terminal',
       foregroundProcess: '2.1.310',
       launchAgent,
       size: { cols, rows: gridRows },
-      data: ''
+      data: '',
+      ...overrides
     },
     {
       onTerminalAgentStatus: ({ paneKey, payload }) => {
         published.push(payload.state)
+        prompts.push(payload.interactivePrompt)
         receivedAt += 1
         rows.set(paneKey, {
           ...payload,
@@ -48,13 +58,15 @@ async function createTrustDialogPane(name: string, launchAgent: TuiAgent = 'clau
     }
   )
   let seq = 0
+  /** Received output the screen model has not applied until timers run. */
+  const receive = (data: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data, ++seq)
   const write = async (data: string, chunkSize = data.length) => {
     for (let index = 0; index < data.length; index += chunkSize) {
-      runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data.slice(index, index + chunkSize), ++seq)
+      receive(data.slice(index, index + chunkSize))
     }
     await vi.advanceTimersByTimeAsync(100)
   }
-  return { runtime, rows, published, recording, cols, gridRows, write }
+  return { runtime, handle, rows, published, prompts, recording, cols, gridRows, receive, write }
 }
 
 describe('TrustDialogStatusObserver', () => {
@@ -66,107 +78,98 @@ describe('TrustDialogStatusObserver', () => {
     vi.useRealTimers()
   })
 
-  async function pane(name: string, launchAgent?: TuiAgent) {
+  async function pane(
+    name: string,
+    launchAgent?: TuiAgent,
+    overrides?: Partial<Parameters<typeof createTranscriptPane>[0]>
+  ) {
     vi.useFakeTimers()
-    const created = await createTrustDialogPane(name, launchAgent)
+    const created = await createTrustDialogPane(name, launchAgent, overrides)
     cleanups.push(async () => {
       await created.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
     })
     return created
   }
 
-  // One byte at a time splits the keyword; Claude's Ink paints words apart with cursor moves.
+  const UP = '\x1b[A'
+  const DOWN = '\x1b[B'
+  const MCP_SERVERS_DIALOG =
+    '2 new MCP servers found in this project Select any you wish to enable.\n\n' +
+    'MCP servers may execute code or access system resources. All tool calls require approval. Learn more in the MCP documentation.'
+  // Keys verified against Claude Code 2.1.322: Enter on a server row toggles it, on the last row enables the ticked ones.
   it.each([
-    ['claude-dialog-trust-workspace', 'claude', 1, ['waiting']],
-    ['claude-dialog-trust-workspace-narrow', 'claude', 1, ['waiting']],
-    ['claude-dialog-trust-workspace-answered', 'claude', 64, ['waiting', 'done']],
-    ['codex-0-158-0-trustprompt', 'codex', 1, ['waiting']]
-  ] as const)('replays %s (%s) in %i-byte chunks', async (name, agent, size, expected) => {
-    const { published, recording, write } = await pane(name, agent)
-    await write(recording, size)
+    [
+      'claude-2-1-322-startup-mcp-servers',
+      '[✔] scratch-echo\n[✔] scratch-time',
+      `${DOWN}${DOWN}\r`
+    ],
+    [
+      'claude-2-1-322-startup-mcp-servers-unchecked',
+      '[ ] scratch-echo\n[✔] scratch-time',
+      `${DOWN}${DOWN}\r`
+    ],
+    ['claude-2-1-322-startup-mcp-servers-on-submit', '[✔] scratch-echo\n[✔] scratch-time', '\r']
+  ])('offers %s a card listing the servers it would enable', async (name, servers, enable) => {
+    const { prompts, recording, write } = await pane(name)
+    await write(recording, 1)
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(expected)
-  })
-
-  it('ignores the dialog wording quoted in ordinary output', async () => {
-    const { published, write } = await pane('codex-0-158-0-trustprompt', 'codex')
-    const reply = [
-      '\u2022 Codex shows "Do you trust this folder?" with 1. Trust and continue',
-      '  and Claude shows "Yes, I trust this folder".',
-      '',
-      '\u203a Ask Codex to do anything',
-      '  gpt-5 \u00b7 ~/repo'
-    ]
-    await write(`${reply.join('\r\n')}\r\n`)
-    expect(published).toEqual([])
-  })
-
-  it('keeps one waiting row through a resize repaint, then clears once the dialog is gone', async () => {
-    const { published, recording, write } = await pane('claude-dialog-trust-workspace')
-    await write(recording)
-    expect(published).toEqual(['waiting'])
-    // A resize repaint split across reads: one debounced read lands on the cleared screen.
-    await write('\x1b[2J\x1b[H')
-    await vi.advanceTimersByTimeAsync(400)
-    await write(recording)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting'])
-    await write(SHELL_PROMPT)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(published).toEqual(['waiting', 'done'])
-  })
-
-  it('clears after a renderer-snapshot recovery replaces the screen model', async () => {
-    const { runtime, published, recording, cols, gridRows, write } = await pane(
-      'codex-0-158-0-trustprompt',
-      'codex'
-    )
-    await write(recording)
-    expect(published).toEqual(['waiting'])
-    runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(TRANSCRIPT_PANE_PTY_ID, {
-      data: recording,
-      cols,
-      rows: gridRows
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'claude')
+    expect(card?.kind === 'approval' && card.approval).toEqual({
+      startupDialog: expect.any(String),
+      neutralOptions: true,
+      title: 'Claude is waiting for a choice in the terminal',
+      description: `${MCP_SERVERS_DIALOG}\n\n${servers}`,
+      options: [
+        { label: 'Enable selected', send: enable },
+        { label: 'Reject all', send: '\x1b' }
+      ]
     })
-    await write(CODEX_COMPOSER)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(published).toEqual(['waiting', 'done'])
   })
 
-  it('leaves a hook row that replaced its own untouched', async () => {
-    const { rows, published, recording, write } = await pane('claude-dialog-trust-workspace')
-    await write(recording)
-    const [paneKey, waiting] = [...rows][0]
-    const hookRow: AgentStatusIpcPayload = {
-      ...waiting,
-      state: 'working',
-      receivedAt: 99,
-      observation: {
-        origin: 'hook',
-        authorityId: 'hooks',
-        incarnation: 0,
-        revision: 1,
-        observedAt: 1
-      }
+  // The keys are aimed from the highlight the card was read off, so a card that no longer matches the screen must not write.
+  it('writes a startup card choice only while the screen still reads as that card', async () => {
+    const writes: string[] = []
+    const { runtime, handle, prompts, recording, receive, write } = await pane(
+      'claude-2-1-316-startup-mcp-server',
+      'claude',
+      { onWrite: (data) => writes.push(data) }
+    )
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const choose = async (prompt: string | undefined, send: string) => {
+      const response = await dispatcher.dispatch(
+        {
+          id: 'choice',
+          authToken: 'test',
+          method: 'terminal.send',
+          params: { terminal: handle, text: send, enter: false, requireStartupDialog: prompt }
+        },
+        { caller: { kind: 'desktop' } }
+      )
+      return response.ok && SEND_RESULT.parse(response.result).send.accepted
     }
-    rows.set(paneKey, hookRow)
-    await write(SHELL_PROMPT)
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting'])
-    expect(rows.get(paneKey)).toBe(hookRow)
-  })
-
-  it("clears a killed agent's leftover frame only once the shell is proven foreground", async () => {
-    const { runtime, published, recording, write } = await pane('claude-dialog-trust-workspace')
-    const foreground = vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('unknown')
     await write(recording)
-    // The shell prompt lands inside the stale frame, so the screen still shows the dialog.
-    await write('user@host repo $ ')
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting'])
-    foreground.mockResolvedValue('shell')
-    await write(' ')
+    const stale = prompts.at(-1)
+    // Up in the terminal: "Use this MCP server" is now two rows up from the highlight, not one.
+    await write(
+      '\x1b[9;1H\x1b[2K  ❯ Use this and all future MCP servers in this project' +
+        '\x1b[10;1H\x1b[2K    Continue without using this MCP server'
+    )
+    await expect(choose(stale, `${UP}${UP}\r`)).resolves.toBe(false)
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(published).toEqual(['waiting', 'done'])
+    // Down arrived but is not on the screen model yet: the model cannot vouch for the card.
+    receive(
+      '\x1b[9;1H\x1b[2K    Use this and all future MCP servers in this project' +
+        '\x1b[10;1H\x1b[2K  ❯ Continue without using this MCP server'
+    )
+    expect(runtime.claimStartupDialogChoice(TRANSCRIPT_PANE_PTY_ID, prompts.at(-1)!)).toBe(false)
+    await vi.advanceTimersByTimeAsync(1_000)
+    await expect(choose(prompts.at(-1), `${UP}${UP}\r`)).resolves.toBe(true)
+    // A second client's click before Claude repaints would land on whatever the first choice opens.
+    await expect(choose(prompts.at(-1), '\r')).resolves.toBe(false)
+    // Answered from the terminal: the next dialog must not take a stale card's keys.
+    const answered = prompts.at(-1)
+    await write('\x1b[2J\x1b[H')
+    await expect(choose(answered, `${UP}${UP}\r`)).resolves.toBe(false)
+    expect(writes).toEqual([`${UP}${UP}\r`])
   })
 })

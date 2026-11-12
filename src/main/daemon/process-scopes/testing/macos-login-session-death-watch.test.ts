@@ -107,10 +107,8 @@ function createWatch(
 
 describe('MacosLoginSessionDeathWatch', () => {
   it('preserves the daemon when a short PAM rejection burst recovers after wake', async () => {
-    const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
     const { watch, clock, onRetire, probe } = createWatch({
-      outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, ACCEPTED],
-      readResolverHealth
+      outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, ACCEPTED]
     })
     watch.start()
     await drainMicrotasks()
@@ -120,7 +118,6 @@ describe('MacosLoginSessionDeathWatch', () => {
     await clock.advance(10_000)
 
     expect(probe).toHaveBeenCalledTimes(4)
-    expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
 
     watch.notifyClientActivity()
@@ -129,15 +126,12 @@ describe('MacosLoginSessionDeathWatch', () => {
     expect(probe).toHaveBeenCalledTimes(4)
     await clock.advance(1)
     expect(probe).toHaveBeenCalledTimes(5)
-    expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
   })
 
   it('does not count a suspended timer gap as rejection evidence', async () => {
-    const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
     const { watch, clock, onRetire, probe } = createWatch({
-      outcomes: [ACCEPTED, REJECTED, REJECTED, ACCEPTED],
-      readResolverHealth
+      outcomes: [ACCEPTED, REJECTED, REJECTED, ACCEPTED]
     })
     watch.start()
     await drainMicrotasks()
@@ -147,7 +141,6 @@ describe('MacosLoginSessionDeathWatch', () => {
     await clock.advance(0)
 
     expect(probe).toHaveBeenCalledTimes(3)
-    expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
 
     await clock.advance(119_999)
@@ -168,8 +161,7 @@ describe('MacosLoginSessionDeathWatch', () => {
       .mockResolvedValueOnce(REJECTED)
       .mockReturnValueOnce(deferredProbe)
       .mockResolvedValueOnce(ACCEPTED)
-    const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
-    const { watch, clock, onRetire } = createWatch({ probeLoginSession: probe, readResolverHealth })
+    const { watch, clock, onRetire } = createWatch({ probeLoginSession: probe })
     watch.start()
     await drainMicrotasks()
 
@@ -180,7 +172,6 @@ describe('MacosLoginSessionDeathWatch', () => {
     await drainMicrotasks()
 
     expect(probe).toHaveBeenCalledTimes(3)
-    expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
 
     await clock.advance(119_999)
@@ -202,28 +193,61 @@ describe('MacosLoginSessionDeathWatch', () => {
     expect(onRetire).not.toHaveBeenCalled()
   })
 
+  it('retires a logged-out session three rejections and two minutes after the first one', async () => {
+    const { watch, clock, onRetire } = createWatch({
+      outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED]
+    })
+    watch.start()
+    await drainMicrotasks()
+    await clock.advance(239_999)
+    expect(onRetire).not.toHaveBeenCalled()
+    await clock.advance(1)
+    expect(onRetire).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retire when DNS recovers before the retirement check', async () => {
+    const { watch, clock, onRetire, setResolverHealth } = createWatch({
+      outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED]
+    })
+    watch.start()
+    await drainMicrotasks()
+    await clock.advance(140_000)
+    setResolverHealth('healthy')
+    await clock.advance(100_000)
+    expect(onRetire).not.toHaveBeenCalled()
+  })
+
   it.each(['healthy', 'unknown'] as const)(
-    'suppresses retirement while resolver health is %s, then retires on explicit degradation',
-    async (initialResolverHealth) => {
-      const { watch, clock, onRetire, probe, setResolverHealth } = createWatch({
-        outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED, REJECTED]
-      })
-      setResolverHealth(initialResolverHealth)
+    'runs no login probe after arming while resolver health is %s',
+    async (resolverHealth) => {
+      const { watch, clock, probe, setResolverHealth } = createWatch()
+      setResolverHealth(resolverHealth)
       watch.start()
       await drainMicrotasks()
-      await clock.advance(120_000)
+      for (let i = 0; i < 5; i++) {
+        await clock.advance(120_000)
+      }
+      watch.notifyClientActivity()
+      watch.notifyPtyExit()
       await clock.advance(10_000)
-      await clock.advance(10_000)
-      await clock.advance(100_000) // Retirement still requires explicit resolver corroboration.
-      expect(onRetire).not.toHaveBeenCalled()
-      const probesAtSuppression = probe.mock.calls.length
-      setResolverHealth('unhealthy')
-      await clock.advance(119_999)
-      expect(probe).toHaveBeenCalledTimes(probesAtSuppression)
-      await clock.advance(1) // Suppressed states use the bounded periodic cadence.
-      expect(onRetire).toHaveBeenCalledTimes(1)
+      expect(probe).toHaveBeenCalledTimes(1)
     }
   )
+
+  it('keeps running the login probe after a rejection until PAM accepts again, even across sleep', async () => {
+    const { watch, clock, probe, setResolverHealth } = createWatch({
+      outcomes: [ACCEPTED, REJECTED, ACCEPTED]
+    })
+    watch.start()
+    await drainMicrotasks()
+    await clock.advance(120_000)
+    expect(probe).toHaveBeenCalledTimes(2)
+
+    setResolverHealth('healthy')
+    clock.suspend(60 * 60 * 1000)
+    await clock.advance(0) // The sleep gap resets the rejection streak, not the rejected verdict.
+    expect(probe).toHaveBeenCalledTimes(3)
+  })
 
   it('stop() prevents an in-flight resolver check from retiring the daemon', async () => {
     let resolveHealth!: (health: SystemResolverHealth) => void
@@ -233,10 +257,14 @@ describe('MacosLoginSessionDeathWatch', () => {
     })
     const { watch, clock, onRetire } = createWatch({
       outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED],
-      readResolverHealth: (signal) => {
-        resolverSignal = signal
-        return resolverHealth
-      }
+      // The first read is the pre-probe gate; hold only the retirement read.
+      readResolverHealth: vi
+        .fn<MacosLoginSessionDeathWatchOptions['readResolverHealth']>()
+        .mockResolvedValueOnce('unhealthy')
+        .mockImplementationOnce((signal) => {
+          resolverSignal = signal
+          return resolverHealth
+        })
     })
     watch.start()
     await drainMicrotasks()

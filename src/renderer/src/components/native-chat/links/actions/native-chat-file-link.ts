@@ -13,6 +13,12 @@ export type NativeChatResolvedFileLink = {
   absolutePath: string
   line: number | null
   column: number | null
+  /** The link names a directory by its trailing separator; the popover can say "Open folder". */
+  isDirectoryHint?: true
+}
+
+function hasDirectorySeparator(pathText: string): boolean {
+  return /[\\/]$/.test(pathText)
 }
 
 function resolvePathText(
@@ -32,7 +38,8 @@ function resolvePathText(
   return {
     absolutePath: resolved.absolutePath,
     line: resolved.line ?? fallbackLine,
-    column: resolved.column
+    column: resolved.column,
+    ...(hasDirectorySeparator(pathText) ? { isDirectoryHint: true as const } : {})
   }
 }
 
@@ -62,7 +69,14 @@ export function resolveNativeChatFileLink(
   }
   if (route.pathKind === 'literal') {
     const absolutePath = resolveExplicitFileLinkTargetPath(route.pathText, context.worktreePath)
-    return absolutePath ? { absolutePath, line: null, column: null } : null
+    return absolutePath
+      ? {
+          absolutePath,
+          line: null,
+          column: null,
+          ...(hasDirectorySeparator(route.pathText) ? { isDirectoryHint: true as const } : {})
+        }
+      : null
   }
   return resolvePathText(route.pathText, route.line, context)
 }

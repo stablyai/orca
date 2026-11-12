@@ -1,7 +1,7 @@
 import React from 'react'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
-import { isLazyChunkLoadError } from '@/lib/lazy-with-retry'
-import { reportReactErrorBoundaryCrash } from '@/lib/react-error-boundary-reporting'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
+import { isLazyChunkLoadError } from '@/app-shell/startup/lazy-with-retry'
+import { reportReactErrorBoundaryCrash } from '@/diagnostics/crash-reporting/react-error-boundary-reporting'
 import { translate } from '@/i18n/i18n'
 
 type Props = {

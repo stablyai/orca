@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
@@ -31,10 +32,14 @@ except (ImportError, ValueError) as error:
     sys.exit(1)
 try:
     gi.require_version("Gdk", "3.0")
-    gi.require_version("GdkPixbuf", "2.0")
-    from gi.repository import Gdk, GdkPixbuf
+    from gi.repository import Gdk
 except (ImportError, ValueError):
     Gdk = None
+try:
+    # Why separate: Wayland capture decodes grim's PNG with GdkPixbuf alone.
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+except (ImportError, ValueError):
     GdkPixbuf = None
 from gi.repository import Atspi
 
@@ -590,8 +595,127 @@ def rendered_element_index(line, depth):
     return int(match.group(1)) if match else None
 
 
-def capture_png(rect):
-    if Gdk is None or GdkPixbuf is None or rect is None or os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+def wayland_compositor():
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        return "hyprland"
+    if os.environ.get("SWAYSOCK") and shutil.which("swaymsg"):
+        return "sway"
+    return None
+
+
+def wayland_session():
+    # Why: Sway launched from a TTY leaves XDG_SESSION_TYPE=tty, where GDK root readback has nothing to read.
+    return os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland" or wayland_compositor() is not None
+
+
+def screenshot_failure(message):
+    return {"error": {"code": "screenshot_failed", "message": message}}
+
+
+def compositor_json(command):
+    with tempfile.TemporaryFile() as output:
+        result = subprocess.run(command, stdout=output, stderr=subprocess.DEVNULL, timeout=2, check=False)
+        if result.returncode != 0 or output.tell() > 4_000_000:
+            raise ValueError("compositor query failed")
+        output.seek(0)
+        return json.load(output)
+
+
+def hyprland_windows(pid, title):
+    clients = compositor_json([shutil.which("hyprctl"), "-j", "clients"])
+    matches = [item for item in clients if item.get("pid") == pid and item.get("title") == title]
+    if len(matches) != 1:
+        return matches, False
+    monitors = compositor_json([shutil.which("hyprctl"), "-j", "monitors"])
+    shown = {monitor.get(key, {}).get("id") for monitor in monitors
+             for key in ("activeWorkspace", "specialWorkspace")}
+    item = matches[0]
+    visible = (item.get("mapped") and not item.get("hidden")
+               and (item.get("pinned") or item.get("workspace", {}).get("id") in shown))
+    return [item.get("at", []) + item.get("size", [])], bool(visible)
+
+
+def sway_windows(pid, title):
+    pending = [compositor_json([shutil.which("swaymsg"), "-t", "get_tree", "-r"])]
+    matches = []
+    while pending:
+        item = pending.pop()
+        pending.extend(item.get("nodes", []) + item.get("floating_nodes", []))
+        if item.get("pid") == pid and item.get("name") == title:
+            matches.append(item)
+    if len(matches) != 1:
+        return matches, False
+    rect = matches[0].get("rect", {})
+    content = matches[0].get("window_rect")
+    if content:
+        # Why: window_rect excludes borders and title bars drawn by Sway.
+        rect = {"x": rect["x"] + content["x"], "y": rect["y"] + content["y"],
+                "width": content["width"], "height": content["height"]}
+    return [[rect.get(key) for key in ("x", "y", "width", "height")]], matches[0].get("visible") is True
+
+
+def wayland_window_rect(compositor, app, window):
+    try:
+        lookup = hyprland_windows if compositor == "hyprland" else sway_windows
+        rects, visible = lookup(pid_of(app), name_of(window))
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, AttributeError, KeyError):
+        return None, "could not read window geometry from the compositor"
+    if len(rects) != 1:
+        return None, "no single compositor window matches this app and window title"
+    # Why: grim captures a screen region, so a window off-workspace or behind a group tab would return other content.
+    if not visible:
+        return None, "the window is not visible on any output; switch to its workspace"
+    values = rects[0]
+    if (len(values) != 4 or any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in values)
+            or values[2] <= 0 or values[3] <= 0):
+        return None, "the compositor reported invalid window geometry"
+    return Rect(*values), None
+
+
+def capture_wayland_png(bounds, app, window):
+    compositor = wayland_compositor()
+    if compositor is None:
+        return screenshot_failure("Wayland screenshots are supported on Hyprland and Sway only; use --no-screenshot or an X11 session")
+    grim = shutil.which("grim")
+    if grim is None or GdkPixbuf is None:
+        return screenshot_failure("Wayland screenshots require grim and GdkPixbuf; install them or use --no-screenshot")
+    if app is None or window is None:
+        return screenshot_failure("Wayland screenshots need a target window")
+    # AT-SPI often reports (0, 0) on Wayland, which would capture an unrelated desktop region.
+    rect, error = wayland_window_rect(compositor, app, window)
+    if rect is None:
+        return screenshot_failure(f"Wayland screenshot skipped: {error}")
+    # Why: element frames are AT-SPI coordinates; a crop of another size (e.g. CSD shadows) would misplace them.
+    if bounds is None or abs(bounds.width - rect.width) > 2 or abs(bounds.height - rect.height) > 2:
+        return screenshot_failure("Wayland screenshot skipped: the compositor window size differs from the accessibility bounds")
+    x, y = math.floor(rect.x), math.floor(rect.y)
+    width, height = math.ceil(rect.x + rect.width) - x, math.ceil(rect.y + rect.height) - y
+    if width > 16384 or height > 16384 or width * height > 67_108_864:
+        return screenshot_failure("Wayland window exceeds the screenshot dimension limit")
+    try:
+        with tempfile.TemporaryFile() as output:
+            # Scale 1 keeps screenshot pixels aligned with window-local logical coordinates.
+            result = subprocess.run([grim, "-s", "1", "-g", f"{x},{y} {width}x{height}", "-t", "png", "-"],
+                                    stdout=output, stderr=subprocess.DEVNULL, timeout=5, check=False)
+            size = output.tell()
+            if result.returncode != 0 or not 0 < size <= 64_000_000:
+                return screenshot_failure("grim could not capture the window; check compositor screencopy support and screen-capture access")
+            output.seek(0)
+            loader = GdkPixbuf.PixbufLoader.new_with_type("png")
+            loader.write(output.read())
+            loader.close()
+            pixbuf = loader.get_pixbuf()
+            if pixbuf is None or pixbuf.get_width() != width or pixbuf.get_height() != height:
+                return screenshot_failure("grim returned an image with unexpected window dimensions")
+            return bounded_png_payload(pixbuf)
+    except Exception as error:
+        return screenshot_failure("Wayland screenshot failed: " + str(error)[:200])
+
+
+def capture_png(rect, app=None, window=None):
+    if wayland_session():
+        return capture_wayland_png(rect, app, window)
+    if Gdk is None or GdkPixbuf is None or rect is None:
         return None
     screen = Gdk.Screen.get_default()
     root = screen.get_root_window() if screen else None
@@ -734,7 +858,7 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
     selection = selected_text(window)
     app_info = app_json(app)
     window_title = name_of(window)
-    screenshot = capture_png(bounds) if include_screenshot else None
+    screenshot = capture_png(bounds, app, window) if include_screenshot else None
     geometry = GeometryReader()
     for item in records:
         node = geometry_nodes[id(item)]
@@ -780,7 +904,9 @@ def handshake_response():
     is_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
     has_hotkey = shutil.which("xdotool") is not None and not is_wayland
     has_clipboard = any(shutil.which(command) for command in ("wl-copy", "xclip", "xsel"))
-    has_screenshot = Gdk is not None and GdkPixbuf is not None and not is_wayland
+    has_screenshot = GdkPixbuf is not None and (
+        bool(shutil.which("grim") and wayland_compositor()) if wayland_session() else Gdk is not None
+    )
     return {
         "platform": "linux",
         "provider": "orca-computer-use-linux",
@@ -1288,7 +1414,7 @@ def insert_focused_text(window, value):
             raise RuntimeError("text_caret_unconfirmed: text was inserted but caret movement did not confirm success; inspect state before retrying")
     action = {"path": "accessibility", "actionName": "insertText", "fallbackReason": None}
     if attempt(lambda: Atspi.Text.get_text(text, start, caret)) == value:
-        action["verification"] = {"state": "verified", "property": "focusedText", "expected": value}
+        action["verification"] = {"state": "verified", "property": "focusedText"}
     return action
 
 

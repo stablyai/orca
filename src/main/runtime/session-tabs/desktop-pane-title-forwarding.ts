@@ -3,7 +3,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/workspace-layout/terminal-tab-types'
-import { sanitizeTerminalLayoutPaneTitles } from '../../../shared/workspace-layout/terminal-pane-title-sanitization'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null): string[] {
   if (!node) {

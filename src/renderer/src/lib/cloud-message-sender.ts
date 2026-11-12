@@ -1,7 +1,7 @@
 // Sender metadata for agents in shared (team-visible) Orca Cloud workspaces: several org members can
 // drive the same agent, so each message names who sent it (see shared/cloud-workspaces/sender-envelope).
 // This module tracks which runtime environments are shared cloud workspaces and who "I" am.
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import {
   withSenderEnvelope,
   type MessageSender

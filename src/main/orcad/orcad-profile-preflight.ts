@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { preflightProfileStateRuntime } from '../persistence/profile-state/profile-state-runtime-preflight'
+import { preflightProfileStateRuntime } from '../persistence/profile-state/startup/profile-state-runtime-preflight'
 import {
   ORCAD_STARTUP_PREFLIGHT_FLAG,
   ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,

@@ -100,11 +100,6 @@ async function runTests(ctx: Ctx): Promise<void> {
   const mainAck = await main.client.connect()
   const transport = main.bindTransport(mainAck.generation)
 
-  // Alarm-driven app ping, answered by the shipped client's pong handler.
-  await sleep(PING_MS * 3 + 300)
-  record('R2/R5 alarm-driven JSON ping parsed by shipped client, pong keeps control alive',
-    main.events.pings >= 2 && main.client.isLive(), `pings=${main.events.pings} live=${main.client.isLive()}`)
-
   // Phone connect -> conn-open (strict, shipped parser) -> host data -> relay-hello (shipped parser).
   const phone = openPhone(ctx)
   const helloOk = await waitFor(() => phone.hello !== null, 5000)

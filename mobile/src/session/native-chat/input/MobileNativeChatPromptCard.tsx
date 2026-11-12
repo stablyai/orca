@@ -123,11 +123,13 @@ export function MobileNativeChatPromptCard({
       />
     ) : permission ? (
       <MobileNativeChatPermission
-        key={JSON.stringify(permission)}
+        // Re-aimed options stay one occurrence, so an in-flight answer keeps its card locked.
+        key={JSON.stringify({ ...permission, options: undefined })}
         permission={permission}
         onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
         onCancel={onCancelPrompt}
         onCollapse={onCollapsePrompt}
+        onAnswerInTerminal={onAnswerInTerminal}
       />
     ) : question?.questions ? (
       <MobileNativeChatStructuredAsk

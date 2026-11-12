@@ -282,6 +282,7 @@ describe('OrcaRuntimeService', () => {
       crewChanges: new CrewChanges(),
       listSessionDispatchesForPresentation: () => [],
       reconcileMissingWorkerTerminal: vi.fn(),
+      getDispatchContextById: () => undefined,
       listLegacyWorkerTerminalRecoveryRows: () => [
         {
           dispatch_id: 'dispatch-exited',

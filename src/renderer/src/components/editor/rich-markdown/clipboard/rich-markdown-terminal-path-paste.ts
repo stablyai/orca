@@ -1,43 +1,34 @@
 import type { Editor } from '@tiptap/react'
+import { escapeRegex } from '../../../../../../shared/string-utils'
 
-type ClipboardAnchor = {
-  href: string
-}
-
-const WINDOWS_ABSOLUTE_PATH_PATTERN =
-  /(?:[A-Za-z]:[\\/][^\s<>"|?*\r\n]+|\\\\[^\s\\/:*?"<>|\r\n]+\\[^\s\\/:*?"<>|\r\n]+(?:\\[^\s<>"|?*\r\n]+)*)/g
+const WINDOWS_PATH_ROOT = /(?:[A-Za-z]:[\\/]+|\\\\[^\s\\/:*?"<>|]+\\+)/
+// Separator runs cover escaped paths; spaced folders must be backslash-delimited so "C:\App and docs/README.md" stays rich.
+const WINDOWS_PATH_FOLDERS =
+  /(?:[^\s<>:"|?*\\/]+[\\/]+|(?<=\\)[^\s<>:"|?*\\/]*[^\S\r\n][^<>:"|?*\\/\r\n]*\\+)*/.source
+const WINDOWS_BASENAME_END = /\.?(?=$|[\s<>:"|?*])/.source
 
 function readClipboardText(event: ClipboardEvent, type: string): string {
   return event.clipboardData?.getData(type) ?? ''
 }
 
-function getWindowsPathBasename(filePath: string): string {
-  const normalized = filePath.replaceAll('/', '\\')
-  const separatorIndex = normalized.lastIndexOf('\\')
-  return separatorIndex !== -1 ? normalized.slice(separatorIndex + 1) : normalized
-}
-
-function extractClipboardAnchors(html: string): ClipboardAnchor[] {
+function extractClipboardAnchorHrefs(html: string): string[] {
   if (!html || typeof DOMParser === 'undefined') {
     return []
   }
 
   const document = new DOMParser().parseFromString(html, 'text/html')
-  return Array.from(document.querySelectorAll('a[href]'), (anchor) => ({
-    href: anchor.getAttribute('href') ?? ''
-  }))
+  return Array.from(
+    document.querySelectorAll('a[href]'),
+    (anchor) => anchor.getAttribute('href') ?? ''
+  )
 }
 
-function hrefPointsAtPathBasename(href: string, basename: string): boolean {
-  if (!href || !basename) {
-    return false
-  }
-
+function getHttpHostname(href: string): string | null {
   try {
     const url = new URL(href)
-    return url.protocol.startsWith('http') && url.hostname.toLowerCase() === basename.toLowerCase()
+    return url.protocol.startsWith('http') ? url.hostname : null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -48,20 +39,22 @@ export function shouldPasteTerminalWindowsPathAsPlainText({
   plainText: string
   htmlText: string
 }): boolean {
-  const paths = Array.from(plainText.matchAll(WINDOWS_ABSOLUTE_PATH_PATTERN), (match) => match[0])
-  if (paths.length === 0) {
+  if (!WINDOWS_PATH_ROOT.test(plainText)) {
     return false
   }
 
-  const anchors = extractClipboardAnchors(htmlText)
-  if (anchors.length === 0) {
+  const hostnames = new Set(
+    extractClipboardAnchorHrefs(htmlText).flatMap((href) => getHttpHostname(href) ?? [])
+  )
+  if (hostnames.size === 0) {
     return false
   }
 
-  return paths.some((filePath) => {
-    const basename = getWindowsPathBasename(filePath)
-    return anchors.some((anchor) => hrefPointsAtPathBasename(anchor.href, basename))
-  })
+  const basenames = Array.from(hostnames, escapeRegex).join('|')
+  return new RegExp(
+    `${WINDOWS_PATH_ROOT.source}${WINDOWS_PATH_FOLDERS}(?:${basenames})${WINDOWS_BASENAME_END}`,
+    'i'
+  ).test(plainText)
 }
 
 export function handleRichMarkdownTerminalPathPaste(

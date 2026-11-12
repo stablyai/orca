@@ -4,7 +4,10 @@ import type { SpeechModelState } from '../../../../../shared/speech-types'
 import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'
-import type { SettingsNavSection, SettingsNavTarget } from '@/lib/settings-navigation-types'
+import type {
+  SettingsNavSection,
+  SettingsNavTarget
+} from '@/components/settings/navigation/settings-navigation-types'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
 
 export const SETTINGS_NAV_GROUPS = [

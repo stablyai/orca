@@ -11,7 +11,7 @@ import {
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
 import type { OrcaOrgRole } from '../../../../../shared/orca-profiles'
 import { formatCents } from '../plans/plans-pricing'

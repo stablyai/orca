@@ -71,6 +71,18 @@ export function canReadRelativeRuntimeFile(
   return Boolean(relativePath && relativePath.trim() && !isAbsolutePathLike(relativePath))
 }
 
+/** A workspace file by its relative path, else a chat's scratch file by its absolute path. */
+export function workspaceOrScratchFileAddress(
+  worktreeId: string,
+  relativePath: string | undefined,
+  filePath: string
+): { worktreeSelector: string; relativePath: string } | null {
+  if (canReadRelativeRuntimeFile(relativePath)) {
+    return { worktreeSelector: toRuntimeWorktreeSelector(worktreeId), relativePath }
+  }
+  return chatScratchFileAddress(filePath)
+}
+
 function isAbsolutePathLike(value: string): boolean {
   return value.startsWith('/') || isWindowsAbsolutePathLike(value)
 }

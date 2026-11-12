@@ -1,5 +1,8 @@
+import type { Worktree } from '../../../../../../shared/worktree/types'
+
 type WorktreeCardTitleDisplayInput = {
   storedDisplayName: string | null | undefined
+  displayNameMode: Worktree['displayNameMode']
   branchName: string | null | undefined
   linearIssueTitle?: string | null
   jiraIssueTitle?: string | null
@@ -37,6 +40,7 @@ export function coerceWorktreeCardVisibleTitle(value: string | null | undefined)
 
 export function getWorktreeCardTitleDisplay({
   storedDisplayName,
+  displayNameMode,
   branchName,
   linearIssueTitle,
   jiraIssueTitle,
@@ -51,9 +55,11 @@ export function getWorktreeCardTitleDisplay({
     return normalizedStoredDisplayName ? visibleStoredDisplayName : ''
   }
 
+  // User-set names win even when they match the branch; mode is absent from older hosts.
   if (
     normalizedStoredDisplayName &&
-    !isBranchTitle(normalizedStoredDisplayName, normalizedBranchName)
+    (displayNameMode === 'fixed' ||
+      !isBranchTitle(normalizedStoredDisplayName, normalizedBranchName))
   ) {
     return visibleStoredDisplayName
   }

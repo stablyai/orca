@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { structuredSessionOperationId } from '../session/structured-session-operation-id'
+import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
 import { SettingsNavBar, SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

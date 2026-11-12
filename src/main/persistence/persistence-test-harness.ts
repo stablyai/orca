@@ -9,14 +9,14 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { SshRemotePtyLease } from '../../shared/ssh-types'
-import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-meta-alias-projection'
+import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { Store } from './loading-store/store'
 import { getDataFile, initDataPath } from './loading-store/user-data-path'
 import type { StoreRuntimeOptions } from './loading-store/store-runtime-state'
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
-import { openProfileStateDatabaseReadOnly } from './profile-state/profile-state-database'
+import { openProfileStateDatabaseReadOnly } from './profile-state/database/profile-state-database'
 import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
-import { exportProfileStateJson } from './profile-state/profile-state-documents'
+import { exportProfileStateJson } from './profile-state/documents/profile-state-documents'
 
 export const testState = { dir: '' }
 const stores = new Set<Store>()

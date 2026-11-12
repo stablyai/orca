@@ -8,9 +8,9 @@ import { ORCA_CLOUD_IMAGE_AGENTS } from '../../../../shared/hosted-sandbox/orca-
 import type { EphemeralVmRecipeOption } from './new-workspace-composer-card-props'
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/lib/host-chat-program', () => ({ agentChoicePending: () => false }))
+vi.mock('@/lib/agent-session/launch/inventory/host-chat-program', () => ({ agentChoicePending: () => false }))
 // This desktop has aider and claude; the host offers exactly what it detected.
-vi.mock('@/lib/host-chat-program-acquisition', () => ({
+vi.mock('@/lib/agent-session/launch/inventory/host-chat-program-acquisition', () => ({
   useAgentsOfferedForLaunch: (_workspace: unknown, detected: ReadonlySet<TuiAgent> | null) =>
     detected
 }))

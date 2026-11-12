@@ -1,4 +1,4 @@
-import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeBranchLabel } from '@/lib/workspace/display/worktree-default-display-name'
 import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'

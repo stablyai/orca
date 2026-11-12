@@ -2,8 +2,8 @@
 
 import { resolvePtyBoundActiveLeafId } from '../../../components/terminal-pane/layout/ownership/terminal-layout-active-leaf'
 import type { AppState } from '@/store/types'
-import { layoutContainsLeafId } from '../../../../../shared/workspace-layout/terminal-pane-tree'
-import type { PublishedWorkspaceLayout } from '../../../../../shared/workspace-layout/workspace-layout-published'
+import { layoutContainsLeafId } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import type { PublishedWorkspaceLayout } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import { isDrawnTabHeld } from '../intents/layout-owner-drawn-tab-holds'
 import { isTabPaneTreeHeld } from '../intents/layout-owner-pane-tree-holds'
 

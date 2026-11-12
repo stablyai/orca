@@ -1,4 +1,4 @@
-import type { TerminalLeafMoveResult } from '../../shared/workspace-layout/terminal-leaf-move'
+import type { TerminalLeafMoveResult } from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 
 // Why its own module: the plain-Node runtime commits leaf moves too, so this must stay Electron-free.
 

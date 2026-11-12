@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { editorSavedEventView } from '@/components/editor/save/commands/editor-saved-event-view'
-import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {

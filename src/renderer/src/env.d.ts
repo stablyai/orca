@@ -2,7 +2,7 @@
 
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { OnboardingFeatureSetupDeps } from '@/components/onboarding/onboarding-feature-setup'
-import type { languages } from 'monaco-editor'
+import type { editor, languages } from 'monaco-editor'
 import type { MonacoE2EProbe } from './components/editor/monaco-e2e-probe'
 import type { TerminalWorktreeParkingDebugVerdict } from './components/terminal-pane/parking/instrumentation/terminal-parking-e2e-overrides'
 import type { TerminalPtyPreSpawnE2EBarrier } from './components/terminal-pane/pty-transport/ipc/terminal-pty-pre-spawn-e2e-barrier'
@@ -63,6 +63,17 @@ declare module 'monaco-editor/esm/vs/base/common/uri.js' {
     with(change: { path?: string; fragment?: string }): URI
     toString(skipEncoding?: boolean): string
   }
+}
+
+// The same enum objects and class the public `monaco.editor.*` / `monaco.Range` re-export, reachable
+// without evaluating the editor bundle (which bakes its NLS labels on first evaluation).
+declare module 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js' {
+  export const EditorOption: typeof editor.EditorOption
+  export const MouseTargetType: typeof editor.MouseTargetType
+}
+
+declare module 'monaco-editor/esm/vs/editor/common/core/range.js' {
+  export { Range } from 'monaco-editor'
 }
 
 declare module 'monaco-editor/esm/vs/base/common/async.js' {

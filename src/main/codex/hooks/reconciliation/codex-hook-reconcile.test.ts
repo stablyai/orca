@@ -507,7 +507,8 @@ describe('an app start whose lookup has not answered within its wait', () => {
       groupIndex: 0,
       handlerIndex: 0,
       command: command(),
-      timeoutSec: 10
+      timeoutSec: 10,
+      statusMessage: buildCodexManagedHook(command(), 'Stop').statusMessage
     }
     writeHooks({ Stop: [{ hooks: [buildCodexManagedHook(command(), 'Stop')] }] })
     upsertHookTrustEntries(tomlPath(), [{ ...stop, trustedHash: 'sha256:main-granted' }])

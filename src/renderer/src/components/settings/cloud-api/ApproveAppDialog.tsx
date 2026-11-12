@@ -10,7 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   CloudApiApproval,
   CloudApiResult,
@@ -23,7 +23,7 @@ import { formatCountdown, scopesForPreset } from './cloud-api-format'
 import { CloudApiErrorNotice } from './cloud-api-parts'
 import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
 import { ScopeSummary } from './ScopeSummary'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 /** "Approve an app": a one-time code an MCP client's consent page accepts instead of an API key. */
 export function ApproveAppDialog({

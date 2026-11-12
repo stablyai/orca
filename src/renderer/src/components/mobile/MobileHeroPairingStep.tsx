@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Trans } from 'react-i18next'
 import { ChevronDown, CircleAlert, Copy, RefreshCw } from 'lucide-react'
-import { cn } from '../../lib/utils'
+import { cn } from '../../lib/class-names'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { NetworkInterfacePicker } from './NetworkInterfacePicker'

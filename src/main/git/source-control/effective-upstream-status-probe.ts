@@ -4,9 +4,12 @@ import {
   getGitUpstreamStatusForUpstreamName
 } from '../../../shared/git/remotes/git-effective-upstream'
 import { splitRemoteBranchName } from '../../../shared/git/remotes/git-remote-branch-name'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitReadOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+
+import {
+  type GitRuntimeOptions,
+  gitReadOptionsForWorktree
+} from '../command-runner/git-runtime-options'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import {
   MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES,
   effectiveUpstreamStatusInFlight,

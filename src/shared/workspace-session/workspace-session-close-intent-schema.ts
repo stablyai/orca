@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { clientHostedBrowserCloseIntentSchema } from './client-hosted-browser-close-intent'
-import { pairedTerminalTabCloseIntentSchema } from '../workspace-layout/paired-terminal-tab-close-intent'
+import { pairedTerminalTabCloseIntentSchema } from '../workspace-layout/terminal-surfaces/paired-terminal-tab-close-intent'
 import { salvagedOptional, salvagingArray, salvagingRecord } from '../zod-salvage'
 
 /** The session fields holding closes this client owes a runtime environment, keyed by it. */

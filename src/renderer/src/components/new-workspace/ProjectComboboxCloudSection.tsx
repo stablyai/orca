@@ -3,7 +3,7 @@
 // while Orca Cloud is the Run on target.
 import React, { useEffect, useRef } from 'react'
 import { Check, ChevronDown, Github, Plus } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 

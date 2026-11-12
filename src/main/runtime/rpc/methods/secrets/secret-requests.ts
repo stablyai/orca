@@ -19,7 +19,7 @@ import {
 } from '../../../secrets/secret-request-store'
 import { isCloudWorkspaceOrcad, readSessionEnvNames } from '../../../secrets/session-env-names'
 import { defineMethod, type RpcContext } from '../../core'
-import { isAgentRpcCaller } from '../../rpc-caller-identity'
+import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
 import { verifiedCallerTerminalHandle } from '../orchestration/turn-sender'
 
 export type SecretRequestDeps = {

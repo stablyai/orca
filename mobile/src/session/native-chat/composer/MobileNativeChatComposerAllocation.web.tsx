@@ -7,7 +7,7 @@ import {
   useRef,
   useState
 } from 'react'
-import { View } from 'react-native'
+import { View, type HostInstance } from 'react-native'
 import {
   useMobileNativeChatLowerGeometry,
   useMobileNativeChatLowerRegion
@@ -36,7 +36,7 @@ export function MobileNativeChatComposerAllocation({
 }: ComposerAllocationProps) {
   const { allocationHeight } = useMobileNativeChatLowerGeometry()
   const lower = useMobileNativeChatLowerRegion()
-  const reserveRef = useRef<View>(null)
+  const reserveRef = useRef<HostInstance>(null)
   const menuWasShown = useRef(false)
   const [active, setActive] = useState(false)
   const [intrinsic, setIntrinsic] = useState<ComposerMenuIntrinsicSize | null>(null)

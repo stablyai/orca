@@ -6,7 +6,7 @@ import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-c
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { dedupePaletteWorktrees } from '@/lib/workspace/search/palette-repo-resolution'
-import { withoutHiddenVmWorktreesByRepo } from '@/lib/vm-create-hidden-checkouts'
+import { withoutHiddenVmWorktreesByRepo } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   useSidebarHiddenCheckouts,
   withoutHiddenHostRepos

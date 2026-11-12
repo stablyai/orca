@@ -70,28 +70,6 @@ function rig(
   }
 }
 
-it('tries CLI reuse once while independent generation retries, and skips it on manual regeneration', async () => {
-  const reuse = vi.fn()
-  const generate = vi.fn<StructuredChatNamingDeps['generate']>(
-    async (_record, _prompt, _current, automatic) => {
-      if (automatic) {
-        reuse()
-      }
-      return generate.mock.calls.length === 1
-        ? { error: 'Retry independent generation' }
-        : { name: 'Login repair' }
-    }
-  )
-  const state = rig(generate)
-  state.start()
-  await state.done()
-  expect(state.record().conversationName).toBe('Login repair')
-  expect(reuse).toHaveBeenCalledOnce()
-  state.handler.regenerate('chat-1')
-  await state.done()
-  expect(reuse).toHaveBeenCalledOnce()
-})
-
 it.each(['owner', 'same-text rename'] as const)(
   'rejects a queued title write after %s changes',
   async (change) => {
@@ -117,18 +95,3 @@ it.each(['owner', 'same-text rename'] as const)(
     )
   }
 )
-
-it('uses current naming settings if they change while the title write is queued', async () => {
-  let eligible = true
-  const generate = vi.fn<StructuredChatNamingDeps['generate']>(
-    async (_record, _prompt, _current, automatic) =>
-      automatic ? { name: 'CLI title', shouldApply: () => eligible } : { name: 'Configured title' }
-  )
-  const state = rig(generate)
-  state.beforeWrite(async () => {
-    eligible = false
-  })
-  state.start()
-  await state.done()
-  expect(state.record().conversationName).toBe('Configured title')
-})

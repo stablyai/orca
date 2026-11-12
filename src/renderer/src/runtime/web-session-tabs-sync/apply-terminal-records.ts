@@ -1,4 +1,4 @@
-import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
+import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 import type { prepareWebSessionTabsSnapshotGroups } from './apply-preparation-groups'
 import { sameStringArray, writableWebSessionTabsRecord } from './state-equality-core'
 

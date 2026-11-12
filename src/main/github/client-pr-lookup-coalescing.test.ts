@@ -35,7 +35,9 @@ vi.mock('./client', async () => ({
   getGitHubPRLookupRateLimitBlock: vi.fn(async () => null),
   createGitHubPullRequest: vi.fn()
 }))
-vi.mock('../gitlab/client', () => ({ getProjectSlug: vi.fn(async () => null) }))
+vi.mock('../gitlab/merge-requests/merge-request-lookup', () => ({
+  getProjectSlug: vi.fn(async () => null)
+}))
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 
 const outcome: PRRefreshOutcome = { kind: 'no-pr', fetchedAt: 1 }

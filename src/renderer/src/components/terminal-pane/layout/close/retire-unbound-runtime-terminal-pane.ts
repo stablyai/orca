@@ -1,4 +1,4 @@
-import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+import { resolveTerminalHostOwnership } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   buildTerminalTabRetirementPlan,

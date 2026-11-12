@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getBundledLauncherPath } from '../../cli/bundled-cli-launcher-path'
+import { getBundledLauncherPath } from '../../cli/packaged-assets/bundled-cli-launcher-path'
 import { getDaemonBashShellReadyRcfileContent } from '../../daemon/shell-readiness/daemon-bash-shell-ready-rcfile'
 import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 

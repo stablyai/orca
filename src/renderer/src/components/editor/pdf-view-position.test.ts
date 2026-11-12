@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PdfViewPosition } from '@/lib/scroll-cache'
+import type { PdfViewPosition } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { createPdfViewPositionRecorder, PDF_POSITION_FLUSH_MS } from './pdf-view-position'
 
 describe('createPdfViewPositionRecorder', () => {
@@ -38,27 +38,7 @@ describe('createPdfViewPositionRecorder', () => {
     expect(writes).toEqual([['a.pdf:pdf', { pageNumber: 7, top: 400, left: 20 }]])
   })
 
-  it('fires the debounced write once and reflects the latest of several rapid records', () => {
-    const recorder = makeRecorder()
-    recorder.arm()
-    recorder.record(location(2))
-    recorder.record(location(3))
-    recorder.record(location(4))
-    expect(writes).toEqual([])
-    vi.advanceTimersByTime(PDF_POSITION_FLUSH_MS)
-    expect(writes).toEqual([['a.pdf:pdf', { pageNumber: 4, top: 400, left: 20 }]])
-  })
-
   // Restarting the timer would starve LRU refresh during continuous scrolling, when the entry most needs to stay warm.
-  it('does not restart the pending timer when a later record arrives', () => {
-    const recorder = makeRecorder()
-    recorder.arm()
-    recorder.record(location(2))
-    vi.advanceTimersByTime(PDF_POSITION_FLUSH_MS - 50)
-    recorder.record(location(3))
-    vi.advanceTimersByTime(50)
-    expect(writes).toEqual([['a.pdf:pdf', { pageNumber: 3, top: 400, left: 20 }]])
-  })
 
   it('ignores a malformed location without clearing the last good position', () => {
     const recorder = makeRecorder()

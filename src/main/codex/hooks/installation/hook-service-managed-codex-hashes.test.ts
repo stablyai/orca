@@ -66,6 +66,7 @@ import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
   computeOrcaCodexHookHashes,
+  getCodexManagedHookStatusMessage,
   getManagedScriptPath
 } from '../definitions/codex-hook-definition'
 import { buildCodexHookCommand as getManagedCommand } from '../definitions/codex-hook-command-form'
@@ -291,7 +292,8 @@ describe('managed-home Codex hook approval', () => {
         groupIndex: 0,
         handlerIndex: 0,
         command: command(),
-        timeoutSec: 10
+        timeoutSec: 10,
+        statusMessage: getCodexManagedHookStatusMessage(command())
       }
       upsertHookTrustEntries(join(managedHome(), 'config.toml'), [
         { ...entry, trustedHash: 'sha256:main-granted' }

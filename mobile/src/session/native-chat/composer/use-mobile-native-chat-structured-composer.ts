@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
-import type { MobileNativeChatStructuredComposer } from './MobileNativeChatComposer'
+import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 import type { MobileNativeChatFileAttachments } from './use-mobile-native-chat-file-attachments'
-import type { useMobileStructuredSessionCommands } from '../../use-mobile-structured-session-commands'
-import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
+import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
+import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 

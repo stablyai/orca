@@ -163,9 +163,9 @@ export function startStructuredAgentSessionLiveRead(args: {
       return
     }
     clearUnattachedReadGrace()
-    // Reset on delivered frames; local subscribe can resolve before the host refuses opening.
+    // Note delivered frames; local subscribe can resolve before the host refuses opening.
     if (event.type !== 'end') {
-      reconnectScheduler.reset()
+      reconnectScheduler.noteDelivered()
     }
     if (event.type === 'snapshot' || event.type === 'reset') {
       requestReader.invalidate()

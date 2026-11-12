@@ -17,12 +17,12 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
+import { retireStructuredAgentSessionLaunchCancellationTombstone } from './structured-agent-session-launch-registry'
 import {
   deleteStructuredLaunchStateIfCurrent,
   notifyStructuredLaunchListeners,
-  retireStructuredAgentSessionLaunchCancellationTombstone,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
 import { recordUnlistedCreatedChat } from './pane/structured-agent-session-unlisted-created-chats'
 import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 

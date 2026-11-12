@@ -12,13 +12,13 @@ import {
 } from '@/components/ui/dialog'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitHubViewer } from '../../../../../shared/github/pull-request-types'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   extractImageFilesFromDataTransfer,
   hasAttachableFeedbackImage
-} from '@/lib/feedback-image-attachments'
+} from '@/components/sidebar/sidebar-feedback/feedback-image-attachments'
 import { stripClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
 import { FEEDBACK_PAYLOAD_TOO_LARGE_STATUS } from '../../../../../shared/feedback-image-limits'
 import { SidebarFeedbackImageAttachments } from './SidebarFeedbackImageAttachments'

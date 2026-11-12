@@ -5,12 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { isPackaged: false }, shell: { openExternal: vi.fn() } }))
 
-import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
+import type { OrcaCloudAuthConfig } from './cloud-auth/profile-cloud-auth-config'
 import {
   beginOrcaCloudPkceFlow,
   ORCA_CLOUD_SIGN_IN_TIMEOUT_MS,
   orcaCloudSignInTimeoutMs
-} from './profile-cloud-pkce'
+} from './cloud-auth/profile-cloud-pkce'
 
 const base = 'https://auth.test'
 const config: OrcaCloudAuthConfig = {

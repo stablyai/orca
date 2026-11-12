@@ -10,7 +10,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { boundHostList } from './bounded-host-list'
 import { HostListOverflowNote } from './HostListOverflowNote'
 import { noHostsMatchLabel, searchHostsLabel } from './host-picker-copy'
