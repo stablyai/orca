@@ -3,6 +3,7 @@ import type { StructuredAgentSessionClientDelivery } from '../publication/subscr
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
 import { StructuredAgentSessionUsageLimitContinue } from './structured-agent-session-usage-limit-continue'
 import { readSavedUsageLimitCut } from './structured-agent-session-usage-limit-chain'
+import { StructuredAgentSessionSignedOutRetry } from './structured-agent-session-signed-out-retry'
 
 export function start(
   context: StructuredAgentSessionMutationContext,
@@ -21,6 +22,20 @@ export function start(
   })
   limit.start()
   return limit
+}
+
+export function startSignedOutRetry(
+  context: StructuredAgentSessionMutationContext,
+  host: Pick<StructuredAgentSessionHost, 'send' | 'queuedMessageSend'>
+): StructuredAgentSessionSignedOutRetry {
+  const retry = new StructuredAgentSessionSignedOutRetry(context, host, context.now)
+  retry.start()
+  return retry
+}
+
+/** Quit ends both, so nothing re-sends after delivery stops. */
+export function stop(...owners: readonly { dispose: () => void }[]): void {
+  owners.forEach((owner) => owner.dispose())
 }
 
 /** A reopened chat re-reads its cut from the loaded journal. */

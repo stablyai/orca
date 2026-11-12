@@ -32,6 +32,7 @@ export type NativeChatDeliveryNotice =
       onDismiss?: never
       onEdit?: never
       onSend?: never
+      onRetry?: never
       detail?: never
       failureKind?: never
     }
@@ -43,6 +44,8 @@ export type NativeChatDeliveryNotice =
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void
+      /** Re-sends a send whose start was refused for want of a login. */
+      onRetry?: () => void
     }
 
 export type MessageRowProps = {

@@ -20,6 +20,7 @@ import { nativeChatWorkRunEntries } from '../../../../../src/shared/native-chat/
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
+import { MobileNativeChatUnsentRetry } from './MobileNativeChatUnsentRetry'
 import { MobileNativeChatPullRequestEventLine } from './MobileNativeChatPullRequestEventLine'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
@@ -72,6 +73,7 @@ function MobileNativeChatMessageImpl({
   reasoningExpanded,
   onToggleReasoning,
   unsentNotice,
+  onRetry,
   receipt,
   awaiting,
   subagentGroupsOpen,
@@ -109,6 +111,7 @@ function MobileNativeChatMessageImpl({
   reasoningExpanded?: boolean
   onToggleReasoning?: (key: string) => void
   unsentNotice?: string
+  onRetry?: () => void
   receipt?: NativeChatResolvedPrompt
   awaiting?: boolean
   subagentGroupsOpen?: ReadonlySet<string>
@@ -387,6 +390,7 @@ function MobileNativeChatMessageImpl({
           ) : null}
         </Content>
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
+        {onRetry ? <MobileNativeChatUnsentRetry onPress={onRetry} /> : null}
         {/* Always shown, so the row never shifts when copy appears. */}
         {isChatTurn && !agentFrom ? (
           <MobileNativeChatMessageMeta

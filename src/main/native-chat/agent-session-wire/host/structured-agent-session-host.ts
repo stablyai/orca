@@ -66,6 +66,7 @@ export class StructuredAgentSessionHost {
   readonly restartResume: StructuredAgentSessionRestartResume
 
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>
+  readonly signedOutRetry: ReturnType<typeof usageLimit.startSignedOutRetry>
 
   constructor(readonly deps: HostTypes.StructuredAgentSessionHostDeps) {
     // Collaborators share a logger wrapper that cannot fail the operation it reports.
@@ -136,6 +137,7 @@ export class StructuredAgentSessionHost {
     })
     this.continuationContext = contextReader(deps, this.lifetime.conversation)
     this.usageLimitContinue = usageLimit.start(this.mutationContext(), this, this.clientDelivery)
+    this.signedOutRetry = usageLimit.startSignedOutRetry(this.mutationContext(), this)
     this.runtimeState.startLeaseRenewal()
     this.lifetime.idleSweep.start()
   }
@@ -239,7 +241,7 @@ export class StructuredAgentSessionHost {
   stopDelivery = () => {
     this.sessions.endPublications()
     ;[this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
-    this.usageLimitContinue.dispose()
+    usageLimit.stop(this.usageLimitContinue, this.signedOutRetry)
   }
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
@@ -305,8 +307,7 @@ export class StructuredAgentSessionHost {
   readonly continuationContext: ReturnType<typeof contextReader>
 
   observeConversationPublications = this.sessions.observeConversationPublications
-  beginConversationTitleWait = (sessionId: string) =>
-    this.runtimeState.acquireAborts.begin(sessionId)
+  beginConversationTitleWait = (id: string) => this.runtimeState.acquireAborts.begin(id)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   journalCurrentRead = this.reads.journalCurrentRead
   queuedSendAnswer = this.reads.queuedSendAnswer
@@ -339,8 +340,7 @@ export class StructuredAgentSessionHost {
   /** Retains no per-session subscription. */
   subscribeStatus = this.clientDelivery.subscribeStatus
   publishConversationName = this.clientDelivery.publishConversationName
-  regenerateConversationName = (sessionId: string): boolean =>
-    this.deps.conversationNaming?.regenerate(sessionId) ?? false
+  regenerateConversationName = (id: string) => this.deps.conversationNaming?.regenerate(id) ?? false
   setUserConversationName: HostTypes.SetUserConversationName = (...args) =>
     this.deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
 

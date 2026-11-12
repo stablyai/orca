@@ -48,6 +48,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
+  signedOutRetry?: StructuredAgentSessionHostDeps['signedOutRetry']
   idleSweep?: StructuredAgentSessionHostDeps['idleSweep']
   /** What a chat saved before its agent had modes ran with; fills that chat's mode once. */
   resolveAgentFullAccess?: (agent: string) => boolean

@@ -90,7 +90,12 @@ export function mutateQueued<TValue>(
 export function sendQueuedStructuredAgentMessage(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: { envelope: AgentSessionMutationEnvelope; messageId: string }
+  params: {
+    envelope: AgentSessionMutationEnvelope
+    messageId: string
+    /** Host-only: throws under the session lock when an automatic send no longer applies. */
+    beforeRun?: () => void
+  }
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const { messageId } = params
   const operationId = params.envelope.clientOperationId
@@ -118,6 +123,7 @@ export function sendQueuedStructuredAgentMessage(
       if (!row) {
         return invalid('No queued message by that id.')
       }
+      params.beforeRun?.()
       if (row.state === 'withdrawn') {
         return invalid('This queued message was withdrawn.')
       }

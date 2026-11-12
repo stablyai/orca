@@ -5,3 +5,8 @@ import { SessionId } from './structured-agent-session-params'
 export const ContinueInterruptedParams = z
   .object({ sessionId: SessionId, turnItemId: z.string().min(1).max(1024) })
   .strict()
+
+/** Re-send a start refused for want of a login; the host rechecks it is still the latest send. */
+export const RetrySignedOutSendParams = z
+  .object({ sessionId: SessionId, clientMessageId: z.string().min(1).max(1024) })
+  .strict()

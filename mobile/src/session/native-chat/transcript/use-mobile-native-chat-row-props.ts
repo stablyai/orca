@@ -8,6 +8,7 @@ import { isActionableStructuredAgentSessionPrompt } from '../../../../../src/sha
 import { nativeChatRowOffersRewind } from '../../../../../src/shared/native-chat/native-chat-rewind-eligibility'
 import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import type { NativeChatTurnDiff } from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
+import type { MobileStructuredSignedOutRetry } from '../composer/use-mobile-structured-signed-out-retry'
 
 export type MobileNativeChatTurnRow = {
   turnDiff?: NativeChatTurnDiff
@@ -42,6 +43,8 @@ export type MobileNativeChatRowProps = Omit<MobileNativeChatTurnRow, 'opensTurn'
   previousTodoWrite: NativeChatToolCallBlock | undefined
   previousUpdatePlan: NativeChatToolCallBlock | undefined
   unsentNotice: string | undefined
+  /** Under the unsent send the host can re-send: its start was refused for want of a login. */
+  onRetry?: () => void
   receipt: NativeChatResolvedPrompt | undefined
   awaiting: boolean
   runOwner: string | undefined
@@ -59,6 +62,7 @@ export type MobileNativeChatRowLookups = {
   unsentNotices: ReadonlyMap<string, string>
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   actionablePromptIds: readonly string[] | undefined
+  signedOutRetry: MobileStructuredSignedOutRetry | null
 }
 
 /** One row's props: its turn's, plus what the chat's lookups hold for it. */
@@ -83,6 +87,9 @@ export function resolveMobileNativeChatRowProps(
     previousTodoWrite: predecessors?.todowrite,
     previousUpdatePlan: predecessors?.update_plan,
     unsentNotice,
+    ...(unsentNotice !== undefined && lookups.signedOutRetry?.messageId === message.id
+      ? { onRetry: lookups.signedOutRetry.retry }
+      : {}),
     receipt: lookups.receipts?.get(message.id),
     awaiting: isActionableStructuredAgentSessionPrompt(message.id, lookups.actionablePromptIds),
     ...turn,

@@ -12,7 +12,10 @@ import {
   RestartResumableParams,
   RestartResumeParams
 } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import { ContinueInterruptedParams } from '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
+import {
+  ContinueInterruptedParams,
+  RetrySignedOutSendParams
+} from '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
 import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 import { structuredAgentsReadBy } from '../structured-agent-session-policy'
@@ -79,6 +82,17 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredSessionHost(ctx, params.sessionId)
       return host.restartResume.continueInterrupted(params.sessionId, params.turnItemId)
+    }
+  }),
+  defineMethod({
+    // Re-send a start refused for want of a login; the host rechecks it is still the latest send.
+    name: 'agentSession.retrySignedOutSend',
+    permission: 'workspace',
+    params: RetrySignedOutSendParams,
+    handler: async (params, ctx) => {
+      await ensureStructuredHostInstalled(ctx)
+      const host = requireStructuredSessionHost(ctx, params.sessionId)
+      return host.signedOutRetry.retry(params.sessionId, params.clientMessageId)
     }
   }),
   defineMethod({

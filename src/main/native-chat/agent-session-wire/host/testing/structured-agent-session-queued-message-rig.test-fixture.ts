@@ -57,6 +57,7 @@ export async function createQueuedMessageTestRig(
     probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
     onRequestFailure?: StructuredAgentSessionHostDeps['onRequestFailure']
     usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
+    signedOutRetry?: StructuredAgentSessionHostDeps['signedOutRetry']
   } = {}
 ) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
@@ -77,6 +78,7 @@ export async function createQueuedMessageTestRig(
       now: options.now ?? (() => NOW),
       onRequestFailure: options.onRequestFailure,
       usageLimitAutoContinue: options.usageLimitAutoContinue,
+      signedOutRetry: options.signedOutRetry,
       ...(options.probeOwner ? { probeOwner: options.probeOwner } : {}),
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
@@ -143,9 +145,7 @@ export async function createQueuedMessageTestRig(
   }
 
   function stop(clientOperationId = hostTestOperationId(), caller = QUEUED_RIG_CALLER) {
-    return host.cancel(caller, {
-      envelope: envelope({}, 'agentSession.cancel', clientOperationId)
-    })
+    return host.cancel(caller, { envelope: envelope({}, 'agentSession.cancel', clientOperationId) })
   }
 
   function sendNow(

@@ -1,6 +1,7 @@
 import { createContext } from 'react'
 import type { MobileStructuredInterruptedContinue } from '../composer/use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatUsageLimit } from '../use-mobile-native-chat-usage-limit'
+import type { MobileStructuredSignedOutRetry } from '../composer/use-mobile-structured-signed-out-retry'
 
 /** What a notice row needs: the Orca host behind the chat (null when unnamed), the agent, and Continue for an Orca-stopped turn. */
 export type MobileNativeChatNoticeView = {
@@ -16,6 +17,8 @@ export type MobileNativeChatNoticeView = {
   usageLimit?: MobileNativeChatUsageLimit | null
   /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
   openAccounts?: () => void
+  /** Retry under the send whose start was refused for want of a login; null when none can be. */
+  signedOutRetry?: MobileStructuredSignedOutRetry | null
 }
 
 export const MobileNativeChatNoticeContext = createContext<MobileNativeChatNoticeView>({

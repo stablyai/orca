@@ -24,6 +24,14 @@ import {
   hostShellEnvironmentRevision
 } from '../environment/structured-agent-shell-environment'
 import { usageLimitAccountSources } from './usage-limit-account-usage'
+import { claudeLaunchAccountHoldsLogin } from '../../../claude-accounts/runtime-auth/claude-launch-login'
+
+/** A sign-in stamps the account list; a selection moves these too. */
+const CLAUDE_ACCOUNT_SETTINGS = [
+  'claudeManagedAccounts',
+  'activeClaudeManagedAccountId',
+  'activeClaudeManagedAccountIdsByRuntime'
+] as const
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
@@ -88,6 +96,48 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
         shellEnvironmentRevision: hostShellEnvironmentRevision,
         claudeLaunchEnv: (settings) => this.structuredAgentLaunchEnv('claude', settings)
       })
+    }
+  }
+
+  /** What the chat host takes from this runtime's accounts. */
+  protected accountHostDeps(): Pick<
+    StructuredAgentSessionHostDeps,
+    'usageLimitAutoContinue' | 'signedOutRetry'
+  > {
+    return {
+      usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
+      signedOutRetry: this.signedOutRetryHostDeps()
+    }
+  }
+
+  /** Only Claude refuses a start for want of a login; Codex reports it inside the turn it ran. */
+  protected signedOutRetryHostDeps(): StructuredAgentSessionHostDeps['signedOutRetry'] {
+    return {
+      // A WSL chat launches on the guest's login, which the host's router doesn't read.
+      launchAccountSignedIn: async ({ provider, location }) =>
+        provider === 'claude' && !location.wslDistro && (await claudeLaunchAccountHoldsLogin()),
+      // Orca's sign-ins and selections write settings; a login made outside Orca shows in usage.
+      subscribe: (changed) => {
+        const settings = this.requireStore().onSettingsChanged?.((updates) => {
+          if (CLAUDE_ACCOUNT_SETTINGS.some((key) => key in updates)) {
+            changed()
+          }
+        })
+        // Every provider's poll pushes state; only Claude's reading changing can mean a login is back.
+        let claude: string | undefined
+        const usage = this.accounts.usageRateLimits()?.onStateChange((state) => {
+          const reading = state.claude
+          const seen = JSON.stringify([reading?.status, reading?.usageMetadata?.failureKind])
+          if (seen !== claude) {
+            claude = seen
+            changed()
+          }
+        })
+        return () => {
+          settings?.()
+          usage?.()
+        }
+      }
     }
   }
 

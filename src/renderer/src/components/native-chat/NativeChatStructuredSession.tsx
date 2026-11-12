@@ -68,7 +68,7 @@ import { useNativeChatStructuredComposerTransport } from '@/components/native-ch
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
-import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
+import { useStructuredAgentSessionRetryableDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-signed-out-retry'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from '@/components/native-chat/host-access/use-native-chat-host-outage-notice'
@@ -142,10 +142,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     controller.journalItems,
     needsFailureFacts || props.agent === 'claude'
   )
-  const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
-    pending: controller.pending,
-    submissions: controller.submissions,
-    journalItems: controller.journalItems,
+  const deliveryNotices = useStructuredAgentSessionRetryableDeliveryNotices(props, controller, {
     startFailures,
     agentName: agentLabel
   })

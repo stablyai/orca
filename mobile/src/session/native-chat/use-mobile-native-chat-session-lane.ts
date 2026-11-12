@@ -6,6 +6,7 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './agent-session/use-mobile-structured-agent-session'
 import { useMobileStructuredSessionCommands } from './composer/use-mobile-structured-session-commands'
+import { useMobileStructuredSignedOutRetry } from './composer/use-mobile-structured-signed-out-retry'
 import type { MobileNativeChatResolution } from './mobile-native-chat-eligibility'
 import type { MobileNativeChatSendErrorReporter } from './composer/use-mobile-native-chat-send-error'
 
@@ -43,6 +44,7 @@ export function useMobileNativeChatSessionLane({
   onActionResolved?: () => void
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
+  signedOutRetry: ReturnType<typeof useMobileStructuredSignedOutRetry>
   session: ReturnType<typeof useMobileNativeChatSession>
   sessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
 } {
@@ -87,8 +89,15 @@ export function useMobileNativeChatSessionLane({
     onQueuedEditNotice,
     ...(onActionResolved ? { onActionResolved } : {})
   })
+  const signedOutRetry = useMobileStructuredSignedOutRetry({
+    client,
+    sessionId: structured ? sessionId : null,
+    hostSupport,
+    submissions: structuredSession.turnJournal?.submissions ?? []
+  })
   return {
     structuredSession,
+    signedOutRetry,
     session: structured ? structuredSession.session : bridgeSession,
     sessionCommands
   }

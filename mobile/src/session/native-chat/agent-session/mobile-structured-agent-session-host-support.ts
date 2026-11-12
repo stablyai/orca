@@ -37,6 +37,7 @@ import {
 } from '../../../../../src/shared/agent-session/agent-session-permission-modes-capability'
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/skill-install-capability'
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
+import { AGENT_SESSION_SIGNED_OUT_RETRY_RUNTIME_CAPABILITY } from '../../../../../src/shared/native-chat/native-chat-signed-out-retry'
 
 export type StructuredAgentSessionHostSupport = {
   commandsOnRequest?: boolean
@@ -85,6 +86,8 @@ export type StructuredAgentSessionHostSupport = {
   usageLimitContinueCancel: boolean
   /** A send may name the usage-limit cut it continues. */
   sendUsageLimitContinuation: boolean
+  /** Older hosts lack Retry on a start refused for want of a login. */
+  signedOutRetry?: boolean
 }
 
 export function structuredAgentSessionHostSupport(
@@ -133,6 +136,7 @@ export function structuredAgentSessionHostSupport(
     ),
     sendUsageLimitContinuation: capabilities.includes(
       AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY
-    )
+    ),
+    signedOutRetry: capabilities.includes(AGENT_SESSION_SIGNED_OUT_RETRY_RUNTIME_CAPABILITY)
   }
 }

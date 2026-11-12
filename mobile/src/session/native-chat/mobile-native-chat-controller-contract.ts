@@ -28,6 +28,7 @@ import type { MobileStructuredQueuedMessageControls } from './input/use-mobile-s
 import type { MobileStructuredThreadGoal } from './input/use-mobile-structured-thread-goal'
 import type { MobileStructuredBackgroundTasks } from './input/use-mobile-structured-background-tasks'
 import type { MobileStructuredInterruptedContinue } from './composer/use-mobile-structured-interrupted-continue'
+import type { MobileStructuredSignedOutRetry } from './composer/use-mobile-structured-signed-out-retry'
 import type { MobileNativeChatPendingMessage } from './transcript/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
@@ -103,6 +104,7 @@ export type MobileNativeChatController = {
   nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
   nativeChatContextUsage: NativeChatContextUsageSummary | null
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
+  nativeChatSignedOutRetry: MobileStructuredSignedOutRetry | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
   nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]

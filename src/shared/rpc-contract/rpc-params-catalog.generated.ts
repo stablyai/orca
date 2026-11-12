@@ -642,7 +642,10 @@ import {
   SshTargetUpdate
 } from './ssh-params'
 import { StatusGetParams } from './status-params'
-import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
+import {
+  ContinueInterruptedParams,
+  RetrySignedOutSendParams
+} from './structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
   AcknowledgeAttentionParams,
@@ -875,6 +878,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.restartResumable': RestartResumableParams,
   'agentSession.restartResumableDismiss': RestartResumableParams,
   'agentSession.restartResume': RestartResumeParams,
+  'agentSession.retrySignedOutSend': RetrySignedOutSendParams,
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,

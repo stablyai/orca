@@ -198,6 +198,13 @@ export type StructuredAgentSessionHostDeps = {
     /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
     accountWitness?: (provider: AgentSessionRecord['provider']) => string
   }
+  /** Absent: a start refused for want of a login is re-sent only on a person's Retry. */
+  signedOutRetry?: {
+    /** Whether the account this chat's next start would launch on now holds a login. */
+    launchAccountSignedIn: (record: AgentSessionRecord) => Promise<boolean>
+    /** Fires when that may have changed: an account signed in, was selected, or its usage read again. */
+    subscribe: (changed: () => void) => () => void
+  }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
   hasOpenDispatch?: (

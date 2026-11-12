@@ -112,6 +112,33 @@ export const signedOutDelivery = defineFixture({
   )
 })
 
+export const signedOutDeliveryRetry = defineFixture({
+  width: 640,
+  render: () => (
+    <NativeChatHostSetupContext.Provider value={signInView}>
+      <div className="native-chat-appearance p-4">
+        <MessageRow
+          agentName="Claude"
+          message={{
+            id: 'signed-out-delivery-retry',
+            role: 'user',
+            timestamp: 0,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Check the deploy logs.' }]
+          }}
+          deliveryNotice={{
+            text: 'Sign in to Claude, then send again.',
+            failureKind: 'notSignedIn',
+            onRetry: () => {}
+          }}
+          expandSignal={false}
+          onScrollMessageToTop={() => {}}
+        />
+      </div>
+    </NativeChatHostSetupContext.Provider>
+  )
+})
+
 export const dollars = defineFixture({
   width: 640,
   render: () => (

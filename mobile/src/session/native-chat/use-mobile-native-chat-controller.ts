@@ -300,6 +300,7 @@ export function useMobileNativeChatController(args: {
     nativeChatInterruptedContinue: activeChatStructured
       ? structuredNativeChat.interruptedContinue
       : null,
+    nativeChatSignedOutRetry: activeChatStructured ? nativeChatLane.signedOutRetry : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
     nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,

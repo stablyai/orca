@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useContext, useMemo } from 'react'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
@@ -7,6 +7,7 @@ import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-
 import { MobileNativeChatRow } from './MobileNativeChatRowItemSource'
 import { mobileNativeChatUnsentNotices } from '../mobile-native-chat-unsent-notices'
 import type { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { MobileNativeChatNoticeContext } from './mobile-native-chat-notice-context'
 
 export function useMobileNativeChatRowRenderer({
   scope,
@@ -35,6 +36,7 @@ export function useMobileNativeChatRowRenderer({
   actionablePromptIds: readonly string[] | undefined
 }): ({ item, index }: { item: NativeChatMessage; index: number }) => React.JSX.Element {
   const t = useMobileTranslation()
+  const signedOutRetry = useContext(MobileNativeChatNoticeContext).signedOutRetry ?? null
   const unsentNotices = useMemo(
     () => mobileNativeChatUnsentNotices(turnJournal, agent),
     [turnJournal, agent, t]
@@ -48,7 +50,8 @@ export function useMobileNativeChatRowRenderer({
       unsentNotices,
       receipts,
       actionablePromptIds,
-      resolveTurnRow
+      resolveTurnRow,
+      signedOutRetry
     }),
     [
       rowKeyOf,
@@ -57,7 +60,8 @@ export function useMobileNativeChatRowRenderer({
       unsentNotices,
       receipts,
       actionablePromptIds,
-      resolveTurnRow
+      resolveTurnRow,
+      signedOutRetry
     ]
   )
   return useCallback(

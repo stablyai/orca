@@ -166,6 +166,11 @@ export function NativeChatUserMessageRow({
               {t('components.native-chat.queuedMessages.send', 'Send')}
             </Button>
           ) : null}
+          {deliveryNotice.onRetry ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onRetry}>
+              {t('auto.components.native.chat.NativeChatLaunchRetry.retry', 'Retry')}
+            </Button>
+          ) : null}
           {deliveryNotice.onEdit ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onEdit}>
               {t('components.native-chat.editDeliveryNotice', 'Edit')}
