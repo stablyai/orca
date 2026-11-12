@@ -28,6 +28,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
+import { useContentContinuesBelow } from './new-workspace/use-content-continues-below'
 import { NewWorkspaceComposerNameSection } from './new-workspace/NewWorkspaceComposerNameSection'
 import { NewWorkspaceComposerProjectSection } from './new-workspace/NewWorkspaceComposerProjectSection'
 import {
@@ -106,6 +107,7 @@ export default function NewWorkspaceComposerCard(
   const branchNameInputId = React.useId()
   const projectDescriptionId = React.useId()
   const [sparseEditing, setSparseEditing] = React.useState(false)
+  const [contentRef, contentContinuesBelow] = useContentContinuesBelow()
   const [addRemoteHostMode, setAddRemoteHostMode] = React.useState<AddRemoteHostMode | null>(null)
   const remoteHostDialogOpenRef = React.useRef(false)
   const handleRemoteHostModeChange = React.useCallback(
@@ -312,7 +314,7 @@ export default function NewWorkspaceComposerCard(
         containerClassName
       )}
     >
-      <div className={cn('min-h-0 min-w-0 space-y-4 pt-3', contentClassName)}>
+      <div ref={contentRef} className={cn('min-h-0 min-w-0 space-y-4 pt-3', contentClassName)}>
         <NewWorkspaceComposerProjectSection
           {...props}
           disabled={sparseEditing}
@@ -357,7 +359,13 @@ export default function NewWorkspaceComposerCard(
         />
       </div>
       {!sparseEditing ? (
-        <div className="shrink-0 space-y-1">
+        <div
+          // Fields scrolled under the footer get an edge instead of running into its buttons.
+          className={cn(
+            'shrink-0 space-y-1 border-t pt-2',
+            contentContinuesBelow ? 'border-border' : 'border-transparent'
+          )}
+        >
           <NewWorkspaceComposerFooter
             {...props}
             submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
