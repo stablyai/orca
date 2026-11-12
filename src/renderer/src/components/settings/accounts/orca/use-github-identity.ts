@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useState } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import {
   GITHUB_IDENTITY_PENDING_MAX_MS,
   GITHUB_IDENTITY_POLL_MS,
