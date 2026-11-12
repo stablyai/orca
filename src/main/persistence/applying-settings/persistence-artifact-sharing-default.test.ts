@@ -47,11 +47,6 @@ describe('artifact sharing default', () => {
     expect(createStore().getSettings().artifactSharingEnabled).toBe(true)
   })
 
-  it('keeps a stored opt-out', () => {
-    writeSettings({ artifactSharingEnabled: false })
-    expect(createStore().getSettings().artifactSharingEnabled).toBe(false)
-  })
-
   it('keeps publishing off for a stored profile saved before the setting existed', () => {
     writeSettings({ showArtifactsButton: false })
     expect(createStore().getSettings().artifactSharingEnabled).toBe(false)

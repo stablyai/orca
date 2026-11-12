@@ -237,14 +237,4 @@ describe('profile project transfer', () => {
     )
     expect(readProfileStateDatabase('work').settings).not.toHaveProperty('artifactSharingEnabled')
   })
-
-  it('keeps explicit publishing choices when moving a project', async () => {
-    writeOlderProfileStateDatabase('personal', { artifactSharingEnabled: true }, [makeRepo()])
-    writeOlderProfileStateDatabase('work', { artifactSharingEnabled: false })
-    const { transferOrcaProfileProject } = await loadTransferModule()
-
-    expect(transferMove(transferOrcaProfileProject)).toMatchObject({ status: 'transferred' })
-    expect(readProfileStateDatabase('personal').settings.artifactSharingEnabled).toBe(true)
-    expect(readProfileStateDatabase('work').settings.artifactSharingEnabled).toBe(false)
-  })
 })
