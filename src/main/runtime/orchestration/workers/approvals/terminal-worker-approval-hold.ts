@@ -58,18 +58,31 @@ export type TerminalWorkerApprovalHold = {
 
 export type TerminalWorkerApprovalCloseHow = Pick<WorkerApprovalOutcome, 'by' | 'decision'>
 
-/** Claude dropped Orca's allow and still asks: some checks only a person at the terminal may approve. */
+// Claude's words for a check no hook may approve (2.1.322 strings: "allow rules, hooks and plugins
+// cannot approve it", "hooks cannot approve …"); its dialog shows them as the warning.
+const HOOKS_CANNOT_APPROVE = /\bhooks\b[^.]*\bcannot (?:approve|grant)\b/i
+
+/** Claude lets only a person at its terminal allow this prompt. */
+export function holdIsPersonOnly(hold: Pick<TerminalWorkerApprovalHold, 'summary'>): boolean {
+  return HOOKS_CANNOT_APPROVE.test(hold.summary.reason ?? '')
+}
+
+/** An allow Claude will not take: its check is one only a person at the terminal may approve, or it
+ *  dropped Orca's allow and still asks. */
 export function droppedAllowRefusal(
   hold: TerminalWorkerApprovalHold,
   input: { approvalId: string; decision: 'allow' | 'deny' }
 ): TerminalWorkerApprovalAnswer | null {
-  if (input.decision !== 'allow' || hold.closedAs?.by !== 'terminal-only') {
+  if (
+    input.decision !== 'allow' ||
+    (hold.closedAs?.by !== 'terminal-only' && !holdIsPersonOnly(hold))
+  ) {
     return null
   }
   return {
     ok: false,
     code: 'approval_requires_person',
-    message: `Claude did not take the allow for ${input.approvalId} and still asks in the worker's terminal: it lets only a person approve this one there, so it stays with the user.`
+    message: `Claude lets only a person approve ${input.approvalId}, in the worker's terminal, so it stays with the user.`
   }
 }
 
@@ -89,6 +102,7 @@ export function holdPayload(
     worker: { handle: hold.handle, dispatchId: hold.dispatch.id, taskId: hold.dispatch.task_id },
     summary: hold.summary,
     allowedActions: ['allow', 'deny'],
+    ...(holdIsPersonOnly(hold) ? { personOnly: true } : {}),
     ...(hold.expiresAt ? { expiresAt: hold.expiresAt } : {})
   }
   return outcome ? closedApproval(open, outcome) : open

@@ -188,6 +188,10 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     if (hold.state !== 'open' || !before || !showsClaudeDialog(before)) {
       return notOpen
     }
+    const personOnly = droppedAllowRefusal(hold, input)
+    if (personOnly) {
+      return personOnly
+    }
     hold.state = 'answering'
     hold.timer?.cancel()
     const written = await hold.channel.answer(

@@ -15,7 +15,13 @@ export function workerApprovalAccess({
 }: OrchestrationAccessRuleInput<z.infer<typeof ApprovalAnswerParams>>): WorkerApprovalAccess {
   const person = ctx.caller?.kind === 'desktop'
   const reason = params.reason?.trim() || null
-  if (params.decision === 'allow' && !person && !ctx.runtime.coordinatorApprovalsEnabled()) {
+  // Without a reason it is not a coordinator's approve: a person on a remote-connected desktop
+  // sends none, and keeps the refusal they always got.
+  if (
+    params.decision === 'allow' &&
+    !person &&
+    !(reason && ctx.runtime.coordinatorApprovalsEnabled())
+  ) {
     throw new OrchestrationError(
       'approval_requires_person',
       `Only a person can allow ${params.prompt}, from Orca or the worker itself. You can deny it with a reason, or leave it for the person.`,
@@ -25,9 +31,7 @@ export function workerApprovalAccess({
   if (!person && !reason) {
     throw new OrchestrationError(
       'invalid_argument',
-      params.decision === 'allow'
-        ? 'Missing --reason: say why you approve it.'
-        : 'Missing --reason: tell the worker what to do instead.',
+      'Missing --reason: tell the worker what to do instead.',
       { effectsApplied: false }
     )
   }

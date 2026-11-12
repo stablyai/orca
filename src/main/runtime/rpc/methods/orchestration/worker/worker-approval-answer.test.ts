@@ -334,7 +334,8 @@ const ROWS: Row[] = [
     decision: 'allow',
     worker: 'chat',
     meanwhile: 'takes it',
-    expected: { code: 'invalid_argument', closing: [] }
+    // A person on a remote-connected desktop sends no reason: the refusal they always got.
+    expected: { code: 'approval_requires_person', closing: [] }
   },
   {
     setting: 'on',
