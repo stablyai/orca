@@ -102,7 +102,7 @@ export type ComputerActionMetadata = {
   fallbackReason?: string | null
   targetWindowId?: number | null
   targetWindowIndex?: number | null
-  // Absent from providers that predate background input (Linux, Windows, older macOS helpers).
+  // Absent from providers that predate background input (Linux, older Windows and macOS helpers).
   delivery?: 'background' | 'foreground'
   verification?: ComputerActionVerification
 }

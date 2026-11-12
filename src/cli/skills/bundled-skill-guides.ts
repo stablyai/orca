@@ -1167,7 +1167,7 @@ const ORCA_COMPUTER_USE_MARKDOWN = [
   "",
   "Popup menus and web `<select>` controls: set the option with `set-value` on the popup element. Background clicks on them are refused because they open the menu off screen or wedge the app's input.",
   "",
-  "On Linux and Windows, clicks, scrolling, drags and keyboard input still bring the target window forward.",
+  "On Linux, clicks, scrolling, drags and keyboard input still bring the target window forward. On Windows, these go through UI Automation when the control supports them, without moving the pointer or sending keys: element clicks, `set-value` (including sliders), element scrolls by whole `--pages`, and secondary actions such as `Invoke`, `Toggle`, `Select`, `Expand`, `Collapse` and `ScrollToVisible` (the last brings a list or tree item into view). Some apps bring their own window forward when driven this way (WPF apps do for most of these), so read `action.delivery`: `background` means the user's foreground window stayed put, `foreground` means the target came forward. Everything else brings the window forward and reports `foreground`.",
   "",
   "## Screenshots",
   "",
