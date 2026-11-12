@@ -104,7 +104,14 @@ function runningClone(
 export function deriveVmBuildSteps(
   entry: VmBuildEntry,
   now: number,
-  { cloud = false }: { cloud?: boolean } = {}
+  {
+    cloud = false,
+    checks: withChecks = true
+  }: {
+    cloud?: boolean
+    /** False for a GitHub-only Orca Cloud create: it is paired, so no environment checks run. */
+    checks?: boolean
+  } = {}
 ): VmBuildStep[] {
   const check = entry.environmentCheck
   const failed = entry.status === 'error'
@@ -177,5 +184,7 @@ export function deriveVmBuildSteps(
             percent: getVisibleCheckoutProgress(entry)?.percent ?? null
           })
 
-  return cloneStep ? [provision, cloneStep, checks, create] : [provision, checks, create]
+  return [provision, cloneStep, withChecks ? checks : null, create].filter(
+    (candidate): candidate is VmBuildStep => candidate !== null
+  )
 }

@@ -60,8 +60,7 @@ import {
   type EphemeralVmFailure
 } from '../../shared/ephemeral-vm-failure-copy'
 import { registerRecipeForwardedEnvHandler } from './ephemeral-vm-forwarded-env'
-
-const activeProvisionControllers = new Map<string, AbortController>()
+import { activeProvisionControllers } from './provision-controllers'
 
 export type EphemeralVmProvisionIpcResult =
   | {

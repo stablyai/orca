@@ -47,3 +47,38 @@ describe('composer data for a create billing refused', () => {
     expect(composerDataFromRefusedCreate(entry, { local: true }).prefilledName).toBeUndefined()
   })
 })
+
+describe('Back to draft from a GitHub-only create (GH-CREATE-SHEET)', () => {
+  const github = {
+    ...request,
+    repoId: '',
+    note: '',
+    githubSource: {
+      repoUrl: 'https://github.com/acme/web',
+      fullName: 'acme/web',
+      prompt: 'Fix login',
+      composerRepoId: 'repo-1'
+    }
+  }
+
+  it('reopens the composer on Orca Cloud with the GitHub repository picked and the prompt kept', () => {
+    expect(typedComposerPrompt({ request: github })).toBe('Fix login')
+    expect(composerDataFromRefusedCreate({ request: github }, { local: false })).toEqual({
+      initialRepoId: 'repo-1',
+      initialEphemeralVmRecipeId: 'cloud',
+      initialCloudGitHubRepo: 'acme/web',
+      prefilledName: 'Fix login',
+      recovery: { note: '', agent: 'claude' },
+      telemetrySource: 'sidebar'
+    })
+  })
+
+  it('"Create locally" keeps the composer’s own project, with no cloud repository', () => {
+    expect(composerDataFromRefusedCreate({ request: github }, { local: true })).toEqual({
+      initialRepoId: 'repo-1',
+      prefilledName: 'Fix login',
+      recovery: { note: '', agent: 'claude' },
+      telemetrySource: 'sidebar'
+    })
+  })
+})
