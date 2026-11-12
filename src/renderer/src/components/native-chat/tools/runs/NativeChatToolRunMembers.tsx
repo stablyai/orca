@@ -217,18 +217,22 @@ export function NativeChatToolRunMembers({
   })
 
   // Recording scans the drawn rows, so it waits while every row or a wide selection is drawn.
-  const recordsOnScroll = !drawsEveryRow && !pins.spansSelection
-  // Set while nothing records the reader's moves: a later restore must start from where they are now.
+  // A hidden box's reset offset is not the reader's: nothing records there either.
+  const recordsOnScroll = isVisible && !drawsEveryRow && !pins.spansSelection
+  // Set while a shown run records none of the reader's moves: a later restore must start from where they are now.
   const anchorStaleRef = useRef(false)
   useLayoutEffect(() => {
+    if (!isVisibleRef.current) {
+      return
+    }
     if (!recordsOnScroll) {
       anchorStaleRef.current = true
-    } else if (anchorStaleRef.current && isVisibleRef.current) {
+    } else if (anchorStaleRef.current) {
       anchorStaleRef.current = false
       anchorRef.current = anchorAtScrollOffset(virtualizer, rows)
       scrollOffsetRef.current = virtualizer.scrollOffset ?? 0
     }
-  }, [recordsOnScroll, rows, virtualizer])
+  }, [isVisible, recordsOnScroll, rows, virtualizer])
 
   // A following reader belongs to the end, not to a row; a hidden pane has no rows to land on.
   const shouldSkipRestore = useCallback(() => followsEndRef.current || !isVisibleRef.current, [])
@@ -244,6 +248,8 @@ export function NativeChatToolRunMembers({
     scrollOffsetRef,
     shouldSkipRestore,
     recordAnchorOnScroll: recordsOnScroll,
+    // A hidden box's reset offset would replace the row its hiding kept.
+    recordAnchorOnCleanup: isVisible,
     // Restore only when rows arrive or the pane shows again: measurement churn is the virtualizer's
     // own, and a reveal or the reader's scrolling must not be pulled back to an older row.
     restoreSignal: `${rows.length}:${isVisible}`,
@@ -271,7 +277,7 @@ export function NativeChatToolRunMembers({
       const anchor = anchorStaleRef.current
         ? anchorAtScrollOffset(virtualizer, rows)
         : anchorRef.current
-      anchorStaleRef.current = !recordsOnScroll
+      anchorStaleRef.current = false
       if (anchor) {
         anchorRef.current = {
           key: anchor.key,
@@ -282,7 +288,7 @@ export function NativeChatToolRunMembers({
     } else if (followsEndRef.current) {
       followRef.current = { observedTail: false }
     }
-  }, [isVisible, recordsOnScroll, rows, virtualizer])
+  }, [isVisible, rows, virtualizer])
 
   // Before paint: new work starts a follow only if the reader was at the end before it. Each visible
   // pass re-pins; once the tail is really measured (now, on a later measurement, or when a hidden pane
@@ -386,7 +392,7 @@ export function NativeChatToolRunMembers({
         setHeldRowKey(undefined)
         // Before the window redraws for this scroll, which can run a pending restore: a jump past
         // the drawn rows must not send the reader back to the row it left.
-        if (!drawsEveryRow) {
+        if (!drawsEveryRow && isVisibleRef.current) {
           anchorRef.current = anchorAtScrollOffset(virtualizer, rows, scroller.scrollTop)
         }
       }

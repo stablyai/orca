@@ -480,6 +480,23 @@ describe('NativeChatToolRun opened-run reader', () => {
     expect(box.scrollTop).toBe(683)
   })
 
+  it("keeps the reader's row through a hidden pane that reports a scroll of its own", async () => {
+    const { container, rerender } = render(<Transcript blocks={calls(1_000)} />)
+    await settle()
+    await scrollBox(container, 9_013)
+    const before = topRow(container)
+
+    // A hidden box loses its offset and may report that as a scroll; the transcript then unmounts the run.
+    pane.hidden = true
+    rerender(<Transcript blocks={calls(1_000)} visible={false} />)
+    await scrollBox(container, 0)
+    rerender(<Transcript blocks={calls(1_000)} visible={false} mounted={false} />)
+    pane.hidden = false
+    rerender(<Transcript blocks={calls(1_000)} />)
+    await settle()
+    expect(topRow(container)).toEqual(before)
+  })
+
   it('does not keep a selection span drawn after it ended while the pane was hidden', async () => {
     const { container, rerender } = render(<Transcript blocks={calls(1_000)} />)
     await settle()
