@@ -14,6 +14,18 @@ import type { LaunchSource } from '../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { AutomationRunPageOrigin, AutomationsPageLocation } from './automations-page-location'
+
+/** Open an automation (runId null) or one of its runs once its host's list has loaded. */
+export type PendingAutomationRunNavigation = {
+  automationId: string
+  runId: string | null
+  hostId?: ExecutionHostId
+  /** With runId null: open the automation's run history instead of its detail. */
+  paneTab?: 'overview' | 'runs'
+  /** With a runId: where Escape returns; defaults to the automation detail. */
+  origin?: AutomationRunPageOrigin
+}
 
 export type PendingSidebarWorktreeReveal = {
   rowKey?: string
@@ -181,14 +193,13 @@ export type UISliceCore = {
   closeActivityPage: () => void
   selectedAutomationId: string | null
   setSelectedAutomationId: (id: string | null) => void
-  pendingAutomationRunNavigation: {
-    automationId: string
-    runId: string | null
-    hostId?: ExecutionHostId
-  } | null
-  setPendingAutomationRunNavigation: (
-    navigation: { automationId: string; runId: string | null; hostId?: ExecutionHostId } | null
-  ) => void
+  pendingAutomationRunNavigation: PendingAutomationRunNavigation | null
+  setPendingAutomationRunNavigation: (navigation: PendingAutomationRunNavigation | null) => void
+  /** A history replay's target sub-page; the Automations page applies it and clears it. */
+  automationsPageLocationRequest: AutomationsPageLocation | null
+  setAutomationsPageLocationRequest: (location: AutomationsPageLocation | null) => void
+  /** Record a settled Automations sub-page in back/forward history. */
+  recordAutomationsPageVisit: (location: AutomationsPageLocation) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
   openSpacePage: () => void
