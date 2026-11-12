@@ -11,7 +11,7 @@ on:
       - 'native/macos-shipit-scheduling/**'
       - 'config/scripts/macos-shipit-scheduling*'
       - 'config/electron-builder.config.cjs'
-      - 'src/main/startup/main-process-quit*'
+      - 'src/main/startup/quit/main-process-quit*'
       - 'src/main/window/main-window-state-lifecycle*'
       - 'src/main/window/dashboard-popout-window*'
       - 'src/packages/process-host/**'
@@ -55,7 +55,7 @@ jobs:
           src/main/updater/mac-install/updater.mac-install.test.ts
           src/main/updater/updater.headless-serve-install.test.ts
           src/main/updater/mac-install/updater-mac-quit-guard.test.ts
-          src/main/startup/main-process-quit-update-veto.test.ts
+          src/main/startup/quit/main-process-quit-update-veto.test.ts
           src/main/window/main-window-state-lifecycle.test.ts
       - name: Prove login-backed terminal writer census on the disposable runner
         env:

@@ -52,7 +52,7 @@
 1 test-no-polling-loop:src/main/ssh/connection/ssh-connection-host-key-store-wiring.test.ts
 1 test-no-polling-loop:src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts
 2 test-no-polling-loop:src/main/startup/gpu-recovery/gpu-lifecycle-install-dir-acl-guard.test.ts
-1 test-no-polling-loop:src/main/startup/run-electron-vite-dev.test.ts
+1 test-no-polling-loop:config/scripts/development/launch/run-electron-vite-dev.test.ts
 2 test-no-polling-loop:src/main/windows/windows-host-job.win32.test.ts
 1 test-no-polling-loop:src/main/windows/windows-pty-job.win32.test.ts
 1 test-no-polling-loop:src/main/worker-thread-child-process/worker-thread-child-process.test.ts
@@ -199,7 +199,7 @@
 1 test-no-real-time-wait:src/main/ssh/connection/ssh-connection-host-key-store-wiring.test.ts
 1 test-no-real-time-wait:src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts
 2 test-no-real-time-wait:src/main/startup/gpu-recovery/gpu-lifecycle-install-dir-acl-guard.test.ts
-3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev.test.ts
+3 test-no-real-time-wait:config/scripts/development/launch/run-electron-vite-dev.test.ts
 1 test-no-real-time-wait:src/main/updater/lifecycle/serve-supervisor-install-park.test.ts
 1 test-no-real-time-wait:src/main/window/main-window-updater-deferred-setup.test.ts
 3 test-no-real-time-wait:src/main/windows/windows-host-job.win32.test.ts
@@ -512,7 +512,7 @@
 2 test-no-wall-clock:src/main/skills/transaction-state/skill-transaction-startup-recovery.test.ts
 4 test-no-wall-clock:src/main/sqlite/sync-database.test.ts
 4 test-no-wall-clock:src/main/ssh/remote-exec/ssh-remote-commands.test.ts
-2 test-no-wall-clock:src/main/startup/run-electron-vite-dev.test.ts
+2 test-no-wall-clock:config/scripts/development/launch/run-electron-vite-dev.test.ts
 1 test-no-wall-clock:src/main/startup/shell-environment/login-shell-environment.test.ts
 2 test-no-wall-clock:src/main/startup/windows-install-permissions/windows-install-dir-acl-recovery.test.ts
 4 test-no-wall-clock:src/main/updater/lifecycle/serve-supervisor-install-park.test.ts
@@ -630,7 +630,6 @@
 1 test-timeout-needs-reason:src/main/sqlite/sync-database-concurrent-backup.test.ts
 2 test-timeout-needs-reason:src/main/ssh/connection/ssh-connection-sftp-wire.test.ts
 2 test-timeout-needs-reason:src/main/ssh/system-transport/forwarding/system-ssh-forward-process-real-openssh.test.ts
-2 test-timeout-needs-reason:src/main/startup/single-instance-lock-exit.electron.test.ts
 1 test-timeout-needs-reason:src/main/window/renderer-publication-throttle.electron.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-administrator-restart.win32.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-host-job.win32.test.ts

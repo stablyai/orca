@@ -4,7 +4,7 @@ import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/up
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../ipc/ui'
 import type { Store } from '../persistence/loading-store/store'
-import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { logStartupMilestone } from '../startup/diagnostics/startup-diagnostics'
 import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
 import { updaterErrorMessage } from '../updater/lifecycle/updater-coded-error'
 import { updaterCodedMessage } from '../../shared/updater-failure-copy'
