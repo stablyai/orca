@@ -12,7 +12,7 @@ vi.mock('../../ipc/agent-session-attachment-upload', () => ({
 }))
 
 import { savePastedTextAsFile } from './native-chat-pasted-text-file'
-import { AgentSessionAttachmentStore } from '../agent-session-attachments/agent-session-attachment-store'
+import { AgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 describe('a long paste saved as a file', () => {
   let root: string

@@ -51,10 +51,7 @@ import {
   publishClipboardText
 } from './clipboard-text-publisher'
 import { restoreNativeChatPastes } from '../../native-chat/paste-files/native-chat-paste-files'
-import {
-  savePastedTextAsFile,
-  type SavePastedTextAsFileArgs
-} from '../../native-chat/paste-files/native-chat-pasted-text-file'
+import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
 import { agentSessionPastedImageName } from '../../../shared/agent-session/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store'
 

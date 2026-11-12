@@ -7,7 +7,7 @@ import {
 } from '../../../shared/agent-session/agent-session-attachments'
 import { assertClipboardTextWithinLimit } from '../../../shared/clipboard-text'
 import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-session-attachment-upload'
-import type { AgentSessionAttachmentStore } from '../agent-session-attachments/agent-session-attachment-store'
+import type { AgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 export type SavePastedTextAsFileArgs = {
   text: string
