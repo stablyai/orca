@@ -1,5 +1,6 @@
 // Lifecycle actions on an Orca Cloud workspace (restart, archive, unarchive) as store updates:
 // each marks the workspace pending while it runs and re-reads its status after.
+import { noteCloudArchiveChanged } from './cloud-archive-changes'
 import { translate } from '@/i18n/i18n'
 import type { CloudWorkspaceResult } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
@@ -77,10 +78,14 @@ export function archiveCloudWorkspace(
       )
       return { ok: false, code: 'failed', message, userMessage: message }
     }
-    return bridge.archive({
+    const archived = await bridge.archive({
       workspaceId,
       ...(deps.pullRequests?.length ? { pullRequests: deps.pullRequests } : {})
     })
+    if (archived.ok) {
+      noteCloudArchiveChanged()
+    }
+    return archived
   })
 }
 
@@ -96,6 +101,7 @@ export function unarchiveCloudWorkspace(
   return withPending(workspaceId, 'unarchive', async () => {
     const result = await bridge.unarchive({ workspaceId })
     if (result.ok) {
+      noteCloudArchiveChanged()
       // Mark it unarchived so the wake path's archive guard lets the wake through.
       updateCloudWorkspaceSnapshot((s) => {
         const entry = s.status[workspaceId]

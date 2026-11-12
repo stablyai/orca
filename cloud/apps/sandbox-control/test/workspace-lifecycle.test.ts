@@ -194,6 +194,21 @@ describe('archive', () => {
     expect((await h.call('GET', `/v1/sandboxes/${id}/status`)).body.status.archive).toBeNull()
   })
 
+  it('a desktop archive (Sleep, then archive) is what Home’s archived=only list and count read (ARCHIVE-REACH)', async () => {
+    const { h, id } = await running()
+    await h.call('POST', `/v1/sandboxes/${id}/suspend`)
+    await h.call('POST', `/v1/sandboxes/${id}/archive`, { body: {} })
+    const ids = async (query: string) =>
+      ((await h.call('GET', `/v1/team/workspaces?${query}`)).body.workspaces as { id: string }[]).map((w) => w.id)
+    // Home's default list leaves it out; the Archived switch and Home's archived count find it.
+    expect(await ids('scope=team')).toEqual([])
+    expect(await ids('scope=team&archived=only')).toEqual([id])
+    expect(await ids('scope=mine&archived=only')).toEqual([id])
+    await h.call('POST', `/v1/sandboxes/${id}/unarchive`)
+    expect(await ids('scope=mine&archived=only')).toEqual([])
+    expect(await ids('scope=mine')).toEqual([id])
+  })
+
   it('archives a sleeping workspace from the desktop cache without waking it', async () => {
     const { h, id } = await running()
     await h.call('POST', `/v1/sandboxes/${id}/suspend`)

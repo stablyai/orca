@@ -1,6 +1,14 @@
 // @vitest-environment happy-dom
 // ARCHIVE-REACH: Home always reaches archived workspaces, however few are active.
-import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { EmptyState } from './CloudWorkspacesStates'
@@ -11,6 +19,7 @@ import {
   shouldShowCloudHomeFilters
 } from './CloudWorkspacesToolbar'
 import { resetCloudArchivedCountCache, useCloudArchivedCount } from './use-cloud-archived-count'
+import { noteCloudArchiveChanged } from '@/lib/orca-cloud/cloud-archive-changes'
 
 vi.mock('../new-workspace/run-on/OrcaCloudTrialUsedUpNotice', () => ({
   OrcaCloudTrialUsedUpBanner: () => null
@@ -194,6 +203,27 @@ describe('useCloudArchivedCount', () => {
     rerender([])
     await waitFor(() => expect(result.current).toBe(3))
     expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  const emptyIds: string[] = []
+  it('archiving the only workspace never leaves a cached 0 standing: the archive itself re-reads', async () => {
+    // Before the first workspace existed, Home read "0 archived" for an empty active list.
+    list.mockResolvedValue({ ok: true, value: [] })
+    const { result, rerender } = renderHook(
+      (ids: string[]) =>
+        useCloudArchivedCount({ account: 'u:o', scope: 'mine', activeIds: ids, enabled: true }),
+      { initialProps: emptyIds }
+    )
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+    expect(result.current).toBe(0)
+    // Created w1, then archived it: the active list is empty again (same key as that cached 0),
+    // and the archive commits after Sleep, so the server only now lists it.
+    rerender(['w1'])
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+    rerender([])
+    list.mockResolvedValue({ ok: true, value: [{ id: 'w1' }] })
+    act(() => noteCloudArchiveChanged())
+    await waitFor(() => expect(result.current).toBe(1))
   })
 
   it('stays null on a failed read or while the active list loads, so Home keeps today’s row', async () => {

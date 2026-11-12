@@ -4,8 +4,14 @@
 //
 // One `archived=only` read per account, scope and active list. When the active list changes (a
 // workspace archived or unarchived, here or elsewhere), the count is read again. Otherwise a cached
-// answer is reused for a few minutes, so Home's polling never doubles its reads.
-import { useEffect, useState } from 'react'
+// answer is reused for a few minutes, so Home's polling never doubles its reads. An archive,
+// unarchive or delete from this desktop starts a fresh read at once (cloud-archive-changes): the
+// active list can change before the archive commits, and its cached 0 must not stand for 5 minutes.
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import {
+  cloudArchiveVersion,
+  subscribeCloudArchiveChanges
+} from '@/lib/orca-cloud/cloud-archive-changes'
 
 const TTL_MS = 5 * 60_000
 
@@ -58,7 +64,8 @@ export function useCloudArchivedCount({
   enabled: boolean
 }): number | null {
   const signature = activeIds ? [...activeIds].sort().join(',') : null
-  const key = JSON.stringify({ account, scope, active: signature })
+  const changes = useSyncExternalStore(subscribeCloudArchiveChanges, cloudArchiveVersion)
+  const key = JSON.stringify({ account, scope, active: signature, changes })
   const [state, setState] = useState<{ key: string; count: number | null }>({ key, count: null })
   useEffect(() => {
     if (!enabled || signature === null) {

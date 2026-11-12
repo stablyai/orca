@@ -3,6 +3,8 @@
 // toasts misleading errors. Delete cancels a queued archive and marks the workspace so an archive
 // already under way stays quiet.
 
+import { noteCloudArchiveChanged } from './cloud-archive-changes'
+
 const queued = new Map<string, () => void>()
 const deleting = new Set<string>()
 
@@ -25,6 +27,8 @@ export function noteCloudWorkspaceDeleting(workspaceId: string): void {
 
 export function noteCloudWorkspaceDeleteSettled(workspaceId: string): void {
   deleting.delete(workspaceId)
+  // An archived one may be gone now: Home's archived count reads again.
+  noteCloudArchiveChanged()
 }
 
 export function isCloudWorkspaceDeleting(workspaceId: string): boolean {
