@@ -140,6 +140,30 @@ it('launches a non-policy agent in the resolved cwd while cancel still targets t
   child.emit('close', 0)
 })
 
+it('keeps a Windows-host generation in a WSL-share workspace on the selected host', async () => {
+  const cwd = '\\\\wsl.localhost\\Ubuntu\\home\\repo'
+  const child = createMockDiscoveryChild()
+  child.stdin.end.mockImplementation(() =>
+    queueMicrotask(() => {
+      child.stdout.emit('data', Buffer.from('Keep the selected Windows host\n'))
+      child.emit('close', 0)
+    })
+  )
+  await expect(
+    runLocalPlanForAgent({
+      agentId: 'claude',
+      plan: planned('claude'),
+      target: { kind: 'local', cwd },
+      operation: 'commit-message',
+      spawnAgent: (input) => {
+        expect(input.cwd).toBe(cwd)
+        expect(input.wslDistro).toBeUndefined()
+        return child
+      }
+    })
+  ).resolves.toMatchObject({ success: true, rawOutput: 'Keep the selected Windows host' })
+})
+
 it('uses the resolved project for Antigravity policy discovery and the resulting generation', async () => {
   runWsl.mockResolvedValue(output('/c/repo\n'))
   const child = createMockDiscoveryChild()
