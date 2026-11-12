@@ -24,21 +24,7 @@ const PREVIEW_COMMIT_FIRST_REPEAT_MS = 120
 const PREVIEW_COMMIT_MIN_MS = 50
 const PREVIEW_COMMIT_MAX_MS = 200
 
-/** A held arrow previews its row as active before the workspace switch commits. */
-export function withKeyboardPreview<
-  P extends {
-    activeWorktreeId: string | null
-    activeWorkspaceExecutionHostId: ExecutionHostId | null
-  }
->(props: P, preview: LastActiveCycleWorkspace | null): P {
-  return preview
-    ? {
-        ...props,
-        activeWorktreeId: preview.worktreeId,
-        activeWorkspaceExecutionHostId: preview.executionHostId
-      }
-    : props
-}
+export { withKeyboardPreview } from './worktree-keyboard-cycle'
 
 export function useWorktreeListKeyboardNavigation(args: {
   rows: HostSectionRow[]
@@ -49,6 +35,7 @@ export function useWorktreeListKeyboardNavigation(args: {
   activeModal: string
   markDirectScrollInput: () => void
   onKeyboardSelect?: (worktree: Worktree) => void
+  focusedWorktree?: Worktree | null
   resolveDeleteIntent?: () => WorktreeContextMenuDeleteIntent | null
 }) {
   const {
@@ -60,6 +47,7 @@ export function useWorktreeListKeyboardNavigation(args: {
     activeModal,
     markDirectScrollInput,
     onKeyboardSelect,
+    focusedWorktree,
     resolveDeleteIntent
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
@@ -125,14 +113,17 @@ export function useWorktreeListKeyboardNavigation(args: {
       const previewState = previewRef.current
       const preview =
         previewState && previewState.fromWorktreeId === activeWorktreeId ? previewState.row : null
+      const focused = selectInList ? focusedWorktree : null
       // Cycle actual rendered rows so collapse, pins, hosts and folder workspaces stay aligned with the screen.
       const nextRow = resolveCycledWorkspaceRow({
         rows,
         pinnedDisplayPolicy,
-        activeWorktreeId: preview ? preview.worktree.id : activeWorktreeId,
+        activeWorktreeId: preview?.worktree.id ?? focused?.id ?? activeWorktreeId,
         activeWorkspaceExecutionHostId: preview
           ? getWorktreeExecutionHostId(preview.worktree, preview.repo)
-          : activeWorkspaceExecutionHostId,
+          : focused
+            ? getWorktreeExecutionHostId(focused)
+            : activeWorkspaceExecutionHostId,
         lastActiveWorkspace: lastActiveWorkspaceRef.current,
         navHistory: worktreeNavHistory,
         navHistoryIndex: worktreeNavHistoryIndex,
@@ -188,6 +179,7 @@ export function useWorktreeListKeyboardNavigation(args: {
       activeWorkspaceExecutionHostId,
       pinnedDisplayPolicy,
       onKeyboardSelect,
+      focusedWorktree,
       clearPreviewCommitTimer,
       commitPreview,
       dropPreview
@@ -279,9 +271,12 @@ export function useWorktreeListKeyboardNavigation(args: {
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (textInputOwnsComposition(e.nativeEvent)) {
+        resetDeleteGesture()
+        return
+      }
       if (
         e.defaultPrevented ||
-        textInputOwnsComposition(e.nativeEvent) ||
         e.target !== e.currentTarget ||
         activeModal !== 'none' ||
         hasVisibleOverlay()
@@ -307,7 +302,14 @@ export function useWorktreeListKeyboardNavigation(args: {
         markDirectScrollInput()
       }
     },
-    [activeModal, commitPreview, handleDeleteKeyDown, markDirectScrollInput, navigateWorktree]
+    [
+      activeModal,
+      commitPreview,
+      handleDeleteKeyDown,
+      resetDeleteGesture,
+      markDirectScrollInput,
+      navigateWorktree
+    ]
   )
 
   return {

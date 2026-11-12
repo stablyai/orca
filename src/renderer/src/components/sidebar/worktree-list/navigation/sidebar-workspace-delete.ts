@@ -37,7 +37,7 @@ export function resolveSidebarWorkspaceDeleteIntent(args: {
     return null
   }
   const needsSingleOperation =
-    isMultiContext &&
+    deletable.length > 1 &&
     !isPairedWebClientWindow() &&
     deletable.some(
       (item) =>
@@ -52,7 +52,7 @@ export function resolveSidebarWorkspaceDeleteIntent(args: {
     )
   const single = needsSingleOperation
     ? focusedWorktree &&
-      selectedWorktrees.find(
+      deletable.find(
         (item) => getWorktreeHostIdentity(item) === getWorktreeHostIdentity(focusedWorktree)
       )
     : selectedWorktrees[0]

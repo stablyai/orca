@@ -38,7 +38,6 @@ export type FolderWorkspaceRowContext = {
   activeWorkspaceExecutionHostId: AppState['activeWorkspaceExecutionHostId']
   currentWorktreeId: string | null
   selectedWorktreeIds: ReadonlySet<string>
-  selectedWorktrees: readonly Worktree[]
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
@@ -157,9 +156,6 @@ export function renderFolderWorkspaceOption(args: {
           repo={undefined}
           isActive={isActiveWorktree}
           isMultiSelected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
-          selectedWorktrees={
-            ctx.selectedWorktreeIds.has(folderWorktreeIdentity) ? ctx.selectedWorktrees : undefined
-          }
           // A child-active folder looks active without the active card's side effects.
           isActiveSurface={lineage?.childIsActive === true || isActiveWorktree}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}

@@ -1,6 +1,10 @@
 import { useAppStore } from '@/store'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
-import { focusRuntimeTerminalSurface } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { activePaneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
+import {
+  findRegisteredTerminalTab,
+  focusRuntimeTerminalSurface
+} from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 
 export function focusActiveWorkspaceSurfaceFromSidebar(list: HTMLElement): void {
   const state = useAppStore.getState()
@@ -13,9 +17,16 @@ export function focusActiveWorkspaceSurfaceFromSidebar(list: HTMLElement): void 
   ) {
     return
   }
+  const manager =
+    tab.contentType === 'terminal'
+      ? findRegisteredTerminalTab(tab.id, state.activeWorktreeId)?.tab.getManager()
+      : null
+  if (manager && !activePaneIsCoveredByNativeChat(manager)) {
+    if (focusRuntimeTerminalSurface(tab.id, null, state.activeWorktreeId)) {
+      list.removeAttribute('data-keyboard-navigation')
+    }
+    return
+  }
   list.removeAttribute('data-keyboard-navigation')
   requestNativeChatComposerFocus(tab.id)
-  if (tab.contentType === 'terminal') {
-    focusRuntimeTerminalSurface(tab.id, null, state.activeWorktreeId)
-  }
 }

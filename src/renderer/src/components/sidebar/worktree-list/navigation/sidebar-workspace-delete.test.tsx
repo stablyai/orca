@@ -8,6 +8,8 @@ import type { AppState } from '@/store/types'
 import { useSidebarWorktreeSelection } from './use-selection'
 import { useWorktreeListKeyboardNavigation } from './use-keyboard'
 import { resolveSidebarWorkspaceDeleteIntent } from './sidebar-workspace-delete'
+import { getActiveDescendantOptionId } from './active-descendant-option'
+import { buildRenderableRows } from '../listing/renderable-rows'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
@@ -61,6 +63,7 @@ function Probe() {
     activeModal,
     markDirectScrollInput: () => {},
     onKeyboardSelect: selected.selectWorktree,
+    focusedWorktree: selected.focusedWorktree,
     resolveDeleteIntent: () =>
       resolveSidebarWorkspaceDeleteIntent({
         selectedWorktrees: selected.selectedWorktrees,
@@ -75,6 +78,14 @@ function Probe() {
         role="listbox"
         tabIndex={0}
         ref={scrollRef}
+        aria-activedescendant={getActiveDescendantOptionId({
+          activeWorktreeId: selected.focusedWorktree?.id ?? 'a',
+          activeWorkspaceExecutionHostId: selected.focusedWorktree?.hostId ?? 'local',
+          primaryActiveRowKey: 'row-0',
+          pinnedDisplayPolicy: 'single-location',
+          renderRows: buildRenderableRows(rows),
+          virtualItems: rows.map((_, index) => ({ index }))
+        })}
         onKeyDown={navigation.handleContainerKeyDown}
         onKeyUp={navigation.handleContainerKeyUp}
         onBlur={navigation.handleContainerBlur}
@@ -221,6 +232,17 @@ it('uses explicit arrow preview selection and cancels its pending activation bef
   })
   expect(activate).not.toHaveBeenCalled()
 })
+it('moves from the explicitly focused row rather than an unrelated active workspace', () => {
+  click(2, true)
+  expect(list.getAttribute('aria-activedescendant')).toBe('worktree-list-option-row-2')
+  key(list, { key: 'ArrowUp', code: 'ArrowUp', shiftKey: false, ctrlKey: false, metaKey: false })
+  expect(list.getAttribute('aria-activedescendant')).toBe('worktree-list-option-row-1')
+  key(list)
+  expect(deleteOne).toHaveBeenCalledWith('b', {
+    expectedInstanceId: 'inc-b',
+    expectedHostId: 'local'
+  })
+})
 it('does nothing after toggling the final selection off or hiding it', () => {
   click(1)
   click(1, true)
@@ -268,26 +290,65 @@ it('falls back to the focused selected row when direct SSH bulk deletion is unsu
   })
   expect(deleteBatch).not.toHaveBeenCalled()
 })
+it('normalizes a single eligible SSH target before considering focused-row bulk fallback', () => {
+  items = [
+    { ...b, hostId: 'ssh:direct' },
+    { ...a, isMainWorktree: true }
+  ]
+  render()
+  click(0)
+  click(1, true)
+  key(list)
+  expect(deleteOne).toHaveBeenCalledWith('b', {
+    expectedInstanceId: 'inc-b',
+    expectedHostId: 'ssh:direct'
+  })
+  expect(deleteBatch).not.toHaveBeenCalled()
+})
+it('never substitutes a focused folder for eligible SSH deletion targets', () => {
+  const folder = { ...a, id: 'folder:notes', repoId: 'no-repo' }
+  items = [{ ...b, hostId: 'ssh:direct' }, folder]
+  render()
+  click(0)
+  click(1, true)
+  key(list)
+  expect(deleteOne).toHaveBeenCalledWith('b', {
+    expectedInstanceId: 'inc-b',
+    expectedHostId: 'ssh:direct'
+  })
+  vi.clearAllMocks()
+  items = [{ ...a, hostId: 'ssh:direct' }, { ...b, hostId: 'ssh:direct' }, folder]
+  render()
+  click(0)
+  click(1, true)
+  click(2, true)
+  key(list)
+  expect(deleteOne).not.toHaveBeenCalled()
+  expect(deleteBatch).not.toHaveBeenCalled()
+  expect(deleteFolder).not.toHaveBeenCalled()
+})
 it('keeps custom forward Delete and modifier double-tap scoped to the list', () => {
-  store.setState({ keybindings: { 'workspace.delete': ['Mod+Delete', 'DoubleTap+Alt'] } })
+  act(() =>
+    store.setState({ keybindings: { 'workspace.delete': ['Mod+Delete', 'DoubleTap+Shift'] } })
+  )
   render()
   click(1)
   key(list, { key: 'Delete', code: 'Delete', shiftKey: false })
   expect(deleteOne).toHaveBeenCalledTimes(1)
-  const alt = {
-    key: 'Alt',
-    code: 'AltLeft',
-    shiftKey: false,
+  const modifier = {
+    key: 'Shift',
+    code: 'ShiftLeft',
+    shiftKey: true,
     ctrlKey: false,
     metaKey: false,
-    altKey: true
+    altKey: false
   }
-  key(list, alt)
-  key(list, { ...alt, altKey: false }, 'keyup')
-  key(list, alt)
+  key(list, modifier)
+  key(list, { ...modifier, shiftKey: false }, 'keyup')
+  key(list, modifier)
   expect(deleteOne).toHaveBeenCalledTimes(2)
-  key(list, { ...alt, altKey: false }, 'keyup')
+  key(list, { ...modifier, shiftKey: false }, 'keyup')
   act(() => container.querySelector('textarea')!.focus())
-  key(container.querySelector('textarea')!, alt)
+  key(container.querySelector('textarea')!, modifier)
   expect(deleteOne).toHaveBeenCalledTimes(2)
 })

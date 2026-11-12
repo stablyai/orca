@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
@@ -235,6 +236,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       activeModal: props.activeModal,
       markDirectScrollInput,
       onKeyboardSelect: props.onKeyboardSelect,
+      focusedWorktree: props.focusedWorktree,
       resolveDeleteIntent: () =>
         resolveSidebarWorkspaceDeleteIntent({
           selectedWorktrees: props.selectedWorktrees,
@@ -337,9 +339,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     },
     [markDirectScrollInput]
   )
-  const handleScroll = useCallback(() => {
-    markScrollMovement()
-  }, [markScrollMovement])
 
   const rowProps = useMemo(
     () => withKeyboardPreview(props, keyboardPreview),
@@ -386,8 +385,9 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         aria-multiselectable="true"
         aria-activedescendant={getActiveDescendantOptionId({
           activeWorktreeId: props.focusedWorktree?.id ?? rowProps.activeWorktreeId,
-          activeWorkspaceExecutionHostId:
-            props.focusedWorktree?.hostId ?? rowProps.activeWorkspaceExecutionHostId,
+          activeWorkspaceExecutionHostId: props.focusedWorktree
+            ? getWorktreeExecutionHostId(props.focusedWorktree)
+            : rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
           renderRows,
@@ -397,7 +397,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         onKeyUp={handleContainerKeyUp}
         onBlur={handleContainerBlur}
         // Why: trackpad momentum fires sparse scroll events after the input stream quiets; suppress correction until the viewport stops.
-        onScroll={handleScroll}
+        onScroll={markScrollMovement}
         onPointerDown={handleScrollPointerDown}
         onTouchMove={markDirectScrollInput}
         onWheel={markDirectScrollInput}

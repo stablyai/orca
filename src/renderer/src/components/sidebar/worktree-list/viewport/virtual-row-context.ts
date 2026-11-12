@@ -129,7 +129,6 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
       currentWorktreeId: props.currentWorktreeId,
       selectedWorktreeIds: props.selectedWorktreeIds,
-      selectedWorktrees: props.selectedWorktrees,
       repoMap: props.repoMap,
       worktreeMap: props.worktreeMap,
       worktreeLineageById: props.worktreeLineageById,
