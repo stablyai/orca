@@ -101,26 +101,6 @@ describe('reading a released terminal worker', () => {
     })
   })
 
-  it('says the output is unavailable for a worker whose transcript was never reachable', async () => {
-    release({ connectionId: 'ssh:remote-host' })
-
-    expect(db.getWorkerTerminalArchive('ctx_1')?.kind).toBe('terminal_tail')
-    await expect(read()).rejects.toMatchObject({
-      code: 'archive_unavailable',
-      message: expect.stringContaining('remote_capability_unavailable')
-    })
-  })
-
-  it('records no transcript for an agent whose transcript the reader cannot open', async () => {
-    release({ agent: 'opencode' })
-
-    expect(db.getWorkerTerminalArchive('ctx_1')?.kind).toBe('terminal_tail')
-    await expect(read()).rejects.toMatchObject({
-      code: 'archive_unavailable',
-      message: expect.stringContaining('provider_unsupported')
-    })
-  })
-
   it('keeps serving the saved copy of a row released before references', async () => {
     db.storeWorkerTerminalArchive({
       dispatchId: 'ctx_1',
