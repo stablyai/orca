@@ -1,3 +1,4 @@
+import { selectedSqliteSessionId } from '../../../session-scanner-selection'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   buildOpenCodeSqliteCandidatePath,
@@ -27,7 +28,12 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
+function buildSessionListQuery(
+  db: SyncDatabase,
+  limited: boolean,
+  scoped: boolean,
+  selected = false
+): string {
   const parentIdPredicate = columnExists(db, 'session', 'parent_id') ? 'AND parent_id IS NULL' : ''
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND time_archived IS NULL'
@@ -37,7 +43,7 @@ function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boole
   const directory = scoped && columnExists(db, 'session', 'directory') ? ', directory' : ''
   return `SELECT id, time_created, time_updated${directory}
           FROM session
-          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
+          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate} ${selected ? 'AND id = ?' : ''}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
           ${limited ? 'LIMIT ?' : ''}`
 }
@@ -46,17 +52,20 @@ function readSessionRows(
   db: SyncDatabase,
   limit: number,
   scopePaths: readonly string[] | undefined,
-  dbPath: string
+  dbPath: string,
+  selectedSessionId?: string
 ): SessionRow[] {
   if (!canReadOpenCodeSessions(db)) {
     return []
   }
-  const scoped = scopePaths !== undefined && scopePaths.length > 0
-  const limited = Number.isFinite(limit) && !scoped
-  const statement = db.prepare(buildSessionListQuery(db, limited, scoped))
+  const selected = selectedSessionId !== undefined
+  const scoped = !selected && scopePaths !== undefined && scopePaths.length > 0
+  const limited = !selected && Number.isFinite(limit) && !scoped
+  const statement = db.prepare(buildSessionListQuery(db, limited, scoped, selected))
+  const parameters = selected ? [selectedSessionId] : limited ? [limit] : []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these columns.
   const rows = (
-    limited ? statement.all(limit) : scoped ? statement.iterate() : statement.all()
+    scoped ? statement.iterate(...parameters) : statement.all(...parameters)
   ) as Iterable<SessionRow>
   return scoped && scopePaths
     ? scopedSessionRows(rows, scopePaths, limit, dbPath)
@@ -109,6 +118,7 @@ export async function listOpenCodeSqliteSessions(args: {
   limit: number
   issues: AiVaultScanIssue[]
   agent?: 'opencode' | 'zcode'
+  selectedSessionId?: string
   /** Lists only sessions whose directory is in scope, newest `limit` of them. */
   scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
@@ -118,7 +128,26 @@ export async function listOpenCodeSqliteSessions(args: {
     try {
       const rows = readOpenCodeDatabase({
         dbPath,
-        read: (db) => readSessionRows(db, args.limit, args.scopePaths, dbPath)
+        read: (db) => {
+          const rows = readSessionRows(db, args.limit, args.scopePaths, dbPath)
+          const selected = selectedSqliteSessionId(args.selectedSessionId, agent, dbPath)
+          if (selected && !rows.some((row) => row.id === selected)) {
+            const row = readSessionRows(db, 1, undefined, dbPath, selected)[0]
+            if (
+              row &&
+              typeof row.id === 'string' &&
+              typeof row.time_created === 'number' &&
+              typeof row.time_updated === 'number'
+            ) {
+              rows.push({
+                id: row.id,
+                time_created: row.time_created,
+                time_updated: row.time_updated
+              })
+            }
+          }
+          return rows
+        }
       })
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath, agent))

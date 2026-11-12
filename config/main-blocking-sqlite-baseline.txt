@@ -19,10 +19,10 @@
 19 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 13 src/main/ai-vault/parse-cache/session-scope-cwds-table.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
-4 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
+3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
 6 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
-5 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
+4 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
 9 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
 5 src/main/browser-passwords/browser-password-chromium-import.ts
 1 src/main/browser/cookies/chromium/prepare-import.ts

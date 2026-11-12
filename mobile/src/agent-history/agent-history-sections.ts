@@ -2,16 +2,26 @@ import {
   filterAiVaultSessions,
   groupAiVaultSessions
 } from '../../../src/shared/ai-vault/session-display/ai-vault-session-filters'
-import {
-  AI_VAULT_AGENTS,
-  type AiVaultScope,
-  type AiVaultSession
+import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultScanIssue,
+  AiVaultScope,
+  AiVaultSession
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-
 import {
   buildMobileAgentHistoryCard,
   type MobileAgentHistoryCard
 } from './agent-history-session-card'
+
+export type AgentHistoryScreenState =
+  | { kind: 'loading' }
+  | { kind: 'unsupported' }
+  | { kind: 'error'; message: string }
+  | {
+      kind: 'ready'
+      sessions: AiVaultSession[]
+      issues: AiVaultScanIssue[]
+    }
 
 // SectionList requires data field; naming it cards renders no rows.
 export type MobileAgentHistorySection = {

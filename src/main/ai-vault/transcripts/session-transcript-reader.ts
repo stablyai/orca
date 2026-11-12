@@ -133,8 +133,15 @@ export async function readResumableTranscript(
       channel.mute(() => displayState.consumeLine(partialLine))
     }
 
+    const skippedRecords = mergeSkippedTranscriptRecords(
+      canResume ? resume.skippedRecords : [],
+      readResult.skippedRecords
+    )
     throwIfAiVaultScanCancelled(args.signal)
-    const session = await displayState.finalize(args.platform, { signal: args.signal })
+    let session = await displayState.finalize(args.platform, { signal: args.signal })
+    if (session?.conversationContent === 'empty' && skippedRecords.length > 0) {
+      session = { ...session, conversationContent: 'unknown' }
+    }
     const consumerSession = args.sessionForConsumers
       ? await waitForAiVaultScan(args.sessionForConsumers(session), args.signal)
       : session
@@ -153,11 +160,7 @@ export async function readResumableTranscript(
         mtimeMs: file.mtimeMs,
         sizeBytes: file.sizeBytes,
         channel,
-        // Retain earlier skips only for append reads; replacements revisit those records.
-        skippedRecords: mergeSkippedTranscriptRecords(
-          canResume ? resume.skippedRecords : [],
-          readResult.skippedRecords
-        ),
+        skippedRecords,
         prefixHash: readResult.prefixHash ?? null
       }
     }

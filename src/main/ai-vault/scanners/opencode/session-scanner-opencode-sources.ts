@@ -1,3 +1,4 @@
+import { isSelectedSessionFile } from '../../session-scanner-selection'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
@@ -35,6 +36,7 @@ export function opencodeDiscoveries(
           limitPerAgent: limit,
           issues,
           scopePaths: options.scopePaths,
+          selectedSessionId: options.selectedSessionId,
           signal: options.signal
         })
       ),
@@ -100,6 +102,7 @@ async function discoverOpenCode2Sessions(
       limit,
       issues,
       scopePaths,
+      selectedSessionId: options.selectedSessionId,
       signal: options.signal
     }).then((candidates) => candidates.map((candidate) => candidate.file))
   const [files, scopeFiles] = await Promise.all([
@@ -110,6 +113,9 @@ async function discoverOpenCode2Sessions(
     agent: 'opencode2' as const,
     rootDir: storageDir,
     files,
+    selectedFiles: files.filter((file) =>
+      isSelectedSessionFile(options.selectedSessionId, 'opencode2', file.path)
+    ),
     ...(scopeFiles ? { scopeFiles } : {})
   }
 }

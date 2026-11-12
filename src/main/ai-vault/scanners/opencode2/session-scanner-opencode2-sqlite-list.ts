@@ -1,3 +1,4 @@
+import { selectedSqliteSessionId } from '../../session-scanner-selection'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   buildOpenCodeSqliteCandidatePath,
@@ -34,7 +35,12 @@ function canReadOpenCode2Sessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boolean): string {
+function buildSessionListQuery(
+  db: SyncDatabase,
+  limited: boolean,
+  scoped: boolean,
+  selected = false
+): string {
   const parentIdPredicate = columnExists(db, OPENCODE2_SESSION_TABLE, 'parent_id')
     ? 'AND parent_id IS NULL'
     : ''
@@ -46,9 +52,30 @@ function buildSessionListQuery(db: SyncDatabase, limited: boolean, scoped: boole
     scoped && columnExists(db, OPENCODE2_SESSION_TABLE, 'directory') ? ', directory' : ''
   return `SELECT id, time_created, time_updated${directory}
           FROM ${OPENCODE2_SESSION_TABLE}
-          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
+          WHERE 1=1 ${parentIdPredicate} ${archivedPredicate} ${selected ? 'AND id = ?' : ''}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
           ${limited ? 'LIMIT ?' : ''}`
+}
+
+function readSessionRows(
+  db: SyncDatabase,
+  limit: number,
+  scopePaths: readonly string[] | undefined,
+  dbPath: string,
+  selectedSessionId?: string
+): SessionRow[] {
+  const selected = selectedSessionId !== undefined
+  const scoped = !selected && scopePaths !== undefined && scopePaths.length > 0
+  const limited = !selected && Number.isFinite(limit) && !scoped
+  const statement = db.prepare(buildSessionListQuery(db, limited, scoped, selected))
+  const parameters = selected ? [selectedSessionId] : limited ? [limit] : []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these metadata columns.
+  const rows = (
+    scoped ? statement.iterate(...parameters) : statement.all(...parameters)
+  ) as Iterable<SessionRow>
+  return scoped && scopePaths
+    ? scopedSessionRows(rows, scopePaths, limit, dbPath)
+    : Array.from(rows)
 }
 
 function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
@@ -89,11 +116,11 @@ export async function listOpenCode2SqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  selectedSessionId?: string
   /** Lists only sessions whose directory is in scope, newest `limit` of them. */
   scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
-  const scoped = args.scopePaths !== undefined && args.scopePaths.length > 0
   for (const dbPath of args.dbPaths) {
     let db: SyncDatabase | null = null
     try {
@@ -101,16 +128,28 @@ export async function listOpenCode2SqliteSessions(args: {
       if (!canReadOpenCode2Sessions(db)) {
         continue
       }
-      const limited = Number.isFinite(args.limit) && !scoped
-      const statement = db.prepare(buildSessionListQuery(db, limited, scoped))
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these metadata columns.
-      const listed = (
-        limited ? statement.all(args.limit) : scoped ? statement.iterate() : statement.all()
-      ) as Iterable<SessionRow>
-      const rows =
-        scoped && args.scopePaths
-          ? scopedSessionRows(listed, args.scopePaths, args.limit, dbPath)
-          : listed
+      const rows = readSessionRows(db, args.limit, args.scopePaths, dbPath)
+      const selected = selectedSqliteSessionId(args.selectedSessionId, 'opencode2', dbPath)
+      const selectedRow = selected
+        ? readSessionRows(db, 1, undefined, dbPath, selected)[0]
+        : undefined
+      if (
+        selectedRow &&
+        typeof selectedRow.id === 'string' &&
+        typeof selectedRow.time_created === 'number' &&
+        typeof selectedRow.time_updated === 'number'
+      ) {
+        candidates.push(
+          rowToCandidate(
+            {
+              id: selectedRow.id,
+              time_created: selectedRow.time_created,
+              time_updated: selectedRow.time_updated
+            },
+            dbPath
+          )
+        )
+      }
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath))
       }

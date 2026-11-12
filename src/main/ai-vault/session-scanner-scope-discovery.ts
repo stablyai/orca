@@ -14,7 +14,7 @@ import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { FileWithMtime } from './session-scanner-types'
 import { extractString, parseJsonObject } from './session-scanner-values'
 import { scanIssueTextFromError } from './session-scan-issues'
-import { isMissingTranscriptPathError } from './session-scanner-discovery'
+import { isMissingTranscriptPathError } from './session-file-observation'
 import { noteAiVaultScanFileFound } from './ai-vault-scan-progress'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.

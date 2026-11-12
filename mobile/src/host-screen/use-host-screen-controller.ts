@@ -79,6 +79,10 @@ export function useHostScreenController({
 
   useHostScreenIdentity({ client, hostId, state })
   const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
+  const projectCatalog =
+    sidebarFeed?.feed.kind === 'ready'
+      ? (sidebarFeed.feed.domains.projectCatalog ?? state.servedProjectSections)
+      : state.servedProjectSections
   const catalog = useHostWorktreeCatalog({
     client,
     connState,
@@ -149,11 +153,13 @@ export function useHostScreenController({
     collapsedGroups,
     feed,
     projectOrderBy,
+    projectCatalog,
     client,
     connectionVerdict,
     connState,
     contentMaxWidth,
     displayWorktrees,
+    hostContextOf,
     embedded,
     existingWorktreePaths,
     floatingWorkspaceEnabled,

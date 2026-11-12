@@ -11,7 +11,8 @@ import type {
   AiVaultScope,
   AiVaultSession
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { MobileAgentHistoryStateParams } from './mobile-agent-history-state-contract'
+import { AI_VAULT_SELECTED_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { defineHostQuery, readHostQueryLive, useHostQuery } from '../query/host-query'
 import { hostScreenState } from '../query/host-query-screen-state'
@@ -61,7 +62,11 @@ type AgentHistoryRead =
       associationRevision: number
     }
 
-type ScanScope = { scopeFilterPaths: string[]; activeWorktreePath: string | null }
+type ScanScope = {
+  scopeFilterPaths: string[]
+  activeWorktreePath: string | null
+  conversationId?: string
+}
 
 async function readAgentHistory(
   client: RpcClient,
@@ -82,8 +87,17 @@ async function readAgentHistory(
   const reply = await agentHistorySessionScan.request(client, {
     limit: MOBILE_AI_VAULT_SESSION_LIMIT,
     force,
-    // From the query's own scope key, so rows cached under Workspace are always Workspace-only ones.
-    ...mobileAiVaultScanScopeArgs(scope, scan.scopeFilterPaths)
+    ...(scan.conversationId
+      ? { includeStructuredSessions: true, includeAntigravityIdeSessions: true }
+      : {}),
+    ...(scan.conversationId &&
+    status.capabilities?.includes(AI_VAULT_SELECTED_SESSION_RUNTIME_CAPABILITY)
+      ? { selectedSessionId: scan.conversationId }
+      : {}),
+    ...mobileAiVaultScanScopeArgs(
+      scan.conversationId ? 'all' : scope,
+      scan.conversationId ? [] : scan.scopeFilterPaths
+    )
   })
   const result = interpretOrThrowRefusalMessage(
     () => agentHistorySessionScan.interpret(reply),
@@ -117,17 +131,9 @@ function agentHistoryQuery(
   })
 }
 
-export type MobileAgentHistoryStateParams = {
-  hostId: string
-  worktreeId: string
-  worktrees: readonly Worktree[]
-  // Distinguish unfetched worktree list from fetched-but-missing workspace; only first holds loading.
-  worktreesLoaded: boolean
-}
-
 export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams) {
   const t = useMobileTranslation()
-  const { hostId, worktreeId, worktrees, worktreesLoaded } = params
+  const { hostId, worktreeId, conversationId, worktrees, worktreesLoaded } = params
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const queryClient = useQueryClient()
@@ -142,10 +148,15 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const liveScan = useMemo(
     (): ScanScope => ({
       // Reuse host hint prefixes for client narrowing: host union only widens; All is not narrowed.
-      scopeFilterPaths: deriveMobileAiVaultScopePaths(scope, activeWorktree, worktrees),
-      activeWorktreePath: activeWorktree?.path ?? null
+      scopeFilterPaths: deriveMobileAiVaultScopePaths(
+        conversationId ? 'all' : scope,
+        activeWorktree,
+        worktrees
+      ),
+      activeWorktreePath: activeWorktree?.path ?? null,
+      conversationId
     }),
-    [scope, activeWorktree, worktrees]
+    [scope, activeWorktree, worktrees, conversationId]
   )
   // Subscribed before the query so the feed's stream opens ahead of the first read, on the page bridge as natively.
   const feed = useMemo(() => (client ? mobileStructuredSessionStatusFeed(client) : null), [client])
@@ -174,7 +185,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     [liveScan, startRevision]
   )
   const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
-  const input = useMemo(() => ({ scope }), [scope])
+  const input = useMemo(() => ({ scope, conversationId }), [scope, conversationId])
   const host = useMemo(() => ({ hostId, client }), [hostId, client])
   // Wait for worktree list before fetching to avoid unrelated history; once loaded, proceed even if workspace is missing.
   // Not gated on the connection: the query keeps its connected-edge watcher, and a read while down fails fast.

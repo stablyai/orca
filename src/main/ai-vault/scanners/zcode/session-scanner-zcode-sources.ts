@@ -1,3 +1,4 @@
+import { isSelectedSessionFile } from '../../session-scanner-selection'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -28,6 +29,7 @@ export function zcodeDiscoveries(
         limit,
         issues,
         scopePaths,
+        selectedSessionId: options.selectedSessionId,
         signal: options.signal
       }).then((candidates) => candidates.map((candidate) => candidate.file))
     const [files, scopeFiles] = await Promise.all([
@@ -38,6 +40,9 @@ export function zcodeDiscoveries(
       agent: 'zcode' as const,
       rootDir: dbPath,
       files,
+      selectedFiles: files.filter((file) =>
+        isSelectedSessionFile(options.selectedSessionId, 'zcode', file.path)
+      ),
       ...(scopeFiles ? { scopeFiles } : {})
     }
   })

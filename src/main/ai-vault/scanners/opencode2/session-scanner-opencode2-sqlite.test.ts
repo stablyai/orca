@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
+import { buildOpenCodeSqliteCandidatePath } from '../../../../shared/opencode-sqlite-session-path'
+import { listOpenCode2SqliteSessions } from './session-scanner-opencode2-sqlite-list'
 
 import {
   parseOpenCode2SqliteSession,
@@ -144,4 +146,37 @@ it('captures the full transcript while keeping list previews bounded', async () 
   expect(capture.messages.map((message) => message.text)).toEqual(
     Array.from({ length: 8 }, (_, index) => `Turn ${index}`)
   )
+})
+
+it('keeps one selected v2 identity beyond recency while preserving archive exclusions', async () => {
+  const { db, path } = createTempDb()
+  applyOpenCode2Schema(db)
+  insertSession(db, { id: 'old', directory: '/old', timeCreated: 1, timeUpdated: 1 })
+  insertSession(db, { id: 'new', directory: '/new', timeCreated: 2, timeUpdated: 2 })
+  insertSession(db, {
+    id: 'archived',
+    directory: '/old',
+    timeCreated: 1,
+    timeUpdated: 1,
+    timeArchived: 3
+  })
+  db.close()
+  const selectedSessionId = `local:opencode2:old:${buildOpenCodeSqliteCandidatePath(path, 'old')}`
+  const listed = await listOpenCode2SqliteSessions({
+    dbPaths: [path],
+    limit: 1,
+    issues: [],
+    selectedSessionId
+  })
+  expect(listed.map((candidate) => candidate.file.path)).toEqual([
+    buildOpenCodeSqliteCandidatePath(path, 'new'),
+    buildOpenCodeSqliteCandidatePath(path, 'old')
+  ])
+  const archived = await listOpenCode2SqliteSessions({
+    dbPaths: [path],
+    limit: 1,
+    issues: [],
+    selectedSessionId: selectedSessionId.replaceAll('old', 'archived')
+  })
+  expect(archived).toHaveLength(1)
 })
