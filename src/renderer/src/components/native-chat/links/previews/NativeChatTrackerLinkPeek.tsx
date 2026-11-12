@@ -13,21 +13,24 @@ import {
   loadJiraLinkPreview,
   readCachedGitLabLinkPreview,
   readCachedJiraLinkPreview,
-  type GitLabChatLink
+  type GitLabChatLink,
+  type JiraChatLink
 } from './native-chat-tracker-link-previews'
 import { useNativeChatHoverPreview, type HoverPreviewState } from './use-native-chat-hover-preview'
 
-export function useJiraIssuePreview(
-  siteId: string,
-  key: string
-): { state: HoverPreviewState<JiraIssue>; retry: () => void } {
+/** Title and status of a linked Jira issue, cached across chips and hover cards. */
+export function useJiraIssuePreview(link: JiraChatLink): {
+  state: HoverPreviewState<JiraIssue>
+  retry: () => void
+} {
   return useNativeChatHoverPreview(
-    jiraLinkPreviewKey(siteId, key),
-    () => readCachedJiraLinkPreview(siteId, key),
-    () => loadJiraLinkPreview(siteId, key)
+    jiraLinkPreviewKey(link),
+    () => readCachedJiraLinkPreview(link),
+    () => loadJiraLinkPreview(link)
   )
 }
 
+/** Title and state of a linked GitLab issue or merge request, cached across chips and hover cards. */
 export function useGitLabWorkItemPreview(
   repo: Repo,
   link: GitLabChatLink
@@ -46,6 +49,7 @@ const JIRA_CATEGORY_DOT: Record<string, string> = {
   done: 'bg-emerald-500'
 }
 
+/** The issue's status category as a colored dot. */
 export function JiraStatusDot({ categoryKey }: { categoryKey: string }): React.JSX.Element {
   return (
     <span
@@ -66,6 +70,7 @@ const GITLAB_STATE_CLASS: Record<GitLabWorkItem['state'], string> = {
   locked: 'text-muted-foreground'
 }
 
+/** Issue or merge request icon, colored by state once known. */
 export function GitLabItemIcon({
   type,
   state
@@ -77,6 +82,7 @@ export function GitLabItemIcon({
   return <Icon aria-hidden className={cn('size-3 shrink-0', state && GITLAB_STATE_CLASS[state])} />
 }
 
+/** Placeholder lines while a lookup is in flight. */
 function Skeleton(): React.JSX.Element {
   return (
     <div aria-hidden className="flex flex-col gap-1.5 motion-safe:animate-pulse">
@@ -86,6 +92,7 @@ function Skeleton(): React.JSX.Element {
   )
 }
 
+/** Shown when the lookup fails, with a way to ask again. */
 function Unavailable({ retry }: { retry: () => void }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -98,6 +105,7 @@ function Unavailable({ retry }: { retry: () => void }): React.JSX.Element {
   )
 }
 
+/** When the item last changed, in the reader's locale. */
 function Updated({ at }: { at: string }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -111,15 +119,10 @@ function Updated({ at }: { at: string }): React.JSX.Element {
 }
 
 /** Title, status, type and assignee of a Jira issue, read through Orca's Jira connection. */
-export function NativeChatJiraPeekBody({
-  siteId,
-  issueKey
-}: {
-  siteId: string
-  issueKey: string
-}): React.JSX.Element {
+export function NativeChatJiraPeekBody({ link }: { link: JiraChatLink }): React.JSX.Element {
   const t = useTranslate()
-  const { state, retry } = useJiraIssuePreview(siteId, issueKey)
+  const { issueKey } = link
+  const { state, retry } = useJiraIssuePreview(link)
   const issue = state.status === 'ready' ? state.value : null
   return (
     <div className="flex flex-col gap-1.5">

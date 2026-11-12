@@ -62,6 +62,7 @@ function remarkNativeChatFileLinks(
   return () => (tree) => linkNativeChatFilePaths(tree, exists)
 }
 
+/** Remark plugin that links known `KEY-123` issue keys. */
 function remarkIssueKeyReferences(
   references: IssueKeyReferences
 ): () => (tree: Parameters<typeof linkIssueKeyReferences>[0]) => void {

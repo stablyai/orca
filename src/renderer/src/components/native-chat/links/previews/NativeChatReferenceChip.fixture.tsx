@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../../shared/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
@@ -34,7 +34,9 @@ const context: NativeChatLinkPeek = {
   ]),
   linearConnected: true,
   jiraSites: [jiraSite],
+  trackerHostId: 'local',
   gitLabLookupRepo: repo,
+  gitLabHosts: new Set(['gitlab.com']),
   referenceChips: 'full'
 }
 

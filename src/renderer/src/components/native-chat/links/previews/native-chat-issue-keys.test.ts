@@ -66,10 +66,22 @@ describe('jiraIssueKeyPrefixes', () => {
 })
 
 describe('mergeIssueKeyPrefixes', () => {
-  it('keeps the first tracker for a key two of them share', () => {
+  it('leaves a key two trackers share unlinked', () => {
+    const merged = mergeIssueKeyPrefixes(
+      [
+        ['ENG', 'https://linear.app/acme/issue/'],
+        ['OPS', 'https://linear.app/acme/issue/']
+      ],
+      [['ENG', 'https://acme.atlassian.net/browse/']]
+    )
+    expect(merged.has('ENG')).toBe(false)
+    expect(merged.get('OPS')).toBe('https://linear.app/acme/issue/')
+  })
+
+  it('keeps a key listed twice for the same tracker', () => {
     const merged = mergeIssueKeyPrefixes(
       [['ENG', 'https://linear.app/acme/issue/']],
-      [['ENG', 'https://acme.atlassian.net/browse/']]
+      [['ENG', 'https://linear.app/acme/issue/']]
     )
     expect(merged.get('ENG')).toBe('https://linear.app/acme/issue/')
   })

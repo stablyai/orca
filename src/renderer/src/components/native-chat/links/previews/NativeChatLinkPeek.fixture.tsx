@@ -11,7 +11,9 @@ const previewContext = {
   issueKeys: new Map<string, string>(),
   linearConnected: false,
   jiraSites: [],
+  trackerHostId: 'local' as const,
   gitLabLookupRepo: null,
+  gitLabHosts: new Set<string>(),
   referenceChips: 'full' as const
 }
 

@@ -55,6 +55,10 @@ describe('linkIssueKeyReferences', () => {
     ])
   })
 
+  it('keeps reference-style links as written', () => {
+    expect(links('[ENG-803][notes]\n\n[notes]: https://example.com/notes')).toEqual([])
+  })
+
   it('links nothing without references', () => {
     const tree: Node = fromMarkdown('ENG-1')
     linkIssueKeyReferences(tree, new Map())

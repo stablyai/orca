@@ -4,7 +4,10 @@ import type { JiraIssue } from '../../../../../../shared/jira/jira-types'
 import type { GitLabWorkItem } from '../../../../../../shared/gitlab-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
 
 export type GitLabChatLink = {
@@ -13,21 +16,33 @@ export type GitLabChatLink = {
   type: 'issue' | 'mr'
 }
 
+/** A Jira issue link, with the host whose Jira connection reads it. */
+export type JiraChatLink = { hostId: ExecutionHostId; siteId: string; issueKey: string }
+
 const jiraPreviews = createHoverPreviewCache<JiraIssue>({ freshMs: 60_000, maxEntries: 200 })
 const gitLabPreviews = createHoverPreviewCache<GitLabWorkItem>({ freshMs: 60_000, maxEntries: 200 })
 
-export function jiraLinkPreviewKey(siteId: string, key: string): string {
-  return `jira:${siteId}:${key}`
+/** Cache key for a Jira preview; the same site can be connected on two hosts with different access. */
+export function jiraLinkPreviewKey(link: JiraChatLink): string {
+  return `jira:${link.hostId}:${link.siteId}:${link.issueKey}`
 }
 
-export function readCachedJiraLinkPreview(siteId: string, key: string): JiraIssue | null {
-  return jiraPreviews.read(jiraLinkPreviewKey(siteId, key))
+/** The last answer for this link, or null when none is fresh. */
+export function readCachedJiraLinkPreview(link: JiraChatLink): JiraIssue | null {
+  return jiraPreviews.read(jiraLinkPreviewKey(link))
 }
 
-/** Reads through the store, which routes Jira to its connected host and shares the Tasks cache. */
-export function loadJiraLinkPreview(siteId: string, key: string): Promise<JiraIssue | null> {
-  return jiraPreviews.load(jiraLinkPreviewKey(siteId, key), () =>
-    useAppStore.getState().fetchJiraIssue(key, siteId)
+/** Reads through the store on the chat's host, sharing the Tasks cache for that host. */
+export function loadJiraLinkPreview(link: JiraChatLink): Promise<JiraIssue | null> {
+  return jiraPreviews.load(jiraLinkPreviewKey(link), () =>
+    useAppStore.getState().fetchJiraIssue(link.issueKey, link.siteId, {
+      sourceContext: {
+        kind: 'task-source',
+        provider: 'jira',
+        projectId: link.siteId,
+        hostId: link.hostId
+      }
+    })
   )
 }
 
@@ -36,6 +51,7 @@ export function gitLabLinkPreviewKey(repo: Repo, link: GitLabChatLink): string {
   return `${getRepoExecutionHostId(repo)}:${repo.id}:${link.slug.host}/${link.slug.path}#${link.type}${link.number}`
 }
 
+/** The last answer for this GitLab link, or null when none is fresh. */
 export function readCachedGitLabLinkPreview(
   repo: Repo,
   link: GitLabChatLink

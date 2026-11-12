@@ -1,4 +1,7 @@
-import type { GlobalSettings, NativeChatReferenceChipMode } from '../global-settings-types'
+import type { GlobalSettings } from '../global-settings-types'
+
+/** How chat links that only repeat an issue or PR ID show. */
+export type NativeChatReferenceChipMode = NonNullable<GlobalSettings['nativeChatReferenceChips']>
 
 /** Absent or unknown values mean 'full', so a hand-edited setting never hides chips by accident. */
 export function nativeChatReferenceChipMode(

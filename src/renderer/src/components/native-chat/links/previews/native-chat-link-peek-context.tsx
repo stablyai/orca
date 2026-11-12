@@ -7,11 +7,19 @@ import {
   type NativeChatGitHubRepo
 } from './native-chat-github-repo'
 import { useNativeChatIssueKeys } from './native-chat-issue-keys'
+import { trustedGitLabHosts } from './native-chat-tracker-links'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import type { IssueKeyReferences } from '../../../../../../shared/work-items/issue-key-reference-links'
-import type { NativeChatReferenceChipMode } from '../../../../../../shared/global-settings-types'
 import type { JiraSite } from '../../../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { nativeChatReferenceChipMode } from '../../../../../../shared/native-chat/native-chat-reference-chips'
+import {
+  nativeChatReferenceChipMode,
+  type NativeChatReferenceChipMode
+} from '../../../../../../shared/native-chat/native-chat-reference-chips'
 
 export type NativeChatLinkPeek = {
   githubRepo: NativeChatGitHubRepo | null
@@ -20,15 +28,20 @@ export type NativeChatLinkPeek = {
   /** Linear team and Jira project keys; `KEY-123` in replies links only for these. */
   issueKeys: IssueKeyReferences
   linearConnected: boolean
-  /** Connected Jira sites, so a `/browse/KEY-1` link previews only on a site Orca can read. */
+  /** Jira sites connected on the chat's host, so a `/browse/KEY-1` link previews only on a site it can read. */
   jiraSites: readonly JiraSite[]
-  /** Sends GitLab lookups; null when this host has no local repo. */
+  /** The chat's host; Jira previews are read through its connection. */
+  trackerHostId: ExecutionHostId
+  /** Sends GitLab lookups; null when the chat's host has no git repo. */
   gitLabLookupRepo: Repo | null
+  /** Hosts a GitLab link may be looked up on. */
+  gitLabHosts: ReadonlySet<string>
   /** How links that only repeat an issue or PR ID show. */
   referenceChips: NativeChatReferenceChipMode
 }
 
 const NO_SITES: readonly JiraSite[] = []
+const NO_HOSTS: ReadonlySet<string> = new Set()
 
 export const NativeChatLinkPeekContext = createContext<NativeChatLinkPeek>({
   githubRepo: null,
@@ -36,7 +49,9 @@ export const NativeChatLinkPeekContext = createContext<NativeChatLinkPeek>({
   issueKeys: new Map(),
   linearConnected: false,
   jiraSites: NO_SITES,
+  trackerHostId: LOCAL_EXECUTION_HOST_ID,
   gitLabLookupRepo: null,
+  gitLabHosts: NO_HOSTS,
   referenceChips: 'full'
 })
 
@@ -51,33 +66,39 @@ export function NativeChatLinkPeekProvider({
   const runtimeEnvironmentId = fileLinkContext?.runtimeEnvironmentId ?? null
   const githubRepo = useNativeChatGitHubRepo(fileLinkContext?.worktreeId)
   const gitLabLookupRepo = useNativeChatLookupRepo(fileLinkContext?.worktreeId)
-  const issueKeys = useNativeChatIssueKeys(runtimeEnvironmentId)
+  const { issueKeys, jiraSites } = useNativeChatIssueKeys(runtimeEnvironmentId)
   const linearConnected = useAppStore((state) => state.linearStatus.connected)
-  const jiraConnected = useAppStore((state) => state.jiraStatus.connected)
-  const jiraSites = useAppStore((state) => state.jiraStatus.sites)
+  const repos = useAppStore((state) => state.repos)
+  const gitLabHosts = useMemo(() => trustedGitLabHosts(repos), [repos])
+  const trackerHostId: ExecutionHostId = runtimeEnvironmentId
+    ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+    : LOCAL_EXECUTION_HOST_ID
   const webPreviewsEnabled = useAppStore(
     (state) => state.settings?.nativeChatLinkPreviews !== false
   )
   const referenceChips = useAppStore((state) => nativeChatReferenceChipMode(state.settings))
-  const value = useMemo(
+  const value = useMemo<NativeChatLinkPeek>(
     () => ({
       githubRepo,
       webPreviews: webPreviewsEnabled ? { runtimeEnvironmentId } : null,
       issueKeys,
       linearConnected,
-      jiraSites: jiraConnected && jiraSites ? jiraSites : NO_SITES,
+      jiraSites,
+      trackerHostId,
       gitLabLookupRepo,
+      gitLabHosts,
       referenceChips
     }),
     [
       githubRepo,
       gitLabLookupRepo,
+      gitLabHosts,
       issueKeys,
-      jiraConnected,
       jiraSites,
       linearConnected,
       referenceChips,
       runtimeEnvironmentId,
+      trackerHostId,
       webPreviewsEnabled
     ]
   )

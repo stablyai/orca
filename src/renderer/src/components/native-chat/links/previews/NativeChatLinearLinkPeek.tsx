@@ -7,21 +7,24 @@ import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import {
   linearLinkPreviewKey,
   loadLinearLinkPreview,
-  readCachedLinearLinkPreview
+  readCachedLinearLinkPreview,
+  type LinearChatLink
 } from './native-chat-linear-link-preview'
 import { useNativeChatHoverPreview, type HoverPreviewState } from './use-native-chat-hover-preview'
 
-export function useLinearIssuePreview(identifier: string): {
+/** Title and state of a linked Linear issue, cached across chips and hover cards. */
+export function useLinearIssuePreview(link: LinearChatLink): {
   state: HoverPreviewState<LinearIssue>
   retry: () => void
 } {
   return useNativeChatHoverPreview(
-    linearLinkPreviewKey(identifier),
-    () => readCachedLinearLinkPreview(identifier),
-    () => loadLinearLinkPreview(identifier)
+    linearLinkPreviewKey(link),
+    () => readCachedLinearLinkPreview(link),
+    () => loadLinearLinkPreview(link)
   )
 }
 
+/** The issue's workflow state as a dot in Linear's own state color. */
 export function LinearStateDot({ color }: { color: string }): React.JSX.Element {
   return (
     <span
@@ -33,14 +36,11 @@ export function LinearStateDot({ color }: { color: string }): React.JSX.Element 
 }
 
 /** Title, status, assignee and priority of a Linear issue, read through Orca's Linear connection. */
-export function NativeChatLinearPeekBody({
-  identifier
-}: {
-  identifier: string
-}): React.JSX.Element {
+export function NativeChatLinearPeekBody({ link }: { link: LinearChatLink }): React.JSX.Element {
+  const { identifier } = link
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const { state, retry } = useLinearIssuePreview(identifier)
+  const { state, retry } = useLinearIssuePreview(link)
   const issue = state.status === 'ready' ? state.value : null
   return (
     <div className="flex flex-col gap-1.5">

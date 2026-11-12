@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useJiraProjectInventory } from '@/components/use-jira-project-inventory'
+import {
+  jiraListProjectsForTarget,
+  jiraStatusForTarget
+} from '@/runtime/jira/runtime-jira-project-client'
 import type { LinearTeam, LinearWorkspace } from '../../../../../../shared/linear/workspace-types'
 import type { JiraProject, JiraSite } from '../../../../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -9,6 +12,7 @@ import { linearIssueUrlPrefix } from '../../../../../../shared/linear/linear-ref
 
 const TEAM_URL_ORG_PATTERN = /^https:\/\/linear\.app\/([A-Za-z0-9_-]+)\//
 
+/** The organization a team's issue URLs use, from its workspace or else its own URL. */
 function orgUrlKeyForTeam(team: LinearTeam, workspaces: readonly LinearWorkspace[]): string | null {
   const workspace =
     workspaces.find((candidate) => candidate.id === team.workspaceId) ??
@@ -16,6 +20,7 @@ function orgUrlKeyForTeam(team: LinearTeam, workspaces: readonly LinearWorkspace
   return workspace?.organizationUrlKey ?? TEAM_URL_ORG_PATTERN.exec(team.url ?? '')?.[1] ?? null
 }
 
+/** `[team key, issue URL prefix]` for each Linear team whose organization is known. */
 export function linearIssueKeyPrefixes(
   teams: readonly LinearTeam[],
   workspaces: readonly LinearWorkspace[]
@@ -26,6 +31,7 @@ export function linearIssueKeyPrefixes(
   })
 }
 
+/** `[project key, browse URL prefix]` for each Jira project on a connected site. */
 export function jiraIssueKeyPrefixes(
   projects: readonly JiraProject[],
   sites: readonly JiraSite[]
@@ -38,17 +44,25 @@ export function jiraIssueKeyPrefixes(
   })
 }
 
-/** Two trackers or workspaces can reuse a key; the first keeps it rather than guess which one a reply meant. */
+/** Two trackers or workspaces can reuse a key. Such a key stays text: linking it to either
+ *  one would guess which issue a reply meant. */
 export function mergeIssueKeyPrefixes(...sources: [string, string][][]): IssueKeyReferences {
   const byKey = new Map<string, string>()
+  const ambiguous = new Set<string>()
   for (const [key, prefix] of sources.flat()) {
-    if (!byKey.has(key)) {
-      byKey.set(key, prefix)
+    const existing = byKey.get(key)
+    if (existing !== undefined && existing !== prefix) {
+      ambiguous.add(key)
     }
+    byKey.set(key, existing ?? prefix)
+  }
+  for (const key of ambiguous) {
+    byKey.delete(key)
   }
   return byKey
 }
 
+/** Key prefixes of every team in the connected Linear workspaces. */
 function useLinearKeyPrefixes(): [string, string][] {
   const connected = useAppStore((state) => state.linearStatus.connected)
   const workspaces = useAppStore((state) => state.linearStatus.workspaces)
@@ -78,18 +92,40 @@ function useLinearKeyPrefixes(): [string, string][] {
   )
 }
 
-function useJiraKeyPrefixes(target: RuntimeClientTarget): [string, string][] {
-  const connected = useAppStore((state) => state.jiraStatus.connected)
-  const sites = useAppStore((state) => state.jiraStatus.sites)
-  const { projects } = useJiraProjectInventory(target, connected)
-  return useMemo(
-    () => (connected ? jiraIssueKeyPrefixes(projects, sites ?? []) : []),
-    [connected, projects, sites]
+type NativeChatJira = { sites: readonly JiraSite[]; projects: readonly JiraProject[] }
+
+const NO_JIRA: NativeChatJira = { sites: [], projects: [] }
+
+/** Jira sites and projects connected on the chat's host, not on the app's default host. */
+function useNativeChatJira(target: RuntimeClientTarget): NativeChatJira {
+  const [jira, setJira] = useState<{ target: RuntimeClientTarget; value: NativeChatJira } | null>(
+    null
   )
+  useEffect(() => {
+    let cancelled = false
+    void jiraStatusForTarget(target)
+      .then(async (status) =>
+        status.connected
+          ? { sites: status.sites ?? [], projects: await jiraListProjectsForTarget(target, 'all') }
+          : NO_JIRA
+      )
+      .then(
+        (value) => !cancelled && setJira({ target, value }),
+        () => !cancelled && setJira({ target, value: NO_JIRA })
+      )
+    return () => {
+      cancelled = true
+    }
+  }, [target])
+  return jira?.target === target ? jira.value : NO_JIRA
 }
 
-/** Issue keys of every connected Linear workspace and Jira site, read on the chat's host. */
-export function useNativeChatIssueKeys(runtimeEnvironmentId: string | null): IssueKeyReferences {
+/** Issue keys of every connected Linear workspace and of the Jira sites on the chat's host, plus
+ *  those Jira sites. */
+export function useNativeChatIssueKeys(runtimeEnvironmentId: string | null): {
+  issueKeys: IssueKeyReferences
+  jiraSites: readonly JiraSite[]
+} {
   const target = useMemo<RuntimeClientTarget>(
     () =>
       runtimeEnvironmentId
@@ -98,6 +134,12 @@ export function useNativeChatIssueKeys(runtimeEnvironmentId: string | null): Iss
     [runtimeEnvironmentId]
   )
   const linear = useLinearKeyPrefixes()
-  const jira = useJiraKeyPrefixes(target)
-  return useMemo(() => mergeIssueKeyPrefixes(linear, jira), [linear, jira])
+  const jira = useNativeChatJira(target)
+  return useMemo(
+    () => ({
+      issueKeys: mergeIssueKeyPrefixes(linear, jiraIssueKeyPrefixes(jira.projects, jira.sites)),
+      jiraSites: jira.sites
+    }),
+    [linear, jira]
+  )
 }

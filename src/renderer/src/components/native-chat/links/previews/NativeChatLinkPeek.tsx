@@ -33,11 +33,9 @@ export function NativeChatLinkPeek({
     }
     switch (tracker.kind) {
       case 'linear':
-        return <NativeChatLinearPeekBody key={href} identifier={tracker.identifier} />
+        return <NativeChatLinearPeekBody key={href} link={tracker} />
       case 'jira':
-        return (
-          <NativeChatJiraPeekBody key={href} siteId={tracker.siteId} issueKey={tracker.issueKey} />
-        )
+        return <NativeChatJiraPeekBody key={href} link={tracker} />
       case 'github':
         return (
           <NativeChatGitHubPeekBody
