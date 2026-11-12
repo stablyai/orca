@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../../shared/protocol-version'
 import '../orchestration-mutation-recovery'
-import { reportCliError } from '../format'
+import { reportCliError } from '../cli-error'
 import { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError } from '../runtime-client'
 
 const servers = new Set<Server>()

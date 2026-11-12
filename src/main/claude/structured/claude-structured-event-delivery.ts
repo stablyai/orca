@@ -1,7 +1,7 @@
 import { agentSessionForegroundTasksEqual } from '../../../shared/agent-session/agent-session-foreground-task'
 import { claudeForegroundTasks } from './claude-structured-background-task'
-import { ClaudePluginInputError } from '../claude-plugin-ui'
-import { claudePromptCardWritten } from '../claude-child-work-evidence'
+import { ClaudePluginInputError } from '../sdk-transport/claude-plugin-ui'
+import { claudePromptCardWritten } from '../child-work/claude-child-work-evidence'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSessionExit,

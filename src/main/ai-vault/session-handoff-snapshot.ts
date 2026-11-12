@@ -15,7 +15,7 @@ import { writeAgentSessionContextSnapshot } from '../native-chat/agent-session-c
 import { wakeNativeChatTranscriptDistro } from '../native-chat/native-chat-open-wake'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
-import { getAiVaultWslScanHomeDirs } from './ai-vault-scan-roots'
+import { getAiVaultWslScanHomeDirs } from './discovery/ai-vault-scan-roots'
 import { openCodeWslPath } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
 import { configureOpenCodeTranscriptWslReaders } from '../native-chat/transcript-opencode-database'
 

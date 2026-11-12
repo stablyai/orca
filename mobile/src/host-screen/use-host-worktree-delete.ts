@@ -7,7 +7,7 @@ import { canUseRepoWideTrust } from '../../../src/shared/orca-hook-trust-entries
 import {
   persistOrcaHookTrustApproval,
   wasOrcaHookPreviouslyApproved
-} from '../tasks/setup-hook-trust'
+} from '../new-workspace/creation/setup-hook-trust'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { buildWorktreeRemoveRequest } from './worktree-remove-request'

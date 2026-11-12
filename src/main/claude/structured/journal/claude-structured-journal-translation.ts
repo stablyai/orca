@@ -1,48 +1,48 @@
-import { ClaudeTaskInvocations } from '../../claude-task-invocations'
-import { ClaudeJournalBoundDelivery } from '../../claude-journal-bound-delivery'
-import type * as contract from '../../claude-journal-translator-contract'
+import { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
+import { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
+import type * as contract from './claude-journal-translator-contract'
 import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import { publishClaudeTurnActivity } from '../../claude-turn-activity'
+import { publishClaudeTurnActivity } from '../turns/claude-turn-activity'
 import {
   claudeProviderFrameKind,
   createClaudeProviderFrameFallback,
   isClaudeProgressFrame
 } from '../launch/claude-structured-provider-fallback'
-import { ClaudeBackgroundTaskRows } from '../../claude-background-task-rows'
-import { ClaudeToolOriginRegistry } from '../../claude-tool-origin-registry'
-import { ClaudeProvisionalRowCorrections } from '../../claude-provisional-row-corrections'
-import { createClaudeStreamedThinking } from '../../claude-streamed-thinking'
-import { ClaudeSubagentIdentities } from '../../claude-subagent-identities'
-import { ClaudeJournaledSubagents } from '../../claude-subagent-journaled-identities'
-import { createClaudeStreamedBlockRegistry } from '../../claude-streamed-block-identity'
-import { createClaudeStreamedTextCheckpoints } from '../../claude-streamed-text-checkpoints'
+import { ClaudeBackgroundTaskRows } from '../../background-tasks/claude-background-task-rows'
+import { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
+import { ClaudeProvisionalRowCorrections } from '../../subagents/claude-provisional-row-corrections'
+import { createClaudeStreamedThinking } from './claude-streamed-thinking'
+import { ClaudeSubagentIdentities } from '../../subagents/claude-subagent-identities'
+import { ClaudeJournaledSubagents } from '../../subagents/claude-subagent-journaled-identities'
+import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
+import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import {
   claudeFrameParentRef,
   claudeStreamTurnSource,
   isRootClaudeFrame
-} from '../../claude-turn-opening'
-import { ClaudeOpenTurn } from '../../claude-open-turn'
-import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../../claude-command-turn'
-import { ClaudeContextFacts } from '../../claude-context-facts'
-import { claudeSessionStateEndsTurn } from '../../claude-session-state-turn-over'
+} from '../turns/claude-turn-opening'
+import { ClaudeOpenTurn } from '../turns/claude-open-turn'
+import { absorbClaudeCommandFrame, claudeCommandCurrentTurn } from '../turns/claude-command-turn'
+import { ClaudeContextFacts } from '../../context-usage/claude-context-facts'
+import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
-import { claudeChildToolQueries } from '../../claude-child-tool-queries'
-import { journalClaudeMessage, journalClaudeStream } from '../../claude-message-journaling'
-import type { ClaudeMessageJournalContext } from '../../claude-message-journaling'
-import { journalClaudeResult } from '../../claude-result-journaling'
-import type { ClaudeResultJournalContext } from '../../claude-result-journaling'
-import { ClaudeAssistantFailures } from '../../claude-assistant-failures'
-import { ClaudeUsageLimits } from '../../claude-usage-limits'
-import { ClaudeThreadGoal } from '../../claude-thread-goal'
-import { createClaudeFinalOutputCoverage } from '../../claude-final-output-coverage'
-import { withClaudeConversationContent } from '../../claude-internal-message-content'
+import { claudeChildToolQueries } from '../../subagents/claude-child-tool-queries'
+import { journalClaudeMessage, journalClaudeStream } from './claude-message-journaling'
+import type { ClaudeMessageJournalContext } from './claude-message-journaling'
+import { journalClaudeResult } from './claude-result-journaling'
+import type { ClaudeResultJournalContext } from './claude-result-journaling'
+import { ClaudeAssistantFailures } from './claude-assistant-failures'
+import { ClaudeUsageLimits } from './claude-usage-limits'
+import { ClaudeThreadGoal } from './claude-thread-goal'
+import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
+import { withClaudeConversationContent } from './claude-internal-message-content'
 import {
   journalClaudePluginInputFailure,
   settleClaudeInterruptedTurn
-} from '../../claude-plugin-input-failure-journal'
+} from './claude-plugin-input-failure-journal'
 
 export function createClaudeJournalTranslator(
   deps: contract.ClaudeJournalTranslatorDeps
@@ -289,9 +289,8 @@ export function createClaudeJournalTranslator(
     get finalOutputAdmitted() {
       return coverage.admitted
     },
-    markContextActivity: () => context.markActivity(),
     subscribeContextUsageRequests: (listener) => context.subscribeReportRequests(listener),
-    recordContextReport: (target, report, part) => context.recordReport(target, report, part),
+    recordContextReport: (target, report, askedAt) => context.recordReport(target, report, askedAt),
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
     dispose: () => {

@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   projectPluginWorkspaceAgents,
+  pluginFrameWorkspaceContext,
   projectPluginWorkspaceContext,
   type PluginAgentStatusRow,
   type PluginWorkspaceTerminal
@@ -23,22 +24,35 @@ import {
   PLUGIN_STATUS_BAR_HANDLERS,
   type PluginStatusBarServices
 } from './plugin-host-status-bar-method-bindings'
-import {
-  PLUGIN_WORKSPACE_ACTION_HANDLERS,
-  type PluginRuntimeRpc
-} from './plugin-host-workspace-method-bindings'
+import { PLUGIN_WORKSPACE_ACTION_HANDLERS } from './plugin-host-workspace-method-bindings'
+import { PLUGIN_TERMINAL_ACTION_HANDLERS } from './plugin-host-terminal-method-bindings'
+import { PLUGIN_WORKSPACE_CREATE_HANDLERS } from './plugin-host-workspace-create-bindings'
+import { PLUGIN_AUTOMATION_HANDLERS } from './plugin-host-automation-bindings'
+import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 import { PluginHostCallError } from './plugin-host-call-scope'
+import type {
+  PluginActionConfirmation,
+  PluginConfirmationSubject
+} from '../../consent/plugin-confirmation-subject'
 
 export type PluginWorktreeContext = {
   worktreeId: string
+  /** Host-qualified identity key, which `workspace.list` ids carry; absent without one. */
+  identityKey?: string
   branch: string
   displayName: string
 }
 
-/** Desktop-only sinks for frame methods; absent in headless serve. */
+/** Desktop-only sinks for frame methods and host confirmations; absent in headless serve. */
 export type PluginDesktopFrameServices = {
+  /** Asks the person in the calling frame's window, else Orca's focused or first window. */
+  confirm(
+    pluginId: string,
+    subject: PluginConfirmationSubject,
+    scope: PluginHostCallScope
+  ): Promise<PluginActionConfirmation>
   openExternal(
     pluginId: string,
     url: string,
@@ -96,6 +110,9 @@ export type PluginHostServices = {
   runtimeRpc?: PluginRuntimeRpc | null
   /** Orca's window, for actions only it can take; absent in headless serve. */
   renderer?: PluginHostRendererActions | null
+  /** Asks the person before the plugin acts; absent where nobody can be asked (headless serve).
+   *  Re-checks the plugin's approval once the person answers. */
+  confirm?: PluginDesktopFrameServices['confirm'] | null
   settings: {
     getAll(pluginId: string): Record<string, PluginJsonValue>
     set(
@@ -131,14 +148,18 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     }
     return services.editorTypography.read()
   }),
-  'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
-    const context = await services.resolveActiveWorktreeContext()
-    // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.
-    const terminals = context
-      ? await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
-      : []
-    return projectPluginWorkspaceContext(context, terminals)
-  }),
+  'workspace.readContext': bind(
+    api['workspace.readContext'],
+    async (_params, { services, surface }) => {
+      const context = await services.resolveActiveWorktreeContext()
+      // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.
+      const terminals = context
+        ? await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
+        : []
+      const projected = projectPluginWorkspaceContext(context, terminals)
+      return surface === 'worker' ? projected : pluginFrameWorkspaceContext(projected)
+    }
+  ),
   'agents.list': bind(api['agents.list'], async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
     if (!context) {
@@ -230,7 +251,10 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   }),
   ...PLUGIN_PANEL_BRIDGE_HANDLERS,
   ...PLUGIN_STATUS_BAR_HANDLERS,
-  ...PLUGIN_WORKSPACE_ACTION_HANDLERS
+  ...PLUGIN_WORKSPACE_ACTION_HANDLERS,
+  ...PLUGIN_TERMINAL_ACTION_HANDLERS,
+  ...PLUGIN_WORKSPACE_CREATE_HANDLERS,
+  ...PLUGIN_AUTOMATION_HANDLERS
 }
 
 function requireDesktop(services: PluginHostServices): PluginDesktopFrameServices {

@@ -7,9 +7,9 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError } from '../runtime-client'
-import { getRequiredWorktreeSelector } from '../selectors'
+import { getRequiredWorktreeSelector } from '../workspace-selection/workspace-selector'
 
 type ConnectorDelivery = { outcome: string; reason?: string; reopened?: boolean }
 
