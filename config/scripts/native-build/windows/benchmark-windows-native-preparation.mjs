@@ -534,5 +534,5 @@ export async function benchmarkWindowsNativePreparation(
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await benchmarkWindowsNativePreparation()
+  await import('../../diagnostics/runtime-lifecycle/windows-cold-host-machine-probe.mjs')
 }
