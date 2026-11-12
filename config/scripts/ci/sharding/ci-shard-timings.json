@@ -2175,7 +2175,6 @@
       "src/main/ipc/wsl/wsl-host-automation-wake-launch.test.ts": 939,
       "src/main/ipc/wsl/wsl-host-handlers-user-actions.test.ts": 772,
       "src/main/ipc/wsl/wsl-host-visible-work-windows.test.ts": 39,
-      "src/main/ipc/wsl/wsl-move-driver-handlers.test.ts": 432,
       "src/main/ipc/wsl/wsl-move-handlers-setting-off.test.ts": 724,
       "src/main/ipc/wsl/wsl-move-host-connect.test.ts": 984,
       "src/main/ipc/wsl/wsl-move-partial-undo.test.ts": 939,

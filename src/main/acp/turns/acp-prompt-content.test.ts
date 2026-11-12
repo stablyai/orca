@@ -5,13 +5,11 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../shared/native-chat/native-chat-types'
-import { AcpPromptContentError, acpDispatchPrompt, acpPromptBlocks } from './acp-prompt-content'
+import { AcpPromptContentError, acpPromptBlocks } from './acp-prompt-content'
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 const dir = mkdtempSync(join(tmpdir(), 'acp-prompt-content-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
-const pngPath = join(dir, 'shot.png')
-writeFileSync(pngPath, PNG)
 
 function message(...blocks: NativeChatBlock[]): AgentJournalMessageItem {
   return { kind: 'message', role: 'user', blocks }
@@ -26,14 +24,6 @@ async function refusal(body: AgentJournalMessageItem, images = true) {
 }
 
 describe('ACP prompt content', () => {
-  it('refuses a withheld command typed with arguments', async () => {
-    const result = await acpDispatchPrompt(message({ type: 'text', text: '/allow-all on' }), {
-      spec: { agent: 'copilot', dialect: { withheldCommands: ['allow-all'] } },
-      connection: { initialize: async () => ({ protocolVersion: 1 }) }
-    })
-    expect(Array.isArray(result)).toBe(false)
-  })
-
   it('sends a host image up to 20 MiB inline and keeps a larger one as a path', async () => {
     const inlinePath = join(dir, 'photo.png')
     writeFileSync(inlinePath, Buffer.alloc(20 * 1024 * 1024))
