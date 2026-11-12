@@ -44,29 +44,51 @@ vi.mock('../../repositories/github-api-repository-remote-probe', () => ({
 import { getConfiguredPushHead } from './branch-review-heads'
 
 it.each([
-  { name: 'nothing', config: [['push.default', 'nothing']], destination: null },
+  {
+    name: 'nothing',
+    config: [['push.default', 'nothing']],
+    destination: null,
+    pushSucceeds: false
+  },
   {
     name: 'unmapped refspec',
     config: [['remote.fork.push', 'refs/heads/other:refs/heads/other']],
-    destination: null
+    destination: null,
+    pushSucceeds: true
+  },
+  {
+    name: 'unmapped refspec overrides upstream mode',
+    config: [
+      ['push.default', 'upstream'],
+      ['remote.fork.push', 'refs/heads/other:refs/heads/other']
+    ],
+    destination: null,
+    pushSucceeds: true
   },
   {
     name: 'simple with another upstream branch',
     config: [['push.default', 'simple']],
-    destination: null
+    destination: null,
+    pushSucceeds: false
   },
-  { name: 'current', config: [['push.default', 'current']], destination: 'feature' },
+  {
+    name: 'current',
+    config: [['push.default', 'current']],
+    destination: 'feature',
+    pushSucceeds: true
+  },
   {
     name: 'explicit mapping overrides nothing',
     config: [
       ['push.default', 'nothing'],
       ['remote.fork.push', 'refs/heads/feature:refs/heads/published']
     ],
-    destination: 'published'
+    destination: 'published',
+    pushSucceeds: true
   }
 ])(
   'matches real Git publication while keeping discovery usable: $name',
-  async ({ config, destination }) => {
+  async ({ config, destination, pushSucceeds }) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'push-head-'))
     const repo = path.join(directory, 'checkout')
     const fork = path.join(directory, 'fork.git')
@@ -98,16 +120,25 @@ it.each([
         '-m',
         'initial'
       ])
+      await git(['branch', 'other'])
       await git(['remote', 'add', 'fork', fork])
       await git(['config', 'branch.feature.remote', 'fork'])
       await git(['config', 'branch.feature.merge', 'refs/heads/other'])
       for (const [key, value] of config) {
         await git(['config', key, value])
       }
-      const push = await run(repo, ['push', '--dry-run'])
+      const push = await run(repo, ['push'])
+      expect(push.code === 0, push.stderr).toBe(pushSucceeds)
       const source = (await readGitReviewBranchSources(git, ['feature'])).get('feature')
       if (destination === null) {
-        expect(push.code).not.toBe(0)
+        const feature = await run(directory, [
+          '--git-dir',
+          fork,
+          'rev-parse',
+          '--verify',
+          'refs/heads/feature'
+        ])
+        expect(feature.code).not.toBe(0)
         // GitLab can still discover a manually published branch despite a disabled plain push.
         expect(source).toMatchObject({
           branchName: 'feature',

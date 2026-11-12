@@ -148,13 +148,14 @@ export async function readGitReviewBranchSources(
           if ((get('push.default') ?? 'simple') === 'simple' && tracked && tracked !== branch) {
             pushBranchName = null
           }
-          if (get('push.default') === 'upstream') {
+          if (specs.length === 0 && get('push.default') === 'upstream') {
             if (!merge) {
               throw new Error('Review upstream is unavailable')
             }
             pushBranchName = tracked ?? null
           }
         } else if (
+          specs.length === 0 &&
           get('push.default') === 'upstream' &&
           explicitRemote &&
           remote !== trackedRemote
