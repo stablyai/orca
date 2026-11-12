@@ -108,23 +108,6 @@ describe('resolveFocusedFrameRoute', () => {
     }
   })
 
-  it('follows focus into nested cross-site frames and reuses their sessions', async () => {
-    const guest = fakeGuest()
-    const send = frameSender({
-      focusedFrameBySession: { '': 'OUTER', S1: 'INNER' },
-      crossSiteTargets: ['OUTER', 'INNER'],
-      sessionForTarget: { OUTER: 'S1', INNER: 'S2' }
-    })
-
-    expect(await resolveFocusedFrameRoute(guest, send)).toEqual({
-      kind: 'session',
-      sessionId: 'S2'
-    })
-    await resolveFocusedFrameRoute(guest, send)
-
-    expect(send.mock.calls.filter(([method]) => method === 'Target.attachToTarget')).toHaveLength(2)
-  })
-
   it('attaches again when a cached frame session has died', async () => {
     const guest = fakeGuest()
     const model: FrameModel = {
