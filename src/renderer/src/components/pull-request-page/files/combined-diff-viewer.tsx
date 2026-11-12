@@ -20,10 +20,12 @@ import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
   PR_DIFF_OVERSCAN,
+  createPRFileDiffSections,
   getPRFileSectionKey,
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
+import { usePRFileViewedCollapse } from '@/components/github/pr-file-viewed-collapse'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { prFilesDiffScrollTopCache, prFilesDiffViewStateCache } from '../cache/files-diff-view'
@@ -118,12 +120,14 @@ export function PRFilesCombinedDiffViewer({
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
+  const fileByPathRef = useRef(fileByPath)
   const generationRef = useRef(0)
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
   useLayoutEffect(() => {
     // Why: keep the loader/navigation callbacks reading the latest sections without a render-phase ref write.
     sectionsRef.current = sections
+    fileByPathRef.current = fileByPath
   })
 
   useEffect(() => {
@@ -150,24 +154,8 @@ export function PRFilesCombinedDiffViewer({
     loadedIndicesRef.current.clear()
     loadingIndicesRef.current.clear()
     pendingRestoreScrollTopRef.current = prFilesDiffScrollTopCache.get(viewStateKey) ?? null
-    setSections(
-      entries.map((entry) => ({
-        key: getPRFileSectionKey(entry.path),
-        path: entry.path,
-        oldPath: entry.oldPath,
-        status: entry.status,
-        added: entry.added,
-        removed: entry.removed,
-        originalContent: '',
-        modifiedContent: '',
-        collapsed: false,
-        loading: true,
-        error: undefined,
-        dirty: false,
-        diffResult: null,
-        largeDiffRenderLimit: null
-      }))
-    )
+    // Why: a ref so a Viewed toggle (which changes `files`) doesn't reset every section.
+    setSections(createPRFileDiffSections(entries, fileByPathRef.current))
   }, [entries, entrySignature, setActiveTreeSectionKey, setSectionHeights, viewStateKey])
 
   const { loadSection, retrySection, toggleSection, setAllSectionsCollapsed } =
@@ -221,6 +209,15 @@ export function PRFilesCombinedDiffViewer({
   useLayoutEffect(() => {
     virtualizer.measure()
   }, [sideBySide, virtualizer])
+
+  const handleViewedToggle = usePRFileViewedCollapse({
+    sectionsRef,
+    toggleSection,
+    scrollContainerRef,
+    pendingRestoreScrollTopRef,
+    virtualizer,
+    onViewedChange
+  })
 
   usePRFilesDiffViewPersistence({
     sections,
@@ -301,13 +298,13 @@ export function PRFilesCombinedDiffViewer({
           filePath={file.path}
           onToggle={() => {
             if (!pending) {
-              void onViewedChange(file.path, !viewed)
+              void handleViewedToggle(file.path, !viewed)
             }
           }}
         />
       )
     },
-    [fileByPath, onViewedChange, pendingViewedPaths]
+    [fileByPath, handleViewedToggle, pendingViewedPaths]
   )
 
   return (
