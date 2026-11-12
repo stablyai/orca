@@ -60,6 +60,7 @@ vi.mock('../stream-remote/use-remote-browser-page-lifecycle', () => ({
       session: {
         resolveNavigationPage: mocks.ensureRemotePage,
         invalidateTabInfoReads: vi.fn(),
+        setPageLoading: vi.fn(),
         refreshTabInfo: vi.fn(async () => null),
         scheduleTabInfoRefresh: vi.fn()
       },
