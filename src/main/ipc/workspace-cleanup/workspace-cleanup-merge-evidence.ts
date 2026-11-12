@@ -1,7 +1,7 @@
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { resolveDefaultBaseRefViaExec } from '../../../shared/git/refs/git-default-base-ref'
 import { localBranchHasNoUnmergedChanges } from '../../git/refs/resolution/local-branch-merge-proof'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../shared/repo-types'
 import {
   readWorkspaceReviewPR,

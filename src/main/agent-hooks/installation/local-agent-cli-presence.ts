@@ -11,7 +11,10 @@ import {
 import type { ManagedAgentHookTarget } from '../../../shared/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
-import { hydrateShellPath, mergePathSegments } from '../../startup/hydrate-shell-path'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../../startup/shell-environment/hydrate-shell-path'
 import { mergePersistedWindowsPathAsync } from '../../pty/environment/windows-environment-path'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import {

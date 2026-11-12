@@ -1,10 +1,10 @@
-import type { RepoSlug } from '../../../../shared/github/links'
+import type { RepoSlug } from '../../../../shared/github/repositories/links'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeTarget
 } from '@/lib/work-items/github/github-source-runtime-context'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

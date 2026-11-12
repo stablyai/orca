@@ -5,38 +5,35 @@ import {
   normalizeCommandPositionals,
   parseArgs,
   resolveHelpPath,
-  specPaths,
   validateCommandAndFlags
-} from './args'
+} from './arguments/args'
+import { specPaths } from './discovery/command-spec'
 import { readOrcaCliVersion } from './cli-version'
-import { dispatch } from './dispatch'
+import { dispatch } from './dispatch/dispatch'
 import {
   resolveEnvironmentSelectorForStore,
   resolveHostFlagEnvironmentId
-} from './execution-host-flag'
-import { fetchSshTargetSummaries, listSshTargets } from './host-selector-alternatives'
-import { reportCliError } from './cli-error'
+} from './hosts/execution-host-flag'
+import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
+import { reportCliError } from './output/cli-error'
 import { RuntimeClientError } from './runtime/types'
-import { cliErrorExitCode } from './cli-exit-code'
-import { printHelp } from './help'
-import type { RuntimeClient } from './runtime-client'
+import { cliErrorExitCode } from './output/cli-exit-code'
+import { printHelp } from './discovery/help'
+import type { RuntimeClient } from './runtime/client'
 import { COMMAND_SPECS } from './specs'
-import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
-import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
-import { ignoresRemoteSelection } from './remote-selection-scope'
+import { resolveOrchestrationCliExecutable } from './orchestration/recovery/orchestration-recovery-command'
+import { refuseConflictingSessionCallerFlags } from './orchestration/identity/session-caller-flags'
+import { ignoresRemoteSelection } from './dispatch/remote-selection-scope'
 import {
   isLocalEnvironmentSelector,
   refuseLocalManagementSelector
-} from './local-environment-selector'
-
-export { COMMAND_SPECS } from './specs'
-export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
+} from './hosts/local-environment-selector'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
 // Defer the runtime graph until after help and validation; await it to keep ctx.client synchronous.
 async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
-  return (await import('./runtime-client.js')).RuntimeClient
+  return (await import('./runtime/client.js')).RuntimeClient
 }
 
 // The SSH bridge runs here, but ORCA_CLI_CWD carries the remote caller's directory.

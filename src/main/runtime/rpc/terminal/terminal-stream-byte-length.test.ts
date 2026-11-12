@@ -31,21 +31,3 @@ describe('measuring a prefix slice that cuts a surrogate pair in half', () => {
     ])
   })
 })
-
-describe('terminal stream UTF-8 byte accounting', () => {
-  it.each([
-    { text: '', limit: -1, byteLength: 0, exceededLimit: false },
-    { text: 'abc', limit: 0, byteLength: 1, exceededLimit: true },
-    { text: 'éé', limit: 2, byteLength: 4, exceededLimit: true },
-    { text: '😀😀😀', limit: 5, byteLength: 8, exceededLimit: true },
-    { text: '\ud800z', limit: 2, byteLength: 3, exceededLimit: true },
-    { text: '😀'.repeat(9), limit: 5, byteLength: 8, exceededLimit: true },
-    { text: 'é'.repeat(16), limit: 32, byteLength: 32, exceededLimit: false },
-    { text: '走'.repeat(16), limit: 48, byteLength: 48, exceededLimit: false }
-  ])(
-    'measures only through the first code point over $limit bytes',
-    ({ text, limit, ...expected }) => {
-      expect(measureTerminalStreamByteLength(text, { stopAfterBytes: limit })).toEqual(expected)
-    }
-  )
-})

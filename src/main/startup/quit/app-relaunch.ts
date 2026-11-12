@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { runWithLaunchPath } from '../hydrate-shell-path'
+import { runWithLaunchPath } from '../shell-environment/hydrate-shell-path'
 import { getWindowsAdministratorRelaunchOptions } from '../../windows/windows-administrator-restart'
 
 export type AppRelaunchReason =

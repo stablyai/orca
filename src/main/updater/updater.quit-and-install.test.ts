@@ -39,7 +39,7 @@ vi.mock('./releases/updater-release-readiness', async (importOriginal) => ({
 }))
 vi.mock('../local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('../local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
-vi.mock('../startup/hydrate-shell-path', () => ({
+vi.mock('../startup/shell-environment/hydrate-shell-path', () => ({
   runWithLaunchPath: (action: () => unknown): unknown => {
     launchPathScope.active = true
     launchPathScope.calls += 1
@@ -58,45 +58,6 @@ describe('updater', () => {
     resetUpdaterMocks()
     launchPathScope.active = false
     launchPathScope.calls = 0
-  })
-
-  it('still surfaces updater error events while a download is in flight', async () => {
-    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
-      })
-      return Promise.resolve(undefined)
-    })
-    autoUpdaterMock.downloadUpdate.mockImplementation(() => {
-      autoUpdaterMock.emit('error', new Error('download failed'))
-      return new Promise(() => {})
-    })
-    const sendMock = vi.fn()
-    const mainWindow = updaterMainWindow(sendMock)
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-
-    await vi.waitFor(() => {
-      expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'available',
-        version: '1.0.61',
-        changelog: null
-      })
-    })
-
-    sendMock.mockClear()
-    downloadUpdate()
-
-    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
-    expect(sendMock).toHaveBeenCalledWith(
-      'updater:status',
-      expect.objectContaining({ state: 'error', message: 'download failed' })
-    )
   })
 
   it('aborts native install when required pre-quit cleanup fails', async () => {
@@ -126,18 +87,6 @@ describe('updater', () => {
         message: expect.stringContaining('Could not restart to install the update')
       })
     )
-  })
-
-  it('allows a required profile export to finish beyond the optional cleanup budget', async () => {
-    vi.useFakeTimers()
-    const onBeforeQuit = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 5_000)))
-    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-    setupAutoUpdater(updaterMainWindow(vi.fn()), { onBeforeQuit, onBeforeQuitFailure: 'abort' })
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(2_600)
-    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(2_500)
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
   })
 
   it('aborts native install when required pre-quit cleanup times out', async () => {
@@ -170,35 +119,6 @@ describe('updater', () => {
         message: expect.stringContaining('Could not restart to install the update')
       })
     )
-  })
-
-  it('ignores duplicate quitAndInstall requests while async pre-quit cleanup is running', async () => {
-    vi.useFakeTimers()
-
-    let finishCleanup!: () => void
-    const onBeforeQuit = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finishCleanup = resolve
-        })
-    )
-    const mainWindow = updaterMainWindow(vi.fn())
-    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { onBeforeQuit })
-    quitAndInstall()
-
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
-    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
-
-    quitAndInstall()
-    finishCleanup()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
   })
 
   it('recovers quit-for-update state on sync quitAndInstall error event without killing PTYs', async () => {

@@ -1,12 +1,12 @@
-import type { RefObject } from 'react'
-import { useMemo } from 'react'
+import { type RefObject, useMemo } from 'react'
+
 import { ArrowLeft, Search, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../../shared/repo-icon'
 import type {
   SettingsNavIcon,
   SettingsNavInstallStatus
 } from '@/components/settings/navigation/settings-navigation-types'
-import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity } from '../../../../../shared/github/repositories/repository-identity'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
@@ -16,8 +16,11 @@ import { RepoForkIndicator } from '../../repo/repo-fork-indicator'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { SetupGuideProgressRing } from '../../setup-guide/SetupGuideProgressRing'
-import { useSettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
-import type { SettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
+import {
+  useSettingsSetupGuideProgress,
+  type SettingsSetupGuideProgress
+} from '../setup-guide/settings-setup-guide-progress'
+
 import { useTranslate } from '@/i18n/use-translate'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { useAppStore } from '@/store/index'

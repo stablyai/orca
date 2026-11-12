@@ -81,6 +81,7 @@ export function resolvePluginServiceHostCallPolicy(input: {
   const plugin = input.findApprovedPlugin(input.pluginKey)
   return {
     grantedCapabilities: plugin ? capabilityKinds(plugin.manifest.capabilities) : null,
+    allowProposed: plugin?.isDev === true,
     services: input.runtimeDelegate
       ? bindPluginHostServices({
           delegate: input.runtimeDelegate,

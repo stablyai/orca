@@ -2,8 +2,8 @@ import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import type { GitHubProjectSummary } from '../../../../shared/github/projects/project-types'
+import type { GitHubProjectViewError } from '../../../../shared/github/projects/project-result-types'
 import {
   getProjectPickerBrowseCacheEntry,
   peekProjectPickerBrowseCacheEntry,

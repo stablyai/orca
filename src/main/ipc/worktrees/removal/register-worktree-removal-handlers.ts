@@ -30,6 +30,7 @@ import {
   runWorkspaceLifecycleCommand,
   workspaceLifecycleKey
 } from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
+import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
 export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
   const { store, options, worktreeRemovalsInFlight } = context
@@ -94,6 +95,8 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
               worktreePath,
               removalHostId
             )
+      // Read before the purge drops the row; listeners hear `removed` after it.
+      const removedIdentity = worktreeHostIdentity(store, args.worktreeId, removalHostId)
       let accepted: RemoveWorktreeResult
       let result: RemoveWorktreeResult
       try {
@@ -108,7 +111,8 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
         options?.onWorktreeLifecycle?.({
           kind: 'removed',
           worktreeId: args.worktreeId,
-          path: worktreePath
+          path: worktreePath,
+          ...removedIdentity
         })
       }
       // Stamp inside the shared promise so coalesced callers receive the same resulting catalog.
