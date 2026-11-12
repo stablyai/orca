@@ -1,4 +1,6 @@
 import { basename } from 'node:path'
+import { buildGitHubRepoUrl } from '../../shared/github/links'
+import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git/refs/git-rev-list-output'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from './remotes/hosted-remote-url'
 import { getRemoteFileTarget } from './remotes/repo-remote-file-target'
@@ -187,6 +189,18 @@ export async function getRemoteFileUrl(
 }
 
 export async function getRemoteCommitUrl(repoPath: string, sha: string): Promise<string | null> {
+  const normalizedSha = sha.trim()
+  if (!normalizedSha) {
+    return null
+  }
   const remoteUrl = await getRemoteUrl(repoPath)
-  return remoteUrl ? buildHostedRemoteCommitUrl(remoteUrl, sha) : null
+  if (!remoteUrl) {
+    return null
+  }
+  const hostedUrl = buildHostedRemoteCommitUrl(remoteUrl, normalizedSha)
+  if (hostedUrl) {
+    return hostedUrl
+  }
+  const enterpriseUrl = buildGitHubRepoUrl(await getEnterpriseGitHubRepoSlug(repoPath))
+  return enterpriseUrl ? `${enterpriseUrl}/commit/${encodeURIComponent(normalizedSha)}` : null
 }
