@@ -18,6 +18,7 @@ import {
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { copyTerminalSelection } from '../../clipboard/terminal-selection-copy'
 import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
+import { pasteBelongsToPaneControl } from './paste-belongs-to-pane-control'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import {
   formatClipboardImagePasteError,
@@ -65,11 +66,7 @@ export function registerTerminalPanePasteListeners({
     )
   }
   const onKeyPaste = (event: KeyboardEvent): void => {
-    const target = event.target
-    if (
-      (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
-      isInsideNativeChatCover(target)
-    ) {
+    if (pasteBelongsToPaneControl(event.target)) {
       return
     }
     const matchesPaste = keybindingMatchesAction(
@@ -117,11 +114,7 @@ export function registerTerminalPanePasteListeners({
   }
 
   const onPaste = (event: ClipboardEvent): void => {
-    const target = event.target
-    if (
-      (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
-      isInsideNativeChatCover(target)
-    ) {
+    if (pasteBelongsToPaneControl(event.target)) {
       return
     }
     if (suppressNextNativePaste) {
@@ -162,8 +155,7 @@ export function registerTerminalPanePasteListeners({
     if (
       !(activeElementAtDispatch instanceof Element) ||
       !container.contains(activeElementAtDispatch) ||
-      activeElementAtDispatch.closest('[data-terminal-search-root]') ||
-      isInsideNativeChatCover(activeElementAtDispatch)
+      pasteBelongsToPaneControl(activeElementAtDispatch)
     ) {
       return
     }

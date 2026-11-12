@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { pasteBelongsToPaneControl } from '../input/paste/paste-belongs-to-pane-control'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPasteSource } from '../input/paste/terminal-paste-model'
@@ -107,6 +108,11 @@ export function useTerminalContextMenuTrigger({
 
   const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
     const target = event.target
+    // SETUP-PASTE: a pane control's own field (the cloud strip's code field) gets the native
+    // Cut/Copy/Paste menu, never the terminal's, whose Paste would go to the shell.
+    if (pasteBelongsToPaneControl(target)) {
+      return
+    }
     if (!managerRef.current || !(target instanceof Node)) {
       event.preventDefault()
       contextPaneIdRef.current = null
