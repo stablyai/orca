@@ -40,9 +40,10 @@ const entry = {
   worker
 }
 
-it('shows no toast when an answer lands, and closes the card with a toast when the prompt had already closed', async () => {
+it('answers the card on click, before the host confirms, with no toast once it lands', async () => {
   const onClosed = vi.fn()
-  rpc.call.mockResolvedValueOnce({})
+  let land: (value: unknown) => void = () => {}
+  rpc.call.mockReturnValueOnce(new Promise((resolve) => (land = resolve)))
   render(
     <NativeChatWorkerApprovalStack
       approvals={[entry]}
@@ -51,12 +52,29 @@ it('shows no toast when an answer lands, and closes the card with a toast when t
     />
   )
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-  await waitFor(() => expect(rpc.call).toHaveBeenCalledTimes(1))
+  // The RPC has not resolved: the card is already shown as allowed by the person.
+  expect(onClosed).toHaveBeenCalledWith('apr_1', {
+    by: 'person',
+    decision: 'allow',
+    reason: null,
+    reasonDelivered: false
+  })
+  land({})
   await waitFor(() => expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled())
+  expect(onClosed).toHaveBeenCalledTimes(1)
   expect(toast.success).not.toHaveBeenCalled()
   expect(toast.info).not.toHaveBeenCalled()
-  expect(onClosed).not.toHaveBeenCalled()
+})
 
+it('shows the real outcome when the answer was not taken, and reopens the card on a failure', async () => {
+  const onClosed = vi.fn()
+  render(
+    <NativeChatWorkerApprovalStack
+      approvals={[entry]}
+      target={{ kind: 'local' }}
+      onClosed={onClosed}
+    />
+  )
   rpc.call.mockRejectedValueOnce(
     new RuntimeRpcCallError({
       id: '1',
@@ -69,13 +87,17 @@ it('shows no toast when an answer lands, and closes the card with a toast when t
   await waitFor(() =>
     expect(toast.info).toHaveBeenCalledWith('try-claude: this prompt had already closed')
   )
-  expect(onClosed).toHaveBeenCalledWith('apr_1', {
+  expect(onClosed).toHaveBeenLastCalledWith('apr_1', {
     by: 'unknown',
     decision: null,
     reason: null,
     reasonDelivered: false
   })
-  expect(toast.error).not.toHaveBeenCalled()
+
+  rpc.call.mockRejectedValueOnce(new Error('socket closed'))
+  fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('try-claude: socket closed'))
+  expect(onClosed).toHaveBeenLastCalledWith('apr_1', null)
 })
 
 it("closes the card at once when an answer finds the worker's Dispatch ended", async () => {
@@ -97,7 +119,7 @@ it("closes the card at once when an answer finds the worker's Dispatch ended", a
   )
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
   await waitFor(() =>
-    expect(onClosed).toHaveBeenCalledWith('apr_1', {
+    expect(onClosed).toHaveBeenLastCalledWith('apr_1', {
       by: 'worker-ended',
       decision: null,
       reason: null,

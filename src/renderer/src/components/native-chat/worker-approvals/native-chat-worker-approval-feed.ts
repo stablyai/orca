@@ -15,8 +15,8 @@ export type NativeChatWorkerApproval = OrchestrationWorkerApprovalEntry
 type Feed = {
   /** The host's list, as last received. */
   received: readonly NativeChatWorkerApproval[]
-  /** Prompts an answer found already closed, until the host's list closes them too. */
-  closedHere: Map<string, WorkerApprovalOutcome>
+  /** Prompts answered or found closed here, shown closed until the host's list closes them too. */
+  closedHere: Map<string, { outcome: WorkerApprovalOutcome; at: string }>
   entries: readonly NativeChatWorkerApproval[]
   listeners: Set<() => void>
   dispose: () => void
@@ -36,22 +36,29 @@ function publish(feed: Feed): void {
   }
   feed.entries = feed.closedHere.size
     ? feed.received.map((entry) => {
-        const outcome = feed.closedHere.get(entry.approval.approvalId)
-        return outcome ? { ...entry, approval: closedApproval(entry.approval, outcome) } : entry
+        const closed = feed.closedHere.get(entry.approval.approvalId)
+        return closed
+          ? { ...entry, approval: closedApproval(entry.approval, closed.outcome), at: closed.at }
+          : entry
       })
     : feed.received
   feed.listeners.forEach((notify) => notify())
 }
 
-/** Shows a prompt as closed at once when an answer finds it already gone, before the host's list says so. */
+/** Shows a prompt closed at once, as answered here or found gone, before the host's list says so;
+ *  null shows it open again, for an answer that was not applied. */
 export function closeNativeChatWorkerApproval(
   party: string,
   approvalId: string,
-  outcome: WorkerApprovalOutcome
+  outcome: WorkerApprovalOutcome | null
 ): void {
   const feed = feeds.get(party)
   if (feed) {
-    feed.closedHere.set(approvalId, outcome)
+    if (outcome) {
+      feed.closedHere.set(approvalId, { outcome, at: new Date().toISOString() })
+    } else {
+      feed.closedHere.delete(approvalId)
+    }
     publish(feed)
   }
 }

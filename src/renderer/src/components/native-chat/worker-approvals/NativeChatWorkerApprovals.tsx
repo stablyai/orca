@@ -71,8 +71,8 @@ export function NativeChatWorkerApprovalStack({
   target: RuntimeClientTarget
   /** A hidden pane's countdown stands still; it shows the time again once visible. */
   isVisible?: boolean
-  /** An answer found the prompt already closed, as this says. */
-  onClosed?: (approvalId: string, outcome: WorkerApprovalOutcome) => void
+  /** Show the prompt closed this way now; null shows it open again. */
+  onClosed?: (approvalId: string, outcome: WorkerApprovalOutcome | null) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const open = approvals.filter(({ approval }) => approval.state === 'open')
@@ -82,6 +82,8 @@ export function NativeChatWorkerApprovalStack({
     (entry: NativeChatWorkerApproval, decision: WorkerApprovalDecision) => {
       const { approvalId, worker } = entry.approval
       setSubmitting((current) => new Set(current).add(approvalId))
+      // The card answers at once, as the chat's own prompt does; only an answer Claude did not take changes it.
+      onClosed?.(approvalId, { by: 'person', decision, reason: null, reasonDelivered: false })
       const name = entry.worker.label
       callRuntimeRpc(target, 'orchestration.approvalAnswer', {
         dispatch: worker.dispatchId,
@@ -93,7 +95,8 @@ export function NativeChatWorkerApprovalStack({
         .catch((error: unknown) => {
           const closed = closedBeforeAnswer(error)
           if (!closed) {
-            // Not applied and still open: the card stays answerable.
+            // Not applied and still open: the card is answerable again.
+            onClosed?.(approvalId, null)
             toast.error(
               t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
                 name,
@@ -179,7 +182,7 @@ export function NativeChatPartyWorkerApprovalStack({
   party: string | null
 }): React.JSX.Element | null {
   const onClosed = useCallback(
-    (approvalId: string, outcome: WorkerApprovalOutcome) => {
+    (approvalId: string, outcome: WorkerApprovalOutcome | null) => {
       if (party) {
         closeNativeChatWorkerApproval(party, approvalId, outcome)
       }
