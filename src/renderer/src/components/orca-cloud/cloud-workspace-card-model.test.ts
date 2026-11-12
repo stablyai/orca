@@ -47,6 +47,10 @@ describe('calm cloud workspace card', () => {
     expect(mostUrgentAttention([null, null])).toBeNull()
     expect(mostUrgentAttention([secrets, agent])).toBe(agent)
     expect(mostUrgentAttention([secrets, null])).toBe(secrets)
+    // GIT-SETUP: below an agent that can't start, above missing secrets.
+    const git = { kind: 'gitSetupOff' as const }
+    expect(mostUrgentAttention([secrets, git])).toBe(git)
+    expect(mostUrgentAttention([git, agent])).toBe(agent)
   })
 
   it('sums up On this computer in a few words', () => {

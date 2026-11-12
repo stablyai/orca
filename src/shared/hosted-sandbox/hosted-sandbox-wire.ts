@@ -99,7 +99,12 @@ export const HostedSandboxViewSchema = z
     session: HostedSandboxSessionSchema.nullable(),
     createdAt: Millis,
     /** Org environment build this workspace booted from; null/absent for the plain image. */
-    environmentBuildId: Id.nullable().optional()
+    environmentBuildId: Id.nullable().optional(),
+    /**
+     * GIT-SETUP: the teammates' git identities couldn't be installed after create, so the VM refuses
+     * commits and pushes. Sent only to clients with feature `git-setup`; a later boot clears it.
+     */
+    gitSetup: z.literal('failed').optional()
   })
   .strict()
 export type HostedSandboxView = z.infer<typeof HostedSandboxViewSchema>

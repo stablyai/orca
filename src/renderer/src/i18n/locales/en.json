@@ -26961,6 +26961,14 @@
     }
   },
   "orcaCloudWorkspace": {
+    "gitSetup": {
+      "title": "Commits and pushes are off in this workspace",
+      "detailShort": "Orca couldn’t set up your GitHub identity here. Restart to try again.",
+      "detail": "Orca couldn’t set up your GitHub identity here. Restart to try again. Your files are kept, and Orca resumes your agents once it is back.",
+      "restartingDetail": "Your files are kept, and Orca resumes your agents once it is back.",
+      "failedAgainShort": "Restarting didn’t fix it. Reading, diffs and other read-only git still work.",
+      "failedAgain": "Restarting didn’t fix it. You can keep working; reading, diffs and other read-only git still work. Restart again later."
+    },
     "menu": {
       "sleep": "Sleep",
       "sleepDescription": "Close this workspace's panels and put its sandbox to sleep. Opening the workspace wakes it.",
@@ -27079,6 +27087,7 @@
       "details": "Details",
       "hideDetails": "Hide details",
       "totalSandboxHours": "Total sandbox hours",
+      "gitSetupOff": "Commits and pushes are off",
       "delete": "Delete"
     },
     "statusUnavailable": "Status unavailable",

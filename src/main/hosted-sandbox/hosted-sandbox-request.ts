@@ -71,6 +71,8 @@ export function createHostedSandboxRequest(
             'archive',
             'idle-minutes',
             'wake-hints',
+            // The sandbox view may carry `gitSetup: 'failed'` (GIT-SETUP strip).
+            'git-setup',
             ...(init.features ?? [])
           ].join(','),
           ...(init.body === undefined ? {} : { 'content-type': 'application/json' })

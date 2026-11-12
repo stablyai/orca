@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { useCloudSecretsMissing } from '@/lib/orca-cloud/cloud-secrets-missing-notice-store'
+import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { cloudAgentHoldTabId } from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import { agentName } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'
 import { useTranslate } from '@/i18n/use-translate'
@@ -43,6 +44,9 @@ export function useCloudCardAttention(workspaceId: string): CloudCardAttention |
   const secrets = useCloudSecretsMissing(workspaceId)
   // A running agent whose sign-in lapsed (the row's "Sign-in expired" / "Needs sign-in").
   const signIn = useWorkspaceAgentSignIn(workspaceId)
+  const gitSetupFailed = useCloudWorkspace(
+    (s) => s.status[workspaceId]?.status?.gitSetupFailed === true
+  )
   return mostUrgentAttention([
     hold
       ? {
@@ -56,6 +60,7 @@ export function useCloudCardAttention(workspaceId: string): CloudCardAttention |
         ? { signIn: signIn.signIn, tabId: signIn.tabId, agentName: agentName(signIn.agent, t) }
         : null
     ),
+    gitSetupFailed ? { kind: 'gitSetupOff' } : null,
     secrets && secrets.names.length > 0
       ? { kind: 'secretsMissing', count: secrets.names.length }
       : null
@@ -69,6 +74,10 @@ export function openCloudCardAttention(workspaceId: string, item: CloudCardAtten
     case 'agentExpired':
       activateAndRevealWorktree(workspaceId)
       useAppStore.getState().setActiveTab(item.tabId)
+      return
+    case 'gitSetupOff':
+      // The workspace's GIT-SETUP strip carries the fix (Restart).
+      activateAndRevealWorktree(workspaceId)
       return
     case 'secretsMissing':
       openCloudSecretsAsk(workspaceId)
