@@ -53,37 +53,44 @@ export async function deliverWorkerDispatchPreamble(args: {
   const chat = structuredSession
     ? null
     : chatAssigneeOf(resolveDispatchAssigneeParty(terminalHandle, args.db))
-  const advisoryPolicy = structuredSession?.host.deps.store.getRecord(
-    structuredSession.identity.sessionId
-  )?.advisoryPolicy
-  const preamble = advisoryPolicy
+  const record = structuredSession?.host.deps.store.getRecord(structuredSession.identity.sessionId)
+  const preamble = record?.executionPolicy
     ? [
-        'Answer this one consultation using only the admitted artifact snapshots.',
-        'Use read_artifact and search_artifacts as needed, then call mcp__orca_advisor__report_advice once.',
-        'A recommendation requires evidence, uncertainty and next_test. Otherwise report inconclusive, conflict, timeout or error.',
-        'The report ends this consultation. The owner decides whether to act on it.',
+        'Complete this one bounded task using the admitted workspace and tools. Do not delegate.',
+        'After verification call orca_worker_report once with status succeeded, failed or needs_context and a concise summary.',
+        'The report reaches the dispatch owner. The owner decides final acceptance.',
         args.taskSpec
       ].join('\n\n')
-    : buildDispatchPreamble({
-        // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
-        canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
-        taskId: args.taskId,
-        dispatchId: args.dispatchId,
-        taskSpec: args.taskSpec,
-        coordinatorHandle: orcaSessionIdOrHandle(args.coordinatorHandle, args.db),
-        coordinatedFrom: args.db.getPeerRun(args.runId)?.home_label,
-        // Its mailbox stays keyed by the handle; its commands name its Orca session ID, which binds to it.
-        workerHandle:
-          structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)
-            ? formatOrcaSessionAddress(canonicalOrcaSessionId(structuredSession.identity.sessionId))
-            : chat
-              ? formatOrcaSessionAddress(chat)
-              : terminalHandle,
-        devMode: args.devMode,
-        cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
-        unreadMail:
-          args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
-      })
+    : record?.advisoryPolicy
+      ? [
+          'Answer this one consultation using only the admitted artifact snapshots.',
+          'Use read_artifact and search_artifacts as needed, then call mcp__orca_advisor__report_advice once.',
+          'A recommendation requires evidence, uncertainty and next_test. Otherwise report inconclusive, conflict, timeout or error.',
+          'The report ends this consultation. The owner decides whether to act on it.',
+          args.taskSpec
+        ].join('\n\n')
+      : buildDispatchPreamble({
+          // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
+          canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
+          taskId: args.taskId,
+          dispatchId: args.dispatchId,
+          taskSpec: args.taskSpec,
+          coordinatorHandle: orcaSessionIdOrHandle(args.coordinatorHandle, args.db),
+          coordinatedFrom: args.db.getPeerRun(args.runId)?.home_label,
+          // Its mailbox stays keyed by the handle; its commands name its Orca session ID, which binds to it.
+          workerHandle:
+            structuredSession && isOrcaSessionId(structuredSession.identity.sessionId)
+              ? formatOrcaSessionAddress(
+                  canonicalOrcaSessionId(structuredSession.identity.sessionId)
+                )
+              : chat
+                ? formatOrcaSessionAddress(chat)
+                : terminalHandle,
+          devMode: args.devMode,
+          cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+          unreadMail:
+            args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
+        })
   if (chat) {
     const dispatch = args.db.getDispatchContextById(args.dispatchId)
     if (!dispatch) {

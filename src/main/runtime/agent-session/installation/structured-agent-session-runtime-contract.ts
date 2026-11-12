@@ -1,3 +1,4 @@
+import type { AgentSessionExecutionReceipt } from '../../../../shared/agent-session/agent-session-execution-receipt'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from '../structured-agent-session-transport-overrides'
@@ -17,7 +18,11 @@ import type { AgentSessionStatusSummary } from '../../../../shared/agent-session
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { AgentSessionAdvisoryReporterFactory } from '../../../../shared/agent-session/agent-session-advisory-report'
 
+import type { AgentSessionExecutionReporterFactory } from '../../../../shared/agent-session/agent-session-execution-report'
+
 export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
+  executionRuntimeIdentity?: () => NonNullable<AgentSessionExecutionReceipt['runtime']> | null
+  prepareExecutionReporter?: AgentSessionExecutionReporterFactory
   prepareAdvisoryReporter?: AgentSessionAdvisoryReporterFactory
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string

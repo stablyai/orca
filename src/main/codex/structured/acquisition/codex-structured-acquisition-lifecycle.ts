@@ -102,4 +102,22 @@ export function bindCodexExecutionDeadline(
         sessionId
       })
   )
+  if (acquisition.execution) {
+    acquisition.execution.record = input.deps.onExecutionReceipt
+    acquisition.execution.binding = {
+      sessionId,
+      fence: input.input.fence,
+      generation,
+      spawnToken: input.input.spawnToken
+    }
+    acquisition.execution.reporter = input.deps.prepareExecutionReporter?.({
+      sessionId,
+      fence: input.input.fence,
+      spawnToken: input.input.spawnToken,
+      currentGeneration: () => {
+        const current = input.sessions.get(sessionId)
+        return current && !current.ended ? current.acquisitionGeneration : null
+      }
+    })
+  }
 }

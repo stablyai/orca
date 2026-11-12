@@ -1,6 +1,7 @@
 import { copyCodexConversation } from '../../codex-conversation-copy'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
 import { readCodexSessionExecutionEvidence } from './codex-session-execution-evidence'
+import { readCodexExecutionQualification } from './codex-execution-qualification'
 import { supportsCodexExecutionPolicy } from '../launch/codex-execution-controls'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
@@ -87,13 +88,14 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     copyCodexConversation(input, this.deps.providerInvocation)
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
+  readExecutionQualification = readCodexExecutionQualification(() => this.deps.providerInvocation)
   readExecutionEvidence = readCodexSessionExecutionEvidence(
     this.sessions,
     () => this.deps.now?.() ?? Date.now()
   )
 
   supportsLocation = supportsCodexStructuredLocation
-  supportsExecutionPolicy = supportsCodexExecutionPolicy
+  supportsExecutionPolicy = supportsCodexExecutionPolicy(() => this.deps)
 
   readCommands: NonNullable<SessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.skillReport?.read()
@@ -338,7 +340,6 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined || this.sessions.has(sessionId)
 
-  private session(sessionId: string): CodexSession {
-    return requireLiveCodexSession(this.sessions, sessionId)
-  }
+  private session = (sessionId: string): CodexSession =>
+    requireLiveCodexSession(this.sessions, sessionId)
 }

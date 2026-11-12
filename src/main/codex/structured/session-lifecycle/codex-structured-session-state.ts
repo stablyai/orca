@@ -1,3 +1,5 @@
+import type { CodexExecutionAdapterDeps } from './codex-execution-receipt'
+import type { AgentSessionExecutionExecutable } from '../../../../shared/agent-session/agent-session-execution-evidence'
 import type { CodexProviderInvocationDeps } from './codex-provider-session-rename'
 import type { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
@@ -39,7 +41,9 @@ export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
 }
 
 export type CodexStructuredLaunch = {
-  execution?: Pick<NonNullable<ReturnType<typeof codexExecutionLaunch>>, 'policy' | 'profileId'>
+  execution?: Pick<NonNullable<ReturnType<typeof codexExecutionLaunch>>, 'policy' | 'profileId'> & {
+    executable?: AgentSessionExecutionExecutable
+  }
   prefixArgs?: readonly string[]
   command: string
   args: string[]
@@ -94,7 +98,7 @@ export type CodexStructuredSessionEvent =
   /** Translator-only compatibility for callers that do not participate in host recovery. */
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
-export type CodexStructuredSessionAdapterDeps = {
+export type CodexStructuredSessionAdapterDeps = CodexExecutionAdapterDeps & {
   providerInvocation?: CodexProviderInvocationDeps
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands

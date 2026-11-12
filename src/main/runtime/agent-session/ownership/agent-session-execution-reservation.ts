@@ -1,4 +1,7 @@
-import { agentSessionExecutionPolicySchema } from '../../../../shared/agent-session/agent-session-execution-policy'
+import {
+  agentSessionExecutionPolicySchema,
+  agentSessionExecutionPolicyFingerprint
+} from '../../../../shared/agent-session/agent-session-execution-policy'
 import { agentSessionNeverStarted } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -35,7 +38,9 @@ export function admitExecutionOwnerReservation(
 ): void {
   if (
     request.executionPolicy &&
-    JSON.stringify(request.executionPolicy) !== JSON.stringify(existing.executionPolicy)
+    (!existing.executionPolicy ||
+      agentSessionExecutionPolicyFingerprint(request.executionPolicy) !==
+        agentSessionExecutionPolicyFingerprint(existing.executionPolicy))
   ) {
     refuse()
   }

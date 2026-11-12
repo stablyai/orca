@@ -168,7 +168,7 @@ export async function acquireCodexStructuredSession(input: {
           ),
         onSpawned: spawnIdentity.onSpawned,
         onExit: (error, exit) => {
-          acquisition.execution?.controls.end()
+          acquisition.execution?.controls.stop()
           acquisition.appliedSettings.end()
           try {
             // Orca's own close or cancel ends no start; Codex ending on its own does, from the

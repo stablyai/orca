@@ -141,6 +141,8 @@ export type AgentSessionRecord = {
   options?: Record<string, string>
   advisoryPolicy?: AgentSessionAdvisoryPolicy
   executionPolicy?: AgentSessionExecutionPolicy
+  /** Host-owned historical observation; never a client-supplied create field. */
+  executionReceipt?: unknown
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
   usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }

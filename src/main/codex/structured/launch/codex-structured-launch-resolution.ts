@@ -1,3 +1,4 @@
+import { readCodexExecutionExecutable } from './codex-execution-executable'
 import { pathEnvRelativeTo } from '../../../../shared/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import {
@@ -145,6 +146,9 @@ export function codexStructuredLaunchPart(
     const model = record.options?.model
     const visuals = execution ? null : await basis.visuals()
     const launchDirectory = await basis.launchDirectory()
+    const executable = execution
+      ? await readCodexExecutionExecutable(command, prefixArgs, launchDirectory, environment)
+      : undefined
     const selectedHome = await deps.prepareLaunchAccountHome?.(record, launchDirectory)
     const accountHome = selectedHome
       ? requireLegacyAgentSessionAccountHome(selectedHome)
@@ -178,7 +182,13 @@ export function codexStructuredLaunchPart(
         codexHome: accountHome.path,
         resumeThreadId,
         ...(execution
-          ? { execution: { policy: execution.policy, profileId: execution.profileId } }
+          ? {
+              execution: {
+                policy: execution.policy,
+                profileId: execution.profileId,
+                ...(executable ? { executable } : {})
+              }
+            }
           : {}),
         // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
         ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),

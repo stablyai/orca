@@ -81,6 +81,7 @@ export function readCodexSessionExecutionEvidence(
     const settings = session?.appliedSettings?.read()
     const permissions = session && sandboxEvidence(session)
     const execution = session?.execution
+    const usage = execution?.usage
     const workspaceRoots = execution?.openedWorkspaceRoots ?? native?.runtimeWorkspaceRoots
     const cwd = native ? native.cwd : session?.permissions?.reportedCwd
     const provider = native ? native.modelProvider : session?.modelProvider
@@ -109,6 +110,7 @@ export function readCodexSessionExecutionEvidence(
       !session.ended &&
       !session.connection.closed &&
       (!execution || execution.controls.isOpen()) &&
+      execution?.usage === usage &&
       session.nativeExecutionSettings === native &&
       session.authRevision === revision &&
       session.acquisitionGeneration === generation &&
@@ -145,6 +147,8 @@ export function readCodexSessionExecutionEvidence(
         ...(roots(workspaceRoots) ? { runtimeWorkspaceRoots: [...workspaceRoots] } : {}),
         model: settings.model,
         effort: settings.effort,
+        ...(execution?.executable ? { executable: { ...execution.executable } } : {}),
+        ...(usage ? { usage: { ...usage } } : {}),
         ...(execution
           ? {
               bounded: {
@@ -162,6 +166,9 @@ export function readCodexSessionExecutionEvidence(
           fingerprint: `codex:${createHash('sha256').update(identity.trim().toLowerCase()).digest('hex')}`
         },
         permissions
+      }
+      if (execution) {
+        execution.lastEvidence = structuredClone(evidence)
       }
       return { evidence, isCurrent }
     } catch {

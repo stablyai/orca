@@ -1,5 +1,5 @@
+import type { StructuredAgentSessionExecutionReader as ExecutionReader } from './structured-agent-session-execution-reader'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
-import type { AgentSessionExecutionEvidence } from '../../../../shared/agent-session/agent-session-execution-evidence'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
@@ -34,7 +34,7 @@ import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-sess
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
-  StructuredAgentSessionAdapterStop
+  StructuredAgentSessionAdapterStop as AdapterStop
 } from './structured-agent-session-adapter-stop'
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
@@ -174,12 +174,9 @@ export type StructuredAgentSessionSetOptionInput = {
   signal?: AbortSignal
 }
 
-export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & {
-  readExecutionEvidence?(input: {
-    sessionId: string
-    fence: number
-    signal?: AbortSignal
-  }): Promise<{ evidence: AgentSessionExecutionEvidence; isCurrent: () => boolean } | null>
+type AdapterBase = AdapterStop & ExecutionReader
+
+export type StructuredAgentSessionAdapter = AdapterBase & {
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean

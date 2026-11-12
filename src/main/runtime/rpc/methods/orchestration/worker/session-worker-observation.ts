@@ -1,3 +1,4 @@
+import { readWorkerExecutionReceipt } from './worker-execution-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
@@ -95,7 +96,8 @@ export async function ensureSessionWorkerRecords(
 
 /** Detailed inspection reads options without starting a child; a replaced owner invalidates the answer. */
 export async function readStructuredWorkerSettings(
-  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
+  runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'> &
+    Partial<Pick<OrcaRuntimeService, 'getRuntimeId'>>,
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<OrchestrationWorkerSettings> {
@@ -110,6 +112,15 @@ export async function readStructuredWorkerSettings(
     const host = getStructuredAgentSessionHost()
     if (!host) {
       return { kind: 'unknown', reason: 'host_unavailable' }
+    }
+    const historical = await readWorkerExecutionReceipt(
+      host,
+      db,
+      dispatchId,
+      runtime.getRuntimeId?.()
+    )
+    if (historical) {
+      return historical
     }
     const held = holdStructuredWorker(identity, db)
     if (held.kind !== 'held') {

@@ -1,4 +1,5 @@
 import { agentSessionRecordPredecessorIds } from './agent-session-record-lineage'
+import { createExecutionReceiptRecorder } from './agent-session-execution-receipt'
 import { clearSuccessor } from './agent-session-sender-identity-revision'
 import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
@@ -349,15 +350,16 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
+  recordExecutionReceipt = createExecutionReceiptRecorder(this.mutate.bind(this))
+
   /** Evaluate options against the record held by this ordered write. */
   reviseSessionOptions = <A extends { sessionId: string }>(
     revise: (record: AgentSessionRecord, args: A) => AgentSessionRecord,
     args: A
   ) => this.mutate(args.sessionId, (record) => revise(record, args))
 
-  async retireClaimKey(keyId: string, now: number): Promise<void> {
-    await this.transact((draft) => retireAgentSessionClaimKey(draft, keyId, now))
-  }
+  retireClaimKey = (keyId: string, now: number): Promise<void> =>
+    this.transact((draft) => retireAgentSessionClaimKey(draft, keyId, now))
 
   private async mutate(
     sessionId: string,

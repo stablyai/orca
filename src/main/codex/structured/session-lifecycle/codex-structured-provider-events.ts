@@ -1,3 +1,4 @@
+import { handleCodexExecutionReport } from '../prompts/codex-execution-report'
 import type { CodexAppServerServerRequest } from '../../app-server/codex-app-server-connection-types'
 import { disposeCodexServerRequest } from '../prompts/codex-server-request-disposition'
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
@@ -65,6 +66,9 @@ export function deliverCodexServerRequest(
   emit: EmitCodexEvent
 ): CodexJournalTranslationAdmission {
   if (!session) {
+    return { accepted: true }
+  }
+  if (handleCodexExecutionReport(session, request)) {
     return { accepted: true }
   }
   const disposition = disposeCodexServerRequest(session.prompts, session.connection, request)

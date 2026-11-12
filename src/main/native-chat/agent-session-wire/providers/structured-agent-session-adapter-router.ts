@@ -225,6 +225,10 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return reader(input)
   }
 
+  readExecutionQualification: NonNullable<Adapter['readExecutionQualification']> = (record) =>
+    this.agents.registration(record.provider)?.adapter.readExecutionQualification?.(record) ??
+    Promise.resolve(null)
+
   readExecutionEvidence: NonNullable<Adapter['readExecutionEvidence']> = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.readExecutionEvidence?.(input) ?? Promise.resolve(null)
 

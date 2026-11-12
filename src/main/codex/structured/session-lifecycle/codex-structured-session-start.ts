@@ -15,6 +15,7 @@ import {
   codexChildWorkSink
 } from '../background-work/codex-background-task-tracker'
 import type { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
+import { bindCodexExecutionCheckpoint } from './codex-execution-receipt'
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-identity'
@@ -220,6 +221,7 @@ export async function openCodexStructuredSession(
     ...(start.unbindReadingControl ? { unbindReadingControl: start.unbindReadingControl } : {})
   }
   current()
+  bindCodexExecutionCheckpoint(session)
   sessions.set(sessionId, session)
   for (const event of attempt.window.drain()) {
     event()

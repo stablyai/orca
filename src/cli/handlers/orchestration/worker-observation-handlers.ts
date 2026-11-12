@@ -70,7 +70,9 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
           escapeTerminalControlCharacters(
             value.settings.kind === 'unknown'
               ? `Settings: unknown (${value.settings.reason})`
-              : `Settings (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.current)}`,
+              : value.settings.kind === 'execution-receipt'
+                ? `Execution receipt (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.qualification.receipt)}`
+                : `Settings (session=${value.settings.sessionId}, fence=${value.settings.runtimeFence}): ${JSON.stringify(value.settings.current)}`,
             true
           )
         )

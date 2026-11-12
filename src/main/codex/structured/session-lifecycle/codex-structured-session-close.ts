@@ -1,4 +1,5 @@
 import { settleCodexRequestEndWaiters } from '../turns/codex-request-end-wait'
+import { persistCodexExecutionReceipt } from './codex-execution-receipt'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
@@ -106,7 +107,7 @@ export async function closeCodexPublishedSession(
   ) {
     return false
   }
-  if (session.ended && session.connection.closed) {
+  if (session.ended && session.connection.closed && !session.execution) {
     sessions.delete(sessionId)
     return true
   }
@@ -117,6 +118,22 @@ export async function closeCodexPublishedSession(
   }
   // Keep unproven closes indexed for a safe retry.
   const exited = await session.connection.close()
+  if (session.execution) {
+    const result = session.connection.closeResult
+    await persistCodexExecutionReceipt(session, {
+      root: result?.root === 'exited' ? 'exited' : 'unverifiable',
+      tree: result?.tree === 'exited' ? 'exited' : 'unverifiable',
+      observedAt: Date.now()
+    }).catch(() =>
+      options?.logger?.warn('Bounded execution receipt was not saved.', {
+        scope: 'codex.execution',
+        sessionId
+      })
+    )
+    if (result?.root !== 'exited' || result.tree !== 'exited') {
+      return false
+    }
+  }
   if (exited !== true) {
     return false
   }

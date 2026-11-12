@@ -5,15 +5,19 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import { isNativeLocalLocation } from '../../../../shared/execution-host'
 
 export function supportsCodexExecutionPolicy(
-  location: AgentSessionRecord['location'],
-  agent: string
-) {
-  return (
-    agent === 'codex' &&
-    process.platform === 'darwin' &&
-    location.workspaceKind === 'folder' &&
-    isNativeLocalLocation(location)
-  )
+  read: () => { onExecutionReceipt?: unknown; prepareExecutionReporter?: unknown }
+): (location: AgentSessionRecord['location'], agent: string) => boolean {
+  return (location, agent) => {
+    const deps = read()
+    return (
+      !!deps.onExecutionReceipt &&
+      !!deps.prepareExecutionReporter &&
+      agent === 'codex' &&
+      process.platform === 'darwin' &&
+      location.workspaceKind === 'folder' &&
+      isNativeLocalLocation(location)
+    )
+  }
 }
 
 export function codexExecutionLaunch(record: AgentSessionRecord) {
@@ -58,8 +62,7 @@ export function codexExecutionLaunch(record: AgentSessionRecord) {
       'codex_hooks',
       'apps',
       'plugins',
-      'collab',
-      'enable_fanout',
+      'multi_agent',
       'browser_use',
       'computer_use'
     ].map((name) => `features.${name}=false`)

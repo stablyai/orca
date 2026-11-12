@@ -8,6 +8,12 @@ import {
   identityFor
 } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 
+vi.mock('./codex-execution-executable', () => ({
+  readCodexExecutionExecutable: vi
+    .fn()
+    .mockResolvedValue({ path: '/native/codex', sha256: 'c'.repeat(64), version: '0.167.2' })
+}))
+
 function resolve(deadlineAt = Date.now() + 120_000) {
   const record = agentSessionRecordFixture({
     sessionId: 'session-bounded',
@@ -54,6 +60,7 @@ it('pins included Codex inference settings instead of inheriting privileged user
   expect(launch.args).toContain('forced_login_method="chatgpt"')
   expect(launch.args).toContain('openai_base_url="https://chatgpt.com/backend-api/codex"')
   expect(launch.args).toContain('model_reasoning_effort="low"')
+  expect(launch.args).toContain('features.multi_agent=false')
   expect(launch.envToDelete).toEqual(
     expect.arrayContaining(['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL'])
   )

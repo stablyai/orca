@@ -58,7 +58,7 @@ import {
 import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
-import { createAdvisoryReportPublisher } from '../../orchestration/workers/reports/agent-session-advisory-report'
+import { createWorkerReportBindings } from '../../orchestration/workers/reports/agent-session-execution-report'
 import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
 import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
@@ -308,7 +308,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
-      prepareAdvisoryReporter: createAdvisoryReportPublisher(this),
+      ...createWorkerReportBindings(this),
       createTurnAttention: () =>
         chatWorkerTurnStopReporter({
           ...this.workerTurnStopReportDeps,

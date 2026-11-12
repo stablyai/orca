@@ -1,4 +1,5 @@
 import { readRecord } from '../../app-server/codex-item-field-readers'
+import { readCodexCumulativeUsage } from '../journal/codex-context-usage'
 import type { CodexAppServerConnectionHandlers } from '../../app-server/codex-app-server-connection-types'
 import type { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
@@ -28,7 +29,9 @@ export function codexAcquisitionNotificationHandler(input: {
     if (method === 'account/updated') {
       input.acquisition.authRevision += 1
       if (input.acquisition.execution?.inputAdmitted) {
+        input.acquisition.execution.invalidated = true
         input.acquisition.execution.controls.stop()
+        input.acquisition.execution.checkpoint?.()
       }
     }
     const observedAt = CODEX_RECEIPT_TIMED_METHODS.has(method) ? input.now() : undefined
@@ -36,6 +39,30 @@ export function codexAcquisitionNotificationHandler(input: {
       method === 'turn/started' ? input.dispatchEchoes.latestSequence() : undefined
     // Stamp status on receipt so buffering cannot reorder it relative to replies.
     const threadId = readCodexThreadId(params)
+    const execution = input.acquisition.execution
+    if (
+      execution?.inputAdmitted &&
+      !execution.usageUnverifiable &&
+      method === 'thread/tokenUsage/updated' &&
+      threadId &&
+      threadId === input.primaryThreadId()
+    ) {
+      execution.usage = readCodexCumulativeUsage(params, threadId, input.now(), execution.usage)
+      if (!execution.usage) {
+        execution.usageUnverifiable = true
+      }
+      execution.checkpoint?.()
+    }
+    if (
+      execution?.inputAdmitted &&
+      method === 'turn/completed' &&
+      threadId === input.primaryThreadId() &&
+      readRecord(readRecord(params).turn).status === 'completed'
+    ) {
+      execution.turnCompleted = true
+      execution.checkpoint?.()
+      execution.controls.stop()
+    }
     if (method === 'thread/status/changed' && threadId && threadId === input.primaryThreadId()) {
       input.dispatchEchoes.observeStatus(codexThreadIsActive(params))
     }
@@ -57,7 +84,9 @@ export function codexAcquisitionNotificationHandler(input: {
           sandbox.type !==
             (execution.policy.access === 'workspace' ? 'workspaceWrite' : 'readOnly'))
       ) {
+        execution.invalidated = true
         execution.controls.stop()
+        execution.checkpoint?.()
       }
       input.acquisition.nativeExecutionSettings = settings
       if (

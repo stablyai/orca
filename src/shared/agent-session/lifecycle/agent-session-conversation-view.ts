@@ -30,6 +30,7 @@ export function agentSessionConversationView(record: ConversationFacts) {
     acquiredAccount: _acquiredAccount,
     advisoryPolicy: _advisoryPolicy,
     executionPolicy: _executionPolicy,
+    executionReceipt: _executionReceipt,
     ...conversation
   } = record
   const {

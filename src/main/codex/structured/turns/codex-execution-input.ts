@@ -1,8 +1,11 @@
+import { assertCodexExecutionCapacity } from './codex-execution-capacity'
+import { assertCodexExecutionSource } from './codex-execution-source'
 import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
+import { persistCodexExecutionReceipt } from '../session-lifecycle/codex-execution-receipt'
 
 export function refuseCodexExecutionInput(): never {
   throw new StructuredAgentSessionInputNotAdmitted({
@@ -27,7 +30,12 @@ export async function prepareCodexExecutionInput(
   if (!execution) {
     return undefined
   }
-  if (execution.inputAdmitted || !execution.controls.isOpen()) {
+  if (
+    execution.inputAdmitted ||
+    !execution.controls.isOpen() ||
+    !execution.record ||
+    !execution.reporter
+  ) {
     refuseCodexExecutionInput()
   }
   const captured = await read(input)
@@ -55,6 +63,13 @@ export async function prepareCodexExecutionInput(
   ) {
     refuseCodexExecutionInput()
   }
+  try {
+    await assertCodexExecutionCapacity(session)
+    await assertCodexExecutionSource(evidence.cwd, policy.sourcePin)
+  } catch {
+    refuseCodexExecutionInput()
+  }
+  await persistCodexExecutionReceipt(session)
   return () => {
     if (
       input.signal?.aborted ||
@@ -66,6 +81,7 @@ export async function prepareCodexExecutionInput(
       refuseCodexExecutionInput()
     }
     execution.inputAdmitted = true
+    execution.checkpoint?.()
   }
 }
 

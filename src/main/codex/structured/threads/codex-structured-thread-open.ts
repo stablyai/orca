@@ -96,6 +96,23 @@ export async function openCodexThread(
     cwd: launch.cwd,
     ...(launch.execution
       ? {
+          dynamicTools: [
+            {
+              type: 'function',
+              name: 'orca_worker_report',
+              description:
+                'Report the result of the one admitted task to its Orca owner. Call once after verification.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', enum: ['succeeded', 'failed', 'needs_context'] },
+                  summary: { type: 'string', minLength: 1, maxLength: 8192 }
+                },
+                required: ['status', 'summary'],
+                additionalProperties: false
+              }
+            }
+          ],
           permissions: launch.execution.profileId,
           runtimeWorkspaceRoots: [launch.cwd],
           approvalPolicy: 'never',

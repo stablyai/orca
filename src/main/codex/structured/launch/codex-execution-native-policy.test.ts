@@ -62,7 +62,7 @@ it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32
       const marker = join(root, 'mcp-was-started')
       await writeFile(
         join(home, 'config.toml'),
-        `sandbox_mode = "danger-full-access"\n[mcp_servers.synthetic_canary]\ncommand = "/usr/bin/touch"\nargs = ["${escapeTomlBasicString(marker)}"]\n`
+        `sandbox_mode = "danger-full-access"\n[features]\nmulti_agent = true\n[mcp_servers.synthetic_canary]\ncommand = "/usr/bin/touch"\nargs = ["${escapeTomlBasicString(marker)}"]\n`
       )
       const auth = '{"OPENAI_API_KEY":"synthetic-api-key"}'
       await writeFile(join(home, 'auth.json'), auth)
@@ -85,6 +85,10 @@ it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32
         activePermissionProfile: { id: PROFILE },
         sandbox: { type: sandbox }
       })
+      const config = readRecord(
+        await connection.request('config/read', { cwd }, { timeoutMs: 2_000 })
+      )
+      expect(readRecord(readRecord(config.config).features).multi_agent).toBe(false)
       // The user shell API bypasses the sandbox; command/exec exercises the sandboxed executor.
       const result = await connection.request(
         'command/exec',
