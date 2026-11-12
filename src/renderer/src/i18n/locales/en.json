@@ -27699,7 +27699,8 @@
       "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up",
       "clearPendingKeys": "Discard waiting keys",
-      "unarchivingNow": "Unarchiving…"
+      "unarchivingNow": "Unarchiving…",
+      "billingPayment": "Your team’s last payment failed."
     },
     "announce": {
       "restarting": "Restarting {{name}}.",

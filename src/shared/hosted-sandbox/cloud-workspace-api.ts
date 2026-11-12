@@ -44,6 +44,8 @@ export type CloudWakeProgressEvent = {
   startedAt: number
   at: number
   message?: string
+  /** The plan refused it (billing's deny reason, null when unsaid): the card says why, not the code. */
+  billingDenial?: { reason: string | null }
 }
 
 export type CloudOomEvent = {

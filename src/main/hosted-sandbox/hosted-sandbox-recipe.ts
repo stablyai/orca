@@ -15,6 +15,7 @@ import { isEnvironmentProviderError } from '../environment-providers/environment
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import {
   isHostedEntitlementDenied,
+  wakeBillingDenial,
   type HostedEnvironmentProviderDriver,
   type HostedEnvironmentReady
 } from './hosted-environment-provider'
@@ -153,6 +154,7 @@ export function createHostedSandboxStepProvider(
       phase: 'waking' | 'connecting' | 'ready' | 'failed'
       startedAt: number
       message?: string
+      billingDenial?: { reason: string | null }
     }) => void
   } = {}
 ): RecipeStepProvider {
@@ -220,7 +222,8 @@ export function createHostedSandboxStepProvider(
               workspaceId,
               phase: 'failed',
               startedAt,
-              message: error instanceof Error ? error.message : String(error)
+              message: error instanceof Error ? error.message : String(error),
+              ...wakeBillingDenial(error)
             })
           }
           throw error
