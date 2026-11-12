@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { mkdir } from 'node:fs/promises'
+import { lstat, mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { canCloneWithApfs } from '../../../ipc/worktree-apfs-clone'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
@@ -110,16 +110,44 @@ async function withoutCheckoutConversion(
   return paths.filter((path) => !converted.has(path))
 }
 
-async function runClone(
+/**
+ * Keeps sources that are regular files with the permissions a checkout would create, since clones
+ * keep their source's mode. Git writes the rest, including files deleted from the main checkout.
+ */
+async function withCheckoutPermissions(
+  repoPath: string,
+  worktreePath: string,
+  paths: string[]
+): Promise<string[]> {
+  // Git creates the worktree's `.git` file like a checked-out file: 0666 minus the umask.
+  const regular = (await lstat(join(worktreePath, '.git'))).mode & 0o777
+  const executable = regular | ((regular & 0o444) >> 2)
+  const keep = await Promise.all(
+    paths.map(async (path) => {
+      const stat = await lstat(join(repoPath, path)).catch(() => null)
+      const expected = stat && stat.mode & 0o100 ? executable : regular
+      return stat?.isFile() === true && (stat.mode & 0o7777) === expected
+    })
+  )
+  return paths.filter((_, i) => keep[i])
+}
+
+function runClone(
   method: CloneMethod,
   sources: string[],
   targetDirectory: string,
   options: GitWorktreeExecOptions
 ): Promise<void> {
-  const [file, args] =
-    method === 'apfs'
-      ? ['/bin/cp', ['-c', ...sources, targetDirectory]]
-      : ['cp', ['--reflink=always', '-t', targetDirectory, ...sources]]
+  return method === 'apfs'
+    ? runTool('/bin/cp', ['-c', ...sources, targetDirectory], options)
+    : runTool('cp', ['--reflink=always', '-t', targetDirectory, ...sources], options)
+}
+
+async function runTool(
+  file: string,
+  args: string[],
+  options: GitWorktreeExecOptions
+): Promise<void> {
   let terminated = (): void => {}
   options.observeChildTermination?.(
     new Promise<void>((resolve) => {
@@ -197,11 +225,19 @@ export async function cloneMainCheckoutIntoWorktree(
       return
     }
     await readTreeIntoPlainIndex(worktreePath, commit, options)
-    const paths = await withoutCheckoutConversion(worktreePath, candidates, options)
+    const paths = await withCheckoutPermissions(
+      repoPath,
+      worktreePath,
+      await withoutCheckoutConversion(worktreePath, candidates, options)
+    )
     if (paths.length === 0) {
       return
     }
     await cloneFiles(method, repoPath, worktreePath, paths, options)
+    if (method === 'apfs') {
+      // APFS clones keep file flags; a checkout never sets the ones that block editing or deleting.
+      await runTool('/usr/bin/chflags', ['-R', 'nouchg,nouappnd', worktreePath], options)
+    }
     // Skips Git's re-read for clones of files it already knows are clean.
     await transferCleanIndexStats(repoPath, worktreePath, options).catch(() => 0)
     // Refresh compares content, so a clone that differs from its blob stays dirty and is rewritten.

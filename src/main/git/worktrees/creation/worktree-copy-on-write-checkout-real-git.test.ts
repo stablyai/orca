@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -102,5 +102,35 @@ describe.runIf(process.platform === 'darwin')('copy-on-write worktree checkout',
 
     expect(await readFile(join(worktreePath, 'filtered.txt'), 'utf8')).toBe('SMUDGE:data\n')
     expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
+  })
+
+  it('gives clones the permissions and flags of a fresh checkout', async () => {
+    const { repoPath, root } = await createRepo()
+    for (const name of ['a-deleted.txt', 'locked.txt', 'read-only.txt']) {
+      await writeFile(join(repoPath, name), `${name}\n`)
+    }
+    git(repoPath, ['add', '.'])
+    git(repoPath, ['commit', '--quiet', '-m', 'more files'])
+    // Sorts first, so it would have been the clone probe.
+    await rm(join(repoPath, 'a-deleted.txt'))
+    await chmod(join(repoPath, 'read-only.txt'), 0o444)
+    execFileSync('chflags', ['uchg', join(repoPath, 'locked.txt')])
+    const worktreePath = join(root, 'feature')
+
+    try {
+      await addWorktreeWithCopyOnWriteCheckout(repoPath, worktreePath, 'feature', 'main', false)
+
+      const checkedOutMode = (await stat(join(worktreePath, 'edited.txt'))).mode
+      expect((await stat(join(worktreePath, 'read-only.txt'))).mode).toBe(checkedOutMode)
+      expect(
+        execFileSync('stat', ['-f', '%f', join(worktreePath, 'locked.txt')], {
+          encoding: 'utf8'
+        }).trim()
+      ).toBe('0')
+      expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
+      expect(git(worktreePath, ['status', '--porcelain', '--untracked-files=all'])).toBe('')
+    } finally {
+      execFileSync('chflags', ['-R', 'nouchg', root])
+    }
   })
 })
