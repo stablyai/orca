@@ -191,6 +191,10 @@ export type AcpDialect = {
   signInAccount?: AgentSessionAccountKind
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
+  /** A selector the menu names too narrowly, such as Cursor's parameterized model id. */
+  modelChoiceLabel?(value: string, name: string): string
+  /** This agent's fast parameter, mapped to Orca's fast mode toggle. */
+  fastConfigId?: string
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
