@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native'
 import type { ConnectionLogEntry } from '../diagnostics/connection/connection-log-types'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -40,7 +40,7 @@ function formatTime(ts: number, baseTs: number): string {
 
 export function ConnectionLog({ entries, title, fillAvailableHeight = false }: Props) {
   useMobileColorScheme()
-  const scrollRef = useRef<ScrollView | null>(null)
+  const scrollRef = useRef<ScrollViewInstance | null>(null)
 
   if (entries.length === 0) {
     return null

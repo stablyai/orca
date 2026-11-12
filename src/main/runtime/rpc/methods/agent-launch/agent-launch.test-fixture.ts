@@ -6,7 +6,7 @@ import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../shared/agent-lau
 import type { WorktreeLineageWarning } from '../../../../../shared/worktree/lineage-types'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import type { RpcContext } from '../../core'
-import { resolveRpcCallerIdentity } from '../../rpc-caller-identity'
+import { resolveRpcCallerIdentity } from '../../callers/rpc-caller-identity'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import type { TerminalWorkspaceLaunchScope } from '../../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type {

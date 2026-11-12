@@ -122,7 +122,7 @@ export function settleDeadWorkerTerminalRelease(
     const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
     const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
     const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
-    // Exit proves process death, not preserved output; require an archive whenever capture is reachable.
+    // Exit proves process death, not a recorded output location; require one whenever recording is reachable.
     // Capture runs only while requested; an unrequested or retained owner settles unavailable instead.
     const archive = this.getWorkerTerminalArchive(resource.owner_dispatch_id)
     const archiveUnreachable =

@@ -6,7 +6,7 @@ import {
 import type { RuntimeTerminalDataMeta } from '../../../terminal/output/runtime-terminal-stream-consumers'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream, TerminalOutputChunk } from './terminal-stream-types'
-import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+import type { TerminalOutputFrameChunk } from '../../terminal/terminal-output-frame-chunks'
 import { encodeTerminalStreamText } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
 

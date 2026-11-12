@@ -1,10 +1,10 @@
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import Database from '../sqlite/sync-database'
-import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
+import { createUsageEventAggregation } from '../usage/rollups/usage-event-aggregation'
 import {
   createUsageWorktreeResolver,
   type UsageWorktreeResolver
-} from '../usage/usage-worktree-resolver'
+} from '../usage/worktree-attribution/usage-worktree-resolver'
 import {
   compareOpenCodeClaimPriority,
   getProcessedDatabaseInfo,

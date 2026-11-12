@@ -20,7 +20,7 @@ import { cloudWorkspaceMoved } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import {

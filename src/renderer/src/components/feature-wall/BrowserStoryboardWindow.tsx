@@ -1,7 +1,7 @@
 import type { JSX, ReactNode } from 'react'
 import { ClaudeIcon } from '@/components/status-bar/icons'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import { BrowserPricingStoryboard } from './BrowserPricingStoryboard'
 import { BrowserSignupStoryboard } from './BrowserSignupStoryboard'

@@ -6,7 +6,7 @@ import {
   subscribeHiddenVmCheckouts,
   withOrcaCloudHosts,
   type HiddenVmCheckouts
-} from '@/lib/vm-create-hidden-checkouts'
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { orcaCloudAccountId } from '../../../../shared/hosted-sandbox/orca-cloud-account'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'

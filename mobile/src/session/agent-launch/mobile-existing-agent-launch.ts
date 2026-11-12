@@ -15,16 +15,16 @@ import { makePaneKey } from '../../../../src/shared/workspace-layout/stable-pane
 import { createStructuredAgentSessionId } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { agentLaunchReplayRun } from '../../tasks/mobile-workspace-create-operations'
-import { agentLaunchExistingParams, readAgentLaunchSupport } from '../../tasks/agent-launch-request'
+import { agentLaunchReplayRun } from '../../new-workspace/creation/mobile-workspace-create-operations'
+import { agentLaunchExistingParams, readAgentLaunchSupport } from './agent-launch-request'
 import {
   classifyAgentLaunchReplayRefusal,
   isAgentLaunchReservationTakenRefusal
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
-import { sendReplayingAmbiguousDelivery } from '../../tasks/replay-on-ambiguous-delivery'
-import { structuredSessionOperationId } from '../structured-session-operation-id'
+import { sendReplayingAmbiguousDelivery } from '../../new-workspace/creation/replay-on-ambiguous-delivery'
+import { structuredSessionOperationId } from '../native-chat/agent-session/structured-session-operation-id'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
-import { rememberMobileCreatedStructuredSession } from '../mobile-created-structured-sessions'
+import { rememberMobileCreatedStructuredSession } from '../native-chat/agent-session/mobile-created-structured-sessions'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
 // so a prompted launch must outlive that wait or the phone reports a launch that is still running.

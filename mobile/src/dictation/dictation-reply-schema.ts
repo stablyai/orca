@@ -37,6 +37,8 @@ export const dictationSetupSchema = z.looseObject({
   dictationHoldToRecord: salvagedOptional('dictationHoldToRecord', z.boolean()),
   // Absent from older hosts, which remove no fillers either; the phone then keeps them on, the host default.
   removeFillerWords: salvagedOptional('removeFillerWords', z.boolean()),
+  // Absent from older hosts, which stop after a minute; the shared reader maps absent and unknown to that.
+  stopAfterSilenceSeconds: salvagedOptional('stopAfterSilenceSeconds', z.number().nullable()),
   // Absent from older hosts, which spell nothing; malformed entries are dropped.
   dictationTerms: salvagedOptional(
     'dictationTerms',

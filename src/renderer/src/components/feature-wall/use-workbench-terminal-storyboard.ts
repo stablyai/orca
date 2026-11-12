@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import {
   WORKBENCH_RUN_QUEUE,
   WORKBENCH_RUN_TICK_MS,

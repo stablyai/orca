@@ -12,7 +12,7 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { RuntimeRepositorySettingsController } from '../../runtime/repositories/runtime-repository-settings-controller'
 import { registerFolderWorkspaceHandlers } from './folder-workspace-handlers'
 import { runtimeRepoSelectorText } from '../../runtime/workspaces/catalog/runtime-repo-selector'

@@ -1,37 +1,20 @@
-import {
-  createOsc133CommandFinishedScanner,
-  type Osc133CommandFinishedScanner
-} from '../../../shared/terminal/output/terminal-osc133-command-finished'
 import type {
   DaemonLaunchNote,
   DaemonLaunchNoteChange
 } from '../protocol/daemon-launch-note-protocol'
 
-/** Main's live launch here; retired on command-finished too, since it can finish while main is down. */
+/** Main's live launch here, so a reattach after a main restart can re-arm it.
+ * Why no output scan: a finish while main is down is caught by reattach's foreground check. */
 export class SessionLaunchNote {
   current: DaemonLaunchNote | null = null
-  private retirement: Osc133CommandFinishedScanner | null = null
-
-  scan(data: string): void {
-    this.retirement?.scan(data)
-  }
 
   change(change: DaemonLaunchNoteChange): void {
-    const token = this.current?.launchToken
     if ('retire' in change) {
-      if (change.retire === token) {
+      if (change.retire === this.current?.launchToken) {
         this.current = null
-        this.retirement = null
       }
       return
     }
-    // Re-arming the same launch keeps the scanner, whose carry may hold a split marker.
-    const note = change.arm
-    if (note.launchToken !== token) {
-      this.current = note
-      this.retirement = createOsc133CommandFinishedScanner(() =>
-        this.change({ retire: note.launchToken })
-      )
-    }
+    this.current = change.arm
   }
 }

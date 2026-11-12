@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
-import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
-import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
-import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/profile-state-storage-classification'
+import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/database/profile-state-authority-marker'
+import { profileStateDatabaseBackups } from '../persistence/profile-state/backup/profile-state-backup-path'
+import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/database/profile-state-storage-classification'
 
 // Keep the pre-ready graph small; this stable ID mirrors DEFAULT_LOCAL_ORCA_PROFILE_ID.
 const DEFAULT_LOCAL_PROFILE_ID = 'local-default'

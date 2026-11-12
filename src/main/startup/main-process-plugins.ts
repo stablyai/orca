@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { PluginImageCache } from '../plugins/plugin-image-cache'
 import { installPluginImageProtocolHandler } from '../plugins/plugin-image-protocol'
-import { getPluginDesktopFrameServices } from '../plugins/panels/plugin-frame-desktop-services'
+import { getPluginDesktopFrameServices } from '../plugins/panels/desktop-actions/plugin-frame-desktop-services'
 import { pluginHostVersion } from '../../shared/plugins/installation/plugin-host-version'
 import { app, BrowserWindow, net } from 'electron'
 import { performance } from 'node:perf_hooks'
@@ -18,10 +18,10 @@ import { PluginBundledBootstrapCoordinator } from '../plugins/plugin-bundled-boo
 import { getPluginsDataDir } from '../plugins/plugin-discovery'
 import { bundledPluginRootForApp } from '../plugins/plugin-bundled-bootstrap'
 import { approveBundledPluginsFromStore } from '../plugins/plugin-bundled-approval'
-import { resolvePluginHostEntryPath } from '../plugins/workers/plugin-host-process'
+import { resolvePluginHostEntryPath } from '../plugins/workers/parent-process/plugin-host-process'
 import { applyPluginConsent, revokePluginConsent } from '../plugins/plugin-enablement'
 import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
-import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
+import { clearPluginFrameStorage } from '../plugins/panels/guest-isolation/plugin-frame-guest-sessions'
 import { bindPluginRpcServices } from './main-process-plugin-rpc'
 import { bindPluginDesktopViews } from '../plugins/view/plugin-view-desktop-binding'
 import {
@@ -45,6 +45,7 @@ import { mainProcessState as state } from './main-process-state'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { PluginStatusBarState } from '../plugins/status-bar/plugin-status-bar-state'
 import { createDesktopPluginAppearance } from '../plugins/appearance/desktop-plugin-appearance'
+import { bindPluginEditorTypography } from '../plugins/appearance/plugin-editor-typography'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 
 const PLUGIN_AUTO_UPDATE_STARTUP_DELAY_MS = 60_000
@@ -123,6 +124,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     getDesktopFrameServices: getPluginDesktopFrameServices,
     statusBar: new PluginStatusBarState(),
     appearance: createDesktopPluginAppearance(store, () => state.pluginService),
+    editorTypography: bindPluginEditorTypography(store, () => state.pluginService),
     bundledPluginRoot
   })
   const pluginService = state.pluginService
@@ -304,7 +306,8 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   watchPluginWorkspaceContext({
     delegate: pluginDelegate,
     events: pluginService,
-    onSessionWritten: (listener) => store.onWorkspaceSessionWritten(listener)
+    onSessionWritten: (listener) => store.onWorkspaceSessionWritten(listener),
+    onStateWritten: (listener) => store.onStateWritten(listener)
   })
   runtime.onWorktreeLifecycle(emitPluginWorktreeLifecycle)
 }

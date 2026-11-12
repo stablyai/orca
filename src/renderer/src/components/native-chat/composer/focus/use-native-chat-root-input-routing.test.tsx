@@ -8,7 +8,9 @@ import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 import { useNativeChatRootInputRouting } from './use-native-chat-root-input-routing'
 
 const overlay = vi.hoisted(() => ({ visible: false }))
-vi.mock('@/lib/visible-overlay', () => ({ hasVisibleOverlay: () => overlay.visible }))
+vi.mock('@/lib/overlay-interaction/visible-overlay', () => ({
+  hasVisibleOverlay: () => overlay.visible
+}))
 
 const insertTypedText = vi.fn(() => true)
 const composer: NativeChatComposerHandle = {

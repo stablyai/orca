@@ -21,12 +21,12 @@ const BLOCKER_SEVERITY: Record<WorkspaceCleanupBlocker, number> = {
   'live-agent': 80,
   'running-terminal': 75,
   'dirty-editor-buffer': 70,
-  'volatile-local-context': 65,
   'recent-visible-context': 60,
   'terminal-liveness-unknown': 55,
   'ssh-disconnected': 50,
   'unpushed-commits': 45,
   'dirty-files': 40,
+  'ignored-files': 38,
   'unknown-base': 35,
   'git-status-error': 30,
   dismissed: 10

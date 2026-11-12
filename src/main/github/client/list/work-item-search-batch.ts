@@ -3,7 +3,7 @@ import { githubReadExecutionScope as workItemSearchScope } from '../../github-re
 export { githubReadExecutionScope as workItemSearchScope } from '../../github-read-execution-scope'
 import { BoundedMap } from '../../../../shared/bounded-map'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
-import { createGhRateLimitBlockedError } from '../../../git/gh-rate-limit-breaker'
+import { createGhRateLimitBlockedError } from '../../../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 import { extractExecError, ghExecFileAsync } from '../../gh-utils'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
 import type { GitHubRepoExecOptions } from '../../github-api-repository'

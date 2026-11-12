@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useWslHostOffForRepo } from '../../use-wsl-host-off-review'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'

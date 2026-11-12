@@ -9,9 +9,9 @@ import type {
   StructuredAgentCommandSettings
 } from '../../../native-chat/structured-agent-command-resolution'
 import type { NativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
-import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/claude-structured-auth-policy'
+import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/runtime-auth/claude-structured-auth-policy'
 import type { RuntimeAgentAccountHomeResolver } from '../model-catalog/structured-agent-model-catalog-wiring'
-import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
+import type { ClaudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
@@ -78,10 +78,14 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Host-owned phone delivery and reconciliation from the current journal projection. */
   attentionDelivery?: StructuredAttentionMobileDelivery
   /** Every live turn completion and pending prompt, with the host's status at that edge. */
-  onTurnAttention?: (
-    event: AgentSessionTurnCompletionEvent,
-    readStatus: (sessionId: string) => AgentSessionStatusSummary | undefined
-  ) => void
+  createTurnAttention?: () => {
+    onTurnAttention: (
+      event: AgentSessionTurnCompletionEvent,
+      readStatus: (sessionId: string) => AgentSessionStatusSummary | undefined
+    ) => void
+    start: () => void
+    stop: () => void
+  }
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver

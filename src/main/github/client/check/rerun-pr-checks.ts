@@ -2,7 +2,7 @@ import { withGitHubRepoExecution } from '../../github-repository-identity'
 import type { GitHubRerunPRChecksResult } from '../../../../shared/github/check-types'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
 // Keep real error parsing available when tests mock gh-utils.
-import { extractExecError } from '../../../git/exec-error'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 import { classifyRerunChecksError } from '../../gh-error-classification'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { getPRChecks } from './get-pr-checks'

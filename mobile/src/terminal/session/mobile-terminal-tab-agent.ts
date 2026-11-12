@@ -11,7 +11,7 @@ import {
   resolveAgentSmartKeys,
   type AgentSmartKeySet
 } from '../../../../src/shared/terminal/input/agent-smart-keys'
-import { isBlankBrowserUrl } from '../../browser/browser-url'
+import { isBlankBrowserUrl } from '../../browser/pane-view/browser-url'
 import { translate } from '../../i18n/mobile-i18n'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 

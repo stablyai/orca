@@ -1,5 +1,5 @@
 import { agentJournalSubmissionKey } from '../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { mobileAgentSessionWriteNoticeText } from '../agent-session-write-notice-copy'
+import { mobileAgentSessionWriteNoticeText } from './agent-session/agent-session-write-notice-copy'
 import { agentSessionVisibleFailureFacts } from '../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import { dispatchWasWithdrawn } from '../../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'

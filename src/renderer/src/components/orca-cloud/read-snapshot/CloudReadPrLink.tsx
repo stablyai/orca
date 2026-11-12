@@ -1,7 +1,7 @@
 import React from 'react'
 import { CircleCheck, CircleDashed, CircleX, GitPullRequest, Minus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { CloudOfflinePr } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import {
   checksLabel,

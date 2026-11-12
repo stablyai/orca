@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
-import { listWslMoveCutovers } from '../../persistence/moving-wsl-projects/wsl-move-cutover-journal'
+import { listWslMoveCutovers } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { setWslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { setWslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 
 type Handler = (event: unknown, request?: unknown) => unknown
 

@@ -1,7 +1,7 @@
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function hasAgentCardLastMessages(card: DashboardCard): boolean {
   return Boolean(card.lastUserMessage || card.lastAgentMessage)

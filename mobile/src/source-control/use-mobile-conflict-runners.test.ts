@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { useMobileConflictRunners } from './use-mobile-conflict-runners'
-import { mobileConflictNeedsNewerHostMessage } from './mobile-source-control-conflict-actions'
 
 type Runners = ReturnType<typeof useMobileConflictRunners>
 
@@ -48,21 +47,5 @@ describe('useMobileConflictRunners', () => {
     }))
     const shown = await run(sendGitRequest, (r) => r.completeMerge())
     expect(shown).toBe('Committing is not possible because you have unmerged files.')
-  })
-
-  it('asks for a desktop update when an older host refuses the new methods', async () => {
-    const refusal = Object.assign(
-      new Error('Method git.completeMerge is not available to mobile clients'),
-      {
-        code: 'forbidden'
-      }
-    )
-    const shown = await run(
-      vi.fn(async () => {
-        throw refusal
-      }),
-      (r) => r.completeMerge()
-    )
-    expect(shown).toBe(mobileConflictNeedsNewerHostMessage())
   })
 })

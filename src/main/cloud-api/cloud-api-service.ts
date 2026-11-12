@@ -12,7 +12,7 @@ import { EnvironmentProviderError } from '../environment-providers/environment-p
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
 import { findCloudRuntime } from '../hosted-sandbox/hosted-workspace-runtime'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import { artifactCloudIdentity } from '../orca-profiles/profile-artifact-cloud-cleanup'
+import { artifactCloudIdentity } from '../orca-profiles/cloud-auth/profile-artifact-cloud-cleanup'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { CloudApiError, createCloudApiClient, type CloudApiClient } from './cloud-api-client'
 

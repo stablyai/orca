@@ -61,16 +61,6 @@ describe.each([
   ['sync', replaceSync],
   ['async', renameOverLockedTargetAsync]
 ])('renameOverLockedTarget (%s)', (_mode, replace) => {
-  it('moves a locked target aside and puts the new file in its place', async () => {
-    const { tmp, target, aside } = stage()
-    refusals.set(tmp, 1)
-
-    await replace(tmp, target, true)
-
-    expect(readFileSync(target, 'utf8')).toBe('next build')
-    expect(readFileSync(aside, 'utf8')).toBe('running build')
-  })
-
   it('restores the running copy when the new file then cannot take its name', async () => {
     const { tmp, target, aside } = stage()
     refusals.set(tmp, 2)

@@ -5,6 +5,7 @@ import type {
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { supersedeInFlightWorkspaceCleanupScans } from './workspace-cleanup-broad-scan-registry'
+import { cancelWorkspaceCleanupHostScan } from './workspace-cleanup-host-scan'
 import {
   applyWorkspaceCleanupDismissal,
   enrichWorkspaceCleanupCandidatesWithCache,
@@ -52,7 +53,7 @@ export function finalizeWorkspaceCleanupScan(scanToken: number): void {
 export function invalidateWorkspaceCleanupScanProgress(): void {
   latestWorkspaceCleanupScanToken += 1
   finalizedWorkspaceCleanupScanToken = 0
-  supersedeInFlightWorkspaceCleanupScans(window.api.workspaceCleanup.cancelScan)
+  supersedeInFlightWorkspaceCleanupScans(cancelWorkspaceCleanupHostScan)
   workspaceCleanupProgressQueue = null
   workspaceCleanupEnrichmentCache = null
   workspaceCleanupProgressCandidateIndex = null

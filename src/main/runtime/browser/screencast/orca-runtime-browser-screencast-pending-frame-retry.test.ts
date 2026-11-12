@@ -5,7 +5,7 @@ import {
   createSinglePageBrowserCommandsHost,
   createStreamedGuest
 } from '../client-pages/single-page-browser-commands-host-test-double'
-import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../../rpc/transports/rpc-binary-sender'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({
   webContentsFromId: vi.fn(),

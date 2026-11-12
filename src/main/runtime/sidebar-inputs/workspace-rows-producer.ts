@@ -13,7 +13,10 @@ import type {
   ResolvedWorktreeRepoScans,
   ResolvedWorktreeScanJoin
 } from '../workspaces/catalog/resolved-worktree-scan-join'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import {
+  savedWorkspaceCatalog,
+  WORKTREE_METADATA_DOMAINS
+} from '../../persistence/profile-save-domains'
 import { ProducerRevision } from './producer-revision'
 import { WorkspaceGitIdentity } from './workspace-git-identity'
 import { CachedScan } from './cached-scan'
@@ -97,11 +100,11 @@ export class WorkspaceRowsProducer {
       },
       { consumesTerminalSideEffects: false }
     )
-    // A full save may be a folder workspace or lineage write.
+    // Folder workspace and lineage writes are catalog saves.
     sources.store?.onStateWritten?.((domains) => {
       const metadata =
-        domains === undefined ||
-        WORKTREE_METADATA_DOMAINS.some((domain) => domains.includes(domain))
+        savedWorkspaceCatalog(domains) ||
+        WORKTREE_METADATA_DOMAINS.some((domain) => domains?.includes(domain))
       const settings = domains !== undefined && domains.includes('settings')
       if (metadata || (settings && this.visibilitySettingsChanged())) {
         // Urgent, and no rescan: metadata joins at read, so the write publishes now from the cache.

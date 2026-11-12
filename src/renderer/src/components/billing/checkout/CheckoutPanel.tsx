@@ -3,7 +3,7 @@ import { AlertCircle, Check, ExternalLink, Lock, RotateCcw, XCircle } from 'luci
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { openFailureCopy } from '../plan-billing-copy'
 import { formatCents, periodTotalCents } from '../plans/plans-pricing'
 import type { CheckoutPhase } from './checkout-flow'

@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/worktree/hosted-review-links'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { findAgentSwitchBlocker, type AgentSwitchRow } from './branch-switch-agent-blocker'

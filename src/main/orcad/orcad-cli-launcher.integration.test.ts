@@ -112,7 +112,7 @@ it.skipIf(skip)(
         cwd: home,
         timeoutMs: 15_000
       })
-      expect(result.code, result.stderr).toBe(0)
+      expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0)
       expect(JSON.parse(result.stdout)).toMatchObject({
         ok: true,
         result: {

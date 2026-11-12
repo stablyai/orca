@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { z } from 'zod'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
-import { structuredSessionOperationId } from '../session/structured-session-operation-id'
+import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
 
 // Prompts typed for a sleeping cloud workspace. They stay on the phone (the control plane must
 // never hold prompt text in the clear) until the VM is up and the phone delivers them over E2EE.

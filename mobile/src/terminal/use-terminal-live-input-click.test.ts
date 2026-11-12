@@ -1,6 +1,6 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
@@ -29,7 +29,7 @@ function createClickHarness(sender?: TerminalLiveInputSender): ClickHarness {
   const setLiveInputCapture = (text: string): void => {
     captures.push(text)
   }
-  const liveInputRef: RefObject<TextInput | null> = { current: null }
+  const liveInputRef: RefObject<TextInputInstance | null> = { current: null }
   const sent: string[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
     current: async (handle, bytes, origin) => {

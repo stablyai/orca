@@ -1,4 +1,4 @@
-import { app as electronApp, type BrowserWindow } from 'electron'
+import { app as electronApp, BaseWindow, type BrowserWindow } from 'electron'
 
 /** Automation must not steal OS foreground. Background/sidecar requests override E2E_FOREGROUND; the hosted-Xvfb benchmark may present explicitly after startup (tests/AGENTS.md), while automatic reveals stay suppressed. */
 
@@ -107,4 +107,49 @@ export function showWindowWithoutStealingFocus(
     return
   }
   window.show()
+}
+
+// Popups waiting for the user to come back share one pair of app listeners.
+const windowsAwaitingAppActive = new Set<BaseWindow>()
+
+function stopAwaitingAppActive(): void {
+  electronApp.off('browser-window-focus', revealWindowsAwaitingAppActive)
+  electronApp.off('did-become-active', revealWindowsAwaitingAppActive)
+}
+
+/** The user is back in Orca. Origin-bar popups (plain BaseWindows) call this on focus, since only BrowserWindows raise `browser-window-focus`. */
+export function revealWindowsAwaitingAppActive(): void {
+  if (windowsAwaitingAppActive.size === 0) {
+    return
+  }
+  stopAwaitingAppActive()
+  for (const window of windowsAwaitingAppActive) {
+    if (!window.isDestroyed()) {
+      window.showInactive()
+    }
+  }
+  windowsAwaitingAppActive.clear()
+}
+
+/** Shows a window an agent opened without activating Orca: now if Orca is in front, else once the user returns to it. */
+export function showWhenAppActive(window: BaseWindow, env: PolicyEnv = process.env): void {
+  if (window.isDestroyed() || isWindowlessLaunch(env)) {
+    return
+  }
+  // Any Orca window counts, including origin-bar popups (plain BaseWindows).
+  if (BaseWindow.getFocusedWindow()) {
+    window.showInactive()
+    return
+  }
+  if (windowsAwaitingAppActive.size === 0) {
+    // macOS reports the app's return through any window; elsewhere BrowserWindows and origin-bar popups report focus.
+    electronApp.on('browser-window-focus', revealWindowsAwaitingAppActive)
+    electronApp.on('did-become-active', revealWindowsAwaitingAppActive)
+  }
+  windowsAwaitingAppActive.add(window)
+  window.once('closed', () => {
+    if (windowsAwaitingAppActive.delete(window) && windowsAwaitingAppActive.size === 0) {
+      stopAwaitingAppActive()
+    }
+  })
 }

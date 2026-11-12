@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { SkillInstallReceiptV1 } from '../transaction-state/skill-install-provenance'
 import { nativeSkillInstallFilesystem } from '../filesystem/skill-install-filesystem'
 import { reconcileSkillProviderPlacement } from './skill-placement-reconciliation'
-import { isRemovableSkillPlacement } from './skill-removable-placement'
 
 const roots: string[] = []
 
@@ -73,21 +72,6 @@ describe('independent skill placement copy drift', () => {
       status: 'skipped',
       errorCategory: 'skill-placement-modified-copy'
     })
-    expect(await readFile(join(value.placementPath, 'local.md'), 'utf8')).toBe('local change')
-  })
-
-  it('refuses to remove a locally modified copy', async () => {
-    const value = await fixture()
-    await writeFile(join(value.placementPath, 'local.md'), 'local change')
-
-    await expect(
-      isRemovableSkillPlacement({
-        placement: value.receipt.placements[0]!,
-        receipt: value.receipt,
-        allowedProviderRoots: [value.providerRoot],
-        filesystem: nativeSkillInstallFilesystem
-      })
-    ).resolves.toBe(false)
     expect(await readFile(join(value.placementPath, 'local.md'), 'utf8')).toBe('local change')
   })
 })

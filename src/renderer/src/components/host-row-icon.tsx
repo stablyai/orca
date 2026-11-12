@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Cloud, Monitor, Server } from 'lucide-react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
 import { CloudStatusGlyph, type CloudGlyphState } from '@/components/orca-cloud/CloudStatusGlyph'

@@ -25,13 +25,13 @@ import {
   wslMoveRigOutcome,
   type WslMoveRig
 } from '../../persistence/__fixtures__/wsl-mover/wsl-move-kill-rig'
-import { resetWslMoveDesktopRewriteStoresForTests } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+import { resetWslMoveDesktopRewriteStoresForTests } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
 import { moveProjectsToWslHost } from '../../persistence/moving-wsl-projects/wsl-move-driver'
 import {
   cancelWslMove,
   isWslMoveRunning,
   isWslMoveUnderwayOnHost
-} from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'

@@ -3,7 +3,7 @@
 // "Poke back", then mark it seen. Nothing runs when Pokes are off.
 import { useEffect } from 'react'
 import { toast } from 'sonner'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { Poke } from '../../../../shared/cloud-workspaces/team-presence-wire'

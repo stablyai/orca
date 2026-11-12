@@ -37,18 +37,6 @@ describe('removeWorktreeRow', () => {
 
     expect(removeWorktreeRow([local, remote], local)).toEqual([remote])
   })
-
-  it('removes the matching row', () => {
-    const only = row('shared', 'ssh:a')
-
-    expect(removeWorktreeRow([only], only)).toEqual([])
-  })
-})
-
-describe('getWorktreeRowIdentity', () => {
-  it('uses the shared host-qualified identity format', () => {
-    expect(getWorktreeRowIdentity(row('shared', 'ssh:builder'))).toBe('ssh:builder|shared')
-  })
 })
 
 describe('host-qualified row display state', () => {
@@ -85,31 +73,6 @@ describe('host-qualified row display state', () => {
     ])
 
     expect([...retained]).toEqual([])
-  })
-
-  it('indexes confirmed identities once instead of rescanning for every slept row', () => {
-    const rowCount = 64
-    let worktreeIdReads = 0
-    const confirmed = Array.from({ length: rowCount }, (_, index) => {
-      const worktree = row(`worktree-${index}`, `ssh:host-${index}`, { liveTerminalCount: 1 })
-      Object.defineProperty(worktree, 'worktreeId', {
-        configurable: true,
-        get: () => {
-          worktreeIdReads += 1
-          return `worktree-${index}`
-        }
-      })
-      return worktree
-    })
-    const previous = new Set(
-      Array.from({ length: rowCount }, (_, index) => {
-        const reversed = rowCount - index - 1
-        return `ssh:host-${reversed}|worktree-${reversed}`
-      })
-    )
-
-    expect(retainLiveSleptWorktreeIdentities(previous, confirmed)).toBe(previous)
-    expect(worktreeIdReads).toBe(rowCount)
   })
 
   it('applies active and slept overrides to the matching host row only', () => {

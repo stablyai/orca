@@ -21,7 +21,7 @@ vi.mock('./worktree-base-refresh', async (importOriginal) => ({
 vi.mock('../../source-control/git-read-cache-invalidation', () => ({
   runWithGitReadCacheInvalidation: (run: () => unknown) => run()
 }))
-vi.mock('../../command-runner/wsl-linked-worktree-git-routing', () => ({
+vi.mock('../../command-runner/host-routing/wsl-linked-worktree-git-routing', () => ({
   invalidateWslLinkedWorktreeGitRouting: vi.fn()
 }))
 

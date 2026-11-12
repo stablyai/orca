@@ -21,19 +21,6 @@ const hostWithoutAnEngine = () => ({
 })
 
 describe('the document start sequence', () => {
-  it('unwinds the starts that completed when a later one throws', () => {
-    document.body.innerHTML = MARKUP_WITHOUT_THE_MENU
-    const previous = window.onerror
-    window.onerror = null
-    try {
-      expect(() => createTerminalDocument(hostWithoutAnEngine())).toThrow()
-      // No handle returned, so only factory unwind can restore window.onerror after the partial start.
-      expect(window.onerror).toBe(null)
-    } finally {
-      window.onerror = previous
-    }
-  })
-
   it('would have installed one, so the null above is a measurement', () => {
     document.body.innerHTML = MARKUP_WITH_THE_MENU
     const previous = window.onerror

@@ -1,14 +1,15 @@
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
-import { app } from 'electron'
+import { app, powerMonitor } from 'electron'
 import { hangDetectionMarkerPath } from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
-import { resolveObservabilityConsent } from '../observability'
+import { getTraceFilePath, resolveObservabilityConsent } from '../observability'
 import {
   HANG_WATCHDOG_CHECK_INTERVAL_MS,
   HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS,
   HANG_WATCHDOG_TIMEOUT_MS,
   type HangWatchdogWorkerData,
+  type HangWatchdogToMainMessage,
   type MainToHangWatchdogWorkerMessage
 } from './hang-watchdog-worker-protocol'
 
@@ -39,6 +40,7 @@ export function installMainThreadHangWatchdog(options: {
   const workerData: HangWatchdogWorkerData = {
     parentPid: process.pid,
     markerPath: hangDetectionMarkerPath(options.userDataPath),
+    tracePath: getTraceFilePath(),
     timeoutMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS, HANG_WATCHDOG_TIMEOUT_MS),
     checkIntervalMs: positiveTiming(
       process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS,
@@ -57,13 +59,36 @@ export function installMainThreadHangWatchdog(options: {
   }
   let stopped = false
   const postMessage = (message: MainToHangWatchdogWorkerMessage): void => {
-    if (stopped && message.type === 'heartbeat') {
+    if (stopped && message.type !== 'shutdown' && message.type !== 'capture-drain-ack') {
       return
     }
     try {
       worker.postMessage(message)
     } catch {
       // The worker already exited.
+    }
+  }
+  worker.on('message', (message: HangWatchdogToMainMessage) => {
+    if (
+      message?.type === 'capture-drain' &&
+      typeof message.token === 'string' &&
+      message.token.length <= 80
+    ) {
+      setImmediate(() => postMessage({ type: 'capture-drain-ack', token: message.token }))
+    }
+  })
+  const powerEvents: NodeJS.EventEmitter = powerMonitor
+  const powerListeners = (['suspend', 'resume', 'lock-screen', 'unlock-screen'] as const).map(
+    (event) => {
+      const listener = (): void =>
+        postMessage({ type: 'power-event', event, observedAt: Date.now() })
+      powerEvents.on(event, listener)
+      return { event, listener }
+    }
+  )
+  const removePowerListeners = (): void => {
+    for (const { event, listener } of powerListeners) {
+      powerEvents.off(event, listener)
     }
   }
   const heartbeatTimer = setInterval(() => {
@@ -76,6 +101,7 @@ export function installMainThreadHangWatchdog(options: {
     stopped = true
     // Drop the app listener immediately so retired workers are not retained by its closure.
     app.off('will-quit', stop)
+    removePowerListeners()
     clearInterval(heartbeatTimer)
     postMessage({ type: 'shutdown' })
   }
@@ -86,6 +112,7 @@ export function installMainThreadHangWatchdog(options: {
   worker.once('exit', () => {
     stopped = true
     app.off('will-quit', stop)
+    removePowerListeners()
     clearInterval(heartbeatTimer)
   })
   worker.unref()

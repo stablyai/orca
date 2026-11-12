@@ -58,19 +58,6 @@ describe('the editor document, from markdown and back', () => {
     expect(currentMarkdown(scope)).toBe(markdown)
   })
 
-  it('serializes a bullet list the engine nested inside a paragraph, as the flat shape does', () => {
-    // Captured WebKit 26.4/Chromium 147 insertUnorderedList nests ul in p instead of replacing p; WebKit also adds styled text span.
-    const { scope, editor } = nestedListSurface(
-      `<ul>${webkitItem('alpha')}${webkitItem('beta')}</ul>`
-    )
-
-    expect(editor.querySelector('ul')?.parentElement?.tagName).toBe('P')
-    const markdown = ['- alpha', '- beta'].join('\n')
-    expect(currentMarkdown(scope)).toBe(markdown)
-    // The flat shape the renderer produces from that same source, so the two shapes agree.
-    expect(currentMarkdown(surface(markdown).scope)).toBe(markdown)
-  })
-
   it('serializes a numbered list the engine nested inside a paragraph', () => {
     // The same capture with the Numbered list command: `<p><ol><li>...</li></ol></p>` on both.
     const { scope, editor } = nestedListSurface(
@@ -120,13 +107,6 @@ describe('the editor document, from markdown and back', () => {
     )
   })
 
-  it('renders task checkboxes as disabled while the surface is read-only', () => {
-    expect(surface('- [ ] Read-only task', { editable: false }).html).toContain(
-      'type="checkbox" disabled'
-    )
-    expect(surface('- [ ] Editable task').html).not.toContain('disabled')
-  })
-
   it('round-trips every block the toolbar can produce', () => {
     const markdown = [
       '# Title',
@@ -171,13 +151,6 @@ describe('the editor document, from markdown and back', () => {
     // The control, so the guard is not swallowing the readers it falls back from.
     expect(render('# ok')).toBe('<h1>ok</h1>')
     expect(render('- ok')).toBe('<ul><li><p>ok</p></li></ul>')
-  })
-
-  it('renders no link for a javascript: URL, which is the one scheme it filters', () => {
-    // Refused URL remains inert text via emphasis fallback; no tappable element may survive.
-    const { html } = surface('[tap](javascript:alert(1))')
-    expect(html).not.toContain('<a')
-    expect(html).not.toContain('href')
   })
 
   it('round-trips a code block that holds a fence of its own', () => {

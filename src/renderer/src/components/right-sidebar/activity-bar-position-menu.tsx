@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Power } from 'lucide-react'
 import { toast } from 'sonner'
-import type { ActivityBarPosition } from '@/store/slices/editor/types/open-file'
+import type { ActivityBarPosition } from '../../../../shared/ui-chrome-types'
 import {
   ContextMenuContent,
   ContextMenuItem,

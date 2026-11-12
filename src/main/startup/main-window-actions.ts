@@ -12,8 +12,8 @@ import { isNativeBrowserPopupWindow } from '../browser/guest-lifecycle/popups/pr
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import type { AppMenuQuitHandlers } from '../menu/app-menu-quit-item'
 import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../updater/updater-service'
 import {
   createSystemTray,

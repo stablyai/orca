@@ -5,7 +5,7 @@ import { resolveBrowserAddressBarSubmission } from '@/components/browser-pane/na
 import { translate } from '@/i18n/i18n'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
-import { resolveWorkspaceDocAddressTarget } from '@/lib/workspace-doc-address-input'
+import { resolveWorkspaceDocAddressTarget } from '@/lib/browser/documents/workspace-doc-address-input'
 import { useAppStore } from '@/store'
 import { DocPreviewDocumentChip } from './doc-preview-document-chip'
 import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity'

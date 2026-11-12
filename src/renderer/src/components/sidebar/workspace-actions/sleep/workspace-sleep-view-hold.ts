@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { getCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import { markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { markWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   holdWorktreeSleepView,
   isWorktreeSleepViewHeld,

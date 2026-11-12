@@ -5,8 +5,8 @@ import type {
 import { BrowserError } from '../../browser-error'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-command-target'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'
-import { isAgentRpcCaller } from '../../../runtime/rpc/rpc-caller-identity'
-import { getActiveRpcCaller } from '../../../runtime/rpc/rpc-active-caller'
+import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
+import { getActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
 
 export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
   setActiveTab(webContentsId: number, worktreeId?: string): void {

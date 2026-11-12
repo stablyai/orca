@@ -240,11 +240,13 @@ export function DailyIntensityGrid({
 export function ProviderUsageRow({
   provider,
   totalTokens,
-  onEnable
+  onEnable,
+  stateKnown = true
 }: {
   provider: UsageProviderOverview
   totalTokens: number
   onEnable: () => void
+  stateKnown?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -262,7 +264,7 @@ export function ProviderUsageRow({
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <h5 className="truncate text-sm font-semibold text-foreground">{provider.label}</h5>
-            <Badge variant={statusVariant}>{status}</Badge>
+            <Badge variant={statusVariant}>{stateKnown ? status : '—'}</Badge>
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {provider.topModel ??
@@ -271,7 +273,7 @@ export function ProviderUsageRow({
           </p>
         </div>
         {!provider.enabled ? (
-          <Button variant="outline" size="xs" onClick={onEnable}>
+          <Button variant="outline" size="xs" onClick={onEnable} disabled={!stateKnown}>
             {t('auto.components.stats.usage.overview.sections.57d1448ef8', 'Enable')}
           </Button>
         ) : null}

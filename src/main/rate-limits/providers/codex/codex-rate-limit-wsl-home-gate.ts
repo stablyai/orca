@@ -1,6 +1,6 @@
 import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import type { CodexRateLimitHomeResolution } from '../../../codex-accounts/runtime-home-service-types'
+import type { CodexRateLimitHomeResolution } from '../../../codex-accounts/runtime-home/runtime-home-service-types'
 import { isWslDistroRunning } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { resolveWslDefaultDistro } from '../../../wsl/discovery/wsl-default-distro'
 

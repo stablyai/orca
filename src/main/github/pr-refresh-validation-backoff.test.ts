@@ -4,7 +4,7 @@ const { recordCoalescedCrashBreadcrumbMock } = vi.hoisted(() => ({
   recordCoalescedCrashBreadcrumbMock: vi.fn()
 }))
 
-vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
+vi.mock('../crash-reporting/breadcrumbs/crash-breadcrumb-store', () => ({
   recordCoalescedCrashBreadcrumb: recordCoalescedCrashBreadcrumbMock
 }))
 

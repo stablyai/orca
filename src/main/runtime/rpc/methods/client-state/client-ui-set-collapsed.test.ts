@@ -5,7 +5,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { CollapseWriteOrder } from '../../../sidebar-inputs/workspace-view-collapse-writes'
 import type { RpcRequest } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
-import type { RpcDispatchStreamingOptions } from '../../dispatcher-stream-options'
+import type { RpcDispatchStreamingOptions } from '../../dispatch/dispatcher-stream-options'
 import { CLIENT_UI_METHODS } from './client-ui'
 import { SIDEBAR_INPUT_METHODS } from '../sidebar-inputs/sidebar-inputs'
 

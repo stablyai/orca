@@ -32,7 +32,7 @@ vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime',
 
 import { createMainWindow, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS } from './createMainWindow'
 import { ipcMain } from 'electron'
-import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
+import { resetExpectedTeardownStateForTest } from '../crash-reporting/process-exits/expected-teardown-state'
 import {
   attachClientPageRendererMock,
   browserWindowMock,

@@ -5,7 +5,7 @@ import {
   normalizeSparsePresetName
 } from '../../ipc/repos/sparse-preset-validation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 type RuntimeRepositorySparsePresetDependencies = {
   getStore: () => RuntimeStore | null

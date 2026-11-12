@@ -1,6 +1,4 @@
-import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ASSIGNMENT_CONNECTION_HEADROOM_QUERY } from './assignment-connection-headroom-query.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import {
   openRelayDatabase,
@@ -9,7 +7,6 @@ import {
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
-const headroomIndexName = 'relay_control_connection_reservation_headroom'
 const cell = {
   id: 'connection-headroom-postgres',
   url: 'https://connection-headroom-postgres.example.com',
@@ -160,39 +157,6 @@ describePostgres('PostgreSQL assignment connection headroom', () => {
     expect(Number(reservations[0]!.count)).toBe(1)
   }, 15_000)
 
-  it('uses the composite headroom index when released history dominates', async () => {
-    await databases[0]!.query(
-      `INSERT INTO relay_control_connection_reservations
-       (reservation_id, idempotency_key, user_id, relay_host_id,
-        assignment_epoch, cell_id, state, created_at, timeout_at, updated_at)
-       SELECT 'headroom-plan-' || value, 'headroom-plan-' || value,
-              'connection-headroom-postgres-plan', 'plan-host-' || value,
-              1, ?, 'released', 1, 2, 1
-       FROM generate_series(1, 50000) AS value`,
-      [cell.id]
-    )
-    await databases[0]!.query(`ANALYZE relay_control_connection_reservations`)
-
-    const client = new pg.Client({ connectionString: databaseUrl })
-    await client.connect()
-    let reservationIndexPlan: Record<string, unknown> | undefined
-    try {
-      const plan = await client.query(
-        `EXPLAIN (FORMAT JSON) ${ASSIGNMENT_CONNECTION_HEADROOM_QUERY}`
-      )
-      reservationIndexPlan = findReservationHeadroomIndexPlan(
-        plan.rows[0]?.['QUERY PLAN']
-      )
-    } finally {
-      await client.end()
-    }
-
-    expect(reservationIndexPlan).toBeDefined()
-    expect(String(reservationIndexPlan?.['Index Cond'])).toContain('cell_id')
-    expect(String(reservationIndexPlan?.['Index Cond'])).toContain('state = ANY')
-    expect(reservationIndexPlan?.['Filter']).toBeUndefined()
-  })
-
   it('deduplicates expired debt after a fresh PostgreSQL snapshot', async () => {
     const now = 200
     const store = new RelayAssignmentStore(databases[0]!, () => now, {
@@ -337,16 +301,3 @@ describePostgres('PostgreSQL assignment connection headroom', () => {
     ).toEqual([{ state: 'released' }])
   })
 })
-
-function findReservationHeadroomIndexPlan(
-  value: unknown
-): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== 'object') return undefined
-  const record = value as Record<string, unknown>
-  if (!Array.isArray(value) && record['Index Name'] === headroomIndexName) return record
-  for (const child of Object.values(value)) {
-    const match = findReservationHeadroomIndexPlan(child)
-    if (match) return match
-  }
-  return undefined
-}

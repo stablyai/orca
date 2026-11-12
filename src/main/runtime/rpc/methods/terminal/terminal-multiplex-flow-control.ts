@@ -1,5 +1,5 @@
 import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
-import { drainTerminalMultiplexRoundRobin } from '../../terminal-multiplex-round-robin'
+import { drainTerminalMultiplexRoundRobin } from '../../terminal/terminal-multiplex-round-robin'
 import {
   sendSnapshotFrames,
   serializeBudgetedRequestedSnapshot
@@ -14,7 +14,7 @@ import {
   creditAckWindow,
   releaseAckPendingHoldbackIfDrained
 } from './terminal-multiplex-ack-window'
-import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+import type { TerminalOutputFrameChunk } from '../../terminal/terminal-output-frame-chunks'
 import {
   markYieldedQueriesDiscardedInFrames,
   replaySnapshotCoveredStatelessQueries

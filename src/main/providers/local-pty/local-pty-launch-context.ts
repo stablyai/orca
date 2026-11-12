@@ -7,6 +7,7 @@ import { resolveSafePtyDefaultCwd } from '../pty-default-cwd'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
 import { WORKSPACE_PORT_ENV_KEYS } from '../../../shared/workspace-port-block'
+import { isLocalCounterPtyId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -81,7 +82,7 @@ export function normalizeLocalCallerSessionId(
   allowNumeric = false
 ): string | null {
   const requested = sessionId?.trim()
-  return !requested || (!allowNumeric && /^\d+$/.test(requested)) ? null : requested
+  return !requested || (!allowNumeric && isLocalCounterPtyId(requested)) ? null : requested
 }
 
 export function normalizeForegroundProcessName(

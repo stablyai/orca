@@ -1,7 +1,6 @@
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
 
-type WatchRootArgs = { worktreePath: string; connectionId: string | undefined }
+export type WatchRootArgs = { worktreePath: string; connectionId: string | undefined }
 
 type HeldWatchRoot = {
   args: WatchRootArgs
@@ -21,7 +20,7 @@ function getWatchRootKey(target: WatchRootArgs): string {
 /** Resolves once the root's watch request has settled, including when another consumer started it. */
 export function acquireWatchRoot(
   roots: HeldWatchRoots,
-  target: EditorExternalWatchTarget,
+  target: WatchRootArgs,
   onError: (error: unknown) => void
 ): Promise<void> {
   const key = getWatchRootKey(target)
@@ -53,7 +52,7 @@ function requestWatch(root: HeldWatchRoot, onError: (error: unknown) => void): v
   })
 }
 
-export function releaseWatchRoot(roots: HeldWatchRoots, target: EditorExternalWatchTarget): void {
+export function releaseWatchRoot(roots: HeldWatchRoots, target: WatchRootArgs): void {
   const key = getWatchRootKey(target)
   const held = roots.get(key)
   if (!held) {

@@ -1,6 +1,6 @@
 import type React from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type AppearanceSectionProps = {
   id: string

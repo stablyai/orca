@@ -4,13 +4,13 @@ import { AlertTriangle, ChevronRight, CircleAlert, CircleCheck, Cloud, Loader2 }
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useOrcaBillingStatus } from '@/components/billing/use-orca-billing-status'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   isAwaitingVmEnvironmentCheckDecision,
   resolveVmEnvironmentCheckDecision
-} from '@/lib/ephemeral-vm-environment-check-decision'
+} from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-decision'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
@@ -63,7 +63,7 @@ function startFixWithAgent(args: {
   recipeId: string
   failure: EnvironmentSetupFailureContext
 }): void {
-  void import('@/lib/environment-setup-agent-launch')
+  void import('@/lib/agent-session/launch/environment-setup-agent-launch')
     .then(({ launchEnvironmentSetupAgent }) => launchEnvironmentSetupAgent(args))
     .catch((launchError: unknown) => {
       toast.error(launchError instanceof Error ? launchError.message : String(launchError))

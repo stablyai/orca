@@ -7,7 +7,7 @@ import {
   type PluginApprovalAction
 } from '../../shared/plugins/approval/plugin-cli-approval'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
-import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
+import type { RpcCallerIdentity } from '../runtime/rpc/callers/rpc-caller-identity'
 import type { PluginAuditEntry } from './plugin-audit-log'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 

@@ -14,7 +14,7 @@ import {
 } from './review-animated-visual-shared'
 import { ReviewShipVisualStyles } from './review-animated-visual-ship-styles'
 import { useTranslate } from '@/i18n/use-translate'
-import { forceLayoutReflow } from '@/lib/force-layout-reflow'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const t = useTranslate()

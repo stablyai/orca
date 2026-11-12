@@ -10,7 +10,7 @@ import { bindingOf } from './pane-live-facts'
 
 import { PaneResumeOutcomes, PaneStartStatuses } from './pane-start-statuses'
 
-import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `tab-1:${LEAF_ID}`

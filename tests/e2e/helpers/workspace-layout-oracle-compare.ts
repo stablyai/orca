@@ -1,6 +1,6 @@
 // Compare runtime layout to each view, excluding viewer-owned selection, focus and sizes.
 
-import { isTerminalOwnerPartition } from '../../../src/shared/workspace-layout/terminal-owner-invariants'
+import { isTerminalOwnerPartition } from '../../../src/shared/workspace-layout/terminal-topology/terminal-owner-invariants'
 import type { LiveWorkspace } from './workspace-layout-oracle-feed'
 import type { ClientView, DrawnLayout, DrawnTerminalSurface } from './workspace-layout-oracle-views'
 

@@ -24,13 +24,11 @@ import type {
   TerminalDocumentWebglAddon,
   TerminalInitialOscLink
 } from './document-terminal-shape'
-import type { TerminalMouseGesture } from './mouse-click-drag'
-import type { TerminalTouchState } from './surface-touch-gestures'
-import type { TerminalTouchDispatch } from './tap-dispatch'
-import type { TerminalDocumentThemeMessage } from './terminal-theme'
+import type { TerminalMouseGesture } from './surface-input/mouse-click-drag'
+import type { TerminalTouchState } from './surface-input/surface-touch-gestures'
+import type { TerminalTouchDispatch } from './surface-input/tap-dispatch'
+import type { TerminalDocumentThemeMessage } from './engine/terminal-theme'
 
-export type * from './document-terminal-shape'
-export type { TerminalDocumentHost, TerminalDocumentHostSeams } from './document-host-seams'
 // Keep cross-module mutable state per document; module-private state stays local to its factory-emitted module.
 
 export type TerminalDocumentState = {

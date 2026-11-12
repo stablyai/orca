@@ -1,7 +1,7 @@
 import { basename } from '@/lib/path'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { describeDropSkipReason } from '@/lib/drop-skip-reason-copy'
-import { isImageDropPath } from '../../../../../../shared/image-path-paste'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { describeDropSkipReason } from '@/lib/files/drop/drop-skip-reason-copy'
+import { isAgentInlineImagePath } from '../../../../../../shared/agent-inline-image-types'
 import type { NativeChatAttachmentFocusOptions } from '../uploads/native-chat-resolved-path-ownership'
 import {
   nativeChatAttachFailedNotice,
@@ -111,7 +111,7 @@ export async function attachNativeChatSessionAttachmentPaths(args: {
       }
       continue
     }
-    if (isImageDropPath(storedPath)) {
+    if (isAgentInlineImagePath(storedPath)) {
       args.chips.resolve(chipId, storedPath, null, args.options)
       continue
     }

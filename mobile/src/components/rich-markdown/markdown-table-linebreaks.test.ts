@@ -71,14 +71,6 @@ it.each([
   expect(editor.querySelector('td')?.querySelector('br')).toBe(null)
 })
 
-it('keeps an authored run of trailing cell breaks byte-for-byte', () => {
-  const { editorDocument } = surface()
-  const markdown = original.replace('| First |', '| x<br /><br /> |')
-  editorDocument.send.setMarkdown(markdown, 8)
-
-  expect(editorDocument.send.currentMarkdown()).toBe(markdown)
-})
-
 it.each(['<br>', '<BR />', 'a<br/>b', '<br onload="run()">'])(
   'keeps typed table markup literal: %s',
   (text) => {

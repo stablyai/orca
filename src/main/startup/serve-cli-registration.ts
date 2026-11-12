@@ -1,8 +1,8 @@
 import { app } from 'electron'
 import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
-import { prepareAppImageCopyForServe } from '../cli/appimage-serve-preparation'
+import { prepareAppImageCopyForServe } from '../cli/appimage/appimage-serve-preparation'
 import { CliInstaller } from '../cli/cli-installer'
-import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'
+import { installLinuxBareOrcaDispatcher } from '../cli/launchers/linux-bare-orca-dispatcher'
 
 /** Headless serve has no renderer to run the normal cli:install flow, so it registers here. */
 export async function registerCliForHeadlessServe(): Promise<void> {

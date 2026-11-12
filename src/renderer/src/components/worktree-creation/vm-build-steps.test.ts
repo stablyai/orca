@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
-import { appendStampedLog } from '@/lib/pending-creation-provisioning-log'
+import { appendStampedLog } from '@/lib/workspace/creation/pending-creation-provisioning-log'
 import { deriveVmBuildSteps } from './vm-build-steps'
 import { classifyVmBuildFailure } from './vm-build-failure'
 import { holdRunningSteps } from './use-minimum-running-steps'

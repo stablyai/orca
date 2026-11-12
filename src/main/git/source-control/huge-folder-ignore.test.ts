@@ -1,0 +1,50 @@
+import { mkdtempSync } from 'node:fs'
+import * as fs from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import * as path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { checkIgnoredPathsMock } = vi.hoisted(() => ({
+  checkIgnoredPathsMock: vi.fn<(worktreePath: string, paths: string[]) => Promise<string[]>>()
+}))
+
+vi.mock('./check-ignored-paths', () => ({
+  checkIgnoredPaths: checkIgnoredPathsMock
+}))
+
+import { appendFolderToGitignore } from './huge-folder-ignore'
+
+describe('appendFolderToGitignore', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'huge-folder-write-'))
+  })
+
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  it('creates .gitignore with the folder pattern when absent', async () => {
+    const wrote = await appendFolderToGitignore(dir, 'node_modules')
+    expect(wrote).toBe(true)
+    const content = await fs.readFile(path.join(dir, '.gitignore'), 'utf-8')
+    expect(content).toContain('node_modules/')
+  })
+
+  it('appends with a leading newline when the file lacks a trailing one', async () => {
+    await fs.writeFile(path.join(dir, '.gitignore'), '*.log')
+    const wrote = await appendFolderToGitignore(dir, 'dist')
+    expect(wrote).toBe(true)
+    const content = await fs.readFile(path.join(dir, '.gitignore'), 'utf-8')
+    expect(content).toBe('*.log\ndist/\n')
+  })
+
+  it('rejects folder names outside the known allowlist (injection guard)', async () => {
+    await expect(appendFolderToGitignore(dir, 'node_modules\n/etc/passwd')).rejects.toThrow(
+      /Refusing to add/
+    )
+    await expect(appendFolderToGitignore(dir, '../escape')).rejects.toThrow(/Refusing to add/)
+    await expect(appendFolderToGitignore(dir, 'arbitrary')).rejects.toThrow(/Refusing to add/)
+  })
+})

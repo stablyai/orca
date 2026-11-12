@@ -85,5 +85,5 @@ export function MobileNativeChatControlSwap({
 
 const styles = StyleSheet.create({
   slot: { alignItems: 'center', justifyContent: 'center' },
-  leaving: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' }
+  leaving: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' }
 })

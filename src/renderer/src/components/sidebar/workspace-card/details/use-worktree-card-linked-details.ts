@@ -94,6 +94,7 @@ export function useWorktreeCardLinkedDetails({
   const jiraIssueDisplay = getWorktreeCardJiraIssueDisplay(worktree)
   const cardTitleDisplay = getWorktreeCardTitleDisplay({
     storedDisplayName: worktree.displayName,
+    displayNameMode: worktree.displayNameMode,
     branchName: branch,
     // Fetched titles only: display fallbacks hold localized loading/unavailable placeholders.
     linearIssueTitle: linearIssue?.title,

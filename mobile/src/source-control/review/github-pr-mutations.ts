@@ -24,11 +24,11 @@ import {
   githubPrRequestParams,
   type GitHubPrRepoSlug
 } from './github-pr-repo-slug'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { translate } from '../../i18n/mobile-i18n'
 
 export function fetchMergePR(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; method?: GitHubPRMergeMethod; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -47,7 +47,7 @@ export function fetchMergePR(
 }
 
 export function fetchUpdatePRTitle(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; title: string; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -66,7 +66,7 @@ export function fetchUpdatePRTitle(
 }
 
 export function fetchUpdatePRBody(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; body: string; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -81,7 +81,7 @@ export function fetchUpdatePRBody(
 }
 
 export function fetchSetPRAutoMerge(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     prNumber: number
@@ -105,7 +105,7 @@ export function fetchSetPRAutoMerge(
 }
 
 export function fetchUpdatePRState(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; state: 'open' | 'closed'; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -123,7 +123,7 @@ export function fetchUpdatePRState(
 }
 
 export function fetchRequestPRReviewers(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; reviewers: string[]; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -141,7 +141,7 @@ export function fetchRequestPRReviewers(
 }
 
 export function fetchRemovePRReviewers(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; reviewers: string[]; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -159,7 +159,7 @@ export function fetchRemovePRReviewers(
 }
 
 export function fetchRerunPRChecks(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     prNumber: number
@@ -186,7 +186,7 @@ export function fetchRerunPRChecks(
 }
 
 export function fetchAddPRReviewCommentReply(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     prNumber: number
@@ -223,7 +223,7 @@ export function fetchAddPRReviewCommentReply(
 }
 
 export function fetchAddIssueComment(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; body: string; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -244,7 +244,7 @@ export function fetchAddIssueComment(
 
 // Thread resolution returns boolean confirmation; do not apply status-envelope void-success semantics.
 export function fetchResolveReviewThread(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { threadId: string; resolve: boolean; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -269,7 +269,7 @@ export function fetchResolveReviewThread(
 
 // Issue comment edits use owner/repo/commentId rather than worktree-scoped params.
 export function fetchUpdateIssueComment(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   args: { owner: string; repo: string; host?: string; commentId: number; body: string }
 ): Promise<GitHubPrMutationOutcome> {
   return settleGithubPrMutation(githubPrIssueCommentEdit, () =>
@@ -282,7 +282,7 @@ export function fetchUpdateIssueComment(
 }
 
 export function fetchDeleteIssueComment(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   args: { owner: string; repo: string; host?: string; commentId: number }
 ): Promise<GitHubPrMutationOutcome> {
   return settleGithubPrMutation(githubPrIssueCommentDelete, () =>

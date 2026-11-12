@@ -1,3 +1,7 @@
+import {
+  acceptBrowserGuestMetadata,
+  clearBrowserGuestMetadata
+} from '@/components/browser-pane/host-guest/browser-guest-metadata-cache'
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findVisibleBrowserLinkTarget } from '@/lib/browser/navigation/visible-browser-link-target'
@@ -74,12 +78,17 @@ export function registerBrowserStateIpcBridge(
       }
       useAppStore.getState().updateBrowserPageState(browserPageId, {
         loading: false,
-        loadError,
-        canGoBack: false,
-        canGoForward: false
+        loadError
       })
     })
   )
+  const unsubscribeMetadata = window.api.browser.onGuestMetadata?.(acceptBrowserGuestMetadata)
+  if (unsubscribeMetadata) {
+    unsubs.push(() => {
+      unsubscribeMetadata()
+      clearBrowserGuestMetadata()
+    })
+  }
   const unsubscribeCertificateFailure = window.api.browser.onCertificateFailureChanged?.(
     ({ browserPageId, failure }) => {
       if (isRuntimeEnvironmentActive() && !isClientHostedBrowserPage(browserPageId)) {
@@ -164,8 +173,14 @@ export function registerBrowserStateIpcBridge(
   // Why: the bootstrap lease is fixed at creation; an agent's page in a hidden worktree must keep drawing while it drives it.
   const agentActivityPaintHolds = createMainOwnedPaintHolds()
   const unsubscribeAgentActivity = window.api.browser.onAgentActivity?.(
-    ({ browserPageId, worktreeId, active, controllerHostLabel }) => {
-      setBrowserAgentPageActive(browserPageId, active, worktreeId, controllerHostLabel)
+    ({ browserPageId, worktreeId, active, controllerHostLabel, agentSessionId }) => {
+      setBrowserAgentPageActive(
+        browserPageId,
+        active,
+        worktreeId,
+        controllerHostLabel,
+        agentSessionId
+      )
       agentActivityPaintHolds.set(browserPageId, active)
     }
   )

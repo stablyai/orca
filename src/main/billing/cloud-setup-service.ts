@@ -17,7 +17,7 @@ import {
   type CloudSetupStartArgs,
   type CloudSetupStartResult
 } from '../../shared/orca-cloud-setup'
-import { connectCurrentOrcaProfile } from '../orca-profiles/profile-cloud-service'
+import { connectCurrentOrcaProfile } from '../orca-profiles/cloud-auth/profile-cloud-service'
 import { billingRequest, BillingServiceError, type BillingEndpoints } from './billing-client'
 import { withBillingToken } from './billing-service'
 

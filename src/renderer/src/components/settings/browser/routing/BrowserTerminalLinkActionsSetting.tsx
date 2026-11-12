@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { getTerminalLinkActionSearchKeywords } from './browser-terminal-link-action-search'

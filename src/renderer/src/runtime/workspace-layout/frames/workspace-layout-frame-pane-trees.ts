@@ -2,7 +2,7 @@
 
 import type { AppState } from '@/store/types'
 import type { WorkspaceLayoutCache } from '@/store/workspace-layout/workspace-layout-cache'
-import { stableJson } from '../../../../../shared/workspace-layout/workspace-layout-load-report'
+import { stableJson } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import { isTabPaneTreeHeld } from '../intents/layout-owner-pane-tree-holds'
 
 type TerminalLayouts = AppState['terminalLayoutsByTabId']

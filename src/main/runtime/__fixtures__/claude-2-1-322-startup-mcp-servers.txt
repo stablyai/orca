@@ -1,0 +1,13 @@
+7[r8[?25h[?25l[?2004h[?2031h[?1004h
+[38;5;220m────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[3G[38;5;220m[1m2[5Gnew[9GMCP[13Gservers[21Gfound[27Gin[30Gthis[35Gproject[22m[39m
+[3G[38;5;246mSelect[10Gany[14Gyou[18Gwish[23Gto[26Genable.[39m
+
+[3GMCP[7Gservers[15Gmay[19Gexecute[27Gcode[32Gor[35Gaccess[42Gsystem[49Gresources.[60GAll[64Gtool[69Gcalls[75Grequire[83Gapproval.[93GLearn
+[3Gmore[8Gin[11Gthe[15GMCP[19Gdocumentation.
+
+[3G[38;5;153m❯[5G[38;5;114m[✔][9G[38;5;153mscratch-echo[39m
+[5G[38;5;114m[✔][9G[39mscratch-time
+[8G[1mEnable[15Gselected[22m
+[2G[38;5;246m[3mSpace[8Gto[11Gselect[18G·[20GEsc[24Gto[27Greject[34Gall[23m[39m
+[2C[4A[>0q[?u]7501;?[c

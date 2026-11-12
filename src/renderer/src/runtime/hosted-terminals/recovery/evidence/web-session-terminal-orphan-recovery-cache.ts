@@ -131,7 +131,7 @@ function buildPaneResolutionFingerprint(
 function inventoryAbsenceCoordinates(args: {
   environmentId: string
   snapshot: RuntimeMobileSessionTabsResult
-  surface: RecoverySurface
+  surface: RecoverySurface | UnresolvedRecoverySurface
   expectedEnvironmentPairingRevision?: number
 }): { key: string; fingerprint: string } {
   return {
@@ -142,15 +142,15 @@ function inventoryAbsenceCoordinates(args: {
       expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
     }),
     // Absence fingerprints identify surfaces, not publicationEpoch: including epoch resets evidence on republication and prevents two independent inventories confirming absence.
-    fingerprint: [args.surface.handle, args.surface.expectedPtyId ?? ''].join('\0')
+    fingerprint: [args.surface.handle ?? '', args.surface.expectedPtyId ?? ''].join('\0')
   }
 }
 
-/** Returns true after two authoritative inventories omit the same surface identity. */
+/** Returns true after two authoritative inventories (terminal listings, or pane resolutions for unbound panes) omit the same surface identity. */
 export function confirmSurfaceInventoryAbsence(args: {
   environmentId: string
   snapshot: RuntimeMobileSessionTabsResult
-  surface: RecoverySurface
+  surface: RecoverySurface | UnresolvedRecoverySurface
   expectedEnvironmentPairingRevision?: number
 }): boolean {
   const { key, fingerprint } = inventoryAbsenceCoordinates(args)
@@ -174,7 +174,7 @@ export function confirmSurfaceInventoryAbsence(args: {
 export function clearSurfaceInventoryAbsence(args: {
   environmentId: string
   snapshot: RuntimeMobileSessionTabsResult
-  surface: RecoverySurface
+  surface: RecoverySurface | UnresolvedRecoverySurface
   expectedEnvironmentPairingRevision?: number
 }): void {
   surfaceInventoryAbsences.delete(inventoryAbsenceCoordinates(args).key)

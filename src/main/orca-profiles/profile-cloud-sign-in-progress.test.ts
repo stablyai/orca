@@ -8,7 +8,7 @@ import {
   resetOrcaCloudSignInProgressForTests,
   setOrcaCloudSignInLink,
   startOrcaCloudSignInProgress
-} from './profile-cloud-sign-in-progress'
+} from './cloud-auth/profile-cloud-sign-in-progress'
 
 afterEach(() => resetOrcaCloudSignInProgressForTests())
 

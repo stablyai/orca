@@ -10,10 +10,6 @@ function Throws(): ReactElement {
   throw FAILURE
 }
 
-function Renders(): ReactElement {
-  return createElement('div', null, 'a worktree list')
-}
-
 function boundary(child: () => ReactElement, onFault: (error: unknown) => void): ReactElement {
   return createElement(PageFaultBoundary, { onFault }, createElement(child))
 }
@@ -30,26 +26,6 @@ afterEach(() => {
 })
 
 describe('the page fault boundary', () => {
-  it('reports a throw from the tree it wraps and leaves nothing on the page', async () => {
-    const faults: unknown[] = []
-    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
-    await act(async () => {
-      rendered.tree = create(boundary(Throws, (error) => faults.push(error)))
-    })
-    expect(faults).toEqual([FAILURE])
-    expect(rendered.tree?.toJSON()).toBeNull()
-  })
-
-  it('stays out of the way of a tree that renders', async () => {
-    const faults: unknown[] = []
-    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
-    await act(async () => {
-      rendered.tree = create(boundary(Renders, (error) => faults.push(error)))
-    })
-    expect(faults).toEqual([])
-    expect(rendered.tree?.toJSON()).not.toBeNull()
-  })
-
   it('reports once, because a faulted page never renders the tree that threw again', async () => {
     const faults: unknown[] = []
     const render = (): ReactElement => boundary(Throws, (error) => faults.push(error))

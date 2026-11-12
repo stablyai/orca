@@ -9,7 +9,7 @@ import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owne
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { layoutFrameTerminalTab } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { pickStoredFields } from '../../../../shared/workspace-layout/stored-record-fields'
+import { pickStoredFields } from '../../../../shared/workspace-layout/persistence/stored-record-fields'
 import type {
   CommandOf,
   LayoutApplyReply

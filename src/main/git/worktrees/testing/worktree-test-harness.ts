@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 
-import { clearGitCapabilityStateForTests } from '../../command-runner/git-capability-state'
+import { clearGitCapabilityStateForTests } from '../../command-runner/host-routing/git-capability-state'
 import { __resetSparseCheckoutStateCacheForTests } from '../sparse-checkout/worktree-sparse-checkout-cache'
 
 export function registerWorktreeSuiteHooks(): void {

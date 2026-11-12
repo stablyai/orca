@@ -4,6 +4,7 @@ import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -19,7 +20,10 @@ import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
-import { readHiddenVmCheckouts, subscribeHiddenVmCheckouts } from '@/lib/vm-create-hidden-checkouts'
+import {
+  readHiddenVmCheckouts,
+  subscribeHiddenVmCheckouts
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
 import {
   deferHostSectionCollapse,
@@ -143,13 +147,11 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   )
   const selectHostOptions = useMemo(() => createSidebarHostOptionsSelector(), [])
   const selectHostLabels = useMemo(() => createSidebarHostLabelsSelector(), [])
+  useUiLanguageRevision()
   const hostOptions = useAppStore((state) =>
     selectHostOptions(state, repos, args.settings, hostLabelOverrides)
   )
-  const hostLabelById = useMemo(
-    () => selectHostLabels(hostOptions),
-    [hostOptions, selectHostLabels]
-  )
+  const hostLabelById = selectHostLabels(hostOptions)
 
   const hostScopedGroups =
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null

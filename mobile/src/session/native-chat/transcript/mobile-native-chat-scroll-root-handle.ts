@@ -1,5 +1,5 @@
-import type { MobileNativeChatScrollMotion } from '../../mobile-native-chat-scroll-motion'
-import type { MobileNativeChatScrollAnchoring } from '../../mobile-native-chat-scroll-anchoring'
+import type { MobileNativeChatScrollMotion } from './mobile-native-chat-scroll-motion'
+import type { MobileNativeChatScrollAnchoring } from './mobile-native-chat-scroll-anchoring'
 
 export type MobileNativeChatRootPosition = {
   top: number

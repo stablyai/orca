@@ -27,6 +27,9 @@ describe('WorkspaceGitIdentity', () => {
   it('clears branch-scoped links on a branch switch it saw, never on the first sight', () => {
     const identity = new WorkspaceGitIdentity()
     expect(identity.observeScan([row({ branch: 'refs/heads/z' })], SCANNED)).toEqual([])
+    expect(identity.observeScan([row({ branch: '' })], SCANNED)).toEqual([])
+    expect(identity.observeScan([row({ branch: 'refs/heads/z' })], SCANNED)).toEqual([])
+    expect(identity.observeScan([row({ branch: '' })], SCANNED)).toEqual([])
     const clears = identity.observeScan([row()], SCANNED)
     expect(clears).toEqual([
       {
@@ -36,6 +39,12 @@ describe('WorkspaceGitIdentity', () => {
     ])
     // The cleared links are what the next scan expects; the same branch clears nothing.
     expect(identity.observeScan([row({ linkedPR: null })], SCANNED)).toEqual([])
+  })
+
+  it('preserves review links when first opened detached without a known owning branch', () => {
+    const identity = new WorkspaceGitIdentity()
+    expect(identity.observeScan([row({ branch: '' })], SCANNED)).toEqual([])
+    expect(identity.observeScan([row({ branch: 'refs/heads/b' })], SCANNED)).toEqual([])
   })
 
   it('keeps a PR linked on a new branch that a cached rescan still reported as the old one', () => {

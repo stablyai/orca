@@ -17,7 +17,7 @@ import {
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { getCodexAccountSyncKey, getCodexResetProjection } from './codex-switcher-projection'
 import {
   getCodexStatusRuntimeKey,

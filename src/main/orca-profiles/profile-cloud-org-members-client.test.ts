@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeRoster } from './profile-cloud-org-members-client'
+import { normalizeRoster } from './cloud-org/profile-cloud-org-members-client'
 
 describe('normalizeRoster', () => {
   it('keeps https profile pictures and drops anything else', () => {

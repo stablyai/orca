@@ -17,7 +17,7 @@ import {
   cloudSecretScopeLabel,
   cloudSecretsErrorCopy
 } from '@/components/settings/cloud-secrets/cloud-secrets-copy'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   CloudSecretScope,
   CloudSecretsErrorCode

@@ -1,6 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import {
   GITHUB_TASK_HEADER_SURFACE_CLASS,
   GITHUB_TASK_STICKY_ID_HEADER_CLASS,

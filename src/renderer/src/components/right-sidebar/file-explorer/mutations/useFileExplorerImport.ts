@@ -1,15 +1,15 @@
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { useTranslate } from '@/i18n/use-translate'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
+import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import {
   describeSharedDropFailureReason,
   describeSharedDropSkipReason
-} from '@/lib/drop-skip-reason-copy'
+} from '@/lib/files/drop/drop-skip-reason-copy'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import {
   captureFileExplorerOperationGuard,

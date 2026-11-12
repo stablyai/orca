@@ -1,22 +1,22 @@
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import type { useAppStore } from '@/store/index'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
+import { browserUrlForPort } from './workspace-port-urls'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
+import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../workspace/creation/surface-policy/client-creation-action-policy'
+import type { useAppStore } from '@/store/index'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,
   WorkspacePortScanResult
 } from '../../../../shared/workspace-ports'
 import type { LocalhostWorktreeLabelRoute } from '../../../../shared/localhost-worktree-labels'
-import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
-import { browserUrlForPort } from './workspace-port-urls'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
-import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../client-creation-action-policy'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500
 const WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON =
@@ -49,42 +49,6 @@ export type WorkspacePortScanPublisher = {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-export function shouldOpenWorkspacePortInOrcaBrowser(
-  settings: { openLinksInApp?: boolean } | null | undefined
-): boolean {
-  return settings?.openLinksInApp === true
-}
-
-function isMacShortcutPlatform(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-}
-
-export function getPortSystemBrowserHint(isMac: boolean = isMacShortcutPlatform()): string {
-  return isMac ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
-}
-
-export function getPortOpenBrowserTooltipLabel(openLabel: string, isMac?: boolean): string {
-  return `${openLabel}. ${getPortSystemBrowserHint(isMac)}`
-}
-
-type PortOpenClickEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
-
-export function resolvePortOpenInOrcaBrowser({
-  settings,
-  event,
-  isMac
-}: {
-  settings: { openLinksInApp?: boolean } | null | undefined
-  event?: PortOpenClickEvent | null
-  isMac: boolean
-}): boolean {
-  // Shift+Cmd/Ctrl forces external browser; keyboard/context-menu opens without pointer events retain saved settings.
-  if (event?.shiftKey && (isMac ? event.metaKey : event.ctrlKey)) {
-    return false
-  }
-  return shouldOpenWorkspacePortInOrcaBrowser(settings)
 }
 
 export function workspacePortOwnerWorktreeId(port: WorkspacePort): string | null {

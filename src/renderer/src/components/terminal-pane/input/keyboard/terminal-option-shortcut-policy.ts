@@ -66,6 +66,13 @@ function isLayoutComposedCharacter(
   )
 }
 
+// US/ABC Option layer keeps readline word motion when Option is not Meta (#696).
+const READLINE_OPTION_WORD_KEYS = new Map([
+  ['KeyB', { optionCharacter: '∫', data: '\x1bb' }],
+  ['KeyF', { optionCharacter: 'ƒ', data: '\x1bf' }],
+  ['KeyD', { optionCharacter: '∂', data: '\x1bd' }]
+])
+
 function isImeOwnedKey(event: TerminalOptionShortcutEvent): boolean {
   return (
     event.isComposing === true ||
@@ -152,10 +159,10 @@ export function resolveTerminalOptionShortcutAction(
   }
 
   if (!event.shiftKey) {
+    const character =
+      (event.code ? context.layoutCharacterForCode?.(event.code, false) : undefined) ??
+      pc101CharacterForCode(event.code)
     if (shouldActAsMeta) {
-      const character =
-        (event.code ? context.layoutCharacterForCode?.(event.code, false) : undefined) ??
-        pc101CharacterForCode(event.code)
       if (character) {
         return {
           type: 'sendInput',
@@ -166,16 +173,14 @@ export function resolveTerminalOptionShortcutAction(
         }
       }
     }
-    if (!shouldActAsMeta) {
-      if (event.code === 'KeyB') {
-        return { type: 'sendInput', data: '\x1bb' }
-      }
-      if (event.code === 'KeyF') {
-        return { type: 'sendInput', data: '\x1bf' }
-      }
-      if (event.code === 'KeyD') {
-        return { type: 'sendInput', data: '\x1bd' }
-      }
+    const wordKey = event.code ? READLINE_OPTION_WORD_KEYS.get(event.code) : undefined
+    // Non-US Option characters (Croatian-PC `[` `{` `“`) are text.
+    if (
+      !shouldActAsMeta &&
+      wordKey &&
+      (event.key === wordKey.optionCharacter || !isLayoutComposedCharacter(event.key, character))
+    ) {
+      return { type: 'sendInput', data: wordKey.data }
     }
   }
   if (

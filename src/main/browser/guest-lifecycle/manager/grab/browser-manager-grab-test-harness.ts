@@ -1,3 +1,4 @@
+import { guestNavigationMethods } from '../browser-manager-test-harness'
 import { vi, type Mock } from 'vitest'
 import { browserManager } from '../browser-manager'
 
@@ -24,6 +25,7 @@ export type GrabTestMocks = {
 export function makeGuest(id: number, mocks: GrabTestMocks): Electron.WebContents {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: grab tests drive only the guest members listed here.
   return {
+    ...guestNavigationMethods(),
     id,
     isDestroyed: mocks.guestIsDestroyedMock,
     isCurrentlyAudible: vi.fn(() => false),

@@ -1,4 +1,4 @@
-import { claudeProfileHistoryDirs } from '../../../claude-accounts/claude-profile-installed-router'
+import { claudeProfileHistoryDirs } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isWslUncPath, parseWslUncPath } from '../../../../shared/wsl-paths'

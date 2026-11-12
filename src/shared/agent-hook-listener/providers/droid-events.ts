@@ -43,8 +43,6 @@ export function normalizeDroidEvent(
     stateName = 'working'
   } else if (eventName === 'Stop') {
     stateName = 'done'
-  } else if (eventName === 'PermissionRequest') {
-    stateName = 'waiting'
   } else if (eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)) {
     stateName = 'waiting'
   } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {

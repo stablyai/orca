@@ -4,7 +4,7 @@ import React from 'react'
 import { CalendarClock, Lock } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   formatWorkspaceNumber,
   type CloudWorkspace

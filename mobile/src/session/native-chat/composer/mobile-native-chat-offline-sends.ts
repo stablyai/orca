@@ -186,7 +186,3 @@ export function useMobileNativeChatOfflineSends(
   }, [])
   return useSyncExternalStore(subscribe, () => readMobileNativeChatOfflineSends(scope))
 }
-
-export function resetMobileNativeChatOfflineSendsForTests(): void {
-  queues.clear()
-}

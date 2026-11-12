@@ -1,5 +1,5 @@
 import { resolveTerminalTeardownOwner } from '@/store/terminals/terminal-teardown-owner'
-import type { TerminalPtyOwner } from '@/lib/terminal-worktree-route'
+import type { TerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 
 export type AgentHibernationRuntimeOwner =
   | { kind: 'runtime'; environmentId: string }

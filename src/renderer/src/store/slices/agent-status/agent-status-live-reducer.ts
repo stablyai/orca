@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -79,13 +80,13 @@ export function reduceAgentStatusLiveUpdate(
   }
   const recordChange = liveResumeRecordChange(existingSleepingRecord, liveRecoveryRecord)
   if (recordChange === 'clear') {
-    nextSleepingAgentSessions = { ...state.sleepingAgentSessionsByPaneKey }
-    delete nextSleepingAgentSessions[paneKey]
+    nextSleepingAgentSessions = replaceRecordEntries<
+      AppState['sleepingAgentSessionsByPaneKey'][string]
+    >(state.sleepingAgentSessionsByPaneKey, [[paneKey, null]])
   } else if (recordChange) {
-    nextSleepingAgentSessions = {
-      ...state.sleepingAgentSessionsByPaneKey,
-      [paneKey]: recordChange.set
-    }
+    nextSleepingAgentSessions = replaceRecordEntries(state.sleepingAgentSessionsByPaneKey, [
+      [paneKey, recordChange.set]
+    ])
   }
   const previousLive = state.agentStatusByPaneKey
   const nextLive = { ...previousLive, [paneKey]: entry }

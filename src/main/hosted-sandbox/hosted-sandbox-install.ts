@@ -11,8 +11,8 @@ import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   getOrcaCloudAuthConfig,
   isOrcaCloudDevAuthEnabled
-} from '../orca-profiles/profile-cloud-auth-config'
-import { readFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
+} from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import { readFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
 import type { PluginService } from '../plugins/plugin-service'

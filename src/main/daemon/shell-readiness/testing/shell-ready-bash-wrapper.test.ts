@@ -6,7 +6,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import type * as DaemonBashRcfileModule from '../daemon-bash-shell-ready-rcfile'
 import { getBashShellReadyRcfileContent } from '../../../providers/local-pty/local-pty-shell-ready-bash-rcfile'
 import { getDaemonBashShellReadyRcfileContent } from '../daemon-bash-shell-ready-rcfile'
-import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
+import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
 import {
   expectBashOsc133Lifecycle,
   runInteractiveBashRcfile

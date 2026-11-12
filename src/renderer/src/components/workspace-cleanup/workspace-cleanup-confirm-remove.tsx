@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
-  shouldForceWorkspaceCleanupRemoval,
+  needsWorkspaceCleanupRemovalApproval,
   type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupRemovalProgress } from './workspace-cleanup-background-removal'
@@ -67,7 +67,7 @@ export function WorkspaceCleanupConfirmRemove({
   const t = useTranslate()
   const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null)
   const count = candidates.length
-  const riskCount = candidates.filter(shouldForceWorkspaceCleanupRemoval).length
+  const riskCount = candidates.filter(needsWorkspaceCleanupRemovalApproval).length
   const deleting = progress !== null
   const progressValue = progress
     ? Math.min(100, Math.max(0, (progress.processedCount / progress.totalCount) * 100))

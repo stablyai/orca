@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useRef } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export type SegmentedOption<T extends string | number> = {
   value: T
@@ -18,9 +18,10 @@ type SettingsSegmentedControlProps<T extends string | number> = {
   ariaLabel?: string
   ariaLabelledBy?: string
   ariaDescribedBy?: string
-  size?: 'sm' | 'md'
+  size?: 'icon' | 'sm' | 'md'
   equalWidth?: boolean
   wrap?: boolean
+  overlayTooltip?: boolean
   /** 'auto' (default) selects on arrow keys; 'manual' only moves focus, for options whose change has side effects. */
   activation?: 'auto' | 'manual'
 }
@@ -35,6 +36,7 @@ export function SettingsSegmentedControl<T extends string | number>({
   size = 'md',
   equalWidth = false,
   wrap = false,
+  overlayTooltip = false,
   activation = 'auto'
 }: SettingsSegmentedControlProps<T>): React.JSX.Element {
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -122,7 +124,11 @@ export function SettingsSegmentedControl<T extends string | number>({
               // Every option is medium weight so labels keep their width when the selection moves.
               // Focus replaces the chip edge (flush outline, no ring) so a focused segment never draws two rings.
               'rounded-sm text-center font-medium outline-none transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-0 focus-visible:outline-focus-ring focus-visible:ring-0',
-              size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm',
+              size === 'icon'
+                ? 'grid h-[26px] w-7 place-items-center'
+                : size === 'sm'
+                  ? 'px-2.5 py-0.5 text-xs'
+                  : 'px-3 py-1 text-sm',
               equalWidth && 'flex-1',
               active
                 ? 'bg-background text-foreground shadow-xs ring-1 ring-border dark:bg-white/[0.11] dark:ring-white/[0.06]'
@@ -140,7 +146,13 @@ export function SettingsSegmentedControl<T extends string | number>({
         return (
           <Tooltip key={String(opt.value)}>
             <TooltipTrigger asChild>{button}</TooltipTrigger>
-            <TooltipContent>{opt.tooltip}</TooltipContent>
+            <TooltipContent
+              side="top"
+              sideOffset={4}
+              style={overlayTooltip ? { zIndex: 110 } : undefined}
+            >
+              {opt.tooltip}
+            </TooltipContent>
           </Tooltip>
         )
       })}

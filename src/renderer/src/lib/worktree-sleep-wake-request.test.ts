@@ -38,7 +38,7 @@ import {
   resetWorktreeSleepViewForTests
 } from './worktree-sleep-view'
 import { activateWorktreeFromSidebar } from './workspace/activation/sidebar-worktree-activation'
-import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from './worktree-sleep-intent'
+import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from './workspace/sleep/worktree-sleep-intent'
 
 const WS = 'cloud-wt'
 const PRESS = 1_800_000_000_000

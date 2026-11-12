@@ -1,4 +1,4 @@
-import { app, powerMonitor } from 'electron'
+import { powerMonitor } from 'electron'
 import {
   disposeLocalRepoRefMaintenance,
   postponeRepoRefMaintenance,
@@ -30,13 +30,8 @@ export function installRepoMaintenanceIdleGate(
   const onBattery = (): void => {
     postponeRepoRefMaintenance()
   }
-  const onFocus = (): void => {
-    postponeRepoRefMaintenance()
-  }
   powerMonitor.on('on-battery', onBattery)
-  app.on('browser-window-focus', onFocus)
   return () => {
-    app.off('browser-window-focus', onFocus)
     powerMonitor.off('on-battery', onBattery)
     // Stop armed timers before removing the activity probe.
     const stopped = disposeLocalRepoRefMaintenance()

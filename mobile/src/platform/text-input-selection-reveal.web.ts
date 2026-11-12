@@ -1,9 +1,9 @@
 import { useLayoutEffect, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { copyTextInputStyles } from './text-input-content-height.web'
 
 // A textarea exposes selection offsets, but no rectangle for its caret.
-export function useTextInputSelectionReveal(input: RefObject<TextInput | null>): void {
+export function useTextInputSelectionReveal(input: RefObject<TextInputInstance | null>): void {
   useLayoutEffect(() => {
     const field: unknown = input.current
     if (!(field instanceof HTMLTextAreaElement)) {

@@ -15,8 +15,8 @@ import type {
   RuntimeTerminalRead
 } from '../../../src/shared/runtime-terminal-contracts'
 import type { TerminalPaneLayoutNode } from '../../../src/shared/workspace-layout/terminal-tab-types'
-import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
-import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
+import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-published'
+import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 const BASELINE_FILE = path.join(process.cwd(), 'tests', 'e2e', 'layout-compat-baselines.json')
 /** Also writes each observation here, one file per scenario and platform, to record a baseline. */

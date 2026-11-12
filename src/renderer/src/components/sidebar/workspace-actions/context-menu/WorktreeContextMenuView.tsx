@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
 import {
@@ -39,7 +39,7 @@ import {
   shouldRevealWorktreeDeveloperMenu,
   shouldUseNativeContextMenu
 } from './worktree-context-menu-policy'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
@@ -146,13 +146,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
-          <DropdownMenuLabel>
-            <span className="block max-w-60 truncate">
-              {isMultiContext || !worktree.displayName
-                ? t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')
-                : worktree.displayName}
-            </span>
-          </DropdownMenuLabel>
+          {/* Why: the highlighted card already names a single worktree. */}
+          {isMultiContext && (
+            <DropdownMenuLabel>
+              {t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
+            </DropdownMenuLabel>
+          )}
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
           {!isMultiContext && <WorktreeRemoteDesktopMenuItem worktreeId={worktree.id} />}
           {isMultiContext ? (

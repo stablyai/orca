@@ -5,14 +5,14 @@ import {
   type GitHubPrMutationOutcome
 } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { translate } from '../../i18n/mobile-i18n'
 
 // The diff screen's writes on a PR file: a new line comment and its viewed mark.
 
 // A new line comment on the PR's head commit; GitHub only accepts lines inside the file's diff hunks.
 export function fetchAddPRReviewComment(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     prNumber: number
@@ -45,7 +45,7 @@ export function fetchAddPRReviewComment(
 }
 
 export function fetchSetPRFileViewed(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: {
     pullRequestId: string

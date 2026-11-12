@@ -58,6 +58,19 @@ export async function readRemoteDownloadChunk(
   )
 }
 
+/** A workspace file on a paired host, streamed in pages, or in one reply from hosts that can't page. */
+export async function downloadRemoteRuntimeFile(
+  remoteArgs: RemoteFileDownloadArgs,
+  suggestedName: string
+): Promise<RuntimeFileDownloadResult> {
+  if (!(await remoteChunkedDownloadAvailable(remoteArgs))) {
+    return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
+  }
+  return streamDownloadedFile(suggestedName, (offset) =>
+    readRemoteDownloadChunk(remoteArgs, offset)
+  )
+}
+
 /** A host file outside every workspace, paged through the grant the host issued for it. */
 export function downloadGrantedRuntimeFile(
   grant: {

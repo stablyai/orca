@@ -5,7 +5,7 @@ import { Switch } from '@/components/ui/switch'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   McpSyncServerRow,

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { isSilentSetupScriptPromptState } from '@/lib/setup-script-prompt'
+import { isSilentSetupScriptPromptState } from '@/runtime/repo-hooks/setup-script-prompt'
 import {
   getRenderedSetupScriptPromptState,
   type LastVisibleSetupScriptPrompt,

@@ -1,0 +1,14 @@
+id: claude-chat-entrypoint-callers
+snapshots:
+  "import { withOrcaClaudeChatEntrypoint as stamp } from './claude-chat-entrypoint'":
+    labels:
+      - source: withOrcaClaudeChatEntrypoint
+        style: primary
+        start: 9
+        end: 37
+  'withOrcaClaudeChatEntrypoint(env, platform)':
+    labels:
+      - source: withOrcaClaudeChatEntrypoint
+        style: primary
+        start: 0
+        end: 28

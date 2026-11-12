@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import { resolveProviderChildEnv } from '../../provider-process/provider-process-launch'
+import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../../shared/node-cli-command-resolution'
 import {
@@ -91,7 +92,7 @@ export async function runCodexAppServerSession<T>(
 ): Promise<T> {
   invocation.signal?.throwIfAborted()
   // Strip CODEX_HOME after the overlay so default-home grants target the real ~/.codex.
-  const childEnv = resolveProviderChildEnv(invocation, process.env)
+  const childEnv = resolveProviderChildEnv(invocation, processEnvWithoutAgentSession())
   const pairedEnv = invocation.cliPath
     ? withCliRuntimeOnPath(invocation.cliPath, childEnv)
     : childEnv

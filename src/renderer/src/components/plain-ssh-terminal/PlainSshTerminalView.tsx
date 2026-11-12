@@ -1,17 +1,11 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
-import type { ITheme, Terminal } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type {
-  PlainSshTerminalEvent,
-  PlainSshTerminalOpenResult
-} from '../../../../shared/plain-ssh-terminal'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
-import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { resolveEffectiveTerminalAppearance } from '@/lib/terminal/appearance/terminal-theme'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 import { syncPreviewTerminalLigatures } from '@/components/dashboard-popout/preview-terminal-ligatures'
@@ -22,6 +16,12 @@ import {
 import { openStandaloneTerminal } from '@/components/standalone-terminal/open-standalone-terminal'
 import { removePlainSshPanel } from '@/ssh/plain-ssh-terminal-panels'
 import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
+import type { ITheme, Terminal } from '@xterm/xterm'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type {
+  PlainSshTerminalEvent,
+  PlainSshTerminalOpenResult
+} from '../../../../shared/plain-ssh-terminal'
 
 export type PlainSshTerminalPhase =
   | { kind: 'opening' }

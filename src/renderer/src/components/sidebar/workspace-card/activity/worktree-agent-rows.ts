@@ -22,7 +22,7 @@ import type {
   TerminalTab
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/runtime-pane-title-leaf-id'
-import { resolveDecayedAgentRowState } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
+import { resolveAgentRowState } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
@@ -180,11 +180,6 @@ export function buildWorktreeAgentRows(args: {
     for (const entry of explicitEntries) {
       const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
       const isFresh = isAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
-      const shouldDecay =
-        !isFresh &&
-        (rowEntry.state === 'working' ||
-          rowEntry.state === 'blocked' ||
-          rowEntry.state === 'waiting')
       const startedAt = effectiveWorktreeAgentRowStartedAt(rowEntry)
       rows.push({
         paneKey: rowEntry.paneKey,
@@ -192,7 +187,7 @@ export function buildWorktreeAgentRows(args: {
         tab,
         agentType: resolveRowAgentType(rowEntry, tab),
         rowSource: 'live',
-        state: shouldDecay ? resolveDecayedAgentRowState(rowEntry, hasLivePty) : rowEntry.state,
+        state: resolveAgentRowState(rowEntry, args.now, hasLivePty),
         startedAt
       })
       rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))
@@ -227,9 +222,6 @@ export function buildWorktreeAgentRows(args: {
       continue
     }
     const isFresh = isAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
-    const shouldDecay =
-      !isFresh &&
-      (rowEntry.state === 'working' || rowEntry.state === 'blocked' || rowEntry.state === 'waiting')
     rows.push({
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
@@ -237,9 +229,7 @@ export function buildWorktreeAgentRows(args: {
       agentType: resolveRowAgentType(rowEntry, tab),
       rowSource: 'live',
       // Even synthesized tabs use available PTY evidence to distinguish idle from unverifiable decay.
-      state: shouldDecay
-        ? resolveDecayedAgentRowState(rowEntry, tabHasLivePty(ptyIdsByTabId, tab.id))
-        : rowEntry.state,
+      state: resolveAgentRowState(rowEntry, args.now, tabHasLivePty(ptyIdsByTabId, tab.id)),
       startedAt
     })
     rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))

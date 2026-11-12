@@ -2,7 +2,7 @@ import React, { useId, useState } from 'react'
 import { Bot, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   ReadSnapshotAgentStatus,
   ReadSnapshotSession

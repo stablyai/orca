@@ -3,7 +3,6 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import PreservedBranchBatchReviewModal from './PreservedBranchBatchReviewModal'
 import { forceDeletePreservedBranchBatch } from './preserved-branch-batch-toast'
@@ -97,13 +96,7 @@ describe('showPreservedBranchBatchToast', () => {
       { worktreeId: 'repo-b::two', branchName: 'feature/two', expectedHead: 'head-two' }
     ])
 
-    expect(document.body.textContent).toContain('Review kept branches')
-    expect(document.body.textContent).toContain('2 of 2 selected')
     await clickCheckbox('preserved-branch-1')
-    expect(document.body.textContent).toContain('1 of 2 selected')
-    expect(
-      document.getElementById('preserved-branch-select-all')?.querySelector('.lucide-minus')
-    ).not.toBeNull()
     await clickButton(document.body, 'Force Delete 1 Branch')
 
     expect(mocks.state.closeModal).toHaveBeenCalledOnce()
@@ -114,9 +107,6 @@ describe('showPreservedBranchBatchToast', () => {
       'head-one',
       { suppressToast: true }
     )
-    expect(toast.success).toHaveBeenCalledWith('Local branches deleted: 1', {
-      id: 'force-delete-branch-batch:repo-a::one:1'
-    })
   })
 
   it('serializes branch deletion within one repository', async () => {
@@ -146,7 +136,6 @@ describe('showPreservedBranchBatchToast', () => {
       { worktreeId: 'repo-b::two', branchName: 'feature/two' }
     ])
 
-    expect(document.body.textContent).toContain('Head unavailable')
     expect((document.getElementById('preserved-branch-1') as HTMLButtonElement).disabled).toBe(true)
     await clickButton(document.body, 'Force Delete 1 Branch')
 

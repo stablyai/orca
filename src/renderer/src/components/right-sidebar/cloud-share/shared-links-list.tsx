@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { OrcaSignInButton } from '@/components/OrcaSignInProgress'
 import { signInAgainActionLabel } from '@/lib/orca-cloud/orca-sign-in-again'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { ShareLink } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
 import { ShareLinkRow, shareLinkState } from './share-link-row'
 

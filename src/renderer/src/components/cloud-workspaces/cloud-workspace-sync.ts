@@ -4,7 +4,7 @@
 // link slug the first time anyone in the org asks (the control plane only knows org ids).
 import { useAppStore } from '@/store'
 import { getOrcaAccountKey } from '@/hooks/use-orca-account-key'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { cloudWorkspacesAvailable } from './use-cloud-workspaces'
 import {
   PREFS_POLL_MS,

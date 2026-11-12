@@ -33,5 +33,18 @@ export function findSpeechModelUpdateTarget(
   const retired = catalog.find(
     (m) => m.replacedBy === model.id && stateOf(m.id)?.status === 'ready'
   )
-  return retired ? { model, retired } : null
+  if (retired) {
+    return { model, retired }
+  }
+  // A download in flight has no needsUpdate, yet the model still can't dictate; the pill shows its progress.
+  return isSpeechModelDownloading(selected) ? { model } : null
+}
+
+export function isSpeechModelDownloading(state: SpeechModelState | undefined): boolean {
+  return state?.status === 'downloading' || state?.status === 'extracting'
+}
+
+/** Only a ready model with no pending update is known to dictate. */
+export function isSpeechModelReady(state: SpeechModelState | undefined): boolean {
+  return state?.status === 'ready' && !state.needsUpdate
 }

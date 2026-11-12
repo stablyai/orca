@@ -12,17 +12,17 @@ import {
 import {
   AUTOMATION_SCHEDULE_PRESET_OPTIONS,
   getAutomationSchedulePresetLabel
-} from '@/components/automations/AutomationSchedulePicker'
-import { AutomationTimeField } from '@/components/automations/AutomationTimeField'
+} from '@/components/automations/authoring/AutomationSchedulePicker'
+import { AutomationTimeField } from '@/components/automations/authoring/AutomationTimeField'
 import {
   getAutomationCronFieldLabels,
   getCronFieldValues,
   getCronScheduleStatusLabel
-} from '@/components/automations/AutomationCustomCronPanel'
-import { formatUiAutomationSchedule } from '@/components/automations/automation-schedule-label'
+} from '@/components/automations/authoring/AutomationCustomCronPanel'
+import { formatUiAutomationSchedule } from '@/components/automations/details/automation-schedule-label'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { isValidAutomationCronSchedule } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
 import { ROUTINE_GITHUB_EVENTS } from '../../../../../shared/cloud-api/cloud-api-types'
 import {

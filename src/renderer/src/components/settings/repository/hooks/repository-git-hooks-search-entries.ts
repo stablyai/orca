@@ -1,8 +1,36 @@
 import type { Repo } from '../../../../../../shared/repo-types'
+import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { searchKeywordTranslator } from '../../search/settings-search-keywords'
+
+export function getRepositoryHookScriptDescription(
+  repo: Repo,
+  hook: 'setup' | 'archive',
+  t: Translate
+): string {
+  if (hook === 'setup') {
+    return isFolderRepo(repo)
+      ? t(
+          'components.settings.RepositoryHooksSection.folderSetupDescription',
+          'Local and shared scripts that run after a new workspace is created.'
+        )
+      : t(
+          'auto.components.settings.RepositoryHooksSection.30d555acd2',
+          'Local and shared scripts that run after a new worktree is created.'
+        )
+  }
+  return isFolderRepo(repo)
+    ? t(
+        'components.settings.RepositoryHooksSection.folderArchiveDescription',
+        'Local and shared scripts that run before a workspace is removed.'
+      )
+    : t(
+        'auto.components.settings.RepositoryHooksSection.b91a0f297d',
+        'Local and shared scripts that run before a worktree is archived.'
+      )
+}
 
 export function getRepositoryGitHooksSearchEntries(
   repo: Repo,
@@ -12,10 +40,7 @@ export function getRepositoryGitHooksSearchEntries(
   return [
     {
       title: t('auto.components.settings.repository.search.810b9f4106', 'Setup script'),
-      description: t(
-        'auto.components.settings.repository.search.baaf70bb37',
-        'Local and shared scripts that run after a new worktree is created.'
-      ),
+      description: getRepositoryHookScriptDescription(repo, 'setup', t),
       keywords: [
         repo.displayName,
         ...translateSearchKeyword('auto.components.settings.repository.search.8655e3387b', 'hooks'),
@@ -41,10 +66,7 @@ export function getRepositoryGitHooksSearchEntries(
     },
     {
       title: t('auto.components.settings.repository.search.1617bc353d', 'Archive script'),
-      description: t(
-        'auto.components.settings.repository.search.acd1157f0c',
-        'Local and shared scripts that run before a worktree is archived.'
-      ),
+      description: getRepositoryHookScriptDescription(repo, 'archive', t),
       keywords: [
         repo.displayName,
         ...translateSearchKeyword('auto.components.settings.repository.search.8655e3387b', 'hooks'),
@@ -123,6 +145,10 @@ export function getRepositoryGitHooksSearchEntries(
           'auto.components.settings.repository.search.waitForSetupBeforeAgent',
           'wait for setup before starting agent'
         ),
+        ...translateSearchKeyword(
+          'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+          'Wait for setup to complete before starting agent'
+        ),
         ...translateSearchKeyword('auto.components.settings.repository.search.80c490b012', 'ask'),
         ...translateSearchKeyword(
           'auto.components.settings.repository.search.a69c5cbe90',
@@ -134,42 +160,46 @@ export function getRepositoryGitHooksSearchEntries(
         )
       ]
     },
-    {
-      title: t(
-        'auto.components.settings.repository.search.aced2fc1be',
-        'Custom GitHub issue command'
-      ),
-      description: t(
-        'auto.components.settings.repository.search.d42d1e49c0',
-        'File-based linked-issue command configured via orca.yaml and optional local override.'
-      ),
-      keywords: [
-        repo.displayName,
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.2011a6a4f2',
-          'github issue command'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.66b584bd6c',
-          'issue command'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.ec70364df2',
-          'workflow'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.9dc60d7f6d',
-          'github'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.603c68b68c',
-          'orca.yaml'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.repository.search.bc7e504b8e',
-          '.orca/issue-command'
-        )
-      ]
-    }
+    ...(isFolderRepo(repo)
+      ? []
+      : [
+          {
+            title: t(
+              'auto.components.settings.repository.search.aced2fc1be',
+              'Custom GitHub issue command'
+            ),
+            description: t(
+              'auto.components.settings.repository.search.d42d1e49c0',
+              'File-based linked-issue command configured via orca.yaml and optional local override.'
+            ),
+            keywords: [
+              repo.displayName,
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.2011a6a4f2',
+                'github issue command'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.66b584bd6c',
+                'issue command'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.ec70364df2',
+                'workflow'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.9dc60d7f6d',
+                'github'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.603c68b68c',
+                'orca.yaml'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.bc7e504b8e',
+                '.orca/issue-command'
+              )
+            ]
+          }
+        ])
   ]
 }

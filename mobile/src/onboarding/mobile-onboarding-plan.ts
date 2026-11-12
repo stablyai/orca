@@ -1,4 +1,4 @@
-import { shouldPresentNotificationOptIn } from '../notifications/notification-opt-in-gate'
+import { shouldPresentNotificationOptIn } from '../notifications/delivery-policy/notification-opt-in-gate'
 import { shouldPresentSessionViewOptIn } from '../session/session-view-opt-in-gate'
 
 export const MOBILE_ONBOARDING_STEPS = ['session-view', 'notifications'] as const

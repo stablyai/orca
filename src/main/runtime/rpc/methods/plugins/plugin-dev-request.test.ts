@@ -10,9 +10,9 @@ import { PluginService } from '../../../../plugins/plugin-service'
 import type {
   PluginWorkerHandle,
   PluginWorkerPanelRequest
-} from '../../../../plugins/workers/plugin-host-process-types'
+} from '../../../../plugins/workers/parent-process/plugin-host-process-types'
 
-import type { PluginWorkerFactory } from '../../../../plugins/workers/plugin-worker-startup'
+import type { PluginWorkerFactory } from '../../../../plugins/workers/worker-supervision/plugin-worker-startup'
 import { eraseRpcMethods, type RpcContext } from '../../core'
 import { PLUGIN_DEV_REQUEST_METHODS } from './plugin-dev-request'
 import { setPluginServiceForRpc } from './plugins'

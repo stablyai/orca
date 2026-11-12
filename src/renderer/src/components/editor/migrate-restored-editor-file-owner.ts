@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   findWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
-} from '@/lib/runtime-workspace-file-route'
+} from '@/lib/files/access/runtime-workspace-file-route'
 import '@/lib/editor/file-operations/editor-file-operation-owner'
 import {
   assertEditorFileOperationCurrent,

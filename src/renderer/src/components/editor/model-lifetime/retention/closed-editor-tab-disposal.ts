@@ -1,5 +1,5 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { scrollTopCache } from '@/lib/scroll-cache'
+import { scrollTopCache } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import {
   disposeUnattachedMonacoModelsByPathPrefixes,
   forgetDiffViewerModelPaths,

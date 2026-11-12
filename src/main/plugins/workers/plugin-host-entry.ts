@@ -1,6 +1,6 @@
 // ELECTRON_RUN_AS_NODE entry: imports must stay transitively Electron-free.
-import { createPluginWorkerRuntime } from './plugin-host-runtime'
-import { registerPluginWorkerSourceHooks } from './plugin-worker-source-hooks'
+import { createPluginWorkerRuntime } from './child-runtime/plugin-host-runtime'
+import { registerPluginWorkerSourceHooks } from './child-runtime/plugin-worker-source-hooks'
 import { pluginWorkerFatal } from '../../../shared/plugins/workers/plugin-host-protocol'
 import type { PluginEnvelope } from '../../../shared/plugins/frames/plugin-protocol'
 

@@ -1,6 +1,7 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
@@ -24,10 +25,8 @@ import { registerEphemeralVmHandlers } from './ephemeral-vm'
 
 const tempDirs: string[] = []
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tempDirs.splice(0))
   vi.clearAllMocks()
 })
 

@@ -17,7 +17,7 @@ import {
 } from '../../../shared/quick-open/quick-open-query-target'
 import { openQuickOpenFile } from './quick-open-file-navigation'
 import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
-import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
+import { useQuickOpenHistory } from '@/lib/files/search/quick-open-file-history'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { useTranslate } from '@/i18n/use-translate'

@@ -3,7 +3,7 @@ import {
   githubBodyImageUrls,
   removeFailedGitHubBodyHtml
 } from './body-image-urls'
-import { extractExecError } from '../git/exec-error'
+import { extractExecError } from '../git/command-runner/process-capture/exec-error'
 import type { GitHubIssueTimelineItem, PRComment } from '../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../shared/github/pull-request-types'
 import {
@@ -14,8 +14,13 @@ import {
 import { mapIssueWorkItem } from './client/map/work-item'
 import { restIssueActor } from './client/map/issue-actor'
 import type { MainWorkItem } from './client/map/work-item-field-coercion'
-import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-utils'
-import type { LocalGitExecOptions } from './gh-utils'
+import {
+  ghExecFileAsync,
+  ghRepoExecOptions,
+  githubRepoContext,
+  type LocalGitExecOptions
+} from './gh-utils'
+
 import { githubHostExecOptions, type GitHubApiRepository } from './github-api-repository'
 import { getIssueTimelineItems } from './issue-timeline'
 import { readViewerLogin } from './client/fetch/authenticated-viewer'

@@ -15,7 +15,7 @@ vi.mock('../../windows/windows-administrator-status', () => ({
 vi.mock('../../daemon/providers/lifecycle/daemon-provider-restart', () => ({
   restartDaemon: vi.fn(async () => {})
 }))
-vi.mock('../../crash-reporting/durable-crash-breadcrumb', () => ({
+vi.mock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
 

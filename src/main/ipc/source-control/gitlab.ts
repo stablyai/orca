@@ -4,9 +4,9 @@ import {
   diagnoseAuth,
   getAuthenticatedViewer,
   getRateLimit
-} from '../../gitlab/gitlab-auth-and-rate-limit'
-import { getProjectSlug } from '../../gitlab/merge-request-lookup'
-import { listTodos } from '../../gitlab/work-item-queries'
+} from '../../gitlab/requests/gitlab-auth-and-rate-limit'
+import { getProjectSlug } from '../../gitlab/merge-requests/merge-request-lookup'
+import { listTodos } from '../../gitlab/work-items/work-item-queries'
 import { registerGitLabCiJobHandlers } from './gitlab-ci-job-handlers'
 import { registerGitLabIssueHandlers } from './gitlab-issue-handlers'
 import { registerGitLabMergeRequestMutationHandlers } from './gitlab-merge-request-mutation-handlers'

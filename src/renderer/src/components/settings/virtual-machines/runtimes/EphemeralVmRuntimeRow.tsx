@@ -2,8 +2,8 @@ import { AlertTriangle, ChevronRight, Copy, Loader2, Square, Trash2, X } from 'l
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
 import { getEphemeralVmRecipeResultProjectRoot } from '../../../../../../shared/ephemeral-vm-recipes'
 import { useTranslate } from '@/i18n/use-translate'
-import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
-import { cn } from '@/lib/utils'
+import { ephemeralVmCleanupErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../../ui/button'
 import { useAppStore } from '@/store'
 

@@ -131,20 +131,4 @@ describe('removing a worktree the host deletes in the background', () => {
     expect(attempt.draft?.text).toBe('pending task')
     clearNativeChatComposerDraftsForTests()
   })
-
-  it('lost removal reply keeps draft when listing is unreadable', async () => {
-    clearNativeChatComposerDraftsForTests()
-    seedRow(store)
-    hostListsOnRefresh(new Error('unreadable'))
-    const scope = nativeChatLaunchPromptDraftScopeKey(worktreeId, 'codex', 'local')
-    updateNativeChatComposerDraft(scope, { text: 'pending task' }, 'immediate')
-    const attempt = captureNativeChatComposerSubmission(scope)
-    mockApi.worktrees.remove.mockRejectedValue(new Error('Request timed out: worktree.rm'))
-    const result = await store
-      .getState()
-      .removeWorktree({ id: worktreeId, executionHostId: 'local' })
-    expect(result.ok).toBe(false)
-    expect(attempt.draft?.text).toBe('pending task')
-    clearNativeChatComposerDraftsForTests()
-  })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import { EMPTY_PENDING_VM_CHECKOUT_INDEX } from '../../../../shared/pending-vm-checkouts'
-import { withOrcaCloudHosts } from '@/lib/vm-create-hidden-checkouts'
+import { withOrcaCloudHosts } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   parseOrcaCloudHostScopeKey,
   selectOrcaCloudHostScopeKey,

@@ -218,8 +218,10 @@ function makePostRevealWorkerRecoveryHarness(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This recovery fixture reaches only the listed planner, terminal settlement and authority lookup methods.
   runtime.setOrchestrationDb({
     crewChanges: new CrewChanges(),
+    hasAnyDispatchContexts: () => true,
     listSessionDispatchesForPresentation: () => [],
     reconcileMissingWorkerTerminal: vi.fn(),
+    getDispatchContextById: () => undefined,
     getActiveDispatchForTerminal: () => undefined,
     findActiveRemoteAttachmentForPane: () => undefined,
     listLegacyWorkerTerminalRecoveryRows: () => [

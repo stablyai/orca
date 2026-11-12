@@ -8,6 +8,8 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Queues
@@ -66,6 +68,17 @@ class OrcaMobileWebShellModule : Module() {
       // A full disk can refuse the folder; the caller then keeps the old root.
       if (!directory.mkdirs() && !directory.isDirectory) throw UnableToCreateGenerationStoreException()
       Uri.fromFile(directory).toString()
+    }
+
+    // Lets isolation-unavailable name the WebView to update.
+    Function("currentWebViewProvider") {
+      val context = appContext.reactContext ?: return@Function null
+      val info = WebViewCompat.getCurrentWebViewPackage(context) ?: return@Function null
+      val version = info.versionName ?: return@Function null
+      val name = info.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: info.packageName
+      val hasShellFeatures = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) &&
+        WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
+      mapOf("name" to name, "version" to version, "hasShellFeatures" to hasShellFeatures)
     }
 
     AsyncFunction("prepareSpareDocument") { directory: String, sessionId: String ->

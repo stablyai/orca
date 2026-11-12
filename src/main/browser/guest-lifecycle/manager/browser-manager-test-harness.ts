@@ -4,6 +4,16 @@ import { browserManager } from './browser-manager'
 export const rendererWebContentsId = 5001
 export const guestBaseUserAgent = 'Mozilla/5.0 (Test) Chrome/140.0.0.0'
 
+export const guestNavigationMethods = () => ({
+  getURL: vi.fn(() => 'https://example.com/'),
+  getTitle: vi.fn(() => 'Example'),
+  isLoadingMainFrame: vi.fn(() => false),
+  navigationHistory: {
+    canGoBack: vi.fn(() => false),
+    canGoForward: vi.fn(() => false)
+  }
+})
+
 export type GuestUserAgentMethods = {
   getUserAgent: Mock<() => string>
   setUserAgent: Mock<(userAgent: string) => void>

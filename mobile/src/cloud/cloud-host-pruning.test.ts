@@ -8,7 +8,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     removeItem: async (key: string) => void store.delete(key)
   }
 }))
-vi.mock('../transport/hosts/host-store', () => ({ loadHostCatalog: async () => [] }))
+vi.mock('../host-catalog/host-store', () => ({ loadHostCatalog: async () => [] }))
 vi.mock('./cloud-workspace-attach', () => ({
   CloudAttachError: class CloudAttachError extends Error {
     constructor(readonly code: string) {

@@ -1,7 +1,7 @@
 import { defineMethod, type RpcContext } from '../../core'
 import { saveClipboardImageBufferAsTempFile } from '../../../../window/clipboard-image-temp-file'
 import { randomUUID } from 'node:crypto'
-import { recordMobileClipboardImagePath } from '../../mobile-clipboard-image-provenance'
+import { recordMobileClipboardImagePath } from '../../clipboard/mobile-clipboard-image-provenance'
 import {
   AbortImageUpload,
   AppendImageUploadChunk,

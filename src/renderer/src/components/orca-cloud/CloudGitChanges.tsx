@@ -1,7 +1,7 @@
 import React from 'react'
 import { GitBranch, GitCommitHorizontal } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   CHANGE_LETTER,
   changeKind,

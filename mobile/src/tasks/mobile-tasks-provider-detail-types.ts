@@ -1,10 +1,9 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type {
   ProviderCheckSummary,
-  GitHubOwnerRepo,
-  RpcClient,
-  LinearMobileIssue
-} from './mobile-tasks-dependencies'
+  GitHubOwnerRepo
+} from '../../../src/shared/github/pull-request-types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 export type RepoSummary = {
@@ -154,8 +153,6 @@ export type LinearIssueChild = {
   title: string
   url: string
 }
-
-export type LinearIssue = LinearMobileIssue
 
 export type LinearState = {
   id: string

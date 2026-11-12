@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
+import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import RunTargetCombobox from './RunTargetCombobox'
 import { useAppStore } from '@/store/index'

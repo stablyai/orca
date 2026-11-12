@@ -3,16 +3,16 @@ import { toast } from 'sonner'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import {
   Dialog,
   DialogContent,
@@ -24,16 +24,16 @@ import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog, {
   restoreAgentSettingsInvoker
 } from '@/components/agent/AgentSettingsDialog'
-import type { AddRepoDialogHostedController } from '@/components/sidebar/project-admission/host-selection/use-add-repo-hosted-controller'
+import { useComposerHostedAddProject } from './new-workspace/use-composer-hosted-add-project'
 import { useComposerState } from '@/hooks/useComposerState'
-import { quickWorkspacePickerInputs } from '@/lib/quick-workspace-agent-selection'
+import { quickWorkspacePickerInputs } from '@/lib/workspace/creation/quick-workspace-agent-selection'
 import { useComposerQuickAgent } from './new-workspace/use-composer-quick-agent'
-import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { shouldAllowComposerEnterSubmitTarget } from '@/lib/workspace/creation/new-workspace-enter-guard'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace/creation/workspace-composer-initial-focus'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
@@ -280,38 +280,19 @@ function QuickTabBody({
     recordCreatedRef,
     onClose
   })
-  // Layer Add Project without replacing the composer. Retain it for close animation and clone/scan cancellation; folder/non-Git navigation still tears down the modal.
-  const [addProjectOpen, setAddProjectOpen] = useState(false)
-  const [addProjectMounted, setAddProjectMounted] = useState(false)
-  const [setLocationOpen, setSetLocationOpen] = useState(false)
-  const handleOpenAddProject = useCallback((): void => {
-    setAddProjectMounted(true)
-    setAddProjectOpen(true)
-  }, [])
-  const handleProjectAdded = useCallback(
-    (repoId: string): void => {
-      selectAddedProjectRepo(repoId)
-    },
-    [selectAddedProjectRepo]
-  )
-  const handleAddProjectCloseAutoFocus = useCallback(
-    (event: Event): void => {
-      // After Add Project, focus the name field; Radix’s original combobox row may be unmounted.
-      event.preventDefault()
-      nameInputRef?.current?.focus()
-    },
-    [nameInputRef]
-  )
-  const addProjectController = useMemo<AddRepoDialogHostedController>(
-    () => ({
-      open: addProjectOpen,
-      onOpenChange: setAddProjectOpen,
-      onProjectAdded: handleProjectAdded,
-      onProjectGroupImported: selectAddedProjectGroup,
-      onCloseAutoFocus: handleAddProjectCloseAutoFocus
-    }),
-    [addProjectOpen, handleAddProjectCloseAutoFocus, handleProjectAdded, selectAddedProjectGroup]
-  )
+  const {
+    addProjectOpen,
+    addProjectMounted,
+    nestedDialogCount,
+    addProjectController,
+    handleNestedDialogOpenChange,
+    handleOpenAddProject,
+    handleOpenAddProjectEntryRequest
+  } = useComposerHostedAddProject({
+    nameInputRef,
+    selectAddedProjectRepo,
+    selectAddedProjectGroup
+  })
   const isFolderWorkspaceTarget =
     cardProps.projectOptions.find((option) => option.id === cardProps.selectedProjectId)?.kind ===
     'project-group'
@@ -321,7 +302,7 @@ function QuickTabBody({
     : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
-  const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
+  const nestedDialogOpen = agentSettingsOpen || addProjectOpen || nestedDialogCount > 0
   useEffect(() => {
     if (!active || nestedDialogOpen) {
       // Nested dialogs own input; never submit the underlying composer through this capture handler.
@@ -408,7 +389,8 @@ function QuickTabBody({
         }}
         onCreate={onPrimary}
         onAddProjectOverride={handleOpenAddProject}
-        onNestedDialogOpenChange={setSetLocationOpen}
+        onAddProjectEntryRequest={handleOpenAddProjectEntryRequest}
+        onNestedDialogOpenChange={handleNestedDialogOpenChange}
       />
       <AgentSettingsDialog
         open={agentSettingsOpen}

@@ -16,7 +16,7 @@ import {
 } from './plugin-discovery'
 import { PluginAuditLog, type PluginAuditEntry } from './plugin-audit-log'
 import { PluginContentVerifier } from './plugin-content-integrity'
-import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
+import type { PluginRuntimeDelegate } from './workers/host-api/plugin-host-service-bindings'
 import {
   createPluginServiceHostCall,
   pluginPanelBridgeServices,
@@ -30,8 +30,8 @@ import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 import {
   collectApprovedWorkerSpecs,
   isApprovedWorkerSpec
-} from './workers/plugin-worker-reconciliation'
-import type { PluginRunState } from './workers/plugin-supervisor'
+} from './workers/worker-admission/plugin-worker-reconciliation'
+import type { PluginRunState } from './workers/worker-supervision/plugin-supervisor'
 import {
   isPluginApproved,
   livePluginActivationState,
@@ -92,8 +92,7 @@ export class PluginService {
         pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
         desktop: this.options.getDesktopFrameServices?.(),
         panels: pluginPanelBridgeServices(this.panelBridge),
-        statusBar: this.options.statusBar,
-        appearance: this.options.appearance,
+        sinks: this.options,
         audit: this.audit,
         log: (pluginKey) => this.installed.captureLog(pluginKey, 'info')
       })

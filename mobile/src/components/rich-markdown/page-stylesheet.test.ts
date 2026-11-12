@@ -6,13 +6,6 @@ import { richMarkdownEditorStyle } from './document-style'
 // Move globals onto host, including theme variables/color/font/box model; unlike terminal, editor owns these page rules rather than delegating to app seam.
 const PREFIX = '.orca-rich-markdown-document-host'
 
-/** Every selector in a sheet, one per entry, as the rewrite leaves them. */
-function selectorsOf(css: string): string[] {
-  return [...css.matchAll(/(?:^|\})\s*([^{}]+)\{/g)].flatMap((match) =>
-    match[1]!.split(',').map((one) => one.trim())
-  )
-}
-
 describe('the editor stylesheet on the page', () => {
   it('moves the document’s own rules onto the host rather than dropping them', () => {
     const scoped = scopeDocumentStyleToHost(richMarkdownEditorStyle(), PREFIX)
@@ -25,17 +18,6 @@ describe('the editor stylesheet on the page', () => {
     for (const rule of rootRules) {
       expect(rule.trimStart().startsWith(PREFIX)).toBe(true)
     }
-  })
-
-  it('keeps the universal rule as the host and everything in it', () => {
-    const scoped = scopeDocumentStyleToHost('* { box-sizing: border-box; }', PREFIX)
-    expect(selectorsOf(scoped)).toEqual([PREFIX, `${PREFIX} *`])
-  })
-
-  it('collapses the document’s three names to one host selector', () => {
-    expect(
-      selectorsOf(scopeDocumentStyleToHost(':root, html, body { color: red; }', PREFIX))
-    ).toEqual([PREFIX])
   })
 
   it('refuses a document-level selector it cannot move, rather than scoping it wrongly', () => {

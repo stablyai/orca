@@ -1,5 +1,7 @@
+import { replaceTabBuckets } from '@/store/keyed-record-transitions'
+import { getTerminalTabOwnerWorktreeIds } from './terminal-tab-owner-index'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
 import { captureStructuredChatRename } from '@/runtime/native-chat/naming/structured-chat-rename-action'
@@ -16,12 +18,19 @@ export function createTerminalTabAppearanceActions(
         ({ renameHostTerminalTab }) => renameHostTerminalTab(state, tabId, title)
       )
       set((s) => {
-        const next = { ...s.tabsByWorktree }
-        for (const wId of Object.keys(next)) {
-          next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
+        const owners = [...getTerminalTabOwnerWorktreeIds(s.tabsByWorktree, tabId)]
+        if (owners.length === 0) {
+          return s
         }
+        const replacements = owners.map(
+          (wId) =>
+            [
+              wId,
+              s.tabsByWorktree[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
+            ] as const
+        )
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: next }
+        return { tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, replacements) }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item?.contentType === 'agent-session') {
@@ -44,11 +53,22 @@ export function createTerminalTabAppearanceActions(
     },
     setTabColor: (tabId, color, opts) => {
       set((s) => {
-        const next = { ...s.tabsByWorktree }
-        for (const wId of Object.keys(next)) {
-          next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, color } : t))
+        const owners = [...getTerminalTabOwnerWorktreeIds(s.tabsByWorktree, tabId)]
+        if (owners.length === 0) {
+          return s
         }
-        return { tabsByWorktree: next }
+        return {
+          tabsByWorktree: replaceTabBuckets(
+            s.tabsByWorktree,
+            owners.map(
+              (wId) =>
+                [
+                  wId,
+                  s.tabsByWorktree[wId].map((t) => (t.id === tabId ? { ...t, color } : t))
+                ] as const
+            )
+          )
+        }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {

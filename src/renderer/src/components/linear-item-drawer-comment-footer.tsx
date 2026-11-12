@@ -9,13 +9,17 @@ import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { linearAddIssueComment } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import type { LinearLocalComment } from '@/components/linear-item-drawer-types'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
@@ -141,7 +145,7 @@ export function LinearIssueCommentFooter({
         />
         <div className="flex items-center justify-between px-4 pb-3">
           <span className="text-[11px] text-muted-foreground">
-            {submitShortcutLabel !== 'Unassigned'
+            {!isUnassignedShortcutLabel(submitShortcutLabel)
               ? t('auto.components.LinearItemDrawer.fda549766e', '{{value0}} to comment', {
                   value0: submitShortcutLabel
                 })

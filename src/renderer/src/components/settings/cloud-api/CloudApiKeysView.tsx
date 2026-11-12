@@ -4,7 +4,7 @@ import { KeyRound, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   CloudApiApproval,
   CloudApiAuditPage,

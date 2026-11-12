@@ -7,7 +7,7 @@ import { build } from 'esbuild'
 
 const ENTRY_PATH = resolve('out/main/parcel-watcher-process-entry.js')
 const SUPERVISOR_SOURCE = resolve(
-  'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-supervisor.ts'
+  'src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-process-supervisor.ts'
 )
 const WAIT_TIMEOUT_MS = 15_000
 const require = createRequire(import.meta.url)

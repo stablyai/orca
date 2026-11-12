@@ -1,5 +1,5 @@
-import type { UsageProvider } from '../usage/usage-provider-contract'
-import { scanMuseUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
+import type { UsageProvider } from '../usage/provider-lifecycle/usage-provider-contract'
+import { scanMuseUsageFilesViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from './types'
 
 // Event-key ordinals require invalidating older caches.

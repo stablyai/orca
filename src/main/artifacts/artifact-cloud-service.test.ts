@@ -13,8 +13,8 @@ import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   linkOrcaProfileToCloud,
   unlinkOrcaProfileFromCloud
-} from '../orca-profiles/profile-cloud-index'
-import { signOutCloudSession } from '../orca-profiles/profile-cloud-session-owner'
+} from '../orca-profiles/cloud-auth/profile-cloud-index'
+import { signOutCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 
 import { ArtifactCloudService } from './artifact-cloud-service'
 

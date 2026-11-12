@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
@@ -15,19 +15,14 @@ import {
   isAgentStatusFresh,
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import {
-  getLiveAgentStatusByWorktreeId,
-  type LiveAgentWorktreeStatus
-} from '@/lib/worktree-activity-state'
-import {
-  getWorktreeStatus,
-  getWorktreeStatusLabel,
-  type WorktreeStatus
-} from '@/lib/worktree-status'
+import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
+import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/workspace-activity-facts'
+import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
 import {
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
-} from '@/lib/recent-workspace-tab-rows'
+} from '@/lib/workspace/search/palette/recent-workspace-tab-rows'
 import {
   resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity,

@@ -1,7 +1,7 @@
 import {
   slowTaskRequiredIdleMs,
   type SlowTaskBackoffOptions
-} from '../../../../lib/repository-refresh/coalesced-poll-runner'
+} from '../../../../lib/source-control/refresh/coalesced-poll-runner'
 
 export type GitStatusRefreshReason = 'activity' | 'safety'
 

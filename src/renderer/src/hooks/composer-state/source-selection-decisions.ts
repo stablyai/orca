@@ -2,7 +2,7 @@ import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/workt
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { SmartGitHubSubmitResolution } from '@/lib/work-items/github/smart-github-submit'
 import {
   resolveGitHubWorkItemIdentity,

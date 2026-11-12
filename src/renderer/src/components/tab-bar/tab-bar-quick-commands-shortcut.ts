@@ -9,8 +9,8 @@ import {
   toModifierDoubleTapEvent
 } from '../../../../shared/modifier-double-tap-detector'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
-import { useAppStore } from '@/store'
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/terminal/quick-commands/quick-commands-menu-events'
+import { useAppStore } from '@/store/index'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 type UseTabBarQuickCommandsShortcutParams = {

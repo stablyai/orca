@@ -19,6 +19,10 @@ import {
 import { workspaceMarkerTabIds } from './workspace-live-markers'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import { getTerminalTabOwnerWorktreeId } from '../../terminals/terminal-tab-owner-index'
+import { hasUnreadAgentSessionTab } from '@/components/terminal-pane/notifications/unread-agent-session-membership'
+
+const emptyTerminalTabs: AppState['tabsByWorktree'] = {}
 
 export const createWorkspaceAttentionSlice: StateCreator<
   AppState,
@@ -28,23 +32,18 @@ export const createWorkspaceAttentionSlice: StateCreator<
 > = (set, get) => {
   const markTabUnread = (tabId: string, reason: AgentAttentionUnreadReason): void => {
     const state = get()
+    if (state.unreadTerminalTabs[tabId]) {
+      return
+    }
     // Terminal tab IDs and structured-chat unified IDs both own markers; SortableTab/findRenamableUnifiedTab use the same pair.
     const ownsTab =
-      Object.values(state.tabsByWorktree ?? {})
-        .flat()
-        .some((tab) => tab.id === tabId) ||
-      Object.values(state.unifiedTabsByWorktree ?? {})
-        .flat()
-        .some((tab) => tab.contentType === 'agent-session' && tab.id === tabId)
+      getTerminalTabOwnerWorktreeId(state.tabsByWorktree ?? emptyTerminalTabs, tabId) !== null ||
+      hasUnreadAgentSessionTab(state.unifiedTabsByWorktree, tabId)
     if (!ownsTab) {
       return
     }
     // Why: a marker stays until its tab is read on screen, Marked as read, or closed.
-    set((s) =>
-      s.unreadTerminalTabs[tabId]
-        ? s
-        : { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: reason } }
-    )
+    set((s) => ({ unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: reason } }))
   }
   const markPaneUnread = (paneKey: string, reason: AgentAttentionUnreadReason): void => {
     set((s) =>

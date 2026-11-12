@@ -3,7 +3,7 @@ import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrad
 import type { MobileRelayDirectUpgradeResult } from './mobile-relay-direct-upgrade'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 import type { ConnectionState } from '../connection/connection-state'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 
 const directHost: HostProfile = {
   id: 'host-direct',

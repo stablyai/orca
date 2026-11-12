@@ -15,7 +15,7 @@ import {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { refreshBillingSummary, useBillingState } from '../../billing/billing-summary-store'
 import { BILLING_CAPABILITY } from '../../billing/register-plan-billing-menu-item'
 import { accountMenuUsageLines } from '../../billing/plan-billing-usage-copy'

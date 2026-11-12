@@ -1,7 +1,6 @@
-import type * as RunnerModule from '../runner'
 import type * as GitExecFileModule from '../command-runner/git-exec-file'
 import type * as GitStreamStdoutModule from '../command-runner/git-stream-stdout'
-import type * as GitProcessEnvModule from '../command-runner/git-process-env'
+import type * as GitProcessEnvModule from '../command-runner/git-environment/git-process-env'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BoundedFileReader from '../../../shared/file-content/node-bounded-file-reader'
 import path from 'node:path'
@@ -9,7 +8,9 @@ import path from 'node:path'
 import {
   createBoundedFileReaderModuleMock,
   createFsPromisesModuleMock,
-  createGitRunnerModuleMock
+  createGitExecFileModuleMock,
+  createGitStreamStdoutModuleMock,
+  createGitProcessEnvModuleMock
 } from './status-test-harness'
 
 const {
@@ -34,38 +35,20 @@ const {
   existsSyncMock: vi.fn()
 }))
 
-vi.mock('../runner', () =>
-  createGitRunnerModuleMock({
-    gitExecFileAsyncMock,
-    gitExecFileAsyncBufferMock,
-    gitStreamOptionsMock
-  })
-)
+vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitExecFileModule>()),
+  ...createGitExecFileModuleMock({ gitExecFileAsyncMock, gitExecFileAsyncBufferMock })
+}))
 
-vi.mock('../command-runner/git-exec-file', async (importOriginal) => {
-  const runnerMocks = await vi.importMock<typeof RunnerModule>('../runner')
-  return {
-    ...(await importOriginal<typeof GitExecFileModule>()),
-    gitExecFileAsync: runnerMocks.gitExecFileAsync,
-    gitExecFileAsyncBuffer: runnerMocks.gitExecFileAsyncBuffer
-  }
-})
+vi.mock('../command-runner/git-stream-stdout', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitStreamStdoutModule>()),
+  ...createGitStreamStdoutModuleMock({ gitExecFileAsyncMock, gitStreamOptionsMock })
+}))
 
-vi.mock('../command-runner/git-stream-stdout', async (importOriginal) => {
-  const runnerMocks = await vi.importMock<typeof RunnerModule>('../runner')
-  return {
-    ...(await importOriginal<typeof GitStreamStdoutModule>()),
-    gitStreamStdout: runnerMocks.gitStreamStdout
-  }
-})
-
-vi.mock('../command-runner/git-process-env', async (importOriginal) => {
-  const runnerMocks = await vi.importMock<typeof RunnerModule>('../runner')
-  return {
-    ...(await importOriginal<typeof GitProcessEnvModule>()),
-    gitOptionalLocksDisabledEnv: runnerMocks.gitOptionalLocksDisabledEnv
-  }
-})
+vi.mock('../command-runner/git-environment/git-process-env', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitProcessEnvModule>()),
+  ...createGitProcessEnvModuleMock()
+}))
 
 vi.mock('fs/promises', () =>
   createFsPromisesModuleMock({ lstatMock, realpathMock, readFileMock, statMock, rmMock })

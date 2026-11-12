@@ -1,4 +1,4 @@
-import type { LocalAgentRuntime } from '../../lib/skill-runtime-command'
+import type { LocalAgentRuntime } from '../../lib/skills/runtime/skill-runtime-command'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

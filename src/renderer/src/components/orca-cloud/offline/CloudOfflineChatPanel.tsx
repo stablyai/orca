@@ -7,7 +7,7 @@ import type {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 // The asleep view's chat: the cached transcript, prompts queued to it, and a composer that queues.
 function QueuedPromptRow({

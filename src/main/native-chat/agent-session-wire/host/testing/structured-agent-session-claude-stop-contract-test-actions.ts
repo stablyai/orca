@@ -10,7 +10,7 @@ import {
   claudeWasSent as wrote,
   type FakeConnection
 } from '../../../../claude/structured/claude-structured-session-test-support'
-import { invokeCanUseTool } from '../../../../claude/claude-can-use-tool-test-support'
+import { invokeCanUseTool } from '../../../../claude/structured/permissions/claude-can-use-tool-test-support'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,

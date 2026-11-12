@@ -7,10 +7,11 @@ import {
   loadingHook,
   source
 } from './task-page-linear-refresh-test-fixtures'
+import '@/store/slices/linear/linear-issue-read'
 import {
   pendingLinearIssueWrites,
   registerLinearIssueConsumer
-} from '@/store/slices/linear/linear-issue-publication'
+} from '@/store/slices/linear/linear-issue-write-publication'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'

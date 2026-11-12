@@ -5,7 +5,7 @@ import { listEnvironments } from '../../../shared/remote-runtime/host-store/runt
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { orcadMigrationCutoverFixture } from '../migration/cutover/testing/orcad-migration-cutover-fixture'
 import { createManagedLifecycleHarness } from './orcad-managed-lifecycle-test-fixture'
 import { isManagedOrcadSshTarget } from '../../ssh/targets/ssh-target-runtime-ownership'

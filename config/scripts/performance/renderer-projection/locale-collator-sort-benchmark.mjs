@@ -18,7 +18,7 @@ const { sortJiraIssues } = await jiti.import(
   '../../../../src/renderer/src/components/jira-issue-sorter.ts'
 )
 const { sortAutomationListViewItems } = await jiti.import(
-  '../../../../src/renderer/src/components/automations/automation-list-view.ts'
+  '../../../../src/renderer/src/components/automations/listing/automation-list-view.ts'
 )
 const automationLocale = 'en-US'
 

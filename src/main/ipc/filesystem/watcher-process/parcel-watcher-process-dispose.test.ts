@@ -5,12 +5,12 @@ const { supervisorDispose, poolDispose } = vi.hoisted(() => ({
   poolDispose: vi.fn<() => Promise<void>>()
 }))
 
-vi.mock('./parcel-watcher-process-supervisor', () => ({
+vi.mock('./supervision/parcel-watcher-process-supervisor', () => ({
   WatcherProcessSupervisor: class {
     disposeAndWait = supervisorDispose
   }
 }))
-vi.mock('./runtime-watcher-process-pool', () => ({
+vi.mock('./runtime-pool/runtime-watcher-process-pool', () => ({
   RuntimeWatcherProcessPool: class {
     disposeAndWait = poolDispose
   }

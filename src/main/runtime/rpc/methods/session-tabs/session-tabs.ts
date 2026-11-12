@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { terminalCreateFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'

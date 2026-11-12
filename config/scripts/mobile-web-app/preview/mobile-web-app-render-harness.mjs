@@ -120,7 +120,7 @@ export async function readClipboardImageUploadChunkBase64Chars() {
 // Read shipped screencast JPEG quality; copied value would certify budget for an encoder configuration no product uses.
 export async function readBrowserFrameQuality() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/browser/browser-screencast-request-parameters.ts'),
+    join(projectDir, 'mobile/src/browser/screencast/browser-screencast-request-parameters.ts'),
     'utf8'
   )
   const match = /BROWSER_FRAME_QUALITY = (\d+)/.exec(source)

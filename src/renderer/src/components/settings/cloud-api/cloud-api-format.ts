@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
-import { formatUiAutomationSchedule } from '@/components/automations/automation-schedule-label'
+import { formatUiAutomationSchedule } from '@/components/automations/details/automation-schedule-label'
 import {
   CLOUD_API_ADMIN_SCOPES,
   CLOUD_API_SCOPES,

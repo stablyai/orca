@@ -61,7 +61,12 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contrac
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import { continueRestoredWorkerMailSoon } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
-import { PeerMailRelay } from './orchestration/federation/peer-mail/peer-mail-relay'
+import {
+  PeerMailRelay,
+  type PeerServerAnswerStatus
+} from './orchestration/federation/peer-mail/peer-mail-relay'
+import { terminalHandleAgent, type TerminalHandleAgent } from './secrets/terminal-handle-agent'
+import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
@@ -72,10 +77,18 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   // Lazy: the database can open, and arm relays, while the runtime is still constructing.
   declare private peerMailRelay: PeerMailRelay | undefined
 
-  override ensureOrchestrationFederationRelay(runId?: string): void {
-    super.ensureOrchestrationFederationRelay(runId)
+  override ensureOrchestrationFederationRelay(
+    runId?: string,
+    options?: { keepAwake?: boolean }
+  ): void {
+    super.ensureOrchestrationFederationRelay(runId, options)
     this.peerMailRelay ??= new PeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
     this.peerMailRelay.ensure()
+  }
+
+  /** What the pull loop last heard from a paired server, without asking it. */
+  getPeerServerAnswerStatus(environmentId: string): PeerServerAnswerStatus | undefined {
+    return this.peerMailRelay?.answerStatus(environmentId)
   }
 
   override stopOrchestrationFederationRelay(): void {
@@ -222,6 +235,13 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.notifier.publishAgentLaunchTab(request)
   }
 
+  /** The window follows a listed active chat only on its own intent (#5435), so a focused launch names it. */
+  focusLaunchedChatInHostWindow(worktreeId: string, sessionId: string): void {
+    this.notifier?.focusEditorTab?.(structuredAgentSessionHostTabId(sessionId), worktreeId, {
+      userInitiated: true
+    })
+  }
+
   /** Retain final verdicts, clear settled ones, and remove withdrawn panes without removing split siblings. */
   reportAgentLaunchPaneVerdict(
     pane: AgentLaunchPaneAddress,
@@ -316,21 +336,13 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   }
 
   /** The agent a terminal runs and its worktree, from host records (never from request params). */
-  getTerminalHandleAgent(handle: string): { agent: string | null; worktreeId: string } | null {
-    const record = this.handles.get(handle)
-    if (!record) {
-      return null
-    }
-    return {
-      agent: record.ptyId ? this.getPtyAgent(record.ptyId) : null,
-      worktreeId: record.worktreeId
-    }
+  getTerminalHandleAgent(handle: string): TerminalHandleAgent | null {
+    return terminalHandleAgent(this.handles.get(handle), (ptyId) => this.getPtyAgent(ptyId))
   }
 
   /** Whether this host knows a worktree by id (a caller's hint is kept only when it does). */
-  async isKnownWorktree(worktreeId: string): Promise<boolean> {
-    return (await this.getResolvedWorktreeMap()).has(worktreeId)
-  }
+  isKnownWorktree = async (id: string): Promise<boolean> =>
+    (await this.getResolvedWorktreeMap()).has(id)
 
   /** Return the already-open record store without waiting. */
   openedAgentSessionRecordStore(): AgentSessionRecordStore | null {

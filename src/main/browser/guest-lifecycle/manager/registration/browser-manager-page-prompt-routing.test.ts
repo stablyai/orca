@@ -45,6 +45,7 @@ import { browserManager } from '../browser-manager'
 import { respondToBrowserPagePrompt } from '../../prompts/browser-page-prompts'
 import { handleBrowserGuestLogin } from '../../prompts/browser-http-auth-prompt'
 import {
+  guestNavigationMethods,
   rendererWebContentsId,
   resetBrowserManagerMocks,
   resetBrowserManagerState
@@ -69,6 +70,7 @@ describe('browserManager page prompt routing', () => {
   it('asks before a page hands a link to another app, naming the frame that asked', () => {
     const rendererSendMock = vi.fn()
     const guest = {
+      ...guestNavigationMethods(),
       id: 107,
       isDestroyed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
@@ -161,6 +163,7 @@ describe('browserManager page prompt routing', () => {
   it("asks for a new tab's first sign-in once its window registers the tab", async () => {
     const rendererSendMock = vi.fn()
     const guest = {
+      ...guestNavigationMethods(),
       id: 109,
       isDestroyed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),

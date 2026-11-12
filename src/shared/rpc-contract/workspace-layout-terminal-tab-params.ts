@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
-import { isValidHostTerminalTabId } from '../workspace-layout/terminal-tab-id'
+import { isValidHostTerminalTabId } from '../workspace-layout/terminal-surfaces/terminal-tab-id'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 

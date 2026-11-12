@@ -1,10 +1,10 @@
-import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 import { hasStructuredAgentLaunchCancellationTombstonePersisted } from './structured-agent-session-launch-persistence'
 import { wasStructuredAgentLaunchClosedByLocalCancel } from './structured-agent-session-local-launch-cancel'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
 import { noteStructuredAgentSessionFence } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
+import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 /** The host's create proof belongs to the existing reader until its tab closes. */
 export function publishStructuredAgentSessionCreateHydration(

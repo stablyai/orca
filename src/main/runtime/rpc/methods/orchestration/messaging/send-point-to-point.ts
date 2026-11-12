@@ -8,6 +8,7 @@ import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lif
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { parseMessageTaskId } from './message-payload'
+import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import type { SendParams } from './send-params'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
@@ -74,6 +75,8 @@ export function sendPointToPointMessage(args: {
         ? bindCoordinatorMutationPayload(messageType, params.payload, dispatch.id)
         : params.payload,
       senderPaneKey,
+      senderDispatchId:
+        dispatch && isDispatchAssignee(dispatch, from, senderPaneKey) ? dispatch.id : undefined,
       runId: messageRunId,
       deliveryContract: legacyWorkerDeliveryContract(
         runtime,

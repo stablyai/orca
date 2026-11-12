@@ -1,7 +1,7 @@
 import { defineMethod } from '../../core'
 import { requireSwitchedOn } from '../../../sidebar-inputs/require-switched-on'
 import { readRuntimeDesktopSidebarFacts } from '../../../sidebar-inputs/sidebar-inputs-feed-domains'
-import { isHostOwnPhone } from '../../host-own-phone'
+import { isHostOwnPhone } from '../../callers/host-own-phone'
 import { SidebarInputsReadParams } from '../../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
 import { SidebarSessionBeginParams } from '../../../../../shared/rpc-contract/sidebar-session-params'
 import { RepoIconDataUrlsParams } from '../../../../../shared/sidebar-list/repo-icon-data-urls-contract'

@@ -12,7 +12,9 @@ import {
   getRepoRoutingConnectionId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../../git/repo'
+import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../git/refs/resolution/repo-default-base-ref'
+import { getRemoteCount } from '../../git/remotes/repo-remote-queries'
+import { searchBaseRefDetails } from '../../git/refs/resolution/repo-base-ref-search'
 import { getProjectRuntimeReadGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'

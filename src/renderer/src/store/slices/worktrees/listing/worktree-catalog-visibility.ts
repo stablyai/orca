@@ -2,10 +2,6 @@ import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared
 import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 
-export function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
-  return catalogRowsEqual(current, next)
-}
-
 /** True when the rows match in place except for `sortOrder`, which an order save rewrites. */
 export function worktreesDifferOnlyInSortOrder(
   current: readonly Worktree[] | undefined,

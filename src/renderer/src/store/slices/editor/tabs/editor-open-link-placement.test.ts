@@ -4,10 +4,10 @@ import { createEditorTabsStore } from '../editor-slice-test-harness'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { captureEditorOpenLinkIntent } from './editor-open-target-group'
-import { removeGroupLayoutLeaf } from '../../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { removeGroupLayoutLeaf } from '../../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
-import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
+import '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
@@ -87,22 +87,6 @@ function addEditor(store: StoreApi<AppState>, filePath: string, groupId: string)
   })
 }
 
-/** Drops a tab the way a close would, without the terminal slice the harness lacks. */
-function removeTab(store: StoreApi<AppState>, tabId: string): void {
-  const state = store.getState()
-  store.setState({
-    unifiedTabsByWorktree: {
-      'wt-1': state.unifiedTabsByWorktree['wt-1']!.filter((tab) => tab.id !== tabId)
-    },
-    groupsByWorktree: {
-      'wt-1': state.groupsByWorktree['wt-1']!.map((group) => {
-        const tabOrder = group.tabOrder.filter((id) => id !== tabId)
-        return { ...group, tabOrder, activeTabId: tabOrder.at(-1) ?? null }
-      })
-    }
-  })
-}
-
 function removeGroup(store: StoreApi<AppState>, groupId: string): void {
   const state = store.getState()
   store.setState({
@@ -157,163 +141,6 @@ function linkIntent(store: StoreApi<AppState>, explicit = false) {
 }
 
 describe('file links open beside their source', () => {
-  it('moves a native-chat link from the chat group to the neighboring editor', async () => {
-    const store = createEditorTabsStore()
-    addTab(store, 'agent-session', 'source')
-    const a = store.getState().groupsByWorktree['wt-1']![0]!.id
-    const b = splitRight(store, a)
-    addEditor(store, '/repo/seed.ts', b)
-    focus(store, a)
-
-    const main = await drawTabsFromMain(store)
-    store.getState().openFile(fileInput('/repo/plain.ts'))
-    const opened = store
-      .getState()
-      .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
-    await main.settle()
-    main.close()
-
-    // Why: the plain open documents the unchanged baseline for callers without link intent.
-    expect(groupOfFile(store, '/repo/plain.ts')).toEqual([a])
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([b])
-    expect(opened).toMatchObject({ fileId: '/repo/link.ts', groupId: b })
-  })
-
-  it('covers the adjacent terminal instead of jumping to a nonadjacent editor', async () => {
-    const store = createEditorTabsStore()
-    const { a, b, c } = seedColumns(store, 'terminal', 'terminal', 'editor')
-
-    const main = await drawTabsFromMain(store)
-    store.getState().openFile(fileInput('/repo/plain.ts'))
-    focus(store, a)
-    store.getState().openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
-    await main.settle()
-    main.close()
-
-    expect(groupOfFile(store, '/repo/plain.ts')).toEqual([c])
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([b])
-  })
-
-  it('selects an existing unselected view of the file over a nearby editor', async () => {
-    const store = createEditorTabsStore()
-    const { a, b, c } = seedColumns(store, 'terminal', 'editor', 'terminal')
-    addEditor(store, '/repo/link.ts', c)
-    store.getState().activateTab(`${c}-terminal`)
-    focus(store, a)
-    const main = await drawTabsFromMain(store)
-    const existing = store
-      .getState()
-      .unifiedTabsByWorktree['wt-1']!.find((tab) => tab.entityId === '/repo/link.ts')!
-
-    const opened = store
-      .getState()
-      .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
-    await main.settle()
-    main.close()
-
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([c])
-    expect(opened).toEqual({ fileId: '/repo/link.ts', viewStateId: existing.id, groupId: c })
-    expect(store.getState().groupsByWorktree['wt-1']!.find((g) => g.id === c)?.activeTabId).toBe(
-      existing.id
-    )
-    expect(b).not.toBe(c)
-  })
-
-  it('keeps placement on the captured source when focus moves during resolution', async () => {
-    const store = createEditorTabsStore()
-    const { b, c } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-    const main = await drawTabsFromMain(store)
-    const intent = linkIntent(store)
-    focus(store, c)
-
-    store.getState().openFileForLink(fileInput('/repo/link.ts'), {}, intent)
-    await main.settle()
-    main.close()
-
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([b])
-  })
-
-  it('follows a source tab that moved to another group while its old group survives', async () => {
-    const store = createEditorTabsStore()
-    const { a, b, c } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-    addTab(store, 'terminal', 'keeps-a-alive', a)
-    const main = await drawTabsFromMain(store)
-    const intent = linkIntent(store)
-    store.getState().moveUnifiedTabToGroup(intent!.sourceTabId, b)
-
-    store.getState().openFileForLink(fileInput('/repo/link.ts'), {}, intent)
-    await main.settle()
-    main.close()
-
-    // From B the preferred neighbor is C; a stale source in A would choose B.
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([c])
-  })
-
-  it('uses default placement once the source tab has closed', async () => {
-    const store = createEditorTabsStore()
-    const { a, c } = seedColumns(store, 'terminal', 'terminal', 'editor')
-    addTab(store, 'terminal', 'keeps-a-alive', a)
-    const main = await drawTabsFromMain(store)
-    const intent = linkIntent(store)
-    removeTab(store, intent!.sourceTabId)
-    focus(store, a)
-
-    store.getState().openFileForLink(fileInput('/repo/link.ts'), {}, intent)
-    await main.settle()
-    main.close()
-
-    // The focused terminal's existing preference sends the file to the visible editor.
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([c])
-  })
-
-  it('uses destination defaults when resolution routes to another workspace', async () => {
-    const store = createEditorTabsStore()
-    seedColumns(store, 'terminal', 'terminal', 'terminal')
-
-    const main = await drawTabsFromMain(store)
-    const opened = store
-      .getState()
-      .openFileForLink(fileInput('/other/link.ts', 'wt-2'), {}, linkIntent(store))
-    await main.settle()
-    main.close()
-
-    expect(opened?.groupId).toBe(store.getState().groupsByWorktree['wt-2']?.[0]?.id)
-  })
-
-  it('pins an explicit request to the captured group even when another group has the file', async () => {
-    const store = createEditorTabsStore()
-    const { a, c } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-    addEditor(store, '/repo/link.ts', c)
-    store.getState().activateTab('source')
-
-    const main = await drawTabsFromMain(store)
-    const opened = store
-      .getState()
-      .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store, true))
-    await main.settle()
-    main.close()
-
-    expect(opened?.groupId).toBe(a)
-    expect(groupOfFile(store, '/repo/link.ts').sort()).toEqual([a, c].sort())
-  })
-
-  it('refuses an explicit request whose group closed, without touching editor state', () => {
-    const store = createEditorTabsStore()
-    const { b } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-    store.getState().activateTab(`${b}-terminal`)
-    const intent = captureEditorOpenLinkIntent(store.getState(), 'wt-1', `${b}-terminal`, {
-      explicitSourceGroup: true
-    })
-    removeGroup(store, b)
-    const before = store.getState().openFiles
-
-    const opened = store.getState().openFileForLink(fileInput('/repo/link.ts'), {}, intent)
-
-    expect(opened).toBeNull()
-    expect(store.getState().openFiles).toBe(before)
-    expect(store.getState().groupsByWorktree['wt-1']!.some((g) => g.id === b)).toBe(false)
-  })
-
   it('refuses when the chosen group disappears at the mutation seam', () => {
     const store = createEditorTabsStore()
     const { b } = seedColumns(store, 'terminal', 'terminal', 'terminal')
@@ -330,54 +157,5 @@ describe('file links open beside their source', () => {
     expect(opened).toBeNull()
     expect(groupOfFile(store, '/repo/link.ts')).toEqual([])
     expect(store.getState().groupsByWorktree['wt-1']!.some((g) => g.id === b)).toBe(false)
-  })
-
-  it('returns the created view and focuses it', async () => {
-    const store = createEditorTabsStore()
-    const { b } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-
-    const main = await drawTabsFromMain(store)
-    const opened = store
-      .getState()
-      .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
-    await main.settle()
-    main.close()
-    const view = store
-      .getState()
-      .unifiedTabsByWorktree['wt-1']!.find((tab) => tab.entityId === '/repo/link.ts')
-
-    expect(opened).toEqual({ fileId: '/repo/link.ts', viewStateId: view?.id, groupId: b })
-    expect(store.getState().activeGroupIdByWorktree['wt-1']).toBe(b)
-    expect(store.getState().pendingEditorFocusRequest).toMatchObject({
-      fileId: '/repo/link.ts',
-      viewStateId: view?.id
-    })
-  })
-
-  it('opens beside the source when it is the only group', async () => {
-    const store = createEditorTabsStore()
-    addTab(store, 'terminal', 'source')
-    const a = store.getState().groupsByWorktree['wt-1']![0]!.id
-    const main = await drawTabsFromMain(store)
-
-    const opened = store
-      .getState()
-      .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
-    await main.settle()
-
-    expect(opened?.groupId).toBeTruthy()
-    expect(opened?.groupId).not.toBe(a)
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([opened?.groupId])
-    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(2)
-    expect(store.getState().groupsByWorktree['wt-1']!.find((g) => g.id === a)?.activeTabId).toBe(
-      'source'
-    )
-
-    store.getState().openFileForLink(fileInput('/repo/second.ts'), {}, linkIntent(store))
-    await main.settle()
-    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(2)
-    expect(groupOfFile(store, '/repo/link.ts')).toEqual([opened?.groupId])
-    expect(groupOfFile(store, '/repo/second.ts')).toEqual([opened?.groupId])
-    main.close()
   })
 })

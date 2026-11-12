@@ -7,7 +7,7 @@ import {
 import {
   launchSetupAgentWithPrompt,
   pickEnvironmentSetupRepo
-} from './environment-setup-agent-launch'
+} from './agent-session/launch/environment-setup-agent-launch'
 
 /** `github.com/owner/repo` from a repo's remote identity, lowercased; null for non-GitHub remotes. */
 export function githubSlugForRepo(repo: Repo): string | null {

@@ -1,3 +1,4 @@
+import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
@@ -13,18 +14,15 @@ import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/ho
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
 import { initObservability } from '../observability/index'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { recoverPendingSkillTransactions } from '../skills/transaction-state/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
+import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
-import { ClaudeUsageStore } from '../claude-usage/store'
-import { CodexUsageStore } from '../codex-usage/store'
-import { OpenCodeUsageStore } from '../opencode-usage/store'
-import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 import { runAfterFirstWindowShown } from './first-window-deferral'
@@ -146,8 +144,12 @@ export function initializeMainProcessObservers(): void {
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
   feedAgentSessionStats(state.stats, agentHookServer)
-  state.claudeUsage = new ClaudeUsageStore(store)
-  state.codexUsage = new CodexUsageStore(store)
-  state.openCodeUsage = new OpenCodeUsageStore(store)
-  state.museUsage = new MuseUsageStore(store)
+  const usageWorktrees = new UsageWorktreeHistory(
+    store,
+    join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')
+  )
+  state.usageWorktreeHistory = usageWorktrees
+  state.backend = new BackendSupervisor(usageWorktrees)
+  state.claudeUsage = state.backend.automationClient('claudeUsage')
+  state.codexUsage = state.backend.automationClient('codexUsage')
 }

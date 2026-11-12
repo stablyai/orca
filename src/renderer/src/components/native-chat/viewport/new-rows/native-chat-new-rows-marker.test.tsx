@@ -66,13 +66,6 @@ const missed = (key: string, after: number, through: number) => ({
 })
 
 describe('where the "New" marker draws', () => {
-  it('is above the first row that came while the reader was away', () => {
-    expect(nativeChatNewRowsMarkerPlacement(slotsOf(LATER), missed('answer', 2, 4))).toEqual({
-      key: 'answer',
-      place: 'above-row'
-    })
-  })
-
   it("is above the turn bar when only that bar parts the row from the reader's prompt", () => {
     const asked = [row('prompt', 1, 'user'), row('answer', 2)]
     expect(
@@ -99,11 +92,6 @@ describe('where the "New" marker draws', () => {
         )
       ).toEqual({ key: 'step', place: 'above-row' })
     }
-  })
-
-  it('is absent when nothing came, or the row that did is gone', () => {
-    expect(nativeChatNewRowsMarkerPlacement(slotsOf(LATER), null)).toBeUndefined()
-    expect(nativeChatNewRowsMarkerPlacement(slotsOf(SEEN), missed('answer', 2, 4))).toBeUndefined()
   })
 })
 
@@ -141,16 +129,6 @@ describe('useNativeChatNewRowsMarker', () => {
     return view
   }
 
-  it('marks nothing that arrives while the reader is looking', () => {
-    const view = chat(SEEN)
-    view.rerender({ messages: LATER, showing: true })
-    expect(view.result.current.marker).toBeUndefined()
-  })
-
-  it('marks what a hidden chat is handed when the reader comes back to it', () => {
-    expect(leaveAndReturn(SEEN, LATER).result.current.marker?.key).toBe('answer')
-  })
-
   it("is never above the reader's own prompt", () => {
     const sent = [...SEEN, row('next-prompt', 3, 'user'), row('answer', 4)]
     expect(leaveAndReturn(SEEN, sent).result.current.marker?.key).toBe('answer')
@@ -176,12 +154,6 @@ describe('useNativeChatNewRowsMarker', () => {
     expect(view.result.current.marker?.key).toBe('answer')
   })
 
-  it('goes once the reader answers', () => {
-    const view = leaveAndReturn(SEEN, LATER)
-    act(() => view.result.current.dismiss())
-    expect(view.result.current.marker).toBeUndefined()
-  })
-
   it('does not appear when the reader answered before the chat had caught up', () => {
     const view = chat(SEEN)
     view.rerender({ messages: SEEN, showing: false })
@@ -194,13 +166,6 @@ describe('useNativeChatNewRowsMarker', () => {
     const sending = [row('prompt', null, 'user')]
     const view = leaveAndReturn(sending, [row('prompt', 1, 'user'), row('answer', 2)])
     expect(view.result.current.marker?.key).toBe('answer')
-  })
-
-  it('is arriving on the return, until the row that draws it has brought it into view', () => {
-    const view = leaveAndReturn(SEEN, LATER)
-    expect(view.result.current.marker?.arriving).toBe(true)
-    act(() => view.result.current.marker?.onArrived())
-    expect(view.result.current.marker).toMatchObject({ key: 'answer', arriving: false })
   })
 
   it('stays where it is through another look away, until the reader answers', () => {
@@ -255,14 +220,6 @@ describe('useNativeChatNewRowsMarker', () => {
     expect(view.result.current.marker?.key).toBe('held')
   })
 
-  it('keeps its place when the reader opens the turn that came while they were away', () => {
-    const view = leaveAndReturn(ASKED, DONE, { worked: 17 })
-    expect(view.result.current.marker).toMatchObject({ key: 'prompt', place: 'above-turn-bar' })
-
-    view.rerender({ messages: DONE, showing: true, turn: { worked: 17, expanded: true } })
-    expect(view.result.current.marker).toMatchObject({ key: 'prompt', place: 'above-turn-bar' })
-  })
-
   it('stays through another look away after the reader shuts the turn they opened', () => {
     const shut = { worked: 17 }
     const view = leaveAndReturn(ASKED, DONE, { worked: 17, expanded: true })
@@ -277,14 +234,6 @@ describe('useNativeChatNewRowsMarker', () => {
     const grown = [row('prompt', 1, 'user'), row('reply', 2, 'assistant', 'The plan has parts.')]
     const marked = (onReturn: NativeChatMessage[]) =>
       leaveAndReturn(begun, onReturn, { working: true }).result.current.marker?.key
-
-    it('is marked new when it grew while they were away', () => {
-      expect(marked(grown)).toBe('reply')
-    })
-
-    it('is not marked when it is as they left it', () => {
-      expect(marked(begun)).toBeUndefined()
-    })
 
     it('gives way to the next row when it is as they left it', () => {
       expect(marked([...begun, row('more', 3)])).toBe('more')

@@ -32,6 +32,11 @@ export type DropdownItem = {
   title: string
   disabled: boolean
   hint?: string
+  // Short right-aligned state; `title` keeps the full sentence for screen readers.
+  status?: string
+  statusTone?: 'active' | 'warning'
+  // Nothing to do right now, but still clickable (counts can be stale until a fetch).
+  idle?: boolean
   variant?: 'default' | 'destructive'
 }
 

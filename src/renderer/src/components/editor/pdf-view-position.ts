@@ -1,4 +1,4 @@
-import type { PdfViewPosition } from '@/lib/scroll-cache'
+import type { PdfViewPosition } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 /** Argument object for pdf.js `PDFViewer.scrollPageIntoView`. */
 export type PdfScrollDestination = {

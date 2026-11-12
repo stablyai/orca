@@ -11,7 +11,10 @@ import {
   readRemoteOrcadMigrationCatalogState,
   stageRemoteOrcadMigrationCatalog
 } from '../migration/catalog/orcad-migration-catalog-client'
-import { listRemoteOrcadRepositories } from '../migration/linking/orcad-server-repositories'
+import {
+  listRemoteOrcadRepositories,
+  type OrcadServerRepository
+} from '../migration/linking/orcad-server-repositories'
 import {
   stageRemoteOrcadMigrationBlobChunk,
   stageRemoteOrcadMigrationSnapshotChunk
@@ -21,11 +24,11 @@ import { abortRemoteOrcadMigrationCatalogByReference } from '../migration/catalo
 import {
   enableRemoteOrcadAutomation,
   type EnableServerAutomation
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-moved-automations'
+} from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-moved-automations'
 import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/endpoints/ssh-host-relay-census-for-target'
 import { isBridgeableLease } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-leases'
 import type { OrcadManagedConversionArgs } from './orcad-runtime-conversion'
-import type { OrcadServerRepository } from '../migration/linking/orcad-server-repositories'
+
 import {
   listRemoteOrcadFolderCatalog,
   type OrcadServerFolderCatalog

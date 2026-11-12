@@ -4,7 +4,7 @@ import type {
 } from '../../../shared/git/diff/git-diff-compare-types'
 import { readBranchCompareHead } from '../../../shared/git/branches/git-branch-compare-head'
 import { resolveWorktreeAddBaseRef } from '../../../shared/worktree/base-ref'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 import { resolveWorktreeBaseCommitOid } from '../worktrees/creation/worktree-base-ref-probe'
 import { loadBranchChangesThroughCache } from './branch-change-list-cache'
 import {

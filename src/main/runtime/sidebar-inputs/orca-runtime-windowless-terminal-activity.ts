@@ -17,7 +17,7 @@ import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-termi
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 type Runtime = OrcaRuntimeWithWslMoveTerminalFacts
 

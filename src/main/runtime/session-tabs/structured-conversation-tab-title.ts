@@ -41,3 +41,23 @@ export function retitleStructuredConversationTab(
   })
   return changed ? { ...snapshot, tabs, snapshotVersion: snapshot.snapshotVersion + 1 } : null
 }
+
+/** Apply a saved-session title change with one snapshot fence per workspace. */
+export function retitleStructuredConversationTabs(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  names: ReadonlyMap<string, string | null>
+): RuntimeMobileSessionTabsSnapshot | null {
+  let changed = false
+  const tabs = snapshot.tabs.map((tab) => {
+    if (tab.type !== 'agent-session' || !names.has(tab.sessionId)) {
+      return tab
+    }
+    const title = names.get(tab.sessionId) ?? defaultAgentChatLabel(tab.agent)
+    if (tab.title === title) {
+      return tab
+    }
+    changed = true
+    return { ...tab, title }
+  })
+  return changed ? { ...snapshot, tabs, snapshotVersion: snapshot.snapshotVersion + 1 } : null
+}

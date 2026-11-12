@@ -57,6 +57,23 @@ describe('AutomaticWorkRunMarker', () => {
     expect(paused.mode.kind).toBe('paused')
   })
 
+  // #40328: a pause carried over a clean restart must not read as a fresh crash in the log.
+  it('logs whether the start that carries a pause followed a clean exit', () => {
+    open().arm()
+    open(20).markCleanExit()
+    logger.log.mockClear()
+
+    expect(open(30).mode).toMatchObject({ kind: 'paused', reason: 'unclean_host_death' })
+    expect(logger.log).toHaveBeenCalledWith(
+      'automatic-work-paused',
+      expect.objectContaining({
+        carriedOver: true,
+        previousExit: 'clean',
+        pausedSince: new Date(20).toISOString()
+      })
+    )
+  })
+
   it('never reads an outside stop as a crash, even when the exit is then cut short', () => {
     const stopped = open()
     stopped.arm()

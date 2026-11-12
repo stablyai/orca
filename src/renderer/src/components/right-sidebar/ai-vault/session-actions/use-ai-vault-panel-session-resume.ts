@@ -4,7 +4,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { useChatProgramFactsVersion } from '@/lib/host-chat-program-acquisition'
+import { useChatProgramFactsVersion } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { recomputeOn } from '@/lib/recompute-on'
 import {
   resolveAiVaultHistorySessionResumeState,

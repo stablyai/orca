@@ -23,7 +23,7 @@ import {
 } from '../../../ssh/migration-source/orcad-migration-terminal-gate'
 import { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
 import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/managed-orcad-ssh-owner'
-import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   leaveBehindClearsOrcadMigrationBlockers,
   onlyLeavableOrcadMigrationBlockers

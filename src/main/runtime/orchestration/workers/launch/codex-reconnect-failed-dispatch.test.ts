@@ -81,7 +81,7 @@ describe('Codex reconnect failure inside a live worker PTY', () => {
         dispatch: 'failed',
         worker: 'failed',
         stage: 'agent_session_lost',
-        escalations: ['Agent session lost']
+        escalations: ['Worker lost without reporting']
       })
     } finally {
       db.close()

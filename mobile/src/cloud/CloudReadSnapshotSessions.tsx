@@ -7,7 +7,7 @@ import type {
 } from '../../../src/shared/cloud-workspaces/read-snapshot'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MobileNativeChatMarkdown } from '../session/native-chat/MobileNativeChatMarkdown'
+import { MobileNativeChatMarkdown } from '../session/native-chat/transcript/MobileNativeChatMarkdown'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { cloudAgentLabel } from './CloudAgentPicker'

@@ -2,8 +2,8 @@ import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { TextInputSheetContent } from '../../components/TextInputModal'
 import { useDraftRenameSheet } from '../../components/use-draft-rename-sheet'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useHostDisplay } from '../../transport/hosts/use-host-display'
-import { useHostProfile } from '../../transport/hosts/use-host-profile'
+import { useHostDisplay } from '../../host-descriptors/use-host-display'
+import { useHostProfile } from '../../host-catalog/use-host-profile'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'
 
 export function MobileTerminalRenameModal({

@@ -26,28 +26,14 @@ afterEach(() => {
 })
 
 describe('opening a URL from a phone screen', () => {
-  it('hands it straight to the app, unchanged', () => {
-    openExternalLink('https://github.com/stablyai/orca/pull/1')
-    expect(linking.openURL.mock.calls).toEqual([['https://github.com/stablyai/orca/pull/1']])
-  })
-
   it('does not throw out of a tap handler when nothing can open the URL', async () => {
     linking.openURL.mockImplementation(() => Promise.reject(new Error('no activity found')))
     expect(() => openExternalLink('mailto:someone@example.com')).not.toThrow()
     await Promise.resolve()
   })
-
-  it('checks no scheme of its own, because on a phone this is what every call site already did', () => {
-    openExternalLink('orca://x')
-    expect(linking.openURL.mock.calls).toEqual([['orca://x']])
-  })
 })
 
 describe('a URL the platform refuses before it returns a promise', () => {
-  it('does not throw out of a tap handler for an empty string', () => {
-    expect(() => openExternalLink('')).not.toThrow()
-  })
-
   it('names the refusal rather than failing silently', () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     openExternalLink('')

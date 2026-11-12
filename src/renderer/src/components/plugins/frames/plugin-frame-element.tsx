@@ -1,7 +1,7 @@
 import React from 'react'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import type { PluginFrameGuest } from '../../../../../shared/plugins/frames/plugin-frame-bridge'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import './plugin-frame-host'
 import { pluginWebviewFrameWindow, type PluginFrameWindow } from './plugin-frame-host-lanes'
 

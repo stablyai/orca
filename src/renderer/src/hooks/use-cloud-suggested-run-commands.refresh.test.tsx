@@ -30,7 +30,7 @@ vi.mock('@/store/github/refresh/worktree-refresh', () => ({
 vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.read
 }))
-vi.mock('@/lib/worktree-sleep-intent', () => ({
+vi.mock('@/lib/workspace/sleep/worktree-sleep-intent', () => ({
   hasWorktreeSleepIntent: () => mocks.sleepIntent
 }))
 

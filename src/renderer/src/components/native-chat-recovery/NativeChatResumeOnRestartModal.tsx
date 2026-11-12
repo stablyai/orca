@@ -4,32 +4,32 @@ import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
 import { Dialog, DialogContent, DialogFooter } from '../ui/dialog'
 import { useAppStore } from '../../store/index'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { ResumeOnRestartGroups } from './tree/NativeChatResumeOnRestartGroups'
 import { ResumeTreeRow } from './tree/NativeChatResumeTreeRow'
 import {
   resumeFailureGuidance,
-  resumeFailureSelectable,
-  type ResumeFailureAction
+  resumeFailureSelectable
 } from './failures/native-chat-resume-failure-guidance'
+import type { ResumeFailureAction } from './failures/native-chat-resume-failure-guidance'
 import {
   resumeSelectionState,
-  toggleResumeSelection,
-  type ResumeCandidate,
-  type ResumeFailure
+  toggleResumeSelection
 } from './tree/native-chat-resume-on-restart-grouping'
+import type { ResumeCandidate, ResumeFailure } from './tree/native-chat-resume-on-restart-grouping'
 import {
   useNativeChatRestartOffer,
   useNativeChatRestartResuming,
   useNativeChatRestartRun
 } from './offers/native-chat-resume-on-restart-store'
-import type { NativeChatRestartStore } from './offers/native-chat-restart-runtime-store'
 import { useResumeRunPanel } from './runs/NativeChatResumeRunPanel'
 import { resumeRunFailures } from './runs/native-chat-resume-run-view'
 import { NativeChatResumeAutoNote } from './dialogs/NativeChatResumeAutoNote'
 import { NativeChatRemoteResumeActions } from './dialogs/NativeChatRemoteResumeActions'
 import { moveInTree } from './tree/native-chat-resume-tree-keys'
+import type { NativeChatRestartStore } from './offers/native-chat-restart-runtime-store'
 
 /** Resume reattaches and sends a continuation, never the original user prompt; disclose this before sending. Automatic preference skips the prompt but uses the same host safety checks.
  * The store owns runs across dialog closes. Closing snoozes; Dismiss all deletes durable offers. Row Retry/Dismiss keep the dialog open, and settled runs cannot close a user-reopened dialog. Unretryable failures stay outside Resume. */

@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
 import { Gesture } from 'react-native-gesture-handler'
-import type { ComposedGesture } from 'react-native-gesture-handler'
+import type { LegacyComposedGesture } from 'react-native-gesture-handler'
 import { quantizeFontScale } from './mobile-native-chat-message-text'
 
 // Anchor each pinch on the committed scale so successive gestures compound.
 // The overlay reuses one view across a worktree's chats, so the scale belongs to `scopeKey`'s chat.
 export function useMobileNativeChatPinchGesture(scopeKey: string): {
   fontScale: number
-  pinchGesture: ComposedGesture
+  pinchGesture: LegacyComposedGesture
 } {
   const [scaled, setScaled] = useState({ scopeKey, fontScale: 1 })
   const fontScale = scaled.scopeKey === scopeKey ? scaled.fontScale : 1

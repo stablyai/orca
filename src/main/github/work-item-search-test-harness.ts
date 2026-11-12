@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, vi, type Mock } from 'vitest'
+
 import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import type * as GithubApiRepositoryModule from './github-api-repository'
@@ -17,10 +17,10 @@ const {
   sourceContext: { host: 'github.com', available: true }
 }))
 const gitExecFileAsync = vi.hoisted(() => vi.fn())
-vi.mock('../git/command-runner/exec-file-capture', () => ({
+vi.mock('../git/command-runner/process-capture/exec-file-capture', () => ({
   execFileCaptureToTermination: capture
 }))
-vi.mock('../git/command-runner/wsl-command-resolution', () => ({
+vi.mock('../git/command-runner/host-routing/wsl-command-resolution', () => ({
   resolveCommand: (binary: string, args: string[], cwd?: string, distro?: string) => ({
     binary,
     args,
@@ -30,10 +30,7 @@ vi.mock('../git/command-runner/wsl-command-resolution', () => ({
   }),
   resolveDefaultWslCli: () => null
 }))
-vi.mock('../git/runner', async () => ({
-  ghExecFileAsync: (await import('../git/command-runner/gh-exec-file')).ghExecFileAsync,
-  gitExecFileAsync
-}))
+
 vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<typeof GitExecFileModule>()),
   gitExecFileAsync
@@ -56,7 +53,10 @@ vi.mock('./github-api-repository', async (importOriginal) => {
 })
 
 import { _resetRateLimitCache } from './rate-limit'
-import { clearGhRateLimitBlock, ghRateLimitScopeKey } from '../git/gh-rate-limit-breaker'
+import {
+  clearGhRateLimitBlock,
+  ghRateLimitScopeKey
+} from '../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 export let api: WorkItemSearchApi
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })

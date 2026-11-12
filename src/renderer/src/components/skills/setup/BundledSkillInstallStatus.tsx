@@ -5,8 +5,8 @@ import { skillInstallResultLine } from './bundled-skill-setup-result-copy'
 import {
   bundledSkillInstallNeedsAttention,
   type BundledSkillInstall
-} from '@/hooks/use-bundled-skill-install'
-import { cn } from '@/lib/utils'
+} from '@/hooks/skills/installation/use-bundled-skill-install'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function BundledSkillInstallStatus(props: {

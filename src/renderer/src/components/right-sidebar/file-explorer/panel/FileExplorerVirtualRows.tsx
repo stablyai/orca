@@ -1,7 +1,7 @@
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { dirname } from '@/lib/path'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from '../mutations/file-explorer-inline-input-row'
@@ -13,7 +13,7 @@ import type { DirCache, FileExplorerOperationOwner, TreeNode } from '../tree/fil
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { getFileExplorerOperationExecutionHostId } from '../navigation/file-explorer-operation-owner'
-import type { WorkspaceFileDragSource } from '@/lib/workspace-file-drag'
+import type { WorkspaceFileDragSource } from '@/lib/files/drop/workspace-file-drag'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>

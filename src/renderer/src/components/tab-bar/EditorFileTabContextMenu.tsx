@@ -14,8 +14,8 @@ import {
   getRevealInFileManagerLabel,
   getWorkspaceFileRevealOwner,
   revealInFileManager
-} from '@/lib/reveal-in-file-manager'
-import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
+} from '@/lib/files/os-open/reveal-in-file-manager'
+import { isRevealOrEditorOpenBlocked } from '@/lib/files/os-open/local-path-open-guard'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'

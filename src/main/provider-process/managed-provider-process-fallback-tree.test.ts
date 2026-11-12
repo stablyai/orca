@@ -20,7 +20,7 @@ vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
 vi.mock('../pty/process-retirement/pty-descendant-exit-verification', () => ({
   terminateDescendantSnapshotWithVerdict: os.verifySnapshot
 }))
-vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
+vi.mock('../crash-reporting/process-exits/self-initiated-tree-kill-log', () => ({
   recordSelfInitiatedTreeKill: vi.fn()
 }))
 

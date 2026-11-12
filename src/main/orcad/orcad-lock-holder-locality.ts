@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 import { readOrcadProcessIncarnation } from './orcad-process-start-time'
 import { OrcadInstanceLockError } from './orcad-data-root-privacy'
 import { orcadCloneMachineHint, orcadPeerIsLiveCloneMachine } from './orcad-lock-clone-machine'

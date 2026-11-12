@@ -18,9 +18,9 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../sh
 import type {
   DesktopLayoutView,
   LayoutContentFacts
-} from '../../../../../shared/workspace-layout/workspace-layout-beside'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
+} from '../../../../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { withPendingTabFacts } from '../intents/layout-owner-pending-tab-facts'
 
 /** What the window's own commands hold as drawn; see buildLayoutFrameStorePatch. */

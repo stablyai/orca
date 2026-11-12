@@ -76,7 +76,7 @@ export function renderPluginHostApiReference(): string {
     '',
     '## Events',
     '',
-    "A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.",
+    "A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`; editor events need none). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.",
     '',
     '| Event | Payload | Summary |',
     '| --- | --- | --- |',

@@ -4,7 +4,7 @@
 import React, { useEffect, useRef } from 'react'
 import { Check, ChevronDown, Cloud, Github, Lock, Plus } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 
@@ -61,6 +61,23 @@ export function commitCloudRow(
 }
 
 /** Case-insensitive substring match; the list is short and names are owner/repo. */
+/** The cloud-only rows' keys, in list order, for the shared keyboard cursor. */
+export function cloudRowKeys(
+  cloudRepos: readonly OrcaCloudGitHubRepository[] | null,
+  query: string,
+  onShowMoreCloudRepos: (() => void) | null,
+  onMoreCloudAccess: (() => void) | undefined
+): string[] {
+  if (!cloudRepos) {
+    return []
+  }
+  return [
+    ...filterCloudRepos(cloudRepos, query).map((repo) => cloudRepoKey(repo.fullName)),
+    ...(onShowMoreCloudRepos ? [CLOUD_REPO_SHOW_MORE_KEY] : []),
+    ...(onMoreCloudAccess ? [CLOUD_REPO_MORE_KEY] : [])
+  ]
+}
+
 export function filterCloudRepos(
   repos: readonly OrcaCloudGitHubRepository[],
   query: string

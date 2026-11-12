@@ -137,7 +137,8 @@ function boundPromptOptions(
       : { description: boundInlineText(option.description, JOURNAL_PROMPT_OPTION_LIMITS).text }),
     ...(option.preview === undefined
       ? {}
-      : { preview: boundInlineText(option.preview, JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS).text })
+      : { preview: boundInlineText(option.preview, JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS).text }),
+    ...(option.intent === undefined ? {} : { intent: option.intent })
   }))
 }
 

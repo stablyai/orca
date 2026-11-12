@@ -4,13 +4,13 @@ import type {
   PairingGetEndpointsResult
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { PairingRelay } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { loadHosts, savePairedHost } from '../transport/hosts/host-store'
+import { loadHosts, savePairedHost } from '../host-catalog/host-store'
 import {
   promotePairingJournalCredential,
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle,
   type MobileRelayCredentialBundle
-} from '../transport/hosts/mobile-relay-credential-bundle'
+} from '../host-credentials/mobile-relay-credential-bundle'
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {

@@ -4,8 +4,8 @@ import type {
 } from '../../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { translateRemotePairingFailureDescription } from '@/lib/remote-pairing-copy'
-import { remoteServerPairingFailureMessage } from '@/lib/remote-server-pairing-error-copy'
+import { translateRemotePairingFailureDescription } from '@/lib/remote-pairing/remote-pairing-copy'
+import { remoteServerPairingFailureMessage } from '@/lib/remote-pairing/remote-server-pairing-error-copy'
 
 export type RuntimeHostAccessFailure = Omit<RemotePairingFailure, 'ok'>
 

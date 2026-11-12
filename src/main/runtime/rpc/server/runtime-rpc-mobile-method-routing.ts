@@ -16,6 +16,12 @@ export const EXECUTION_HOST_METHODS = [
   'agentActivity.setRead',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  // Transcripts live on the host that ran the agent, which is also where resume launches it.
+  'aiVault.listSessions',
+  'aiVault.prepareSessionResume',
+  'aiVault.resolveSessionTitles',
+  'aiVault.searchSessions',
+  'aiVault.searchStatus',
   'automation.list',
   'automation.show',
   'automation.create',

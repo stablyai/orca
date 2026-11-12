@@ -41,18 +41,18 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }))
-vi.mock('@/lib/ephemeral-vm-environment-check', () => ({ gateVmCreateOnEnvironmentCheck: gate }))
-vi.mock('@/lib/ephemeral-vm-failed-create-cleanup', () => ({
+vi.mock('@/runtime/ephemeral-vm/ephemeral-vm-environment-check', () => ({ gateVmCreateOnEnvironmentCheck: gate }))
+vi.mock('@/runtime/ephemeral-vm/ephemeral-vm-failed-create-cleanup', () => ({
   cleanupFailedEphemeralVmWorkspace: cleanup
 }))
-vi.mock('@/lib/vm-create-hidden-checkouts', () => ({
+vi.mock('@/runtime/ephemeral-vm/vm-create-hidden-checkouts', () => ({
   hideVmCreateCheckout: vi.fn(),
   settleVmCreateCheckoutAfterCleanup: vi.fn()
 }))
 vi.mock('@/lib/workspace/creation/worktree-creation-flow', () => ({
   retryBackgroundWorktreeCreation: retry
 }))
-vi.mock('@/lib/ephemeral-vm-workspace-target', () => ({
+vi.mock('@/runtime/ephemeral-vm/ephemeral-vm-workspace-target', () => ({
   prepareEphemeralVmWorkspaceTarget: vi.fn(async () => ({
     ok: true,
     setup: {
@@ -67,7 +67,7 @@ vi.mock('@/lib/ephemeral-vm-workspace-target', () => ({
   }))
 }))
 
-import { prepareRequestForCreate } from './ephemeral-vm-worktree-creation'
+import { prepareRequestForCreate } from './workspace/creation/ephemeral-vm-worktree-creation'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create path reads only these fields.

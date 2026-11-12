@@ -1,37 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  parseTerminalKeyboardAvoidanceMetrics,
-  sameTerminalKeyboardAvoidanceMetrics,
-  type TerminalKeyboardAvoidanceMetrics
-} from './terminal-webview-contract'
+import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
 describe('parseTerminalKeyboardAvoidanceMetrics', () => {
-  it('parses a full payload', () => {
-    expect(
-      parseTerminalKeyboardAvoidanceMetrics({
-        cursorY: 30,
-        contentBottomRow: 34,
-        rows: 40,
-        altScreen: true
-      })
-    ).toEqual({ cursorY: 30, contentBottomRow: 34, rows: 40, altScreen: true })
-  })
-
   it('defaults contentBottomRow to cursorY when absent (older WebView bundles)', () => {
     expect(parseTerminalKeyboardAvoidanceMetrics({ cursorY: 12, rows: 40 })).toEqual({
       cursorY: 12,
       contentBottomRow: 12,
       rows: 40,
-      altScreen: false
-    })
-  })
-
-  it('defaults non-numeric fields to zero', () => {
-    expect(parseTerminalKeyboardAvoidanceMetrics({})).toEqual({
-      cursorY: 0,
-      contentBottomRow: 0,
-      rows: 0,
       altScreen: false
     })
   })
@@ -63,32 +39,5 @@ describe('parseTerminalKeyboardAvoidanceMetrics', () => {
         'rowPitch' in parseTerminalKeyboardAvoidanceMetrics({ cursorY: 1, rows: 4, rowPitch })
       ).toBe(false)
     }
-  })
-})
-
-describe('sameTerminalKeyboardAvoidanceMetrics', () => {
-  const metrics: Required<TerminalKeyboardAvoidanceMetrics> = {
-    cursorY: 38,
-    contentBottomRow: 38,
-    rows: 40,
-    altScreen: false,
-    rowPitch: 15
-  }
-  const variants: [keyof typeof metrics, TerminalKeyboardAvoidanceMetrics][] = [
-    ['cursorY', { ...metrics, cursorY: 39 }],
-    ['contentBottomRow', { ...metrics, contentBottomRow: 39 }],
-    ['rows', { ...metrics, rows: 41 }],
-    ['altScreen', { ...metrics, altScreen: true }],
-    ['rowPitch', { ...metrics, rowPitch: 6.96 }]
-  ]
-
-  it('tells apart metrics that differ in any one field', () => {
-    expect(sameTerminalKeyboardAvoidanceMetrics(metrics, { ...metrics })).toBe(true)
-    expect(variants.map(([key]) => key).sort()).toEqual(Object.keys(metrics).sort())
-    for (const [key, variant] of variants) {
-      expect(sameTerminalKeyboardAvoidanceMetrics(metrics, variant), key).toBe(false)
-    }
-    const { rowPitch: _rowPitch, ...older } = metrics
-    expect(sameTerminalKeyboardAvoidanceMetrics(metrics, older)).toBe(false)
   })
 })

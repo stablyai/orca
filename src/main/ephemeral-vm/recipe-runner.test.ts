@@ -1,6 +1,7 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -15,10 +16,8 @@ import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 
 const tmpRoots: string[] = []
 
-afterEach(() => {
-  for (const root of tmpRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tmpRoots.splice(0))
 })
 
 function makeRepo(): string {

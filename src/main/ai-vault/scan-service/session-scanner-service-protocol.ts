@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import type { AiVaultSearchSettings } from '../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { SessionSearchHostScope } from '../../ai-vault-search/session-search-service'
-import type { SessionSearchScanRoots } from '../../ai-vault-search/session-search-scan-roots'
+import type { SessionSearchScanRoots } from '../../ai-vault-search/discovery/session-search-scan-roots'
 import type { ReadAiVaultFirstUserPromptArgs } from '../session-first-user-prompt-read'
 import type { SessionParseCachePersistenceOptions } from '../parse-cache/session-parse-cache-persistence'
 import type { AiVaultScanOptions } from '../session-scanner-types'

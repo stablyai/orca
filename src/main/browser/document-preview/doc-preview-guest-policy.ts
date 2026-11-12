@@ -66,6 +66,12 @@ export function readDocPreviewGuestBoundGrantId(guest: Electron.WebContents): st
   return previewGuests.get(guest)?.readBoundGrantId() ?? null
 }
 
+/** Browser page of the guest's live grant; null before the grant binds or once it is revoked. */
+export function readDocPreviewGuestBoundPageId(guest: Electron.WebContents): string | null {
+  const grantId = readDocPreviewGuestBoundGrantId(guest)
+  return (grantId && getDocPreviewGrant(grantId)?.browserPageId) || null
+}
+
 /** URL of the guest's committed document; unlike getURL(), pushState cannot rewrite it. */
 export function readDocPreviewGuestDocumentUrl(guest: Electron.WebContents): string {
   return previewGuests.get(guest)?.readDocumentUrl() ?? ''

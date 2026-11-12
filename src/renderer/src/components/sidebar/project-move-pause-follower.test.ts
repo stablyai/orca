@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createProjectMovePauseFollower } from './project-move-pause-follower'
 import type { AppState } from '@/store/types'
 import type { ProjectMovePauseResponse } from '../../../../shared/project-move-pause'
 
@@ -28,10 +29,10 @@ vi.mock('@/store/slices/browser/cleanup/browser-webview-cleanup', () => ({
   destroyWorktreeBrowserGuests: (_tabs: unknown, _pages: unknown, worktreeId: string) =>
     mocks.evictGuests(worktreeId)
 }))
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mocks.state, subscribe: () => () => {} }
 }))
-vi.mock('@/lib/worktree-sleep-intent', () => ({
+vi.mock('@/lib/workspace/sleep/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: vi.fn(),
   markWorktreeSleepIntent: vi.fn(),
   withWorktreeSleepTeardown: (_id: string, action: () => Promise<void>) => action()
@@ -43,7 +44,6 @@ vi.mock('@/lib/workspace/persistence/workspace-session-host-persistence', () => 
   persistWorkspaceSessionByHost: mocks.persist
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }))
-import { createProjectMovePauseFollower } from './project-move-pause-follower'
 
 function fixture() {
   const responses: ProjectMovePauseResponse[] = []

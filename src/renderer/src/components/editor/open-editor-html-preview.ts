@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   editorViewPlacement,
   editorViewTab
@@ -8,8 +8,8 @@ import { openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
 import { resolveFileBrowserLinkExecutionHostId } from '@/lib/browser/documents/file-preview-link-open'
 import { captureBrowserLinkReveal } from '@/lib/browser/navigation/browser-link-reveal'
 import { createBrowserLinkHostMatcher } from '@/lib/browser/navigation/browser-link-owner'
-import { beginLinkOpenRequest, subscribeLinkOpenRequests } from '@/lib/link-open-request'
-import { captureLinkOpenIntent } from '@/lib/link-open-intent'
+import { beginLinkOpenRequest, subscribeLinkOpenRequests } from '@/lib/links/link-open-request'
+import { captureLinkOpenIntent } from '@/lib/links/placement/link-open-intent'
 import { flushEditorFrames } from './save/flush/editor-pending-flush'
 
 export async function openEditorHtmlPreview(

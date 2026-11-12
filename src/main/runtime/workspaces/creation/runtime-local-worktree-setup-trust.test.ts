@@ -21,8 +21,6 @@ const repo: Repo = { id: 'repo', path: '/primary', displayName: 'r', badgeColor:
 function prepare(approvedSetupHash?: string, approvedSetupHashes?: string[]) {
   return prepareRuntimeLocalWorktreeSetup({
     request: {
-      repoSelector: 'id:repo',
-      name: 'w',
       setupDecision: 'run',
       ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {}),
       ...(approvedSetupHashes ? { approvedSetupHashes } : {})
@@ -81,5 +79,43 @@ describe('created worktree setup trust', () => {
     const result = await prepare()
     expect(runner.createSetupRunnerScript).toHaveBeenCalledOnce()
     expect(result.setupTrustMismatch).toBeUndefined()
+  })
+
+  describe('folder projects', () => {
+    const folderRepo: Repo = { ...repo, kind: 'folder' }
+    const identity = { worktreeId: 'repo::/acme::workspace:1', displayName: 'Fix login' }
+    const prepareFolder = (setupDecision: 'run' | 'inherit', approvedSetupHash?: string) =>
+      prepareRuntimeLocalWorktreeSetup({
+        request: {
+          setupDecision,
+          ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {})
+        },
+        repo: folderRepo,
+        worktreePath,
+        settings: getDefaultSettings(tmpdir()),
+        runtimeTarget: undefined,
+        shouldUseSetupRunner: true,
+        identity
+      })
+
+    it('skips shared setup from an older client that sent no approval', async () => {
+      writeFileSync(join(worktreePath, 'orca.yaml'), 'scripts:\n  setup: make bootstrap\n')
+      const result = await prepareFolder('inherit')
+      expect(runner.createSetupRunnerScript).not.toHaveBeenCalled()
+      expect(result.setup).toBeUndefined()
+      expect(result.warning).toContain('pass --setup run')
+    })
+
+    it('runs approved shared setup for the workspace, without default tabs', async () => {
+      writeFileSync(
+        join(worktreePath, 'orca.yaml'),
+        'scripts:\n  setup: make bootstrap\ndefaultTabs:\n  - title: dev\n    command: pnpm dev\n'
+      )
+      const result = await prepareFolder('run', sha256('make bootstrap'))
+      expect(runner.createSetupRunnerScript).toHaveBeenCalledOnce()
+      expect(runner.createSetupRunnerScript.mock.calls[0][6]).toEqual(identity)
+      expect(result.defaultTabs).toBeUndefined()
+      expect(result.setupTrustMismatch).toBeUndefined()
+    })
   })
 })

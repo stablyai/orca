@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
-import { useSettledMobileNativeChatInputLock } from '../use-mobile-native-chat-input-lease'
+import { useSettledMobileNativeChatInputLock } from './use-mobile-native-chat-input-lease'
 import {
   mobileNativeChatDraftDestination,
   readMobileNativeChatDraftInputs,

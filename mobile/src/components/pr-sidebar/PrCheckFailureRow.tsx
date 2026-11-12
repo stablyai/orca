@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View, type HostInstance } from 'react-native'
 import {
   Copy,
   CircleX,
@@ -58,7 +58,7 @@ export function PrCheckFailureRow({
   const [showLog, setShowLog] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
-  const menuRef = useRef<View>(null)
+  const menuRef = useRef<HostInstance>(null)
   const details = entry?.status === 'loaded' ? entry.details : null
   const content = details ? presentCheckDetail(details) : null
   const annotation = content?.annotations[0] ?? null

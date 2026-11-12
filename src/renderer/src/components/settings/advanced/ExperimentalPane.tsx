@@ -11,7 +11,6 @@ import { NumberField } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
-import { BrowserExtensionsExperimentalSetting } from '../browser/extensions/BrowserExtensionsExperimentalSetting'
 import { PokesExperimentalSetting } from '../../teammates/PokesExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../../sidebar/use-wsl-hosts-enabled'
@@ -253,8 +252,6 @@ export function ExperimentalPane({
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
-
-        <BrowserExtensionsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
         {matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pokes]) ? (
           <PokesExperimentalSetting />

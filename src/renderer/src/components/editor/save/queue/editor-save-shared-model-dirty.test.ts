@@ -20,7 +20,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.curren
 vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: () => undefined
 }))
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' }),
   requireRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))

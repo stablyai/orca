@@ -7,8 +7,8 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { addWorkspaceSessionWorktreeOwners } from '../restoring-sessions/session-worktree-ownership'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
-import { ownerKeyWorktreeIds } from '../../orca-profiles/profile-project-worktree-identity'
+import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
+import { ownerKeyWorktreeIds } from '../../orca-profiles/project-transfer/profile-project-worktree-identity'
 
 /** Paired-host catalogs live on the remote host. */
 const isPairedHost = (hostId: string | null | undefined): boolean =>

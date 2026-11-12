@@ -1,8 +1,8 @@
 import type { ReactNode, RefObject } from 'react'
-import type { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 
 export type ComposerMenuLayerProps = {
-  anchorRef: RefObject<View | null>
+  anchorRef: RefObject<HostInstance | null>
   children: ReactNode
 }
 

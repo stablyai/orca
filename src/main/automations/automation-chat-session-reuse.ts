@@ -6,7 +6,7 @@ import type {
 import { automationRunRecency } from '../../shared/automations/history/automation-session-reuse'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { AUTOMATION_AGENT_CALLER, automationRunOperationId } from './automation-run-operation'
-import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
+import { rpcCallerOperationKey } from '../runtime/rpc/callers/rpc-caller-identity'
 import {
   structuredAgentSessionMessageSendMutation,
   structuredAgentSessionSendBody

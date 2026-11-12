@@ -1,7 +1,7 @@
 import {
   isPairedWebClientWindow,
   shouldRenderDesktopWindowChrome
-} from '@/lib/desktop-window-chrome'
+} from '@/app-shell/chrome/desktop-window-chrome'
 
 export const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')

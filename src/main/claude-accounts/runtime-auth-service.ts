@@ -5,18 +5,16 @@ import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-run
 import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
-import { ClaudeProfileRouter } from './claude-profile-router'
-import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
+import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
+import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
   installClaudeObservedConfigDirs,
   installClaudeProfileRouter,
   installClaudeWslProfileRouter
-} from './claude-profile-installed-router'
-import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
-import type { ClaudeAccountSelectionTarget } from './runtime-selection'
+} from './profiles/routing/claude-profile-installed-router'
+import { ClaudeObservedConfigDirs } from './profiles/routing/claude-observed-config-dirs'
+import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
-
-export type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
 /** `readPath` exposes a guest configDir to the host through UNC on WSL. */
 export type ClaudeAccountFolder = { configDir: string; readPath: string }

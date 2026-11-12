@@ -1,6 +1,7 @@
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { interactivePromptLabel } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { sayNativeChatApprovalTranslated } from '../native-chat/prompts/native-chat-interactive-prompt'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import type { AgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
@@ -42,10 +43,6 @@ import {
   rowConversationName,
   rowTask
 } from './dashboard-card-labels'
-import {
-  buildDashboardWorktreeLaunchOptions,
-  type DashboardLaunchDetectionState
-} from './dashboard-worktree-launch-options'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
@@ -71,7 +68,6 @@ export type DashboardSnapshotState = Pick<
   DashboardCardContextState &
   Partial<
     DashboardCardTerminalInputState &
-      DashboardLaunchDetectionState &
       Pick<
         AppState,
         | 'runtimeEnvironments'
@@ -89,7 +85,6 @@ export function buildDashboardSnapshot(
   state: DashboardSnapshotInput,
   now: number,
   options: {
-    launchRouteStore?: AgentLaunchRouteView
     includeCardDetails?: boolean
     includeFilterOptions?: boolean
     /** Cache only row derivation; review/host/status inputs still require fresh card assembly. */
@@ -248,7 +243,15 @@ export function buildDashboardSnapshot(
         stateChangedAt: row.entry.stateStartedAt || row.startedAt,
         statusUpdatedAt: row.entry.updatedAt,
         unseen,
-        askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
+        askSummary:
+          bucket === 'attention'
+            ? interactivePromptLabel(
+                row.entry.interactivePrompt,
+                row.entry.toolName,
+                row.agentType,
+                sayNativeChatApprovalTranslated
+              )
+            : undefined,
         conversationName: boundedLabelOrUndefined(
           rowConversationName(
             row,
@@ -274,17 +277,6 @@ export function buildDashboardSnapshot(
     ...(workspaces ? { workspaces } : {}),
     showIdle,
     filterOptions,
-    // Count-only callers offer no launcher; skip host-detection lookups for sidebar rebuilds.
-    ...(includeCardDetails
-      ? {
-          launchableAgentsByWorktreeId: buildDashboardWorktreeLaunchOptions(
-            state,
-            cards,
-            workspaces,
-            options.launchRouteStore
-          )
-        }
-      : {}),
     repoIconsByRepoId
   }
 }

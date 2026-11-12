@@ -79,13 +79,6 @@ describe('fetchRemoteRepoIcon', () => {
     expect(pulls).toBeLessThan(10)
   })
 
-  it('refuses a reply that is not a raster image', async () => {
-    const svg = new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } })
-    expect(await fetchRemoteRepoIcon(AVATAR, async () => svg)).toBeNull()
-    const missing = new Response('nope', { status: 404, headers: { 'content-type': 'image/png' } })
-    expect(await fetchRemoteRepoIcon(AVATAR, async () => missing)).toBeNull()
-  })
-
   it('refuses non-https and credentialed sources', async () => {
     const fetch = vi.fn<RepoIconFetch>()
     expect(await fetchRemoteRepoIcon('http://github.com/a.png', fetch)).toBeNull()

@@ -2,7 +2,7 @@ import { BrowserClientAutomationMethod } from '../../../../shared/browser/client
 import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/browser-expected-page-url'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
-import { isAgentRpcCaller, type RpcCallerIdentity } from '../../rpc/rpc-caller-identity'
+import { isAgentRpcCaller, type RpcCallerIdentity } from '../../rpc/callers/rpc-caller-identity'
 
 export type ClientHostedBrowserRpcRoute = { handled: false } | { handled: true; result: unknown }
 

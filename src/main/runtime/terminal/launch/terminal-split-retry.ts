@@ -1,5 +1,5 @@
 import { BoundedMap } from '../../../../shared/bounded-map'
-import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/terminal-split-outcome'
+import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
 import { SPLIT_PANE_WAIT_TIMEOUT_MESSAGE } from './terminal-split-wait-timeout'
 
 /** Where main asked the window to split; a retry answers from it without asking again. */

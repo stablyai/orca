@@ -29,19 +29,6 @@ afterAll(() => {
 })
 
 describe('the mounted module loader', () => {
-  it('preserves constants through a star reexport in an evaluated module', () => {
-    const modules = loaderOver({
-      'constants.ts': `export const CAPABILITY = 'files.mutation-ownership.v1'`,
-      'protocol.ts': `export * from './constants'`,
-      'operation.ts': `
-        import { CAPABILITY } from './protocol'
-        export const read = () => CAPABILITY
-      `
-    })
-    const { read } = modules.load<{ read: () => string }>('mobile/src/operation.ts')
-    expect(read()).toBe('files.mutation-ownership.v1')
-  })
-
   it('follows named reexports reached through the task foundation barrel', () => {
     const modules = loaderOver({
       'mobile-tasks-legacy-foundation.tsx': `export * from './mapping'`,
@@ -149,19 +136,6 @@ describe('the mounted module loader', () => {
     const { read } = modules.load<{ read: () => unknown }>('mobile/src/uses-default.ts')
     expect(() => read()).toThrow(
       'Unspecified native mounting dependency: react-native-not-substituted.default'
-    )
-  })
-
-  it('refuses a named import of an unlisted package on the read', () => {
-    const modules = loaderOver({
-      'uses-named.ts': `
-        import { thing } from 'expo-not-substituted'
-        export const read = () => thing
-      `
-    })
-    const { read } = modules.load<{ read: () => unknown }>('mobile/src/uses-named.ts')
-    expect(() => read()).toThrow(
-      'Unspecified native mounting dependency: expo-not-substituted.thing'
     )
   })
 

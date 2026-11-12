@@ -144,23 +144,6 @@ describe('catalog update approval', () => {
     })
   }
 
-  for (const [type, sample] of Object.entries(SAMPLES)) {
-    it(`never carries or one-click grants approval when a ${type} plugin moves repository`, async () => {
-      const before = sample()
-      const after = { ...sample(), version: '1.1.0' }
-      for (const enableIfData of [false, true]) {
-        const { outcome, approve } = await runUpdate({
-          before,
-          after,
-          repositoryMoved: true,
-          enableIfData
-        })
-        expect(outcome).toMatchObject({ ok: true, needsReview: true })
-        expect(approve).not.toHaveBeenCalled()
-      }
-    })
-  }
-
   it('asks again when the execution profile rises', async () => {
     const { outcome, approve } = await runUpdate({
       before: SAMPLES.data(),

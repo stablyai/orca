@@ -1,3 +1,4 @@
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
@@ -61,7 +62,9 @@ export function createTerminalTabPresentationActions(
           return s
         }
         const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
-        const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
+        const nextTabsByWorktree = replaceTabBuckets(s.tabsByWorktree, [
+          [ownerWorktreeId, ownerTabs]
+        ])
         const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
         const nextUnifiedTabs = unifiedTabs.map((tab) =>
           tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
@@ -72,10 +75,9 @@ export function createTerminalTabPresentationActions(
         scheduleRuntimeGraphSync()
         return {
           tabsByWorktree: nextTabsByWorktree,
-          unifiedTabsByWorktree: {
-            ...s.unifiedTabsByWorktree,
-            [ownerWorktreeId]: nextUnifiedTabs
-          }
+          unifiedTabsByWorktree: replaceTabBuckets(s.unifiedTabsByWorktree, [
+            [ownerWorktreeId, nextUnifiedTabs]
+          ])
         }
       })
     },
@@ -136,7 +138,9 @@ export function createTerminalTabPresentationActions(
         const nextTabs = [...tabs]
         nextTabs[tabIndex] = tabWithoutLaunchAgent
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+        return {
+          tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[ownerWorktreeId, nextTabs]])
+        }
       })
     },
     setRuntimePaneTitle: (tabId, paneId, title) => {
@@ -159,10 +163,9 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: {
-            ...s.runtimePaneTitlesByTabId,
-            [tabId]: { ...currentByPane, [paneId]: title }
-          },
+          runtimePaneTitlesByTabId: replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+            [tabId, { ...currentByPane, [paneId]: title }]
+          ]),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })
@@ -176,12 +179,6 @@ export function createTerminalTabPresentationActions(
         const prevTitle = currentByPane[paneId]
         const nextByPane = { ...currentByPane }
         delete nextByPane[paneId]
-        const next = { ...s.runtimePaneTitlesByTabId }
-        if (Object.keys(nextByPane).length > 0) {
-          next[tabId] = nextByPane
-        } else {
-          delete next[tabId]
-        }
         // Clearing a classified title changes smart-sort’s verdict, like setRuntimePaneTitle.
         const hadClassification = detectAgentStatusFromTitle(prevTitle ?? '') !== null
         // Click-driven teardown must not re-rank active worktrees; skip orphaned owners too.
@@ -191,7 +188,9 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: next,
+          runtimePaneTitlesByTabId: replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+            [tabId, Object.keys(nextByPane).length > 0 ? nextByPane : null]
+          ]),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })

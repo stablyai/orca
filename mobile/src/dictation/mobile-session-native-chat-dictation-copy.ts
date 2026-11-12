@@ -14,9 +14,10 @@ export const nativeChatDictationCopy = {
       'session.useNativeChatDictation.stoppedAtCloudLimit',
       'Dictation stopped at the 10-minute cloud limit.'
     ),
-  stoppedAfterSilence: () =>
+  stoppedAfterSilence: (seconds: number) =>
     translate(
-      'session.useNativeChatDictation.stoppedAfterSilence',
-      'Stopped after a minute of silence'
+      'session.useNativeChatDictation.stoppedAfterSilenceSeconds',
+      'Stopped after {{seconds}} seconds of silence',
+      { seconds }
     )
 }

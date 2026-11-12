@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../../store/index'
-import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
+import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
@@ -76,7 +76,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     [worktreeId]
   )
 
-  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
+  const backdropActive = useWindowBackdropActive()
   const focusOwningGroup = useCallback(
     (groupId: string) => focusGroup(worktreeId, groupId),
     [focusGroup, worktreeId]
@@ -173,8 +173,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isVisible={isVisible}
             isActive={isActive}
             hiddenPrewarm={assignment?.isActiveInGroup === true ? hiddenTerminalPrewarm : null}
-            // Why not over a theme image: a chat there is translucent, so a dim would bleed the image in.
-            dimmed={groups.length > 1 && isVisible && !isActive && !themeBackgroundActive}
+            // Why not over a backdrop: group dimming also fades terminal and chat text.
+            dimmed={groups.length > 1 && isVisible && !isActive && !backdropActive}
             activityTerminalPortal={activityTerminalPortal}
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FileText, GitGraph, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
 import { getShortcutPlatform } from '../../hooks/useShortcutLabel'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   activateFloatingWorkspaceCyclableTab,
   isFloatingWorkspacePanelFocused
-} from '@/lib/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord
@@ -21,7 +21,7 @@ import {
 } from './recent-tab-switching'
 import { useTranslate } from '@/i18n/use-translate'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type SwitcherState = {
   items: RecentTabSwitcherItem[]

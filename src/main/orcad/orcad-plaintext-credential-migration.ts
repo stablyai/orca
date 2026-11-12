@@ -10,14 +10,14 @@ import {
   getWorkspaceTokenDir,
   getWorkspaceTokenPath,
   LEGACY_WORKSPACE_ID
-} from '../linear/linear-credential-paths'
+} from '../linear/accounts/linear-credential-paths'
 import { getTokenDir as getJiraTokenDir } from '../jira/site-credential-store'
 import { getSecretPath as getBitbucketSecretPath } from '../bitbucket/credential-store'
 import { getOpenAiKeyPath } from '../speech/openai-api-key-store'
 import { API_KEY_ENVELOPE_PREFIX, getZcodePlanApiKeyPath } from '../zcode/zcode-plan-api-key-store'
 import { COOKIE_ENVELOPE_PREFIX, getMiniMaxCookiePath } from '../minimax/minimax-cookie-store'
 import { miniMaxApiKeyEnvelopeFile } from '../minimax/minimax-api-key-store'
-import { openCodeGoApiKeyEnvelopeFile } from '../opencode/opencode-go-api-key-store'
+import { openCodeGoApiKeyEnvelopeFile } from '../opencode/accounts/opencode-go-api-key-store'
 import { openAiCompatibleSpeechProviderEnvelopeFile } from '../speech/openai-compatible-speech-provider-store'
 
 type PlaintextCredentialTarget = {

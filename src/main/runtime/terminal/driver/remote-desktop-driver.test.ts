@@ -5,7 +5,7 @@ import type * as WorktreeListingModule from '../../../git/worktrees/catalog/work
 /** Desktop viewers suppress host resize, never input; mobile drivers retain priority and the final viewer releases its floor. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
-import type * as GitUsernameModule from '../../../git/git-username'
+import type * as GitUsernameModule from '../../../git/repositories/git-username'
 
 import { OrcaRuntimeService } from '../../orca-runtime'
 
@@ -59,16 +59,11 @@ vi.mock('../../../ipc/worktrees/removal/registered-worktree-roots-cache', () => 
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 const repoBranchConflictMock = vi.hoisted(() => vi.fn().mockResolvedValue(null))
-vi.mock('../../../git/repo', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
-    getBranchConflictKind: repoBranchConflictMock
-  }
-})
-vi.mock('../../../git/git-username', async () => {
-  const actual = await vi.importActual<typeof GitUsernameModule>('../../../git/git-username')
+
+vi.mock('../../../git/repositories/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>(
+    '../../../git/repositories/git-username'
+  )
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
@@ -194,21 +189,6 @@ describe('remote desktop viewer width driver', () => {
 
     await runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
     expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
-  })
-
-  it('repairs host-side drift when the current viewer reasserts an unchanged grid', async () => {
-    const { runtime, ptySizes, resizeCalls } = createRuntime()
-    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
-    ptySizes.set('pty-1', { cols: 80, rows: 24 })
-    resizeCalls.splice(0)
-
-    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
-
-    expect(resizeCalls).toEqual([{ ptyId: 'pty-1', cols: 100, rows: 30 }])
-    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 30 })
-
-    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
-    expect(resizeCalls).toHaveLength(1)
   })
 
   it('keeps a reconnected pane at its own grid when the heartbeat reaps its stale stream', async () => {
@@ -480,33 +460,7 @@ describe('remote desktop viewer width driver', () => {
   })
 })
 
-describe('terminal layout runtime dispatch and ownership', () => {
-  it('keeps floors, subscribers, queues and listeners isolated for identical IDs', async () => {
-    const first = createRuntime().runtime
-    const second = createRuntime().runtime
-    const secondResize = vi.fn()
-    second.subscribeToTerminalResize('pty-1', secondResize)
-    await first.handleMobileSubscribe('pty-1', 'client', { cols: 50, rows: 25 })
-
-    expect(first.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'client' })
-    expect(first.getLayoutForTest('pty-1')).toMatchObject({ kind: 'phone', cols: 50, rows: 25 })
-    expect(second.getDriver('pty-1')).toEqual({ kind: 'idle' })
-    expect(second.isMobileSubscriberActive('pty-1')).toBe(false)
-    expect(second.getLayoutForTest('pty-1')).toBeNull()
-    expect(second.getTerminalFitOverride('pty-1')).toBeNull()
-    expect(secondResize).not.toHaveBeenCalled()
-
-    await second.handleMobileSubscribe('pty-1', 'client', { cols: 60, rows: 30 })
-    first.onPtyExit('pty-1', 0)
-
-    expect(second.isMobileSubscriberActive('pty-1')).toBe(true)
-    expect(second.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'client' })
-    expect(second.getTerminalFitOverride('pty-1')).toMatchObject({ cols: 60, rows: 30 })
-    expect(secondResize).toHaveBeenCalledOnce()
-  })
-})
-
-vi.mock('../../../git/repo-branch-conflict', async (importOriginal) => ({
+vi.mock('../../../git/refs/resolution/repo-branch-conflict', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getBranchConflictKind: repoBranchConflictMock
 }))

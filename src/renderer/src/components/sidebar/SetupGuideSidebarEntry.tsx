@@ -1,7 +1,7 @@
 import React from 'react'
 import { EyeOff } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,

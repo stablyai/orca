@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AgentConfigSyncStatus } from '../../../../../../shared/agent-config-sync/agent-config-sync-contract'
 import { formatRelative } from '../../../cloud-workspaces/cloud-workspace-format'
 import {

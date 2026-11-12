@@ -14,11 +14,11 @@ import { agentSessionCreateCapabilities } from '@/runtime/hosted-terminals/creat
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { pairedAgentLaunchInputs } from '../../../paired-agent-launch-inputs'
+import { pairedAgentLaunchInputs } from '../routing/paired-agent-launch-inputs'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { completeWebHostAgentLaunch } from '@/lib/web-host-agent-launch-completion'
+import { completeWebHostAgentLaunch } from '@/lib/agent-session/launch/new-tab/web-host-agent-launch-completion'
 import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
 import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import {

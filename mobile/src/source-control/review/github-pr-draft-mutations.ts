@@ -1,11 +1,11 @@
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
 import { githubPrDraftMark, githubPrReadyForReviewMark } from './github-pr-mutation-operations'
 import { settleGithubPrMutation, type GitHubPrMutationOutcome } from './github-pr-mutation-outcome'
 
 // Ready for review and Mark as draft: the same toggle on GitHub, one RPC each.
 export function fetchMarkPRReadyForReview(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
@@ -23,7 +23,7 @@ export function fetchMarkPRReadyForReview(
 }
 
 export function fetchMarkPRDraft(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {

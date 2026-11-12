@@ -68,7 +68,7 @@ vi.mock('./browser-tab-sleep', () => ({
 }))
 
 import { followWorkspaceSleep, keepWorkspaceAwakeDuringSleep } from './workspace-sleep-follower'
-import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   hasWakeAfterSleepRequest,
   requestWakeAfterSleep,

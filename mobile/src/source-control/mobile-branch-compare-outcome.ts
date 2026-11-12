@@ -1,5 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import {
   resolveMobileBranchBaseRefs,
@@ -22,7 +22,7 @@ export type BranchCompareAttempt = BranchCompareOutcome & {
 
 // Return failures because callers void this load.
 export async function readBranchCompareOutcome(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   compare?: MobileBranchCompareTarget
 ): Promise<BranchCompareAttempt> {
@@ -40,7 +40,7 @@ export async function readBranchCompareOutcome(
 }
 
 async function readCompare(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId: string,
   baseRef: string | null
 ): Promise<BranchCompareOutcome> {

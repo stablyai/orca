@@ -8,8 +8,6 @@ import { GRACE_MS } from './federation-auto-release-grace.test-support'
 export function registerHomeAutoReleaseScenarios(args: {
   harness: AutoReleaseScenarioHarness
   settleRemotely: () => Promise<string>
-  listFromHome: (dispatchId: string) => Promise<unknown>
-  retainFromHome: (dispatchId: string) => Promise<unknown>
 }): void {
   const { harness } = args
 

@@ -24,7 +24,10 @@ import {
 import type { PrepareNativeChatVisuals } from '../../../native-chat/native-chat-visuals-delivery'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
 import { PI_RPC_AGENT } from '../../../pi/rpc-agent-definition'
-import { piRpcLaunchPart, type PiRpcLaunchPartDeps } from '../../../pi/rpc-launch-resolution'
+import {
+  piRpcLaunchPart,
+  type PiRpcLaunchPartDeps
+} from '../../../pi/rpc/launch/rpc-launch-resolution'
 import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import {
   composeStructuredLaunch,

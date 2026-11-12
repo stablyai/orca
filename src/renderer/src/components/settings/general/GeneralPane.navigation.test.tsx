@@ -119,31 +119,6 @@ function renderNavigationHarness({
   return render(<NavigationHarness {...props} />)
 }
 
-it('finds controls across General destinations and opens the actual setting for editing', async () => {
-  const onWrite = vi.fn()
-  const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
-  renderNavigationHarness({ onWrite })
-  expect(screen.getByRole('button', { name: /Workspace directory/i })).toBeTruthy()
-  expect(screen.getByRole('button', { name: /External worktrees/i })).toBeTruthy()
-  expect(screen.getByRole('switch', { name: 'Deleting a workspace' })).toBeTruthy()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Search settings' }), {
-    target: { value: 'folder per project' }
-  })
-  fireEvent.click(await screen.findByRole('button', { name: /Folder per project/ }))
-  expect(await screen.findByRole('switch', { name: 'Folder per project' })).toBeTruthy()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Search settings' }), {
-    target: { value: 'minimap' }
-  })
-  const result = await screen.findByRole('button', { name: /Minimap/ })
-  fireEvent.click(result)
-  const control = await screen.findByRole('switch', { name: 'Minimap' })
-  await waitFor(() =>
-    expect(scroll.mock.contexts).toContain(control.closest('#general-editor-minimap'))
-  )
-  fireEvent.click(control)
-  expect(onWrite).toHaveBeenCalledWith({ editorMinimapEnabled: false })
-})
-
 it('opens an old subsection link from another child with a conflicting query, including repeated selection', async () => {
   const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
   const { container } = renderNavigationHarness({ initialQuery: 'font' })

@@ -21,12 +21,22 @@ import {
 } from '@/components/tab-bar/tab-session-history-switch'
 import type { AiVaultResumeCommandSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { waitForPromiseWithSignal } from '../../../../../../shared/abort-signal-reason'
+import { translate } from '@/i18n/i18n'
 
 export type NativeChatCliForkSubject = Extract<TabSessionHistorySubject, { kind: 'chat' }>
 export type NativeChatCliForkPreparation = {
   session: AiVaultResumeCommandSession
   copied: boolean
   sourceAgent?: AiVaultAgent
+}
+
+function sourceChatChangedError(): Error {
+  return new Error(
+    translate(
+      'auto.lib.nativeChatCliFork.sourceChanged',
+      'The source chat changed before preparation.'
+    )
+  )
 }
 
 export async function prepareNativeChatCliFork(
@@ -36,7 +46,12 @@ export async function prepareNativeChatCliFork(
   const hostId = subject.request.executionHostScope
   const host = parseExecutionHostId(hostId)
   if (!host || (host.kind !== 'local' && host.kind !== 'runtime')) {
-    throw new Error('The conversation host is unavailable.')
+    throw new Error(
+      translate(
+        'auto.lib.nativeChatCliFork.hostUnavailable',
+        'The conversation host is unavailable.'
+      )
+    )
   }
   const target =
     host.kind === 'runtime'
@@ -45,14 +60,22 @@ export async function prepareNativeChatCliFork(
   const observe = async <T>(timeoutMs: number, run: (signal: AbortSignal) => Promise<T>) => {
     const deadline = new AbortController()
     const timer = setTimeout(
-      () => deadline.abort(new Error('Conversation preparation timed out.')),
+      () =>
+        deadline.abort(
+          new Error(
+            translate(
+              'auto.lib.nativeChatCliFork.preparationTimedOut',
+              'Conversation preparation timed out.'
+            )
+          )
+        ),
       timeoutMs
     )
     const signal = AbortSignal.any([options.signal, deadline.signal])
     try {
       signal.throwIfAborted()
       if (!options.isCurrent()) {
-        throw new Error('The source chat changed before preparation.')
+        throw sourceChatChangedError()
       }
       return await waitForPromiseWithSignal(run(signal), signal)
     } finally {
@@ -84,7 +107,7 @@ export async function prepareNativeChatCliFork(
       )
     ).capabilities?.includes(AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY) === true
   if (!options.isCurrent()) {
-    throw new Error('The source chat changed before preparation.')
+    throw sourceChatChangedError()
   }
   if (modern) {
     return prepareAiVaultSessionForFork(
@@ -109,11 +132,16 @@ export async function prepareNativeChatCliFork(
     )
   )
   if (!options.isCurrent()) {
-    throw new Error('The source chat changed before preparation.')
+    throw sourceChatChangedError()
   }
   const row = findTabSessionHistoryRow(listed.sessions, subject)
   if (!row || row.executionHostId !== host.id || !isAiVaultSessionResumableContent(row)) {
-    throw new Error('This chat has no saved conversation to copy.')
+    throw new Error(
+      translate(
+        'auto.lib.nativeChatCliFork.noSavedConversation',
+        'This chat has no saved conversation to copy.'
+      )
+    )
   }
   return { ...(await prepareAiVaultSessionForFork(row, request)), sourceAgent: row.agent }
 }

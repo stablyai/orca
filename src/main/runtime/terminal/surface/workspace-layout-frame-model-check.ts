@@ -1,7 +1,7 @@
 // Applying each records frame must equal a fresh partition projection; tests check every frame and dev builds log Store-write mismatches (workspace-layout-frame-observer.ts).
 
-import { stableJson } from '../../../../shared/workspace-layout/workspace-layout-load-report'
-import { applyWorkspaceLayoutRecordChange } from '../../../../shared/workspace-layout/workspace-layout-records'
+import { stableJson } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
+import { applyWorkspaceLayoutRecordChange } from '../../../../shared/workspace-layout/published-layout/workspace-layout-records'
 import type { LayoutFrameObservation } from './workspace-layout-frame-observer'
 
 /** Empty when the frame holds exactly what changed. */

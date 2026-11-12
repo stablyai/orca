@@ -1,5 +1,6 @@
 import type { TerminalPaneLayoutNode } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from '../terminal-layout-leaf-traversal'
+import '../terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 function hasLeafPtyBinding(
   ptyIdsByLeafId: Record<string, string> | undefined,
@@ -13,7 +14,7 @@ export function resolveTerminalLayoutActiveLeafId(opts: {
   activeLeafId: string | null | undefined
   ptyIdsByLeafId?: Record<string, string>
 }): string | null {
-  const leafIds = collectLeafIdsInOrder(opts.root)
+  const leafIds = collectLayoutLeafIdsInOrder(opts.root)
   if (leafIds.length === 0) {
     return null
   }

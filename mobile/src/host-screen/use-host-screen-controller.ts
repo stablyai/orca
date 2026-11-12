@@ -28,7 +28,7 @@ import { useHostViewSettings } from './use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
-import { useHostDisplay } from '../transport/hosts/use-host-display'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { classifyConnection } from '../transport/connection/connection-health'
 
 export type HostScreenProps = {

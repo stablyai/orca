@@ -18,7 +18,6 @@ import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runti
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { ComputerAwakeMode } from './computer-awake-mode'
-import type { RuntimePortForwardSettings } from './runtime-port-forwards'
 import type { CommitMessageAiSettings } from './source-control/ai/generation/commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
 import type {
@@ -199,8 +198,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   electronHttp1CompatibilityMode?: boolean
   /** Opt-in in-app browsing (isolated guest surface); default keeps links opening in the system browser. */
   openLinksInApp: boolean
-  /** Settings → Ports: forwarding remote hosts' listeners to this computer; absent means defaults. */
-  runtimePortForwarding?: Partial<RuntimePortForwardSettings>
   /** Worktree-scoped localhost hostnames to distinguish tabs; opt-in since a non-localhost host can break apps binding cookies/sessions to localhost. */
   localhostWorktreeLabelsEnabled?: boolean
   /** Tracks the one-time first-use prompt for terminal link routing (avoid silently changing where links open). */
@@ -254,13 +251,15 @@ export type GlobalSettings = GlobalSettingsBase & {
   showAutomationsButton?: boolean
   /** Deprecated: Artifacts are always available. Use showArtifactsButton for sidebar visibility. */
   artifactsEnabled?: boolean
-  /** Capability gate for agent-driven publishing; off until granted, enforced in main, not just the UI. */
+  /** Capability gate for public artifact publishing; on for new profiles, enforced in main, not just the UI. */
   artifactSharingEnabled?: boolean
   /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
   agentSkillSharingEnabled?: boolean
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
   /** Close a finished worker's terminal or chat after a grace period; absent means on. The coordinator's runtime decides. */
   orchestrationWorkerAutoReleaseEnabled?: boolean
+  /** Coordinator agents may allow workers' permission prompts on this machine; absent means off. Not in any agent-writable settings RPC. */
+  orchestrationCoordinatorApprovalsEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */

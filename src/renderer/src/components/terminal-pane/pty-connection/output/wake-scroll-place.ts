@@ -1,14 +1,14 @@
 import type { Terminal } from '@xterm/xterm'
-import { syncTerminalScrollIntentFromViewport } from '@/lib/pane-manager/terminal-scroll-intent'
+import { syncTerminalScrollIntentFromViewport } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import {
   beginTerminalScrollIntentBufferRebuild,
   endTerminalScrollIntentBufferRebuild,
   onTerminalScrollIntentBufferRebuildComplete
-} from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+} from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-rebuild'
 import {
   cancelDeferredScrollRestore,
   cancelPendingFitScrollRestore
-} from '@/lib/pane-manager/pane-scroll'
+} from '@/lib/pane-manager/terminal-scroll/pane-scroll'
 
 /**
  * WAKE-SCROLLBACK-SCROLL: puts a woken pane back on the line the person scrolled to. The person's

@@ -1,5 +1,6 @@
 import React from 'react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
 
 export function SmartWorkspaceSourceTabs({
@@ -13,8 +14,9 @@ export function SmartWorkspaceSourceTabs({
   inputRef?: React.RefObject<HTMLInputElement | null>
   tabsListRef?: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
+  // Why: the wrapper scrolls; TabsList and TabsTrigger own their own spacing and type.
   return (
-    <div className="flex min-w-0 items-center gap-2 border-b border-border/40">
+    <div className="flex min-w-0 items-center gap-2 overflow-x-auto overflow-y-hidden border-b border-border/40 scrollbar-sleek">
       <Tabs
         value={model.mode}
         onValueChange={(value) => {
@@ -28,7 +30,8 @@ export function SmartWorkspaceSourceTabs({
         <TabsList
           ref={tabsListRef}
           variant="line"
-          className="h-7 w-full justify-start gap-4 overflow-x-auto overflow-y-hidden px-0 scrollbar-sleek"
+          size="sm"
+          className="justify-start"
           onFocusCapture={(event) => {
             const previous = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null
             const list = event.currentTarget
@@ -39,16 +42,25 @@ export function SmartWorkspaceSourceTabs({
           }}
         >
           {model.availableModes.map(({ id, label, Icon }) => (
-            <TabsTrigger
-              key={id}
-              value={id}
-              tabIndex={-1}
-              data-smart-name-mode={id}
-              className="flex-none gap-1.5 px-0 text-xs"
-            >
-              <Icon className="size-3.5" />
-              <span>{label}</span>
-            </TabsTrigger>
+            <Tooltip key={id}>
+              {/* Why: TabsTrigger outermost so its data-state (active) wins over the tooltip's. */}
+              <TabsTrigger
+                asChild
+                value={id}
+                tabIndex={-1}
+                // Why: icon-only tabs; the label lives in the tooltip and the accessible name.
+                aria-label={label}
+                data-smart-name-mode={id}
+                className="flex-none"
+              >
+                <TooltipTrigger>
+                  <Icon className="size-3.5" />
+                </TooltipTrigger>
+              </TabsTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {label}
+              </TooltipContent>
+            </Tooltip>
           ))}
         </TabsList>
       </Tabs>

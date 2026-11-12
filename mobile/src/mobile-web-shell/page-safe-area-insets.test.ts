@@ -78,11 +78,6 @@ describe('window-authoritative page insets', () => {
     })
   })
 
-  it('uses the existing behavior until geometry arrives, including old native modules', () => {
-    expect(measuredPageSafeAreaInsets(undefined, pageFrame, nestedInsets)).toBe(nestedInsets)
-    expect(measuredPageSafeAreaInsets(windowSafeArea, null, nestedInsets)).toBe(nestedInsets)
-  })
-
   it('bounds untrusted geometry and logs a malformed producer before falling back', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {

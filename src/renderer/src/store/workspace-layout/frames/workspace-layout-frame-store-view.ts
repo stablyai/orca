@@ -6,12 +6,12 @@ import {
   BROWSER_TAB_WORKSPACE_FIELDS,
   type DesktopLayoutView,
   type LayoutContentFacts
-} from '../../../../../shared/workspace-layout/workspace-layout-beside'
+} from '../../../../../shared/workspace-layout/persistence/workspace-layout-beside'
 import {
   childRecord,
   omitStoredFields,
   pickStoredFields
-} from '../../../../../shared/workspace-layout/stored-record-fields'
+} from '../../../../../shared/workspace-layout/persistence/stored-record-fields'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import {
   buildPersistedBrowserPagesByWorkspace,
@@ -128,7 +128,8 @@ export function layoutViewAndFactsOfStore(
     localOnlyScrollbackByTabId: terminals.localOnlyScrollbackByTabId,
     browserPagesByWorkspace: buildPersistedBrowserPagesByWorkspace(
       pickKeys(state.browserPagesByWorkspace, browserTabIds),
-      state.remoteBrowserPageHandlesByPageId
+      state.remoteBrowserPageHandlesByPageId,
+      {}
     ),
     tabLabels: {},
     terminalRows: {},

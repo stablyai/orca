@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { ExternalLink, Loader2, Lock, LockOpen, RefreshCw, ShieldCheck } from 'lucide-react'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { translate } from '@/i18n/i18n'
@@ -8,7 +8,7 @@ import {
   ZCODE_PLAN_SITE_CONSOLE_URLS,
   type ZcodePlanSite
 } from '../../../../../../shared/zcode-plan-sites'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { useNow } from '../../../../hooks/use-now'
 import { Badge } from '../../../ui/badge'

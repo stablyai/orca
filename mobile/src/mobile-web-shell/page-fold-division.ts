@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { useWindowDimensions, type LayoutChangeEvent, type View } from 'react-native'
+import { useWindowDimensions, type LayoutChangeEvent, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSideRailStrip, useSideRailDirectionPadAvailable } from '../layout/side-rail'
 import { pageOcclusions, type BridgePageGeometry } from './bridge/bridge-page-geometry'
@@ -20,7 +20,7 @@ export function usePageFoldDivision(): {
   division: BridgeFoldDivision | null
   geometry: BridgePageGeometry
   safeAreaInsets: BridgeSafeAreaInsets
-  rootRef: RefObject<View | null>
+  rootRef: RefObject<HostInstance | null>
   onRootLayout: () => void
   onShellLayout: (event: LayoutChangeEvent) => void
 } {
@@ -28,7 +28,7 @@ export function usePageFoldDivision(): {
   const strip = useSideRailStrip()
   const sideRail = strip !== null
   const directionPadAvailable = useSideRailDirectionPadAvailable()
-  const rootRef = useRef<View>(null)
+  const rootRef = useRef<HostInstance>(null)
   const layoutRef = useRef<WindowFrame | null>(null)
   const [frame, setFrame] = useState<WindowFrame | null>(null)
   const measure = useCallback(() => {

@@ -1,6 +1,11 @@
 // Require failure reporting for errors hidden from UI; production writes local traces and console.
 
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  providerDiagnostic,
+  providerDiagnosticOf
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { redactString } from '../../../observability/redactor'
 import { startSpan } from '../../../observability/tracer'
 import { createStructuredAgentSessionLogRepeats } from './structured-agent-session-log-repeats'
 
@@ -78,7 +83,7 @@ export function createStructuredAgentSessionLogger(options?: {
         ...errorAttributes(error)
       }
       // Exclude stack and timing so equivalent failures share a repeat key.
-      const { openMs: _openMs, ...keyed } = attributes
+      const { openMs: _openMs, providerDetail: _providerDetail, ...keyed } = attributes
       const suppressed = repeats.admit(
         stableJson([
           scope,
@@ -130,7 +135,11 @@ function errorAttributes(error: unknown): Record<string, unknown> {
   // Refusal messages contain only the code; wire-safe reason distinguishes them.
   const details = isAgentSessionRefusalError(error) ? error.refusal.details : undefined
   const reason = details && 'reason' in details ? details.reason : undefined
+  const diagnostic = providerDiagnosticOf(error)
+  const detail =
+    diagnostic && providerDiagnostic(redactString(diagnostic.text), diagnostic.audience)
   return {
+    ...(detail ? { providerDetail: detail.text } : {}),
     ...(code !== undefined ? { errorCode: code } : {}),
     ...(sqliteCode !== undefined ? { errorErrcode: sqliteCode } : {}),
     ...(typeof reason === 'string' ? { refusalReason: reason } : {}),

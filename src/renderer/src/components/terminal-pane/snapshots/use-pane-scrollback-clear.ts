@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
+import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scroll/terminal-scrollback-clear'
 import { clearWebRuntimeTerminalBuffer } from '@/runtime/hosted-terminals/actions/web-runtime-terminal-buffer-actions'
 import type { TerminalPaneStartupController } from '../controller/use-terminal-pane-startup-actions'
 

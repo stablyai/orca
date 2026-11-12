@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getIntlLocale } from '@/i18n/i18n'
 import { InlineError } from '@/components/ui/inline-error'

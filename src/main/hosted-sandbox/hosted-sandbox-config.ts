@@ -5,9 +5,9 @@ import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import { cloudDevSigningAllowed } from '../cloud-build-defaults'
 import { cleanCloudServiceUrl } from '../../shared/cloud-service-url'
-import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
-import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
+import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
+import { runWithFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import {
   ensureActiveOrcaProfile,
   type ActiveOrcaProfileState

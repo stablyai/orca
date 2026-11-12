@@ -43,7 +43,7 @@ vi.mock('@/store/slices/browser/cleanup/browser-webview-cleanup', () => ({
 
 const { sleepWorktreeBrowserTabs, installBrowserTabWakeOnOpen, selectAwakeBrowserTabsByWorktree } =
   await import('./browser-tab-sleep')
-const { isInactiveWorkspace } = await import('@/lib/worktree-activity-state')
+const { isInactiveWorkspace } = await import('@/lib/workspace/activity/worktree-activity-state')
 
 const tab = (id: string): BrowserWorkspace => ({
   id,

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const track = vi.fn()
-vi.mock('@/lib/telemetry', () => ({ track: (...args: unknown[]) => track(...args) }))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: (...args: unknown[]) => track(...args) }))
 
 const { noteComposerAgentCoverage, reportCloudStartAgentCoverage, resetCloudStartAgentCoverage } =
   await import('./cloud-first-start-agent-coverage')

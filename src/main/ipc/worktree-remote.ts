@@ -41,17 +41,17 @@ import {
 } from '../workspaces/creation/preparation/worktree-create-preparation'
 import {
   getBranchConflictKind,
-  getBranchConflictKindStrict,
-  resolveDefaultBaseRefWithLocalGit
-} from '../git/repo'
+  getBranchConflictKindStrict
+} from '../git/refs/resolution/repo-branch-conflict'
+import { resolveDefaultBaseRefWithLocalGit } from '../git/refs/resolution/repo-default-base-ref'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
-import { resolveLocalGitUsername } from '../git/git-username'
+import { resolveLocalGitUsername } from '../git/repositories/git-username'
 import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
 import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
-import { validateGitPushTarget } from '../git/push-target-validation'
-import { gitExecFileAsync } from '../git/runner'
+import { validateGitPushTarget } from '../git/remotes/push-target-validation'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RemoteFetchResult,
@@ -182,7 +182,7 @@ import {
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
 } from '../workspaces/creation/worktree-create-in-flight'
-import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget

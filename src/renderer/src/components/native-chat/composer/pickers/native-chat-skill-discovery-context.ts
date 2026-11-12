@@ -1,21 +1,21 @@
-import type { AppState } from '../../../../store/types'
-import type { SkillDiscoveryTarget } from '../../../../../../shared/skills'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-directory'
 import {
   resolveNativeChatTabDirectory,
-  resolveNativeChatTabDirectoryResolution,
-  type NativeChatTabDirectoryState
+  resolveNativeChatTabDirectoryResolution
 } from '../../pane/routing/native-chat-tab-directory'
+import type { NativeChatTabDirectoryState } from '../../pane/routing/native-chat-tab-directory'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '../../../../store/types'
+import type { SkillDiscoveryTarget } from '../../../../../../shared/skills'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 
 export type NativeChatSkillStateInputs = Pick<
   AppState,

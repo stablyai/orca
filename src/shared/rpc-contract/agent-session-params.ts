@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../workspace-layout/terminal-surfaces/terminal-tab-id'
 import {
   RESUMABLE_TUI_AGENTS,
   hasUnsafeProviderSessionIdChars

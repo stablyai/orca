@@ -11,7 +11,7 @@ import {
   ensureClaudeAgentTeamsShimDir,
   resolveClaudeAgentTeamsShimBin
 } from './claude-agent-teams-shim-env'
-import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
+import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { splitPanePendingError } from './terminal-split-retry'
 import {

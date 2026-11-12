@@ -1,0 +1,11 @@
+# Legacy synchronous ipc uses per file; counts may only go DOWN.
+# Only explicit worker/utility entry files are exempt; their imports remain guarded.
+3 src/main/host/native-chat-visual-guest-theme.ts
+1 src/main/ipc/renderer-shutdown-checkpoint.ts
+2 src/main/ipc/session.ts
+1 src/main/ipc/settings.ts
+1 src/preload/api/app-bridge.ts
+1 src/preload/api/native-chat-bridge.ts
+2 src/preload/api/session-bridge.ts
+1 src/preload/api/settings-bridge.ts
+1 src/preload/native-chat-visual-guest-theme.ts

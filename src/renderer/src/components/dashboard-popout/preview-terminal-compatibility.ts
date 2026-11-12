@@ -2,11 +2,11 @@ import type { Terminal } from '@xterm/xterm'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
-import { installWindowsCtrlAltChordRepair } from '@/lib/pane-manager/terminal-windows-ctrl-alt-chord-classification'
-import { attachTerminalMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
-import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
-import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
-import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
+import { installWindowsCtrlAltChordRepair } from '@/lib/pane-manager/terminal-protocol/terminal-windows-ctrl-alt-chord-classification'
+import { attachTerminalMouseWheelMultiplier } from '@/lib/pane-manager/terminal-input/pane-terminal-mouse-wheel'
+import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-rendering/terminal-arabic-shaping-joiner'
+import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-input/terminal-ime-candidate-anchor'
+import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/terminal-input/pane-terminal-tui-wheel-reports'
 import {
   installPreviewTerminalLinks,
   type PreviewTerminalLinkHandlers

@@ -4,20 +4,22 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
-import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/focus-keeping-press'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { ArrowUp, Check, CornerDownLeft, Loader2 } from 'lucide-react'
 import { isDictationPillShown } from '../../../../shared/dictation-session-machine'
 import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
 import { CLOUD_DICTATION_MAX_SECONDS } from '../../../../shared/rpc-contract/speech-params'
-import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import { dispatchDictationControl } from './dictation-control-events'
 import { DictationGrapes } from './DictationGrapes'
 import { useDictationMeter } from './dictation-meter-store'
-import { useDictationPillBox, type DictationPillAnchor } from './dictation-pill-anchor'
+import type { DictationPillAnchor } from './dictation-pill-anchor'
 import { DictationPillCloseButton, DictationPillFailure } from './DictationPillFailure'
+import { DictationPillShell } from './DictationPillShell'
+import { DictationSetupPill } from './DictationSetupPill'
+import { loadSpeechCatalog } from './speech-model-update-check'
+import type { SpeechModelUpdateTarget } from './speech-model-update-target'
 import type { DictationFailureKind } from './dictation-toasts'
 import type { DictationQueuedSendKind } from './use-dictation-queued-send'
 
@@ -36,9 +38,24 @@ type DictationIndicatorProps = {
   queued: DictationQueuedSendKind | null
 }
 
-export function DictationIndicator(props: DictationIndicatorProps) {
+type DictationSetupProps = {
+  /** Set while the pill offers the download the selected model needs instead of recording. */
+  setup: SpeechModelUpdateTarget | null
+  onSetupClose: () => void
+}
+
+export function DictationIndicator({
+  setup,
+  onSetupClose,
+  ...props
+}: DictationIndicatorProps & DictationSetupProps) {
   const dictationState = useAppStore((state) => state.dictationState)
-  return isDictationPillShown(dictationState) ? <DictationPill {...props} /> : null
+  if (isDictationPillShown(dictationState)) {
+    return <DictationPill {...props} />
+  }
+  return setup ? (
+    <DictationSetupPill target={setup} anchor={props.anchor} onClose={onSetupClose} />
+  ) : null
 }
 
 function formatElapsed(seconds: number): string {
@@ -66,21 +83,13 @@ function useElapsedSeconds(running: boolean): number {
   return seconds
 }
 
-// The catalog never changes while the app runs; the paired web client has none and its host caps itself.
-let catalogRequest: Promise<SpeechModelManifest[]> | null = null
-
+// The paired web client has no catalog; its host caps itself.
 function useIsCloudModel(): boolean {
   const modelId = useAppStore((state) => state.settings?.voice?.sttModel)
   const [cloud, setCloud] = useState(false)
   useEffect(() => {
     let current = true
-    if (!catalogRequest) {
-      catalogRequest = Promise.resolve()
-        // The paired web client's fallback resolves with nothing rather than a list.
-        .then(async () => (await window.api.speech.getCatalog()) ?? [])
-        .catch(() => [])
-    }
-    void catalogRequest.then((catalog) => {
+    void loadSpeechCatalog().then((catalog) => {
       if (current) {
         setCloud(catalog.some((model) => model.id === modelId && model.provider !== 'local'))
       }
@@ -141,17 +150,12 @@ function DictationPendingDots() {
   )
 }
 
-// Presses on the pill keep focus where the words are going.
-const keepFocus = (event: React.MouseEvent): void => event.preventDefault()
-const keepFocusProps = { [KEEPS_FOCUS_ATTRIBUTE]: '', onMouseDown: keepFocus }
-
 function DictationPill({ captureLive, anchor, failure, queued }: DictationIndicatorProps) {
   const t = useTranslate()
   const dictationState = useAppStore((state) => state.dictationState)
   const liveText = useAppStore((state) => state.liveText)
   const isHoldMode = useAppStore((state) => state.settings?.voice?.dictationMode === 'hold')
   const shortcut = useShortcutKeyDetails('voice.dictation')
-  const box = useDictationPillBox(anchor)
   const cloudModel = useIsCloudModel()
 
   const finishing = dictationState === 'stopping'
@@ -185,17 +189,10 @@ function DictationPill({ captureLive, anchor, failure, queued }: DictationIndica
   const finishLabel = t('auto.components.dictation.DictationIndicator.finish', 'Finish')
 
   return (
-    <div
-      data-testid="dictation-indicator"
-      className={cn(
-        'fixed z-50 flex h-10 -translate-x-1/2 items-center gap-2 rounded-full px-2 text-[13px]',
-        'border border-border bg-popover/95 text-popover-foreground shadow-floating backdrop-blur',
-        'transition-[opacity,translate] duration-180 ease-out starting:translate-y-1.5 starting:opacity-0 motion-reduce:transition-opacity',
-        !box && 'bottom-12 left-1/2 w-[min(440px,calc(100vw-2rem))]',
-        failedKind && 'border-destructive/40'
-      )}
-      style={box ? { left: box.left, bottom: box.bottom, width: box.width } : undefined}
-      {...keepFocusProps}
+    <DictationPillShell
+      anchor={anchor}
+      testId="dictation-indicator"
+      className={cn(failedKind && 'border-destructive/40')}
     >
       {failedKind ? (
         <DictationPillFailure kind={failedKind} />
@@ -277,6 +274,6 @@ function DictationPill({ captureLive, anchor, failure, queued }: DictationIndica
           )}
         </>
       )}
-    </div>
+    </DictationPillShell>
   )
 }

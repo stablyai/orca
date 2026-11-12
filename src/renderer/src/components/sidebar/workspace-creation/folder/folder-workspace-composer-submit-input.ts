@@ -1,5 +1,5 @@
 import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { AgentStartupSettings } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { AgentLaunchInputViews } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'

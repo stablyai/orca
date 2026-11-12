@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react'
 import {
-  getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
   subscribeStructuredAgentLaunchStatus
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
+import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 
 /** Unknown capability keeps Stop unavailable until create can publish or choose the old flow. */
 export function useStructuredLaunchCreateSupport(sessionId: string): boolean | undefined {
@@ -11,7 +11,7 @@ export function useStructuredLaunchCreateSupport(sessionId: string): boolean | u
     subscribeStructuredAgentLaunchStatus,
     () =>
       getStructuredLaunchStateBySessionId(sessionId)?.intent.createMessageSupport ??
-      getPersistedStructuredAgentLaunchRecord(sessionId)?.createMessageSupport,
+      readStructuredAgentLaunchRecord(sessionId)?.createMessageSupport,
     () => undefined
   )
 }

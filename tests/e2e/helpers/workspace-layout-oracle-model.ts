@@ -2,12 +2,12 @@
 
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { TerminalPaneLayoutNode } from '../../../src/shared/workspace-layout/terminal-tab-types'
-import {
-  checkWorkspaceLayoutRules,
-  type WorkspaceLayoutPartition,
-  type WorkspaceLayoutViolation
-} from '../../../src/shared/workspace-layout/workspace-layout-rules'
-import { checkWorkspaceLayoutModelRules } from '../../../src/shared/workspace-layout/workspace-layout-model-rules'
+import { checkWorkspaceLayoutRules } from '../../../src/shared/workspace-layout/invariants/workspace-layout-rules'
+import type {
+  WorkspaceLayoutPartition,
+  WorkspaceLayoutViolation
+} from '../../../src/shared/workspace-layout/invariants/workspace-layout-rule-types'
+import { checkWorkspaceLayoutModelRules } from '../../../src/shared/workspace-layout/invariants/workspace-layout-model-rules'
 import type { LiveWorkspace } from './workspace-layout-oracle-feed'
 
 export type OraclePane = { leafId: string; ptyId: string | null }

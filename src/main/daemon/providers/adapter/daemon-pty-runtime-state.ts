@@ -123,6 +123,7 @@ export abstract class DaemonPtyRuntimeState {
   })
   protected activeSessionIds = new Set<string>()
   protected getSizeUnsupported = false
+  protected focusLossReportRejected = false
   protected sessionsAwaitingDaemonRecovery = new Set<string>()
   protected sessionIncarnations = new Map<string, string>()
   protected readonly ptyInventory = new DaemonPtyInventoryObservation(

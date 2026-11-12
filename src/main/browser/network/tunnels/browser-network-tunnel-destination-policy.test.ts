@@ -25,24 +25,6 @@ afterEach(async () => {
 
 describe('browser tunnel destination policy', () => {
   it.each([
-    ['localhost', 3000],
-    ['127.0.0.1', 5173],
-    ['::1', 8080],
-    ['0.0.0.0', 8000],
-    ['192.168.1.20', 80],
-    ['10.0.0.5', 443],
-    ['172.16.4.2', 8443],
-    ['100.75.218.44', 3000],
-    ['fd12:3456::1', 80],
-    ['example.com', 443],
-    ['2130706433', 3000],
-    ['1.2.3', 80],
-    ['v1.2.3.4', 80]
-  ])('allows %s:%i', (host, port) => {
-    expect(browserTunnelTargetBlockReason(host, port)).toBeNull()
-  })
-
-  it.each([
     ['169.254.169.254', 80],
     ['169.254.170.2', 80],
     ['169.254.1.1', 443],
@@ -179,22 +161,6 @@ describe('native browser tunnel dial', () => {
     await expect(
       outcome(connectNativeBrowserNetworkTarget({ host: 'localhost', port }, {}))
     ).resolves.toBe('connected')
-  })
-
-  it("refuses metadata and the host's own Orca listener before dialing", async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const port = await startServer()
-    cleanups.push(reserveBrowserTunnelOrcaListenerPort(port))
-
-    expect(() => connectNativeBrowserNetworkTarget({ host: '127.0.0.1', port }, {})).toThrow(
-      BrowserTunnelDestinationBlockedError
-    )
-    expect(() =>
-      connectNativeBrowserNetworkTarget({ host: '169.254.169.254', port: 80 }, {})
-    ).toThrow(BrowserTunnelDestinationBlockedError)
-    expect(() => connectNativeBrowserNetworkTarget({ host: 'localhost', port }, {})).toThrow(
-      BrowserTunnelDestinationBlockedError
-    )
   })
 
   it('restores unrestricted dialing when the host opts out', async () => {

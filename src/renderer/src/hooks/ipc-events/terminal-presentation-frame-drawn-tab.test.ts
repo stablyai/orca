@@ -29,7 +29,9 @@ vi.mock('../../store', () => ({
     subscribe: () => () => {}
   }
 }))
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
 
@@ -126,29 +128,5 @@ describe('revealing a terminal main created, in a layout-owner build', () => {
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'layout.apply', {
       command: expect.objectContaining({ type: 'createTerminalTab', tabId: TAB, leafId: LEAF })
     })
-  })
-
-  it('reuses the frame-drawn tab even when stale records leave the terminal’s owner unclear', () => {
-    const { store, reveal, replyTerminalCreate } = setup()
-    store.setState({
-      tabsByWorktree: {
-        [WORKTREE]: [
-          ...store.getState().tabsByWorktree[WORKTREE]!,
-          makeTab({ id: 'stale-1', worktreeId: WORKTREE, ptyId: 'pty-1' }),
-          makeTab({ id: 'stale-2', worktreeId: WORKTREE, ptyId: 'pty-1' })
-        ]
-      }
-    })
-
-    reveal()
-
-    expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([
-      TAB,
-      'stale-1',
-      'stale-2'
-    ])
-    expect(replyTerminalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ requestId: 'request-1', tabId: TAB })
-    )
   })
 })

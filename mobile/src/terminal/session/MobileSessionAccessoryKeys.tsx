@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { View, Text, ScrollView, Pressable } from 'react-native'
+import { View, Text, ScrollView, Pressable, type ScrollViewInstance } from 'react-native'
 import {
   ChevronDown,
   Keyboard as KeyboardIcon,
@@ -65,7 +65,7 @@ export function MobileSessionAccessoryKeys({
   } = controller
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const accessoryPresses = useRef(new Map<string, PreparedPress>())
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
   const latestSmartKeys = useMemo(
     () =>
       smartRailEnabled ? resolveMobileTerminalTabSmartKeys(activeSessionTab, terminals) : null,

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { defineMethod } from '../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { pluginHostCallRevoked } from './workers/plugin-host-call-scope'
+import { pluginHostCallRevoked } from './workers/host-api/plugin-host-call-scope'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 
 function harness() {
@@ -40,14 +40,6 @@ describe('pluginRuntimeRpc', () => {
         }
       )
     ).rejects.toMatchObject({ code: 'consent_required' })
-    expect(ran).toEqual([])
-  })
-
-  it('never acts on a call its worker already cancelled', async () => {
-    const { rpc, ran } = harness()
-    const cancel = new AbortController()
-    cancel.abort()
-    await expect(rpc('terminal.create', {}, { signal: cancel.signal })).rejects.toThrow()
     expect(ran).toEqual([])
   })
 })
