@@ -119,7 +119,7 @@ export function PickerListDrawer<T extends PickerListItem>({
         ListEmptyComponent={
           searchable && query.trim() !== '' ? (
             <Text style={styles.emptyText}>{search.emptyLabel}</Text>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item }) => (
           <ListRow
