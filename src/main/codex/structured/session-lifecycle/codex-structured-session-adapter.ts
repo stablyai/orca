@@ -304,6 +304,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
 
   startVoiceConversation: NonNullable<SessionAdapter['startVoiceConversation']> = (input) =>
     this.voice.start(this.sessions.get(input.sessionId), input)
+  listVoiceConversationVoices = (sessionId: string) =>
+    this.voice.listVoices(this.sessions.get(sessionId))
   confirmIdle = (sessionId: string) => this.voice.confirmIdle(sessionId)
 
   answerPrompt: SessionAdapter['answerPrompt'] = (request) =>

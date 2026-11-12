@@ -150,6 +150,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return owner.startVoiceConversation(input)
   }
 
+  listVoiceConversationVoices = async (sessionId: string): Promise<string[] | null> =>
+    (await this.liveOwnerOrNull(sessionId)?.listVoiceConversationVoices?.(sessionId)) ?? null
+
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
 

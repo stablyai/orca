@@ -6857,7 +6857,10 @@
               "shortcutDescription": "A tecla que inicia o ditado.",
               "shortcutKeyword": "teclado",
               "keepLoadedTitle": "Manter modelo carregado",
-              "gpuKeyword": "placa de vídeo"
+              "gpuKeyword": "placa de vídeo",
+              "codexVoiceModeDescription": "Escolha a voz com que o Codex fala no Modo de Voz.",
+              "codexVoiceModeKeyword": "codex",
+              "codexVoiceModeTalkKeyword": "conversar"
             }
           }
         },
@@ -21737,26 +21740,26 @@
         }
       },
       "voice": {
-        "end": "Encerrar conversa por voz",
-        "start": "Iniciar conversa por voz",
+        "end": "Encerrar Modo de Voz",
+        "start": "Iniciar Modo de Voz",
         "checking": "Verificando suporte a voz…",
-        "hostUnavailable": "O host desta conversa ainda não oferece voz do Codex",
-        "dictationActive": "Termine o ditado para iniciar a voz",
-        "startHint": "Converse com o Codex desta conversa. A fala usa o serviço de voz da OpenAI no Codex.",
+        "hostUnavailable": "O host desta conversa ainda não oferece o Modo de Voz do Codex",
+        "dictationActive": "Termine o ditado para iniciar o Modo de Voz",
+        "startHint": "Converse com o Codex desta conversa. O Modo de Voz usa o serviço de voz da OpenAI no Codex.",
         "failure": {
           "microphoneDenied": "O acesso ao microfone foi negado. Permita nas configurações do sistema e tente de novo.",
           "microphoneUnavailable": "Nenhum microfone pôde ser aberto.",
-          "busy": "A conversa por voz anterior ainda está encerrando. Tente de novo em instantes.",
-          "notRunning": "O Codex não está rodando nesta conversa. Envie uma mensagem e inicie a voz de novo.",
-          "unsupported": "Esta conversa não pode iniciar uma conversa por voz do Codex.",
-          "answerTimeout": "O Codex não respondeu ao pedido de voz a tempo.",
-          "providerExited": "O Codex parou, então a conversa por voz terminou.",
+          "busy": "A sessão anterior do Modo de Voz ainda está encerrando. Tente de novo em instantes.",
+          "notRunning": "O Codex não está rodando nesta conversa. Envie uma mensagem e inicie o Modo de Voz de novo.",
+          "unsupported": "Esta conversa não pode iniciar o Modo de Voz do Codex.",
+          "answerTimeout": "O Codex não iniciou o Modo de Voz a tempo.",
+          "providerExited": "O Codex parou, então o Modo de Voz terminou.",
           "connectionLost": "A conexão de voz caiu.",
-          "providerError": "A voz do Codex falhou.",
-          "microphoneLost": "O microfone parou, então a conversa por voz terminou.",
-          "connectTimeout": "A conversa por voz não conseguiu conectar a tempo."
+          "providerError": "O Modo de Voz do Codex falhou.",
+          "microphoneLost": "O microfone parou, então o Modo de Voz terminou.",
+          "connectTimeout": "O Modo de Voz não conseguiu conectar a tempo."
         },
-        "connecting": "Conectando voz…",
+        "connecting": "Iniciando Modo de Voz…",
         "muted": "Microfone silenciado",
         "speaking": "Falando",
         "listening": "Ouvindo",
@@ -21768,7 +21771,10 @@
         "voice": "Voz",
         "disclosure": "A fala usa o serviço de voz da OpenAI no Codex; o trabalho continua no Codex desta conversa.",
         "transcriptYou": "Você, por voz",
-        "transcriptVoice": "Voz do Codex"
+        "transcriptVoice": "Voz do Codex",
+        "endShort": "Encerrar",
+        "voiceUnavailable": "O Codex desta conversa não oferece a voz {{voice}}, então fala a voz padrão dele.",
+        "defaultVoiceSpeaking": "Voz padrão do Codex"
       }
     },
     "tab": {
@@ -22362,6 +22368,18 @@
           "description": "O ditado começa na hora enquanto ele estiver carregado.",
           "always": "Sempre",
           "never": "Nunca"
+        },
+        "codexVoiceMode": {
+          "title": "Modo de Voz do Codex",
+          "description": "Fale com o Codex em voz alta numa conversa. Separado do ditado.",
+          "serviceLabel": "Serviço",
+          "serviceDescription": "Voz nativa do Codex na OpenAI, com o seu login do Codex.",
+          "serviceValue": "Codex · OpenAI",
+          "voiceLabel": "Voz",
+          "voiceDescription": "Da sua conversa mais recente do Codex. Ouça no Modo de Voz.",
+          "voicesUnlisted": "Envie uma mensagem numa conversa do Codex e liste as vozes de novo.",
+          "defaultVoice": "Padrão do Codex",
+          "refresh": "Listar vozes de novo"
         }
       },
       "repositoryHooks": {

@@ -5,9 +5,10 @@ import type {
 } from '../session-lifecycle/codex-structured-session-state'
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import { readCodexVoiceInitialItems } from './codex-realtime-voice-context'
-import type {
-  AgentSessionVoiceEndReason,
-  AgentSessionVoiceEvent
+import {
+  AGENT_SESSION_VOICE_NAME_PATTERN,
+  type AgentSessionVoiceEndReason,
+  type AgentSessionVoiceEvent
 } from '../../../../shared/agent-session/agent-session-voice-conversation'
 
 const ANSWER_TIMEOUT_MS = 30_000
@@ -60,9 +61,24 @@ export class CodexRealtimeVoice {
     }
   }
 
+  /** The voices this child accepts for the v3 session `start` opens. */
+  async listVoices(
+    session: Pick<CodexSession, 'connection' | 'ended'> | undefined
+  ): Promise<string[] | null> {
+    if (!session || session.ended || session.connection.closed) {
+      return null
+    }
+    return listV3Voices(session.connection).catch(() => null)
+  }
+
   start(
     session: Pick<CodexSession, 'threadId' | 'connection' | 'ended'> | undefined,
-    input: { sessionId: string; offerSdp: string; emit: (event: AgentSessionVoiceEvent) => void }
+    input: {
+      sessionId: string
+      offerSdp: string
+      voice?: string
+      emit: (event: AgentSessionVoiceEvent) => void
+    }
   ): CodexRealtimeVoiceHandle {
     const { sessionId } = input
     this.releaseEnded(sessionId, session?.connection)
@@ -89,11 +105,17 @@ export class CodexRealtimeVoice {
       ANSWER_TIMEOUT_MS
     )
     const pending = () => this.slots.get(sessionId) === slot && slot.phase === 'starting'
-    void readCodexVoiceInitialItems(connection, session.threadId)
-      .then((initialItems) => {
+    void Promise.all([
+      readCodexVoiceInitialItems(connection, session.threadId),
+      offeredVoice(connection, input.voice)
+    ])
+      .then(([initialItems, voice]) => {
         // A stop while the history was read already answered; Codex never hears of this attempt.
         if (!pending()) {
           return
+        }
+        if (input.voice && !voice) {
+          deliver(slot, { type: 'voice-unavailable', voice: input.voice })
         }
         return connection.request(
           'thread/realtime/start',
@@ -109,6 +131,8 @@ export class CodexRealtimeVoice {
             // A flush would start a turn after the user hung up.
             flushTranscriptTailOnSessionEnd: false,
             backendReasoningStatus: false,
+            // Codex rejects a voice its v3 list lacks; without one it uses its configured default.
+            ...(voice ? { voice } : {}),
             ...(initialItems.length > 0 ? { initialItems } : {})
           },
           { timeoutMs: REQUEST_TIMEOUT_MS }
@@ -260,6 +284,34 @@ export class CodexRealtimeVoice {
     }
     deliver(slot, { type: 'transcript', itemId, ...caption, final })
   }
+}
+
+/** Orca always starts v3; a Codex without a v3 list cannot take a voice choice. */
+async function listV3Voices(connection: CodexAppServerConnection): Promise<string[] | null> {
+  const listing = readRecord(
+    readRecord(
+      await connection.request('thread/realtime/listVoices', {}, { timeoutMs: REQUEST_TIMEOUT_MS })
+    ).voices
+  )
+  if (!Array.isArray(listing.v3)) {
+    return null
+  }
+  return listing.v3.filter(
+    (voice): voice is string =>
+      typeof voice === 'string' && AGENT_SESSION_VOICE_NAME_PATTERN.test(voice)
+  )
+}
+
+/** The preferred voice when this child offers it; a failed listing falls back to the default. */
+async function offeredVoice(
+  connection: CodexAppServerConnection,
+  voice: string | undefined
+): Promise<string | undefined> {
+  if (!voice) {
+    return undefined
+  }
+  const voices = await listV3Voices(connection).catch(() => null)
+  return voices?.includes(voice) ? voice : undefined
 }
 
 /** A client that vanished must not keep the provider's session from being stopped. */

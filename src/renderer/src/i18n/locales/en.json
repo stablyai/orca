@@ -12074,7 +12074,10 @@
               "gpuKeyword": "graphics card",
               "cleanupDescription": "Fix punctuation, numbers and spoken corrections with your agent before text lands.",
               "cleanupKeyword": "correction word",
-              "cleanupScratchKeyword": "scratch that"
+              "cleanupScratchKeyword": "scratch that",
+              "codexVoiceModeDescription": "Choose the voice Codex speaks with in Voice mode.",
+              "codexVoiceModeKeyword": "codex",
+              "codexVoiceModeTalkKeyword": "talk"
             }
           }
         },
@@ -21590,26 +21593,26 @@
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
       },
       "voice": {
-        "end": "End voice conversation",
-        "start": "Start voice conversation",
+        "end": "End Voice mode",
+        "start": "Start Voice mode",
         "checking": "Checking voice support…",
-        "hostUnavailable": "This chat's host does not support Codex voice yet",
-        "dictationActive": "Finish dictation to start voice",
-        "startHint": "Talk with this chat's Codex. Speech uses Codex's OpenAI voice service.",
+        "hostUnavailable": "This chat's host does not support Codex Voice mode yet",
+        "dictationActive": "Finish dictation to start Voice mode",
+        "startHint": "Talk with this chat's Codex. Voice mode uses Codex's OpenAI voice service.",
         "failure": {
           "microphoneDenied": "Microphone access was denied. Allow it in system settings and try again.",
           "microphoneUnavailable": "No microphone could be opened.",
-          "busy": "The previous voice conversation is still closing. Try again in a moment.",
-          "notRunning": "Codex is not running in this chat. Send a message, then start voice again.",
-          "unsupported": "This chat cannot start a Codex voice conversation.",
-          "answerTimeout": "Codex did not answer the voice request in time.",
-          "providerExited": "Codex stopped, so the voice conversation ended.",
+          "busy": "The previous Voice mode session is still closing. Try again in a moment.",
+          "notRunning": "Codex is not running in this chat. Send a message, then start Voice mode again.",
+          "unsupported": "This chat cannot start Codex Voice mode.",
+          "answerTimeout": "Codex did not start Voice mode in time.",
+          "providerExited": "Codex stopped, so Voice mode ended.",
           "connectionLost": "The voice connection was lost.",
-          "providerError": "Codex voice failed.",
-          "microphoneLost": "The microphone stopped, so the voice conversation ended.",
-          "connectTimeout": "The voice conversation could not connect in time."
+          "providerError": "Codex Voice mode failed.",
+          "microphoneLost": "The microphone stopped, so Voice mode ended.",
+          "connectTimeout": "Voice mode could not connect in time."
         },
-        "connecting": "Connecting voice…",
+        "connecting": "Starting Voice mode…",
         "muted": "Microphone muted",
         "speaking": "Speaking",
         "listening": "Listening",
@@ -21621,7 +21624,10 @@
         "disclosure": "Speech runs on Codex's OpenAI voice service; the work continues in this chat's Codex.",
         "voice": "Voice",
         "transcriptYou": "You, by voice",
-        "transcriptVoice": "Codex voice"
+        "transcriptVoice": "Codex voice",
+        "endShort": "End",
+        "voiceUnavailable": "This chat's Codex doesn't offer the voice {{voice}}, so its default voice speaks.",
+        "defaultVoiceSpeaking": "Codex default voice"
       }
     },
     "tab": {
@@ -22287,6 +22293,18 @@
           "correctionWord": "Correction word",
           "correctionWordDescription": "Say it to take back what you just said: “at four, {{word}}, at five”.",
           "correctionWordOff": "None"
+        },
+        "codexVoiceMode": {
+          "title": "Codex Voice mode",
+          "description": "Talk with Codex out loud in a chat. Separate from dictation.",
+          "serviceLabel": "Service",
+          "serviceDescription": "Codex's native OpenAI voice, using your Codex sign-in.",
+          "serviceValue": "Codex · OpenAI",
+          "voiceLabel": "Voice",
+          "voiceDescription": "From your latest Codex chat. Start Voice mode to hear it.",
+          "voicesUnlisted": "Send a message in a Codex chat, then list voices again.",
+          "defaultVoice": "Codex default",
+          "refresh": "List voices again"
         }
       },
       "repositoryHooks": {

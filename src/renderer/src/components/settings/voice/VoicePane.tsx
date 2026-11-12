@@ -29,6 +29,11 @@ import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { speechModelRatingLanguage } from '../../../../../shared/speech-model-quality'
 import { suggestSpeechModel } from '../../../../../shared/speech-model-suggestion'
+import {
+  refreshCodexVoiceCatalog,
+  useCodexVoiceCatalog
+} from '../../native-chat/voice/codex-voice-catalog'
+import { VoiceCodexVoiceModeSettings } from './VoiceCodexVoiceModeSettings'
 
 type VoicePaneProps = {
   settings: GlobalSettings
@@ -49,6 +54,9 @@ export function VoicePane({
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const systemLanguageTag = useLanguageReadiness((s) => s.detection?.detectedTag)
+  const codexVoices = useCodexVoiceCatalog((s) => s.voices)
+  const codexVoicesListing = useCodexVoiceCatalog((s) => s.listing)
+  const codexVoiceSourceKnown = useCodexVoiceCatalog((s) => s.source !== null)
   // null until main answers, so the status and list never show a state the catalog would contradict.
   const [loadedCatalog, setCatalog] = useState<SpeechModelManifest[] | null>(null)
   const catalog = loadedCatalog ?? []
@@ -74,15 +82,22 @@ export function VoicePane({
 
   const updateVoiceSettings = useCallback(
     (updates: Partial<VoiceSettings>): void => {
-      updateSettings({
-        voice: {
-          ...voiceSettingsRef.current,
-          ...updates
+      const voice = { ...voiceSettingsRef.current, ...updates }
+      // An optional choice reset to its default is removed, not stored as undefined.
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === undefined) {
+          Reflect.deleteProperty(voice, key)
         }
-      })
+      }
+      updateSettings({ voice })
     },
     [updateSettings]
   )
+
+  // A Codex chat that was resting when last shown may be running by now.
+  useEffect(() => {
+    void refreshCodexVoiceCatalog()
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -347,6 +362,14 @@ export function VoicePane({
         voiceSettings={voiceSettings}
         onUpdateVoiceSettings={updateVoiceSettings}
         writeSourceControlAiSettings={writeSourceControlAiSettings}
+      />
+
+      <VoiceCodexVoiceModeSettings
+        voiceSettings={voiceSettings}
+        voices={codexVoices}
+        listing={codexVoicesListing}
+        {...(codexVoiceSourceKnown ? { onRefresh: () => void refreshCodexVoiceCatalog() } : {})}
+        onUpdateVoiceSettings={updateVoiceSettings}
       />
 
       <SettingsGroup title={t('components.settings.voice.advanced.title', 'Advanced')}>

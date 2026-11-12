@@ -263,8 +263,12 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   startVoiceConversation?(input: {
     sessionId: string
     offerSdp: string
+    /** Sent only when the live child lists it; otherwise the provider's default voice speaks. */
+    voice?: string
     emit: (event: AgentSessionVoiceEvent) => void
   }): { stop: () => void }
+  /** Voices the live child offers for that voice session; null without a live child or a listing. */
+  listVoiceConversationVoices?(sessionId: string): Promise<string[] | null>
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */

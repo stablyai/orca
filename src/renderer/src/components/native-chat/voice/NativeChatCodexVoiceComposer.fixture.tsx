@@ -13,6 +13,7 @@ const liveCall: CodexVoiceCallState = {
   muted: false,
   speaking: 'assistant',
   captions: [{ id: 'rt-1', role: 'assistant', text: 'Write-through keeps reads fresh.' }],
+  unavailableVoice: null,
   failure: null
 }
 
@@ -71,5 +72,5 @@ export const before = defineFixture({ width: 720, render: composer(null) })
 /** The voice control beside dictation, idle. */
 export const afterIdle = defineFixture({ width: 720, render: composer(voice(null)) })
 
-/** A live call: the strip on the composer, dictation held while voice owns the microphone. */
+/** Voice mode on: the strip on the composer, dictation held while voice owns the microphone. */
 export const afterLive = defineFixture({ width: 720, render: composer(voice(liveCall)) })
