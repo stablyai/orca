@@ -35,7 +35,9 @@ vi.mock('../../../git/worktrees/catalog/worktree-listing', async (importOriginal
   const facade = getWorktreeListingMocks()
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
-    listWorktreesStrict: facade.listWorktreesStrict
+    listWorktreesStrict: facade.listWorktreesStrict,
+    // Runtime scans share the strict, true-empty-aware reader with desktop scans.
+    listWorktreesStrictAllowingTrueEmpty: facade.listWorktreesStrict
   }
 })
 

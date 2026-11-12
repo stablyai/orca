@@ -36,7 +36,7 @@ import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/f
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   peekWorktreeCatalog,
-  retireUnregisteredWorktreeCatalogs
+  retireObsoleteWorktreeCatalogs
 } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 import {
   claimRuntimeLineagePrune,
@@ -150,13 +150,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   }
 
   protected pruneUnregisteredWorktreeScans(): void {
-    const store = this.store
-    if (store) {
-      retireUnregisteredWorktreeCatalogs(
-        store.getRepos(),
-        (repo) => ScanCache.resolveWorktreeScanRuntime(store, repo).runtimeKey
-      )
-    }
+    retireObsoleteWorktreeCatalogs()
   }
 
   private peekRepoWorktreeObservation(repo: Repo) {

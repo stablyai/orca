@@ -25,9 +25,27 @@ export function getLocalWorktreeScanGeneration(repoId: string): number {
   return generation
 }
 
+const generationBumpListeners = new Set<() => void>()
+
+/** Repo, project-runtime and settings writes bump here; listeners run after the writer's synchronous update. */
+export function onLocalWorktreeScanGenerationBump(listener: () => void): void {
+  generationBumpListeners.add(listener)
+}
+
+let bumpNotificationQueued = false
+
 export function bumpLocalWorktreeScanGeneration(repoId: string): void {
   generationByRepoId.set(repoId, ++generationSequence)
   mutationRevision += 1
+  if (generationBumpListeners.size > 0 && !bumpNotificationQueued) {
+    bumpNotificationQueued = true
+    queueMicrotask(() => {
+      bumpNotificationQueued = false
+      for (const listener of generationBumpListeners) {
+        listener()
+      }
+    })
+  }
 }
 
 export function forgetLocalWorktreeScanGeneration(repoId: string): void {

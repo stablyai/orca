@@ -1,7 +1,10 @@
 import { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
-import { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
+import {
+  resolveWorktreeScanCacheTtlMs,
+  resolveWorktreeScanRuntime
+} from './runtime-worktree-scan-cache'
 import {
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
@@ -70,6 +73,17 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
         ? runtimeResultForObservation(known.observation)
         : { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
+    // Admission and the owner route must agree: a route replaced while the distro check ran is not read.
+    const live = this.store
+      ? resolveWorktreeScanRuntime(this.requireStore(), repo)
+      : { runtimeKey, projectRuntime }
+    if (
+      live.runtimeKey !== runtimeKey ||
+      getLocalProjectWorktreeGitOptionsForRuntime(repo, live.projectRuntime).wslDistro !==
+        gitOptions.wslDistro
+    ) {
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
+    }
     const ttlMs = resolveWorktreeScanCacheTtlMs(repo)
     // WSL execution cannot be described by local admin reads; a TTL at the ceiling could never reuse a probe.
     const verifier =
@@ -109,6 +123,9 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
           : {})
       }
     )
+    if (!observation) {
+      return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
+    }
     const result = runtimeResultForObservation(observation)
     // Mutations kept overtaking scans: publish the rows as non-authoritative, never as current truth.
     return superseded && result.ok ? { ok: false, worktrees: result.worktrees } : result

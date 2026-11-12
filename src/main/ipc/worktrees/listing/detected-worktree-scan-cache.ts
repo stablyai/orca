@@ -89,13 +89,27 @@ export async function listDetectedGitWorktrees(
       generation
     }
   }
+  // Git options, runtime key and hygiene all come from one admitted route snapshot.
+  const runtimeKey = resolveWorktreeScanRuntime(store, repo).runtimeKey
   // A stopped distro fails as unavailable (rows are retained) instead of booting it (E9); host scans keep their ticks.
   if (wslDistroForPath(repo.path, localWorktreeGitOptions.wslDistro)) {
     await assertWslUncPathRunning(repo.path, localWorktreeGitOptions.wslDistro)
+    if (
+      resolveWorktreeScanRuntime(store, repo).runtimeKey !== runtimeKey ||
+      getLocalProjectWorktreeGitOptions(store, repo).wslDistro !== localWorktreeGitOptions.wslDistro
+    ) {
+      // The route changed during admission; the bounded overtaken rescan admits the new one.
+      return {
+        gitWorktrees: [],
+        fresh: false,
+        superseded: true,
+        generation: getLocalWorktreeScanGeneration(repo.id)
+      }
+    }
   }
   const { observation, superseded } = await readWorktreeCatalog(
     repo,
-    resolveWorktreeScanRuntime(store, repo).runtimeKey,
+    runtimeKey,
     {
       kind: 'desktop',
       maxAgeMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
@@ -109,6 +123,14 @@ export async function listDetectedGitWorktrees(
       ...worktreeCatalogHygienePlan(store, repo, localWorktreeGitOptions, true)
     }
   )
+  if (!observation) {
+    return {
+      gitWorktrees: [],
+      fresh: false,
+      superseded: true,
+      generation: getLocalWorktreeScanGeneration(repo.id)
+    }
+  }
   if (observation.outcome.kind === 'failed') {
     // A failed scan must reject: an authoritative empty list would prune live worktrees.
     throw observation.outcome.error

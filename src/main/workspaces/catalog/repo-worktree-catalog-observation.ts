@@ -60,7 +60,8 @@ export type WorktreeCatalogRequirement = {
 }
 
 export type WorktreeCatalogRead = {
-  observation: WorktreeCatalogObservation
+  /** Null only for a request whose route was replaced before any observation existed. */
+  observation: WorktreeCatalogObservation | null
   /** Invalidations kept overtaking scans; callers must not treat these rows as authoritative. */
   superseded: boolean
 }

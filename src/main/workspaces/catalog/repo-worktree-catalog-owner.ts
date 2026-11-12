@@ -13,8 +13,10 @@ import type {
 } from './repo-worktree-catalog-observation'
 import {
   getLocalWorktreeScanGeneration,
-  isLocalWorktreeScanGenerationCurrent
+  isLocalWorktreeScanGenerationCurrent,
+  onLocalWorktreeScanGenerationBump
 } from './local-worktree-scan-generation'
+import { isLiveWorktreeCatalogRoute } from './repo-worktree-catalog-route'
 
 type Flight = {
   revision: number
@@ -23,6 +25,7 @@ type Flight = {
 
 type Entry = {
   repoId: string
+  hostId: string
   repoPath: string
   runtimeKey: string
   revision: number
@@ -35,14 +38,12 @@ type Entry = {
 const entries = new Map<string, Entry>()
 
 onWorktreeScanGenerationBump((repoPath) => invalidateWorktreeCatalogForRepoPath(repoPath))
-
-function repoScope(repo: Repo): string {
-  return `${repo.id}\0${getRepoExecutionHostId(repo)}\0`
-}
+// Route-changing writes retire obsolete owners even when no reader arrives afterwards.
+onLocalWorktreeScanGenerationBump(() => retireObsoleteWorktreeCatalogs())
 
 /** Owner identity: repo, host and the project runtime that runs Git (distro, selected Git, repair state). */
-function entryKey(repo: Repo, runtimeKey: string): string {
-  return `${repoScope(repo)}${runtimeKey}`
+function entryKey(repoId: string, hostId: string, runtimeKey: string): string {
+  return `${repoId}\0${hostId}\0${runtimeKey}`
 }
 
 function releaseWitness(observation: WorktreeCatalogObservation | null): void {
@@ -60,12 +61,23 @@ function retireEntry(key: string, entry: Entry): void {
   releaseWitness(entry.success)
 }
 
-/** The live owner for this repo and runtime; a path or runtime change retires the old one. */
-function resolveEntry(repo: Repo, runtimeKey: string): { key: string; entry: Entry } {
-  const key = entryKey(repo, runtimeKey)
-  const scope = repoScope(repo)
+function isLive(entry: Entry): boolean {
+  return (
+    !entry.retired &&
+    isLiveWorktreeCatalogRoute(entry.repoId, entry.hostId, {
+      repoPath: entry.repoPath,
+      runtimeKey: entry.runtimeKey
+    })
+  )
+}
+
+/** The owner for a live route; only a live route may create it or retire the repo's other routes. */
+function resolveEntry(repo: Repo, runtimeKey: string): Entry {
+  const hostId = getRepoExecutionHostId(repo)
+  const key = entryKey(repo.id, hostId, runtimeKey)
+  const scope = entryKey(repo.id, hostId, '')
   for (const [candidateKey, candidate] of entries) {
-    // One project runtime runs a repo's Git at a time; rows from another one are obsolete.
+    // One project runtime runs a repo's Git at a time; rows from another route are obsolete.
     if (
       candidateKey.startsWith(scope) &&
       (candidateKey !== key || !areWorktreePathsEqual(candidate.repoPath, repo.path))
@@ -77,6 +89,7 @@ function resolveEntry(repo: Repo, runtimeKey: string): { key: string; entry: Ent
   if (!entry) {
     entry = {
       repoId: repo.id,
+      hostId,
       repoPath: repo.path,
       runtimeKey,
       revision: 0,
@@ -87,14 +100,14 @@ function resolveEntry(repo: Repo, runtimeKey: string): { key: string; entry: Ent
     }
     entries.set(key, entry)
   }
-  return { key, entry }
+  return entry
 }
 
 function isCurrent(entry: Entry, observation: WorktreeCatalogObservation): boolean {
   return (
-    !entry.retired &&
     observation.revision === entry.revision &&
-    isLocalWorktreeScanGenerationCurrent(entry.repoId, observation.generation)
+    isLocalWorktreeScanGenerationCurrent(entry.repoId, observation.generation) &&
+    isLive(entry)
   )
 }
 
@@ -102,13 +115,14 @@ function startFlight(
   entry: Entry,
   repo: Repo,
   requirement: WorktreeCatalogRequirement,
-  plan: WorktreeCatalogFlightPlan
+  plan: WorktreeCatalogFlightPlan,
+  pendingProbe: Promise<string | null> | null
 ): Flight {
   // Capture before Git can yield so a concurrent mutation is never stamped as observed.
   const revision = entry.revision
   const generation = getLocalWorktreeScanGeneration(entry.repoId)
   const startedAt = Date.now()
-  const probe = requirement.verifier?.probe() ?? null
+  const probe = pendingProbe ?? requirement.verifier?.probe() ?? null
   const adminFingerprint = probe && probe !== 'in-flight' ? probe : null
   const witness = plan.captureWitness?.()
   const flight: Flight = {
@@ -150,16 +164,17 @@ function publish(
   observation: WorktreeCatalogObservation,
   plan: WorktreeCatalogFlightPlan
 ): void {
+  const live = isLive(entry)
   if (observation.outcome.kind === 'failed') {
     // Like the evidence gate's own claim, a failed pass is not retried on every read (#17775); new evidence re-arms it.
     observation.witness = undefined
-    if (!entry.retired && (entry.failure?.startedAt ?? -1) <= observation.startedAt) {
+    if (live && (entry.failure?.startedAt ?? -1) <= observation.startedAt) {
       entry.failure = observation
     }
     return
   }
-  // A retired owner or a newer published observation keeps late completions out.
-  if (entry.retired || (entry.success?.startedAt ?? -1) > observation.startedAt) {
+  // An obsolete route or a newer published observation keeps late completions out.
+  if (!live || (entry.success?.startedAt ?? -1) > observation.startedAt) {
     releaseWitness(observation)
     return
   }
@@ -173,24 +188,26 @@ function publish(
   }
 }
 
-/** True when a probe proves, or cannot yet disprove (#19312), that rows with a pre-scan fingerprint still hold. */
+type Verification = { reuse: true } | { reuse: false; probe: Promise<string | null> | null }
+
+/** Reuse when a probe proves, or cannot yet disprove (#19312), that rows fingerprinted before their scan still hold. */
 async function verify(
   observation: WorktreeCatalogObservation,
   verifier: WorktreeCatalogVerifier,
   now: number
-): Promise<boolean> {
+): Promise<Verification> {
   // Without a fingerprint from before its scan, no probe can certify these rows.
   if (
     observation.outcome.kind !== 'rows' ||
     !observation.adminFingerprint ||
     now - observation.startedAt >= verifier.ceilingMs
   ) {
-    return false
+    return { reuse: false, probe: null }
   }
   const probe = verifier.probe()
   if (probe === 'in-flight') {
     verifier.onUnknown?.('previous probe still pending')
-    return true
+    return { reuse: true }
   }
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<'timeout'>((resolve) => {
@@ -200,9 +217,12 @@ async function verify(
   if (current === 'timeout') {
     // Unknown is not proof, but rescanning slow mounts on every read amplifies load (#19312).
     verifier.onUnknown?.('probe expired')
-    return true
+    return { reuse: true }
   }
+  // A mismatching probe was taken before the rescan, so it becomes that scan's fingerprint.
   return current !== null && (await observation.adminFingerprint) === current
+    ? { reuse: true }
+    : { reuse: false, probe }
 }
 
 function acceptable(
@@ -225,13 +245,15 @@ export async function readWorktreeCatalog(
   requirement: WorktreeCatalogRequirement,
   plan: WorktreeCatalogFlightPlan
 ): Promise<WorktreeCatalogRead> {
+  const hostId = getRepoExecutionHostId(repo)
+  // A request admitted for a route the registration has since replaced runs no Git and retires nothing.
+  if (!isLiveWorktreeCatalogRoute(repo.id, hostId, { repoPath: repo.path, runtimeKey })) {
+    const known = entries.get(entryKey(repo.id, hostId, runtimeKey))?.success ?? null
+    return { observation: known, superseded: true }
+  }
+  const entry = resolveEntry(repo, runtimeKey)
   let last: WorktreeCatalogObservation | null = null
-  const { entry } = resolveEntry(repo, runtimeKey)
   for (let flights = 0; flights < (requirement.overtakenFlights ?? 1); flights += 1) {
-    // A newer runtime or path took over this repo mid-read; this reader's rows stay non-authoritative.
-    if (entry.retired && last) {
-      break
-    }
     const now = Date.now()
     const failure = entry.failure
     if (
@@ -243,29 +265,32 @@ export async function readWorktreeCatalog(
       return { observation: failure, superseded: false }
     }
     const success = entry.success
+    let pendingProbe: Promise<string | null> | null = null
     if (success && isCurrent(entry, success)) {
       if (acceptable(success, requirement, now)) {
         return { observation: success, superseded: false }
       }
-      if (
-        requirement.verifier &&
-        !requirement.needsHygieneClaim?.() &&
-        (await verify(success, requirement.verifier, now)) &&
-        entry.success === success &&
-        isCurrent(entry, success)
-      ) {
-        success.confirmedAt = Math.max(success.confirmedAt, Date.now())
-        return { observation: success, superseded: false }
+      if (requirement.verifier && !requirement.needsHygieneClaim?.()) {
+        const verification = await verify(success, requirement.verifier, now)
+        if (verification.reuse && entry.success === success && isCurrent(entry, success)) {
+          success.confirmedAt = Math.max(success.confirmedAt, Date.now())
+          return { observation: success, superseded: false }
+        }
+        pendingProbe = verification.reuse ? null : verification.probe
       }
+    }
+    // The route can be replaced across any await; obsolete readers never start Git.
+    if (!isLive(entry)) {
+      break
     }
     // At most one flight per owner: a reader arriving after an invalidation waits for the
     // overtaken flight, then starts the single trailing one.
-    last = await (entry.flight ?? startFlight(entry, repo, requirement, plan)).promise
+    last = await (entry.flight ?? startFlight(entry, repo, requirement, plan, pendingProbe)).promise
     if (isCurrent(entry, last)) {
       return { observation: last, superseded: false }
     }
   }
-  return { observation: last!, superseded: true }
+  return { observation: last ?? entry.success, superseded: true }
 }
 
 /** Last known observation, current or not, for last-known fallbacks and projections. */
@@ -273,7 +298,7 @@ export function peekWorktreeCatalog(
   repo: Repo,
   runtimeKey: string
 ): { observation: WorktreeCatalogObservation; current: boolean } | null {
-  const entry = entries.get(entryKey(repo, runtimeKey))
+  const entry = entries.get(entryKey(repo.id, getRepoExecutionHostId(repo), runtimeKey))
   const observation = entry?.success
   if (!entry || !observation || !areWorktreePathsEqual(entry.repoPath, repo.path)) {
     return null
@@ -299,14 +324,10 @@ export function invalidateWorktreeCatalogForRepoPath(repoPath: string): void {
   }
 }
 
-/** Drop owners whose repo, host or project runtime is gone; late completions cannot recreate them. */
-export function retireUnregisteredWorktreeCatalogs(
-  registered: readonly Repo[],
-  runtimeKeyFor: (repo: Repo) => string
-): void {
-  const live = new Set(registered.map((repo) => entryKey(repo, runtimeKeyFor(repo))))
+/** Drop owners whose repo, host, path or project runtime is no longer the live route. */
+export function retireObsoleteWorktreeCatalogs(): void {
   for (const [key, entry] of entries) {
-    if (!live.has(key)) {
+    if (!isLive(entry)) {
       retireEntry(key, entry)
     }
   }
