@@ -185,6 +185,7 @@ export function VmBuildSheet({
       ? 'ready'
       : 'building'
   const building = state === 'building'
+  const title = headerTitle(billingBlock ? 'building' : state, cloud, t, failure?.kind === 'create')
 
   const sourceRepo = useAppStore((state) =>
     recipe ? state.repos.find((repo) => repo.id === recipe.sourceRepoId) : undefined
@@ -247,9 +248,7 @@ export function VmBuildSheet({
                 aria-live={failure ? 'off' : 'polite'}
                 className="text-sm font-medium text-foreground outline-none"
               >
-                {billingBlock
-                  ? headerTitle('building', cloud, t)
-                  : headerTitle(state, cloud, t, failure?.kind === 'create')}
+                {title}
               </h2>
               {/* Orca Cloud: each step carries its own timer, so the header has none. */}
               {gated || cloud ? null : (
