@@ -10,6 +10,7 @@ import {
 } from './automation-launch-surface'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
 import { filterEnabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type {
   AutomationLaunchPreferences,
@@ -68,6 +69,13 @@ export type AutomationDraft = {
   savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
+}
+
+type AutomationEditBaseline = { draftKey: string; hostKey: string | null }
+
+function automationDraftKey(draft: AutomationDraft): string {
+  // Leaving Custom keeps its cron text, which no longer affects a non-custom schedule.
+  return JSON.stringify(draft.preset === 'custom' ? draft : { ...draft, customSchedule: '' })
 }
 
 type AutomationEditorDialogProps = {
@@ -133,7 +141,38 @@ export function AutomationEditorDialog({
   const [templateOpen, setTemplateOpen] = React.useState(false)
   const dialogContentRef = React.useRef<HTMLDivElement>(null)
   const isCreateMode = !isEditing
-  const destination = isCreateMode ? createDestination : editDestination
+  const selectedDestination = isCreateMode ? createDestination : editDestination
+  const hostKey =
+    selectedDestination?.resolution.status === 'ready'
+      ? selectedDestination.resolution.entry.stableKey
+      : null
+  // Baseline at the first user edit, after opening effects have filled project/workspace/setup defaults.
+  const [editBaseline, setEditBaseline] = React.useState<AutomationEditBaseline | null>(null)
+  if (!open && editBaseline) {
+    setEditBaseline(null)
+  }
+  const isDirty =
+    editBaseline !== null &&
+    (editBaseline.hostKey !== hostKey || editBaseline.draftKey !== automationDraftKey(draft))
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(() => isDirty)
+  const markUserEdit = (): void => {
+    setEditBaseline((current) => current ?? { draftKey: automationDraftKey(draft), hostKey })
+  }
+  const handleDraftChange = (updater: (current: AutomationDraft) => AutomationDraft): void => {
+    markUserEdit()
+    onDraftChange(updater)
+  }
+  const handleProjectChange = (projectId: string): void => {
+    markUserEdit()
+    onProjectChange(projectId)
+  }
+  const destination = selectedDestination && {
+    ...selectedDestination,
+    onSelect: (stableKey: string) => {
+      markUserEdit()
+      selectedDestination.onSelect(stableKey)
+    }
+  }
   const launchWorkspace = automationLaunchWorkspace(draft, destination?.resolution)
   useChatProgramFacts(launchWorkspace, open)
   const routeState = useAppStore(selectAgentLaunchRouteView)
@@ -157,6 +196,8 @@ export function AutomationEditorDialog({
         className="flex h-[min(880px,90vh)] w-[min(1080px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
         aria-describedby={undefined}
         ref={dialogContentRef}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
         }}
@@ -184,6 +225,7 @@ export function AutomationEditorDialog({
           templates={getAutomationTemplates()}
           onTemplateOpenChange={setTemplateOpen}
           onApplyTemplate={(template) => {
+            markUserEdit()
             onApplyTemplate(template)
             setTemplateOpen(false)
           }}
@@ -192,7 +234,7 @@ export function AutomationEditorDialog({
         <div className="flex min-h-0 flex-1 flex-row">
           <AutomationEditorPromptSection
             draft={draft}
-            onDraftChange={onDraftChange}
+            onDraftChange={handleDraftChange}
             onDismiss={() => onOpenChange(false)}
           />
           <AutomationEditorSettingsSidebar
@@ -211,10 +253,10 @@ export function AutomationEditorDialog({
             draft={draft}
             visibleAgents={visibleAgents}
             pickerTriggerClassName={AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS}
-            onProjectChange={onProjectChange}
+            onProjectChange={handleProjectChange}
             getRepoHostLabel={getRepoHostLabel}
             allowAddProject={allowAddProject}
-            onDraftChange={onDraftChange}
+            onDraftChange={handleDraftChange}
             onSetupDecisionTouched={onSetupDecisionTouched}
           />
         </div>

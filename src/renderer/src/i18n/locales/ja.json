@@ -3296,7 +3296,6 @@
             "runningTerminalBlocker": "実行中のターミナルプロセス",
             "terminalLivenessUnknownBlocker": "ターミナルの状態不明",
             "dirtyEditorBufferBlocker": "未保存のエディターバッファ",
-            "volatileLocalContextBlocker": "揮発性のローカルコンテキスト",
             "recentVisibleContextBlocker": "最近表示したタブ",
             "liveAgentBlocker": "アクティブな Agent",
             "sshDisconnectedBlocker": "リモート利用不可",
@@ -3458,6 +3457,8 @@
             "15dd899676": "{{value0}} に追加…"
           },
           "TerminalErrorToast": {
+            "title": "ターミナルの問題",
+            "errorTitle": "ターミナルエラー",
             "e4aa243f8c": "デーモンを再起動します",
             "a7e2fd2699": "Issue を登録",
             "5c8ce20be6": "この状態が続く場合は、",
@@ -16505,6 +16506,14 @@
                     "logins": {
                       "title": "ログイン状態を保つ",
                       "body": "既存のログイン情報を Orca に取り込んで、すぐにログイン状態を保ちます。"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 拡張機能",
+                        "body": "Chrome ウェブストアからインストールし、アドレスバーの横に固定できます。",
+                        "action": "ウェブストアを開く",
+                        "secondaryAction": "了解"
+                      }
                     }
                   },
                   "tasks": {
@@ -20577,7 +20586,8 @@
       "remove": "削除…",
       "empty": "このプロファイルで有効な拡張機能はありません",
       "visitWebStore": "Chrome ウェブストアにアクセス",
-      "manage": "拡張機能を管理"
+      "manage": "拡張機能を管理",
+      "openWebStoreFailed": "Chrome ウェブストアを開けませんでした。"
     },
     "viewport": {
       "mobile-s": "モバイル S — 320 × 568",
@@ -21481,7 +21491,6 @@
       "cancel": "キャンセル"
     },
     "antigravity": {
-      "chatTitle": "Antigravity チャット",
       "chatSignIn": "サインイン",
       "chatChangeAccount": "アカウントを変更",
       "chatRetry": "サインインを再試行",
@@ -21499,23 +21508,13 @@
       "chatFailed": "サインインに失敗しました。もう一度お試しください。",
       "chatOtherClient": "別のクライアントでサインインが進行中です。",
       "chatReadFailed": "{{host}} のサインインを確認できませんでした。",
-      "signIn": "このホストで agy を起動し、ブラウザのサインインを完了して、現在のアカウントを保存します。別のアカウントを追加するには、agy で /logout を使用し、再度サインインします。",
-      "docs": "サインイン手順",
       "retry": "再試行",
-      "identityUnknown": "サインインしているIDは利用できません",
-      "signedOut": "ネイティブのAGYアカウントはサインインしていません。",
       "changed": "ネイティブアカウントが変更されました。AGYを起動する前に、保存したアカウントを再度選択してください。",
-      "save": "現在のアカウントを保存",
       "refresh": "アカウントを更新する",
       "usage": "使用量を更新",
-      "working": "アカウントの更新",
       "usageReading": "セッション： {{session}} ·毎週： {{weekly}}",
       "saved": "保存されたGoogleアカウント",
-      "nativeActive": "ネイティブアカウント",
-      "selected": "選択",
-      "select": "選択",
       "remove": "削除",
-      "sessions": "選択は、このホストの新規AGYセッションに適用されます。既存のセッションでは、以前のアカウントが保持される場合があります。",
       "searchDescription": "実行ホストにネイティブのagy Googleアカウントを保存して選択します。",
       "title": "Antigravity",
       "keyword": {
@@ -21527,7 +21526,6 @@
       "authMethod": "サインイン方法",
       "personal": "Google アカウント",
       "gcpProject": "Google Cloud プロジェクト",
-      "gcpLocation": "Google Cloud ロケーション",
       "settingsIncomplete": "Antigravity アカウントの種類を選択し、Google Cloud のプロジェクトとロケーションを入力してください。",
       "settingsLoadFailed": "Orca は Antigravity のサインイン設定を読み込めませんでした。もう一度お試しください。",
       "settingsSaveFailed": "Orca は Antigravity のサインイン設定を保存できませんでした。もう一度お試しください。",
@@ -22850,11 +22848,10 @@
     "setByArguments": "引数で設定",
     "searchModels": "モデルを検索",
     "noModels": "検索に一致するモデルがありません。",
-    "legacyModels": "旧モデル",
     "toggleArguments": "引数の表示を切り替え",
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
-    "legacyModelCount": "{{total}} 個のモデル",
+    "moreModelsWithCount": "その他のモデル ({{total}})",
     "use": "使用",
     "select": "Agent を選択",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",

@@ -3,6 +3,7 @@ import {
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
 } from '../../../shared/computer-use-key-spec'
+import { assertComputerKeyComboAllowed } from './computer-blocked-key-combos'
 import { validateComputerClipboardPasteTextWithBoundedYield } from './computer-clipboard-paste-validation'
 import { RuntimeClientError } from '../runtime-client-error'
 
@@ -19,7 +20,8 @@ type ComputerProviderActionMethod =
 
 export async function validateComputerProviderActionParams(
   method: ComputerProviderActionMethod,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  platform: NodeJS.Platform = process.platform
 ): Promise<string> {
   const app = requireNonEmptyString(params, 'app')
   validateWindowTarget(params)
@@ -49,10 +51,10 @@ export async function validateComputerProviderActionParams(
       await validatePasteText(params)
       return app
     case 'pressKey':
-      validatePressKey(params)
+      validatePressKey(params, platform)
       return app
     case 'hotkey':
-      validateHotkey(params)
+      validateHotkey(params, platform)
       return app
     case 'setValue':
       requireNonNegativeInteger(params, 'elementIndex')
@@ -182,20 +184,22 @@ function validateScrollDirection(params: Record<string, unknown>): void {
   }
 }
 
-function validatePressKey(params: Record<string, unknown>): void {
+function validatePressKey(params: Record<string, unknown>, platform: NodeJS.Platform): void {
   const key = requireNonEmptyString(params, 'key')
   const message = computerUsePressKeyValidationMessage(key)
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
+  assertComputerKeyComboAllowed(params, key, platform)
 }
 
-function validateHotkey(params: Record<string, unknown>): void {
+function validateHotkey(params: Record<string, unknown>, platform: NodeJS.Platform): void {
   const key = requireNonEmptyString(params, 'key')
   const message = computerUseHotkeyValidationMessage(key)
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
+  assertComputerKeyComboAllowed(params, key, platform)
 }
 
 function validatePasteText(params: Record<string, unknown>): Promise<void> | void {

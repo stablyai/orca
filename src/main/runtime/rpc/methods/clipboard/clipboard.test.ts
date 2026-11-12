@@ -8,7 +8,7 @@ const { saveClipboardImageBufferAsTempFile } = vi.hoisted(() => ({
   saveClipboardImageBufferAsTempFile: vi.fn()
 }))
 
-vi.mock('../../../../window/clipboard-image-temp-file', () => ({
+vi.mock('../../../../window/clipboard/clipboard-image-temp-file', () => ({
   saveClipboardImageBufferAsTempFile
 }))
 import '../../../../../shared/rpc-contract/clipboard-params'
@@ -16,7 +16,7 @@ import { CLIPBOARD_METHODS, resetClipboardImageUploadsForTest } from './clipboar
 import {
   hasMobileClipboardImagePath,
   resetMobileClipboardImageProvenanceForTest
-} from '../../mobile-clipboard-image-provenance'
+} from '../../clipboard/mobile-clipboard-image-provenance'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }

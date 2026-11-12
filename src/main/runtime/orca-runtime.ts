@@ -28,6 +28,7 @@ import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-r
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
+import { registerWorktreeCatalogRoutes } from './workspaces/catalog/worktree-catalog-live-route'
 import {
   listReferenceWorkspaces,
   selectWarmedReferenceWorkspace,
@@ -201,6 +202,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+    registerWorktreeCatalogRoutes(this.store)
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))

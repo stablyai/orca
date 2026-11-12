@@ -356,8 +356,7 @@
       "pausedState": "一時停止中",
       "queuedState": "キュー待ち",
       "resume": "再開",
-      "resumeSending": "キュー内のメッセージの送信を再開",
-      "title": "キュー内のメッセージ"
+      "resumeSending": "キュー内のメッセージの送信を再開"
     },
     "offlineQueue": {
       "failed": "送信できませんでした — 「送信」をタップして再試行",
@@ -2317,20 +2316,16 @@
       "loadFailed": "PR を読み込めませんでした。"
     },
     "queuedCardText": {
-      "showLess": "折りたたむ",
       "showLessHint": "メッセージを折りたたんで表示します。",
-      "showMore": "さらに表示",
       "showMoreHint": "メッセージ全体を表示します。"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "キュー内のこのメッセージを削除",
       "images_one": "画像 {{count}} 枚",
       "images_other": "画像 {{count}} 枚",
       "moreActions": "その他の操作",
       "send": "送信",
       "sendAgainHint": "このメッセージを再送信",
       "sendHint": "このメッセージを送信",
-      "showLessHint": "メッセージを折りたたんで表示します。",
       "steer": "今すぐ送信",
       "steerHint": "モデルを中断せずに送信します"
     },
@@ -2493,6 +2488,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "添付に失敗しました（再接続中）。"
+    },
+    "useCloseActions": {
+      "closeFailed": "タブを閉じられませんでした。もう一度お試しください。",
+      "closeFailedDesktopNotReady": "タブを閉じられませんでした。コンピューターの Orca はまだ読み込み中です。少ししてからもう一度お試しください。"
     },
     "useContentCreateActions": {
       "browserCommandFailed": "ブラウザコマンドの実行に失敗しました。",

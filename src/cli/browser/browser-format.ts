@@ -1,6 +1,6 @@
 import { readBrowserActionEffects } from '../../shared/browser-action-effects'
 import { formatBrowserPasskeyRequest } from '../../shared/browser-passkey-request'
-import { writeCliScreenshotTempFile } from '../cli-screenshot-temp-file'
+import { writeCliScreenshotTempFile } from '../screenshots/cli-screenshot-temp-file'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import { formatBrowserAnnotationsAsMarkdown } from '../../shared/browser/annotations/browser-annotation-output'
 import type {

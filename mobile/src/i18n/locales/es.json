@@ -360,8 +360,7 @@
       "pausedState": "En pausa",
       "queuedState": "En cola",
       "resume": "Reanudar",
-      "resumeSending": "Reanudar el envío de los mensajes en cola",
-      "title": "Mensajes en cola"
+      "resumeSending": "Reanudar el envío de los mensajes en cola"
     },
     "offlineQueue": {
       "failed": "No se pudo enviar: toca Enviar para reintentar",
@@ -2390,13 +2389,10 @@
       "loadFailed": "No se pudo cargar la pull request"
     },
     "queuedCardText": {
-      "showLess": "Mostrar menos",
       "showLessHint": "Muestra menos contenido del mensaje",
-      "showMore": "Mostrar más",
       "showMoreHint": "Muestra el mensaje completo"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Eliminar este mensaje en cola",
       "images_many": "{{count}} imágenes",
       "images_one": "{{count}} imagen",
       "images_other": "{{count}} imágenes",
@@ -2404,7 +2400,6 @@
       "send": "Enviar",
       "sendAgainHint": "Volver a enviar este mensaje",
       "sendHint": "Enviar este mensaje",
-      "showLessHint": "Muestra menos contenido del mensaje",
       "steer": "Enviar ahora",
       "steerHint": "Enviar sin interrumpir al modelo"
     },
@@ -2567,6 +2562,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "No se pudo adjuntar (reconectando)"
+    },
+    "useCloseActions": {
+      "closeFailed": "No se pudo cerrar la pestaña. Inténtalo de nuevo.",
+      "closeFailedDesktopNotReady": "No se pudo cerrar la pestaña. Orca todavía se está cargando en tu ordenador. Vuelve a intentarlo en un momento."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "No se pudo ejecutar el comando del navegador",

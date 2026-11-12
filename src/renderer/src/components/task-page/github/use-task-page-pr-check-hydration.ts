@@ -22,9 +22,9 @@ import {
   acceptPRCheckObservation,
   projectPRCheckOwner,
   completePRCheckOwnerScope
-} from '../../../../../shared/github/complete-pr-check-owner'
+} from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
 import { PR_CHECKS_EAGER_PREFETCH_LIMIT } from '../task-page-source-context'

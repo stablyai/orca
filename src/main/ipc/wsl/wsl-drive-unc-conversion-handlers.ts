@@ -17,7 +17,7 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import type { Store } from '../../persistence/loading-store/store'
 import { pauseWslMoveScope } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-pause'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { quitProcess } from '../../startup/process-quit-request'
+import { quitProcess } from '../../startup/quit/process-quit-request'
 import { startWslDriveUncConversion } from '../../wsl/filesystem/wsl-drive-unc-conversion-run'
 import {
   lastWslDriveUncConversionOutcomes,

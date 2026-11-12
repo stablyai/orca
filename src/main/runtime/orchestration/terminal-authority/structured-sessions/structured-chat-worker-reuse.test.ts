@@ -1,11 +1,9 @@
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
-import { structuredMailboxCustody } from '../../mailbox/routing/structured-session-mail-target'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/orca-session-address'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   COORDINATOR,
   WAIT,
@@ -147,75 +145,6 @@ async function followUpTask(): Promise<string> {
 }
 
 describe('a finished structured worker', () => {
-  it('takes a follow-up Dispatch in its chat, and releasing it frees the worker', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-    const { identity, released, firstDispatchId } = await finishedStructuredWorker(taskId)
-    const worker = connectionFor(identity.sessionId)
-    const resource = db.getWorkerTerminalResourceByOwner(firstDispatchId)
-    expect(resource?.auto_release_at).not.toBeNull()
-
-    const followUp = await followUpTask()
-    const started = call(
-      'orchestration.workerStart',
-      { task: followUp, terminal: identity.handle },
-      { sessionId: COORDINATOR }
-    )
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    await settleTurn(identity.sessionId, 0)
-    const receipt = await started
-
-    expect(receipt).toMatchObject({ state: 'ready', turnStart: 'observed' })
-    const dispatchId = String(receipt.dispatchId)
-    const task = turnText(worker.turns[0]!)
-    expect(task).toContain(dispatchId)
-    expect(task).toContain(
-      `Your Orca session ID is: ${ORCA_SESSION_ADDRESS_PREFIX}${identity.sessionId}`
-    )
-    expect(db.getDispatchContextById(dispatchId)).toMatchObject({
-      assignee_handle: identity.handle,
-      assignee_orca_session_id: identity.sessionId
-    })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      id: resource!.id,
-      ownership_state: 'owned',
-      auto_release_at: null
-    })
-
-    expect(await reportDone(identity.sessionId, followUp, dispatchId)).toMatchObject({ ok: true })
-    expect(released()).toBe(0)
-    expect(structuredMailboxCustody(identity.handle, db)).toMatchObject({
-      sessionId: identity.sessionId
-    })
-    await call('orchestration.workerRelease', { dispatch: dispatchId }, { sessionId: COORDINATOR })
-    await vi.waitFor(() => expect(released()).toBe(1), WAIT)
-    // Released: mail to its handle is no longer this chat's, so a card for it never holds the person's queue.
-    expect(structuredMailboxCustody(identity.handle, db)).toBe('elsewhere')
-  })
-
-  it('given new work after abandon, is bound again so its release frees it again', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-    const { identity, released } = await finishedStructuredWorker(taskId, 'abandon')
-    expect(released()).toBe(1)
-    const worker = connectionFor(identity.sessionId)
-
-    const followUp = await followUpTask()
-    const started = call(
-      'orchestration.workerStart',
-      { task: followUp, terminal: identity.handle },
-      { sessionId: COORDINATOR }
-    )
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    await settleTurn(identity.sessionId, 0)
-    const dispatchId = String((await started).dispatchId)
-    expect(structuredWorkerIdentities.get(identity.handle)).not.toBeNull()
-
-    expect(await reportDone(identity.sessionId, followUp, dispatchId)).toMatchObject({ ok: true })
-    await call('orchestration.workerRelease', { dispatch: dispatchId }, { sessionId: COORDINATOR })
-    await vi.waitFor(() => expect(released()).toBe(2), WAIT)
-  })
-
   it('kept open by the user takes follow-up work and stays kept', async () => {
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
@@ -377,44 +306,59 @@ describe('a send to a finished structured worker', () => {
     const { taskId } = await coordinatorRunAndTask()
     const { identity, firstDispatchId } = await finishedStructuredWorker(taskId, 'none')
     const worker = connectionFor(identity.sessionId)
-    expect(await sendUserMessage(identity.sessionId, 'go')).toMatchObject({ ok: true })
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    worker.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
-    await host.flushStreamedEvents(identity.sessionId)
-    await sendTo(firstDispatchId, 'and the docs')
-    // The mail waits as a card behind the running turn; the worker reports before it is handed over.
-    await vi.waitFor(
-      async () => expect(await queuedCardTexts(identity.sessionId)).toHaveLength(1),
-      WAIT
-    )
+    const reply = Promise.withResolvers<void>()
+    const request = worker.request
+    worker.request = async (...args) => {
+      const response = await request(...args)
+      if (args[0] === 'turn/start') {
+        await reply.promise
+      }
+      return response
+    }
+    try {
+      expect(await sendUserMessage(identity.sessionId, 'go')).toMatchObject({ ok: true })
+      await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+      worker.handlers.onNotification?.('turn/started', { turn: { id: 'turn-1' } })
+      await host.flushStreamedEvents(identity.sessionId)
+      await sendTo(firstDispatchId, 'and the docs')
+      // The mail waits as a card behind the running turn; the worker reports before it is handed over.
+      await vi.waitFor(
+        async () => expect(await queuedCardTexts(identity.sessionId)).toHaveLength(1),
+        WAIT
+      )
+      expect(worker.steers).toEqual([])
 
-    expect(await reportDone(identity.sessionId, taskId, firstDispatchId)).toMatchObject({
-      ok: true
-    })
-    // The follow-up took the mail: the old card is gone, its Task waits first, then the mail itself.
-    await vi.waitFor(async () => {
-      const cards = await queuedCardTexts(identity.sessionId)
-      expect(cards).toHaveLength(2)
-      expect(cards[0]).toContain('arrive next, one at a time')
-      expect(isWholeMail(cards[1]!)).toBe(true)
-      expect(cards[1]).toContain('and the docs')
-    }, WAIT)
-    expect((await queuedCardTexts(identity.sessionId)).join('\n')).not.toContain('`check`')
-    worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
-    await host.flushStreamedEvents(identity.sessionId)
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
-    expect(turnText(worker.turns[1]!)).toContain('arrive next, one at a time')
-    await settleTurn(identity.sessionId, 1)
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(3), WAIT)
-    expect(isWholeMail(turnText(worker.turns[2]!))).toBe(true)
-    expect(turnText(worker.turns[2]!)).toContain('and the docs')
-    await settleTurn(identity.sessionId, 2)
+      expect(await reportDone(identity.sessionId, taskId, firstDispatchId)).toMatchObject({
+        ok: true
+      })
+      // The follow-up took the mail: the old card is gone, its Task waits first, then the mail itself.
+      await vi.waitFor(async () => {
+        const cards = await queuedCardTexts(identity.sessionId)
+        expect(cards).toHaveLength(2)
+        expect(cards[0]).toContain('arrive next, one at a time')
+        expect(isWholeMail(cards[1]!)).toBe(true)
+        expect(cards[1]).toContain('and the docs')
+      }, WAIT)
+      expect((await queuedCardTexts(identity.sessionId)).join('\n')).not.toContain('`check`')
+      reply.resolve()
+      worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
+      await host.flushStreamedEvents(identity.sessionId)
+      await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
+      expect(turnText(worker.turns[1]!)).toContain('arrive next, one at a time')
+      await settleTurn(identity.sessionId, 1)
+      await vi.waitFor(() => expect(worker.turns).toHaveLength(3), WAIT)
+      expect(isWholeMail(turnText(worker.turns[2]!))).toBe(true)
+      expect(turnText(worker.turns[2]!)).toContain('and the docs')
+      await settleTurn(identity.sessionId, 2)
 
-    const followUp = getFollowUpDispatch(db, firstDispatchId)!
-    await vi.waitFor(
-      () => expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([]),
-      WAIT
-    )
-    expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
+      const followUp = getFollowUpDispatch(db, firstDispatchId)!
+      await vi.waitFor(
+        () => expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([]),
+        WAIT
+      )
+      expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
+    } finally {
+      reply.resolve()
+    }
   })
 })

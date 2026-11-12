@@ -1,5 +1,5 @@
 import { getProviderChecksOutcome } from '../../../../../shared/source-control/checks/provider-check-summary'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import React, { useRef, useEffect } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { CheckCircle2, AlertCircle, Clock3, Minus } from 'lucide-react'

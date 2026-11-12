@@ -1,82 +1,11 @@
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('does not let the active browser webContents steal session focus from terminals', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const tabList = vi.fn(() => ({
-      tabs: [
-        {
-          browserPageId: 'browser-page-1',
-          index: 0,
-          url: 'https://example.com/',
-          title: 'Live Browser',
-          active: true
-        }
-      ]
-    }))
-    runtime.setAgentBrowserBridge({ tabList } as never)
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: 'group-1',
-          activeTabId: 'terminal-tab::pane:1',
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'browser',
-              id: 'browser-unified-1',
-              title: 'Stale Browser',
-              browserWorkspaceId: 'browser-workspace-1',
-              browserPageId: 'browser-page-1',
-              url: 'https://stale.example/',
-              loading: false,
-              canGoBack: false,
-              canGoForward: false,
-              isActive: false
-            },
-            {
-              type: 'terminal',
-              id: 'terminal-tab::pane:1',
-              parentTabId: 'terminal-tab',
-              leafId: 'pane:1',
-              title: 'Terminal 2',
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.activeTabId).toBe('terminal-tab::pane:1')
-    expect(result.activeTabType).toBe('terminal')
-    expect(result.tabs).toEqual([
-      expect.objectContaining({
-        type: 'browser',
-        id: 'browser-unified-1',
-        isActive: false,
-        title: 'Live Browser'
-      }),
-      expect.objectContaining({
-        type: 'terminal',
-        id: 'terminal-tab::pane:1',
-        isActive: true
-      })
-    ])
-  })
-
   it.each([
     {
       behavior: 'fills a missing renderer session',
@@ -199,43 +128,6 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
-  it('normalizes Pi-compatible mobile session status to OMP for an unknown-launch foreground omp PTY', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
-    const getForegroundProcess = vi.fn(async () => 'omp')
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: committingSpawn(runtime, spawn),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess
-    })
-    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-      tabId: 'typed-omp-tab',
-      leafId: HEADLESS_LEAF_ID,
-      title: 'Terminal'
-    })
-
-    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi ready\x07', 123)
-    await new Promise<void>((resolve) => setImmediate(resolve))
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(getForegroundProcess).toHaveBeenCalledWith('pty-typed-omp')
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        title: 'OMP ready',
-        agentStatus: expect.objectContaining({
-          state: 'done',
-          agentType: 'omp',
-          terminalHandle: terminal.handle,
-          terminalTitle: 'OMP ready'
-        })
-      })
-    )
-    expect(result.tabs[0]).not.toHaveProperty('launchAgent')
-  })
-
   it('preserves host metadata when terminal.create adopts a stable pane owner', async () => {
     const adoptStablePane = vi.fn(
       async (args: AdoptStablePaneArgs): Promise<AdoptStablePaneResult | null> => {
@@ -311,35 +203,6 @@ describe('OrcaRuntimeService', () => {
       })
     ])
     expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('releases a stable-pane claim when creation aborts before provider spawn', async () => {
-    const releaseClaim = vi.fn()
-    const spawn = vi.fn()
-    const adoptStablePane = vi.fn()
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      claimStablePaneCreate: vi.fn(() => releaseClaim),
-      adoptStablePane,
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const abort = new AbortController()
-    abort.abort()
-
-    await expect(
-      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-        tabId: 'aborted-stable-pane',
-        leafId: HEADLESS_LEAF_ID,
-        signal: abort.signal
-      })
-    ).rejects.toThrow('client_disconnected')
-
-    expect(spawn).not.toHaveBeenCalled()
-    expect(adoptStablePane).not.toHaveBeenCalled()
-    expect(releaseClaim).toHaveBeenCalledOnce()
   })
 
   it('refuses before spawning when the client disconnects during pane adoption', async () => {

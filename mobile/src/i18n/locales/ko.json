@@ -356,8 +356,7 @@
       "pausedState": "일시 중지됨",
       "queuedState": "대기 중",
       "resume": "재개",
-      "resumeSending": "대기 중인 메시지 전송 재개",
-      "title": "대기 중인 메시지"
+      "resumeSending": "대기 중인 메시지 전송 재개"
     },
     "offlineQueue": {
       "failed": "보내지 못했습니다 — 보내기를 탭해 다시 시도하세요",
@@ -2317,20 +2316,16 @@
       "loadFailed": "PR을 로드할 수 없습니다."
     },
     "queuedCardText": {
-      "showLess": "접기",
       "showLessHint": "메시지의 일부만 표시합니다.",
-      "showMore": "더 보기",
       "showMoreHint": "메시지 전체를 표시합니다."
     },
     "queuedMessageCardRow": {
-      "deleteHint": "대기 중인 메시지 삭제",
       "images_one": "이미지 {{count}}개",
       "images_other": "이미지 {{count}}개",
       "moreActions": "추가 작업",
       "send": "보내기",
       "sendAgainHint": "이 메시지 다시 보내기",
       "sendHint": "이 메시지 보내기",
-      "showLessHint": "메시지의 일부만 표시합니다.",
       "steer": "지금 보내기",
       "steerHint": "모델을 중단하지 않고 보냅니다"
     },
@@ -2493,6 +2488,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "첨부 실패 (다시 연결 중)"
+    },
+    "useCloseActions": {
+      "closeFailed": "탭을 닫지 못했습니다. 다시 시도하세요.",
+      "closeFailedDesktopNotReady": "탭을 닫지 못했습니다. 컴퓨터에서 Orca를 아직 불러오는 중입니다. 잠시 후 다시 시도하세요."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "브라우저 명령 실행에 실패했습니다.",

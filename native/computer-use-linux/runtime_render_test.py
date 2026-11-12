@@ -1,7 +1,10 @@
 from contextlib import ExitStack, nullcontext
 import importlib.util
 import json
+import shutil
 import sys
+import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
@@ -15,6 +18,8 @@ class FakeStateType:
     SHOWING = 4
     FOCUSED = 5
     EDITABLE = 6
+    ENABLED = 7
+    SENSITIVE = 8
 
 
 class FakeStateSet:
@@ -202,15 +207,6 @@ class WaylandScreenshotTest(unittest.TestCase):
             options["stdout"].write(b"png")
         return types.SimpleNamespace(returncode=0)
 
-    def test_grim_captures_the_compositor_window_at_logical_scale(self):
-        pixbuf = types.SimpleNamespace(get_width=lambda: 640, get_height=lambda: 480)
-        loader = types.SimpleNamespace(write=lambda _: None, close=lambda: None, get_pixbuf=lambda: pixbuf)
-        with patch.object(runtime.GdkPixbuf, "PixbufLoader", types.SimpleNamespace(new_with_type=lambda _: loader), create=True), \
-             patch.object(runtime, "png_bytes", return_value=b"png"):
-            result = runtime.capture_png(runtime.Rect(0, 0, 640, 480), self.app, self.window)
-        self.assertEqual(self.commands[-1], ["/usr/bin/grim", "-s", "1", "-g", "-800,40 640x480", "-t", "png", "-"])
-        self.assertEqual(result, {"base64": "cG5n", "width": 640, "height": 480, "scale": 1.0})
-
     def test_ambiguous_missing_and_hidden_windows_never_capture_another_region(self):
         for clients in ([], self.clients * 2, [{**self.clients[0], "hidden": True}],
                         [{**self.clients[0], "workspace": {"id": 3}}],
@@ -241,38 +237,126 @@ class WaylandScreenshotTest(unittest.TestCase):
         self.assertIsNone(hidden)
         self.assertIsNotNone(hidden_error)
 
-    def test_grim_failure_and_timeout_preserve_accessibility_only_results(self):
-        native = self.run_native
-        for failure in (1, runtime.subprocess.TimeoutExpired("grim", 5)):
-            def failed(command, **options):
-                if not command[0].endswith("grim"):
-                    return native(command, **options)
-                if isinstance(failure, Exception):
-                    raise failure
-                return types.SimpleNamespace(returncode=failure)
-            with self.subTest(failure=failure), patch.object(runtime.subprocess, "run", side_effect=failed):
-                result = runtime.capture_png(runtime.Rect(0, 0, 640, 480), self.app, self.window)
+class FakePixbuf:
+    def __init__(self, width, height, calls):
+        self.width, self.height, self.calls = width, height, calls
+
+    def get_width(self):
+        return self.width
+
+    def get_height(self):
+        return self.height
+
+    def new_subpixbuf(self, x, y, width, height):
+        self.calls.append(("crop", x, y, width, height))
+        return FakePixbuf(width, height, self.calls)
+
+    def fill(self, _):
+        self.calls.append(("fill", self.width, self.height))
+
+    def copy_area(self, x, y, width, height, _, to_x, to_y):
+        self.calls.append(("copy", x, y, width, height, to_x, to_y))
+
+    def scale_simple(self, width, height, _):
+        self.calls.append(("scale", width, height))
+        return FakePixbuf(width, height, self.calls)
+
+    def save_to_bufferv(self, *_):
+        return True, b"png"
+
+
+class KWinScreenshotTest(unittest.TestCase):
+    def setUp(self):
+        self.app = types.SimpleNamespace(get_process_id=lambda: 42)
+        self.window = types.SimpleNamespace(get_name=lambda: "Editor")
+        self.target = {"pid": 42, "caption": "Editor", "captionNormal": "Editor", "stackingOrder": 3, "shown": True,
+                       "client": [100, 50, 400, 300], "buffer": [90, 40, 420, 320], "frame": [100, 20, 400, 330],
+                       "screen": [-1280, 0, 2560, 800]}
+        self.reports = []
+        self.portal_calls = []
+        self.pixbuf_calls = []
+        self.context = ExitStack()
+        self.addCleanup(self.context.close)
+        for name, value in (
+            ("wayland_session", lambda: True),
+            ("wayland_screenshot_backend", lambda: "kwin"),
+            ("session_bus", lambda: "bus"),
+            ("kwin_layout", lambda _: self.reports.pop(0) if len(self.reports) > 1 else self.reports[0]),
+            ("portal_screenshot_png", self.portal),
+            ("decode_png", lambda _: FakePixbuf(5120, 1600, self.pixbuf_calls)),
+            ("GdkPixbuf", types.SimpleNamespace(
+                InterpType=types.SimpleNamespace(BILINEAR=0), Colorspace=types.SimpleNamespace(RGB=0),
+                Pixbuf=types.SimpleNamespace(new=lambda _c, _a, _b, width, height: FakePixbuf(width, height, self.pixbuf_calls)))),
+        ):
+            self.context.enter_context(patch.object(runtime, name, value))
+
+    def portal(self, _):
+        self.portal_calls.append(True)
+        return b"desktop"
+
+    def capture(self, *windows, bounds=(400, 300)):
+        self.reports = [{"workspace": [-1280, 0, 2560, 800], "windows": list(windows)}]
+        return runtime.capture_png(runtime.Rect(0, 0, *bounds), self.app, self.window)
+
+    def test_windows_kwin_cannot_place_never_reach_the_portal(self):
+        cover = {**self.target, "pid": 7, "caption": "Other", "captionNormal": "Other", "stackingOrder": 4,
+                 "frame": [450, 300, 200, 200]}
+        for windows in ([], [self.target, dict(self.target)], [{**self.target, "shown": False}],
+                        [{**self.target, "pid": 43}], [{**self.target, "client": [100, 50, 500, 300]}],
+                        [{**self.target, "screen": [0, 400, 640, 400]}], [self.target, cover]):
+            with self.subTest(windows=windows):
+                self.portal_calls.clear()
+                result = self.capture(*windows)
                 self.assertEqual(result["error"]["code"], "screenshot_failed")
+                self.assertEqual(self.portal_calls, [])
 
-    def test_x11_retains_gdk_capture_without_running_grim(self):
-        root = object()
-        screen = types.SimpleNamespace(get_root_window=lambda: root)
-        pixbuf = types.SimpleNamespace(get_width=lambda: 640, get_height=lambda: 480)
-        with patch.dict(runtime.os.environ, {"XDG_SESSION_TYPE": "x11", "HYPRLAND_INSTANCE_SIGNATURE": ""}), \
-             patch.object(runtime.Gdk, "Screen", types.SimpleNamespace(get_default=lambda: screen), create=True), \
-             patch.object(runtime.Gdk, "pixbuf_get_from_window", return_value=pixbuf, create=True) as capture, \
-             patch.object(runtime, "png_bytes", return_value=b"png"):
-            result = runtime.capture_png(runtime.Rect(100, 50, 640, 480))
-        capture.assert_called_once_with(root, 100, 50, 640, 480)
-        self.assertEqual(result, {"base64": "cG5n", "width": 640, "height": 480, "scale": 1.0})
-        self.assertEqual(self.commands, [])
+    def test_crop_maps_the_matching_kwin_rectangle_into_the_scaled_workspace_image(self):
+        below = {**self.target, "pid": 7, "caption": "Other", "stackingOrder": 1, "frame": [0, 0, 800, 800]}
+        menu = {**self.target, "caption": "Menu", "captionNormal": "Menu", "stackingOrder": 5, "ownedPopup": True,
+                "frame": [150, 80, 100, 200]}
+        result = self.capture(self.target, below, menu)
+        self.assertNotIn("error", result)
+        self.assertEqual(self.pixbuf_calls, [("crop", 2760, 100, 800, 600), ("scale", 400, 300)])
+        self.pixbuf_calls.clear()
+        # Client-side decorations: the toolkit reports the buffer (shadow included), not the content rectangle.
+        self.capture(self.target, bounds=(420, 320))
+        self.assertEqual(self.pixbuf_calls, [("crop", 2740, 80, 840, 640), ("scale", 420, 320)])
+        self.pixbuf_calls.clear()
+        # Partly left of the leftmost screen: full window size, only the shown part copied at its offset.
+        self.capture({**self.target, "client": [-1380, 50, 400, 300]})
+        self.assertEqual(self.pixbuf_calls, [("fill", 800, 600), ("copy", 0, 100, 600, 600, 200, 0), ("scale", 400, 300)])
 
-    def test_capabilities_require_grim_and_a_supported_compositor(self):
-        with patch.object(runtime.shutil, "which", side_effect=lambda name: None if name == "grim" else "/usr/bin/" + name):
-            self.assertFalse(runtime.handshake_response()["supports"]["observation"]["screenshot"])
-        with patch.dict(runtime.os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": "", "SWAYSOCK": ""}):
-            self.assertFalse(runtime.handshake_response()["supports"]["observation"]["screenshot"])
-        self.assertTrue(runtime.handshake_response()["supports"]["observation"]["screenshot"])
+    def test_window_that_moves_while_the_portal_answers_is_not_cropped(self):
+        moved = {"workspace": [-1280, 0, 2560, 800], "windows": [{**self.target, "client": [120, 50, 400, 300]}]}
+        self.reports = [{"workspace": [-1280, 0, 2560, 800], "windows": [self.target]}, moved]
+        result = runtime.capture_png(runtime.Rect(0, 0, 400, 300), self.app, self.window)
+        self.assertEqual(result["error"]["code"], "screenshot_failed")
+        self.assertEqual(self.pixbuf_calls, [])
+
+
+@unittest.skipIf(sys.platform == "win32", "the Linux bridge reads portal files with POSIX flags")
+class PortalFileTest(unittest.TestCase):
+    def setUp(self):
+        self.directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.directory)
+        self.file = self.directory / "Screenshot 1.png"
+        self.file.write_bytes(b"png")
+
+    def test_reads_and_removes_only_a_new_file_the_portal_named(self):
+        uri = self.file.as_uri()
+        self.assertEqual(runtime.take_portal_file(uri, time.time()), b"png")
+        self.assertFalse(self.file.exists())
+
+        self.file.write_bytes(b"png")
+        with self.assertRaises(ValueError):
+            runtime.take_portal_file(uri, time.time() + 60)
+        self.assertTrue(self.file.exists())
+
+        link = self.directory / "link.png"
+        link.symlink_to(self.file)
+        with self.assertRaises(OSError):
+            runtime.take_portal_file(link.as_uri(), time.time())
+        self.assertTrue(link.is_symlink() and self.file.exists())
 
 
 class RuntimeRenderTest(unittest.TestCase):
@@ -586,6 +670,19 @@ class RuntimeRenderTest(unittest.TestCase):
                 keys.assert_not_called()
                 paste.assert_not_called()
 
+    def test_tree_marks_controls_without_enabled_or_sensitive_state_disabled(self):
+        disabled = FakeAccessible("push button", "Continue")
+        disabled.get_state_set = lambda: FakeStateSet(FakeStateType.SHOWING)
+        enabled = FakeAccessible("push button", "Cancel")
+        enabled.get_state_set = lambda: FakeStateSet(FakeStateType.ENABLED, FakeStateType.SENSITIVE)
+        unreadable = FakeAccessible("push button", "Help")
+        root = FakeAccessible("frame", "Form", children=[disabled, enabled, unreadable])
+        with SnapshotFixture(root):
+            lines = runtime.make_snapshot("Fixture", False)["treeLines"]
+        self.assertIn("\t1 push button (disabled) Continue", lines)
+        self.assertIn("\t2 push button Cancel", lines)
+        self.assertIn("\t3 push button Help", lines)
+
     def test_compacted_browser_records_keep_their_own_frames_and_indexes(self):
         tabs = [FakeAccessible("page tab", f"Tab {i}", value="1" if i == 9 else "") for i in range(10)]
         buttons = [FakeAccessible("button", f"Other {i}") for i in range(10)]
@@ -601,6 +698,26 @@ class RuntimeRenderTest(unittest.TestCase):
             self.assertNotIn("Tab 0", by_name)
             indexes = [item["index"] for item in snapshot["elements"]]
             self.assertEqual(len(indexes), len(set(indexes)))
+
+    def test_cut_tree_marks_hidden_children_and_root_reads_them(self):
+        items = [FakeAccessible("button", f"A{i}") for i in range(3)]
+        root = FakeAccessible("frame", "Main", children=[
+            FakeAccessible("list", "Items", children=items), FakeAccessible("button", "After"),
+        ])
+        with SnapshotFixture(root), patch.object(runtime, "MAX_NODES", 4):
+            snapshot = runtime.make_snapshot("Fixture", False)
+            self.assertEqual(snapshot["treeLines"], [
+                "0 frame Main",
+                "\t1 list Items",
+                "\t\t2 button A0",
+                "\t\t3 button A1",
+                "\t\t... 1 more not shown (snapshot limit)",
+                "\t... 1 more not shown (snapshot limit)",
+            ])
+            items_record = next(item for item in snapshot["elements"] if item["name"] == "Items")
+            subtree = runtime.run_operation({"tool": "get_app_state", "app": "Fixture", "noScreenshot": True, "root": items_record})["snapshot"]
+            self.assertEqual(subtree["treeLines"], ["0 list Items", "\t1 button A0", "\t2 button A1", "\t3 button A2"])
+            self.assertEqual(subtree["elements"][-1]["runtimeId"], [0, 0, 2])
 
 
 

@@ -1,4 +1,5 @@
-import { ghExecFileAsync, acquire, release } from '../../gh-utils'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
 import { runAsDefaultWslCliUserAct } from '../../../git/command-runner/hosted-cli/default-wsl-cli-fallback'
 export const ORCA_REPO = 'stablyai/orca'
 

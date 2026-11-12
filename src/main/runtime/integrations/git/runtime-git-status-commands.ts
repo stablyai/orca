@@ -28,6 +28,8 @@ import {
   type RuntimeGitTarget
 } from './runtime-git-command-target'
 import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
+import type { WorktreeAtRiskLocalFiles } from '../../../../shared/worktree/at-risk-local-files'
+import { readWorktreeAtRiskLocalFiles } from '../../../git/worktrees/removal/worktree-at-risk-local-files'
 
 // Followers nobody is looking at: a stopped distro must stay stopped for them (E9).
 async function resolveGatedGitTarget(
@@ -102,6 +104,19 @@ export class RuntimeGitStatusCommands {
         localGitOptionsForTarget(target)
       )
     }
+  }
+
+  async readRuntimeWorktreeAtRiskLocalFiles(
+    worktreeSelector: string,
+    signal?: AbortSignal
+  ): Promise<WorktreeAtRiskLocalFiles> {
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
+    requireLocalRuntimeGitRoute(target)
+    return readWorktreeAtRiskLocalFiles({
+      worktreePath: target.worktree.path,
+      mainCheckoutPath: target.repo?.path ?? null,
+      gitOptions: { ...localGitOptionsForTarget(target), ...(signal ? { signal } : {}) }
+    })
   }
 
   async checkoutRuntimeGitBranch(

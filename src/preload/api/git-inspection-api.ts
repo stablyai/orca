@@ -11,6 +11,7 @@ import type {
   GitUpstreamStatus
 } from '../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type { WorktreeAtRiskLocalFiles } from '../../shared/worktree/at-risk-local-files'
 import type {
   GitHistoryItemRef,
   GitHistoryOptions,
@@ -56,6 +57,10 @@ export type GitInspectionApi = {
     paths: string[]
     connectionId?: string
   }) => Promise<string[]>
+  atRiskLocalFiles: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<WorktreeAtRiskLocalFiles>
   findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
   refs: (args: {
     worktreePath: string

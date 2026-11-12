@@ -356,8 +356,7 @@
       "pausedState": "Duraklatıldı",
       "queuedState": "Sıraya alındı",
       "resume": "Devam ettir",
-      "resumeSending": "Kuyruktaki mesajları göndermeye devam et",
-      "title": "Kuyruktaki mesajlar"
+      "resumeSending": "Kuyruktaki mesajları göndermeye devam et"
     },
     "offlineQueue": {
       "failed": "Gönderilemedi — yeniden denemek için Gönder'e dokunun",
@@ -2321,20 +2320,16 @@
       "loadFailed": "Pull request yüklenemedi"
     },
     "queuedCardText": {
-      "showLess": "Daha az göster",
       "showLessHint": "Mesajın daha azını gösterir",
-      "showMore": "Daha fazla göster",
       "showMoreHint": "Mesajın tamamını gösterir"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Sıraya alınmış bu mesajı sil",
       "images_one": "{{count}} görsel",
       "images_other": "{{count}} görsel",
       "moreActions": "Diğer işlemler",
       "send": "Gönder",
       "sendAgainHint": "Bu mesajı yeniden gönder",
       "sendHint": "Bu mesajı gönder",
-      "showLessHint": "Mesajın daha azını gösterir",
       "steer": "Yönlendir",
       "steerHint": "Modeli kesintiye uğratmadan gönder"
     },
@@ -2497,6 +2492,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Eklenemedi (yeniden bağlanılıyor)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Sekme kapatılamadı. Tekrar deneyin.",
+      "closeFailedDesktopNotReady": "Sekme kapatılamadı. Orca bilgisayarınızda hâlâ yükleniyor. Birazdan tekrar deneyin."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Tarayıcı komutu çalıştırılamadı",

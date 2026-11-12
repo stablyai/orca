@@ -98,12 +98,23 @@ vi.mock('../git/repositories/git-username', async (importOriginal) => ({
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
-vi.mock('../github/client', async () =>
-  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
-)
-vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
-  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
-)
+vi.mock('../github/client/lookup/get-pr-for-branch', async () => ({
+  getPRForBranch: (await import('./worktrees-test-module-mocks')).getPRForBranchMock
+}))
+
+vi.mock('../github/client/fetch/get-work-item', async () => {
+  return {
+    getWorkItem: (await import('./worktrees-test-module-mocks')).getWorkItemMock
+  }
+})
+
+vi.mock('../github/client/lookup/pull-request-push-target', async () => {
+  return {
+    getPullRequestPushTarget: (await import('./worktrees-test-module-mocks'))
+      .getPullRequestPushTargetMock
+  }
+})
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )

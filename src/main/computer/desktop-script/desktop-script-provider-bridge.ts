@@ -158,8 +158,11 @@ function runBridgeProcess(
 
 export function mapBridgeError(message: string): RuntimeClientError {
   const text = message.trim() || 'desktop provider failed'
-  if (/text_input_incomplete/i.test(text)) {
+  if (/text_input_incomplete|window_not_responding/i.test(text)) {
     return new RuntimeClientError('action_timeout', text)
+  }
+  if (/target_elevated/i.test(text)) {
+    return new RuntimeClientError('permission_denied', text)
   }
   if (/appNotFound|app not found/i.test(text)) {
     return new RuntimeClientError('app_not_found', text)
@@ -217,7 +220,7 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('screenshot_failed', text)
   }
   if (
-    /window_not_found|No top-level(?: AT-SPI| UI Automation)? window|has no (?:on-screen |accessibility )?window|could not match accessibility window|unknown window(?:_index| id)?/i.test(
+    /window_not_found|windowNotFound|No top-level(?: AT-SPI| UI Automation)? window|has no (?:on-screen |accessibility )?window|could not match accessibility window|unknown window(?:_index| id)?/i.test(
       text
     )
   ) {

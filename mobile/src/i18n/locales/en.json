@@ -2056,9 +2056,7 @@
     },
     "queuedCardText": {
       "showLessHint": "Shows less of the message",
-      "showMoreHint": "Shows the whole message",
-      "showLess": "Show less",
-      "showMore": "Show more"
+      "showMoreHint": "Shows the whole message"
     },
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
@@ -2068,9 +2066,8 @@
       "sendHint": "Send this message",
       "steer": "Steer",
       "send": "Send",
-      "deleteHint": "Delete this queued message",
       "moreActions": "More actions",
-      "showLessHint": "Shows less of the message"
+      "you": "You"
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "Commands can't be saved in a queued message.",
@@ -2544,6 +2541,10 @@
     "useAccessorySelection": {
       "copyFailed": "Couldn't copy",
       "selectionCleared": "Selection cleared (scrolled out of buffer)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Couldn't close the tab. Try again.",
+      "closeFailedDesktopNotReady": "Couldn't close the tab. Orca on your computer is still loading. Try again in a moment."
     },
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
@@ -3023,10 +3024,16 @@
       "clearAll": "Clear all",
       "resumeSending": "Resume sending the queued messages",
       "resume": "Resume",
-      "title": "Queued messages",
       "pausedState": "Paused",
       "queuedState": "Queued",
-      "editMessage": "Edit message"
+      "editMessage": "Edit message",
+      "showLess": "Show less",
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "deleteMessage": "Delete message",
+      "queuedCount_one": "{{count}} queued message",
+      "queuedCount_other": "{{count}} queued messages",
+      "foldNeedsAttention": "{{more}}, a message needs attention"
     },
     "offlineQueue": {
       "failed": "Couldn't send — tap Send to retry",
@@ -3929,7 +3936,10 @@
       "planAgentUnsupported": "Agent \"{{agent}}\" does not support AI commit messages.",
       "planModelUnavailable": "Model \"{{model}}\" is not available for {{label}}.",
       "planModelWithoutThinking": "Model \"{{model}}\" does not support a thinking effort level.",
-      "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}."
+      "planThinkingLevelInvalid": "Thinking level \"{{level}}\" is not valid for {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "Command template is empty for dictation cleanup.",
+      "dictationCleanupAgentUnsupported": "Choose a supported agent for AI cleanup in Settings -> Voice -> Cleanup. Supported agents: {{agents}}, or Custom command.",
+      "agentCannotGenerateDictationCleanup": "Agent \"{{agent}}\" does not support dictation cleanup. Supported agents: {{agents}}, or Custom command."
     },
     "conflictActions": {
       "resolveFile": "{{action}}: {{path}}",
