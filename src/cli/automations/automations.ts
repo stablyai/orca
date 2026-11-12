@@ -10,7 +10,7 @@ import {
 } from '../../shared/work-items/task-source-context'
 import type { AutomationDestination } from '../../shared/automations/ownership/automation-owner-precondition'
 import type { ProjectHostSetup } from '../../shared/project-types'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import {
   formatAutomationList,
   formatAutomationRemoved,
@@ -20,12 +20,12 @@ import {
   formatAutomationShow,
   type AutomationShowPayload
 } from './automation-format'
-import { printResult } from '../command-result-output'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import { resolveAutomationDestination, routeAutomationCreate } from './automation-destination'
 import {
   AUTOMATION_RUNS_PAGE_SIZE,

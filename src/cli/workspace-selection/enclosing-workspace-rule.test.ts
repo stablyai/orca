@@ -6,7 +6,7 @@ import { selectEnclosingWorktreeSelectionOnHost } from './caller-host-worktree-s
 import type { CatalogRow } from './workspace-catalog-row'
 import { readEnclosingWorkspaceCatalog } from './enclosing-workspace-catalog'
 import { RuntimeClient } from '../runtime/client'
-import { okFixture } from '../test-fixtures'
+import { okFixture } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 function select(rows: CatalogRow[], cwd: string, caller?: string[]) {
   return selectEnclosingWorktreeSelectionOnHost(rows, cwd, 'local', caller)?.selector

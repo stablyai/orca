@@ -1,7 +1,7 @@
 import type { ComputerAppQuery } from '../../shared/computer-use-runtime-types'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 
 export type ComputerCliTarget = {

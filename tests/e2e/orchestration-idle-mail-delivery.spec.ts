@@ -17,7 +17,8 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
-import { RuntimeClient, type RuntimeRpcSuccess } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import type { RuntimeRpcSuccess } from '../../src/shared/runtime-rpc-envelope'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import {
   CODEX_IDLE_TITLE,

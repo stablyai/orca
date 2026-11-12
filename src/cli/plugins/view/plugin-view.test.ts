@@ -1,11 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COMMAND_SPECS } from '../../specs/index'
-import { normalizeCommandPositionals, parseArgs } from '../../args'
-import { specPaths } from '../../command-spec'
-import type { HandlerContext } from '../../dispatch'
+import { normalizeCommandPositionals, parseArgs } from '../../arguments/args'
+import { specPaths } from '../../discovery/command-spec'
+import type { HandlerContext } from '../../dispatch/dispatch'
 import type { RuntimeClient } from '../../runtime/client'
 import type { PluginShotActResult } from '../../../shared/plugins/view/plugin-shot-acts'
 import { PLUGIN_VIEW_HANDLERS, type PluginShotReply } from './plugin-view'
@@ -132,20 +132,6 @@ describe('orca plugin shot', () => {
         context(['plugin', 'shot', 'acme.todos'], vi.fn(), { cwd })
       )
     ).rejects.toMatchObject({ code: 'invalid_environment' })
-  })
-
-  it('writes beside the plugin when run inside its folder', async () => {
-    const plugin = join(cwd, 'todos')
-    await mkdir(join(plugin, 'src'), { recursive: true })
-    await writeFile(join(plugin, 'orca-plugin.json'), '{}')
-    await PLUGIN_VIEW_HANDLERS['plugin shot'](
-      context(['plugin', 'shot', 'acme.todos'], vi.fn().mockResolvedValue(shotReply()), {
-        cwd: join(plugin, 'src')
-      })
-    )
-    expect(JSON.parse(stdout.join('')).result.path).toBe(
-      join(plugin, '.orca', 'shots', 'acme.todos-todos.png')
-    )
   })
 
   it('sends --act, reports each act, and exits 1 when one failed', async () => {

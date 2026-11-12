@@ -1,5 +1,5 @@
 import type { RuntimeClient } from '../runtime/client'
-import { getPresentStringFlag } from '../flags'
+import { getPresentStringFlag } from '../arguments/flags'
 import type { WorkspaceSelectionPurpose } from '../workspace-selection/caller-host-worktree-selection'
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 

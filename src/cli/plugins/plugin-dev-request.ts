@@ -1,5 +1,5 @@
-import type { CommandHandler } from '../dispatch'
-import { getOptionalPositiveIntegerFlag } from '../flags'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalPositiveIntegerFlag } from '../arguments/flags'
 import { printPluginResult, requirePluginPathArg } from './plugin-cli-output'
 import { parseDataFlag } from './plugin-dev-emit'
 import { callPlugins, devTargetParams, stringFlag } from './plugin-runtime'

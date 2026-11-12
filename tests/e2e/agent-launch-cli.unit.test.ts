@@ -6,9 +6,10 @@ import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../src/shared/agent-launch
 import type { StructuredAgentSessionFirstMessage } from '../../src/shared/agent-session/structured-agent-session-create'
 import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import { RuntimeClientError } from '../../src/cli/runtime/types'
 import { callAgentLaunch, readCliAgentLaunch } from '../../src/cli/agents/agent-launch-request'
-import { parseArgs } from '../../src/cli/args'
+import { parseArgs } from '../../src/cli/arguments/args'
 import { AGENT_LAUNCH_HANDLERS } from '../../src/cli/agents/agent-launch'
 import { createWorktreeWithAgent } from '../../src/cli/workspaces/worktree-create-agent-launch'
 import {

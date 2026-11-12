@@ -21,15 +21,15 @@ import type {
   LinearTeamStatesResult
 } from '../../shared/linear/agent-result-types'
 import { clampLinearSearchLimit } from '../../shared/linear/agent-access'
-import type { CommandHandler } from '../dispatch'
-import { printResult } from '../command-result-output'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRepeatedStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import {
   buildAssigneeSetRequest,
   buildIssueRequest,

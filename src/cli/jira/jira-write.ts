@@ -6,15 +6,15 @@ import type {
   JiraProject,
   JiraTransition
 } from '../../shared/jira/jira-types'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { readCommandBody } from '../command-body-input'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { readCommandBody } from '../arguments/command-body-input'
 import {
   getOptionalJsonFlag,
   getOptionalStringFlag,
   getRepeatedStringFlag,
   getRequiredStringFlag
-} from '../flags'
-import { printResult } from '../command-result-output'
+} from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import { formatJiraCreate } from './jira-format'
 import { resolveJiraTarget } from './jira-target'
 import { RuntimeClientError } from '../runtime/types'

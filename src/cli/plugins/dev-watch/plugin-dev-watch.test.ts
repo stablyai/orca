@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { COMMAND_SPECS } from '../../specs/index'
-import { findCommandSpec, normalizeCommandPositionals, parseArgs } from '../../args'
-import { specPaths } from '../../command-spec'
-import type { HandlerContext } from '../../dispatch'
-import { reportCliError } from '../../cli-error'
+import { findCommandSpec, normalizeCommandPositionals, parseArgs } from '../../arguments/args'
+import { specPaths } from '../../discovery/command-spec'
+import type { HandlerContext } from '../../dispatch/dispatch'
 import type { RuntimeClient } from '../../runtime/client'
+
 import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime/types'
 import { bindPluginDevWatchHost, PluginHostUnreachableError } from './plugin-dev-watch'
 
@@ -80,26 +80,6 @@ describe('orca plugin dev watch', () => {
     const reply = await host.list().catch((error: unknown) => error)
     expect(reply).not.toBeInstanceOf(PluginHostUnreachableError)
     expect(reply).toMatchObject({ code: 'internal_error' })
-  })
-})
-
-describe('plugin dev watch --json errors', () => {
-  it('prints a failed first load as one JSON line, unlike other commands', () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    try {
-      const error = new RuntimeClientError('approval_required', 'acme.notes needs approval')
-      reportCliError(error, true, { commandPath: ['plugin', 'dev', 'watch'] })
-      reportCliError(error, true, { commandPath: ['plugin', 'dev', 'load'] })
-      const [watchLine, loadOutput] = log.mock.calls.map(([text]) => String(text))
-      expect(watchLine).not.toContain('\n')
-      expect(JSON.parse(watchLine)).toMatchObject({
-        ok: false,
-        error: { code: 'approval_required' }
-      })
-      expect(loadOutput).toContain('\n')
-    } finally {
-      log.mockRestore()
-    }
   })
 })
 

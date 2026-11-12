@@ -2,10 +2,10 @@ import type {
   RuntimeTerminalClose,
   RuntimeWorktreeTerminalCloseResult
 } from '../../shared/runtime-terminal-contracts'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { formatTerminalClose } from './terminal-format'
-import { reportCliError } from '../cli-error'
-import { printResult } from '../command-result-output'
+import { reportCliError } from '../output/cli-error'
+import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import { getRequiredWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getTerminalHandle } from './terminal-selector'

@@ -1,4 +1,4 @@
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
 import { pluginDevWatchConfirmFor } from '../plugins/dev-watch/plugin-dev-watch-approval'

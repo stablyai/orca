@@ -1,4 +1,4 @@
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 export const WORKTREE_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {

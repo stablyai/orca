@@ -5,9 +5,9 @@ import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contra
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import { callFileOpen } from './file-open-call'
 import {
