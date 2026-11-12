@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import {
   USAGE_NAMED_ROWS,
+  usageWorkspaceNames,
   topMemberRows,
   topWorkspaceRows,
   usageBarPercent,
@@ -142,5 +143,21 @@ describe('V3-06: at most five named workspaces, then the buckets', () => {
     // F (2 h) and G (1 h) joined the 3 h of others.
     expect(rows[6]!.seconds).toBe(6 * HOUR)
     expect(USAGE_NAMED_ROWS).toBe(5)
+  })
+})
+
+describe('V3-06b: workspaces with the same title', () => {
+  it('adds the workspace number only to titles that repeat', () => {
+    const names = usageWorkspaceNames([
+      { id: 's1', title: 'orca', number: 512 },
+      { id: 's2', title: 'orca', number: 498 },
+      { id: 's3', title: 'Hello-World', number: 7 },
+      { id: 's4', title: 'orca', number: null }
+    ])
+    expect(names.get('s1')).toBe('orca · W-512')
+    expect(names.get('s2')).toBe('orca · W-498')
+    expect(names.get('s3')).toBe('Hello-World')
+    // No number from an older control plane: the title stays as is.
+    expect(names.get('s4')).toBe('orca')
   })
 })
