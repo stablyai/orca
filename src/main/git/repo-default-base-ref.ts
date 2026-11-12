@@ -1,5 +1,5 @@
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-base-ref'
 
 export type LocalGitExecOptions = {

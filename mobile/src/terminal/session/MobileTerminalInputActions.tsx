@@ -2,8 +2,8 @@ import { useContext, type RefObject } from 'react'
 import {
   ActivityIndicator,
   Pressable,
+  type HostInstance,
   type StyleProp,
-  type View,
   type ViewStyle
 } from 'react-native'
 import { ImagePlus } from 'lucide-react-native'
@@ -37,7 +37,7 @@ type MobileTerminalDictationButtonProps = {
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
   // The ✕ on the field that a held mic may be released over.
-  readonly dictationCancelRef: RefObject<View | null>
+  readonly dictationCancelRef: RefObject<HostInstance | null>
   readonly onDictationToggle: () => void
   readonly onDictationPressIn: () => void
   readonly onDictationPressOut: () => void

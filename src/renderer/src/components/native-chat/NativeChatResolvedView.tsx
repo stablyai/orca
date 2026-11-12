@@ -372,7 +372,7 @@ export function NativeChatResolvedView({
             onAnswerInTerminal={onSwitchToTerminal}
             onDismiss={promptCardPresentation.dismiss}
             onCollapse={
-              mountedPromptCard?.kind === 'approval' && mountedPromptCard.approval.holdsComposer
+              mountedPromptCard?.kind === 'approval' && mountedPromptCard.approval.startupDialog
                 ? undefined
                 : promptCardPresentation.collapse
             }

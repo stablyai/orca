@@ -1,5 +1,5 @@
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
-import type * as GhExecFileModule from '../git/command-runner/gh-exec-file'
+import type * as GhExecFileModule from '../git/command-runner/hosted-cli/gh-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Fork PR reads prefer upstream while origin-only probes retain the checkout identity.
@@ -17,7 +17,7 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+vi.mock('../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) => ({
   ...(await importOriginal<typeof GhExecFileModule>()),
   ghExecFileAsync: ghExecFileAsyncMock
 }))

@@ -12,7 +12,7 @@ import {
 import {
   resetWslLinkedWorktreeGitRoutingForTests,
   seedWslLinkedWorktreeGitRoutingForTests
-} from './command-runner/wsl-linked-worktree-git-routing'
+} from './command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 const { readRepoCommonDirFromGitMock } = vi.hoisted(() => ({
   readRepoCommonDirFromGitMock: vi.fn()

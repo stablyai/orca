@@ -11,7 +11,7 @@ import {
   acquire as acquireGlab,
   release as releaseGlab
 } from '../gitlab/requests/glab-request-admission'
-import { glabExecFileAsync } from '../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../git/command-runner/hosted-cli/glab-exec-file'
 import { glabRepoExecOptions } from '../gitlab/projects/gitlab-project-ref-resolution'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {

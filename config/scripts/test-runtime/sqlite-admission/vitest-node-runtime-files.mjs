@@ -93,7 +93,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/command-path/command-path-directory-worker.test.ts',
   // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
   'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',
-  'src/main/git/command-runner/worker-exec-file.test.ts',
+  'src/main/git/command-runner/process-capture/worker-exec-file.test.ts',
   'src/main/git/worktrees/removal/worktree-removal-real-git.test.ts',
   'src/main/git/worktrees/catalog/worktree-list-paths.test.ts',
   'src/main/runtime/workspaces/removal/runtime-failed-local-worktree-removal.test.ts',

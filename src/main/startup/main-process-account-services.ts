@@ -31,13 +31,7 @@ const MODEL_CATALOG_ACCOUNT_SETTINGS = [
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
-  if (
-    !store ||
-    !state.claudeUsage ||
-    !state.codexUsage ||
-    !state.openCodeUsage ||
-    !state.museUsage
-  ) {
+  if (!store || !state.claudeUsage || !state.codexUsage) {
     throw new Error('Usage stores must be initialized before account services')
   }
   state.codexSessionMigration = createCodexSessionMigrationScheduler({

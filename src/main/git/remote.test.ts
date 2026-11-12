@@ -8,7 +8,7 @@ vi.mock('./command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
-import { clearGitCapabilityStateForTests } from './command-runner/git-capability-state'
+import { clearGitCapabilityStateForTests } from './command-runner/host-routing/git-capability-state'
 import { gitFastForward, gitPush } from './remote'
 
 describe('git remote operations', () => {

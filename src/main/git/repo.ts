@@ -8,7 +8,7 @@ import {
   gitExecOptions,
   type LocalGitExecOptions
 } from './repo-default-base-ref'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 
 export {
   isGitRepo,

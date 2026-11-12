@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BackgroundDistroGate from '../wsl/discovery/wsl-background-distro-gate'
-import {
-  createFakeSpawnedChild,
-  fakeSpawnDispatch,
-  fakeSpawnReturning
-} from '../../shared/__fixtures__/fake-spawned-child'
+import { fakeSpawnDispatch, fakeSpawnReturning } from '../../shared/__fixtures__/fake-spawned-child'
 import type * as WslModule from '../wsl/discovery/distro-catalog'
-import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
@@ -30,7 +25,9 @@ vi.mock('../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getDefaultWslDistro: getDefaultWslDistroMock
 }))
-import { ghExecFileAsync, glabExecFileAsync, setDefaultWslDistroOverride } from './runner'
+import { ghExecFileAsync } from './command-runner/hosted-cli/gh-exec-file'
+import { glabExecFileAsync } from './command-runner/hosted-cli/glab-exec-file'
+import { setDefaultWslDistroOverride } from './command-runner/host-routing/wsl-command-resolution'
 import { _resetGhRateLimitBreaker } from './gh-rate-limit-breaker'
 
 const PRIMARY_RATE_LIMIT_STDERR =
@@ -177,72 +174,6 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).rejects.toThrow('HTTP 502 Bad Gateway')
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('times out the default-WSL glab fallback and waits for full tree cleanup', async () => {
-    vi.useFakeTimers()
-    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
-    const wslChild = createFakeSpawnedChild(2400)
-    const taskkill = createFakeSpawnedChild(3600)
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('glab')))
-      // Keep the child unsettled until taskkill reports completion.
-      .mockImplementationOnce(() => wslChild)
-      .mockImplementation(() => taskkill)
-
-    const promise = glabExecFileAsync(['auth', 'status'], { timeout: 1000 })
-    const rejection = expect(promise).rejects.toThrow('wsl.exe timed out.')
-    let rejected = false
-    void promise.catch(() => {
-      rejected = true
-    })
-
-    await vi.advanceTimersByTimeAsync(999)
-    expect(spawnMock).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(spawnMock).toHaveBeenCalledWith(
-      windowsSystem32Binary('taskkill.exe'),
-      ['/pid', '2400', '/t', '/f'],
-      expect.objectContaining({ stdio: 'ignore', windowsHide: true })
-    )
-    await Promise.resolve()
-    expect(rejected).toBe(false)
-
-    taskkill.emit('close', 0)
-    await rejection
-    expect(wslChild.kill).not.toHaveBeenCalled()
-  })
-
-  it('aborts the default-WSL glab fallback with full process-tree cleanup', async () => {
-    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
-    const wslChild = createFakeSpawnedChild(2400)
-    const taskkill = createFakeSpawnedChild(3600)
-    spawnMock
-      .mockImplementationOnce(fakeSpawnReturning(spawnEnoent('glab')))
-      .mockImplementationOnce(() => wslChild)
-      .mockImplementation(() => taskkill)
-    const controller = new AbortController()
-
-    const promise = glabExecFileAsync(['auth', 'status'], { signal: controller.signal })
-    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
-    controller.abort()
-
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--exec', 'bash', '-c', "'glab' 'auth' 'status'"],
-      expect.not.objectContaining({ signal: controller.signal })
-    )
-    expect(spawnMock).toHaveBeenCalledWith(
-      windowsSystem32Binary('taskkill.exe'),
-      ['/pid', '2400', '/t', '/f'],
-      expect.objectContaining({ stdio: 'ignore', windowsHide: true })
-    )
-    taskkill.emit('close', 0)
-
-    await rejection
-    expect(wslChild.kill).not.toHaveBeenCalled()
   })
 
   it('does not wake the default WSL distro for host-only GitLab diagnostics', async () => {

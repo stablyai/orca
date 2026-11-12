@@ -1,24 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
+import { plansOf } from '../query-plan-capture.test-support'
 import { countRemoteDispatches, listRemoteDispatches } from './remote-dispatch-records'
 import { closeRemoteRunLink, openRemoteRunLink } from './remote-run-links'
-
-/** The query plan of every statement `act` prepares that reads or writes one of `tables`. */
-function plansOf(db: OrchestrationDb, tables: string[], act: () => void): string[] {
-  const prepare = vi.spyOn(db.db, 'prepare')
-  act()
-  const statements = prepare.mock.calls
-    .map(([sql]) => sql)
-    .filter((sql) => tables.some((table) => sql.includes(table)))
-  prepare.mockRestore()
-  expect(statements.length).toBeGreaterThan(0)
-  return statements.flatMap((sql) =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: EXPLAIN QUERY PLAN rows carry a detail column.
-    (db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as { detail: string }[]).map(
-      ({ detail }) => detail
-    )
-  )
-}
 
 describe('remote-owned queries read through their indexes', () => {
   let db: OrchestrationDb

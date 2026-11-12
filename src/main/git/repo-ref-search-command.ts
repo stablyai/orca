@@ -4,9 +4,9 @@ import {
   isRepoSearchRefsScanLimit
 } from '../../shared/repo-search-limits'
 import { isSafeGitRefName } from '../../shared/git/status/git-status-upstream-ref'
-import { getLocalGitCapabilityCache } from './command-runner/git-capability-state'
+import { getLocalGitCapabilityCache } from './command-runner/host-routing/git-capability-state'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
-import { gitExecFileAsync } from './runner'
+import { gitExecFileAsync } from './command-runner/git-exec-file'
 
 const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
 const REF_SEARCH_LEGACY_HEADROOM = 100

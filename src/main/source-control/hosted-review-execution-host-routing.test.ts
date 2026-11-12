@@ -65,7 +65,7 @@ vi.mock('../gitlab/requests/glab-request-admission', () => ({
   release: vi.fn()
 }))
 
-vi.mock('../git/command-runner/glab-exec-file', () => ({
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', () => ({
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 
@@ -73,7 +73,7 @@ vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
   glabRepoExecOptions: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/command-runner/git-process-env', async (importOriginal) => ({
+vi.mock('../git/command-runner/git-environment/git-process-env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitOptionalLocksDisabledEnv: vi.fn(() => ({}))
 }))

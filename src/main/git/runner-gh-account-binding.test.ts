@@ -40,7 +40,7 @@ vi.mock('../github/gh-account-token', async (importOriginal) => {
   }
 })
 
-import { ghExecFileAsync } from './runner'
+import { ghExecFileAsync } from './command-runner/hosted-cli/gh-exec-file'
 import { _resetGhRateLimitBreaker, recordGhPrimaryRateLimit } from './gh-rate-limit-breaker'
 
 /** Spawns a child that settles with `stdout`, capturing the env the runner handed it. */

@@ -7,7 +7,8 @@ import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import { getHistory, getHistoryRefs } from '../git/history'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { getRemoteCommitUrl, getRemoteFileUrl, isGitRepo } from '../git/repo'
-import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync } from '../git/runner'
+import { awaitWindowsHostGitEnvironmentReady } from '../git/command-runner/host-routing/windows-host-git-environment'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import {
   abortMerge,
   abortRebase,

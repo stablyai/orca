@@ -1,5 +1,5 @@
 import type * as GitExecFileModule from './command-runner/git-exec-file'
-import type * as GhExecFileModule from './command-runner/gh-exec-file'
+import type * as GhExecFileModule from './command-runner/hosted-cli/gh-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
@@ -13,8 +13,10 @@ vi.mock('./command-runner/git-exec-file', async () => {
   }
 })
 
-vi.mock('./command-runner/gh-exec-file', async () => {
-  const actual = await vi.importActual<typeof GhExecFileModule>('./command-runner/gh-exec-file')
+vi.mock('./command-runner/hosted-cli/gh-exec-file', async () => {
+  const actual = await vi.importActual<typeof GhExecFileModule>(
+    './command-runner/hosted-cli/gh-exec-file'
+  )
   return {
     ...actual,
     ghExecFileAsync: ghExecFileAsyncMock
