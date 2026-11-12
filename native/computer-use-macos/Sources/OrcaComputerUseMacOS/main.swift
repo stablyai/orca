@@ -813,8 +813,7 @@ final class Provider {
         }
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
-            let actionability = AccessibilityActionability(pid: snapshot.app.pid)
-            try requireEnabled(record, snapshot: snapshot, ax: actionability)
+            try requireEnabled(record, snapshot: snapshot)
             if !foreground {
                 try requireBackgroundClickAllowed(backgroundClickHit(record.element, snapshot: snapshot))
             }
@@ -834,7 +833,7 @@ final class Provider {
                     actionName: actionName
                 )
             }
-            let point = try pointerTarget(record, snapshot: snapshot, ax: actionability)
+            let point = try pointerTarget(record, snapshot: snapshot)
             try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
             guard unselectedRow else {
                 return actionMetadata(
@@ -873,14 +872,17 @@ final class Provider {
         }
     }
 
-    private func requireEnabled(_ record: ElementRecord, snapshot: Snapshot, ax: AccessibilityActionability) throws {
+    private func requireEnabled(_ record: ElementRecord, snapshot: Snapshot) throws {
+        let ax = AccessibilityActionability(pid: snapshot.app.pid)
         let enabled = ElementActionability.waitUntilEnabled(record.element, ax: ax)
         if ax.unanswered { throw AccessibilityMessaging.appNotResponding(snapshot.app.name) }
         guard enabled else { throw notEnabledError(record) }
     }
 
     /// The screen point a pointer click on the element should use, once it is enabled, in view and on top there.
-    private func pointerTarget(_ record: ElementRecord, snapshot: Snapshot, ax: AccessibilityActionability) throws -> CGPoint {
+    private func pointerTarget(_ record: ElementRecord, snapshot: Snapshot) throws -> CGPoint {
+        // Why: its own wait budget, so time spent enabling or trying AXPress cannot cut short the settle after a scroll.
+        let ax = AccessibilityActionability(pid: snapshot.app.pid)
         let target = try ElementActionability.pointerTarget(record.element, windowFrame: snapshot.windowBounds, ax: ax)
         if ax.unanswered { throw AccessibilityMessaging.appNotResponding(snapshot.app.name) }
         switch target {
@@ -924,7 +926,7 @@ final class Provider {
         }
         // Why: scrolling a control into view does not operate it.
         if action != "AXScrollToVisible" {
-            try requireEnabled(record, snapshot: snapshot, ax: AccessibilityActionability(pid: snapshot.app.pid))
+            try requireEnabled(record, snapshot: snapshot)
         }
         guard try performAction(record.element, action) else {
             throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed")
@@ -936,7 +938,7 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         let expected = try requiredStringAllowingEmpty(params, "value")
-        try requireEnabled(record, snapshot: snapshot, ax: AccessibilityActionability(pid: snapshot.app.pid))
+        try requireEnabled(record, snapshot: snapshot)
         guard isSettable(record.element, kAXValueAttribute as String) else {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is not settable")
         }
@@ -2059,7 +2061,11 @@ private final class AccessibilityActionability: ElementActionabilityAccessibilit
         CFEqual(lhs, rhs)
     }
 
-    /// Asks the target app itself, which is what background input reaches regardless of other apps' windows.
+    func isModal(_ window: AXUIElement) -> Bool {
+        read(window, kAXModalAttribute as String) as? Bool == true
+    }
+
+    /// Asks the target app itself: background input reaches it whatever other apps' windows are on top.
     func element(at point: CGPoint) -> AXUIElement? {
         guard !unanswered, Float(point.x).isFinite, Float(point.y).isFinite else { return nil }
         var found: AXUIElement?

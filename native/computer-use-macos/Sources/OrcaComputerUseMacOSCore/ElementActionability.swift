@@ -10,6 +10,8 @@ public protocol ElementActionabilityAccessibility {
     func role(of element: Element) -> String?
     func parent(of element: Element) -> Element?
     func isSame(_ lhs: Element, _ rhs: Element) -> Bool
+    /// AXModal: an app-modal window blocks input to the app's other windows.
+    func isModal(_ window: Element) -> Bool
     /// The target app's own topmost element at a screen point; nil when the app cannot say.
     func element(at point: CGPoint) -> Element?
     /// Asks the app to scroll the element into view; false when the element does not offer that.
@@ -82,7 +84,16 @@ public enum ElementActionability {
                 continue
             }
             last = hitTarget(element, visible: visible, ancestors: ancestors, ax: ax)
-            if case .ready = last { return last }
+            switch last {
+            case .ready:
+                return last
+            case .covered where !scrollTried:
+                // Why: a table or sticky header inside the scroll area can cover a row that scrolling would clear.
+                scrollTried = true
+                scrolled = try ax.scrollToVisible(element)
+            default:
+                break
+            }
         } while ax.waitBeforeRetry()
         return last
     }
@@ -110,7 +121,7 @@ public enum ElementActionability {
     }
 
     /// Accepts a point whose hit is the element, inside it, or one of its ancestors (the element is
-    /// see-through to hit tests there); anything else is a different element covering it.
+    /// see-through to hit tests there); anything else in the element's window is covering it.
     static func hitTarget<AX: ElementActionabilityAccessibility>(
         _ element: AX.Element,
         visible: CGRect,
@@ -119,13 +130,33 @@ public enum ElementActionability {
     ) -> PointerTarget<AX.Element> {
         var coveredBy: AX.Element?
         for point in candidatePoints(in: visible) {
-            guard let hit = ax.element(at: point) else { return .ready(point) }
-            if isSelfOrDescendant(hit, of: element, ax: ax) || ancestors.contains(where: { ax.isSame($0, hit) }) {
+            guard let hit = ax.element(at: point), coversElement(hit, element, ancestors: ancestors, ax: ax) else {
                 return .ready(point)
             }
             coveredBy = coveredBy ?? hit
         }
         return coveredBy.map { .covered(by: $0) } ?? .noFrame
+    }
+
+    private static func coversElement<AX: ElementActionabilityAccessibility>(
+        _ hit: AX.Element,
+        _ element: AX.Element,
+        ancestors: [AX.Element],
+        ax: AX
+    ) -> Bool {
+        if ancestors.contains(where: { ax.isSame($0, hit) }) { return false }
+        var current = hit
+        for _ in 0..<maxAncestorDepth {
+            if ax.isSame(current, element) { return false }
+            if ax.role(of: current) == "AXWindow" {
+                // Why: the app hit-tests its topmost window, but background input is stamped with the target window,
+                // so only a modal window on top blocks it; the foreground fence checks other windows on top.
+                return ancestors.contains(where: { ax.isSame($0, current) }) || ax.isModal(current)
+            }
+            guard let parent = ax.parent(of: current) else { return true }
+            current = parent
+        }
+        return true
     }
 
     /// The centre first, then the middle of each quadrant, so a partly covered element is still reachable.
@@ -135,17 +166,6 @@ public enum ElementActionability {
             CGPoint(x: rect.minX + rect.width * $0.0, y: rect.minY + rect.height * $0.1)
         }
         return [center] + quarters
-    }
-
-    private static func isSelfOrDescendant<AX: ElementActionabilityAccessibility>(_ hit: AX.Element, of element: AX.Element, ax: AX) -> Bool {
-        var current = hit
-        for _ in 0..<maxAncestorDepth {
-            if ax.isSame(current, element) { return true }
-            if ax.role(of: current) == "AXWindow" { return false }
-            guard let parent = ax.parent(of: current) else { return false }
-            current = parent
-        }
-        return false
     }
 
     private static func framesMatch(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
