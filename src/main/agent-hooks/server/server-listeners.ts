@@ -20,6 +20,7 @@ import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServerAgentIdentities } from './server-agent-identities'
+import { publishedOrcaSessionId } from '../identity/pane-agent-identities'
 
 export abstract class AgentHookServerListeners extends AgentHookServerAgentIdentities {
   protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
@@ -258,7 +259,8 @@ export abstract class AgentHookServerListeners extends AgentHookServerAgentIdent
         ? undefined
         : this.agentIdentities.canonicalIdentity(subjectKey)
       if (status) {
-        rows.push(identity ? { ...status, orcaSessionId: identity.id } : status)
+        const orcaSessionId = publishedOrcaSessionId(identity)
+        rows.push(orcaSessionId !== undefined ? { ...status, orcaSessionId } : status)
       }
     }
     return rows

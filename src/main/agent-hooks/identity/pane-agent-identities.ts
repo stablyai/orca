@@ -55,13 +55,21 @@ export function agentSightingOf(row: {
 }
 
 /** A row's conversation id, computed when its provider key changes and copied at publication.
- *  `id` null: unresolved (a read-only file without this link, or a pending failed lookup); the
- *  row is still published as one this host can name, so a Copy click can retry. */
+ *  `id` null: unresolved, either settled (a read-only file without this link) or `pending` (a
+ *  failed lookup a later admission or Copy click retries). */
 export type RowAgentIdentity = {
   key: AgentProviderKey
   id: OrcaSessionId | null
   /** The store was unavailable: not settled, so a later admission resolves it again. */
   pending?: true
+}
+
+/** What a row publishes as `orcaSessionId`: its id; null while a failed link may still succeed
+ *  (Copy retries); nothing for a settled read-only miss, where Copy could never succeed. */
+export function publishedOrcaSessionId(
+  identity: RowAgentIdentity | undefined
+): string | null | undefined {
+  return identity?.id ?? (identity?.pending ? null : undefined)
 }
 
 export type AgentIdentityStoreHandle = Pick<
