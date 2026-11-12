@@ -21,11 +21,15 @@ import {
   isStructuredAgentSessionGoalCommand,
   structuredAgentSessionCommandChangesConversation
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
-import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
-import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
-import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
-import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
+import type {
+  UseNativeChatStructuredComposerSendArgs,
+  NativeChatStructuredComposerSend
+} from './native-chat-structured-composer-transport'
+export type {
+  UseNativeChatStructuredComposerSendArgs,
+  NativeChatStructuredComposerSend
+} from './native-chat-structured-composer-transport'
 import { nativeChatAttachImagesAgainReason } from '../../attachments/chips/native-chat-image-reattach'
 import { nativeChatNoticeFromError } from '../controls/native-chat-composer-notice'
 import { agentSessionWriteNoticeText } from '../../messages/notices/agent-session-write-notice-text'
@@ -44,23 +48,7 @@ import {
   admitNativeChatPastedText,
   projectNativeChatPastedText
 } from '../../paste/native-chat-composer-pasted-text-references'
-
-export type UseNativeChatStructuredComposerSendArgs = {
-  agent: AgentType
-  draftScopeKey: string
-  imageAttachments: readonly NativeChatComposerImageAttachment[]
-  structuredTransport?: NativeChatStructuredComposerTransport
-  isComposing: () => boolean
-  clearSkillOrigin: () => void
-  setDraft: (value: string) => void
-  setCaret: (caret: number) => void
-}
-
-export type NativeChatStructuredComposerSend = (
-  text: string,
-  attachments?: readonly NativeChatComposerImageAttachment[],
-  intent?: NativeChatComposerSendIntent
-) => Promise<boolean>
+import { structuredAgentSessionRequestedDelivery } from '../../queue/structured-agent-session-queue-request'
 
 /** Clear submitted composer content only after structured transport acceptance. */
 export function useNativeChatStructuredComposerSend({
@@ -74,7 +62,7 @@ export function useNativeChatStructuredComposerSend({
   setCaret
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
-    async (text, attachments = imageAttachments, intent): Promise<boolean> => {
+    async (text, attachments = imageAttachments, request): Promise<boolean> => {
       // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return false
@@ -94,6 +82,40 @@ export function useNativeChatStructuredComposerSend({
           agent,
           structuredTransport.optionSnapshot
         )
+      const intent = structuredTransport.queue
+        ? structuredAgentSessionRequestedDelivery(
+            structuredTransport.queue,
+            structuredTransport.isWorking === true,
+            request?.delivery,
+            request?.alternate
+          )
+        : request?.delivery
+      if (
+        !hostCommand &&
+        intent === 'immediate' &&
+        structuredTransport.steerCapability !== 'supported'
+      ) {
+        structuredTransport.onError(
+          translate(
+            'components.native-chat.composer.steerUnavailable',
+            'This host cannot send drafts immediately yet. Update Orca on this host, or change the Enter action in Chat settings.'
+          )
+        )
+        return false
+      }
+      if (
+        !hostCommand &&
+        intent === 'queue-if-active' &&
+        structuredTransport.queue?.capability !== 'supported'
+      ) {
+        structuredTransport.onError(
+          translate(
+            'components.native-chat.composer.queueUnavailable',
+            'This host cannot queue drafts yet. Update Orca on this host; your draft has been kept.'
+          )
+        )
+        return false
+      }
       // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&
@@ -207,9 +229,15 @@ export function useNativeChatStructuredComposerSend({
         attachments,
         promptSkillRefs(submission.draft?.document),
         {
-          ...intent,
+          ...request,
           ...(prepareAttachments
-            ? { prepareAttachments, onSettled: () => stagedInput?.release() }
+            ? {
+                prepareAttachments,
+                onSettled: (outcome) => {
+                  stagedInput?.release()
+                  request?.onSettled?.(outcome)
+                }
+              }
             : {})
         },
         consume

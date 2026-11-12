@@ -32,7 +32,10 @@ import {
   nativeChatSessionOptionLabel
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
-import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
+import {
+  mobileSessionOptionSummaryValue,
+  mobileSessionOptionSelectedChoice
+} from './mobile-native-chat-session-option-labels'
 import {
   descriptorRowElements,
   ModelPill,
@@ -101,12 +104,6 @@ function permissionChoiceLeading(value: string): React.JSX.Element | null {
   ) : null
 }
 
-function selectedChoice(descriptor: SessionOptionDescriptor | undefined) {
-  return descriptor?.kind.type === 'select'
-    ? descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue)
-    : undefined
-}
-
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
@@ -144,25 +141,32 @@ export function MobileNativeChatSessionOptionPickers({
     ? snapshot.find((descriptor) => descriptor.id === presentation?.page)
     : undefined
   const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
+  const forFutureTurn = activeDescriptor?.transport === 'agent-session'
   const showWorkingNotice =
     (model !== undefined || permission !== undefined) &&
     activeDescriptor !== undefined &&
     isWorking &&
-    activeDescriptor.transport !== 'agent-session' &&
     !permissionView
+  const workingNoticeDescription = forFutureTurn
+    ? t('chat.sessionOptionPickers.futureMessages', 'Choices apply to future messages.')
+    : t(
+        'chat.sessionOptionPickers.settingsLocked',
+        'Model settings unlock when this turn finishes.'
+      )
 
   useEffect(() => {
     if (Platform.OS === 'ios' && showWorkingNotice) {
       // Queued announcements cannot be canceled when the picker closes or changes pages.
       AccessibilityInfo.announceForAccessibilityWithOptions(
         translate(
-          'chat.sessionOptionPickers.workingAnnouncement',
-          'Agent is working. Model settings unlock when this turn finishes.'
+          'chat.sessionOptionPickers.workingWithDescription',
+          'Agent is working. {{description}}',
+          { description: workingNoticeDescription }
         ),
         { queue: false }
       )
     }
-  }, [showWorkingNotice])
+  }, [showWorkingNotice, workingNoticeDescription])
 
   const options = sortNativeChatSessionOptions(snapshot)
   if (!model && !permission && options.length === 0) {
@@ -175,7 +179,7 @@ export function MobileNativeChatSessionOptionPickers({
   const locked = (descriptor: SessionOptionDescriptor): boolean =>
     busy || (isWorking && descriptor.transport !== 'agent-session' && descriptor !== permission)
   const reason = nativeChatSessionOptionDisabledReason(activeDescriptor?.disabledReason, say)
-  const permissionChoice = selectedChoice(permission)
+  const permissionChoice = mobileSessionOptionSelectedChoice(permission)
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
   const permissionIcon =
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
@@ -287,17 +291,12 @@ export function MobileNativeChatSessionOptionPickers({
             </View>
             {showWorkingNotice ? (
               <View style={styles.lockNotice} accessibilityLiveRegion="polite">
-                <LockKeyhole size={16} color={colors.textSecondary} />
+                {!forFutureTurn ? <LockKeyhole size={16} color={colors.textSecondary} /> : null}
                 <View style={styles.lockNoticeBody}>
                   <Text style={styles.lockNoticeTitle}>
                     {t('chat.sessionOptionPickers.agentWorking', 'Agent is working')}
                   </Text>
-                  <Text style={styles.lockNoticeDescription}>
-                    {t(
-                      'chat.sessionOptionPickers.settingsLocked',
-                      'Model settings unlock when this turn finishes.'
-                    )}
-                  </Text>
+                  <Text style={styles.lockNoticeDescription}>{workingNoticeDescription}</Text>
                 </View>
               </View>
             ) : null}

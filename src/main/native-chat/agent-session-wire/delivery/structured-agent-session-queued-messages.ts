@@ -28,7 +28,10 @@ import {
   type AgentSessionTurnContext,
   agentSessionAdmissionWriteRefusal
 } from '../operations/structured-agent-session-turns'
-import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
+import {
+  captureStructuredExecutionOptions,
+  captureStructuredSteerOptions
+} from '../options/structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import {
   nextStructuredQueuedMessage,
@@ -56,6 +59,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    steer?: true
     queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>
@@ -95,7 +99,10 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (refusal) {
     return { ok: false, refusal }
   }
-  const captured = captureStructuredExecutionOptions(ctx, params.options, params.selection)
+  const captured =
+    params.steer && params.delivery !== 'queue-if-active'
+      ? captureStructuredSteerOptions(ctx, params.options, params.selection)
+      : captureStructuredExecutionOptions(ctx, params.options, params.selection)
   if ('refusal' in captured) {
     return { ok: false, refusal: captured.refusal }
   }

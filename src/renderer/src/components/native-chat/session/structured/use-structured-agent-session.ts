@@ -5,11 +5,8 @@ import { useMemo, useRef } from 'react'
 import { useStructuredAgentSessionSendOptions } from './delivery/use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './delivery/use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './writes/use-structured-agent-session-command-write'
-import { structuredAgentSessionSendQueues } from '../../queue/structured-agent-session-queue-request'
-import {
-  nativeChatQueueFollowUps,
-  nativeChatSendFollowUp
-} from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import { structuredAgentSessionQueueControls } from '../../queue/structured-agent-session-queue-request'
+import { nativeChatQueueFollowUps } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'
 import {
@@ -110,6 +107,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     isVisible: args.isVisible,
     providerVisible,
     providerStarting,
+    isWorking: transportState.isWorking,
     ...(args.providerRunning ? { providerRunning: true } : {}),
     ...(args.hostOptionStamp ? { hostOptionStamp: args.hostOptionStamp } : {}),
     fence: state.fence,
@@ -150,7 +148,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     queuedMessageIds,
     queue,
     historyLoaded: transportEnabled && state.status === 'ready',
-    isWorking: transportState.isWorking,
+    isWorking,
     stopping: stopControl.stopping,
     sendSelection: sendOptions
   })
@@ -299,12 +297,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     stopPressed: stopControl.pressed,
     queuedMessages: queuedController,
     capturePresentation,
-    /** A plain send would queue: the host takes it, the setting or a waiting command asks, and no unanswerable prompt blocks it. */
-    sendsQueue: structuredAgentSessionSendQueues(queue),
-    /** What a plain send does now, and whether its alternate would send any differently. */
-    sendFollowUp: nativeChatSendFollowUp((alternate) =>
-      structuredAgentSessionSendQueues(queue, alternate)
-    ),
+    ...structuredAgentSessionQueueControls(queue, sends.steerCapability),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>

@@ -102,7 +102,7 @@ function PickerTrigger(props: {
             size="xs"
             aria-label={props.accessibleName}
             disabled={props.disabled}
-            className="max-w-64"
+            className="min-w-0 max-w-64 shrink"
             onKeyDown={props.onKeyDown}
           >
             <span data-composer-label className="flex min-w-0 items-center gap-1">
@@ -174,6 +174,7 @@ function SessionOptionPopover(props: {
   const modelTitle = t('components.native-chat.composer.model', 'Model')
   const modelLabel = nativeChatModelPillLabel(model, say)
   const modelName = pillAccessibleName(modelTitle, modelLabel, t)
+  const forFutureTurn = props.isWorking && model.transport === 'agent-session'
   const optionsTitle = nativeChatOptionsPillTitle(options, say)
   const optionsLabel = nativeChatOptionValuesLabel(options, say)
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason, say)
@@ -218,9 +219,15 @@ function SessionOptionPopover(props: {
         modelLabel={modelLabel}
         optionsLabel={optionsLabel}
         accessibleName={
-          optionsLabel
-            ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel, t)}`
-            : modelName
+          forFutureTurn
+            ? t('components.native-chat.composer.nextTurnOptionsLabel', 'Next turn: {{options}}', {
+                options: optionsLabel
+                  ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel, t)}`
+                  : modelName
+              })
+            : optionsLabel
+              ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel, t)}`
+              : modelName
         }
         disabled={!canOpen}
         disabledReason={modelReason ?? optionsReason}
@@ -273,6 +280,9 @@ function SessionOptionPopover(props: {
           }
         }}
       >
+        {forFutureTurn && model.disabledReason === 'host-update-required' ? (
+          <p className="px-2 py-1 text-xs text-muted-foreground">{modelReason}</p>
+        ) : null}
         {model.kind.type === 'select' && !model.action ? (
           <NativeChatModelCombobox
             choices={model.kind.choices}

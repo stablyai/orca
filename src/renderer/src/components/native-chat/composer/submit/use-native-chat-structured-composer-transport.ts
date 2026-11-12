@@ -120,6 +120,9 @@ export function useNativeChatStructuredComposerTransport(args: {
                 })
             }
           : undefined,
+      queue: controller.queue,
+      isWorking: controller.isWorking,
+      steerCapability: controller.steerCapability,
       fork: nativeChatForkCommand(fork, controller.isWorking),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),

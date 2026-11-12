@@ -35,3 +35,9 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
   }
   return nativeChatSessionChoiceLabel(choice, say, descriptor.id)
 }
+
+export function mobileSessionOptionSelectedChoice(descriptor: SessionOptionDescriptor | undefined) {
+  return descriptor?.kind.type === 'select'
+    ? descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue)
+    : undefined
+}

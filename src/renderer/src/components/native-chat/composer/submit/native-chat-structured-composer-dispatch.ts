@@ -15,10 +15,7 @@ export async function dispatchNativeChatStructuredComposerText(
   draftText: string,
   attachments: readonly NativeChatComposerImageAttachment[] = [],
   skills: readonly AgentJournalSkillRef[] = [],
-  intent: Pick<
-    StructuredAgentSessionSendRequest,
-    'alternate' | 'prepareAttachments' | 'onSettled'
-  > = {},
+  request?: StructuredAgentSessionSendRequest,
   onPending?: () => void
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
   // Number image chips by their attachment order in this message.
@@ -49,11 +46,10 @@ export async function dispatchNativeChatStructuredComposerText(
       revealsTranscript: false
     }
   }
-  const request = { ...(skills.length > 0 ? { skills } : {}), ...intent }
-  const admission =
-    Object.keys(request).length > 0
-      ? transport.send(prompt, attachments, request)
-      : transport.send(prompt, attachments)
+  const sendRequest = skills.length > 0 ? { ...request, skills } : request
+  const admission = sendRequest
+    ? transport.send(prompt, attachments, sendRequest)
+    : transport.send(prompt, attachments)
   if (admission instanceof Promise) {
     onPending?.()
   }

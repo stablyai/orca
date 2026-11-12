@@ -145,7 +145,7 @@ it.each(['options-first', 'catalog-first', 'cached'] as const)(
     expect(state.record.values.model).toBeUndefined()
     expect(state.record.values.effort).toBeUndefined()
     expect(state.acceptedInputSources).toEqual({})
-    expect(view.result.current.capture().selection).toEqual({})
+    expect(view.result.current.capture()?.selection).toEqual({})
     if (order === 'options-first') {
       mocks.call.mockImplementation((_target: unknown, method: string) =>
         method === 'agentSession.options'
@@ -176,7 +176,7 @@ it.each(['options-first', 'catalog-first', 'cached'] as const)(
         ).toBe('default')
       )
       expect([value('model'), value('effort')]).toEqual(['opus', 'medium'])
-      expect(view.result.current.capture().selection).toEqual({})
+      expect(view.result.current.capture()?.selection).toEqual({})
       mocks.call.mockImplementation((_target: unknown, method: string) =>
         method === 'agentSession.options'
           ? Promise.resolve(answer)

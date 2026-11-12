@@ -29,6 +29,8 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   chooseInAgentPicker: 'Choose in agent picker…',
   setWhenSessionStarts: 'Set when the session starts.',
   availableAfterSessionStarts: 'Available after the session starts.',
+  futureOptionsRequireUpdate:
+    'Update Orca on this host to change future-turn choices while the agent works.',
   sessionOptions: 'Session options'
 } as const
 
@@ -147,6 +149,8 @@ export function nativeChatSessionOptionDisabledReason(
       return say('setWhenSessionStarts')
     case 'available-after-session-start':
       return say('availableAfterSessionStarts')
+    case 'host-update-required':
+      return say('futureOptionsRequireUpdate')
     case undefined:
       return null
   }
