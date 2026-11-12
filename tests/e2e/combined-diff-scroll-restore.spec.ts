@@ -514,7 +514,7 @@ test.describe('Combined diff scroll restore', () => {
           contentType: 'image/png'
         })
         if (kind === 'draft') {
-          await card.getByRole('button', { name: /add note/i }).click()
+          await orcaPage.keyboard.press('Enter')
           await expect(orcaPage.locator('.orca-diff-comment-card')).toContainText(
             'alpha FOCUS gamma'
           )
