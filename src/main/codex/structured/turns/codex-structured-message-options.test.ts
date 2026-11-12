@@ -310,7 +310,7 @@ it('holds Plan behind a successful sparse Default start, then starts Plan after 
       threadId: 'thread-abc',
       turn: { id: turnId, status: 'completed' }
     })
-  const held = (interactionMode: string) =>
+  const held = (interactionMode: 'default' | 'plan') =>
     waitsForCodexTurnOptions(
       { provider: 'codex', sessionId: 'session-1' },
       {
