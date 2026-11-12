@@ -6,7 +6,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { getMountedWorktreeOptions } from '../rows/option-dom'
+import { getMountedWorktreeOptionsById } from '../rows/option-dom'
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
   document.addEventListener('visibilitychange', onChange)
@@ -85,28 +85,31 @@ export function useVisiblePrRefreshReporting(args: {
   useEffect(() => {
     const update = (): void => {
       const scroll = args.scrollRef.current
-      const viewport = scroll?.getBoundingClientRect()
+      if (!enabled || !scroll || document.visibilityState !== 'visible') {
+        publish([])
+        return
+      }
+      const candidates = visibleReviewCardIds({
+        enabled,
+        renderRows: args.renderRows,
+        virtualItems: args.virtualItems,
+        viewportTop: scroll.scrollTop,
+        viewportHeight: scroll.clientHeight
+      })
+      if (candidates.length === 0) {
+        publish([])
+        return
+      }
+      const viewport = scroll.getBoundingClientRect()
+      const mountedOptions = getMountedWorktreeOptionsById(candidates, scroll)
       publish(
-        scroll && document.visibilityState === 'visible'
-          ? visibleReviewCardIds({
-              enabled,
-              renderRows: args.renderRows,
-              virtualItems: args.virtualItems,
-              viewportTop: scroll.scrollTop,
-              viewportHeight: scroll.clientHeight,
-              isOnScreen: (id) =>
-                getMountedWorktreeOptions(id, scroll).some((option) => {
-                  const surface = option.querySelector('[data-worktree-card-surface]')
-                  const bounds = (surface?.firstElementChild ?? option).getBoundingClientRect()
-                  return (
-                    viewport !== undefined &&
-                    bounds.height > 0 &&
-                    bounds.top < viewport.bottom &&
-                    bounds.bottom > viewport.top
-                  )
-                })
-            })
-          : []
+        candidates.filter((id) =>
+          mountedOptions.get(id)?.some((option) => {
+            const surface = option.querySelector('[data-worktree-card-surface]')
+            const bounds = (surface?.firstElementChild ?? option).getBoundingClientRect()
+            return bounds.height > 0 && bounds.top < viewport.bottom && bounds.bottom > viewport.top
+          })
+        )
       )
     }
     update()
