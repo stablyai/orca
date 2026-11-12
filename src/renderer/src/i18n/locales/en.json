@@ -25335,13 +25335,17 @@
     "freeze": {
       "attach": "Attach saved freeze report and diagnostic logs",
       "attachDescription": "Sends the saved freeze report with a capped, redacted log bundle.",
+      "attachmentsOmitted": "The saved freeze report and diagnostic logs were not attached: {{value0}}",
       "description": "Send the saved freeze report to help us understand what happened.",
+      "notSent": "Freeze report wasn't sent",
       "notes": "Optional: what were you doing before Orca froze?",
       "sent": "Freeze report sent.",
+      "sentWithoutAttachments": "Details sent without the saved freeze report or diagnostic logs",
       "showFailed": "Orca couldn't open the saved freeze report. Try again from Help.",
       "showFile": "Show file",
       "summary": "Orca stopped responding",
-      "title": "Orca froze last time"
+      "title": "Orca froze last time",
+      "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
   }
 }

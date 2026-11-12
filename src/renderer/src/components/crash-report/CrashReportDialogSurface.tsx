@@ -124,7 +124,7 @@ export function CrashReportDialogSurface({
     diagnosticBundle?: CrashReportDiagnosticBundle
   ): void => {
     const failure = { error, ...(diagnosticBundle ? { diagnosticBundle } : {}) }
-    const notice = getCrashReportSubmitFailureNotice(failure, includeDiagnosticLogs)
+    const notice = getCrashReportSubmitFailureNotice(failure, includeDiagnosticLogs, isFreezeReport)
     const copyFailure = getCrashReportCopySubmissionFailure(failure)
     toast.error(notice.title, {
       id: CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
@@ -179,7 +179,11 @@ export function CrashReportDialogSurface({
       onReportChange(result.report)
       setNotes('')
       toast.dismiss(CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID)
-      const warningNotice = getCrashReportSubmitWarningNotice(result, includeDiagnosticLogs)
+      const warningNotice = getCrashReportSubmitWarningNotice(
+        result,
+        includeDiagnosticLogs,
+        isFreezeReport
+      )
       if (warningNotice) {
         toast.warning(warningNotice.title, { description: warningNotice.description })
       } else {
