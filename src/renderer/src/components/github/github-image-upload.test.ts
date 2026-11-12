@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { captureGitHubImageUpload } from './github-image-upload'
 import { callAbortableGitHubImageUpload } from './github-image-upload-local-call'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { GITHUB_IMAGE_ATTACHMENT_CAPABILITY } from '../../../../shared/github/image-attachment'
+import { GITHUB_IMAGE_ATTACHMENT_CAPABILITY } from '../../../../shared/github/attachments/image-attachment'
 
 const { call } = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: call }))

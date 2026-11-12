@@ -44,16 +44,19 @@ describe('GitHub preview routing for a chat without a repo of its own', () => {
     expect(githubPreviewRouteCandidates(all, 'runtime:env')).toEqual([runtime])
   })
 
-  it("prefers the linked repo's own clone, then any repo on the same GitHub host", () => {
+  it('prefers an exact clone before a fork upstream, then any repo on the GitHub host', () => {
     const orca = repo('orca')
     const fork = repo('fork', { upstream: { owner: 'stablyai', repo: 'orca-private' } })
+    const clone = repo('clone')
     const ghes = repo('ghes')
     const rows = [
       { repo: ghes, originKey: 'git.corp.example/team/app' },
       { repo: orca, originKey: 'stablyai/orca' },
-      { repo: fork, originKey: 'me/orca-private' }
+      { repo: fork, originKey: 'me/orca-private' },
+      { repo: clone, originKey: 'stablyai/orca-private' }
     ]
-    expect(pickGitHubPreviewRouteRepo(rows, privatePr)).toBe(fork)
+    expect(pickGitHubPreviewRouteRepo(rows, privatePr)).toBe(clone)
+    expect(pickGitHubPreviewRouteRepo(rows.slice(0, 3), privatePr)).toBe(fork)
     expect(pickGitHubPreviewRouteRepo(rows.slice(0, 2), privatePr)).toBe(orca)
     expect(pickGitHubPreviewRouteRepo(rows.slice(0, 1), privatePr)).toBeNull()
     expect(pickGitHubPreviewRouteRepo([{ repo: orca, originKey: null }], privatePr)).toBeNull()

@@ -28,10 +28,9 @@ export function pickGitHubPreviewRouteRepo(
   const resolved = candidates.filter((row): row is { repo: Repo; originKey: string } =>
     Boolean(row.originKey)
   )
-  const clone = resolved.find(
-    ({ repo, originKey }) =>
-      originKey === linkKey || repoUpstreamIdentityKey(repo, originKey) === linkKey
-  )
+  const clone =
+    resolved.find(({ originKey }) => originKey === linkKey) ??
+    resolved.find(({ repo, originKey }) => repoUpstreamIdentityKey(repo, originKey) === linkKey)
   return (
     clone?.repo ??
     resolved.find(({ originKey }) => githubHostFromIdentityKey(originKey) === linkHost)?.repo ??
