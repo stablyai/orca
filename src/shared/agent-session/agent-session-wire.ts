@@ -211,7 +211,7 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
-  /** Current child's reported execution model, independent of the next-turn selection. */
+  /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
