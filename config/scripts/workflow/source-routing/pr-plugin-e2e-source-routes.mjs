@@ -125,7 +125,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/preload\\/plugin-frame-guest',
       'src\\/main\\/window\\/(?:main-window-webview-security|attach-main-window-services|host-frame-permission-policy)',
       'src\\/main\\/ipc\\/(?:plugins|plugin-frame-entry-ipc)\\.ts$',
-      'src\\/main\\/startup\\/main-process-plugins',
+      'src\\/main\\/startup\\/plugin-startup\\/main-process-plugins',
       'config\\/build-plugins\\/main-build-entry-points',
       'src\\/main\\/browser\\/guest-lifecycle\\/input\\/browser-guest-shortcut-(?:forwarding|dispatch)',
       'src\\/renderer\\/src\\/components\\/(?:plugins\\/frames\\/|right-sidebar\\/plugin-panels\\/PluginPanel\\.tsx$)',
