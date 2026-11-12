@@ -7,12 +7,14 @@ const {
   isPwshAvailableMock,
   validateWorkingDirectoryMock,
   resolveUnixShellPathMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  resetLinuxPtyChildPriorityMock
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
   resolveAgentForegroundProcessMock: vi.fn(),
+  resetLinuxPtyChildPriorityMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
     if (cwd.includes('definitely-missing')) {
       throw new Error(
@@ -24,6 +26,10 @@ const {
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('../../../pty/linux-pty-child-priority', () => ({
+  resetLinuxPtyChildPriority: resetLinuxPtyChildPriorityMock
 }))
 
 vi.mock('../../../pty/shell-startup/pwsh', () => ({
@@ -75,7 +81,7 @@ vi.mock('../../../providers/windows-pty-job-membership', () => ({
   isWindowsPtyJobReadable: () => true
 }))
 import { createPtySubprocess } from '../pty-subprocess'
-import { useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -132,5 +138,31 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('resets Linux child niceness without rewriting the shell spawn', async () => {
+    const proc = mockPtyProcess(4242)
+    spawnMock.mockReturnValue(proc)
+    resetLinuxPtyChildPriorityMock.mockClear()
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '/home/user',
+        env: { SHELL: '/bin/bash' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls[0]?.[0]).toBe('/bin/bash')
+    expect(spawnMock.mock.calls[0]?.[0]).not.toBe('nice')
+    expect(resetLinuxPtyChildPriorityMock).toHaveBeenCalledWith(4242)
   })
 })
