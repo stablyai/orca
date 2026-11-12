@@ -3,6 +3,25 @@ import { isAbsolute, relative, sep } from 'node:path'
 
 export type UsageAccountRoot = { path: string; accountId: string }
 
+export function parseUsageAccountRoots(value: unknown): UsageAccountRoot[] {
+  if (!Array.isArray(value)) {
+    throw new Error('Invalid usage account roots.')
+  }
+  return value.map((root: unknown) => {
+    if (
+      typeof root !== 'object' ||
+      root === null ||
+      !('path' in root) ||
+      typeof root.path !== 'string' ||
+      !('accountId' in root) ||
+      typeof root.accountId !== 'string'
+    ) {
+      throw new Error('Invalid usage account roots.')
+    }
+    return { path: root.path, accountId: root.accountId }
+  })
+}
+
 type AccountClaims = {
   keys: readonly string[]
   accountIds?: readonly (string | null)[]
