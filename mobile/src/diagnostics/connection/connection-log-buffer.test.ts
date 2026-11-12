@@ -7,7 +7,7 @@ function entry(id: number): ConnectionLogEntry {
 }
 
 describe('connection log buffer', () => {
-  it('clears retained history without a pending hydration restoring it', async () => {
+  it('discards history without a pending hydration or late event restoring it', async () => {
     let resolveLoad: (entries: readonly ConnectionLogEntry[]) => void = () => {}
     let persisted: readonly ConnectionLogEntry[] = [entry(1)]
     const store = createConnectionLogStore(3, {
@@ -22,16 +22,17 @@ describe('connection log buffer', () => {
     const hydration = store.hydrate('host-a')
     store.append('host-a', entry(2))
 
-    await store.clear('host-a')
+    await store.discard('host-a')
     resolveLoad([entry(1)])
     await hydration
+    store.append('host-a', entry(3))
     await store.flush()
 
     expect(store.get('host-a')).toEqual([])
     expect(persisted).toEqual([])
   })
 
-  it('clears history after an older in-flight save finishes', async () => {
+  it('discards history after an older in-flight save finishes', async () => {
     let finishSave: () => void = () => {}
     let markSaveStarted: () => void = () => {}
     const saveStarted = new Promise<void>((resolve) => {
@@ -58,7 +59,7 @@ describe('connection log buffer', () => {
     store.append('host-a', entry(1))
     await saveStarted
 
-    const cleared = store.clear('host-a')
+    const cleared = store.discard('host-a')
     finishSave()
     await cleared
 

@@ -24,9 +24,9 @@ export const connectionLogStore = createConnectionLogStore(200, {
   }
 })
 
-export async function clearConnectionLogs(hostId: string): Promise<void> {
+export async function discardConnectionLogs(hostId: string): Promise<void> {
   sessionStartedHosts.delete(hostId)
-  await connectionLogStore.clear(hostId)
+  await connectionLogStore.discard(hostId)
 }
 
 export function recordConnectionRevival(
