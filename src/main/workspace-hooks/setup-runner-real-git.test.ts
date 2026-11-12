@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -49,5 +49,9 @@ it('writes usable setup scripts for linked worktrees and rejects non-repositorie
   })
   expect(execution.code).toBe(0)
   expect(execution.stdout).toContain('SETUP_PATH_OK')
-  await expect(createSetupRunnerScript(repo, tmpdir(), 'echo UNREACHABLE')).rejects.toThrow()
+  const nonRepository = join(root, 'non-repository')
+  await mkdir(nonRepository)
+  // Stop Git discovery at an owned invalid marker, even when TMPDIR is inside a checkout.
+  await writeFile(join(nonRepository, '.git'), 'gitdir: missing-fixture-directory\n')
+  await expect(createSetupRunnerScript(repo, nonRepository, 'echo UNREACHABLE')).rejects.toThrow()
 })
