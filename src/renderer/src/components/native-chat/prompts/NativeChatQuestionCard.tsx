@@ -323,6 +323,7 @@ export function NativeChatQuestionCard({
                 selected={(selections[index] ?? []).includes(i)}
                 disabled={isSubmitting}
                 onSelect={() => pickOption(i)}
+                onEnter={() => pickOption(i, 'enter')}
               />
             ))}
           </div>

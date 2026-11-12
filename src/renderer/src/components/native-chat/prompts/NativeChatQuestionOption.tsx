@@ -14,7 +14,8 @@ export function NativeChatQuestionOption({
   preview,
   selected,
   disabled,
-  onSelect
+  onSelect,
+  onEnter
 }: {
   badge: string
   initialFocus: boolean
@@ -25,6 +26,8 @@ export function NativeChatQuestionOption({
   selected: boolean
   disabled: boolean
   onSelect: () => void
+  /** Enter on the row: the card picks it, or confirms when it is the chosen single-select row. */
+  onEnter: () => void
 }): React.JSX.Element {
   return (
     // The tile wraps the row and its preview, so the preview reads as part of the picked option.
@@ -40,6 +43,23 @@ export function NativeChatQuestionOption({
         type="button"
         disabled={disabled}
         onClick={onSelect}
+        // On the row, not the card's key hook, so Enter works when the card did not take focus;
+        // preventDefault stops the native Enter click from toggling the row instead.
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+            return
+          }
+          event.preventDefault()
+          if (
+            !event.repeat &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !event.altKey &&
+            !event.shiftKey
+          ) {
+            onEnter()
+          }
+        }}
         aria-pressed={selected}
         data-native-chat-prompt-card-focus-target={initialFocus || undefined}
         // Focus is an inset ring, never the selected fill, so the row that opens focused does not read as picked.

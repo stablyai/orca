@@ -133,4 +133,40 @@ describe('async question send ownership', () => {
       )
     ).toBe(true)
   })
+  it('submits with Enter on the chosen option even though the async card does not take focus', () => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => true)
+    const render = (submissions: AgentJournalSubmission[] = []) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="scope"
+            sourceKey="host/epoch"
+            sourceScope="host/epoch"
+            session={{ messages: [asked], readPhase: 'ready' }}
+            submissions={submissions}
+            send={send}
+          />
+        )
+      )
+    const blue = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((node) =>
+        node.textContent?.includes('Blue')
+      )!
+    render()
+    act(() => blue().dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    act(() => vi.advanceTimersByTime(200))
+    expect(send).toHaveBeenCalledTimes(1)
+    // The first delivery is uncertain, so the card comes back with Blue still chosen.
+    render([{ ...pendingAnswer, dispatchState: 'unknown' }])
+    expect(blue().getAttribute('aria-pressed')).toBe('true')
+    act(() => blue().focus())
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    act(() => {
+      blue().dispatchEvent(enter)
+    })
+    // Enter submits like the footer's Submit; it neither deselects nor lets the native click run.
+    expect(enter.defaultPrevented).toBe(true)
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(blue().getAttribute('aria-pressed')).toBe('true')
+  })
 })
