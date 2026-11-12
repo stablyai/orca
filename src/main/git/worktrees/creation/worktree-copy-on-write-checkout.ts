@@ -114,36 +114,19 @@ async function readConfig(key: string, worktreePath: string, options: GitWorktre
   )
 }
 
-/**
- * Drops files whose checkout can write bytes other than the blob's: filters (e.g. Git LFS), ident,
- * encodings, and line-ending conversion that adds CRs. Git writes those itself.
- */
-async function withoutCheckoutConversion(
-  worktreePath: string,
+const CHECKED_ATTRIBUTES = [...CHECKOUT_CONVERSION_ATTRIBUTES, ...LINE_ENDING_ATTRIBUTES]
+
+/** Each path's values of CHECKED_ATTRIBUTES; `cached` reads the index instead of the worktree. */
+async function readAttributes(
+  cwd: string,
   paths: string[],
+  cached: boolean,
   options: GitWorktreeExecOptions
-): Promise<string[]> {
-  const [{ stdout }, autocrlf, eol] = await Promise.all([
-    // --cached reads the attributes of the base commit that read-tree just staged.
-    gitExecFileAsync(
-      [
-        'check-attr',
-        '--cached',
-        '-z',
-        '--stdin',
-        ...CHECKOUT_CONVERSION_ATTRIBUTES,
-        ...LINE_ENDING_ATTRIBUTES
-      ],
-      {
-        ...gitExecOptions(worktreePath, options),
-        maxBuffer: LIST_MAX_BUFFER,
-        stdin: paths.join('\0')
-      }
-    ),
-    readConfig('core.autocrlf', worktreePath, options),
-    readConfig('core.eol', worktreePath, options)
-  ])
-  const crlfByConfig = GIT_TRUE.has(autocrlf) || eol === 'crlf'
+): Promise<Map<string, Map<string, string>>> {
+  const { stdout } = await gitExecFileAsync(
+    ['check-attr', ...(cached ? ['--cached'] : []), '-z', '--stdin', ...CHECKED_ATTRIBUTES],
+    { ...gitExecOptions(cwd, options), maxBuffer: LIST_MAX_BUFFER, stdin: paths.join('\0') }
+  )
   // -z output: "<path>\0<attribute>\0<value>\0" per path and attribute.
   const attributes = new Map<string, Map<string, string>>()
   const fields = stdout.split('\0')
@@ -152,8 +135,36 @@ async function withoutCheckoutConversion(
     values.set(fields[i + 1], fields[i + 2])
     attributes.set(fields[i], values)
   }
+  return attributes
+}
+
+/**
+ * Drops files whose checkout can write bytes other than the blob's: filters (e.g. Git LFS), ident,
+ * encodings, and line-ending conversion that adds CRs. Also drops files whose attributes in the
+ * main checkout differ from the base's (an untracked or edited .gitattributes, a relative
+ * core.attributesFile), since "clean" in the main checkout then says nothing about the blob.
+ * Git writes those itself.
+ */
+async function withoutCheckoutConversion(
+  repoPath: string,
+  worktreePath: string,
+  paths: string[],
+  options: GitWorktreeExecOptions
+): Promise<string[]> {
+  const [target, source, autocrlf, eol] = await Promise.all([
+    // --cached reads the attributes of the base commit that read-tree just staged.
+    readAttributes(worktreePath, paths, true, options),
+    readAttributes(repoPath, paths, false, options),
+    readConfig('core.autocrlf', worktreePath, options),
+    readConfig('core.eol', worktreePath, options)
+  ])
+  const crlfByConfig = GIT_TRUE.has(autocrlf) || eol === 'crlf'
   return paths.filter((path) => {
-    const values = attributes.get(path)
+    const values = target.get(path)
+    const sourceValues = source.get(path)
+    if (CHECKED_ATTRIBUTES.some((name) => values?.get(name) !== sourceValues?.get(name))) {
+      return false
+    }
     const set = (name: string) => {
       const value = values?.get(name) ?? 'unspecified'
       return value !== 'unspecified' && value !== 'unset'
@@ -291,7 +302,7 @@ export async function cloneMainCheckoutIntoWorktree(
     const paths = await withFreshCheckoutStat(
       repoPath,
       worktreePath,
-      await withoutCheckoutConversion(worktreePath, [...candidates.keys()], options),
+      await withoutCheckoutConversion(repoPath, worktreePath, [...candidates.keys()], options),
       candidates
     )
     if (paths.length === 0) {

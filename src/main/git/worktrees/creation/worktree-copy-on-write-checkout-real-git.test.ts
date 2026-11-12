@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -133,6 +133,27 @@ describe.runIf(process.platform === 'darwin')('copy-on-write worktree checkout',
 
     expect(await readFile(join(worktreePath, 'run.bat'), 'utf8')).toBe('echo\r\n')
     expect(await readFile(join(worktreePath, 'notes.txt'), 'utf8')).toBe('line\n')
+    expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
+  })
+
+  it('lets Git write files that only the main checkout filters', async () => {
+    const { repoPath, root } = await createRepo()
+    await writeFile(join(repoPath, 'data.bin'), 'AAAA')
+    git(repoPath, ['add', 'data.bin'])
+    git(repoPath, ['commit', '--quiet', '-m', 'data'])
+    // An untracked filter makes main's different, same-size bytes clean to the committed blob.
+    git(repoPath, ['config', 'filter.swap.clean', 'tr B A'])
+    git(repoPath, ['config', 'filter.swap.smudge', 'tr A B'])
+    await writeFile(join(repoPath, '.gitattributes'), '*.bin filter=swap\n')
+    await writeFile(join(repoPath, 'data.bin'), 'BBBB')
+    await utimes(join(repoPath, 'data.bin'), new Date('2020-01-01'), new Date('2020-01-01'))
+    // Refreshes main's index, so data.bin is stat-clean there.
+    expect(git(repoPath, ['status', '--porcelain', 'data.bin'])).toBe('')
+    const worktreePath = join(root, 'feature')
+
+    await addWorktreeWithCopyOnWriteCheckout(repoPath, worktreePath, 'feature', 'main', false)
+
+    expect(await readFile(join(worktreePath, 'data.bin'), 'utf8')).toBe('AAAA')
     expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
   })
 
