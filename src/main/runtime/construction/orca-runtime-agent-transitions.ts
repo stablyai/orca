@@ -7,9 +7,9 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-cont
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/orca-runtime-windowless-terminal-activity'
+import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
-import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-activity-facts-producer'
+import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
 import {
   resolveTerminalWorkerDispatch,
