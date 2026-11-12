@@ -1,5 +1,4 @@
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
@@ -11,15 +10,15 @@ const OPTION_ORDER = ['model', 'effort', 'serviceTier', 'personality', 'interact
 /** A different Codex control needs a new turn: steer has no choice parameters. */
 export function waitsForCodexTurnOptions(
   record: Pick<AgentSessionRecord, 'provider' | 'sessionId'> | null,
-  journal: Pick<AgentSessionJournal, 'newestTurn' | 'itemBody'>,
-  next: AgentJournalSubmission,
+  journal: Pick<AgentSessionJournal, 'newestTurn'>,
+  next: { body: AgentJournalItemBody | null; options?: AgentSessionExecutionOptions },
   child: StructuredAgentSessionProviderChild,
   adapter?: Pick<StructuredAgentSessionAdapter, 'readAppliedInputOptions'>
 ): boolean {
   if (record?.provider !== 'codex') {
     return false
   }
-  const body = journal.itemBody(agentJournalSubmissionKey(next.clientMessageId))
+  const { body } = next
   if (body?.kind !== 'message' || body.command) {
     return false
   }
