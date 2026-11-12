@@ -36,8 +36,9 @@ const CANDIDATE_JOINS = `LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
 /**
  * Every row that can set may_run or may_owe_action, each read from an index so settled history is
  * never visited: an unsettled Dispatch status (the only way an unsupervised row without a terminal
- * owes anything), an unsettled worker, an unreleased terminal, or a liveness fact. CROSS JOIN keeps
- * SQLite driving from these seeds instead of walking the Run by run_id.
+ * owes anything), an unsettled worker, a terminal still owed a release, an unreleased terminal whose
+ * Dispatch has no worker, or a liveness fact. CROSS JOIN keeps SQLite driving from these seeds
+ * instead of walking the Run by run_id.
  */
 const SEED_SQL = `WITH seed(id) AS (
     SELECT id FROM dispatch_contexts
@@ -45,7 +46,11 @@ const SEED_SQL = `WITH seed(id) AS (
     UNION SELECT dispatch_id FROM worker_dispatches
      WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
     UNION SELECT owner_dispatch_id FROM worker_terminal_resources
-     WHERE release_state IN ('not_requested', 'requested', 'releasing', 'unknown', 'retained')
+     WHERE release_state IN ('not_requested', 'requested', 'releasing', 'unknown')
+       AND ownership_state = 'owned'
+    UNION SELECT r.owner_dispatch_id FROM worker_terminal_resources r
+     WHERE r.release_state IN ('not_requested', 'requested', 'releasing', 'unknown', 'retained')
+       AND NOT EXISTS (SELECT 1 FROM worker_dispatches w WHERE w.dispatch_id = r.owner_dispatch_id)
     UNION SELECT dispatch_id FROM attempt_observation_facts WHERE facet = 'liveness')
   SELECT ${CANDIDATE_COLUMNS}
     FROM seed CROSS JOIN dispatch_contexts d ON d.id = seed.id AND d.run_id = ?1
@@ -55,13 +60,26 @@ const SEED_SQL = `WITH seed(id) AS (
 const RUN_POSITION_SQL = `SELECT COUNT(*) AS position FROM dispatch_contexts
   WHERE run_id = ? AND rowid > ?`
 
-/** The newest row of the page `offset` rows newer than a row on it. */
-const PAGE_TOP_SQL = `SELECT rowid AS database_id FROM dispatch_contexts
+/** The row `offset` rows from `rowid` in the Run, newer or older. */
+const NEWER_ROW_SQL = `SELECT rowid AS database_id FROM dispatch_contexts
   WHERE run_id = ? AND rowid >= ? ORDER BY rowid ASC LIMIT 1 OFFSET ?`
+const OLDER_ROW_SQL = `SELECT rowid AS database_id FROM dispatch_contexts
+  WHERE run_id = ? AND rowid <= ? ORDER BY rowid DESC LIMIT 1 OFFSET ?`
 
-const PAGE_SQL = `SELECT ${CANDIDATE_COLUMNS}
-    FROM dispatch_contexts d ${CANDIDATE_JOINS}
-   WHERE d.run_id = ? AND d.rowid <= ? ORDER BY d.rowid DESC LIMIT ${ORCHESTRATION_FLEET_PAGE_MAX}`
+/** Rows on one page (rowids ?4..?5 of Run ?3) that may own one of these handles (?1) or panes (?2). */
+const PAGE_OWNER_SQL = `WITH seed(id) AS (
+    SELECT id FROM dispatch_contexts
+     WHERE assignee_handle IN (SELECT value FROM json_each(?1)) AND rowid BETWEEN ?4 AND ?5
+    UNION SELECT dispatch_id FROM worker_dispatches
+     WHERE agent_terminal_handle IN (SELECT value FROM json_each(?1))
+    UNION SELECT owner_dispatch_id FROM worker_terminal_resources
+     WHERE pane_key IN (SELECT value FROM json_each(?2))
+    UNION SELECT id FROM dispatch_contexts
+     WHERE assignee_pane_key IN (SELECT value FROM json_each(?2)) AND rowid BETWEEN ?4 AND ?5)
+  SELECT ${CANDIDATE_COLUMNS}
+    FROM seed CROSS JOIN dispatch_contexts d
+      ON d.id = seed.id AND d.run_id = ?3 AND d.rowid BETWEEN ?4 AND ?5
+    ${CANDIDATE_JOINS}`
 
 /** The keys worker-list's status index counts owners by, from the same identity. */
 function ownerKeys(row: CandidateRow): string[] {
@@ -93,28 +111,49 @@ export function listWorkerReportWaitCandidates(this: OrchestrationDb, runId: str
   if (!seeded.some((row) => row.may_run === 1)) {
     return []
   }
-  const pageAnchors = new Map<number, { databaseId: number; position: number }>()
+  const pages = new Map<number, { anchor: CandidateRow; position: number; rows: CandidateRow[] }>()
   for (const row of seeded.filter(isCandidate)) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: COUNT(*) selects one number.
     const { position } = this.db.prepare(RUN_POSITION_SQL).get(runId, row.database_id) as {
       position: number
     }
-    pageAnchors.set(Math.floor(position / ORCHESTRATION_FLEET_PAGE_MAX), {
-      databaseId: row.database_id,
-      position
-    })
+    const page = Math.floor(position / ORCHESTRATION_FLEET_PAGE_MAX)
+    const entry = pages.get(page) ?? { anchor: row, position, rows: [] }
+    entry.rows.push(row)
+    pages.set(page, entry)
   }
-  return [...pageAnchors.entries()].flatMap(([page, anchor]) => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects one rowid.
-    const top = this.db
-      .prepare(PAGE_TOP_SQL)
-      .get(runId, anchor.databaseId, anchor.position - page * ORCHESTRATION_FLEET_PAGE_MAX) as {
-      database_id: number
+  return [...pages.entries()].map(([page, { anchor, position, rows }]) => {
+    const keys = new Set(rows.flatMap(ownerKeys))
+    if (keys.size === 0) {
+      return rows.map((row) => row.dispatch_id)
     }
+    const rowAt = (sql: string, from: number, offset: number) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects one rowid.
+      (this.db.prepare(sql).get(runId, from, offset) as { database_id: number } | undefined)
+        ?.database_id
+    const top = rowAt(
+      NEWER_ROW_SQL,
+      anchor.database_id,
+      position - page * ORCHESTRATION_FLEET_PAGE_MAX
+    )
+    const bottom =
+      top === undefined ? undefined : rowAt(OLDER_ROW_SQL, top, ORCHESTRATION_FLEET_PAGE_MAX - 1)
+    const values = (prefix: string) =>
+      JSON.stringify(
+        [...keys].flatMap((key) => (key.startsWith(prefix) ? [key.slice(prefix.length)] : []))
+      )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects exactly these columns.
-    const rows = this.db.prepare(PAGE_SQL).all(runId, top.database_id) as CandidateRow[]
-    const kept = keptRowsOfPage(rows)
-    return kept.length > 0 ? [kept] : []
+    const owners = this.db
+      .prepare(PAGE_OWNER_SQL)
+      .all(
+        values('handle:'),
+        values('pane:'),
+        runId,
+        bottom ?? 0,
+        top ?? anchor.database_id
+      ) as CandidateRow[]
+    const candidateIds = new Set(rows.map((row) => row.dispatch_id))
+    return keptRowsOfPage([...rows, ...owners.filter((row) => !candidateIds.has(row.dispatch_id))])
   })
 }
 
