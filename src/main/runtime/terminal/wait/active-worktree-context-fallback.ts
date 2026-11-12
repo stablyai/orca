@@ -10,6 +10,8 @@ import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 type WorktreeMetaLabel = { displayName?: string }
 export type ActiveWorkspaceContext = {
   worktreeId: string
+  /** Host-qualified identity key; absent for folders and rows known only from storage. */
+  identityKey?: string
   path: string
   branch: string
   displayName: string

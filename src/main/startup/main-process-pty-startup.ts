@@ -40,9 +40,9 @@ import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecy
 import { mainProcessState as state } from './main-process-state'
 import { shortPluginBranchName } from '../../shared/plugins/events/plugin-events'
 import { notifyWorkspaceCreatedPluginHook } from '../plugins/hooks/workspace-create-plugin-hook'
+import { pluginEventWorkspaceListId } from '../plugins/plugin-event-workspace-id'
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
-  const identity = { workspaceId: event.worktreeId, kind: 'worktree', path: event.path }
   const folder = parseWorkspaceKey(event.worktreeId)?.type === 'folder'
   if (event.kind === 'created') {
     notifyWorkspaceCreatedPluginHook({ ...event, folder })
@@ -50,6 +50,15 @@ export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent
   // Public worktree events retain their Git-only scope.
   if (folder) {
     return
+  }
+  const workspaceListId = pluginEventWorkspaceListId(state.store, event.worktreeId, {
+    removed: event.kind === 'removed'
+  })
+  const identity = {
+    workspaceId: event.worktreeId,
+    ...(workspaceListId ? { workspaceListId } : {}),
+    kind: 'worktree',
+    path: event.path
   }
   state.pluginService?.emitEvent(
     event.kind === 'created' ? 'workspace.created' : 'workspace.removed',

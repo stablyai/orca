@@ -23,16 +23,17 @@ import {
   PLUGIN_STATUS_BAR_HANDLERS,
   type PluginStatusBarServices
 } from './plugin-host-status-bar-method-bindings'
-import {
-  PLUGIN_WORKSPACE_ACTION_HANDLERS,
-  type PluginRuntimeRpc
-} from './plugin-host-workspace-method-bindings'
+import { PLUGIN_WORKSPACE_ACTION_HANDLERS } from './plugin-host-workspace-method-bindings'
+import { PLUGIN_TERMINAL_ACTION_HANDLERS } from './plugin-host-terminal-method-bindings'
+import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 import { PluginHostCallError } from './plugin-host-call-scope'
 
 export type PluginWorktreeContext = {
   worktreeId: string
+  /** Host-qualified identity key, which `workspace.list` ids carry; absent without one. */
+  identityKey?: string
   branch: string
   displayName: string
 }
@@ -230,7 +231,8 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   }),
   ...PLUGIN_PANEL_BRIDGE_HANDLERS,
   ...PLUGIN_STATUS_BAR_HANDLERS,
-  ...PLUGIN_WORKSPACE_ACTION_HANDLERS
+  ...PLUGIN_WORKSPACE_ACTION_HANDLERS,
+  ...PLUGIN_TERMINAL_ACTION_HANDLERS
 }
 
 function requireDesktop(services: PluginHostServices): PluginDesktopFrameServices {

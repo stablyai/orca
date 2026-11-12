@@ -9,7 +9,7 @@ import { installPluginResidentWorkerWarmer } from './workers/worker-admission/pl
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 import type { DispatcherOptions } from '../runtime/rpc/dispatcher'
-import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-workspace-method-bindings'
+import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-runtime-call'
 import {
   pluginTerminalTitle,
   projectPluginWorkspaceContext,

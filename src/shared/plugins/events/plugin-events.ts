@@ -8,6 +8,7 @@ import {
   pluginWorkspaceContextSchema
 } from '../workers/plugin-host-api'
 import { pluginEditorTypographySchema } from '../workers/plugin-host-api-editor-typography'
+import { pluginWorkspaceIdSchema } from '../workers/plugin-host-api-workspace-methods'
 
 /**
  * Payload contracts for the v0 plugin event set (workspace lifecycle + agent
@@ -21,8 +22,14 @@ export function shortPluginBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
+/** The id `workspace.list` gives the workspace, which every workspace method takes; `workspaceId`
+ *  is Orca's raw id, which they take too but which differs from it for most worktrees. Absent
+ *  before host API 1.7. */
+const workspaceListId = pluginWorkspaceIdSchema.optional()
+
 const workspaceIdentity = {
   workspaceId: z.string().min(1).max(2048),
+  workspaceListId,
   /** Folder workspaces have no branch; only worktrees emit lifecycle events today. */
   kind: z.enum(['worktree', 'folder'])
 }
@@ -46,6 +53,8 @@ export const workspaceRemovedPayloadSchema = z.object({
 
 export const agentStatusChangedPayloadSchema = z.object({
   workspaceId: z.string().min(1).max(2048).nullable(),
+  /** Absent too while `workspaceId` is null. */
+  workspaceListId,
   paneKey: z.string().min(1).max(2048),
   /** The pane's terminal, as `workspace.readContext` and `terminal.sendText` name it; absent when
    *  Orca cannot tie the pane to a terminal it lists. */
@@ -84,12 +93,14 @@ export const PLUGIN_EVENT_PAYLOAD_SCHEMAS = {
 
 /** One line per event for the generated reference and author typings. */
 export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
-  'workspace.created': 'A worktree workspace was created.',
-  'workspace.removed': 'A worktree workspace was removed.',
+  'workspace.created':
+    'A worktree workspace was created; `workspaceListId` (host API 1.7) is the id `workspace.list` gives it.',
+  'workspace.removed':
+    'A worktree workspace was removed; `workspaceListId` (host API 1.7) is the id `workspace.list` gave it.',
   'agent.status.changed':
-    'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it.',
+    'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `workspaceListId` (host API 1.7) is the id `workspace.list` gives that workspace, and `terminalId` names its terminal when Orca lists it.',
   'workspace.changed':
-    'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.',
+    'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context.',
   'editor.typography.changed':
     "What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability."
 }

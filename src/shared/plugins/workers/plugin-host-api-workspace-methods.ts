@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../contributions/plugin-command-actions'
+import { parseWorkspaceKey } from '../../workspace-scope'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /**
@@ -9,15 +10,50 @@ import { spec, WORKER_ONLY } from './plugin-host-method-spec'
  * workspace (local, WSL or SSH), so a mod acts exactly as `orca terminal create` would.
  */
 
+/** Provisional release floor for host API 1.7, for plugins that require it in `engines.orca`
+ *  instead of checking `host.has`; not a stock-release claim. */
+export const PLUGIN_HOST_API_1_7_SINCE = '1.4.258'
+
 export const PLUGIN_WORKSPACE_LIST_LIMIT = 500
+export const PLUGIN_PROJECT_LIST_LIMIT = 500
 export const PLUGIN_TERMINAL_READ_MAX_LINES = 2000
-const ID_MAX = 1024
+export const PLUGIN_HOST_ID_MAX_LENGTH = 1024
+const ID_MAX = PLUGIN_HOST_ID_MAX_LENGTH
 const TEXT_MAX = 4096
 
-const workspaceId = z.string().min(1).max(ID_MAX)
-const terminalId = z.string().min(1).max(ID_MAX)
+export const pluginWorkspaceIdSchema = z.string().min(1).max(ID_MAX)
+export const pluginTerminalIdSchema = z.string().min(1).max(ID_MAX)
+const workspaceId = pluginWorkspaceIdSchema
+const terminalId = pluginTerminalIdSchema
 
-const workspaceListParams = z.strictObject({}).optional()
+/**
+ * The id `workspace.list` gives a workspace: its host-qualified identity when it has one (no path,
+ * and it survives the folder moving), else the raw id. Folder workspaces keep their `folder:` key.
+ */
+export function pluginWorkspaceId(row: { id: string; identityKey?: string | null }): string {
+  return row.identityKey && parseWorkspaceKey(row.id)?.type !== 'folder'
+    ? `identity:${row.identityKey}`
+    : row.id
+}
+
+const workspaceListParams = z
+  .strictObject({
+    /** Also report each workspace's agent and terminal status. Why opt-in: it refreshes every
+     *  terminal host. Hosts before 1.7 refuse it with `invalid_params`. */
+    includeStatus: z.boolean().optional()
+  })
+  .optional()
+const workspaceStatus = z.object({
+  /** `working`: an agent works; `permission`: one waits for input; `done`: an agent finished;
+   *  `active`: a live terminal and no agent working; `inactive`: no live terminal. */
+  state: z.enum(['working', 'permission', 'done', 'active', 'inactive']),
+  /** Output arrived since the person last looked, as the sidebar's dot shows. */
+  unread: z.boolean(),
+  /** Live terminals. */
+  terminalCount: z.number().int().nonnegative(),
+  /** Milliseconds since the epoch: the last terminal output, else the last activity; null when none. */
+  lastActivityAt: z.number().finite().nullable()
+})
 const workspaceListResult = z.object({
   workspaces: z
     .array(
@@ -31,15 +67,41 @@ const workspaceListResult = z.object({
         /** Its project's (repository's) name, or null when it has none, as for project folders.
          *  Absent before host API 1.5. */
         project: z.string().max(512).nullable().optional(),
+        /** The project's id, as `project.list` gives it; null for folders of a project group.
+         *  Absent before host API 1.7. */
+        projectId: z.string().max(ID_MAX).nullable().optional(),
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
         path: z.string().max(ID_MAX),
         branch: z.string().max(512).nullable(),
         /** The execution host; null for this machine on hosts that do not record one. */
-        hostId: z.string().max(ID_MAX).nullable()
+        hostId: z.string().max(ID_MAX).nullable(),
+        /** Present only with `includeStatus`, for workspaces Orca has a status for. */
+        status: workspaceStatus.optional()
       })
     )
     .max(PLUGIN_WORKSPACE_LIST_LIMIT),
   /** More workspaces exist than the list holds. */
+  truncated: z.boolean()
+})
+
+const projectListParams = z.strictObject({}).optional()
+const projectListResult = z.object({
+  projects: z
+    .array(
+      z.object({
+        /** What `workspace.list` rows name as `projectId`. */
+        id: z.string().min(1).max(ID_MAX),
+        name: z.string().max(512),
+        /** `folder`: a plain folder, with no Git repository. */
+        kind: z.enum(['git', 'folder']),
+        /** The execution host; null for this machine on hosts that do not record one. */
+        hostId: z.string().max(ID_MAX).nullable(),
+        /** The path on the host that owns it, which may be WSL or an SSH machine. */
+        path: z.string().max(ID_MAX)
+      })
+    )
+    .max(PLUGIN_PROJECT_LIST_LIMIT),
+  /** More projects exist than the list holds. */
   truncated: z.boolean()
 })
 
@@ -149,7 +211,8 @@ const commandsRunResult = z.object({ ran: z.literal(true) })
 
 export const PLUGIN_WORKSPACE_ACTIONS_API = {
   'workspace.list': spec({
-    summary: 'Lists every workspace, Git worktrees and folders, on every host Orca reaches.',
+    summary:
+      "Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status.",
     since: 3,
     scope: 'any-workspace',
     capability: 'workspace:read',
@@ -157,6 +220,17 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
     surfaces: WORKER_ONLY,
     params: workspaceListParams,
     result: workspaceListResult
+  }),
+  'project.list': spec({
+    summary:
+      'Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`.',
+    since: 7,
+    scope: 'any-workspace',
+    capability: 'workspace:read',
+    mutation: false,
+    surfaces: WORKER_ONLY,
+    params: projectListParams,
+    result: projectListResult
   }),
   'workspace.open': spec({
     summary:
