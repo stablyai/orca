@@ -4,11 +4,15 @@ import type { BranchRefSnapshot } from './branch-ref-snapshot-read'
 import type { BranchRef } from './branch-ref-snapshot-data'
 import type * as SnapshotReader from './branch-ref-snapshot-read'
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), identity: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  read: vi.fn(),
+  identity: vi.fn(),
+  remotes: vi.fn(async (): Promise<string[]> => [])
+}))
 vi.mock('./branch-ref-snapshot-read', async (original) => ({
   ...(await original<typeof SnapshotReader>()),
   readBranchRefSnapshot: mocks.read,
-  readBranchRemoteNames: async () => []
+  readBranchRemoteNames: mocks.remotes
 }))
 vi.mock('./branch-ref-snapshot-identity', () => ({ resolveBranchSnapshotIdentity: mocks.identity }))
 import { BranchRefSnapshotStore } from './branch-ref-snapshot-store'
@@ -62,6 +66,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   mocks.read.mockReset()
   mocks.identity.mockReset()
+  mocks.remotes.mockReset().mockResolvedValue([])
 })
 
 it('does not publish a capture that finishes after a ref change', async () => {
@@ -216,19 +221,63 @@ it('shares a fill while independently projecting each caller query', async () =>
   expect(await absent).toEqual([])
 })
 
-it('retries failed fills and refreshes an expired snapshot', async () => {
+it('retries failed fills without extending the original metadata deadline', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(0)
   const value = store()
+  expect(await value.remoteNames(identity)).toEqual([])
+  clock.mockReturnValue(60_000)
   mocks.read.mockRejectedValueOnce(new Error('temporary read error'))
   await expect(value.search(identity, '', 20)).rejects.toThrow('temporary read error')
   mocks.read.mockResolvedValue(snapshot('first'))
   expect(await value.search(identity, '', 20)).toEqual([
     { refName: 'refs/heads/first', localBranchName: 'first' }
   ])
-  const now = Date.now()
-  vi.spyOn(Date, 'now').mockReturnValue(now + 120_001)
+  clock.mockReturnValue(120_001)
   mocks.read.mockResolvedValue(snapshot('second'))
   expect(await value.search(identity, '', 20)).toEqual([
     { refName: 'refs/heads/second', localBranchName: 'second' }
+  ])
+})
+
+it('refreshes remote metadata and recovers retention after repeated oversized captures', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(0)
+  const value = store()
+  mocks.remotes.mockResolvedValue(['origin'])
+  const ref: BranchRef = {
+    refName: 'refs/remotes/team/fork/topic',
+    label: 'team/fork/topic',
+    searchName: 'team/fork/topic',
+    oid: 'a'.repeat(40),
+    committedAt: 0,
+    symref: ''
+  }
+  let oversized = true
+  mocks.read.mockImplementation(
+    async (...args: Parameters<typeof SnapshotReader.readBranchRefSnapshot>) => {
+      const [, , onRef, maxBytes = 0] = args
+      onRef(ref)
+      return { snapshot: !oversized && maxBytes > 0 ? { refs: [ref] } : null, oversized }
+    }
+  )
+  expect(await value.search(identity, 'topic', 20)).toEqual([
+    { refName: 'refs/remotes/team/fork/topic', localBranchName: 'fork/topic' }
+  ])
+  mocks.remotes.mockResolvedValue(['origin', 'team/fork'])
+  for (const now of [60_000, 119_000]) {
+    clock.mockReturnValue(now)
+    expect(await value.search(identity, 'topic', 20)).toEqual([
+      { refName: 'refs/remotes/team/fork/topic', localBranchName: 'fork/topic' }
+    ])
+  }
+  clock.mockReturnValue(120_001)
+  oversized = false
+  expect(await value.search(identity, 'topic', 20)).toEqual([
+    { refName: 'refs/remotes/team/fork/topic', localBranchName: 'topic' }
+  ])
+  expect(await value.remoteNames(identity)).toEqual(['origin', 'team/fork'])
+  mocks.read.mockRejectedValue(new Error('retained queries must survive an unavailable reader'))
+  expect(await value.search(identity, 'TOPIC', 20)).toEqual([
+    { refName: 'refs/remotes/team/fork/topic', localBranchName: 'topic' }
   ])
 })
 

@@ -3,7 +3,6 @@ import type { BranchSnapshotIdentity } from './branch-ref-snapshot-identity'
 import {
   BranchSnapshotOwners,
   BranchSnapshotIdentityChanged,
-  BRANCH_SNAPSHOT_TTL_MS,
   type Owner,
   type Capture,
   type BranchSnapshotSignals
@@ -67,7 +66,6 @@ export class BranchRefSnapshotStore {
         if (owner && !owner.disposed && owner.generation === generation) {
           owner.snapshot = result.snapshot
           owner.oversized ||= result.oversized
-          owner.expiresAt = Date.now() + BRANCH_SNAPSHOT_TTL_MS
           if (result.snapshot) {
             owner.snapshotLease = lease
           } else {
