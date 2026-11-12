@@ -6,6 +6,7 @@ import { subscribeForRedrive } from '../../mailbox/structured-pointer/structured
 import { structuredMailboxCustody } from '../../mailbox/routing/structured-session-mail-target'
 import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
 import {
+  answeredByOrca,
   chatApprovalCloseOutcome,
   readChatWorkerPrompt,
   type ChatWorkerPromptReader
@@ -16,6 +17,7 @@ import {
   closeReportedApproval,
   recentOpenApprovalReports
 } from './worker-approval-report'
+import { workerApprovalDecisionOf } from './worker-approval'
 
 export type ChatJournalWatch = (
   sessionId: string,
@@ -159,6 +161,29 @@ export class ChatWorkerApprovalWatch {
           dispatch,
           approvalId,
           { by: 'unknown', decision: null, reason: null, reasonDelivered: false },
+          this.deps
+        )
+        continue
+      }
+      const prompt = await (this.deps.readPrompt ?? readChatWorkerPrompt)(
+        sessionId,
+        approvalId
+      ).catch(() => undefined)
+      if (this.deps.signal.aborted) {
+        return
+      }
+      if (prompt && answeredByOrca(prompt)) {
+        // Orca stopped after answering it but before storing that answer's closing line.
+        closeReportedApproval(
+          db,
+          dispatch,
+          approvalId,
+          {
+            by: 'unknown',
+            decision: workerApprovalDecisionOf(prompt.body),
+            reason: null,
+            reasonDelivered: false
+          },
           this.deps
         )
         continue
