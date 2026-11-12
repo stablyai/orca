@@ -447,6 +447,26 @@ describe('PaneAgentIdentities authority', () => {
   })
 })
 
+it('gives a carried pending row the answer its missed re-stamp would have', async () => {
+  vi.useFakeTimers()
+  const workers = new ScriptedIdentityWorkers()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const identities = new PaneAgentIdentities(
+    () => 'ids.db',
+    () => {
+      throw new Error('publication failed')
+    },
+    () => new AgentIdentityWorkerClient(workers.factory)
+  )
+  opened.push(identities)
+  const pending = identities.assign(sighting({ id: 'k' }), undefined)
+  identities.setPlace('row', 'row', pending)
+  await vi.advanceTimersByTimeAsync(1)
+  // The answer settled but the row was never re-stamped; its next admission carries pending.
+  expect(identities.assign(sighting({ id: 'k' }), pending)?.id).toBe('claude_k')
+  vi.useRealTimers()
+})
+
 describe('PaneAgentIdentities explicit retries', () => {
   afterEach(() => vi.useRealTimers())
 

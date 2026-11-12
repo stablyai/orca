@@ -15,6 +15,8 @@ import type {
 } from '../context-menu/terminal-pane-context-menu-types'
 import { tryRuntimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-focus/pane-overlay-focus'
+import { isDocumentBodyOrNull } from '../input/ime/terminal-ime-input-context-refresh'
 
 export function createTerminalPaneMenuCopyActions({
   paneTransportsRef,
@@ -68,8 +70,17 @@ export function createTerminalPaneMenuCopyActions({
       )
       return result.orcaSessionId
     },
-    // Like Copy Session ID: xterm needs its textarea focused for typing after the menu (#592).
-    focusPane: () => agentIdPane?.terminal.focus()
+    // Like Copy Session ID: xterm needs its textarea focused for typing after the menu (#592), but
+    // a slow answer must not pull focus back from wherever the user has moved since.
+    focusPane: () => {
+      const active = document.activeElement
+      if (
+        agentIdPane &&
+        (isDocumentBodyOrNull(active, document) || agentIdPane.container.contains(active))
+      ) {
+        focusPanePreservingOverlays(agentIdPane)
+      }
+    }
   }
   return {
     onCopy,

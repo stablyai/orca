@@ -96,14 +96,15 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           NOTHING_DELIVERED
         )
       }
-      // Await first, so the replay check and routing below read state as it is after the wait.
-      const terminalRecipient = await prepareSessionRecipient(runtime, to)
       // A retry after a lost answer is acknowledged even if the recipient has since gone.
-      const delivered = db.getPeerMailMessage(params.messageId)
-      if (delivered) {
-        const conversation = db.getPeerMailConversation(delivered.conversation_id)
+      const delivered = (): { message: { id: string; to: string } } | null => {
+        const message = db.getPeerMailMessage(params.messageId)
+        if (!message) {
+          return null
+        }
+        const conversation = db.getPeerMailConversation(message.conversation_id)
         if (
-          delivered.conversation_id !== params.conversationId ||
+          message.conversation_id !== params.conversationId ||
           conversation?.peer_fingerprint !== peerFingerprint
         ) {
           throw new OrchestrationError(
@@ -113,6 +114,17 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           )
         }
         return { message: { id: params.messageId, to } }
+      }
+      // A replay needs no routing, so it never waits on the recipient's preparation.
+      const replayed = delivered()
+      if (replayed) {
+        return replayed
+      }
+      const terminalRecipient = await prepareSessionRecipient(runtime, to)
+      // Read again after the wait: a copy of this delivery may have landed meanwhile.
+      const landed = delivered()
+      if (landed) {
+        return landed
       }
       const recipient = resolveBareOrchestrationRecipient({
         runtime,

@@ -139,14 +139,15 @@ export class PaneAgentIdentities {
     if (!key) {
       return undefined
     }
-    if (
-      carried &&
-      sameProviderKey(carried.key, key) &&
-      (carried.pending === true || this.isCurrent(carried))
-    ) {
+    const sameKey = carried !== undefined && sameProviderKey(carried.key, key)
+    if (sameKey && this.isCurrent(carried)) {
       return carried
     }
-    return this.demand.of(this.keyString(key))?.identity ?? { key, id: null, pending: true }
+    // A carried pending row takes the key's settled answer, even one whose re-stamp was missed.
+    return (
+      this.demand.of(this.keyString(key))?.identity ??
+      (sameKey && carried.pending === true ? carried : { key, id: null, pending: true })
+    )
   }
 
   /** An explicit request (a Copy click): joins the key's demand, or sends it once during the
