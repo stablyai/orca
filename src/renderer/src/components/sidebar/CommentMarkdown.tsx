@@ -134,6 +134,8 @@ const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkd
 /** Keep extensions stable per surface; new objects rebuild components and remount their contents. */
 export type CommentMarkdownExtension = {
   remarkPlugins: RemarkPlugins
+  /** Run before built-in transforms discard text source positions. */
+  remarkPluginsBefore?: RemarkPlugins
   /** Extra flow syntax requires one of these markers; omitted means unknown grammar. */
   extraFlowSyntaxMarkers?: readonly string[]
   sanitizeAttributes: Record<string, readonly string[]>
@@ -226,7 +228,10 @@ const CommentMarkdown = React.memo(
       [extension]
     )
     const activeRemarkPlugins = React.useMemo(() => {
-      const basePlugins = unknownHtmlAsText ? unknownHtmlAsTextRemarkPlugins : remarkPlugins
+      const basePlugins = [
+        ...(extension?.remarkPluginsBefore ?? []),
+        ...(unknownHtmlAsText ? unknownHtmlAsTextRemarkPlugins : remarkPlugins)
+      ]
       const plugins = fileLinkExists
         ? [...basePlugins, remarkNativeChatFileLinks(fileLinkExists)]
         : basePlugins
