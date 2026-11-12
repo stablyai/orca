@@ -18994,7 +18994,7 @@
           "runStatusDispatchFailed": "Failed"
         },
         "runContent": {
-          "noOutput": "No output content available."
+          "noOutput": "No output."
         },
         "runViewState": {
           "viewRun": "View run",

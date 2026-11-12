@@ -169,9 +169,3 @@ export function automationRunErrorText(
   }
   return COPY[run.errorCode](run.errorParams) ?? run.error
 }
-
-/** A run stopped at an agent trust prompt; opening its workspace is how to answer it. */
-export function isAutomationRunTrustBlocked(run: Pick<AutomationRun, 'error'>): boolean {
-  const blocked = run.error ? BLOCKED_AGENT_ERROR.exec(run.error) : null
-  return blocked?.[1].endsWith('-trust-workspace') ?? false
-}

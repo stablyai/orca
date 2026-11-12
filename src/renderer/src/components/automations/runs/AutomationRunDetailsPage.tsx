@@ -10,7 +10,7 @@ import type { Automation } from '../../../../../shared/automations/automation-de
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { getAutomationRunContent } from './automation-run-content'
-import { automationRunErrorText, isAutomationRunTrustBlocked } from './automation-run-error-copy'
+import { automationRunErrorText } from './automation-run-error-copy'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import { useFullAutomationRun } from './use-full-automation-run'
@@ -102,8 +102,6 @@ export function AutomationRunDetailsPage({
   const full = useFullAutomationRun(listedRun, history)
   const run = full.run
   const failed = run.status === 'dispatch_failed'
-  // A trust prompt is answered in the workspace, so the banner carries that one action.
-  const openFromBanner = failed && isAutomationRunTrustBlocked(run) && Boolean(viewState?.canOpen)
   // Why: the detail's Last run shows when a run started; when that differs from its slot, say both.
   const startedAt = run.dispatchedAt ?? run.startedAt ?? null
   const startedLate =
@@ -307,21 +305,13 @@ export function AutomationRunDetailsPage({
                 'This run did not start, and no reason was recorded.'
               )
             }
-            action={
-              openFromBanner ? (
-                <Button type="button" variant="outline" size="xs" onClick={onOpenWorkspace}>
-                  <ExternalLink className="size-3.5" />
-                  {t('auto.components.automations.runViewState.openWorkspace', 'Open workspace')}
-                </Button>
-              ) : null
-            }
           />
         ) : null}
 
-        {(viewState?.canOpen && !openFromBanner) || (canRerun && automation) ? (
+        {viewState?.canOpen || (canRerun && automation) ? (
           <div className="flex flex-wrap items-center gap-2">
             {/* Why: a disabled button with nothing to open reads as broken; Details says the workspace is gone. */}
-            {viewState?.canOpen && !openFromBanner ? (
+            {viewState?.canOpen ? (
               <Button type="button" size="sm" onClick={onOpenWorkspace}>
                 <ExternalLink className="size-3.5" />
                 {t('auto.components.automations.runViewState.openWorkspace', 'Open workspace')}

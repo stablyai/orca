@@ -9,7 +9,6 @@ import {
   type AutomationLastRunTone
 } from '../listing/automation-list-last-run'
 import { formatAutomationCost, formatAutomationTokens } from '../runs/automation-usage-model'
-import { RUN_START_DRIFT_LABEL_MS } from '../runs/automation-run-identity-label'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 function HealthCell({
@@ -99,22 +98,10 @@ export function AutomationDetailHealth({
   const intlLocale = useIntlLocale()
 
   const lastRun = getLocalAutomationLastRunSnapshot(automation, latestRun, t)
-  const lastRunRelative = formatAutomationRelativeTime(lastRun.at, now, t, intlLocale)
-  const lastRunAbsolute = lastRun.at ? formatAutomationDateTime(lastRun.at, t, intlLocale) : null
-  // Why: run pages and lists name a run by its scheduled slot; a late start says it started then.
-  // Only a run that actually started has a start time; a skipped run's record time is not one.
-  const latestStartedAt = latestRun ? (latestRun.dispatchedAt ?? latestRun.startedAt ?? null) : null
-  const startedOffSchedule =
-    latestRun !== undefined &&
-    latestStartedAt !== null &&
-    lastRun.at === latestStartedAt &&
-    Math.abs(latestStartedAt - latestRun.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
-  const lastRunWhen =
-    lastRunAbsolute && startedOffSchedule
-      ? t('auto.components.automations.runIdentity.startedAt', 'Started {{time}}', {
-          time: lastRunAbsolute
-        })
-      : lastRunAbsolute
+  // Why: lists and run rows name a run by its scheduled slot; the stat uses the same time.
+  const lastRunAt = latestRun ? latestRun.scheduledFor : lastRun.at
+  const lastRunRelative = formatAutomationRelativeTime(lastRunAt, now, t, intlLocale)
+  const lastRunWhen = lastRunAt ? formatAutomationDateTime(lastRunAt, t, intlLocale) : null
   const lastRunValue =
     lastRun.tone === 'never'
       ? t('auto.components.automations.AutomationDetail.notRunYet', 'Not run yet')

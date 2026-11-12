@@ -75,8 +75,53 @@ export type AutomationsPageFocusTarget = {
   page: string
 }
 
-// Virtualized rows mount after a scroll, and a freshly opened page a frame or two later.
-const FOCUS_RETRY_FRAMES = 30
+const RETURN_HIGHLIGHT_MS = 1500
+// How long a returned-to row keeps focus through a list that is still re-rendering.
+const RETURN_SETTLE_MS = 1000
+
+/** Briefly tint the row the user returned to, fading out (instantly gone with reduced motion). */
+function flashReturnedRow(element: HTMLElement): void {
+  if (typeof element.animate !== 'function') {
+    return
+  }
+  // Why: the accent token is close to the hover background; a primary tint reads as a mark.
+  const primary = getComputedStyle(element).getPropertyValue('--primary').trim()
+  if (!primary) {
+    return
+  }
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  // Why: an inset shadow paints over any background, so the row and its sticky name cell
+  // (which paints its own, transitioning background) get the same tint.
+  const tint = `inset 0 0 0 100vmax color-mix(in srgb, ${primary} 14%, transparent)`
+  const clear = `inset 0 0 0 100vmax transparent`
+  const flash = (target: HTMLElement, pseudoElement?: string): void => {
+    target.animate(
+      [
+        { boxShadow: tint },
+        { boxShadow: tint, offset: reduceMotion ? 0.99 : 0.4 },
+        { boxShadow: clear }
+      ],
+      {
+        duration: RETURN_HIGHLIGHT_MS,
+        easing: reduceMotion ? 'step-end' : 'ease-out',
+        pseudoElement
+      }
+    )
+  }
+  flash(element)
+  for (const cell of element.querySelectorAll<HTMLElement>('*')) {
+    if (getComputedStyle(cell).position === 'sticky') {
+      // Its edge strips (::before/::after) extend the background past the cell.
+      flash(cell)
+      flash(cell, '::before')
+      flash(cell, '::after')
+    }
+  }
+}
+
+// Virtualized rows mount after a scroll, and a list that reloads on open (Runs) can take a
+// moment to list the row; past this, focus falls back to the page title.
+const FOCUS_RETRY_MS = 3000
 
 /**
  * Opening a page focuses its title; going back focuses the row or link you left from,
@@ -110,27 +155,63 @@ export function useAutomationsPageFocus(
     }
     const returning = previous?.returnSelector && previous.parents.includes(page) ? previous : null
     const selector = returning?.returnSelector ?? null
-    let frame = 0
+    const giveUpAt = performance.now() + FOCUS_RETRY_MS
+    const focusedAtStart = document.activeElement
     let handle = 0
+    let keepUntil = 0
+    // Why: a list that is still settling (Runs reloads on open) can replace the row just
+    // focused; while focus has gone nowhere else, move it to the replacement.
+    const keepReturnedFocus = (): void => {
+      const container = containerRef.current
+      const active = document.activeElement
+      if (!container || !selector || (active && active !== document.body)) {
+        if (performance.now() < keepUntil) {
+          handle = requestAnimationFrame(keepReturnedFocus)
+        }
+        return
+      }
+      const replacement = container.querySelector<HTMLElement>(selector)
+      if (replacement) {
+        replacement.focus({ preventScroll: true })
+        flashReturnedRow(replacement)
+      }
+      if (performance.now() < keepUntil) {
+        handle = requestAnimationFrame(keepReturnedFocus)
+      }
+    }
     const attempt = (): void => {
       const container = containerRef.current
       if (!container) {
         return
       }
+      // Why: the user moved on (clicked or typed somewhere) while the row was loading.
+      const active = document.activeElement
+      if (active && active !== focusedAtStart && active !== document.body) {
+        return
+      }
       const element =
         (selector ? container.querySelector<HTMLElement>(selector) : null) ??
-        (selector && frame < FOCUS_RETRY_FRAMES
+        (selector && performance.now() < giveUpAt
           ? null
           : container.querySelector<HTMLElement>('[data-automations-page-title]'))
       if (element) {
+        if (selector && element.matches(selector)) {
+          // Why: focus set from code after a pointer click draws no ring, so mark the row
+          // you came back to; a run row is also brought to the middle of its table.
+          element.scrollIntoView({ block: returning?.returnRunId ? 'center' : 'nearest' })
+          element.focus({ preventScroll: true })
+          flashReturnedRow(element)
+          keepUntil = performance.now() + RETURN_SETTLE_MS
+          handle = requestAnimationFrame(keepReturnedFocus)
+          return
+        }
         element.focus({ preventScroll: false })
         return
       }
       if (returning?.returnRunId) {
         requestAutomationRunReveal(returning.returnRunId)
       }
-      frame += 1
-      if (frame <= FOCUS_RETRY_FRAMES) {
+      if (performance.now() < giveUpAt + 100) {
         handle = requestAnimationFrame(attempt)
       }
     }
