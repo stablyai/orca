@@ -17805,16 +17805,16 @@
           "markUnread": "标记为未读",
           "goToWorkspace": "转到工作区",
           "clear": "从列表中清除",
-          "agentSection": "代理",
-          "markManyRead_one": "将 {{count}} 个代理标记为已读",
-          "markManyRead_other": "将 {{count}} 个代理标记为已读",
-          "markManyUnread_one": "将 {{count}} 个代理标记为未读",
-          "markManyUnread_other": "将 {{count}} 个代理标记为未读",
+          "agentSection": "智能体",
+          "markManyRead_one": "将 {{count}} 个智能体标记为已读",
+          "markManyRead_other": "将 {{count}} 个智能体标记为已读",
+          "markManyUnread_one": "将 {{count}} 个智能体标记为未读",
+          "markManyUnread_other": "将 {{count}} 个智能体标记为未读",
           "clearMany_one": "从列表中清除 {{count}} 个智能体",
           "clearMany_other": "从列表中清除 {{count}} 个智能体",
           "clearMany": "从列表中清除 {{count}} 个智能体",
-          "markManyRead": "将 {{count}} 个代理标记为已读",
-          "markManyUnread": "将 {{count}} 个代理标记为未读"
+          "markManyRead": "将 {{count}} 个智能体标记为已读",
+          "markManyUnread": "将 {{count}} 个智能体标记为未读"
         }
       },
       "confirmation": {
