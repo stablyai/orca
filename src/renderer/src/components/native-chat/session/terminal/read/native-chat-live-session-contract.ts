@@ -5,6 +5,7 @@ import type {
   NativeChatTurnLifecycle
 } from '../../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
+import type { IncrementalChatAssembler } from '../assembly/native-chat-incremental-assembler'
 
 export type ReadState =
   | { phase: 'loading' }
@@ -20,7 +21,10 @@ export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): bool
 
 export type NativeChatLiveSession = NativeChatSession & {
   /** Canonical source publication paired with its append/reset provenance, before display folding. */
-  sourceObservation?: { messages: readonly NativeChatMessage[]; generation: object }
+  sourceObservation?: {
+    messages: readonly NativeChatMessage[]
+    generation: IncrementalChatAssembler['generation']
+  }
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle
   /** Hook-reported human wait not yet ended by the transcript; absent on hookless lanes. */

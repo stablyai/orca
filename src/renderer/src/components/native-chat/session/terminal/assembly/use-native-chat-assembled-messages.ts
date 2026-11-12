@@ -48,7 +48,10 @@ export function useNativeChatAssembledMessages(args: {
 }): {
   assembledMessages: NativeChatMessage[]
   normalizedMessages: NativeChatMessage[]
-  sourceObservation: { messages: readonly NativeChatMessage[]; generation: object }
+  sourceObservation: {
+    messages: readonly NativeChatMessage[]
+    generation: IncrementalChatAssembler['generation']
+  }
 } {
   const committedCacheRef = useRef<AssemblyCache | null>(null)
   const { agent, sessionId, baseMessages, appended } = args

@@ -1,4 +1,5 @@
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { IncrementalChatAssembler } from '../assembly/native-chat-incremental-assembler'
 import { releaseNativeChatReceiptDependencies } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-witnesses'
 import {
   nativeChatSourcePosition,
@@ -27,7 +28,11 @@ type PendingOwner = {
   pending: NativeChatPendingSend[]
   boundary?: NativeChatSourceBoundary
   sessionId?: string
-  search?: { generation: object; length: number; found: boolean }
+  search?: {
+    generation: IncrementalChatAssembler['generation']
+    length: number
+    found: boolean
+  }
 }
 const pendingSendCache = new Map<string, PendingOwner>()
 let pendingSendCounter = 0
@@ -56,7 +61,7 @@ export function observePendingSendCache(
   scope: NativeChatPendingSendScope,
   messages: readonly NativeChatMessage[],
   sessionId: string,
-  generation?: object
+  generation?: IncrementalChatAssembler['generation']
 ): void {
   const key = pendingSendScopeKey(scope)
   const owner = pendingSendCache.get(key) ?? { pending: [] }

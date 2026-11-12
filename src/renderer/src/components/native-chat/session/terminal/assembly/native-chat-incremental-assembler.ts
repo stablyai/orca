@@ -10,7 +10,7 @@ import { mergeOne, sortForImageNormalization } from './native-chat-session-assem
 
 export type IncrementalChatAssembler = {
   /** Changes whenever the published list is not an extension of its previous prefix. */
-  generation: object
+  generation: symbol
   byId: Map<string, NativeChatMessage>
   byTurn: Map<string, NativeChatMessage>
   // Last emitted sorted output; stable reference until a mutation occurs.
@@ -18,7 +18,7 @@ export type IncrementalChatAssembler = {
 }
 
 export function createIncrementalAssembler(): IncrementalChatAssembler {
-  return { generation: {}, byId: new Map(), byTurn: new Map(), messages: [] }
+  return { generation: Symbol(), byId: new Map(), byTurn: new Map(), messages: [] }
 }
 
 /** Reset from a windowed base using the canonical transcript-only assembly path. */
@@ -31,7 +31,7 @@ export function reset(
   for (const message of base) {
     mergeOne(assembler.byId, assembler.byTurn, message)
   }
-  assembler.generation = {}
+  assembler.generation = Symbol()
   assembler.messages = [...sortForImageNormalization(Array.from(assembler.byId.values()))]
   return assembler.messages
 }
@@ -59,7 +59,7 @@ export function applyAppends(
     return assembler.messages
   }
 
-  assembler.generation = {}
+  assembler.generation = Symbol()
   assembler.messages = [...sortForImageNormalization(Array.from(assembler.byId.values()))]
   return assembler.messages
 }

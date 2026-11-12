@@ -1,8 +1,16 @@
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1_700_000_000_000)
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 it('does not pair a retained model with another provider session on the phone', () => {
   const tab: RuntimeMobileSessionTerminalTab = {

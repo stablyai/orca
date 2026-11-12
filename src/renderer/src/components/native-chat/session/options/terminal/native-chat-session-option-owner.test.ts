@@ -108,11 +108,11 @@ describe('terminal option owner catalog invalidation', () => {
         }
       )
       const nextRepos = new Proxy([...repos], {
-        get(target, key, receiver) {
+        get(target, key) {
           if (typeof key === 'string' && /^\d+$/.test(key)) {
             repoRowsRead++
           }
-          return Reflect.get(target, key, receiver)
+          return target[key as keyof typeof target]
         }
       })
       act(() =>
