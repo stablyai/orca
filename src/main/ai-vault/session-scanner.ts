@@ -32,6 +32,7 @@ import {
   createAiVaultScopeCwdMatcher
 } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { extraWslClaudeProjectsDirs } from './wsl-claude-projects-root'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { withDevinSessionsDbScan } from './scanners/devin/session-scanner-devin-db'
 import { withOpenCodeSqliteScanScope } from './scanners/opencode/sqlite/session-scanner-opencode-sqlite-scan-scope'
@@ -64,8 +65,22 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           readLocalAntigravityHistory(path, options.signal)
         )
         throwIfAiVaultScanCancelled(options.signal)
+        const resolvedClaude = await extraWslClaudeProjectsDirs(options)
+        for (const issue of resolvedClaude.issues) {
+          issues.push(issue)
+        }
+        const scanOptions =
+          resolvedClaude.dirs.length === 0
+            ? options
+            : {
+                ...options,
+                extraClaudeProjectsDirs: [
+                  ...(options.extraClaudeProjectsDirs ?? []),
+                  ...resolvedClaude.dirs
+                ]
+              }
         const discoveries = await discoverAiVaultSessionSources({
-          options,
+          options: scanOptions,
           limitPerAgent,
           issues
         })
