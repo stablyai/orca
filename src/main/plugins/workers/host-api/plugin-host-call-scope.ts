@@ -27,7 +27,9 @@ export class PluginHostCallError extends Error {
   constructor(
     readonly code: PluginErrorCode,
     message: string,
-    readonly retryAfterMs?: number
+    readonly retryAfterMs?: number,
+    /** What actually failed, for the plugin's log only; the plugin gets `message`. */
+    readonly detail?: string
   ) {
     super(message)
   }

@@ -105,3 +105,27 @@ describe('workspace.readContext workspace id', () => {
     ])
   })
 })
+
+describe('workspace.readContext in frames', () => {
+  it('gives panels only path-free ids', async () => {
+    const read = (worktreeId: string) => {
+      const services = createServices(vi.fn())
+      vi.mocked(services.resolveActiveWorktreeContext).mockResolvedValue({
+        worktreeId,
+        branch: '',
+        displayName: 'w'
+      })
+      return executePluginHostCall({
+        pluginId: 'samples.demo',
+        method: 'workspace.readContext',
+        params: {},
+        surface: 'panel',
+        grantedCapabilities: ['workspace:read'],
+        services
+      })
+    }
+    const [raw, folder] = await Promise.all([read('repo::/home/me/w'), read('folder:f1')])
+    expect(raw.ok && raw.value).not.toHaveProperty('workspaceId')
+    expect(folder).toMatchObject({ ok: true, value: { workspaceId: 'folder:f1' } })
+  })
+})

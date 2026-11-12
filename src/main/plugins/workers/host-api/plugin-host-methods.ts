@@ -1,3 +1,4 @@
+import { ZodError } from 'zod'
 import { getBoundPluginHostMethod, type PluginHostServices } from './plugin-host-method-bindings'
 import { isQualifiedPluginKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 import { gatePluginHostCall as decidePluginHostCall } from '../../../../shared/plugins/capabilities/plugin-capability-gate'
@@ -95,7 +96,12 @@ export async function executePluginHostCall(
   try {
     // The audit write awaited: approval may have been revoked meanwhile.
     scope.assertActive()
-    const validated = await prepared.execute({ pluginId: input.pluginId, services, scope })
+    const validated = await prepared.execute({
+      pluginId: input.pluginId,
+      surface: input.surface,
+      services,
+      scope
+    })
     if (!validated) {
       await auditMutation('error').catch(() => undefined)
       // Malformed host results must not leak unvalidated shapes through any plugin transport.
@@ -109,7 +115,19 @@ export async function executePluginHostCall(
     return { ok: true, value: validated.value }
   } catch (error) {
     await auditMutation('error').catch(() => undefined)
+    if (error instanceof ZodError) {
+      // A runtime answer Orca's own binding did not expect; its shape is internal.
+      scope.log?.(`${input.method}: unexpected runtime answer: ${error.message}`)
+      return {
+        ok: false,
+        code: 'action_failed',
+        error: `internal: malformed ${input.method} answer`
+      }
+    }
     if (error instanceof PluginHostCallError) {
+      if (error.detail) {
+        scope.log?.(`${input.method}: ${error.detail}`)
+      }
       const { code, message, retryAfterMs } = error
       return {
         ok: false,

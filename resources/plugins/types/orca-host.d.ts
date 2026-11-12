@@ -163,7 +163,7 @@ declare module 'orca/host' {
     /** Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status. Since host API 1.3. */
     "workspace.list": {
       params: { includeStatus?: boolean } | undefined
-      result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean }
+      result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }
       surfaces: "worker"
     }
     /** Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`. Since host API 1.7. */
@@ -220,13 +220,13 @@ declare module 'orca/host' {
       result: { terminals: { id: string; title?: string }[]; truncated: boolean }
       surfaces: "worker"
     }
-    /** Shows a terminal's workspace and focuses its pane, as clicking it does; desktop app only. Since host API 1.7. */
+    /** Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. Since host API 1.7. */
     "terminal.focus": {
       params: { terminalId: string }
       result: { focused: true }
       surfaces: "worker"
     }
-    /** Closes a terminal, stopping what runs in it (local or SSH), as `orca terminal close` does; closing its last pane closes the tab. Since host API 1.7. */
+    /** Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. Since host API 1.7. */
     "terminal.close": {
       params: { terminalId: string }
       result: { closed: true; processExited: boolean }

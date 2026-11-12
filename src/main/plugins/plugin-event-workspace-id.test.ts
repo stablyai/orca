@@ -1,72 +1,69 @@
 import { describe, expect, it } from 'vitest'
-import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import { removeWorktreeMetaRow } from '../persistence/host-qualified-worktree-meta'
-import { pluginEventWorkspaceListId } from './plugin-event-workspace-id'
+import { worktreeHostIdentity } from '../persistence/worktree-meta-host-identity'
 import { projectPluginAgentStatusChangedPayload } from './plugin-agent-status-event'
 
-function metaStore(rows: Record<string, WorktreeMeta>) {
+type Row = { instanceId?: string; hostId?: ExecutionHostId }
+
+/** Rows by host, as the Store partitions same-id worktrees; `legacy` is the unqualified row. */
+function metaStore(byHost: Record<string, Record<string, Row>>, legacy: Record<string, Row> = {}) {
   return {
-    getWorktreeMeta: (worktreeId: string) => rows[worktreeId],
-    removeWorktreeMeta: ({ id }: { id: string }) => {
-      delete rows[id]
-    }
+    getWorktreeMeta: (worktreeId: string) => legacy[worktreeId],
+    getWorktreeMetaForHost: (worktreeId: string, hostId: ExecutionHostId) =>
+      byHost[hostId]?.[worktreeId]
   }
 }
 
-const LOCAL: ExecutionHostId = 'local'
-const BASE_META: WorktreeMeta = {
-  displayName: '',
-  comment: '',
-  linkedIssue: null,
-  linkedPR: null,
-  linkedLinearIssue: null,
-  isArchived: false,
-  isUnread: false,
-  isPinned: false,
-  sortOrder: 0,
-  lastActivityAt: 0
-}
-const meta = (instanceId: string, hostId: ExecutionHostId = LOCAL): WorktreeMeta => ({
-  ...BASE_META,
-  instanceId,
-  hostId
+describe('worktreeHostIdentity', () => {
+  it("reads the named host's row only, never a same-id row of another host", () => {
+    const store = metaStore(
+      { 'ssh:box': { 'r::/w': { instanceId: 'i2', hostId: 'ssh:box' } } },
+      { 'r::/w': { instanceId: 'i1', hostId: 'local' } }
+    )
+    expect(worktreeHostIdentity(store, 'r::/w', 'ssh:box')).toEqual({
+      identityKey: 'wt2:ssh%3Abox:i2',
+      hostId: 'ssh:box'
+    })
+    expect(worktreeHostIdentity(store, 'r::/w', 'local')).toEqual({ hostId: 'local' })
+  })
+
+  it("follows the row's own host when the caller names none, as removal does", () => {
+    const row: Row = { instanceId: 'i3', hostId: 'local' }
+    const store = metaStore({ local: { 'r::/gone': row } }, { 'r::/gone': row })
+    expect(worktreeHostIdentity(store, 'r::/gone')).toEqual({
+      identityKey: 'wt2:local:i3',
+      hostId: 'local'
+    })
+  })
 })
 
-describe('workspaceListId on workspace and agent events', () => {
-  it('is the identity form for a live worktree, and the raw id without an identity', () => {
-    const store = metaStore({ 'r::/a': meta('i1'), 'r::/b': BASE_META })
-    expect(pluginEventWorkspaceListId(store, 'r::/a')).toBe('identity:wt2:local:i1')
-    expect(pluginEventWorkspaceListId(store, 'r::/b')).toBe('r::/b')
-  })
+describe('workspaceListId on agent.status.changed', () => {
+  const enriched = {
+    paneKey: 'tab:leaf',
+    receivedAt: 1,
+    payload: { state: 'working' as const, prompt: '', agentType: 'claude' as const }
+  }
+  const store = metaStore({ local: { 'r::/a': { instanceId: 'i4', hostId: 'local' } } })
 
-  it('keeps a removed worktree identity after its row is purged', () => {
-    const store = metaStore({ 'r::/gone': meta('i2') })
-    removeWorktreeMetaRow(store, 'r::/gone', undefined)
-    expect(store.getWorktreeMeta('r::/gone')).toBeUndefined()
-    expect(pluginEventWorkspaceListId(store, 'r::/gone', { removed: true })).toBe(
-      'identity:wt2:local:i2'
-    )
-  })
-
-  it("never borrows a same-id row's identity from another host", () => {
-    const store = metaStore({ 'r::/twin': meta('i3', 'ssh:box') })
-    removeWorktreeMetaRow(store, 'r::/twin', LOCAL)
-    expect(pluginEventWorkspaceListId(store, 'r::/twin', { removed: true })).toBe('r::/twin')
-  })
-
-  it('rides on agent.status.changed only when the pane has a workspace', () => {
-    const enriched = {
-      paneKey: 'tab:leaf',
-      receivedAt: 1,
-      payload: { state: 'working' as const, prompt: '', agentType: 'claude' as const }
-    }
-    const store = metaStore({ 'r::/a': meta('i4') })
+  it("names the workspace by the reporting host's identity, else by its raw id", () => {
     expect(
-      projectPluginAgentStatusChangedPayload({ ...enriched, worktreeId: 'r::/a' }, store)
+      projectPluginAgentStatusChangedPayload(
+        { ...enriched, worktreeId: 'r::/a', connectionId: null },
+        store
+      )
     ).toMatchObject({ workspaceId: 'r::/a', workspaceListId: 'identity:wt2:local:i4' })
+    // An SSH agent with a same-id local twin does not borrow the local identity.
     expect(
-      projectPluginAgentStatusChangedPayload({ ...enriched, worktreeId: undefined }, store)
+      projectPluginAgentStatusChangedPayload(
+        { ...enriched, worktreeId: 'r::/a', connectionId: 'box' },
+        store
+      )
+    ).toMatchObject({ workspaceId: 'r::/a', workspaceListId: 'r::/a' })
+    expect(
+      projectPluginAgentStatusChangedPayload(
+        { ...enriched, worktreeId: undefined, connectionId: null },
+        store
+      )
     ).not.toHaveProperty('workspaceListId')
   })
 })

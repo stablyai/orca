@@ -36,6 +36,11 @@ export function pluginWorkspaceId(row: { id: string; identityKey?: string | null
     : row.id
 }
 
+/** The execution host: `local` for this machine, `ssh:<connection>` or `runtime:<environment>`.
+ *  `workspace.list` and `project.list` name a host the same way. Hosts before 1.7 sent null for
+ *  this machine when the workspace recorded no host. */
+const pluginHostIdSchema = z.string().max(ID_MAX).nullable()
+
 const workspaceListParams = z
   .strictObject({
     /** Also report each workspace's agent and terminal status. Why opt-in: it refreshes every
@@ -73,15 +78,18 @@ const workspaceListResult = z.object({
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
         path: z.string().max(ID_MAX),
         branch: z.string().max(512).nullable(),
-        /** The execution host; null for this machine on hosts that do not record one. */
-        hostId: z.string().max(ID_MAX).nullable(),
+        hostId: pluginHostIdSchema,
         /** Present only with `includeStatus`, for workspaces Orca has a status for. */
         status: workspaceStatus.optional()
       })
     )
     .max(PLUGIN_WORKSPACE_LIST_LIMIT),
-  /** More workspaces exist than the list holds. */
-  truncated: z.boolean()
+  /** More workspaces exist than the list holds, or some were left out for an over-long id or
+   *  path. */
+  truncated: z.boolean(),
+  /** With `includeStatus`: Orca's status listing stopped short, so some rows lack a status they
+   *  may have. Absent without `includeStatus` and before host API 1.7. */
+  statusTruncated: z.boolean().optional()
 })
 
 const projectListParams = z.strictObject({}).optional()
@@ -94,14 +102,13 @@ const projectListResult = z.object({
         name: z.string().max(512),
         /** `folder`: a plain folder, with no Git repository. */
         kind: z.enum(['git', 'folder']),
-        /** The execution host; null for this machine on hosts that do not record one. */
-        hostId: z.string().max(ID_MAX).nullable(),
+        hostId: pluginHostIdSchema,
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
         path: z.string().max(ID_MAX)
       })
     )
     .max(PLUGIN_PROJECT_LIST_LIMIT),
-  /** More projects exist than the list holds. */
+  /** More projects exist than the list holds, or some were left out for an over-long id or path. */
   truncated: z.boolean()
 })
 

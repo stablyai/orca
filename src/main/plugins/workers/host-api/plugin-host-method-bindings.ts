@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   projectPluginWorkspaceAgents,
+  pluginFrameWorkspaceContext,
   projectPluginWorkspaceContext,
   type PluginAgentStatusRow,
   type PluginWorkspaceTerminal
@@ -132,14 +133,18 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     }
     return services.editorTypography.read()
   }),
-  'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
-    const context = await services.resolveActiveWorktreeContext()
-    // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.
-    const terminals = context
-      ? await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
-      : []
-    return projectPluginWorkspaceContext(context, terminals)
-  }),
+  'workspace.readContext': bind(
+    api['workspace.readContext'],
+    async (_params, { services, surface }) => {
+      const context = await services.resolveActiveWorktreeContext()
+      // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.
+      const terminals = context
+        ? await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
+        : []
+      const projected = projectPluginWorkspaceContext(context, terminals)
+      return surface === 'worker' ? projected : pluginFrameWorkspaceContext(projected)
+    }
+  ),
   'agents.list': bind(api['agents.list'], async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
     if (!context) {

@@ -73,7 +73,7 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'agent:read': 'Get notified when agent status changes',
   'agent:launch': 'Start agents in your workspaces, local and SSH',
   'terminal:send':
-    'Open and close your terminals, and type and run commands in them, local and SSH',
+    'Open terminals, close the ones it opened or that are in your focused workspace, and type and run commands in your terminals, local and SSH',
   'terminal:read': 'Read the output of your terminals, local and SSH',
   'notifications:show': 'Show desktop notifications labeled with the plugin name',
   'storage:own': "Store data in the plugin's own storage folder",

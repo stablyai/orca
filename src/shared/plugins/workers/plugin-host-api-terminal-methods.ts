@@ -49,7 +49,7 @@ export const PLUGIN_TERMINAL_ACTIONS_API = {
   }),
   'terminal.focus': spec({
     summary:
-      "Shows a terminal's workspace and focuses its pane, as clicking it does; desktop app only.",
+      "Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only.",
     since: 7,
     scope: 'explicit-terminal',
     capability: 'workspace:write',
@@ -60,7 +60,7 @@ export const PLUGIN_TERMINAL_ACTIONS_API = {
   }),
   'terminal.close': spec({
     summary:
-      'Closes a terminal, stopping what runs in it (local or SSH), as `orca terminal close` does; closing its last pane closes the tab.',
+      'Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`.',
     since: 7,
     scope: 'explicit-terminal',
     capability: 'terminal:send',

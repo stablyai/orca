@@ -1,26 +1,24 @@
-import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
-  removedWorktreeIdentityKey,
-  worktreeMetaIdentityKey
-} from '../persistence/removed-worktree-identities'
+  worktreeHostIdentity,
+  type WorktreeMetaIdentitySource
+} from '../persistence/worktree-meta-host-identity'
 import { pluginListedWorkspaceId } from './workers/host-api/plugin-workspace-projection'
 
-export type PluginWorktreeMetaSource = {
-  getWorktreeMeta(worktreeId: string): Pick<WorktreeMeta, 'instanceId' | 'hostId'> | undefined
-}
-
 /**
- * The `workspaceListId` an event carries for a raw worktree id: the id `workspace.list` gives it.
- * A removed worktree's row is already gone, so its identity comes from the removal; without one
- * the raw id stands, as it does in `workspace.list`.
+ * The `workspaceListId` of an agent's workspace: the id `workspace.list` gives it. The identity
+ * comes from the metadata row of the host the agent reported from (`connectionId`: an SSH host,
+ * else this machine), never another host's same-id row; without one the raw id stands.
  */
-export function pluginEventWorkspaceListId(
-  store: PluginWorktreeMetaSource | null | undefined,
+export function pluginAgentWorkspaceListId(
+  store: WorktreeMetaIdentitySource | null | undefined,
   worktreeId: string,
-  options: { removed?: boolean } = {}
+  connectionId: string | null | undefined
 ): string | undefined {
-  const identityKey = options.removed
-    ? removedWorktreeIdentityKey(worktreeId)
-    : worktreeMetaIdentityKey(worktreeId, store?.getWorktreeMeta(worktreeId))
+  const { identityKey } =
+    parseWorkspaceKey(worktreeId)?.type === 'folder'
+      ? {}
+      : worktreeHostIdentity(store, worktreeId, getConnectionExecutionHostId(connectionId))
   return pluginListedWorkspaceId({ id: worktreeId, identityKey })
 }

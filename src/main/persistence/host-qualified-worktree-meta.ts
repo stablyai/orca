@@ -11,7 +11,6 @@ import { isLocalOnlyWorktreeMetaId } from '../../shared/worktree/local-only-work
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { rememberRemovedWorktreeIdentity } from './removed-worktree-identities'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -119,12 +118,7 @@ export function removeWorktreeMetaRow(
   worktreeId: string,
   hostId: ExecutionHostId | undefined
 ): void {
-  const meta = store.getWorktreeMeta(worktreeId)
-  const owner = hostId ?? meta?.hostId
-  // A same-id row of another host is not the one removed; its identity must not be borrowed.
-  if (meta?.hostId === owner) {
-    rememberRemovedWorktreeIdentity(worktreeId, meta)
-  }
+  const owner = hostId ?? store.getWorktreeMeta(worktreeId)?.hostId
   if (owner) {
     store.removeWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: owner }))
   } else {

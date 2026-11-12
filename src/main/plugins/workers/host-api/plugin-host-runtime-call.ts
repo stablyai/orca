@@ -12,13 +12,12 @@ export type PluginRuntimeRpc = (
   options?: { signal?: AbortSignal; beforeEffect?: () => void }
 ) => Promise<unknown>
 
-const NO_LIVE_TERMINAL: [PluginErrorCode, string] = [
-  'action_failed',
-  'no live terminal has this id'
-]
+type Failure = [PluginErrorCode, string]
+const NO_LIVE_TERMINAL: Failure = ['action_failed', 'no live terminal has this id']
+const NO_WINDOW: Failure = ['unavailable', "Orca's window is not available"]
 
 // Runtime refusals whose wording names Orca internals; a plugin gets a fixed message instead.
-const RUNTIME_FAILURES: ReadonlyMap<string, [PluginErrorCode, string]> = new Map([
+const RUNTIME_FAILURES: ReadonlyMap<string, Failure> = new Map([
   ['selector_not_found', ['action_failed', 'no workspace has this id']],
   [
     'selector_ambiguous',
@@ -28,18 +27,34 @@ const RUNTIME_FAILURES: ReadonlyMap<string, [PluginErrorCode, string]> = new Map
   ['terminal_handle_stale', NO_LIVE_TERMINAL],
   ['terminal_exited', NO_LIVE_TERMINAL],
   ['terminal_gone', NO_LIVE_TERMINAL],
+  ['tab_not_found', NO_LIVE_TERMINAL],
+  ['terminal_tab_pinned', ['conflict', "the terminal's tab is pinned; unpin it in Orca first"]],
+  ['renderer_unavailable', NO_WINDOW],
+  ['client_disconnected', ['unavailable', 'the host that owns this is not connected']],
   ['runtime_unavailable', ['unavailable', 'this Orca host cannot run workspace actions now']]
 ])
+const UNKNOWN_FAILURE: Failure = ['action_failed', 'Orca could not complete this action']
 
-/** A runtime refusal as the plugin sees it; anything unrecognized passes through unchanged. */
+/**
+ * A runtime refusal as the plugin sees it: a fixed message, never the runtime's wording, which
+ * goes to the plugin's log as `detail`. Approval and cancellation refusals pass through.
+ */
 export function pluginRuntimeFailure(error: unknown): unknown {
-  if (!(error instanceof Error) || error instanceof PluginHostCallError) {
+  if (
+    error instanceof PluginHostCallError ||
+    (error instanceof Error && error.name === 'AbortError')
+  ) {
     return error
   }
+  const detail = error instanceof Error ? error.message : String(error)
   // The runtime answers a code (`selector_not_found`); some refusals arrive as a bare message.
-  const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
-  const known = (code && RUNTIME_FAILURES.get(code)) || RUNTIME_FAILURES.get(error.message)
-  return known ? new PluginHostCallError(known[0], known[1]) : error
+  const code =
+    error instanceof Error && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : undefined
+  const [failureCode, message] =
+    (code && RUNTIME_FAILURES.get(code)) || RUNTIME_FAILURES.get(detail) || UNKNOWN_FAILURE
+  return new PluginHostCallError(failureCode, message, undefined, detail)
 }
 
 export function pluginHostRenderer(services: PluginHostServices): PluginHostRendererActions {

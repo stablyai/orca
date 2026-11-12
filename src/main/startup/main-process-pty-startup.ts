@@ -40,7 +40,7 @@ import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecy
 import { mainProcessState as state } from './main-process-state'
 import { shortPluginBranchName } from '../../shared/plugins/events/plugin-events'
 import { notifyWorkspaceCreatedPluginHook } from '../plugins/hooks/workspace-create-plugin-hook'
-import { pluginEventWorkspaceListId } from '../plugins/plugin-event-workspace-id'
+import { pluginListedWorkspaceId } from '../plugins/workers/host-api/plugin-workspace-projection'
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   const folder = parseWorkspaceKey(event.worktreeId)?.type === 'folder'
@@ -51,8 +51,9 @@ export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent
   if (folder) {
     return
   }
-  const workspaceListId = pluginEventWorkspaceListId(state.store, event.worktreeId, {
-    removed: event.kind === 'removed'
+  const workspaceListId = pluginListedWorkspaceId({
+    id: event.worktreeId,
+    identityKey: event.identityKey
   })
   const identity = {
     workspaceId: event.worktreeId,

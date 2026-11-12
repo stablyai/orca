@@ -43,8 +43,8 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`editor.open`](#editoropen) | `workspace:write` | worker | yes | 1.3 | Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace. |
 | [`commands.run`](#commandsrun) | `workspace:write` | worker | yes | 1.3 | Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only. |
 | [`terminal.list`](#terminallist) | `workspace:read` | worker | no | 1.7 | Lists a workspace's terminals, at most 50; `workspace.readContext` lists the focused one's. |
-| [`terminal.focus`](#terminalfocus) | `workspace:write` | worker | yes | 1.7 | Shows a terminal's workspace and focuses its pane, as clicking it does; desktop app only. |
-| [`terminal.close`](#terminalclose) | `terminal:send` | worker | yes | 1.7 | Closes a terminal, stopping what runs in it (local or SSH), as `orca terminal close` does; closing its last pane closes the tab. |
+| [`terminal.focus`](#terminalfocus) | `workspace:write` | worker | yes | 1.7 | Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. |
+| [`terminal.close`](#terminalclose) | `terminal:send` | worker | yes | 1.7 | Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`. |
 | [`editor.readTypography`](#editorreadtypography) | none | worker, panel, editor | no | 1.6 | The font family, size, weight, line height, ligatures, word wrap and minimap Orca's file editor uses now, editor zoom included. `editor.typography.changed` reports each change after. |
 
 ### `workspace.readContext`
@@ -220,7 +220,7 @@ Publishes owned app/editor and terminal colors and selects them in the desktop. 
 Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status.
 
 ```ts
-(params?: { includeStatus?: boolean }) => { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean }
+(params?: { includeStatus?: boolean }) => { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }
 ```
 
 ### `project.list`
@@ -297,7 +297,7 @@ Lists a workspace's terminals, at most 50; `workspace.readContext` lists the foc
 
 ### `terminal.focus`
 
-Shows a terminal's workspace and focuses its pane, as clicking it does; desktop app only.
+Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only.
 
 ```ts
 (params: { terminalId: string }) => { focused: true }
@@ -305,7 +305,7 @@ Shows a terminal's workspace and focuses its pane, as clicking it does; desktop 
 
 ### `terminal.close`
 
-Closes a terminal, stopping what runs in it (local or SSH), as `orca terminal close` does; closing its last pane closes the tab.
+Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`.
 
 ```ts
 (params: { terminalId: string }) => { closed: true; processExited: boolean }

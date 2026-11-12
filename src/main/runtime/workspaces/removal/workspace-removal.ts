@@ -37,6 +37,7 @@ import {
   assertWslMoveWorkspaceWritable,
   isWslMoveSourceHost
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
 export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorkspaceMetadata {
   abstract removeWorktreeMetadataAndHistory(
@@ -92,12 +93,14 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
     if (pending) {
       return options.waitForBackgroundRemoval ? await pending : { removing: true }
     }
-    const emitRemoved = (): void =>
-      this.emitWorktreeLifecycle({
-        kind: 'removed',
-        worktreeId: removalTarget.id,
-        path: removalTarget.path
-      })
+    // Identity read now: the purge drops the row before listeners hear `removed`.
+    const removed = {
+      kind: 'removed' as const,
+      worktreeId: removalTarget.id,
+      path: removalTarget.path,
+      ...worktreeHostIdentity(store, removalTarget.id, fenceHostId)
+    }
+    const emitRemoved = (): void => this.emitWorktreeLifecycle(removed)
     const cleanupScopeKey = preservedBranchCleanupScopeKey({
       worktreeId: removalTarget.id,
       hostId: cleanupHostId

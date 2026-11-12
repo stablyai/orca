@@ -12,6 +12,7 @@ import {
   pluginWorkspaceSelector as workspaceSelector
 } from './plugin-host-runtime-call'
 import { listPluginProjects, listPluginWorkspaces } from './plugin-host-workspace-list'
+import { recordPluginOpenedTerminal } from './plugin-opened-terminals'
 
 const api = PLUGIN_HOST_API
 const DEFAULT_READ_LINES = 200
@@ -33,9 +34,20 @@ const agentLaunchAnswer = z.object({
   outcome: z.object({ kind: z.enum(['structured', 'terminal']), handle: z.string() })
 })
 
+function failureDetail(error: unknown): string {
+  if (error instanceof PluginHostCallError) {
+    return error.detail ?? error.message
+  }
+  return error instanceof Error ? error.message : String(error)
+}
+
 export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
   'workspace.list': bind(api['workspace.list'], async (params, { services }) =>
-    listPluginWorkspaces(rpc(services), params?.includeStatus === true)
+    listPluginWorkspaces(
+      rpc(services),
+      params?.includeStatus === true,
+      services.runtimeRpc ?? services
+    )
   ),
   'project.list': bind(api['project.list'], async (_params, { services }) =>
     listPluginProjects(rpc(services))
@@ -93,7 +105,9 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       // A mod works beside the person: never reveal or focus the new terminal.
       presentation: 'background'
     })
-    return { terminalId: terminalCreateAnswer.parse(answer).terminal.handle }
+    const terminalId = terminalCreateAnswer.parse(answer).terminal.handle
+    recordPluginOpenedTerminal(ctx.pluginId, terminalId)
+    return { terminalId }
   }),
   'terminal.read': bind(api['terminal.read'], async (params, { services, scope }) => {
     const limit = Math.min(params.maxLines ?? DEFAULT_READ_LINES, PLUGIN_TERMINAL_READ_MAX_LINES)
@@ -121,6 +135,7 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       launchSource: 'plugin'
     })
     const terminalId = agentLaunchAnswer.parse(answer).outcome.handle
+    recordPluginOpenedTerminal(ctx.pluginId, terminalId)
     if (params.prompt) {
       // Delivery waits for the agent's composer (up to a minute), longer than a host call may take.
       void effect(ctx, 'agent.launch', {
@@ -132,7 +147,7 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
         launchSource: 'plugin'
       }).catch((error: unknown) => {
         ctx.scope.log?.(
-          `agent.launch: the prompt did not reach ${terminalId}: ${error instanceof Error ? error.message : String(error)}`
+          `agent.launch: the prompt did not reach ${terminalId}: ${failureDetail(error)}`
         )
       })
     }

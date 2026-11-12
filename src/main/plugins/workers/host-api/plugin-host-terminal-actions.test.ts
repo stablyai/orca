@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import { callPluginHost, pluginHostTestServices } from './__mocks__/plugin-host-services-fixture'
+import { executePluginHostCall } from './plugin-host-methods'
 
 // The runtime's refusal of a handle it no longer knows, as the in-process RPC raises it.
 const runtimeError = (code: string) =>
@@ -57,6 +58,34 @@ describe('terminal.list', () => {
   })
 })
 
+describe('runtime failures', () => {
+  it('reach the plugin as a fixed message, with the detail in its log only', async () => {
+    const log = vi.fn()
+    const outcomes = await Promise.all(
+      [
+        vi.fn().mockRejectedValue(new Error('EACCES /home/someone/secret')),
+        vi.fn().mockResolvedValue({ unexpected: true })
+      ].map((rpc) =>
+        executePluginHostCall({
+          pluginId: 'samples.demo',
+          method: 'terminal.list',
+          params: { workspaceId: 'w' },
+          surface: 'worker',
+          grantedCapabilities: ['workspace:read'],
+          services: pluginHostTestServices(rpc),
+          scope: { assertActive: () => {}, log }
+        })
+      )
+    )
+    expect(outcomes).toEqual([
+      { ok: false, code: 'action_failed', error: 'Orca could not complete this action' },
+      { ok: false, code: 'action_failed', error: 'internal: malformed terminal.list answer' }
+    ])
+    expect(JSON.stringify(outcomes)).not.toContain('secret')
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('EACCES /home/someone/secret'))
+  })
+})
+
 describe('terminal.focus', () => {
   it("focuses in this Orca's window only, never steering paired clients", async () => {
     const rpc = vi.fn().mockResolvedValue({ focus: { handle: 'term_a', navigated: true } })
@@ -93,14 +122,54 @@ describe('terminal.focus', () => {
   })
 })
 
+// term_a is a terminal of the focused workspace, which terminal.close may close.
+const focusedOn = (terminalIds: string[]) => ({
+  resolveActiveWorktreeContext: vi
+    .fn()
+    .mockResolvedValue({ worktreeId: 'repo::/w', branch: 'main', displayName: 'w' }),
+  listWorktreeTerminals: vi.fn().mockResolvedValue(terminalIds.map((id) => ({ id })))
+})
+
 describe('terminal.close', () => {
-  const close = (rpc: PluginRuntimeRpc) =>
+  const close = (rpc: PluginRuntimeRpc, terminalId = 'term_a') =>
     callPluginHost({
       method: 'terminal.close',
-      params: { terminalId: 'term_a' },
+      params: { terminalId },
+      granted: ['terminal:send'],
+      services: pluginHostTestServices(rpc, focusedOn(['term_a']))
+    })
+
+  it('closes a terminal of the focused workspace, or one this plugin opened anywhere', async () => {
+    const rpc = vi.fn(async (method: string) =>
+      method === 'terminal.create'
+        ? { terminal: { handle: 'term_elsewhere' } }
+        : { close: { handle: 'x', tabId: 't', ptyKilled: true } }
+    )
+    expect(await close(rpc)).toMatchObject({ ok: true })
+    await callPluginHost({
+      method: 'terminal.create',
+      params: { workspaceId: 'identity:other' },
       granted: ['terminal:send'],
       services: pluginHostTestServices(rpc)
     })
+    expect(await close(rpc, 'term_elsewhere')).toMatchObject({ ok: true })
+    expect(rpc).toHaveBeenCalledWith(
+      'terminal.close',
+      { terminal: 'term_elsewhere' },
+      expect.anything()
+    )
+  })
+
+  it('refuses any other terminal before asking the runtime', async () => {
+    const rpc = vi.fn()
+    expect(await close(rpc, 'term_other')).toEqual({
+      ok: false,
+      code: 'action_failed',
+      error:
+        'terminal.close closes only terminals of the focused workspace or ones this plugin opened'
+    })
+    expect(rpc).not.toHaveBeenCalled()
+  })
 
   it('reports whether the process is known to have stopped', async () => {
     const answers = [

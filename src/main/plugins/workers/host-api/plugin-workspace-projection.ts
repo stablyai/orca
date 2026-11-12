@@ -1,5 +1,9 @@
 import type { z } from 'zod'
-import { shortPluginBranchName } from '../../../../shared/plugins/events/plugin-events'
+import {
+  shortPluginBranchName,
+  workspaceChangedPayloadSchema
+} from '../../../../shared/plugins/events/plugin-events'
+import type { PluginEventName } from '../../../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
@@ -11,6 +15,7 @@ import {
   PLUGIN_HOST_ID_MAX_LENGTH,
   pluginWorkspaceId
 } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 /** One terminal of a workspace, as main's runtime lists it. */
@@ -53,6 +58,29 @@ export function pluginListedWorkspaceId(row: {
 }): string | undefined {
   const id = pluginWorkspaceId(row)
   return id.length <= PLUGIN_HOST_ID_MAX_LENGTH ? id : undefined
+}
+
+/**
+ * What a frame (panel, editor) may see of a context: no raw workspace id, which embeds the
+ * workspace's path. Only the path-free forms (`identity:`, `folder:`) reach frames.
+ */
+export function pluginFrameWorkspaceContext(
+  context: PluginWorkspaceContext
+): PluginWorkspaceContext {
+  const id = context?.workspaceId
+  if (!context || !id || id.startsWith('identity:') || parseWorkspaceKey(id)?.type === 'folder') {
+    return context
+  }
+  const { workspaceId: _rawId, ...pathFree } = context
+  return pathFree
+}
+
+/** An event payload as frames get it: `workspace.changed` without a raw workspace id. */
+export function pluginFrameEventPayload(event: PluginEventName, payload: unknown): unknown {
+  const changed = event === 'workspace.changed' && workspaceChangedPayloadSchema.safeParse(payload)
+  return changed && changed.success
+    ? { context: pluginFrameWorkspaceContext(changed.data.context) }
+    : payload
 }
 
 /** Only these public fields reach plugins; the id is the one `workspace.list` gives. */

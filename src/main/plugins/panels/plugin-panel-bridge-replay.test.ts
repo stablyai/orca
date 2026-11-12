@@ -30,8 +30,8 @@ function setup(capabilities: PluginCapabilityKind[] = ['workspace:read']) {
   return { bridge, unfocus: () => (active = null) }
 }
 
+// The raw id (`repo::/w`) embeds a path, so panels never get it.
 const context = {
-  workspaceId: 'repo::/w',
   branch: 'main',
   displayName: 'w',
   terminals: [{ id: 'term_a', title: 'zsh' }]

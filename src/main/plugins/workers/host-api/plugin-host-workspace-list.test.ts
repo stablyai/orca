@@ -1,6 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
 import { callPluginHost, pluginHostTestServices } from './__mocks__/plugin-host-services-fixture'
 
+const PS_ANSWER = {
+  worktrees: [
+    {
+      worktreeId: 'r1::/src/app',
+      identity: { key: 'wt2:local:i1' },
+      status: 'working',
+      unread: true,
+      liveTerminalCount: 2,
+      lastOutputAt: 20,
+      lastActivityAt: 10
+    },
+    {
+      worktreeId: 'folder:f1',
+      status: 'inactive',
+      unread: false,
+      liveTerminalCount: 0,
+      lastOutputAt: null
+    }
+  ]
+}
+
 const ANSWERS: Record<string, unknown> = {
   'worktree.list': {
     worktrees: [
@@ -26,26 +47,7 @@ const ANSWERS: Record<string, unknown> = {
   'folderWorkspace.list': {
     folderWorkspaces: [{ id: 'f1', name: 'Notes', folderPath: '/notes' }]
   },
-  'worktree.ps': {
-    worktrees: [
-      {
-        worktreeId: 'r1::/src/app',
-        identity: { key: 'wt2:local:i1' },
-        status: 'working',
-        unread: true,
-        liveTerminalCount: 2,
-        lastOutputAt: 20,
-        lastActivityAt: 10
-      },
-      {
-        worktreeId: 'folder:f1',
-        status: 'inactive',
-        unread: false,
-        liveTerminalCount: 0,
-        lastOutputAt: null
-      }
-    ]
-  }
+  'worktree.ps': PS_ANSWER
 }
 
 const runtime = () => vi.fn(async (method: string) => ANSWERS[method])
@@ -87,6 +89,47 @@ describe('workspace.list', () => {
     expect(plain.mock.calls.map(([method]) => method)).not.toContain('worktree.ps')
   })
 
+  it('names hosts as project.list does, and leaves out rows past the bounds', async () => {
+    const rpc = vi.fn(async (method: string) =>
+      method === 'worktree.list'
+        ? {
+            worktrees: [
+              { id: 'r1::/ok', repoId: 'r1', displayName: 'ok', path: '/ok' },
+              { id: 'r1::/long', repoId: 'r1', displayName: 'x', path: `/${'x'.repeat(2000)}` }
+            ]
+          }
+        : ANSWERS[method]
+    )
+    const outcome = await list(rpc, {})
+    expect(outcome.ok && outcome.value).toMatchObject({
+      workspaces: [
+        { id: 'r1::/ok', hostId: 'local' },
+        { id: 'folder:f1', hostId: 'local' }
+      ],
+      truncated: true
+    })
+  })
+
+  it('shares one status listing across calls, and says when it stopped short', async () => {
+    const rpc = vi.fn(async (method: string) =>
+      method === 'worktree.ps'
+        ? { ...PS_ANSWER, totalCount: 900, truncated: true }
+        : ANSWERS[method]
+    )
+    const services = pluginHostTestServices(rpc)
+    const call = () =>
+      callPluginHost({
+        method: 'workspace.list',
+        params: { includeStatus: true },
+        granted: ['workspace:read'],
+        services
+      })
+    const [first, second] = await Promise.all([call(), call()])
+    expect(first.ok && first.value).toMatchObject({ statusTruncated: true })
+    expect(second).toEqual(first)
+    expect(rpc.mock.calls.filter(([method]) => method === 'worktree.ps')).toHaveLength(1)
+  })
+
   it('refuses unknown params, as older hosts refuse includeStatus', async () => {
     expect(await list(runtime(), { includeStatus: true, extra: 1 })).toMatchObject({
       ok: false,
@@ -109,7 +152,7 @@ describe('project.list', () => {
         projects: [
           { id: 'r1', name: 'App', kind: 'git', hostId: 'local', path: '/src/app' },
           { id: 'r2', name: 'Docs', kind: 'folder', hostId: 'ssh:box', path: '/docs' },
-          { id: 'r3', name: 'Lib', kind: 'git', hostId: null, path: '/lib' }
+          { id: 'r3', name: 'Lib', kind: 'git', hostId: 'local', path: '/lib' }
         ],
         truncated: false
       }

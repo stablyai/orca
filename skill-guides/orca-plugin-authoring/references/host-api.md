@@ -112,7 +112,7 @@ HTML panels and custom editors get these CSS variables from Orca's active theme,
 - `appearance.apply` (capability `appearance:write`; worker; since 1.4): Publishes owned app/editor and terminal colors and selects them in the desktop. Returns publication, not renderer acknowledgement.
   `(params: { expectedRevision: string; app: string; terminal: string }) => { revision: string; themeId: string; mode: "dark" | "light"; delivery: "published" }`
 - `workspace.list` (capability `workspace:read`; worker; since 1.3): Lists every workspace, Git worktrees and folders, on every host Orca reaches; `includeStatus` (host API 1.7) adds each one's agent status.
-  `(params?: { includeStatus?: boolean }) => { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean }`
+  `(params?: { includeStatus?: boolean }) => { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; projectId?: string | null; path: string; branch: string | null; hostId: string | null; status?: { state: "working" | "permission" | "done" | "active" | "inactive"; unread: boolean; terminalCount: number; lastActivityAt: number | null } }[]; truncated: boolean; statusTruncated?: boolean }`
 - `project.list` (capability `workspace:read`; worker; since 1.7): Lists your projects (repositories and folders) on every host; `id` is what `workspace.list` rows name as `projectId`.
   `(params?: {}) => { projects: { id: string; name: string; kind: "git" | "folder"; hostId: string | null; path: string }[]; truncated: boolean }`
 - `workspace.open` (capability `workspace:write`; worker; since 1.3): Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app.
@@ -131,9 +131,9 @@ HTML panels and custom editors get these CSS variables from Orca's active theme,
   `(params: { action: "worktree.history.back" | "worktree.history.forward" | "sidebar.left.toggle" | "sidebar.sleepingWorkspaces.toggle" | "floatingWorkspace.maximize" | "tab.rename" | "workspace.rename" | "workspace.openBoard" | "view.tasks" | "sidebar.right.toggle" | "sidebar.explorer.toggle" | "sidebar.search.toggle" | "sidebar.sourceControl.toggle" | "sidebar.checks.toggle" | "sidebar.ports.toggle" }) => { ran: true }`
 - `terminal.list` (capability `workspace:read`; worker; since 1.7): Lists a workspace's terminals, at most 50; `workspace.readContext` lists the focused one's.
   `(params: { workspaceId: string }) => { terminals: { id: string; title?: string }[]; truncated: boolean }`
-- `terminal.focus` (capability `workspace:write`; worker; since 1.7): Shows a terminal's workspace and focuses its pane, as clicking it does; desktop app only.
+- `terminal.focus` (capability `workspace:write`; worker; since 1.7): Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only.
   `(params: { terminalId: string }) => { focused: true }`
-- `terminal.close` (capability `terminal:send`; worker; since 1.7): Closes a terminal, stopping what runs in it (local or SSH), as `orca terminal close` does; closing its last pane closes the tab.
+- `terminal.close` (capability `terminal:send`; worker; since 1.7): Closes a terminal of the focused workspace, or one this plugin opened (`terminal.create`, `agent.launch`), stopping what runs in it (local or SSH); closing its last pane closes the tab. Any other terminal is refused with `action_failed`.
   `(params: { terminalId: string }) => { closed: true; processExited: boolean }`
 - `editor.readTypography` (no capability; worker, panel, editor; since 1.6): The font family, size, weight, line height, ligatures, word wrap and minimap Orca's file editor uses now, editor zoom included. `editor.typography.changed` reports each change after.
   `(params?: {}) => { fontFamily: string; cssFontFamily: string; fontSize: number; fontWeight: string; lineHeight: number; fontLigatures: boolean; wordWrap: "on" | "off"; minimap: boolean }`
@@ -165,7 +165,7 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
 - `workspace:write` (since 1.4.248): Open and rename your workspaces, focus their terminals, open their files in Orca, and run its built-in commands
 - `agent:read` (since 1.4.245): Get notified when agent status changes
 - `agent:launch` (since 1.4.248): Start agents in your workspaces, local and SSH
-- `terminal:send` (since 1.4.160): Open and close your terminals, and type and run commands in them, local and SSH
+- `terminal:send` (since 1.4.160): Open terminals, close the ones it opened or that are in your focused workspace, and type and run commands in your terminals, local and SSH
 - `terminal:read` (since 1.4.248): Read the output of your terminals, local and SSH
 - `notifications:show` (since 1.4.160): Show desktop notifications labeled with the plugin name
 - `storage:own` (since 1.4.245): Store data in the plugin's own storage folder
