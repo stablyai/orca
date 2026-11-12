@@ -455,6 +455,31 @@ describe('NativeChatToolRun opened-run reader', () => {
     expect(topRow(container)).toEqual(before)
   })
 
+  it('keeps a reader who jumps past the drawn rows of a live run where they jumped', async () => {
+    layout.rowPx = 26
+    const { container, rerender } = render(<Transcript blocks={calls(29)} live />)
+    await settle()
+    const box = membersBox(container)
+    const opened = container.querySelector('[data-native-chat-tool-run-row="call:call-28"] button')
+    if (!opened) {
+      throw new Error('row call-28 is not drawn')
+    }
+    await act(async () => {
+      fireEvent.click(opened)
+    })
+    await growRow(container, 'call:call-28', 68)
+    for (let count = 30; count <= 62; count++) {
+      rerender(<Transcript blocks={calls(count)} live />)
+      await settle()
+    }
+
+    // A scrollbar drag lands far from every drawn row; then work arrives.
+    await scrollBox(container, 683)
+    rerender(<Transcript blocks={calls(63)} live />)
+    await settle()
+    expect(box.scrollTop).toBe(683)
+  })
+
   it('does not keep a selection span drawn after it ended while the pane was hidden', async () => {
     const { container, rerender } = render(<Transcript blocks={calls(1_000)} />)
     await settle()

@@ -48,12 +48,12 @@ export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement 
   return scroller
 }
 
-/** The reader's row from the window's own offsets, for when scrolling did not record it: reads no drawn row. */
+/** The reader's row from the window's own offsets, which cover rows not drawn yet: reads no drawn row. */
 function anchorAtScrollOffset(
   virtualizer: NativeChatToolRunVirtualizer,
-  rows: readonly NativeChatToolRunRow[]
+  rows: readonly NativeChatToolRunRow[],
+  scrollTop = virtualizer.scrollOffset ?? 0
 ): VirtualizedScrollAnchor {
-  const scrollTop = virtualizer.scrollOffset ?? 0
   const item = virtualizer.getVirtualItemForOffset(scrollTop)
   const row = item && rows[item.index]
   if (!item || !row) {
@@ -384,10 +384,13 @@ export function NativeChatToolRunMembers({
         // The reader moved: any follow in flight and any held restore row yield to them.
         followRef.current = null
         setHeldRowKey(undefined)
+        // Before the window redraws for this scroll, which can run a pending restore: a jump past
+        // the drawn rows must not send the reader back to the row it left.
+        anchorRef.current = anchorAtScrollOffset(virtualizer, rows, scroller.scrollTop)
       }
       readPosition()
     },
-    [marks, readPosition]
+    [marks, readPosition, rows, virtualizer]
   )
 
   useEffect(() => {
