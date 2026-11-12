@@ -8,6 +8,8 @@ export type SessionOptionSelectChoice = {
   description?: string
   /** Folded under More models; a matching search still lists it. */
   legacy?: true
+  /** Listed only by a matching search; never set on the current choice. */
+  hidden?: true
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.

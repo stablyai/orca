@@ -233,15 +233,13 @@ export function nativeChatSessionOptionDescriptors(args: {
   // Callers reconcile tracked models into choices first; the trigger must never show an unlisted selection.
   // Legacy rows fold away like the launch picker's; a picker opens the section when the chat is on one.
   const { legacy, hidden } = classifyAgentModels(agent, args.legacyInventory ?? models)
-  // A hidden row stays listed while the chat is on it.
-  const modelChoices = models
-    .filter(({ id }) => !hidden.has(id) || id === model.currentId)
-    .map(({ id, label, description }) => ({
-      value: id,
-      label,
-      ...(description ? { description } : {}),
-      ...(legacy.has(id) ? { legacy: true as const } : {})
-    }))
+  const modelChoices = models.map(({ id, label, description }) => ({
+    value: id,
+    label,
+    ...(description ? { description } : {}),
+    ...(legacy.has(id) ? { legacy: true as const } : {}),
+    ...(hidden.has(id) && id !== model.currentId ? { hidden: true as const } : {})
+  }))
   const modelAction = actionForApply(catalog.modelApply, model.tracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [
     {

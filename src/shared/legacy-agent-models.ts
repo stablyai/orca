@@ -52,9 +52,9 @@ function supersededCodexModels(models: readonly ListedModel[]): (model: ListedMo
   }
 }
 
-// Proven by the row naming the versioned model it runs, or, where a saved list or older host
-// dropped that, by a versioned row of the same family (opus beside claude-opus-5-5). Only a
-// family short name (opus, opus[1m]) is that model; other names (opusplan) only fold.
+// Hidden only when the row names the versioned model it runs and is that family's short name
+// (opus → claude-opus-5-5). Other covered names (opusplan) and rows a saved list or older host
+// lists without that proof (opus beside claude-opus-5-5) only fold.
 function coveredClaudeAliases(models: readonly ListedModel[]): (model: ListedModel) => ModelClass {
   const selfResolved = new Set<string>()
   const versionedFamilies = new Set<string>()
@@ -77,7 +77,7 @@ function coveredClaudeAliases(models: readonly ListedModel[]): (model: ListedMod
       }
       return family && claudeVersionedFamily(resolved) === family ? 'hidden' : 'legacy'
     }
-    return family && versionedFamilies.has(family) ? 'hidden' : null
+    return family && versionedFamilies.has(family) ? 'legacy' : null
   }
 }
 

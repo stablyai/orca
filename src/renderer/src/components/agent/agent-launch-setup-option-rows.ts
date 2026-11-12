@@ -277,8 +277,8 @@ export function agentLaunchSetupModelRows(
   modelInArguments: boolean
 ) {
   type Row = { id: string; label: string; unlisted?: true }
-  // A hidden row stays listed while it is the current choice.
-  const listed = models.filter((model) => !model.hidden || model.id === currentModel)
+  // A hidden row is listed by a matching search, or while it is the current choice.
+  const listed = models.filter((model) => !model.hidden || query || model.id === currentModel)
   // Membership ignores the selection, so picking a model never moves rows in the open list.
   const folded = (model: AgentPickerModel) => !query && Boolean(model.isLegacy)
   const rows: Row[] = listed.filter((model) => !folded(model))
