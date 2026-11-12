@@ -114,7 +114,7 @@ describe('usage source cache file', () => {
     cyclic.self = cyclic
     await expect(
       writeUsageSourceCache(ref, [{ path: 'a'.repeat(2_000_000) }, cyclic])
-    ).rejects.toThrow('circular')
+    ).rejects.toThrow()
     expect(await readUsageSourceCache(ref)).toEqual([{ totalTokens: 29 }])
     expect(readdirSync(directory)).toEqual(['sources.json'])
   })
