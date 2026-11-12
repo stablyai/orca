@@ -67,24 +67,41 @@ export async function createOrAttachTerminalSession(
       attachedSession.physicalCompletion,
       terminalSessionExitCode(attachedSession)
     )
-    const snapshot = existing.getSnapshot()
-    // Same turn as the live snapshot and stream attach, so the history image meets the stream exactly.
-    const historyCut = deps.historyJournals
-      ?.live(opts.sessionId, existing.incarnationId)
-      ?.captureCut()
-    existing.detachAllClients()
-    const token = existing.attachClient(opts.streamClient)
-    attachSessionInputViewer(existing, opts.streamClient)
-    return {
-      isNew: false,
-      snapshot,
-      pid: existing.pid,
-      shellState: existing.shellState,
-      incarnationId: existing.incarnationId,
-      ...getDaemonSessionResultMetadata(existing),
-      ...(isSessionInputClosed(existing) ? { inputClosed: true as const } : {}),
-      ...(historyCut ? { historyCut } : {}),
-      attachToken: token
+    for (;;) {
+      // Admission waits here with the old viewer still attached; denial never detaches it.
+      const hold = await opts.attachHistory?.admit(opts.sessionId, attachedSession.incarnationId)
+      if (
+        deps.sessions.get(opts.sessionId) !== attachedSession ||
+        !attachedSession.isAlive ||
+        attachedSession.isTerminating
+      ) {
+        hold?.release()
+        return createOrAttachTerminalSession(opts, deps)
+      }
+      try {
+        deps.assertCreateAllowed()
+        // One turn: snapshot, cut, encoded reply and stream attach meet; no await splits them.
+        const result = {
+          isNew: false,
+          snapshot: attachedSession.getSnapshot(),
+          pid: attachedSession.pid,
+          shellState: attachedSession.shellState,
+          incarnationId: attachedSession.incarnationId,
+          ...getDaemonSessionResultMetadata(attachedSession),
+          ...(isSessionInputClosed(attachedSession) ? { inputClosed: true as const } : {})
+        }
+        if (hold?.capture(result) === 'retry') {
+          hold.release()
+          continue
+        }
+        attachedSession.detachAllClients()
+        const token = attachedSession.attachClient(opts.streamClient)
+        attachSessionInputViewer(attachedSession, opts.streamClient)
+        return { ...result, attachToken: token }
+      } catch (error) {
+        hold?.release()
+        throw error
+      }
     }
   }
 

@@ -13,7 +13,12 @@ import {
   writeTerminalHistoryMeta,
   type SessionMeta
 } from '../storage/terminal-history-metadata'
-import { TerminalSessionJournal } from './terminal-session-journal'
+import {
+  JOURNAL_SESSION_BACKLOG_BYTES,
+  JOURNAL_SESSION_BACKLOG_RECORDS,
+  TerminalSessionJournal
+} from './terminal-session-journal'
+import { TerminalHistoryReads } from './terminal-history-read-admission'
 import type { TerminalSessionJournalReads } from './terminal-session-journal-reads'
 
 // Backing for queued, in-flight and frozen inputs across every journal on this host.
@@ -30,6 +35,12 @@ export type TerminalHistoryHold = {
 /** The daemon's single owner of its host-local history root. */
 export class TerminalHistoryJournals {
   private readonly replay = new PrioritySemaphore(1)
+  readonly reads = new TerminalHistoryReads(
+    (journal, readBytes, records) =>
+      this.backlogBytes + readBytes <= JOURNAL_HOST_BACKLOG_BYTES &&
+      journal.backlog + journal.pendingSource.bytes <= JOURNAL_SESSION_BACKLOG_BYTES &&
+      records + journal.pendingSource.records <= JOURNAL_SESSION_BACKLOG_RECORDS
+  )
   // Latest journal per ID until its actual I/O settles; a successor waits on it.
   private readonly byId = new Map<string, TerminalSessionJournal>()
   private readonly open = new Set<TerminalSessionJournalReads>()
@@ -128,7 +139,8 @@ export class TerminalHistoryJournals {
     }
     const journal = new TerminalSessionJournal(
       {
-        acquireReplay: (priority) => this.replay.acquire(priority),
+        acquireReplay: (priority, signal) => this.replay.acquire(priority, signal),
+        images: this.reads.images,
         charge: (owner, bytes) => this.charge(owner, bytes),
         settled: (owner) => this.release(hold.sessionId, owner),
         log: (event, details) => this.logger?.log(event, details)
@@ -163,7 +175,14 @@ export class TerminalHistoryJournals {
 
   private charge(journal: TerminalSessionJournalReads, bytes: number): void {
     this.backlogBytes += bytes
-    if (bytes <= 0 || this.backlogBytes <= JOURNAL_HOST_BACKLOG_BYTES) {
+    if (
+      bytes <= 0 ||
+      this.backlogBytes + this.reads.readSourceBytes <= JOURNAL_HOST_BACKLOG_BYTES
+    ) {
+      return
+    }
+    this.reads.relievePressure()
+    if (this.backlogBytes <= JOURNAL_HOST_BACKLOG_BYTES) {
       return
     }
     let largest = journal

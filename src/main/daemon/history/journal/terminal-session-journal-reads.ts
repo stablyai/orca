@@ -1,6 +1,5 @@
 import { join } from 'node:path'
 import type { TerminalHistoryOutcome } from '../../protocol/daemon-history-protocol'
-import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../../protocol/terminal-snapshot'
 import type { TerminalHistorySessionWriter } from '../storage/terminal-history-session-writer'
 import { LOG_HEADER_BYTES } from '../storage/terminal-history-log'
@@ -8,11 +7,21 @@ import { TerminalJournalBacklog } from './terminal-session-journal-backlog'
 import type {
   TerminalHistoryCut,
   TerminalHistoryImage,
+  TerminalHistoryReadCut,
   TerminalJournalOutput,
   TerminalJournalSession,
   TerminalSessionJournalHost
 } from './terminal-session-journal-contract'
-import { replayTerminalJournalSource } from './terminal-session-journal-source'
+import {
+  replayTerminalJournalSource,
+  type TerminalJournalSource
+} from './terminal-session-journal-source'
+import { RevocablePendingSource } from './terminal-history-pending-source'
+import {
+  derivedImageCharge,
+  type DerivedHistoryImage,
+  type DerivedImageLease
+} from './terminal-history-derived-image'
 
 export const JOURNAL_READ_PRIORITY = 1
 
@@ -30,6 +39,11 @@ export class TerminalSessionJournalReads {
   protected seq = 0
   protected foldGeneration = 0
   protected folded = false
+  /** Log bytes committed together with the queue head, so a cut never counts a batch twice. */
+  protected committedLogBytes = 0
+  /** Bumped by every applied record and every transition that can change a derived answer. */
+  protected appliedRevision = 0
+  private derived: DerivedHistoryImage | null = null
   constructor(
     protected readonly host: TerminalSessionJournalHost,
     root: string,
@@ -64,6 +78,7 @@ export class TerminalSessionJournalReads {
   }
 
   bindSession(session: TerminalJournalSession): void {
+    this.markApplied()
     this.incarnationId = session.incarnationId
     this.boundSession = session
   }
@@ -82,7 +97,7 @@ export class TerminalSessionJournalReads {
     const records = this.queue.snapshot()
     return {
       generation: this.foldGeneration,
-      logBytes: this.writer?.committedLog?.bytes ?? 0,
+      logBytes: this.committedLogBytes,
       records,
       outputSequence: this.output?.outputSequence() ?? 0,
       terminalOwner: this.output?.terminalOwner(),
@@ -90,30 +105,107 @@ export class TerminalSessionJournalReads {
     }
   }
 
-  /** Read-only: replays the cut through one parser without touching storage or the live model. */
-  async readImage(
-    cutOrCapture: TerminalHistoryCut | (() => TerminalHistoryCut | null),
-    opts: { scrollbackRows?: number; isCanceled?: () => boolean } = {}
-  ): Promise<TerminalHistoryImage | null> {
-    if (this.state === 'gap') {
+  /** Backing a reader's cut must reserve before copying: queued bytes and records. */
+  get pendingSource(): { bytes: number; records: number } {
+    return { bytes: this.queue.bytes, records: this.queue.length }
+  }
+
+  /** A reader's cut; only the returned handle holds the copied pending records. */
+  captureReadCut(): TerminalHistoryReadCut {
+    const { records, ...cut } = this.captureCut()
+    return { ...cut, source: new RevocablePendingSource(records) }
+  }
+
+  /** The replay lease a reader holds from before its capture until its parser is disposed. */
+  acquireRead(signal?: AbortSignal): Promise<() => void> {
+    return this.host.acquireReplay(JOURNAL_READ_PRIORITY, signal)
+  }
+
+  /**
+   * Exact qualification of a derived answer for this request shape, read after the caller's
+   * barriers. Null while no answer can be derived. Incarnation, fold generation, every applied
+   * transition, the stream position and the owner all take part.
+   */
+  derivedKey(scrollbackRows: number | undefined): string | null {
+    if (this.state === 'gap' || !this.session) {
       return null
     }
-    // Admission precedes any capture a reader makes, so waiting readers pin no copies.
-    const release = await this.host.acquireReplay(JOURNAL_READ_PRIORITY)
-    try {
-      const cut = typeof cutOrCapture === 'function' ? cutOrCapture() : cutOrCapture
-      // A cut that read nothing from files holds its whole source, whatever was published since.
-      const selfContained = cut?.generation === 0 && cut.logBytes <= LOG_HEADER_BYTES
-      if (
-        !cut ||
-        cut.gapped ||
-        this.gapped ||
-        (cut.generation !== this.foldGeneration && !selfContained) ||
-        opts.isCanceled?.()
-      ) {
-        return null
+    return JSON.stringify([
+      this.incarnationId,
+      this.foldGeneration,
+      this.appliedRevision,
+      scrollbackRows ?? null,
+      this.output?.outputSequence() ?? 0,
+      this.output?.terminalOwner() ?? null
+    ])
+  }
+
+  /** The latest derived answer for exactly this key, leased; null when absent or stale. */
+  leaseDerived(key: string): DerivedImageLease | null {
+    const derived = this.derived
+    return derived?.eligible && derived.key === key ? this.host.images.lease(derived) : null
+  }
+
+  /** Installs a fresh answer as the sole entry if its key is still current and it fits I. */
+  offerDerived(
+    key: string,
+    scrollbackRows: number | undefined,
+    image: TerminalHistoryImage
+  ): DerivedHistoryImage | null {
+    if (this.derivedKey(scrollbackRows) !== key) {
+      return null
+    }
+    const entry: DerivedHistoryImage = {
+      key,
+      image,
+      charge: derivedImageCharge(image),
+      leases: 0,
+      eligible: true,
+      onEvict: () => {
+        if (this.derived === entry) {
+          this.derived = null
+        }
       }
-      const snapshot = await this.replay(cut.logBytes, cut.records, { ...opts, selfContained })
+    }
+    this.invalidateDerived()
+    if (!this.host.images.admit(entry)) {
+      return null
+    }
+    this.derived = entry
+    return entry
+  }
+
+  protected markApplied(): void {
+    this.appliedRevision += 1
+    this.invalidateDerived()
+  }
+
+  protected invalidateDerived(): void {
+    const derived = this.derived
+    if (derived) {
+      this.derived = null
+      derived.eligible = false
+      this.host.images.settle(derived)
+    }
+  }
+
+  /** Replays the cut through one parser; the caller holds the replay lease from before capture. */
+  async readImage(
+    cut: TerminalHistoryReadCut,
+    opts: { scrollbackRows?: number; isCanceled?: () => boolean } = {}
+  ): Promise<TerminalHistoryImage | null> {
+    // A cut that read nothing from files holds its whole source, whatever was published since.
+    const selfContained = cut.generation === 0 && cut.logBytes <= LOG_HEADER_BYTES
+    if (
+      this.state === 'gap' ||
+      cut.gapped ||
+      (cut.generation !== this.foldGeneration && !selfContained) ||
+      opts.isCanceled?.()
+    ) {
+      return null
+    }
+    try {
+      const snapshot = await this.replay(cut.logBytes, cut.source, { ...opts, selfContained })
       return snapshot
         ? {
             snapshot: {
@@ -130,8 +222,6 @@ export class TerminalSessionJournalReads {
         : null
     } catch {
       return null
-    } finally {
-      release()
     }
   }
 
@@ -148,13 +238,14 @@ export class TerminalSessionJournalReads {
       return
     }
     this.state = 'gap'
+    this.markApplied()
     this.host.log('terminal-history-gap', { reason, incarnationId: this.incarnationId })
     this.host.charge(this, -this.queue.clear())
   }
 
   protected replay(
     logBytes: number,
-    pending: readonly PendingOutputRecord[],
+    pending: TerminalJournalSource['pending'],
     opts: { scrollbackRows?: number; isCanceled?: () => boolean; selfContained?: boolean } = {}
   ): Promise<TerminalSnapshot | null> {
     return replayTerminalJournalSource(

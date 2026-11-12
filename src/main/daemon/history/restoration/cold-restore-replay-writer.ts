@@ -1,4 +1,12 @@
 import type { HeadlessEmulator } from '../../emulation/headless-emulator'
+import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
+import { isValidTerminalHistorySize } from './terminal-history-dimensions'
+
+/**
+ * Records read by position at each synchronous slice. Undefined ends the source; null means it
+ * was revoked. Nothing a slice reads survives the next yield.
+ */
+export type ReplayRecordSource = (index: number) => PendingOutputRecord | undefined | null
 
 const REPLAY_CHARS_PER_TURN = 64 * 1024
 const REPLAY_OPERATIONS_PER_TURN = 1024
@@ -38,6 +46,80 @@ export class ColdRestoreReplayWriter {
       offset = end
     }
     return true
+  }
+
+  /** Replays the source with no record, string or slice held across a yield. */
+  async replayRecords(source: ReplayRecordSource, isCanceled: () => boolean): Promise<boolean> {
+    const position = { index: 0, offset: 0 }
+    for (;;) {
+      const pendingYield = this.takeBudgetYield()
+      if (pendingYield) {
+        await pendingYield
+      }
+      if (isCanceled()) {
+        return false
+      }
+      const step = this.replayStep(source, position)
+      if (step !== 'more') {
+        return step === 'done'
+      }
+    }
+  }
+
+  // One synchronous slice: its record and string locals end when it returns.
+  private replayStep(
+    source: ReplayRecordSource,
+    position: { index: number; offset: number }
+  ): 'more' | 'done' | 'failed' {
+    const record = source(position.index)
+    if (record === undefined) {
+      return 'done'
+    }
+    if (record === null) {
+      return 'failed'
+    }
+    this.operations += 1
+    if (record.kind === 'resize') {
+      if (!isValidTerminalHistorySize(record.cols, record.rows)) {
+        return 'failed'
+      }
+      this.emulator.resize(record.cols, record.rows)
+    } else if (record.kind === 'clear') {
+      this.emulator.clearScrollback()
+    } else {
+      const end = this.sliceEnd(record.data, position.offset)
+      if (
+        end > position.offset &&
+        !this.emulator.writeSync(record.data.slice(position.offset, end))
+      ) {
+        return 'failed'
+      }
+      this.chars += end - position.offset
+      position.offset = end
+      if (end < record.data.length) {
+        return 'more'
+      }
+    }
+    position.index += 1
+    position.offset = 0
+    return 'more'
+  }
+
+  private sliceEnd(data: string, offset: number): number {
+    let end = Math.min(data.length, offset + Math.max(1, REPLAY_CHARS_PER_TURN - this.chars))
+    // Keep UTF-16 surrogate pairs together across xterm replay slices.
+    const left = data.charCodeAt(end - 1)
+    const right = data.charCodeAt(end)
+    if (
+      end < data.length &&
+      left >= 0xd800 &&
+      left <= 0xdbff &&
+      right >= 0xdc00 &&
+      right <= 0xdfff
+    ) {
+      end += end === offset + 1 ? 1 : -1
+    }
+    return end
   }
 
   async resize(cols: number, rows: number): Promise<void> {

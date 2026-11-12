@@ -168,7 +168,11 @@ export class DaemonRequestRouter {
         return this.shutdownIfIdle(clientId, request.id)
       case 'getSnapshot':
       case 'flushHistory':
-        return answerDaemonHistoryRequest(this.options.host, request)
+        return answerDaemonHistoryRequest(
+          this.options.host,
+          request,
+          this.options.connections.get(clientId)?.controlSocket
+        )
       case 'getSize':
         return { size: this.options.host.getAppliedSize(request.payload.sessionId) }
       case 'takePendingOutput':

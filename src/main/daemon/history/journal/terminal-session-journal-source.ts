@@ -13,6 +13,9 @@ import { readTerminalHistoryBufferAsync } from '../storage/terminal-history-file
 import { TERMINAL_HISTORY_LOG_MAX_BYTES } from '../storage/terminal-history-file-limits'
 import { readTerminalHistoryCheckpoint } from '../restoration/terminal-history-checkpoint-reader'
 import { replayTerminalHistory } from '../restoration/terminal-history-replay'
+import type { ReplayRecordSource } from '../restoration/cold-restore-replay-writer'
+import type { RevocablePendingSource } from './terminal-history-pending-source'
+import { detachTerminalSnapshotStrings } from './terminal-history-detached-snapshot'
 import { TerminalHistorySessionWriter } from '../storage/terminal-history-session-writer'
 import {
   clearLegacyTerminalHistoryScrollback,
@@ -29,7 +32,8 @@ export type TerminalJournalSource = {
   generation: number
   folded: boolean
   logBytes: number
-  pending: readonly PendingOutputRecord[]
+  /** Read per slice; a revocable source also owns the parser it feeds. */
+  pending: ReplayRecordSource | RevocablePendingSource
   origin: { cols: number; rows: number; wslDistro: string | undefined }
 }
 
@@ -69,6 +73,16 @@ export async function replayTerminalJournalSource(
     wslDistro: source.origin.wslDistro,
     windowsPty: historyReplayWindowsPty(DAEMON_HISTORY_RESIZE_MODEL)
   })
+  const pending = typeof source.pending === 'function' ? source.pending : source.pending.at
+  const revocable = typeof source.pending === 'function' ? null : source.pending
+  let disposed = false
+  const dispose = (): void => {
+    if (!disposed) {
+      disposed = true
+      emulator.dispose()
+    }
+  }
+  revocable?.holdParser(dispose)
   try {
     // The checkpoint's cwd is the baseline; a later OSC 7 in the replayed records still wins.
     if (checkpoint?.cwd) {
@@ -77,21 +91,16 @@ export async function replayTerminalJournalSource(
     const replayed = await replayTerminalHistory(
       emulator,
       checkpoint,
-      concatRecords(logged, source.pending),
-      opts.isCanceled
+      (index) => (index < logged.length ? logged[index] : pending(index - logged.length)),
+      () => opts.isCanceled?.() === true || revocable?.revoked === true
     )
-    return replayed ? emulator.getSnapshot({ scrollbackRows: opts.scrollbackRows }) : null
+    return replayed && !revocable?.revoked
+      ? detachTerminalSnapshotStrings(emulator.getSnapshot({ scrollbackRows: opts.scrollbackRows }))
+      : null
   } finally {
-    emulator.dispose()
+    revocable?.holdParser(null)
+    dispose()
   }
-}
-
-function* concatRecords(
-  first: readonly PendingOutputRecord[],
-  second: readonly PendingOutputRecord[]
-): Generator<PendingOutputRecord> {
-  yield* first
-  yield* second
 }
 
 /** An explicit new physical origin: predecessor replay files go, fresh metadata, generation 0. */
@@ -124,7 +133,7 @@ export async function publishTerminalJournalSeedOrigin(
     generation: 0,
     folded: false,
     logBytes: 0,
-    pending: seed,
+    pending: (index) => seed[index],
     origin
   })
   if (!snapshot) {

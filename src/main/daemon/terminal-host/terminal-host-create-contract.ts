@@ -11,11 +11,25 @@ import type {
 } from '../../../shared/agent-session/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { TerminalHistoryCut } from '../history/journal/terminal-session-journal'
 import type { TerminalHistoryOutcome } from '../protocol/daemon-history-protocol'
+
+/** Deep-history admission an attach takes before its atomic cut, while the old viewer stays. */
+export type AttachHistoryAdmission = {
+  admit(sessionId: string, incarnationId: string): Promise<AttachHistoryHold | null>
+}
+
+export type AttachHistoryHold = {
+  /**
+   * Synchronous with the live snapshot and token attach: freezes the cut, or substitutes the
+   * image at a proved anchor and encodes the final reply. 'retry' leaves the old viewer intact.
+   */
+  capture(result: Omit<CreateOrAttachResult, 'attachToken'>): 'captured' | 'retry'
+  release(): void
+}
 
 export type CreateOrAttachOptions = {
   sessionId: string
+  attachHistory?: AttachHistoryAdmission
   cols: number
   rows: number
   cwd?: string
@@ -64,7 +78,5 @@ export type CreateOrAttachResult = {
   cwdReadableByDaemon?: boolean
   /** The live child can no longer take input through its PTY master. */
   inputClosed?: true
-  /** Internal: the attach cut for the host-owned history image, never sent on the wire. */
-  historyCut?: TerminalHistoryCut
   history?: TerminalHistoryOutcome
 }

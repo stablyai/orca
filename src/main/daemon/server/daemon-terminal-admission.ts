@@ -27,7 +27,9 @@ import {
 } from '../../../shared/agent-session/agent-session-host-authority'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
-import { withAttachHistoryImage } from './daemon-history-requests'
+import { openAttachHistory } from './daemon-attach-history'
+import { withPreparedReply, type PreparedDaemonReply } from './daemon-reply-obligation'
+import { encodeNdjson } from '../../../shared/main-process-ndjson-framer'
 
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
@@ -86,6 +88,8 @@ export class DaemonTerminalAdmission {
     let routedSessionId = payload.sessionId
     let result: CreateOrAttachResult
     let spawnPreparation: PendingPtySpawnPreparation | null = null
+    let prepared: PreparedDaemonReply | undefined
+    let attachHistory: ReturnType<typeof openAttachHistory> | undefined
     try {
       if (
         payload.agentSessionEnsure !== undefined &&
@@ -115,7 +119,21 @@ export class DaemonTerminalAdmission {
               ? []
               : [payload.historySeed]
             : undefined
+      const preparation = spawnPreparation
+      attachHistory = this.options.host.historyJournals
+        ? openAttachHistory(
+            this.options.host,
+            {
+              cancelSignal: preparation.controller.signal,
+              isCanceled: () => preparation.canceled === true
+            },
+            // The whole wire reply through the existing encoder, once; the writer sends this line.
+            (reply) =>
+              encodeNdjson({ id: request.id, ok: true, payload: toCreateOrAttachReply(reply) })
+          )
+        : undefined
       result = await this.options.host.createOrAttach({
+        ...(attachHistory ? { attachHistory: attachHistory.admission } : {}),
         sessionId: payload.sessionId,
         cols: payload.cols,
         rows: payload.rows,
@@ -149,14 +167,14 @@ export class DaemonTerminalAdmission {
         },
         streamClient: this.createStreamClient(clientId, () => routedSessionId)
       })
-      if (this.options.host.historyJournals) {
-        result = await withAttachHistoryImage(
-          this.options.host,
+      if (attachHistory) {
+        ;({ result, prepared } = await attachHistory.finish(
           result.agentSessionEnsure?.owner.ptyId ?? payload.sessionId,
-          result,
-          () => spawnPreparation?.canceled === true
-        )
+          result
+        ))
       }
+    } catch (error) {
+      throw attachHistory ? attachHistory.fail(error) : error
     } finally {
       if (spawnPreparation) {
         this.options.preparations.finish(payload.sessionId, spawnPreparation)
@@ -172,7 +190,8 @@ export class DaemonTerminalAdmission {
       client.streamSocket === null
     ) {
       this.options.host.detach(routedSessionId, result.attachToken)
-      throw new TerminalAttachCanceledError(routedSessionId)
+      const canceled = new TerminalAttachCanceledError(routedSessionId)
+      throw prepared ? withPreparedReply(canceled, { release: prepared.release }) : canceled
     }
     this.options.attachments.attach(routedSessionId, clientId, result.attachToken)
     this.options.streamDataBatcher.refreshSessionDroppability(routedSessionId)
@@ -188,23 +207,8 @@ export class DaemonTerminalAdmission {
       sessionId: routedSessionId,
       pid: result.pid
     })
-    return {
-      isNew: result.isNew,
-      snapshot: result.snapshot,
-      pid: result.pid,
-      shellState: result.shellState,
-      incarnationId: result.incarnationId,
-      ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-      ...(result.launchNote !== undefined ? { launchNote: result.launchNote } : {}),
-      wslDistro: result.wslDistro,
-      ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
-      ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
-      ...(result.cwdReadableByDaemon !== undefined
-        ? { cwdReadableByDaemon: result.cwdReadableByDaemon }
-        : {}),
-      ...(result.inputClosed ? { inputClosed: true as const } : {}),
-      ...(result.history ? { history: result.history } : {})
-    }
+    const reply = toCreateOrAttachReply(result)
+    return prepared ? withPreparedReply(reply, prepared) : reply
   }
 
   private createStreamClient(
@@ -261,5 +265,26 @@ export class DaemonTerminalAdmission {
         this.options.reevaluateIdleShutdown()
       }
     }
+  }
+}
+
+/** The wire payload of a create or attach result; the attach token never leaves the daemon. */
+function toCreateOrAttachReply(result: Omit<CreateOrAttachResult, 'attachToken'>) {
+  return {
+    isNew: result.isNew,
+    snapshot: result.snapshot,
+    pid: result.pid,
+    shellState: result.shellState,
+    incarnationId: result.incarnationId,
+    ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
+    ...(result.launchNote !== undefined ? { launchNote: result.launchNote } : {}),
+    wslDistro: result.wslDistro,
+    ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
+    ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
+    ...(result.cwdReadableByDaemon !== undefined
+      ? { cwdReadableByDaemon: result.cwdReadableByDaemon }
+      : {}),
+    ...(result.inputClosed ? { inputClosed: true as const } : {}),
+    ...(result.history ? { history: result.history } : {})
   }
 }

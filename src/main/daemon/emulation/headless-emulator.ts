@@ -24,7 +24,6 @@ import {
 } from './terminal-view-attribute-responder'
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
-import type { TerminalModes } from '../protocol/terminal-modes'
 import type { TerminalOscLinkRange } from '../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalCursorContext } from '../../../shared/terminal/input/terminal-composer-draft'
 import { readTerminalCursorLineContext } from '../../../shared/terminal/input/terminal-cursor-line-context'
@@ -242,7 +241,7 @@ export class HeadlessEmulator {
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
-    const modes = this.getModes()
+    const modes = readTerminalModes(this.terminal)
     // Absolute cursor restore avoids wrap-pending drift; carry the saved register for DECRC.
     const serializedAnsi = serializeWithAbsoluteCursor(
       this.serializer,
@@ -353,10 +352,9 @@ export class HeadlessEmulator {
 
   dispose(): void {
     this.disposed = true
+    // Parser-held text may slice its input; a disposed model keeps none of it.
+    this.partialEscapeTail = ''
+    this.oscText = new TerminalOscCwdTitleScanner()
     this.terminal.dispose()
-  }
-
-  private getModes(): TerminalModes {
-    return readTerminalModes(this.terminal)
   }
 }

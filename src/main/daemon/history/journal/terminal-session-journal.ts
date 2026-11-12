@@ -40,6 +40,8 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
 
   /** Called in applied order; the seed origin is exempt from the backlog bound it predates. */
   record(record: PendingOutputRecord, opts: { origin?: boolean } = {}): void {
+    // Coalescing can change content without new intake; every applied call invalidates.
+    this.markApplied()
     if (this.state !== 'open' || this.ending) {
       return
     }
@@ -92,6 +94,7 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
     }
     this.ending = true
     this.exitCode = exitCode
+    this.markApplied()
     this.kick()
   }
 
@@ -167,6 +170,7 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       }
       if (appended === 'ok') {
         this.seq += 1
+        this.committedLogBytes = this.writer.committedLog?.bytes ?? 0
         this.host.charge(this, -this.queue.commit(batch.records, batch.headOffset))
         continue
       }
@@ -197,6 +201,7 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       !hasReplayableTerminalHistorySessionFiles(this.dir)
     ) {
       this.writer = openTerminalJournalOrigin(this.dir, this.origin)
+      this.committedLogBytes = 0
       return
     }
     // Predecessor files stay the sole recovery until the seed's checkpoint is durable.
@@ -211,6 +216,8 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
         return
       }
       this.writer = writer
+      this.committedLogBytes = writer.committedLog?.bytes ?? 0
+      this.markApplied()
       this.foldGeneration += 1
       this.host.charge(this, -this.queue.commit(this.originRecords, 0))
     } finally {
@@ -229,7 +236,8 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       }
       const covered = this.queue.sealAll()
       const cut = this.captureCut()
-      const snapshot = await this.replay(committed.bytes, cut.records)
+      const records = cut.records
+      const snapshot = await this.replay(committed.bytes, (index) => records[index])
       if (!snapshot || this.state !== 'open') {
         throw new Error('terminal_history_fold_replay_failed')
       }
@@ -240,6 +248,8 @@ export class TerminalSessionJournal extends TerminalSessionJournalReads {
       }
       this.foldGeneration += 1
       this.folded = true
+      this.committedLogBytes = writer.committedLog?.bytes ?? 0
+      this.markApplied()
       this.host.charge(this, -this.queue.commit(covered, 0))
     } finally {
       release()

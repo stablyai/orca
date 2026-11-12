@@ -56,7 +56,9 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
           ...payload,
           cancelAfterMs: Math.max(1, opts.timeoutMs + opts.unmatchedCancelGraceMs)
         }
-      : payload
+      : type === 'getSnapshot' && payload !== null && typeof payload === 'object'
+        ? { ...payload, remainingBudgetMs: opts.timeoutMs }
+        : payload
   const encoded = encodeNdjson({
     id: opts.id,
     type,

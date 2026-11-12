@@ -10,6 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TerminalSessionJournal } from '../terminal-session-journal'
+import { DerivedHistoryImageBudget } from '../terminal-history-derived-image'
 import { getHistorySessionDirName } from '../../storage/history-paths'
 import { HistoryReader } from '../../restoration/history-reader'
 import { TerminalHistorySessionWriter } from '../../storage/terminal-history-session-writer'
@@ -38,7 +39,13 @@ function openJournal(
   const dir = join(root, dirName)
   mkdirSync(dir, { recursive: true })
   const journal = new TerminalSessionJournal(
-    { acquireReplay: async () => () => {}, charge: () => {}, settled: () => {}, log: () => {} },
+    {
+      acquireReplay: async () => () => {},
+      images: new DerivedHistoryImageBudget(),
+      charge: () => {},
+      settled: () => {},
+      log: () => {}
+    },
     root,
     dirName,
     { cwd: '/tmp', cols: 80, rows: 24, wslDistro: undefined, preservesRecovery: false, ...opts }
@@ -52,6 +59,7 @@ function bind(journal: TerminalSessionJournal, historySeeded?: boolean): void {
     historySeeded,
     isAlive: true,
     settleShellOwnershipConfirmation: async () => {},
+    snapshotBarrier: () => {},
     prepareForFinalSnapshot: () => ''
   })
   journal.bindOutput({
@@ -71,13 +79,14 @@ describe('TerminalSessionJournal', () => {
     journal.record(output('COMMITTED\r\n'))
     expect(await journal.flush()).toBe(true)
     journal.record(output('AT_CUT\r\n'))
-    const cut = journal.captureCut()
+    const cut = journal.captureReadCut()
     journal.record(output('AFTER_CUT\r\n'))
 
     const image = await journal.readImage(cut)
     expect(image?.snapshot.snapshotAnsi).toContain('COMMITTED')
     expect(image?.snapshot.snapshotAnsi).toContain('AT_CUT')
     expect(image?.snapshot.snapshotAnsi).not.toContain('AFTER_CUT')
+    expect(await journal.flush()).toBe(true)
   })
 
   // CJ3: a seeded origin used to delete the predecessor before its own replacement was durable.
@@ -122,7 +131,7 @@ describe('TerminalSessionJournal', () => {
     expect(readGeneration().cwd).toBe('/tmp/cwd-a')
 
     journal.record(output('\x1b]7;file://host/tmp/cwd-c\x07CWD_C_ROW\r\n'))
-    const image = await journal.readImage(journal.captureCut(), { scrollbackRows: 5000 })
+    const image = await journal.readImage(journal.captureReadCut(), { scrollbackRows: 5000 })
     expect(image?.snapshot.cwd).toBe('/tmp/cwd-c')
     expect(await journal.flush()).toBe(true)
     const restored = await new HistoryReader(root).detectColdRestore(sessionId)

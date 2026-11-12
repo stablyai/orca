@@ -201,6 +201,8 @@ export type GetSnapshotRequest = {
     scrollbackRows?: number
     /** Host-owned history answers only for this incarnation. */
     expectedIncarnationId?: string
+    /** The caller's remaining wait; deep reads stop by it, capped by the daemon's own budget. */
+    remainingBudgetMs?: number
   }
 }
 

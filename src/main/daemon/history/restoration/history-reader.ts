@@ -259,7 +259,7 @@ export class HistoryReader {
       })
       try {
         const records = log.batches.flatMap((batch) => batch.records)
-        if (!(await replayTerminalHistory(emulator, checkpoint, records))) {
+        if (!(await replayTerminalHistory(emulator, checkpoint, (index) => records[index]))) {
           return { restoreInfo: null, readFailed: true }
         }
         const snapshot = emulator.getSnapshot()

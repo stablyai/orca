@@ -267,6 +267,40 @@ describe('daemon-owned terminal history', () => {
     expect(screen?.data).not.toContain('OLD_INCARNATION')
   }, 30_000)
 
+  // R2-A: a known answer whose full reply cannot fit must fail before it detaches the viewer.
+  it('refuses an over-long attach reply while the existing viewer keeps streaming', async () => {
+    const { child, options } = await startHostHistory()
+    const { id } = await adapter!.spawn({
+      sessionId: 'host-history-oversize-attach',
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp'
+    })
+    child._simulateData('ATTACHED_ROW\r\n')
+    const request = { sessionId: id, cols: 80, rows: 24, cwd: '/tmp' }
+    // This attach leaves its answer as the latest result, then streams to its own viewer.
+    const viewer = new DaemonPtyAdapter(options)
+    const late = new DaemonPtyAdapter(options)
+    try {
+      expect((await viewer.spawn(request)).snapshot).toContain('ATTACHED_ROW')
+      const received: string[] = []
+      viewer.onData(({ data }) => received.push(data))
+      harness!.server.host.setLaunchNote(id, {
+        arm: {
+          launchToken: 'oversize',
+          launchConfig: { agentArgs: '', agentEnv: { BIG: 'x'.repeat(17 * 1024 * 1024) } }
+        }
+      })
+      await expect(late.spawn(request)).rejects.toThrow()
+      child._simulateData('AFTER_REFUSAL\r\n')
+      await waitFor(() => received.join('').includes('AFTER_REFUSAL'))
+    } finally {
+      await viewer.disconnectOnly()
+      viewer.dispose()
+      late.dispose()
+    }
+  }, 30_000)
+
   // Ruling 23:29: after a storage gap the live terminal continues, deep history stays unavailable.
   it('keeps the live window after a storage gap and never ends the gapped history cleanly', async () => {
     const { child } = await startHostHistory()
