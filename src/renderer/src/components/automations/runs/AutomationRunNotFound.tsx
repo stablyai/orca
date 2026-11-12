@@ -45,10 +45,18 @@ export function AutomationRunNotFound({
         </p>
         <div className="mt-3 flex flex-wrap justify-center gap-2">
           {runGone && automationName ? (
-            <Button type="button" size="sm" onClick={onShowAutomation}>
-              {t('auto.components.automations.runNotFound.openAutomation', 'Open {{name}}', {
-                name: automationName
-              })}
+            <Button
+              type="button"
+              size="sm"
+              className="max-w-[min(100%,24rem)]"
+              title={automationName}
+              onClick={onShowAutomation}
+            >
+              <span className="truncate">
+                {t('auto.components.automations.runNotFound.openAutomation', 'Open {{name}}', {
+                  name: automationName
+                })}
+              </span>
             </Button>
           ) : null}
           <Button
