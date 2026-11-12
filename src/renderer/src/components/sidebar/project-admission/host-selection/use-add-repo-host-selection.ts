@@ -151,7 +151,7 @@ export function useAddRepoHostSelection({
       setStep('add')
       return true
     },
-    [selectableHostOptions, setStep]
+    [selectableHostOptions, setSelectedAddProjectHostId, setStep]
   )
 
   const handleConnectAddProjectHost = useCallback(
@@ -230,7 +230,14 @@ export function useAddRepoHostSelection({
         return false
       }
     },
-    [selectableHostOptions, setSshConnectionState, setStep, sshConnectionStates]
+    [
+      selectableHostOptions,
+      setHostSelectorOpen,
+      setSelectedAddProjectHostId,
+      setSshConnectionState,
+      setStep,
+      sshConnectionStates
+    ]
   )
 
   return {
