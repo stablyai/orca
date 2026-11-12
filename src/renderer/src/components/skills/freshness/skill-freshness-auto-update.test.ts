@@ -19,7 +19,8 @@ vi.mock('@/hooks/skills/discovery/installed-agent-skill-discovery', () => ({
 const { _resetSkillFreshnessAutoUpdate, autoUpdateUnmodifiedSkills } =
   await import('./skill-freshness-auto-update')
 const { getSkillUpdateRun } = await import('./skill-update-run-store')
-const { RuntimeRpcCallError } = await import('@/runtime/rpc/calls/runtime-rpc-result')
+const { RuntimeConnectionChangedBeforeSendError, RuntimeRpcCallError } =
+  await import('@/runtime/rpc/calls/runtime-rpc-result')
 
 const DIGEST = 'a'.repeat(64)
 
@@ -120,15 +121,24 @@ describe('startup scan of an already-current host', () => {
       false
     ],
     [
-      'stays quiet when the host answers the marking call with an error',
+      // A paired host's lost reply or timeout reaches the renderer as an RPC error, not proof of no write.
+      'warns when a sent marking call fails with an RPC error',
       async (options) => {
         options.onSent?.()
         throw new RuntimeRpcCallError({
           id: '1',
           ok: false,
-          error: { code: 'internal', message: 'boom' },
+          error: { code: 'timeout', message: 'Timed out waiting for the remote Orca runtime' },
           _meta: { runtimeId: 'r' }
         })
+      },
+      true
+    ],
+    [
+      'stays quiet when the connection changed before the marking call was sent',
+      async (options) => {
+        options.onSent?.()
+        throw new RuntimeConnectionChangedBeforeSendError('connection changed')
       },
       false
     ]

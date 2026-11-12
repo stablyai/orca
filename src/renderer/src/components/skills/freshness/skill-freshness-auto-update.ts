@@ -15,10 +15,7 @@ import {
 } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
-import {
-  RuntimeConnectionChangedBeforeSendError,
-  RuntimeRpcCallError
-} from '@/runtime/rpc/calls/runtime-rpc-result'
+import { RuntimeConnectionChangedBeforeSendError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '@/store/index'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
@@ -131,15 +128,12 @@ function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPl
 }
 
 /**
- * A rejection after the request left for the host, other than the host's own error reply, may
- * hide a committed update. Refused before sending, or answered with an error, nothing was written.
+ * Once the request is on its way to the host, any rejection may hide a committed update: a paired
+ * host's lost reply or timeout also arrives as an RPC error, and failure codes do not say whether
+ * the host ran the method. Only a refusal before sending proves nothing was written.
  */
 function mayHaveWritten(sent: boolean, error: unknown): boolean {
-  return (
-    sent &&
-    !(error instanceof RuntimeRpcCallError) &&
-    !(error instanceof RuntimeConnectionChangedBeforeSendError)
-  )
+  return sent && !(error instanceof RuntimeConnectionChangedBeforeSendError)
 }
 
 /**
