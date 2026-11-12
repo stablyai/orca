@@ -20,9 +20,10 @@ import {
   selectFolderWorkspaceCopies
 } from '@/store/folder-workspaces/folder-workspace-record-index'
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { rowLessSourceTarget } from '@/runtime/hosts/selection/default-creation-host'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
-  getLinearReadScope,
+  getLinearTaskSourceScope,
   scopedLinearCacheKey,
   type LinearReadScope
 } from '@/store/slices/linear/linear-slice-scope'
@@ -67,7 +68,7 @@ function updatedWorkspace(
       ? getFolderWorkspaceWorktree(candidates[0].workspace, candidates[0])
       : undefined
   }
-  const candidates = findIndexedWorktrees(state.worktreesByRepo, id).filter(
+  const candidates = findIndexedWorktrees(selectWorktreesByRepo(state), id).filter(
     (row) => !row.runtimeOwnerEnvironmentId && parseExecutionHostId(row.hostId)?.kind !== 'runtime'
   )
   return candidates.length === 1
@@ -127,8 +128,8 @@ export function resolveLinearLinkedIssueRefreshTargets(
     ) {
       continue
     }
-    const scope = getLinearReadScope(state.settings, source)
-    if (!sameEndpoint(rowLessSourceTarget(scope.settings), endpoint)) {
+    const scope = getLinearTaskSourceScope(source)
+    if (!sameEndpoint(taskSourceRuntimeTarget(source), endpoint)) {
       continue
     }
     const workspaceId = getWorkspaceReferenceLinearWorkspaceId(item.linearWorkspaceId, source)
