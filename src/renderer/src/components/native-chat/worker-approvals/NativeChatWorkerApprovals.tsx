@@ -89,16 +89,11 @@ export function NativeChatWorkerApprovalStack({
         decision,
         ...(decision === 'deny' ? { reason: OWNER_DENY_REASON } : {})
       })
-        .then(() =>
-          toast.success(
-            decision === 'allow'
-              ? t('components.native-chat.approval.answerAllowed', 'Allowed · {{name}}', { name })
-              : t('components.native-chat.approval.answerDenied', 'Denied · {{name}}', { name })
-          )
-        )
+        // A landed answer needs no toast: the card turns into its receipt.
         .catch((error: unknown) => {
           const closed = closedBeforeAnswer(error)
           if (!closed) {
+            // Not applied and still open: the card stays answerable.
             toast.error(
               t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
                 name,
@@ -107,7 +102,7 @@ export function NativeChatWorkerApprovalStack({
             )
             return
           }
-          // Closed before this answer: the card turns into its receipt now, and the click did not fail.
+          // Closed before this answer: the card turns into its receipt now, and the toast says why.
           onClosed?.(approvalId, closed)
           toast.info(
             closed.by === 'worker-ended'

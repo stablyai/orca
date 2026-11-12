@@ -40,11 +40,22 @@ const entry = {
   worker
 }
 
-it('says the Allow landed, and an answer to a prompt already closed is no failure', async () => {
+it('shows no toast when an answer lands, and closes the card with a toast when the prompt had already closed', async () => {
+  const onClosed = vi.fn()
   rpc.call.mockResolvedValueOnce({})
-  render(<NativeChatWorkerApprovalStack approvals={[entry]} target={{ kind: 'local' }} />)
+  render(
+    <NativeChatWorkerApprovalStack
+      approvals={[entry]}
+      target={{ kind: 'local' }}
+      onClosed={onClosed}
+    />
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Allowed · try-claude'))
+  await waitFor(() => expect(rpc.call).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled())
+  expect(toast.success).not.toHaveBeenCalled()
+  expect(toast.info).not.toHaveBeenCalled()
+  expect(onClosed).not.toHaveBeenCalled()
 
   rpc.call.mockRejectedValueOnce(
     new RuntimeRpcCallError({
@@ -58,6 +69,12 @@ it('says the Allow landed, and an answer to a prompt already closed is no failur
   await waitFor(() =>
     expect(toast.info).toHaveBeenCalledWith('try-claude: this prompt had already closed')
   )
+  expect(onClosed).toHaveBeenCalledWith('apr_1', {
+    by: 'unknown',
+    decision: null,
+    reason: null,
+    reasonDelivered: false
+  })
   expect(toast.error).not.toHaveBeenCalled()
 })
 
