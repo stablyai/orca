@@ -77,7 +77,8 @@ describe('recoverable connect failures on a remote runtime pane', () => {
     })
   })
 
-  it('re-prepares a fresh agent after a failed capability read through Reconnect', async () => {
+  it('re-prepares a fresh agent after a failed capability read through scheduled recovery', async () => {
+    vi.useFakeTimers()
     freshLaunchFixture = true
     appStore.getState.mockReturnValue({ runtimeStatusByEnvironmentId: new Map() })
     const hostCall = runtimeCall.getMockImplementation()
@@ -114,7 +115,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
       expect(
         runtimeCall.mock.calls.some(([request]) => request.method.startsWith('terminal.create'))
       ).toBe(false)
-      expect(transport.retryRecovery?.()).toBe(true)
+      await vi.advanceTimersByTimeAsync(1000)
       await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1'))
       expect(
         runtimeCall.mock.calls.filter(
@@ -128,6 +129,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
       )
     } finally {
       transport.destroy?.()
+      vi.useRealTimers()
     }
   })
 
