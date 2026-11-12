@@ -81,18 +81,26 @@ public enum ElementActionability {
             }
             guard !visible.isEmpty else {
                 last = .outOfView(scrolled: scrolled)
-                continue
-            }
-            last = hitTarget(element, visible: visible, ancestors: ancestors, ax: ax)
-            switch last {
-            case .ready:
+                if scrolled { continue }
                 return last
-            case .covered where !scrollTried:
-                // Why: a table or sticky header inside the scroll area can cover a row that scrolling would clear.
+            }
+            switch hitTarget(element, visible: visible, ancestors: ancestors, ax: ax) {
+            case let .direct(point):
+                return .ready(point)
+            case let .ancestorOnly(point):
+                // Why: a scroller not exposed as AXScrollArea (a web overflow div) can hide the element behind its own container.
+                guard !scrollTried else { return .ready(point) }
                 scrollTried = true
                 scrolled = try ax.scrollToVisible(element)
-            default:
-                break
+                guard scrolled else { return .ready(point) }
+                last = .outOfView(scrolled: true)
+            case let .covered(by: cover):
+                last = .covered(by: cover)
+                // Why: a table or sticky header inside the scroll area can cover a row that scrolling would clear.
+                if !scrollTried {
+                    scrollTried = true
+                    scrolled = try ax.scrollToVisible(element)
+                }
             }
         } while ax.waitBeforeRetry()
         return last
@@ -120,43 +128,72 @@ public enum ElementActionability {
         return (visible, ancestors)
     }
 
-    /// Accepts a point whose hit is the element, inside it, or one of its ancestors (the element is
-    /// see-through to hit tests there); anything else in the element's window is covering it.
+    enum Hit<Element> {
+        /// The element, inside it, or a hit that shows nothing covers it.
+        case direct(CGPoint)
+        /// Only the element's own ancestors answered, as when it is see-through to hit tests.
+        case ancestorOnly(CGPoint)
+        case covered(by: Element)
+    }
+
     static func hitTarget<AX: ElementActionabilityAccessibility>(
         _ element: AX.Element,
         visible: CGRect,
         ancestors: [AX.Element],
         ax: AX
-    ) -> PointerTarget<AX.Element> {
+    ) -> Hit<AX.Element> {
+        var ancestorPoint: CGPoint?
         var coveredBy: AX.Element?
         for point in candidatePoints(in: visible) {
-            guard let hit = ax.element(at: point), coversElement(hit, element, ancestors: ancestors, ax: ax) else {
-                return .ready(point)
+            guard let hit = ax.element(at: point) else { return .direct(point) }
+            switch owner(of: hit, element, ancestors: ancestors, ax: ax) {
+            case .clear:
+                return .direct(point)
+            case .ancestor:
+                ancestorPoint = ancestorPoint ?? point
+            case .cover:
+                coveredBy = coveredBy ?? hit
             }
-            coveredBy = coveredBy ?? hit
         }
-        return coveredBy.map { .covered(by: $0) } ?? .noFrame
+        if let ancestorPoint { return .ancestorOnly(ancestorPoint) }
+        // SAFETY: candidatePoints is never empty, so a loop without a direct or ancestor hit recorded a cover.
+        return .covered(by: coveredBy!)
     }
 
-    private static func coversElement<AX: ElementActionabilityAccessibility>(
-        _ hit: AX.Element,
+    private enum HitOwner {
+        /// The element, inside it, or a hit that shows nothing of the target window is on top.
+        case clear
+        case ancestor
+        case cover
+    }
+
+    private static func owner<AX: ElementActionabilityAccessibility>(
+        of hit: AX.Element,
         _ element: AX.Element,
         ancestors: [AX.Element],
         ax: AX
-    ) -> Bool {
-        if ancestors.contains(where: { ax.isSame($0, hit) }) { return false }
+    ) -> HitOwner {
+        if ancestors.contains(where: { ax.isSame($0, hit) }) { return .ancestor }
         var current = hit
         for _ in 0..<maxAncestorDepth {
-            if ax.isSame(current, element) { return false }
-            if ax.role(of: current) == "AXWindow" {
+            if ax.isSame(current, element) { return .clear }
+            // Why: reaching the element's own container first means the hit sits beside the element, on top of it.
+            if ancestors.contains(where: { ax.isSame($0, current) }) { return .cover }
+            switch ax.role(of: current) {
+            case "AXWindow":
                 // Why: the app hit-tests its topmost window, but background input is stamped with the target window,
                 // so only a modal window on top blocks it; the foreground fence checks other windows on top.
-                return ancestors.contains(where: { ax.isSame($0, current) }) || ax.isModal(current)
+                return ax.isModal(current) ? .cover : .clear
+            case "AXApplication":
+                // Why: the app found none of its windows there (hidden, minimized, another Space), which says nothing.
+                return .clear
+            default:
+                break
             }
-            guard let parent = ax.parent(of: current) else { return true }
+            guard let parent = ax.parent(of: current) else { return .cover }
             current = parent
         }
-        return true
+        return .cover
     }
 
     /// The centre first, then the middle of each quadrant, so a partly covered element is still reachable.
