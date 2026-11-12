@@ -123,6 +123,43 @@ describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
     expect(after.indexOf(first)).toBeLessThan(after.indexOf(second))
   })
 
+  // V3-02 follow-up (n33 baseline): the host restored the pre-sleep history into the woken
+  // terminal, so its replay already holds 1–2000; only the divider was lost.
+  it('the host restored the pre-sleep history: the divider goes back in place, nothing doubled', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    const divider = '── Slept 11:08 AM · processes stopped ──'
+    const preSleep = [...lines(1, 300), '$ sleep 900']
+    const postWake = ['$ seq 5001 5003', '5001', '5002', '5003', 'N02W-POSTWAKE']
+    await write(terminal, `${[...preSleep, divider, ...postWake].join('\r\n')}\r\n$ `)
+
+    const kept = await shallowReplay(terminal, `${[...preSleep, ...postWake].join('\r\n')}\r\n$ `)
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after.filter((row) => row === '00001 line')).toHaveLength(1)
+    expect(after.filter((row) => row === '00300 line')).toHaveLength(1)
+    expect(after.filter((row) => row === divider)).toHaveLength(1)
+    expect(after.filter((row) => row === 'N02W-POSTWAKE')).toHaveLength(1)
+    expect(after.indexOf('00300 line')).toBeLessThan(after.indexOf(divider))
+    expect(after.indexOf(divider)).toBeLessThan(after.indexOf('5001'))
+  })
+
+  it('the host restored only the newest pre-sleep lines: older ones come from the pane, once each', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
+    const divider = '── Slept 11:08 AM · processes stopped ──'
+    await write(terminal, `${[...lines(1, 300), divider].join('\r\n')}\r\n$ `)
+
+    const kept = await shallowReplay(terminal, `${lines(201, 300).join('\r\n')}\r\n$ `)
+
+    expect(kept).toBe(true)
+    const after = rows(terminal)
+    expect(after[0]).toBe('00001 line')
+    expect(after.filter((row) => row.endsWith(' line'))).toHaveLength(300)
+    expect(after.filter((row) => row === '00250 line')).toHaveLength(1)
+    expect(after.indexOf('00300 line')).toBeLessThan(after.indexOf(divider))
+  })
+
   it('leaves the replay alone when it does not overlap what the pane held', async () => {
     const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
     await write(terminal, `${lines(1, 3000).join('\r\n')}\r\n$ `)
