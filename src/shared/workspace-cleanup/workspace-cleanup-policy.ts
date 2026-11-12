@@ -19,6 +19,11 @@ export type WorkspaceCleanupRules = {
   keepWhen: WorkspaceCleanupKeepWhen
 }
 
+export type WorkspaceCleanupPolicySettings = {
+  /** Host-owned automatic cleanup rules; read through resolveWorkspaceCleanupPolicy. */
+  workspaceCleanupPolicy?: WorkspaceCleanupRules
+}
+
 /** Absent inherits the global rules. Custom stores a full rule set; writers seed it from the inherited rules. */
 export type RepoWorkspaceCleanupPolicy =
   | { mode: 'off' }

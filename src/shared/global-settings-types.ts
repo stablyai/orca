@@ -43,7 +43,6 @@ import type {
   TaskViewPresetId
 } from './ui-chrome-types'
 import type { WorktreeVisibilityDefaults } from './repo-types'
-import type { WorkspaceCleanupRules } from './workspace-cleanup/workspace-cleanup-policy'
 
 export type { WorktreeVisibilityDefaults } from './repo-types'
 
@@ -56,8 +55,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
   /** Per-host value is host override ?? client default, keyed by ExecutionHostId. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
-  /** Host-owned automatic cleanup rules; read through resolveWorkspaceCleanupPolicy. */
-  workspaceCleanupPolicy?: WorkspaceCleanupRules
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
