@@ -20,7 +20,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 
-async function bounded(account: unknown) {
+async function bounded(account: unknown, initialAccountUpdate = false) {
   const receipts: AgentSessionExecutionReceiptWrite[] = []
   const reports: unknown[] = []
   const events: CodexStructuredSessionEvent[] = []
@@ -34,7 +34,13 @@ async function bounded(account: unknown) {
     }),
     'config/read': () => ({ config: {}, layers: [] }),
     'mcpServerStatus/list': () => ({ data: [], nextCursor: null }),
-    'account/read': () => ({ account }),
+    'account/read': () => {
+      if (initialAccountUpdate) {
+        initialAccountUpdate = false
+        codex.connections[0]!.handlers.onNotification?.('account/updated', { authMode: 'chatgpt' })
+      }
+      return { account }
+    },
     'thread/start': () => ({
       thread: { id: THREAD_ID, modelProvider: 'openai' },
       cwd: '/work/repo',
@@ -109,6 +115,15 @@ it.each([{ type: 'apiKey' }, { type: 'chatgpt', id: 'wrong-account', planType: '
     }
   }
 )
+
+it('admits the first bounded input after the initial account notification settles', async () => {
+  const { adapter } = await bounded({ type: 'chatgpt', id: 'account-1', planType: 'pro' }, true)
+  try {
+    await expect(adapter.dispatch(input)).resolves.toMatchObject({ state: 'admitted' })
+  } finally {
+    await adapter.closeAll()
+  }
+})
 
 it('preserves the native named profile on the one admitted input and refuses another input', async () => {
   const { adapter, codex } = await bounded({ type: 'chatgpt', id: 'account-1', planType: 'pro' })

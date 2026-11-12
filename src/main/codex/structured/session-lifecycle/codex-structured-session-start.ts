@@ -93,6 +93,14 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
+  if (launch.execution) {
+    // Initial account loading can notify during the first read; settle it before admission evidence.
+    await waitForPromiseWithSignal(
+      connection.request('account/read', { refreshToken: false }, { timeoutMs: 2_000 }),
+      openInput.signal
+    )
+    current()
+  }
   const threadLaunch = await waitForPromiseWithSignal(
     withCodexVisualsThreadConfig(connection, launch, {
       sessionId,
