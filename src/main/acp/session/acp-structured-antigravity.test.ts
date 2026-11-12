@@ -12,6 +12,7 @@ import {
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import {
+  type AcpAdapterRig,
   openAcpAdapterRig,
   PROVIDER_SESSION,
   sendHello,
@@ -102,7 +103,7 @@ async function nativeOptionsRig({
 }
 
 it('honors restored native effort while retaining changed, unknown, explicit and new choices', async () => {
-  const rigs = []
+  const rigs: AcpAdapterRig[] = []
   const unknown = fixture.session.configOptions.map((option) =>
     option.category === 'thought_level' ? { ...option, currentValue: '' } : option
   )
