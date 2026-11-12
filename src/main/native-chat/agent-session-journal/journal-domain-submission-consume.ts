@@ -23,7 +23,7 @@ import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 type Submission = Extract<JournalWriterOperation, { kind: 'submission' }>
 
-export type JournalDomainQueueSelection = {
+type JournalDomainQueueSelection = {
   reopenFloor: AgentJournalCursor | null
   /** Wall-clock milliseconds that decide which persisted edit holds are live. */
   now: number

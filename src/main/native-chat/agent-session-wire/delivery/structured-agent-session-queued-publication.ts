@@ -27,7 +27,7 @@ export type QueuePublication = {
   nextQueuedMessageId: string | null
 }
 
-export type QueueSendGate = (
+type QueueSendGate = (
   journal: AgentSessionJournal,
   cards: readonly QueuedMessageRow[]
 ) => Promise<
@@ -43,7 +43,6 @@ export function structuredQueueSendGate(
   },
   sessionId: string,
   now: () => number,
-  onWork?: (work: StructuredAgentSessionObservedWork) => void,
   resolved?: StructuredAgentSessionObservedWork
 ): QueueSendGate {
   return async (journal, cards) => {
@@ -58,7 +57,6 @@ export function structuredQueueSendGate(
       }
     )
     const work = new StructuredAgentSessionObservedWork(journal, answer.state, journal.cursor())
-    onWork?.(work)
     if ('failure' in answer.queue) {
       throw restoreJournalSqlFailure(answer.queue.failure)
     }
@@ -118,12 +116,6 @@ type ListMemo = {
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
 
-export function readPublishedQueuedMessages(
-  journal: AgentSessionJournal
-): Promise<AgentSessionQueuedMessage[]> {
-  return journal.readInOrder(async () => (await publishedQueueRows(journal)).list)
-}
-
 async function publishedQueueRows(journal: AgentSessionJournal): Promise<ListMemo> {
   const key = journal.queuedMessages.revision()
   const floor = JSON.stringify(journal.reopenFloor())
@@ -148,7 +140,7 @@ async function publishedQueueRows(journal: AgentSessionJournal): Promise<ListMem
 }
 
 /** Compare presence first, including unknown reasons. */
-export function sameQueuePause(
+function sameQueuePause(
   previous: { reason?: string } | null,
   next: { reason?: string } | null
 ): boolean {

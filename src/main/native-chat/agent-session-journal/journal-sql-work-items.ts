@@ -36,7 +36,7 @@ export function readJournalSqlWorkItems(scope: JournalSqlScope) {
   )
 }
 
-export function readJournalSqlWorkRelatedItems(scope: JournalSqlScope, ids: readonly string[]) {
+function readJournalSqlWorkRelatedItems(scope: JournalSqlScope, ids: readonly string[]) {
   return scope.db
     .prepare(`SELECT wanted.value AS item_id,item.payload_json,item.wire_version,item.wire_json,item.hidden,
       COALESCE(item.execution_owner,item.owner_fence) AS fence

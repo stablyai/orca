@@ -39,14 +39,13 @@ export type SubscriberFieldHooks = {
   ) => AgentSessionSlashCommand[] | undefined
   readQueuePublication?: (
     sessionId: string,
-    work?: StructuredAgentSessionObservedWork,
-    onWork?: (work: StructuredAgentSessionObservedWork) => void
+    work?: StructuredAgentSessionObservedWork
   ) => QueuePublication | undefined | Promise<QueuePublication | undefined>
   /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
 }
 
-export type SubscriberFrame = {
+type SubscriberFrame = {
   /** Bounded subscribers receive side lists after history. */
   frames: AgentSessionSubscribeEvent[]
   /** Last observed inventory also deduplicates bounded command-change hints. */
@@ -61,7 +60,7 @@ export function backgroundTaskFingerprint(state: AgentSessionBackgroundTaskState
 }
 
 /** Advance dedup references only after successful emission. */
-export async function buildSubscriberFrame(
+async function buildSubscriberFrame(
   hooks: SubscriberFieldHooks,
   subscriber: SubscriberFieldState,
   event: AgentSessionSubscribeEvent,
