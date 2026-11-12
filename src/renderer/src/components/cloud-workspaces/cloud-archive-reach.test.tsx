@@ -215,7 +215,7 @@ describe('useCloudArchivedCount', () => {
       { initialProps: emptyIds }
     )
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
-    expect(result.current).toBe(0)
+    await waitFor(() => expect(result.current).toBe(0))
     // Created w1, then archived it: the active list is empty again (same key as that cached 0),
     // and the archive commits after Sleep, so the server only now lists it.
     rerender(['w1'])
