@@ -1,6 +1,9 @@
 // Orca billing Worker: Stripe Checkout/Portal, Stripe webhooks, entitlements and usage.
 //
+// Public:
+//   GET  /v1/plans                         plan catalog: Stripe prices, entitlements, features (ETag)
 // Desktop (Orca Cloud billing JWT):
+//   GET  /v1/entitlements                  effective entitlements, access and the grants behind them
 //   GET  /v1/billing/entitlements          current plan, hours used/remaining, can-start
 //   POST /v1/billing/checkout {plan,interval,seats} -> { url } hosted Stripe Checkout
 //   POST /v1/billing/overage {enabled, spendCapCents?} opt in/out of overage, set the cap
@@ -47,6 +50,8 @@ import { CheckoutRequestSchema, createCheckout, createPortal } from './checkout'
 import { checkStart, computeEntitlement, entitlementsMode } from './entitlements'
 import { CatalogUnavailableError, loadCatalog, policyFor } from './catalog'
 import { backfillGrants } from './entitlements-backfill'
+import { entitlementsView, offersFor, plansView } from './plans-api'
+import { reconcile } from './reconcile'
 import type { Env } from './env'
 import { MACHINE_SIZES, PlanConfigError, planCatalog, publicOffers } from './plans'
 import { OverageRequestSchema, updateOverage } from './overage'
@@ -114,7 +119,7 @@ function trialInput(caller: BillingCaller, request: Request): TrialInput {
 /** The desktop's entitlement body: the account's state plus what this caller is offered. */
 async function desktopEntitlement(env: Env, caller: BillingCaller, request: Request, now: number) {
   const entitlement = await computeEntitlement(env, caller.accountId, now, 'desktop')
-  const offers = publicOffers(planCatalog(env))
+  const offers = await offersFor(env, now)
   const neverHadPlan = entitlement.reason === 'no_subscription'
   const trial = neverHadPlan ? await trialOffer(env, trialInput(caller, request), now) : null
   // A team that never had a plan but can't get a trial (one already used by this user, email,
@@ -166,7 +171,7 @@ async function handleCloudSetup(
   if (route === 'GET /v1/cloud-setup/offers') {
     // Public: the setup pages show the trial and prices before anyone has signed in.
     const offered = await deps.trial.offeredSeconds(env, now)
-    return json({ ...publicOffers(planCatalog(env)), trial: offered ? { includedSeconds: offered } : null })
+    return json({ ...(await offersFor(env, now)), trial: offered ? { includedSeconds: offered } : null })
   }
   if (route === 'POST /v1/cloud-setup/sessions') {
     const caller = await authenticateDesktop(env, request)
@@ -245,7 +250,7 @@ async function handleCloudSetup(
       return json({ error: 'invalid_request' }, 400)
     }
     const session = await readSetupSessionForPages(env, deps.trial, id, query.data.userId, now)
-    return session ? json({ ...session, offers: publicOffers(planCatalog(env)) }) : json({ error: 'not_found' }, 404)
+    return session ? json({ ...session, offers: await offersFor(env, now) }) : json({ error: 'not_found' }, 404)
   }
   if (request.method !== 'POST' || !action) {
     return json({ error: 'not_found' }, 404)
@@ -319,6 +324,29 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
 
       case 'POST /v1/stripe/webhook':
         return await handleStripeWebhook(env, stripe, request, now)
+
+      case 'GET /v1/plans': {
+        // Public catalog (desktop, setup pages, marketing): cacheable, revalidated by ETag.
+        const catalog = await loadCatalog(env.BILLING_DB, now)
+        const headers = {
+          'cache-control': 'public, max-age=300',
+          etag: catalog.etag,
+          'access-control-allow-origin': '*'
+        }
+        if (request.headers.get('if-none-match') === catalog.etag) {
+          return new Response(null, { status: 304, headers })
+        }
+        return Response.json(plansView(catalog), { headers })
+      }
+
+      case 'GET /v1/entitlements': {
+        const caller = await authenticateDesktop(env, request)
+        if (!caller) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const view = await entitlementsView(env, caller.accountId, caller.canManage, now)
+        return Response.json(view, { headers: { 'cache-control': 'private, no-cache' } })
+      }
 
       case 'GET /v1/billing/entitlements': {
         const caller = await authenticateDesktop(env, request)
@@ -533,9 +561,11 @@ export default {
     ctx.waitUntil(flushMeterReports(env, stripe, Date.now()).then(() => undefined))
     // Seat drift from a missed membership push heals here (needs AUTH_INTERNAL_URL).
     ctx.waitUntil(reconcileSeats(env, stripe, authMembershipSource(env), Date.now()).then(() => undefined))
-    // Entitlement grants: backfill and heal (no-op while ENTITLEMENTS_MODE is off).
+    // Stripe -> billing reconciliation: event replay, rolling re-sync, catalog prices (reconcile.ts),
+    // then entitlement grant backfill/heal. Both are no-ops while ENTITLEMENTS_MODE is off.
     ctx.waitUntil(
-      backfillGrants(env, Date.now())
+      reconcile(env, stripe, Date.now())
+        .then(() => backfillGrants(env, Date.now()))
         .then((result) => {
           if (result.subscriptions + result.trials + result.failed > 0) {
             console.log(JSON.stringify({ event: 'entitlements_backfill', ...result }))

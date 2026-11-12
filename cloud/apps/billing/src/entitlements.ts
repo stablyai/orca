@@ -26,6 +26,7 @@ import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted
 import { CatalogUnavailableError, loadCatalog, planVersion, policyFor, type Catalog, type PlanPolicy } from './catalog'
 import { aggregateGrants, isEntitlementKey, type GrantValue } from './entitlement-keys'
 import { entitlementsMode } from './entitlements-mode'
+import { MAX_TEAM_SEATS } from './checkout'
 import { grantsForSubject, liveAt, projectSubscription, projectTrial, type GrantRow } from './grants'
 
 export type DenyReason =
@@ -113,6 +114,9 @@ export type AccountTerms = {
   maxSpendCapCents: number
   overageCentsPerHour: number
   idleSleepMinutes: number
+  /** Seat bounds for Checkout and membership sync, and how close to renewal seats come down. */
+  maxSeats: number
+  seatTrueDownHours: number
 }
 
 type AccountState = {
@@ -150,6 +154,8 @@ function legacyTerms(env: Pick<Env, 'BILLING_PLANS'>, state: AccountState): Acco
     maxSpendCapCents: team.maxSpendCapCents,
     overageCentsPerHour: team.overageCentsPerHour,
     idleSleepMinutes: team.idleSleepMinutes,
+    maxSeats: MAX_TEAM_SEATS,
+    seatTrueDownHours: team.seatTrueDownHours,
     ungranted: false
   }
   if (state.subscription) {
@@ -271,6 +277,8 @@ async function grantTerms(env: EntitlementEnv, state: AccountState, now: number)
     overageCentsPerHour: catalogOverageCentsPerHour(catalog, overagePlan),
     // Product config, not a plan term: the control plane enforces it (GET /v1/config).
     idleSleepMinutes: planCatalog(env).team.idleSleepMinutes,
+    maxSeats: policy.seats.max,
+    seatTrueDownHours: policy.seatTrueDownHours,
     ungranted
   }
   if (subscription) {

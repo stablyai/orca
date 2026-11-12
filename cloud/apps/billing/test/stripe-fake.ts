@@ -14,12 +14,34 @@ export type FakeSubscription = {
   items: { object: 'list'; data: FakeItem[] }
 }
 
+type FakePrice = {
+  id: string
+  object?: 'price'
+  active?: boolean
+  livemode?: boolean
+  currency?: string
+  unit_amount?: number | null
+  unit_amount_decimal?: string | null
+  lookup_key?: string | null
+  product?: string
+  recurring: { interval?: string; usage_type: 'licensed' | 'metered' }
+}
+
 type FakeItem = {
   id: string
   quantity?: number
   current_period_start: number
   current_period_end: number
-  price: { id: string; recurring: { usage_type: 'licensed' | 'metered' } }
+  price: FakePrice
+}
+
+/** The test-mode catalog the harness env names (STRIPE_PRICE_*), like stripe-test-setup.ts makes. */
+export function defaultFakePrices(): FakePrice[] {
+  return [
+    { id: 'price_team_month', active: true, currency: 'usd', unit_amount: 5000, unit_amount_decimal: '5000', lookup_key: 'orca_team_seat_monthly', product: 'prod_team', recurring: { interval: 'month', usage_type: 'licensed' } },
+    { id: 'price_team_year', active: true, currency: 'usd', unit_amount: 48000, unit_amount_decimal: '48000', lookup_key: 'orca_team_seat_annual', product: 'prod_team', recurring: { interval: 'year', usage_type: 'licensed' } },
+    { id: 'price_overage', active: true, currency: 'usd', unit_amount: null, unit_amount_decimal: '1.666666666667', lookup_key: 'orca_sandbox_overage_per_minute', product: 'prod_overage', recurring: { interval: 'month', usage_type: 'metered' } }
+  ]
 }
 
 export type RecordedCall = { method: string; path: string; form: URLSearchParams; headers: Headers }
@@ -31,7 +53,12 @@ export function createFakeStripe() {
   const idempotent = new Map<string, unknown>()
   const checkoutSessions = new Map<string, { id: string; customer: string; status: string }>()
   const meterEvents: Array<Record<string, string>> = []
+  const prices = new Map(defaultFakePrices().map((price) => [price.id, price]))
+  // Stripe's event log (newest last here; listed newest first like Stripe).
+  const events: Array<{ id: string; type: string; created: number; livemode: boolean; data: { object: Record<string, unknown> } }> = []
   let nextId = 1
+  const priceFor = (id: string, usage: 'licensed' | 'metered'): FakePrice =>
+    structuredClone(prices.get(id) ?? { id, recurring: { usage_type: usage } })
   let failMeterEvents = 0
 
   const fetchImpl: typeof fetch = async (input, init) => {
@@ -86,6 +113,28 @@ export function createFakeStripe() {
       const id = `bps_test_${nextId++}`
       return respond({ id, url: `https://billing.stripe.com/p/session/${id}` })
     }
+    if (method === 'GET' && url.pathname === '/v1/prices') {
+      const keys = [...url.searchParams.entries()].filter(([name]) => name.startsWith('lookup_keys')).map(([, value]) => value)
+      return Response.json({
+        object: 'list',
+        data: [...prices.values()].filter((price) => price.active !== false && price.lookup_key && keys.includes(price.lookup_key))
+      })
+    }
+    if (method === 'GET' && url.pathname === '/v1/events') {
+      const types = [...url.searchParams.entries()].filter(([name]) => name.startsWith('types')).map(([, value]) => value)
+      const before = url.searchParams.get('ending_before')
+      const limit = Number(url.searchParams.get('limit') ?? '10')
+      const matching = events.filter((event) => types.length === 0 || types.includes(event.type))
+      let page: typeof matching
+      if (before) {
+        const index = matching.findIndex((event) => event.id === before)
+        // The `limit` events right after the cursor (oldest of the newer ones first), newest first.
+        page = (index < 0 ? [] : matching.slice(index + 1, index + 1 + limit)).reverse()
+        return Response.json({ object: 'list', data: page, has_more: index >= 0 && matching.length > index + 1 + limit })
+      }
+      page = matching.slice(-limit).reverse()
+      return Response.json({ object: 'list', data: page, has_more: matching.length > limit })
+    }
     if (method === 'GET' && url.pathname.startsWith('/v1/subscriptions/')) {
       const subscription = subscriptions.get(decodeURIComponent(url.pathname.slice('/v1/subscriptions/'.length)))
       return subscription
@@ -97,7 +146,7 @@ export function createFakeStripe() {
       for (const subscription of subscriptions.values()) {
         const item = subscription.items.data.find((entry) => entry.id === itemId)
         if (item && form.has('price')) {
-          item.price = { id: form.get('price')!, recurring: { usage_type: 'metered' } }
+          item.price = priceFor(form.get('price')!, 'metered')
           return respond({ id: item.id, price: item.price })
         }
         if (item) {
@@ -126,7 +175,7 @@ export function createFakeStripe() {
       const base = subscription.items.data[0]!
       const item: FakeItem = {
         id: `si_test_${nextId++}`,
-        price: { id: form.get('price') ?? '', recurring: { usage_type: 'metered' } },
+        price: priceFor(form.get('price') ?? '', 'metered'),
         current_period_start: base.current_period_start,
         current_period_end: base.current_period_end
       }
@@ -150,6 +199,12 @@ export function createFakeStripe() {
     customers,
     subscriptions,
     meterEvents,
+    prices,
+    events,
+    /** Stripe records an event (whether or not its webhook is delivered). */
+    recordEvent(event: { id: string; type: string; created: number; livemode: boolean; data: { object: Record<string, unknown> } }) {
+      events.push(event)
+    },
     failNextMeterEvents(count: number) {
       failMeterEvents = count
     },
@@ -169,10 +224,10 @@ export function createFakeStripe() {
       const id = `sub_test_${nextId++}`
       const period = { current_period_start: args.periodStart, current_period_end: args.periodEnd }
       const data: FakeSubscription['items']['data'] = [
-        { id: `si_test_${nextId++}`, quantity: args.quantity ?? 1, price: { id: args.basePrice, recurring: { usage_type: 'licensed' } }, ...period }
+        { id: `si_test_${nextId++}`, quantity: args.quantity ?? 1, price: priceFor(args.basePrice, 'licensed'), ...period }
       ]
       for (const price of [args.overagePrice ?? []].flat()) {
-        data.push({ id: `si_test_${nextId++}`, price: { id: price, recurring: { usage_type: 'metered' } }, ...period })
+        data.push({ id: `si_test_${nextId++}`, price: priceFor(price, 'metered'), ...period })
       }
       const subscription: FakeSubscription = {
         id,

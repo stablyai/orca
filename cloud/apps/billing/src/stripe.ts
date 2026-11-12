@@ -183,6 +183,21 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
         args.idempotencyKey
       )
     },
+    /** Active prices holding these lookup keys (the catalog's checkout prices). */
+    listPricesByLookupKeys(lookupKeys: string[]) {
+      return request<{ data: StripePrice[] }>('GET', '/v1/prices', { lookup_keys: lookupKeys, active: 'true', limit: '100' })
+    },
+    /**
+     * Events of these types newer than `endingBefore` (the page right after it), or the newest when
+     * absent. Stripe lists newest first; Stripe keeps events for 30 days.
+     */
+    listEvents(args: { types: string[]; endingBefore?: string; limit: number }) {
+      return request<{ data: StripeEventObject[]; has_more: boolean }>('GET', '/v1/events', {
+        types: args.types,
+        ending_before: args.endingBefore,
+        limit: String(args.limit)
+      })
+    },
     retrieveSubscription(id: string) {
       return request<StripeSubscription>('GET', `/v1/subscriptions/${encodeURIComponent(id)}`)
     },
@@ -220,7 +235,28 @@ export type StripeSubscription = {
       quantity?: number
       current_period_start?: number
       current_period_end?: number
-      price: { id: string; recurring?: { usage_type?: string } | null }
+      price: StripePrice
     }>
   }
+}
+
+/** The Price fields billing reads (subscription items embed the whole Price object). */
+export type StripePrice = {
+  id: string
+  active?: boolean
+  livemode?: boolean
+  currency?: string
+  unit_amount?: number | null
+  unit_amount_decimal?: string | null
+  lookup_key?: string | null
+  product?: string | { id: string } | null
+  recurring?: { interval?: string; usage_type?: string } | null
+}
+
+export type StripeEventObject = {
+  id: string
+  type: string
+  created?: number
+  livemode: boolean
+  data: { object: Record<string, unknown> }
 }

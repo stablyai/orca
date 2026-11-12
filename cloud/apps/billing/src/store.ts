@@ -83,6 +83,10 @@ export async function subscriptionById(db: D1Database, subscriptionId: string): 
   return db.prepare('SELECT * FROM subscriptions WHERE stripe_subscription_id = ?1').bind(subscriptionId).first<SubscriptionRow>()
 }
 
+export async function subscriptionsForCustomer(db: D1Database, customerId: string): Promise<SubscriptionRow[]> {
+  return (await db.prepare('SELECT * FROM subscriptions WHERE stripe_customer_id = ?1').bind(customerId).all<SubscriptionRow>()).results
+}
+
 export async function upsertSubscription(db: D1Database, row: SubscriptionRow): Promise<void> {
   await db
     .prepare(
@@ -100,7 +104,9 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
          past_due_since = CASE WHEN excluded.past_due_since IS NULL THEN NULL
                                ELSE COALESCE(subscriptions.past_due_since, excluded.past_due_since) END,
          member_count = COALESCE(excluded.member_count, subscriptions.member_count),
-         seat_price_id = COALESCE(excluded.seat_price_id, subscriptions.seat_price_id)`
+         seat_price_id = COALESCE(excluded.seat_price_id, subscriptions.seat_price_id)
+       -- updated_at is the time of the Stripe read (or local change): an older read never wins.
+       WHERE subscriptions.updated_at <= excluded.updated_at`
     )
     .bind(
       row.stripe_subscription_id,

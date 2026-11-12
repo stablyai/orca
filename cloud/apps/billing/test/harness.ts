@@ -7,6 +7,7 @@ import { createFakeD1 } from './d1-fake'
 import { createFakeStripe, signStripePayload } from './stripe-fake'
 import type { TrialPort } from '../src/cloud-setup-trial'
 import { applyCatalog } from '../src/catalog'
+import { syncCatalogPrices } from '../src/catalog-sync'
 import { testCatalog } from './catalog-fixture'
 
 /** Harnesses created by the current test (the shadow guard checks each one's diff table). */
@@ -41,6 +42,9 @@ export async function createHarness(overrides: Partial<Env> = {}) {
   // The D1 catalog every environment gets from catalog/catalog.json (with any BILLING_PLANS test
   // override carried over, so the modes agree).
   await applyCatalog(db, testCatalog(env.BILLING_PLANS), Date.now())
+  // ...and its prices, synced from the fake Stripe's lookup keys like the cron does.
+  await syncCatalogPrices(env, createStripeClient(env, stripe.fetchImpl), Date.now())
+  stripe.calls.length = 0
   liveHarnesses.push({ raw, env })
   let now = Date.now()
   // Live org member counts from auth; null = not configured (the default).
@@ -67,7 +71,11 @@ export async function createHarness(overrides: Partial<Env> = {}) {
       ...(outboundFetch ? { fetch: outboundFetch } : {})
     })
     await Promise.all(waits.splice(0))
-    return { status: response.status, body: (await response.json()) as Record<string, any> }
+    const text = await response.text()
+    const result = { status: response.status, body: (text ? JSON.parse(text) : null) as Record<string, any> }
+    // Not enumerable, so `toEqual({ status, body })` assertions stay as they are.
+    Object.defineProperty(result, 'headers', { value: response.headers, enumerable: false })
+    return result as typeof result & { headers: Headers }
   }
 
   return {
@@ -102,6 +110,11 @@ export async function createHarness(overrides: Partial<Env> = {}) {
     },
     async webhook(event: unknown, secret = WEBHOOK_SECRET) {
       const rawBody = JSON.stringify(event)
+      // Stripe logs every event it delivers (GET /v1/events, the reconciliation replay).
+      const typed = event as { id?: string; type?: string; livemode?: boolean; data?: { object: Record<string, unknown> } }
+      if (typed.id && typed.type && typed.data && !stripe.events.some((entry) => entry.id === typed.id)) {
+        stripe.recordEvent({ id: typed.id, type: typed.type, created: Math.floor(now / 1000), livemode: typed.livemode ?? false, data: typed.data })
+      }
       return call('POST', '/v1/stripe/webhook', {
         rawBody,
         headers: { 'stripe-signature': signStripePayload(rawBody, secret, Math.floor(now / 1000)) }
