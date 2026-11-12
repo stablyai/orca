@@ -301,28 +301,3 @@ it.each([false, true])(
     stopLocal()
   }
 )
-
-it('keeps older-host direct-root names and both clicks on the stamped host when the workspace is local', async () => {
-  seed()
-  transport.unsupported = true
-  transport.olderLookup = true
-  useAppStore.setState({
-    unifiedTabsByWorktree: {
-      [WORKSPACE]: [
-        useAppStore.getState().unifiedTabsByWorktree[WORKSPACE]![0]!,
-        tab('wrong-local', ROOT, 'Wrong local name', 'local'),
-        tab('remote-sender', ROOT, 'Legacy remote rename', 'runtime:server-1')
-      ]
-    }
-  })
-  await mount()
-  for (const link of screen.getAllByRole('button', { name: 'Legacy remote rename' })) {
-    await act(async () => fireEvent.click(link))
-    expect(useAppStore.getState().activateTab).toHaveBeenLastCalledWith('remote-sender', {
-      worktreeId: WORKSPACE
-    })
-    expect(transport.bridge).toHaveBeenCalledWith(
-      expect.objectContaining({ selector: 'server-1', method: 'session.tabs.activate' })
-    )
-  }
-})

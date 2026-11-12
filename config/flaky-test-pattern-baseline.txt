@@ -201,7 +201,6 @@
 1 test-no-real-time-wait:src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts
 2 test-no-real-time-wait:src/main/startup/gpu-lifecycle-install-dir-acl-guard.test.ts
 3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev.test.ts
-2 test-no-real-time-wait:src/main/startup/windows-install-dir-acl-recovery.test.ts
 1 test-no-real-time-wait:src/main/updater/lifecycle/serve-supervisor-install-park.test.ts
 1 test-no-real-time-wait:src/main/updater/updater.quit-and-install.test.ts
 1 test-no-real-time-wait:src/main/window/main-window-updater-deferred-setup.test.ts
@@ -525,7 +524,7 @@
 1 test-no-wall-clock:src/main/startup/gpu-lifecycle-install-dir-acl-guard.test.ts
 1 test-no-wall-clock:src/main/startup/login-shell-environment.test.ts
 2 test-no-wall-clock:src/main/startup/run-electron-vite-dev.test.ts
-13 test-no-wall-clock:src/main/startup/windows-install-dir-acl-recovery.test.ts
+2 test-no-wall-clock:src/main/startup/windows-install-dir-acl-recovery.test.ts
 4 test-no-wall-clock:src/main/updater/lifecycle/serve-supervisor-install-park.test.ts
 1 test-no-wall-clock:src/main/window/desktop-integration/macos-press-and-hold-default.defaults-domain.test.ts
 2 test-no-wall-clock:src/main/windows/windows-host-job.win32.test.ts
