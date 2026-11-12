@@ -14,7 +14,6 @@ import {
   renderAccountsSettingsSection,
   renderAgentsSettingsSection,
   renderDesktopCapabilitySettingsSections,
-  renderLinearSettingsSection,
   renderOrchestrationSettingsSection
 } from './settings-capability-section-renderers'
 import {
@@ -36,7 +35,6 @@ import {
   renderBrowserSettingsSection,
   renderFloatingWorkspaceSettingsSection,
   renderMobileEmulatorSettingsSection,
-  renderQuickCommandsSettingsSection,
   renderTerminalSettingsSection
 } from './settings-interface-primary-section-renderers'
 import {
@@ -55,7 +53,6 @@ import {
 } from './settings-remote-security-section-renderers'
 import {
   renderAdvancedSettingsSection,
-  renderDevSettingsSection,
   renderExperimentalSettingsSection,
   renderPluginsSettingsSection
 } from './settings-advanced-section-renderers'
@@ -167,7 +164,6 @@ export function renderSettingsPage(
                     {renderAgentsSettingsSection(context, t)}
                     {renderAccountsSettingsSection(context, t)}
                     {renderOrchestrationSettingsSection(context, t)}
-                    {renderLinearSettingsSection(context, t)}
                     {renderDesktopCapabilitySettingsSections(context, t)}
                     {renderOrcaAccountSettingsSection(context, t)}
                     {renderSetupGuideSettingsSection(context, t)}
@@ -181,7 +177,6 @@ export function renderSettingsPage(
                     {renderGitSettingsSection(context, t)}
                     {renderTasksSettingsSection(context, t)}
                     {renderTerminalSettingsSection(context, t)}
-                    {renderQuickCommandsSettingsSection(context, t)}
                     {renderBrowserSettingsSection(context, t)}
                     {renderMobileEmulatorSettingsSection(context, t)}
                     {renderFloatingWorkspaceSettingsSection(context, t)}
@@ -196,7 +191,6 @@ export function renderSettingsPage(
                     {renderDeveloperPermissionsSettingsSection(context, t)}
                     {renderPrivacySettingsSection(context, t)}
                     {renderAdvancedSettingsSection(context, t)}
-                    {renderDevSettingsSection(context, t)}
                     {renderExperimentalSettingsSection(context, t)}
                     {renderPluginsSettingsSection(context)}
                     {renderProjectSettingsSections(context, t)}

@@ -2,10 +2,10 @@ import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifac
 import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations/automations-settings-search'
 import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser/browser-pane-search'
 import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/source-control/commit-message-ai-search'
-import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspaces/floating-workspace-search'
 import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/source-control/git-provider-api-budget-search'
 import { getGitPaneSearchEntries } from '@/components/settings/source-control/git-search'
 import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile/emulator/mobile-emulator-search'
+import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
 import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands/quick-commands-search'
 import { getShareSkillsSettingsSearchEntries } from '@/components/settings/skills/sharing/share-skills-settings-search'
 import { getTasksPaneSearchEntries } from '@/components/settings/tasks/tasks-search'
@@ -20,15 +20,13 @@ import {
   GitBranch,
   Globe,
   ListChecks,
-  PanelsTopLeft,
-  Play,
   SquareTerminal,
   TabletSmartphone
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildWorkflowSettingsSections(
-  { isWebClient }: SettingsNavigationBuildOptions,
+  { isWebClient, isLinearConnected }: SettingsNavigationBuildOptions,
   terminalPaneSearchEntries: SettingsNavSection['searchEntries'],
   t: Translate = translate
 ): SettingsNavSection[] {
@@ -113,7 +111,11 @@ export function buildWorkflowSettingsSections(
         'Connect providers, install the Linear skill, and choose what appears in Tasks.'
       ),
       icon: ListChecks,
-      searchEntries: getTasksPaneSearchEntries(),
+      // Linear's guide lives on this page (connected Linear only), so search finds it here.
+      searchEntries: [
+        ...getTasksPaneSearchEntries(),
+        ...(isLinearConnected ? getLinearAgentSkillPaneSearchEntries() : [])
+      ],
       group: 'workflows'
     },
     {
@@ -124,18 +126,8 @@ export function buildWorkflowSettingsSections(
         'Shells, renderer, sessions, and terminal behavior.'
       ),
       icon: SquareTerminal,
-      searchEntries: terminalPaneSearchEntries,
-      group: 'workflows'
-    },
-    {
-      id: 'quick-commands',
-      title: t('auto.hooks.useSettingsNavigationMetadata.3fc3db144f', 'Quick Commands'),
-      description: t(
-        'auto.hooks.useSettingsNavigationMetadata.42ae40842f',
-        'Saved terminal commands, scoped globally or per project.'
-      ),
-      icon: Play,
-      searchEntries: getQuickCommandsPaneSearchEntries(),
+      // Quick commands is a part of the Terminal page.
+      searchEntries: [...terminalPaneSearchEntries, ...getQuickCommandsPaneSearchEntries()],
       group: 'workflows'
     },
     ...(showDesktopOnlySettings
@@ -167,24 +159,6 @@ export function buildWorkflowSettingsSections(
             group: 'workflows'
           }
         ]
-      : []),
-    {
-      id: 'floating-workspace',
-      title: t('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
-      description: showDesktopOnlySettings
-        ? t(
-            'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
-            'Global terminal, browser, and markdown tabs.'
-          )
-        : t(
-            'auto.hooks.useSettingsNavigationMetadata.floatingWorkspaceWebDescription',
-            'Global terminal and markdown tabs.'
-          ),
-      icon: PanelsTopLeft,
-      searchEntries: getFloatingWorkspaceSearchEntries({
-        includeBrowser: showDesktopOnlySettings
-      }),
-      group: 'workflows'
-    }
+      : [])
   ]
 }

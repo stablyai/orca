@@ -10,10 +10,19 @@ import { getInputPaneSearchEntries } from '@/components/settings/input/input-sea
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications/notifications-search'
 import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts/shortcuts-search'
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
+import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspaces/floating-workspace-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
-import { BarChart3, Bell, Keyboard, MessageSquare, Palette, TextCursorInput } from 'lucide-react'
+import {
+  BarChart3,
+  Bell,
+  Keyboard,
+  MessageSquare,
+  Palette,
+  PanelsTopLeft,
+  TextCursorInput
+} from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildInterfaceSettingsSections(
@@ -113,6 +122,24 @@ export function buildInterfaceSettingsSections(
       ),
       icon: BarChart3,
       searchEntries: getStatsPaneSearchEntries(),
+      group: 'interface'
+    },
+    {
+      id: 'floating-workspace',
+      title: t('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
+      description: showDesktopOnlySettings
+        ? t(
+            'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
+            'Global terminal, browser, and markdown tabs.'
+          )
+        : t(
+            'auto.hooks.useSettingsNavigationMetadata.floatingWorkspaceWebDescription',
+            'Global terminal and markdown tabs.'
+          ),
+      icon: PanelsTopLeft,
+      searchEntries: getFloatingWorkspaceSearchEntries({
+        includeBrowser: showDesktopOnlySettings
+      }),
       group: 'interface'
     }
   ]

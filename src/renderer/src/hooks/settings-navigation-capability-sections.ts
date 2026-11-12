@@ -1,10 +1,8 @@
-import { LinearIcon } from '@/components/icons/LinearIcon'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts/accounts-search'
 import { getAgentsPaneSearchEntries } from '@/components/settings/agents/agents-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use/computer-use-search'
 import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations/integrations-search'
-import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accounts/orca/orca-account-settings-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
@@ -27,7 +25,7 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildCapabilitySettingsSections(
-  { isLocalWindowsHost, isWebClient, isLinearConnected }: SettingsNavigationBuildOptions,
+  { isLocalWindowsHost, isWebClient }: SettingsNavigationBuildOptions,
   t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -74,22 +72,6 @@ export function buildCapabilitySettingsSections(
       }),
       group: 'capabilities'
     },
-    // Expose only with connected Linear; its skill needs linked provider capability.
-    ...(isLinearConnected
-      ? [
-          {
-            id: 'linear',
-            title: t('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
-            description: t(
-              'auto.hooks.useSettingsNavigationMetadata.linearDescription',
-              'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
-            ),
-            icon: LinearIcon,
-            searchEntries: getLinearAgentSkillPaneSearchEntries(),
-            group: 'capabilities'
-          }
-        ]
-      : []),
     ...(showDesktopOnlySettings
       ? [
           {
@@ -190,7 +172,7 @@ export function buildSetupSettingsSections(
       ? [
           {
             id: 'mobile',
-            title: t('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Orca Mobile'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
               'Control terminals and agents from your phone.'

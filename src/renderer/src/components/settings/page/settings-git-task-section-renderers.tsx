@@ -1,3 +1,5 @@
+import { LinearAgentSkillPane } from '../skills/linear/LinearAgentSkillPane'
+import { SettingsMergedSubsection } from '../section-layout/SettingsMergedSubsection'
 import { CommitMessageAiPane } from '../source-control/CommitMessageAiPane'
 import { GitPane } from '../source-control/GitPane'
 import { GitProviderApiBudgetPane } from '../source-control/GitProviderApiBudgetPane'
@@ -72,6 +74,18 @@ export function renderTasksSettingsSection(
     >
       {view.isSectionMounted('tasks') ? (
         <TasksPane settings={model.settings} updateSettings={model.updateSettings} />
+      ) : null}
+      {model.linearConnected && view.isSectionMounted('tasks') ? (
+        <SettingsMergedSubsection
+          id="linear"
+          title={t('auto.components.settings.Settings.linearTitle', 'Linear')}
+          description={t(
+            'auto.components.settings.Settings.linearDescription',
+            'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
+          )}
+        >
+          <LinearAgentSkillPane />
+        </SettingsMergedSubsection>
       ) : null}
     </SettingsSection>
   )

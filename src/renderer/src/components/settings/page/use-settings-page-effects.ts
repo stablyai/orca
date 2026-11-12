@@ -16,6 +16,7 @@ import {
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import {
+  getSettingsScrollTargetId,
   getSettingsSectionId,
   SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
   SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS
@@ -206,7 +207,9 @@ export function useSettingsPageEffects(
     }
     consumeSettingsNavigation(settingsNavigationTarget)
     pendingNavSectionRef.current = paneSectionId
-    pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    pendingScrollTargetRef.current =
+      settingsNavigationTarget.sectionId ??
+      getSettingsScrollTargetId(settingsNavigationTarget.pane, paneSectionId)
     setHighlightedSettingsTarget(
       settingsNavigationTarget.pane === 'developer-permissions' &&
         settingsNavigationTarget.sectionId

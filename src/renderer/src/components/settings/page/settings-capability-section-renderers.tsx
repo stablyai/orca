@@ -3,7 +3,6 @@ import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observa
 import { AgentsPane } from '../agents/AgentsPane'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
 import { ComputerUsePane } from '../computer-use/ComputerUsePane'
-import { LinearAgentSkillPane } from '../skills/linear/LinearAgentSkillPane'
 import { OrchestrationPane } from '../orchestration/OrchestrationPane'
 import { VoicePane } from '../voice/VoicePane'
 import { SettingsSection } from '../section-layout/SettingsSection'
@@ -129,27 +128,6 @@ export function renderOrchestrationSettingsSection(
       ) : null}
     </SettingsSection>
   )
-}
-
-export function renderLinearSettingsSection(
-  context: SettingsRenderContext,
-  t: Translate = translate
-): React.JSX.Element | null {
-  const { model, navigation, view } = context
-  return model.linearConnected ? (
-    <SettingsSection
-      id="linear"
-      grouped
-      title={t('auto.components.settings.Settings.linearTitle', 'Linear')}
-      description={t(
-        'auto.components.settings.Settings.linearDescription',
-        'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
-      )}
-      searchEntries={navigation.getSectionSearchEntries('linear')}
-    >
-      {view.isSectionMounted('linear') ? <LinearAgentSkillPane /> : null}
-    </SettingsSection>
-  ) : null
 }
 
 export function renderDesktopCapabilitySettingsSections(

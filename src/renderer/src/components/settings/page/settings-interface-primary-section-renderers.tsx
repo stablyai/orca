@@ -4,6 +4,7 @@ import { MobileEmulatorSettingsPane } from '../mobile/emulator/MobileEmulatorSet
 import { QuickCommandsPane } from '../quick-commands/QuickCommandsPane'
 import { TerminalPane } from '../terminal/TerminalPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
+import { SettingsMergedSubsection } from '../section-layout/SettingsMergedSubsection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
@@ -39,30 +40,21 @@ export function renderTerminalSettingsSection(
           isWindowsTerminalHost={terminal.isWindowsTerminalHost}
         />
       ) : null}
-    </SettingsSection>
-  )
-}
-
-export function renderQuickCommandsSettingsSection(
-  context: SettingsRenderContext,
-  t: Translate = translate
-): React.JSX.Element {
-  const { model, navigation, view } = context
-  return (
-    <SettingsSection
-      id="quick-commands"
-      title={t('auto.components.settings.Settings.d60b7f0e58', 'Quick commands')}
-      description={t(
-        'auto.components.settings.Settings.6742c7932c',
-        'Saved terminal commands, scoped globally or per project.'
-      )}
-      searchEntries={navigation.getSectionSearchEntries('quick-commands')}
-    >
-      {view.isSectionMounted('quick-commands') ? (
-        <QuickCommandsPane
-          settings={model.settings}
-          addCommandIntentSignal={model.quickCommandAddIntentSignal}
-        />
+      {view.isSectionMounted('terminal') ? (
+        <SettingsMergedSubsection
+          id="quick-commands"
+          card
+          title={t('auto.components.settings.Settings.d60b7f0e58', 'Quick commands')}
+          description={t(
+            'auto.components.settings.Settings.6742c7932c',
+            'Saved terminal commands, scoped globally or per project.'
+          )}
+        >
+          <QuickCommandsPane
+            settings={model.settings}
+            addCommandIntentSignal={model.quickCommandAddIntentSignal}
+          />
+        </SettingsMergedSubsection>
       ) : null}
     </SettingsSection>
   )

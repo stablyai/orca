@@ -132,7 +132,7 @@ export function renderMobileSettingsSection(
     <SettingsSection
       id="mobile"
       grouped
-      title={t('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
+      title={t('auto.components.settings.Settings.c40dadaac8', 'Orca Mobile')}
       badge="Beta"
       description={t(
         'auto.components.settings.Settings.c6c01ac209',

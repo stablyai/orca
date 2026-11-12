@@ -3,6 +3,7 @@ import { AdvancedPane } from '../advanced/AdvancedPane'
 import { ExperimentalPane } from '../advanced/ExperimentalPane'
 import { PluginsSettingsSection } from '../../plugins/list/PluginsSettingsSection'
 import { SettingsSection } from '../section-layout/SettingsSection'
+import { SettingsMergedSubsection } from '../section-layout/SettingsMergedSubsection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
@@ -32,30 +33,19 @@ export function renderAdvancedSettingsSection(
       {view.isSectionMounted('advanced') ? (
         <AdvancedPane settings={model.settings} updateSettings={model.updateSettings} />
       ) : null}
-    </SettingsSection>
-  ) : null
-}
-
-export function renderDevSettingsSection(
-  context: SettingsRenderContext,
-  t: Translate = translate
-): React.JSX.Element | null {
-  const { model, navigation, view } = context
-  return model.showDesktopOnlySettings && import.meta.env.DEV ? (
-    <SettingsSection
-      id="dev"
-      grouped
-      title={t('auto.components.settings.Settings.3eac6fb97f', 'Dev tools')}
-      description={t(
-        'auto.components.settings.Settings.devDescription',
-        'Dev-only tools for exercising UI states.'
-      )}
-      searchEntries={navigation.getSectionSearchEntries('dev')}
-    >
-      {DevToolsPane && view.isSectionMounted('dev') ? (
-        <Suspense fallback={null}>
-          <DevToolsPane />
-        </Suspense>
+      {DevToolsPane && view.isSectionMounted('advanced') ? (
+        <SettingsMergedSubsection
+          id="dev"
+          title={t('auto.components.settings.Settings.3eac6fb97f', 'Dev tools')}
+          description={t(
+            'auto.components.settings.Settings.devDescription',
+            'Dev-only tools for exercising UI states.'
+          )}
+        >
+          <Suspense fallback={null}>
+            <DevToolsPane />
+          </Suspense>
+        </SettingsMergedSubsection>
       ) : null}
     </SettingsSection>
   ) : null

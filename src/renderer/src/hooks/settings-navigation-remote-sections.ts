@@ -16,7 +16,6 @@ import { getRepoKindLabel } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import {
   Blocks,
-  Bug,
   Cable,
   FlaskConical,
   Lock,
@@ -103,26 +102,12 @@ export function buildRemoteSettingsSections(
               'Low-level compatibility settings for troubleshooting.'
             ),
             icon: Wrench,
-            searchEntries: getAdvancedPaneSearchEntries(),
+            // Dev tools (dev builds only) is a part of the Advanced page.
+            searchEntries: [
+              ...getAdvancedPaneSearchEntries(),
+              ...(import.meta.env.DEV && isDev ? getDevToolsPaneSearchEntries(t) : [])
+            ],
             group: 'advanced'
-          }
-        ]
-      : []),
-    // Packaged/web builds must reject dev navigation even when callers pass isDev=true.
-    ...(showDesktopOnlySettings && import.meta.env.DEV && isDev
-      ? [
-          {
-            id: 'dev',
-            title: t('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
-            description: t(
-              'auto.hooks.useSettingsNavigationMetadata.devDescription',
-              'Dev-only tools for exercising UI states.'
-            ),
-            // Use a distinct icon from sibling Advanced settings so adjacent rows remain distinguishable.
-            icon: Bug,
-            searchEntries: getDevToolsPaneSearchEntries(t),
-            group: 'advanced',
-            badge: t('auto.hooks.useSettingsNavigationMetadata.devBadge', 'Dev')
           }
         ]
       : []),

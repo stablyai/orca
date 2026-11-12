@@ -59,6 +59,14 @@ export const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
 export const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
 export const SETTINGS_TARGET_HIGHLIGHT_MS = 3_000
 
+/** Former pages that are now a part of another page: links to them open the host page and scroll
+ *  to the part (its element keeps the old id). */
+export const SETTINGS_MERGED_PANES: Partial<Record<SettingsNavTarget, SettingsNavTarget>> = {
+  'quick-commands': 'terminal',
+  dev: 'advanced',
+  linear: 'tasks'
+}
+
 export function getSettingsSectionId(
   pane: SettingsNavTarget,
   repoId: string | null,
@@ -68,7 +76,12 @@ export function getSettingsSectionId(
     // Each project has one pane; map every host’s repo ID to its representative.
     return `repo-${repoIdToRepresentative.get(repoId) ?? repoId}`
   }
-  return pane
+  return SETTINGS_MERGED_PANES[pane] ?? pane
+}
+
+/** Where a link to `pane` scrolls: the merged part's own element, else the page. */
+export function getSettingsScrollTargetId(pane: SettingsNavTarget, sectionId: string): string {
+  return SETTINGS_MERGED_PANES[pane] ? pane : sectionId
 }
 
 export function getFallbackVisibleSection(
