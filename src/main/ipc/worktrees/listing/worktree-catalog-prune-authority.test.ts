@@ -8,6 +8,7 @@ import {
 import { setWorktreeCatalogRouteResolver } from '../../../workspaces/catalog/repo-worktree-catalog-route'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the owner and pruning read only these repo fields.
 const repo = { id: 'repo-1', path: '/repos/app', kind: 'git' } as Repo
 const goneWorktreeId = 'repo-1::/repos/app-gone'
 
@@ -38,6 +39,7 @@ describe('metadata pruning under catalog owner authority', () => {
     let releaseProbe: (() => void) | undefined
     const pruneMissing = vi.fn(() => [goneWorktreeId])
     const pruning = pruneMetadataMissingFromAuthoritativeLocalScan({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the helper reads only these store members.
       store: {
         getRepos: () => [repo],
         pruneSessionlessMissingLocalWorktreeMetadataForRepo: pruneMissing,
@@ -47,6 +49,7 @@ describe('metadata pruning under catalog owner authority', () => {
       gitWorktrees: [
         { path: repo.path, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
       ],
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pruning compares only the repo identity and metadata ids.
       scan: {
         repo: { id: repo.id, path: repo.path },
         metadata: [{ worktreeId: goneWorktreeId }]

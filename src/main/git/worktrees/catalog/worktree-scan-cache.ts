@@ -2,9 +2,9 @@ import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   annotateSparseCheckoutStatus,
   listWorktreeGraph as listWorktreeGraphUnshared,
-  listWorktreesStrict as listWorktreesStrictUnshared,
-  listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared
+  listWorktreesStrict as listWorktreesStrictUnshared
 } from './worktree-listing'
+import { listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared } from './strict-true-empty-worktree-listing'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
 import { resolveGitAdmissionTier } from '../../command-runner/admission/git-operation-executor'

@@ -18,14 +18,6 @@ import {
   registerWorktreeRootsForRepo
 } from '../removal/registered-worktree-roots-cache'
 
-type HygieneStore = Pick<Store, 'captureNativeLocalWorktreeMetadataScanExpectation'>
-
-export type WorktreeCatalogHygieneWitness = WorktreeCatalogWitness & {
-  readonly expectation?: NativeLocalWorktreeMetadataScanExpectation
-  /** Roots revision after this observation registered its roots; later side effects fence on it. */
-  rootsRevision: number
-}
-
 export type WorktreeCatalogHygieneClaim = Readonly<{
   generation: number
   authorizedRootsRevision: number
@@ -35,7 +27,7 @@ export type WorktreeCatalogHygieneClaim = Readonly<{
 
 /** Pre-scan facts for every flight; only readers that prune claim the evidence gate (#17775). */
 export function worktreeCatalogHygienePlan(
-  store: Store | HygieneStore,
+  store: Store,
   repo: Repo,
   gitOptions: { wslDistro?: string },
   claimsHygiene: boolean
@@ -54,7 +46,7 @@ export function worktreeCatalogHygienePlan(
         hygieneDue && !gitOptions.wslDistro
           ? store.captureNativeLocalWorktreeMetadataScanExpectation?.(repo)
           : undefined
-      const witness: WorktreeCatalogHygieneWitness = {
+      const witness: WorktreeCatalogWitness = {
         authorizedRootsRevision,
         hygieneDue,
         ...(expectation ? { expectation } : {}),
@@ -74,7 +66,7 @@ export function worktreeCatalogHygienePlan(
         repo.id,
         worktrees.map((worktree) => worktree.path)
       )
-      const witness = observation.witness as WorktreeCatalogHygieneWitness | undefined
+      const witness = observation.witness
       if (
         !witness ||
         getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
@@ -84,7 +76,7 @@ export function worktreeCatalogHygienePlan(
       }
       // Reuse listing roots for authorization to avoid another Git scan and macOS folder-permission prompts.
       registerWorktreeRootsForRepo(
-        store as Store,
+        store,
         repo,
         [repo.path, ...worktrees.map((worktree) => worktree.path)],
         gitOptions
@@ -98,7 +90,7 @@ export function worktreeCatalogHygienePlan(
 export function claimWorktreeCatalogHygiene(
   observation: WorktreeCatalogObservation
 ): WorktreeCatalogHygieneClaim | null {
-  const witness = observation.witness as WorktreeCatalogHygieneWitness | undefined
+  const witness = observation.witness
   if (!witness) {
     return null
   }

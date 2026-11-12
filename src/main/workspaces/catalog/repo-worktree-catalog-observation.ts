@@ -1,4 +1,5 @@
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
+import type { NativeLocalWorktreeMetadataScanExpectation } from '../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
 
 /** One `git worktree list`; a confirmed missing/non-repo stays distinct from a failed run. */
 export type WorktreeCatalogOutcome =
@@ -9,8 +10,10 @@ export type WorktreeCatalogOutcome =
 /** Captured before Git runs; destructive consumers claim it at most once. */
 export type WorktreeCatalogWitness = {
   readonly authorizedRootsRevision: number
+  /** Roots revision after this observation registered its roots; later side effects fence on it. */
+  rootsRevision: number
   readonly hygieneDue: boolean
-  readonly expectation?: unknown
+  readonly expectation?: NativeLocalWorktreeMetadataScanExpectation
   /** Returns an unconsumed claim so the evidence gate can re-arm. */
   readonly release: () => void
 }

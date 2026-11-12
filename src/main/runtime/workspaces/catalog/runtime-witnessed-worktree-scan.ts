@@ -71,9 +71,7 @@ async function scanRuntimeWorktreesWithMutationWitness(
       isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration) && authorityCurrent()
         ? claimWorktreeCatalogHygiene(observation)
         : null
-    metadataPruneExpectation = claim?.expectation as
-      | NativeLocalWorktreeMetadataScanExpectation
-      | undefined
+    metadataPruneExpectation = claim?.expectation
     lineagePrune = claimRuntimeLineagePrune(scan)
   } else {
     metadataPruneExpectation = captureLocalMetadataPruneExpectation(store, repo)

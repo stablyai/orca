@@ -17,9 +17,7 @@ const electronMocks = vi.hoisted(() => {
 vi.mock('../../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
-    listWorktreesStrict: listWorktreesStrictMock,
-    // Runtime scans share the strict, true-empty-aware reader with desktop scans.
-    listWorktreesStrictAllowingTrueEmpty: listWorktreesStrictMock
+    listWorktreesStrict: listWorktreesStrictMock
   }
 })
 

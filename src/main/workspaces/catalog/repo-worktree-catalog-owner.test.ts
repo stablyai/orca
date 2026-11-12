@@ -17,6 +17,7 @@ import type {
   WorktreeCatalogOutcome
 } from './repo-worktree-catalog-observation'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the owner reads only these repo fields.
 const repo = { id: 'repo-1', path: '/repos/app', kind: 'git' } as Repo
 const row = (path: string): GitWorktreeInfo => ({
   path,
@@ -238,7 +239,12 @@ describe('repo worktree catalog owner', () => {
     const release = vi.fn()
     const plan = {
       ...scanner([rows('/repos/app')]),
-      captureWitness: () => ({ authorizedRootsRevision: 1, hygieneDue: true, release })
+      captureWitness: () => ({
+        authorizedRootsRevision: 1,
+        rootsRevision: 1,
+        hygieneDue: true,
+        release
+      })
     }
     await readWorktreeCatalog(repo, 'local:default', desktop, plan)
     invalidateWorktreeCatalogForRepo(repo.id)

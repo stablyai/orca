@@ -345,6 +345,7 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
           scan: async () => ({ kind: 'rows', worktrees: rows([repo.path]) }),
           // The observation carries the pre-scan hygiene claim a pruning listing consumes.
           captureWitness: () =>
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked prune reads only the expectation's presence.
             ({
               authorizedRootsRevision: 0,
               rootsRevision: 0,

@@ -15,9 +15,11 @@ vi.mock('../removal/registered-worktree-roots-cache', () => ({
   registerWorktreeRootsForRepo: vi.fn()
 }))
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the owner and hygiene plan read only these repo fields.
 const repo = { id: 'repo-1', path: '/repos/app', kind: 'git' } as Repo
 
 async function readFailing(times: number, claimsHygiene: boolean) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the expectation is only carried, never read, when every scan fails.
   const capture = vi.fn(() => ({}) as never)
   const store = { captureNativeLocalWorktreeMetadataScanExpectation: capture }
   for (let read = 0; read < times; read += 1) {
