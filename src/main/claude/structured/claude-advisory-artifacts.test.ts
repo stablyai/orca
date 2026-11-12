@@ -24,9 +24,9 @@ function policy() {
   }
 }
 
-async function connect(packet = policy()) {
+async function connect(packet = policy(), publish?: (report: { status: string }) => Promise<void>) {
   const controller = new AbortController()
-  const config = createClaudeAdvisoryArtifactServer(packet, sdk, controller.signal)
+  const config = createClaudeAdvisoryArtifactServer(packet, sdk, controller.signal, publish)
   const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
   await config.instance.connect(serverTransport)
   closers.push(() => config.instance.close())
@@ -37,6 +37,60 @@ async function connect(packet = policy()) {
 }
 
 describe('bounded advisory artifact access', () => {
+  it('commits one advisory report and replays concurrent identical submissions without another effect', async () => {
+    const published: unknown[] = []
+    const { client } = await connect(policy(), async (report) => {
+      published.push(report)
+    })
+    const body = {
+      status: 'recommendation',
+      recommendation: 'Check the empty input path.',
+      evidence: ['src/hello.txt: hello'],
+      uncertainty: 'No empty input fixture was supplied.',
+      next_test: 'Run the existing empty input fixture.'
+    }
+    const responses = await Promise.all(
+      [1, 2].map(() => client.callTool({ name: 'report_advice', arguments: body }))
+    )
+    expect(published).toEqual([body])
+    expect(responses.map((response) => response.structuredContent)).toEqual([
+      { state: 'submitted' },
+      { state: 'submitted' }
+    ])
+    const changed = await client.callTool({ name: 'report_advice', arguments: { status: 'error' } })
+    expect(changed.isError).toBe(true)
+    expect(published).toEqual([body])
+  })
+
+  it('turns unsupported recommendations into inconclusive and never retries an ambiguous report effect', async () => {
+    const published: unknown[] = []
+    const { client } = await connect(policy(), async (report) => {
+      published.push(report)
+      throw new Error('private backend detail')
+    })
+    const body = { status: 'recommendation', recommendation: 'Unsupported claim.' }
+    const first = await client.callTool({ name: 'report_advice', arguments: body })
+    const replay = await client.callTool({ name: 'report_advice', arguments: body })
+    expect(first.isError).toBe(true)
+    expect(replay.isError).toBe(true)
+    expect(JSON.stringify([first, replay])).not.toContain('private backend detail')
+    expect(published).toEqual([{ status: 'inconclusive' }])
+  })
+
+  it('refuses report effects after cancellation', async () => {
+    const published: unknown[] = []
+    const { client, controller } = await connect(policy(), async (report) => {
+      published.push(report)
+    })
+    controller.abort()
+    const response = await client.callTool({
+      name: 'report_advice',
+      arguments: { status: 'inconclusive' }
+    })
+    expect(response.isError).toBe(true)
+    expect(published).toEqual([])
+  })
+
   it('serves only the admitted immutable snapshot and searches that same text', async () => {
     const packet = policy()
     const { client } = await connect(packet)

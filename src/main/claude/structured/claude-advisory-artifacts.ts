@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type * as ClaudeSdk from '@anthropic-ai/claude-agent-sdk'
 import { agentSessionAdvisoryPolicySchema } from '../../../shared/agent-session/agent-session-advisory-policy'
+import type { AgentSessionAdvisoryReporter } from '../../../shared/agent-session/agent-session-advisory-report'
+import { createClaudeAdvisoryReportTool } from './claude-advisory-report'
 
 const jsonResult = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value) }]
@@ -15,7 +17,8 @@ const errorResult = (text: string) => ({
 export function createClaudeAdvisoryArtifactServer(
   input: unknown,
   sdk: Pick<typeof ClaudeSdk, 'createSdkMcpServer' | 'tool'>,
-  signal: AbortSignal
+  signal: AbortSignal,
+  publish?: AgentSessionAdvisoryReporter
 ) {
   const parsed = agentSessionAdvisoryPolicySchema.safeParse(input)
   if (!parsed.success) {
@@ -35,12 +38,14 @@ export function createClaudeAdvisoryArtifactServer(
     }
     artifacts.set(artifact.path, { sha256: artifact.sha256, text: artifact.text })
   }
-  const ended = () => (signal.aborted ? errorResult('Advisor artifact access ended.') : null)
+  const isEnded = () => signal.aborted || Date.now() >= parsed.data.deadlineAt
+  const ended = () => (isEnded() ? errorResult('Advisor artifact access ended.') : null)
   return sdk.createSdkMcpServer({
     name: 'orca_advisor',
     version: '1.0.0',
     timeout: 1_000,
     tools: [
+      ...(publish ? [createClaudeAdvisoryReportTool(sdk, isEnded, publish)] : []),
       sdk.tool(
         'read_artifact',
         'Read admitted snapshot text. Offsets count UTF-16 code units.',
