@@ -26,7 +26,13 @@ function runtime(terminals: { handle: string; title: string | null; paneTitle?: 
       }))
     })),
     sendTerminal: vi.fn(),
-    dispatchPluginNotification: vi.fn()
+    dispatchPluginNotification: vi.fn(),
+    listAgentTasksByPaneKey: vi.fn(
+      (): Record<string, { taskTitle?: string; dispatchId: string }> => ({
+        'tab0:worker': { taskTitle: 'Write the tests', dispatchId: 'd-1' },
+        'tab0:untitled': { dispatchId: 'd-2' }
+      })
+    )
   }
 }
 
@@ -98,5 +104,17 @@ describe('workspace.changed for plugins', () => {
     }
     const { change } = await readPluginWorkspaceChange(pluginRuntimeDelegate(source, () => []))
     expect(change.context).toMatchObject({ workspaceId: 'identity:wt2:local:i1', branch: 'main' })
+  })
+})
+
+describe('agents.list task titles for plugins', () => {
+  it("passes each pane's task title on, and nothing else of its dispatch", () => {
+    const titles = pluginRuntimeDelegate(runtime([]), () => []).listAgentTaskTitles?.()
+    expect(titles).toEqual(
+      new Map([
+        ['tab0:worker', 'Write the tests'],
+        ['tab0:untitled', '']
+      ])
+    )
   })
 })
