@@ -30,7 +30,8 @@ import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child
 import { removeTree } from '../../../shared/windows-transient-lock-removal'
 import {
   _resetPendingWorktreeRemovalsForTests,
-  _settlePendingWorktreeRemovalsForTests
+  _settlePendingWorktreeRemovalsForTests,
+  loadWorktreeRemovalRecords
 } from '../../workspaces/removal/worktree-background-removal'
 
 installRealWorkerThreadChildProcesses()
@@ -71,6 +72,7 @@ beforeEach(async () => {
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
   directory = await realpath(await mkdtemp(join(tmpdir(), 'orca-cli-rm-')))
+  await loadWorktreeRemovalRecords(directory)
   repoPath = join(directory, 'repo')
   checkout = join(directory, 'checkout')
   id = `repo::${checkout}`
