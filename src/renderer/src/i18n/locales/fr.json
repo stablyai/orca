@@ -210,7 +210,8 @@
       "remove": "Supprimer…",
       "empty": "Aucune extension n'est activée pour ce profil",
       "visitWebStore": "Visiter le Chrome Web Store",
-      "manage": "Gérer les extensions"
+      "manage": "Gérer les extensions",
+      "openWebStoreFailed": "Impossible d’ouvrir le Chrome Web Store."
     },
     "viewport": {
       "mobile-s": "Mobile S — 320 × 568",
@@ -3624,7 +3625,6 @@
             "runningTerminalBlocker": "Processus de terminal en cours",
             "terminalLivenessUnknownBlocker": "Activité du terminal inconnue",
             "dirtyEditorBufferBlocker": "Tampon d'éditeur non enregistré",
-            "volatileLocalContextBlocker": "Contexte local volatil",
             "recentVisibleContextBlocker": "Onglets visités récemment",
             "liveAgentBlocker": "Agent actif",
             "sshDisconnectedBlocker": "Distant indisponible",
@@ -17180,6 +17180,14 @@
                     "logins": {
                       "title": "Restez connecté",
                       "body": "Importez vos connexions existantes dans Orca pour rester connecté immédiatement."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Extensions Chrome",
+                        "body": "Installez des extensions depuis le Chrome Web Store et épinglez-les à côté de la barre d’adresse.",
+                        "action": "Ouvrir le Web Store",
+                        "secondaryAction": "Compris"
+                      }
                     }
                   },
                   "tasks": {
@@ -22148,7 +22156,6 @@
       "cancel": "Annuler"
     },
     "antigravity": {
-      "chatTitle": "Discussions Antigravity",
       "chatSignIn": "Se connecter",
       "chatChangeAccount": "Changer de compte",
       "chatRetry": "Réessayer la connexion",
@@ -22166,23 +22173,13 @@
       "chatFailed": "La connexion a échoué. Réessayez.",
       "chatOtherClient": "Une connexion est en cours dans un autre client.",
       "chatReadFailed": "Impossible de vérifier la connexion sur {{host}}.",
-      "signIn": "Démarrez agy sur cet hôte et complétez la connexion au navigateur, puis enregistrez le compte actuel. Pour ajouter un autre compte, utilisez /logout dans agy et reconnectez-vous.",
-      "docs": "Instructions de connexion",
       "retry": "Réessayer",
-      "identityUnknown": "Identité connectée indisponible",
-      "signedOut": "Aucun compte agy natif n'est connecté.",
       "changed": "Le compte natif a changé. Sélectionnez à nouveau un compte enregistré avant de lancer agy.",
-      "save": "Enregistrer le compte courant",
       "refresh": "Actualiser les comptes",
       "usage": "Actualiser l'utilisation",
-      "working": "Mise à jour du compte",
       "usageReading": "Séance : {{session}} · Hebdomadaire : {{weekly}}",
       "saved": "Compte Google enregistré",
-      "nativeActive": "Compte natif",
-      "selected": "Choisi",
-      "select": "Sélectionner",
       "remove": "Retirer",
-      "sessions": "La sélection s'applique aux nouvelles sessions agy sur cet hôte. Les sessions existantes peuvent conserver leur compte précédent.",
       "searchDescription": "Enregistrez et sélectionnez les comptes Google agy natifs sur l’hôte d’exécution.",
       "title": "Antigravity",
       "keyword": {
@@ -22194,7 +22191,6 @@
       "authMethod": "Se connecter avec",
       "personal": "Compte Google",
       "gcpProject": "Projet Google Cloud",
-      "gcpLocation": "Emplacement Google Cloud",
       "settingsIncomplete": "Choisissez un type de compte Antigravity et saisissez son projet et son emplacement Google Cloud.",
       "settingsLoadFailed": "Orca n’a pas pu charger vos paramètres de connexion Antigravity. Réessayez.",
       "settingsSaveFailed": "Orca n’a pas pu enregistrer vos paramètres de connexion Antigravity. Réessayez.",
@@ -23553,11 +23549,10 @@
     "setByArguments": "Défini par vos arguments",
     "searchModels": "Rechercher des modèles",
     "noModels": "Aucun modèle ne correspond à votre recherche.",
-    "legacyModels": "Anciens modèles",
     "toggleArguments": "Afficher ou masquer les arguments",
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
-    "legacyModelCount": "{{total}} modèles",
+    "moreModelsWithCount": "Plus de modèles ({{total}})",
     "use": "Utiliser",
     "select": "Choisir un agent",
     "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",

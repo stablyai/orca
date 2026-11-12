@@ -9,7 +9,8 @@ import {
   RUNTIME_SOURCE_INCARNATION_ENV,
   RUNTIME_SOURCE_PROFILE_PATH_ENV
 } from '../../shared/runtime-source-env'
-import { RuntimeClient, RuntimeClientError } from '../runtime-client'
+import { RuntimeClient } from './client'
+import { RuntimeClientError } from './types'
 import { resolveFencedRuntimeSource } from './runtime-source-fence'
 
 const SOURCE_A = '11111111-1111-4111-8111-111111111111'

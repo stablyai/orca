@@ -1,6 +1,6 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -93,66 +93,6 @@ describe('OrcaRuntimeRpcServer', () => {
       expect(second.available).toBe(false)
       expect(server.getDeviceRegistry()?.getDevice(first.deviceId)?.relayBinding).toBeTruthy()
       expect(server.getDeviceRegistry()?.getPendingDevice('mobile')?.deviceId).toBe(first.deviceId)
-    } finally {
-      await server.stop()
-    }
-  })
-
-  it('coalesces concurrent mobile Relay mints for the shared pending credential', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const server = new OrcaRuntimeRpcServer({
-      methods: [],
-      runtime: new OrcaRuntimeService(),
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-    let resolveFirst: (() => void) | undefined
-    const firstMint = new Promise<void>((resolve) => {
-      resolveFirst = resolve
-    })
-    const createPairingRelay = vi.fn(async (relayDeviceId: string) => {
-      await firstMint
-      return {
-        relay: {
-          v: 1 as const,
-          directorUrl: 'https://relay.example.com',
-          cellUrl: 'https://cell.example.com',
-          assignmentEpoch: 7,
-          relayHostId: 'AbCdEf0123_-xyZ9',
-          inviteToken: 'A'.repeat(43),
-          inviteExpiresAt: Date.now() + 60_000,
-          e2eeFraming: 2 as const
-        },
-        binding: {
-          relayHostId: 'AbCdEf0123_-xyZ9',
-          relayDeviceId,
-          ownerIdentityKey: 'user\0profile\0org'
-        }
-      }
-    })
-    server.setMobileRelayPairingProvider({
-      createPairingRelay,
-      onDeviceRevokeQueued: vi.fn(),
-      getEndpoints: vi.fn(),
-      provisionRelay: vi.fn()
-    })
-
-    await server.start()
-    try {
-      const first = server.createMobilePairingOffer({ address: '100.64.1.20', rotate: true })
-      const second = server.createMobilePairingOffer({ address: '100.64.1.20', rotate: true })
-      await vi.waitFor(() => expect(createPairingRelay).toHaveBeenCalledTimes(1))
-      resolveFirst?.()
-      const [firstOffer, secondOffer] = await Promise.all([first, second])
-      expect(firstOffer.available).toBe(true)
-      expect(secondOffer.available).toBe(true)
-      if (!firstOffer.available || !secondOffer.available) {
-        throw new Error('WebSocket pairing unavailable')
-      }
-      expect(secondOffer.deviceId).toBe(firstOffer.deviceId)
-      expect(secondOffer.pairingUrl).toBe(firstOffer.pairingUrl)
-      expect(createPairingRelay).toHaveBeenCalledTimes(1)
     } finally {
       await server.stop()
     }

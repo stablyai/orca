@@ -2,11 +2,11 @@ import {
   isTerminalInputPaused,
   TerminalInputPausedError
 } from '../../../terminal/input/terminal-input-admission'
-import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { isUntypedTerminalInput } from '../../../../../shared/terminal/input/terminal-untyped-input'
-import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
+import { assertTerminalAgentSendable } from '../../terminal/terminal-agent-send-guard'
 import { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
 import {

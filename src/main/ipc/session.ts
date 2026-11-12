@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { parseTerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
+import { parseTerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { isFrozenOrcadSourceSessionPartition } from '../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
 import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import { visibleSessionHostIds } from '../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source-session'

@@ -72,7 +72,7 @@ async function closeThroughDaemon(
     })),
     isDispatchProcessCurrent: vi.fn(() => true),
     workerTerminalResourceHasIdentityConflict: vi.fn(() => false),
-    getWorkerTerminalArchive: vi.fn(() => ({ kind: 'transcript_pin' })),
+    getWorkerTerminalArchive: vi.fn(() => ({ kind: 'transcript_pin', content: '{}' })),
     commitWorkerTerminalArchiveForRelease: vi.fn(() => ({
       ...resource,
       release_state: 'releasing'

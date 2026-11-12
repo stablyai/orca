@@ -28,8 +28,8 @@ import {
 } from '../../../provider-process/provider-executable-missing'
 import { providerRequestTimeoutOf } from '../../../provider-process/provider-request-timeout'
 import { findInErrorChain } from '../../../provider-process/provider-error-chain'
-import { argumentProblemOf } from '../../structured-agent-arguments-error'
-import { agentCliInstallationProblemOf } from '../../agent-cli-installation-error'
+import { argumentProblemOf } from '../../agent-launch/structured-agent-arguments-error'
+import { agentCliInstallationProblemOf } from '../../agent-launch/agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 const TYPED_START_REFUSALS = [

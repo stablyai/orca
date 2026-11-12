@@ -14,7 +14,7 @@ import { parseGlabJsonList, parseGlabPaginationHeader } from '../requests/glab-a
 import { resolveIssueSource } from '../issues/gitlab-issue-source-resolution'
 import { encodedProject } from '../projects/project-path-encoding'
 import { readGlabViewer } from '../requests/gitlab-auth-and-rate-limit'
-import { isTaskRepositoryIneligible } from '../../git/task-repository-eligibility'
+import { isTaskRepositoryIneligible } from '../../git/remotes/task-repository-eligibility'
 
 const INVOLVEMENT_PARAM: Record<GitLabMRInvolvement, string> = {
   authored: 'author_id',

@@ -6,8 +6,11 @@ import {
   parseNumstat,
   type GitLineStats
 } from '../../../shared/git/status/git-uncommitted-line-stats'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitReadOptionsForWorktree } from '../git-runtime-options'
+
+import {
+  type GitRuntimeOptions,
+  gitReadOptionsForWorktree
+} from '../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { gitOptionalLocksDisabledEnv } from '../command-runner/git-environment/git-process-env'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'

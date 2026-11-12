@@ -816,18 +816,35 @@ final class Provider {
             if !foreground {
                 try requireBackgroundClickAllowed(backgroundClickHit(record.element, snapshot: snapshot))
             }
+            let rowSelection = AccessibilityRowSelection()
+            let unselectedRow = modifiers.isEmpty && count <= 1 && button == .left
+                && RowSelectionClick.isUnselectedRow(record.element, ax: rowSelection)
             if modifiers.isEmpty,
                count <= 1,
                button.hasAccessibilityAction,
                let actionName = try performClickAction(record: record, mouseButton: button) {
-                return actionMetadata(path: "accessibility", actionName: actionName)
+                guard unselectedRow else {
+                    return actionMetadata(path: "accessibility", actionName: actionName)
+                }
+                return rowClickMetadata(
+                    try RowSelectionClick.confirm(record.element, ax: rowSelection),
+                    path: "accessibility",
+                    actionName: actionName
+                )
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
                 try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
-                return actionMetadata(
+                guard unselectedRow else {
+                    return actionMetadata(
+                        path: "synthetic",
+                        fallbackReason: "actionUnsupported",
+                        verification: unverifiedAction(reason: "synthetic_input")
+                    )
+                }
+                return rowClickMetadata(
+                    try RowSelectionClick.confirm(record.element, ax: rowSelection),
                     path: "synthetic",
-                    fallbackReason: "actionUnsupported",
-                    verification: unverifiedAction(reason: "synthetic_input")
+                    actionName: nil
                 )
             }
             throw ProviderError.coded("element_not_clickable", "element \(record.index) has no clickable frame")
@@ -838,6 +855,22 @@ final class Provider {
             path: "synthetic",
             verification: unverifiedAction(reason: "synthetic_input")
         )
+    }
+
+    /// The selection reading back on verifies a row click; a row it never selected stays unverified.
+    private func rowClickMetadata(_ outcome: RowSelectionClick.Outcome, path: String, actionName: String?) -> [String: Any] {
+        let fallbackReason = path == "synthetic" ? "actionUnsupported" : nil
+        switch outcome {
+        case .selectedByClick:
+            return actionMetadata(path: path, actionName: actionName, fallbackReason: fallbackReason, verification: verifiedAction(property: "selection"))
+        case let .selectedByWrite(attribute):
+            return actionMetadata(path: "accessibility", actionName: attribute, fallbackReason: fallbackReason, verification: verifiedAction(property: "selection"))
+        case .unselected:
+            // Why: an accessibility click leaves verification to the tree diff, which reports suspected_noop if nothing changed.
+            return path == "synthetic"
+                ? actionMetadata(path: path, fallbackReason: fallbackReason, verification: unverifiedAction(reason: "synthetic_input"))
+                : actionMetadata(path: path, actionName: actionName)
+        }
     }
 
     private func performClickAction(record: ElementRecord, mouseButton: MouseButtonSelection) throws -> String? {
@@ -894,13 +927,20 @@ final class Provider {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
         }
         let verification: [String: Any]
-        switch coercion.compare(readback: rawAttributeValue(record.element, kAXValueAttribute as String)) {
-        case let .match(actualPreview):
-            verification = verifiedAction(property: "value", expected: expected, actualPreview: actualPreview)
+        let readback = settledValueReadback(record.element) { readback in
+            if case .mismatch = coercion.compare(readback: readback) { return false }
+            return true
+        }
+        switch coercion.compare(readback: readback) {
+        case .match:
+            verification = verifiedAction(property: "value")
         case let .mismatch(actualPreview):
-            verification = unverifiedAction(reason: "value_mismatch", expected: expected, actualPreview: actualPreview)
+            // Why: a secure field can read back masked, so its value neither disproves the write nor gets shown.
+            verification = AXSnapshotReader().isSecureTextElement(record.element)
+                ? unverifiedAction(reason: "readback_unsupported")
+                : unverifiedAction(reason: "value_mismatch", actualPreview: actualPreview)
         case .unsupported:
-            verification = unverifiedAction(reason: "readback_unsupported", expected: expected)
+            verification = unverifiedAction(reason: "readback_unsupported")
         }
         return actionMetadata(path: "accessibility", actionName: "AXSetValue", verification: verification)
     }
@@ -1751,6 +1791,19 @@ private func rawStringAttribute(_ element: AXUIElement, _ attribute: String) -> 
     return value as? String
 }
 
+/// Reads the value until `settled` accepts it: Chromium answers from a cache that trails a successful write by about 100 ms.
+private func settledValueReadback(_ element: AXUIElement, settled: (CFTypeRef) -> Bool) -> CFTypeRef? {
+    var readback: CFTypeRef?
+    // Why: settle counts only its sleeps, and one slow or failed AX read can take the full 3 s timeout.
+    let deadline = CFAbsoluteTimeGetCurrent() + 0.5
+    _ = PermissionTrustSettling.settle(timeoutMs: 500, intervalMs: 25) {
+        readback = rawAttributeValue(element, kAXValueAttribute as String)
+        guard let readback, CFAbsoluteTimeGetCurrent() < deadline else { return true }
+        return settled(readback)
+    }
+    return readback
+}
+
 private func rawAttributeValue(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
@@ -1856,6 +1909,75 @@ private func performAction(_ element: AXUIElement, _ action: String) throws -> B
 private func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
     var settable = DarwinBoolean(false)
     return AXUIElementIsAttributeSettable(element, attribute as CFString, &settable) == .success && settable.boolValue
+}
+
+/// Once the app stops answering, later reads return nothing at once so a hung app costs one timeout, not dozens.
+private final class AccessibilityRowSelection: RowSelectionAccessibility {
+    private var unanswered = false
+
+    func role(of element: AXUIElement) -> String? {
+        read(element, kAXRoleAttribute as String) as? String
+    }
+
+    func isSelected(_ element: AXUIElement) -> Bool? {
+        read(element, kAXSelectedAttribute as String) as? Bool
+    }
+
+    func parent(of element: AXUIElement) -> AXUIElement? {
+        guard let value = read(element, kAXParentAttribute as String),
+              CFGetTypeID(value) == AXUIElementGetTypeID()
+        else {
+            return nil
+        }
+        return (value as! AXUIElement)
+    }
+
+    func isSettable(_ attribute: String, on element: AXUIElement) -> Bool {
+        guard !unanswered else { return false }
+        var settable = DarwinBoolean(false)
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
+        unanswered = AccessibilityMessaging.timedOut(result, since: start)
+        return result == .success && settable.boolValue
+    }
+
+    func setSelected(_ element: AXUIElement) throws -> Bool {
+        try write(kAXSelectedAttribute as String, on: element, value: kCFBooleanTrue)
+    }
+
+    func setSelection(_ attribute: String, of container: AXUIElement, to member: AXUIElement) throws -> Bool {
+        try write(attribute, on: container, value: [member] as CFArray)
+    }
+
+    func settles(_ check: () -> Bool) -> Bool {
+        // Why: settle counts only its sleeps, and one slow AX read can take the full 3 s timeout.
+        let deadline = CFAbsoluteTimeGetCurrent() + 0.3
+        var shown = false
+        _ = PermissionTrustSettling.settle(timeoutMs: 300, intervalMs: 25) {
+            guard !unanswered, CFAbsoluteTimeGetCurrent() < deadline else { return true }
+            shown = check()
+            return shown
+        }
+        return shown
+    }
+
+    private func read(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+        guard !unanswered else { return nil }
+        var value: CFTypeRef?
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        unanswered = AccessibilityMessaging.timedOut(result, since: start)
+        return result == .success ? value : nil
+    }
+
+    private func write(_ attribute: String, on element: AXUIElement, value: CFTypeRef) throws -> Bool {
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = AXUIElementSetAttributeValue(element, attribute as CFString, value)
+        if AccessibilityMessaging.timedOut(result, since: start) {
+            throw AccessibilityMessaging.unanswered("the \(attribute) write")
+        }
+        return result == .success
+    }
 }
 
 private func frame(_ element: AXUIElement, windowBounds: CGRect) -> CGRect? {
@@ -2409,6 +2531,10 @@ private final class AXSnapshotReader {
         return Array((visible.isEmpty ? rows : visible).prefix(20))
     }
 
+    func isSecureTextElement(_ element: AXUIElement) -> Bool {
+        isSecureTextElement(element, role: stringAttribute(element, kAXRoleAttribute as String) ?? "")
+    }
+
     private func isSecureTextElement(_ element: AXUIElement, role: String) -> Bool {
         guard SnapshotRenderHeuristics.shouldProbeSecureTextMetadata(role: role) else {
             return false
@@ -2533,20 +2659,15 @@ private func actionMetadata(
     return metadata
 }
 
-private func verifiedAction(property: String, expected: String? = nil, actualPreview: String? = nil) -> [String: Any] {
-    [
-        "state": "verified",
-        "property": property,
-        "expected": jsonNullable(expected),
-        "actualPreview": jsonNullable(actualPreview),
-    ]
+// Why: results never repeat the written text or field contents, so --value-stdin / --text-stdin secrets stay out of transcripts.
+private func verifiedAction(property: String) -> [String: Any] {
+    ["state": "verified", "property": property]
 }
 
-private func unverifiedAction(reason: String, expected: String? = nil, actualPreview: String? = nil) -> [String: Any] {
+private func unverifiedAction(reason: String, actualPreview: String? = nil) -> [String: Any] {
     [
         "state": "unverified",
         "reason": reason,
-        "expected": jsonNullable(expected),
         "actualPreview": jsonNullable(actualPreview),
     ]
 }
@@ -2937,7 +3058,9 @@ private enum Input {
 
 private enum TextInput {
     static func replaceSelection(_ element: AXUIElement, with text: String) throws -> [String: Any]? {
-        guard isSettable(element, kAXValueAttribute as String),
+        // Why: Chromium applies AX value writes without the input events pages listen to; a contenteditable gets none, so editors like Discord's never see the text.
+        guard !BackgroundInputTransport.isChromiumNode(element),
+              isSettable(element, kAXValueAttribute as String),
               let current = rawStringAttribute(element, kAXValueAttribute as String)
         else {
             return nil
@@ -2957,15 +3080,18 @@ private enum TextInput {
         guard result == .success else {
             return nil
         }
-        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
-        guard rawStringAttribute(element, kAXValueAttribute as String) == next else {
+        // Why: a cached, out-of-process AX tree can show the old value for a moment; any other value is final.
+        let readback = settledValueReadback(element) { next == current || ($0 as? String) != current } as? String
+        // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
+        if readback == current && next != current {
             return nil
         }
-        return verifiedAction(
-            property: "focusedText",
-            expected: text,
-            actualPreview: preview(next)
-        )
+        // Why: moving the caret before a refused write would send the fallback keys to the wrong place.
+        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
+        guard readback == next else {
+            return unverifiedAction(reason: "accessibility_action_unasserted")
+        }
+        return verifiedAction(property: "focusedText")
     }
 
     static func selectAll(_ element: AXUIElement) -> Bool {
@@ -2983,7 +3109,7 @@ private enum TextInput {
         else {
             return unverifiedAction(reason: "provider_unavailable")
         }
-        return verifiedAction(property: "selection", actualPreview: preview(current))
+        return verifiedAction(property: "selection")
     }
 
     private static func selectedTextRange(_ element: AXUIElement) -> CFRange? {

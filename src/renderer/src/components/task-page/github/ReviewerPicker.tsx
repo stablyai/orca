@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 import { Input } from '@/components/ui/input'
 import { PopoverContent } from '@/components/ui/popover'
 
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 

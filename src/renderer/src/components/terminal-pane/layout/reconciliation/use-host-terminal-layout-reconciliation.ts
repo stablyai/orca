@@ -6,7 +6,7 @@ import {
   selectRetiredPaneIds,
   trackRetiredLeafIds
 } from './terminal-live-layout-reconciliation'
-import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { TerminalPaneMountedController } from '../../mounting/use-terminal-pane-lifecycle-stage'
 
 export function useHostTerminalLayoutReconciliation({

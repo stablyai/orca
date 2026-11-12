@@ -401,7 +401,8 @@
       "remove": "Entfernen…",
       "empty": "Für dieses Profil sind keine Erweiterungen aktiviert",
       "visitWebStore": "Chrome Web Store besuchen",
-      "manage": "Erweiterungen verwalten"
+      "manage": "Erweiterungen verwalten",
+      "openWebStoreFailed": "Der Chrome Web Store konnte nicht geöffnet werden."
     },
     "history": {
       "clear": "Browserverlauf löschen",
@@ -3863,7 +3864,6 @@
             "runningTerminalBlocker": "Laufender Terminal-Prozess",
             "terminalLivenessUnknownBlocker": "Terminal-Aktivität unbekannt",
             "dirtyEditorBufferBlocker": "Ungespeicherter Editor-Puffer",
-            "volatileLocalContextBlocker": "Flüchtiger lokaler Kontext",
             "recentVisibleContextBlocker": "Kürzlich besuchte Tabs",
             "liveAgentBlocker": "Aktiver Agent",
             "sshDisconnectedBlocker": "Remote-Host nicht verfügbar",
@@ -17206,6 +17206,14 @@
                     "logins": {
                       "title": "Angemeldet bleiben",
                       "body": "Bestehende Anmeldungen in Orca übernehmen, um sofort angemeldet zu bleiben."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome-Erweiterungen",
+                        "body": "Installiere Erweiterungen aus dem Chrome Web Store und hefte sie neben der Adressleiste an.",
+                        "action": "Web Store öffnen",
+                        "secondaryAction": "Verstanden"
+                      }
                     }
                   },
                   "tasks": {
@@ -21873,7 +21881,6 @@
       "description": "Die Agenten dort verwenden die Standardkonten der Distribution für Claude und Codex, bis Orca in WSL aktualisiert wird."
     },
     "antigravity": {
-      "chatTitle": "Antigravity-Chats",
       "chatSignIn": "Anmelden",
       "chatChangeAccount": "Konto wechseln",
       "chatRetry": "Anmeldung erneut versuchen",
@@ -21891,23 +21898,13 @@
       "chatFailed": "Anmeldung fehlgeschlagen. Erneut versuchen.",
       "chatOtherClient": "In einem anderen Client läuft bereits eine Anmeldung.",
       "chatReadFailed": "Die Anmeldung auf {{host}} konnte nicht überprüft werden.",
-      "signIn": "agy auf diesem Host starten und die Anmeldung im Browser abschließen, dann das aktuelle Konto speichern. Um ein anderes Konto hinzuzufügen, /logout in agy ausführen und erneut anmelden.",
-      "docs": "Anmeldeanleitung",
       "retry": "Erneut versuchen",
-      "identityUnknown": "Angemeldete Identität nicht verfügbar",
-      "signedOut": "Es ist kein natives agy-Konto angemeldet.",
       "changed": "Das native Konto hat sich geändert. Vor dem Start von agy erneut ein gespeichertes Konto auswählen.",
-      "save": "Aktuelles Konto speichern",
       "refresh": "Konten aktualisieren",
       "usage": "Nutzung aktualisieren",
-      "working": "Konto wird aktualisiert",
       "usageReading": "Sitzung: {{session}} · Wöchentlich: {{weekly}}",
       "saved": "Gespeichertes Google-Konto",
-      "nativeActive": "Natives Konto",
-      "selected": "Ausgewählt",
-      "select": "Auswählen",
       "remove": "Entfernen",
-      "sessions": "Die Auswahl gilt für neue agy-Sitzungen auf diesem Host. Bestehende Sitzungen behalten möglicherweise ihr bisheriges Konto.",
       "searchDescription": "Native Google-Konten von agy auf dem Ausführungshost speichern und auswählen.",
       "title": "Antigravity",
       "keyword": {
@@ -21919,7 +21916,6 @@
       "authMethod": "Anmelden mit",
       "personal": "Google-Konto",
       "gcpProject": "Google-Cloud-Projekt",
-      "gcpLocation": "Google-Cloud-Standort",
       "settingsIncomplete": "Wähle einen Antigravity-Kontotyp und gib dessen Google-Cloud-Projekt und -Standort ein.",
       "settingsLoadFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht laden. Versuche es erneut.",
       "settingsSaveFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht speichern. Versuche es erneut.",
@@ -23637,11 +23633,10 @@
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
-    "legacyModels": "Ältere Modelle",
     "toggleArguments": "Argumente ein-/ausblenden",
     "argumentsTerminalHint": "Gilt nur für Terminalstarts (CLI)",
     "searchAgentModels": "{{agent}}-Modelle suchen…",
-    "legacyModelCount": "{{total}} Modelle",
+    "moreModelsWithCount": "Weitere Modelle ({{total}})",
     "search": "Suchen, z. B. Opus 5.5…",
     "configure": "{{agent}} konfigurieren",
     "arguments": "Argumente",

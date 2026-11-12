@@ -16,13 +16,13 @@ import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
-} from '../../../native-chat/structured-agent-session-create-support'
+} from '../../../native-chat/agent-launch/structured-agent-session-create-support'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
 import {
   refreshHostAgentBaseEnvironmentAfterMiss,

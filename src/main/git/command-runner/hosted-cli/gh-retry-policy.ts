@@ -1,4 +1,4 @@
-import { parseRetryAfterMs } from '../../exec-error'
+import { parseRetryAfterMs } from '../process-capture/exec-error'
 import { createAbortError } from '../process-capture/abort-error'
 
 /** Retry 5xx/resets and 429 without Retry-After; propagate explicit waits and primary 403s. */

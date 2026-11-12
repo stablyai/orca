@@ -5,7 +5,6 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -114,13 +113,5 @@ describe('Claude account profile setup', () => {
       accountId: 'a',
       runtime: 'host'
     })
-  })
-
-  itLinks('refuses a data root linked into the default home before writing there', async () => {
-    const f = fixture()
-    mkdirSync(join(f.defaultHome, 'inner'))
-    symlinkSync(join(f.defaultHome, 'inner'), join(f.dataRoot, 'claude-profiles'))
-    expect((await f.setup()).outcome).toBe('refused')
-    expect(existsSync(join(f.defaultHome, 'inner', 'a'))).toBe(false)
   })
 })

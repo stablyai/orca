@@ -7,7 +7,7 @@ import {
 } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import SyncDatabase from '../../../../sqlite/sync-database'
 import { classifySqliteReadFailure } from '../../../../sqlite/sqlite-read-failure'
-import { errorMessage } from '../../../session-scanner-values'
+import { errorMessage } from '../../../../../shared/error-message'
 
 // Allow bounded contention waits for native reads without adding retries atop SQLite’s busy handler (#15036).
 const OPENCODE_SQLITE_BUSY_TIMEOUT_MS = 1_500

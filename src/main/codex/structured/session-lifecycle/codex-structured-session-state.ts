@@ -28,7 +28,7 @@ import type { StructuredLaunchRequest } from '../../../runtime/agent-session/lau
 import type { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentModelCatalogSessionAccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-lister'
 import type { StructuredAgentSessionProviderOpen } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
-import type { NativeChatVisualsLaunch } from '../../../native-chat/native-chat-visuals-delivery'
+import type { NativeChatVisualsLaunch } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
