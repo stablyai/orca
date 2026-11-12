@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ExternalLink, Loader2, RefreshCw, Trophy, Unlink } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw, Unlink } from 'lucide-react'
 import type { ToknSyncErrorCode, ToknSyncStatus } from '../../../../shared/tokn-sync-status'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
+import { ToknIcon } from '../icons/ToknIcon'
 import {
   IntegrationCardDetails,
   IntegrationCardShell
@@ -198,7 +199,7 @@ export function ToknPublishCard(): React.JSX.Element {
 
   return (
     <IntegrationCardShell
-      icon={<Trophy className="size-5" />}
+      icon={<ToknIcon className="size-5" />}
       name="tokn"
       description={description}
       checking={status === null}
