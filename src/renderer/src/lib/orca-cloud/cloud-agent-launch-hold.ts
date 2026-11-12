@@ -253,11 +253,19 @@ export async function holdCloudAgentLaunch({
       // Renewed (or a key now covers it): every pane held on recovery starts. A first-time setup
       // waits for its "Start {{agent}}" click instead (PC-3b), so it never starts unasked.
       const entry = holds.get(hold.paneKey)
-      if (
-        entry?.release !== finish ||
-        entry.reason !== 'accountExpired' ||
-        cloudAgentStripReason(hold.agent, readOrcaCloudAgentAccounts()) === 'accountExpired'
-      ) {
+      if (entry?.release !== finish || entry.reason !== 'accountExpired') {
+        return
+      }
+      const accounts = readOrcaCloudAgentAccounts()
+      const now = accounts.load.kind === 'ready' ? cloudAgentHoldReason(hold.agent, accounts) : null
+      if (accounts.load.kind !== 'ready' || now === 'accountExpired') {
+        return
+      }
+      if (now === 'notSetUp') {
+        // The sign-in was removed, not renewed: nothing covers the agent, so it never starts here;
+        // the hold becomes the one-time setup.
+        holds.set(hold.paneKey, { ...entry, reason: 'notSetUp' })
+        notify()
         return
       }
       if (restored) {
