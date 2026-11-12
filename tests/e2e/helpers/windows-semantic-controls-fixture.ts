@@ -3,18 +3,22 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { vi } from 'vitest'
+import { z } from 'zod'
 
 const execFileAsync = promisify(execFile)
 const fixtureScript = join(process.cwd(), 'tests/e2e/helpers/windows-semantic-controls-fixture.ps1')
 
-export type WindowsSemanticFixtureState = {
-  ready: boolean
-  activations: number
-  listOffset: number
-  listViewport: number
-  branchExpanded: boolean
-  level: number
-}
+const WindowsSemanticFixtureStateSchema = z.object({
+  ready: z.boolean(),
+  activations: z.number(),
+  listOffset: z.number(),
+  listViewport: z.number(),
+  branchExpanded: z.boolean(),
+  level: z.number()
+})
+
+export type WindowsSemanticFixtureState = z.infer<typeof WindowsSemanticFixtureStateSchema>
 
 export type WindowsSemanticFixture = {
   app: string
@@ -56,26 +60,23 @@ export async function launchWindowsSemanticFixture(): Promise<WindowsSemanticFix
 
   const readState = async (): Promise<WindowsSemanticFixtureState> => {
     const raw = await readFile(statePath, 'utf8')
-    return JSON.parse(raw.replace(/^﻿/, '')) as WindowsSemanticFixtureState
+    return WindowsSemanticFixtureStateSchema.parse(JSON.parse(raw.replace(/^﻿/, '')))
   }
   const waitForState = async (
     predicate: (state: WindowsSemanticFixtureState) => boolean,
     label: string
   ): Promise<WindowsSemanticFixtureState> => {
-    const deadline = Date.now() + 15_000
-    let last: WindowsSemanticFixtureState | null = null
-    while (Date.now() < deadline) {
-      try {
-        last = await readState()
-        if (predicate(last)) {
-          return last
+    // Why: the fixture replaces the file on every change, so a read can land between writes and throw.
+    return vi.waitFor(
+      async () => {
+        const state = await readState()
+        if (!predicate(state)) {
+          throw new Error(`Fixture state not yet ${label}: ${JSON.stringify(state)}`)
         }
-      } catch {
-        // The fixture replaces the file on every change; a read can land between writes.
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
-    throw new Error(`Timed out waiting for fixture state: ${label}. Last: ${JSON.stringify(last)}`)
+        return state
+      },
+      { timeout: 15_000, interval: 100 }
+    )
   }
   const close = async (): Promise<void> => {
     try {
