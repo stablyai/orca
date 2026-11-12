@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
-import { detectOpenCodeCredentialBackend } from '../../../opencode/opencode-credential-backend'
+import { detectOpenCodeCredentialBackend } from '../../../opencode/accounts/opencode-credential-backend'
 import { resolveOpenCodeGoApiKey } from './opencode-go-api-key-source'
 
-vi.mock('../../../opencode/opencode-credential-backend', () => ({
+vi.mock('../../../opencode/accounts/opencode-credential-backend', () => ({
   detectOpenCodeCredentialBackend: vi.fn()
 }))
 const ENVIRONMENT_KEY = 'environment-placeholder-key'

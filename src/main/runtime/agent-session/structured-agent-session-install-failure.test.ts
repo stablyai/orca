@@ -10,6 +10,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './installation/structured-agent-session-runtime-contract'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const mocks = vi.hoisted(() => ({ failWiring: vi.fn(() => false) }))
@@ -38,9 +39,12 @@ vi.mock('./model-catalog/structured-agent-model-catalog-wiring', async (importOr
 
 let root: string
 
-function install(): ReturnType<typeof ensureStructuredAgentSessionHost> {
+function install(
+  createTurnAttention?: StructuredAgentSessionRuntimeDeps['createTurnAttention']
+): ReturnType<typeof ensureStructuredAgentSessionHost> {
   return ensureStructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),
+    createTurnAttention,
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
@@ -77,5 +81,13 @@ describe('an install that fails after opening the chat journal', () => {
 
     await stopStructuredAgentSessionRuntime()
     expect(opened.isClosed).toBe(true)
+  })
+  it('retries when acquiring the turn-attention owner throws', async () => {
+    await expect(
+      install(() => {
+        throw new Error('attention acquisition failed')
+      })
+    ).rejects.toThrow('attention acquisition failed')
+    await expect(install()).resolves.toBeDefined()
   })
 })

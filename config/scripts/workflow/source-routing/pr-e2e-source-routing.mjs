@@ -154,16 +154,6 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
-    id: 'ssh.orcad-auto-convert',
-    specs: ['tests/e2e/ssh-orcad-auto-convert.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/main\/(?:ipc\/(?:ssh\/)?ssh-host-server-|(?:ssh|managed-server\/[a-z-]+)\/(?:ssh-host-server-|orcad-runtime-conversion|orcad-migration-|orcad-retained-source|orcad-runtime-deployment))/.test(
-          file
-        ))
-  },
-  {
     id: 'ssh.orcad-connect-failure',
     specs: [
       'tests/e2e/ssh-orcad-ssh-failure-reason.spec.ts',
@@ -330,7 +320,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       MANAGED_SSH_HARNESS.test(file) ||
       file === 'tests/e2e/fixtures/structured-claude-stub.cjs' ||
       (isProductSource(file) &&
-        /^src\/(?:main\/(?:claude\/claude-(?:stream-json-connection|stream-json-exit-error|structured-session-exit-lifecycle)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
+        /^src\/(?:main\/(?:claude\/(?:claude-(?:stream-json-connection|structured-session-exit-lifecycle)|sdk-transport\/claude-stream-json-exit-error)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
           file
         ))
   },
@@ -483,16 +473,6 @@ export const PR_E2E_SOURCE_ROUTES = [
       isProductSource(file) &&
       !file.endsWith('-test-harness.ts') &&
       /^(?:src\/renderer\/src\/components\/terminal-pane\/pty-transport\/remote-runtime\/remote-runtime-pty-transport(?:-[a-z0-9-]+)?\.ts|src\/renderer\/src\/runtime\/remote-runtime-terminal-multiplexer\.ts)$/.test(
-        file
-      )
-  },
-  {
-    // Layout resolution can invent split directions; publishing the guess overwrites the original tree irreversibly.
-    id: 'terminal-session.split-orientation-resolution',
-    specs: ['tests/e2e/desktop-published-split-orientation-legacy-leaf.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/runtime\/(?:remote-terminal-layout-resolution\.ts|sync-runtime-graph\/(?:graph-publication|mobile-session-terminal-tabs|mobile-session-surfaces)\.ts|web-session-tabs-sync\/terminal-surfaces\.ts)$/.test(
         file
       )
   },

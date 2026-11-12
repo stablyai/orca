@@ -5,7 +5,7 @@ import {
   uniqueDirs,
   wslHomeSessionDirs,
   type SessionHomeAgent
-} from '../ai-vault/session-scanner-roots'
+} from '../ai-vault/discovery/session-scanner-roots'
 import { resolveWslGuestRealDirAsync } from '../wsl/filesystem/unc-path-access'
 import {
   listRunningWslHomeDirsUnlessStopped,
@@ -17,7 +17,8 @@ import {
   filterPathsToWslDistros
 } from '../wsl/filesystem/wsl-running-path-filter'
 import { wslGatedAccess } from './wsl-transcript-fs-access'
-import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { WslTranscriptFsError } from './wsl-transcript-fs-error'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export function isGuestAbsoluteLinuxPath(path: string): boolean {
   if (!path.startsWith('/') || path.startsWith('//')) {

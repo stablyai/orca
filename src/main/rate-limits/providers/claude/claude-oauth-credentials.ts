@@ -3,10 +3,10 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { readActiveClaudeKeychainCredentialsStrict } from '../../../claude-accounts/keychain'
+import { readActiveClaudeKeychainCredentialsStrict } from '../../../claude-accounts/runtime-auth/keychain'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
-import { readUserClaudeConfigDir } from '../../../claude-accounts/claude-profile-paths'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+import { readUserClaudeConfigDir } from '../../../claude-accounts/profiles/claude-profile-paths'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
 export type ClaudeOAuthCredentialSource =
   | 'scoped-keychain'

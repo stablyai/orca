@@ -235,12 +235,9 @@ function installWillQuitHandler(): void {
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)
-    // Capture queued usage writes before awaiting teardown or quit can lose the last enabled/scan snapshot.
     const usageCacheFlush = Promise.all([
-      state.claudeUsage?.flush(),
-      state.codexUsage?.flush(),
-      state.openCodeUsage?.flush(),
-      state.museUsage?.flush()
+      state.backend?.stop(),
+      state.usageWorktreeHistory?.flush()
     ]).then(() => {})
     disposeDesktopBrowserBridge()
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()

@@ -5,6 +5,7 @@ import { CLI_MAIN_ENTRY_NAMES } from './cli-main-entry-names'
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   index: resolve('src/main/index.ts'),
+  'backend-entry': resolve('src/main/backend/backend-entry.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(
     'src/main/browser/extensions/native-messaging/browser-extension-native-host-supervisor-entry.ts'
   ),
@@ -15,7 +16,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   'computer-sidecar': resolve('src/main/computer/computer-sidecar.ts'),
   'claude-conversation-fork-worker-entry': resolve(
-    'src/main/claude/claude-conversation-fork-worker-entry.ts'
+    'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts'
   ),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
@@ -47,7 +48,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   // Why: a first account setup can merge a large history tree with sync fs calls.
   'claude-profile-setup-worker-entry': resolve(
-    'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'
+    'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts'
   ),
   'profile-state-backup-worker-entry': resolve(
     'src/main/persistence/profile-state/backup/profile-state-backup-worker-entry.ts'

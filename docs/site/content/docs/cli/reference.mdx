@@ -233,21 +233,6 @@ orca chat rename --name "Migrate auth"
 
 Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
 
-Agents that run as chats are read and messaged with `chat` commands. `--session` takes the session id from `chat list` or the handle `agent launch` returns.
-
-```bash
-orca chat list --json
-orca chat list --state working --json
-orca chat read --session <session> --limit 10 --json
-orca chat send --session <session> --text "Run the tests, then summarize failures" --json
-orca chat send --session <session> --text "<message>" --wait --timeout-ms 600000 --json
-orca chat wait --session <session> --timeout-ms 600000 --json
-```
-
-`chat read` returns the newest messages, tool calls, errors, approvals and questions; an approval or question waiting for an answer has `pending: true`. `chat send` sends the text as your message. While the agent is working, hosts with a message queue hold it until the turn ends and report `delivery: "queued"`. A chat that restarted since it was read refuses the send. `--text-file -` reads the message from stdin.
-
-`chat send --wait` and `chat wait` return once the chat's own turn settles, in the words `chat list` uses: `settled: "done"`, or `settled: "blocked"` when an approval or question needs an answer. Background agents the chat started can still show as `working` or `waiting` in `chat list`. They print the entries since the last user message. A wait past `--timeout-ms` returns `settled: "timeout"`, and a message held in a stopped or failed queue returns `settled: "held"`; both exit 1. `chat read --json` returns a `cursor` for the newest row read, and `truncated: true` when older rows it needed were past the 200-row read. `chat list --state` takes `working`, `blocked`, `waiting` or `done`. Paired hosts (`--environment`, `--pairing-code`) can list chats but not read, send or wait yet.
-
 ## Files
 
 ```bash

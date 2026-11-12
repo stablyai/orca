@@ -1,5 +1,5 @@
 import type { Dirent } from 'node:fs'
-import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import { walkSessionFiles } from '../ai-vault/discovery/session-scanner-discovery'
 import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
 import { wslGatedReaddir } from './wsl-transcript-fs-access'
 

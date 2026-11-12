@@ -1,4 +1,4 @@
-import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 
 export type HostedReviewLocalGitOptions = {

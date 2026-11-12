@@ -170,7 +170,16 @@ describe('useNativeChatComposerAttachments', () => {
     }
   })
 
-  it('clears a pending image on disable without putting its marker in prompt text', async () => {
+  it('attaches a dropped BMP as a file reference, since agents take only PNG, JPEG, GIF and WebP inline', async () => {
+    const probe = await renderProbe('pty-bmp')
+    act(() => probe.latest().attachResolvedPaths(['/repo/diagram.bmp', '/repo/shot.png']))
+
+    expect(probe.latest().imageAttachments).toMatchObject([{ path: '/repo/shot.png' }])
+    expect(probe.draft()).toContain('@/repo/diagram.bmp')
+    act(() => probe.root.unmount())
+  })
+
+it('clears a pending image on disable without putting its marker in prompt text', async () => {
     const probe = await renderProbe('structured-1', true)
     act(() => {
       probe.latest().beginPendingImageAttachment()

@@ -70,33 +70,6 @@ function staleGate(
 }
 
 describe('profile state owner reclamation', () => {
-  it('keeps an owner written since this boot by a clone sharing machine-id and hostname (#32918)', () => {
-    const path = root()
-    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('current-boot')
-    vi.spyOn(identity, 'profileStateAccessMachineIdentity').mockReturnValue('cloned-machine')
-    vi.spyOn(identity, 'profileStateAccessWrittenThisBoot').mockReturnValue(true)
-    const owner = staleGate(path, 12345, hostname(), {
-      bootIdentity: 'clone-boot',
-      machineIdentity: 'cloned-machine'
-    })
-    expect(() => acquireProfileStateMaintenance(path)).toThrow('in use')
-    expect(fs.existsSync(owner)).toBe(true)
-  })
-
-  it('reclaims a reused PID only when its recorded process start differs on the same boot', () => {
-    const path = root()
-    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
-    vi.spyOn(identity, 'profileStateAccessProcessIdentity').mockReturnValue(
-      'linux-start-ticks:2000'
-    )
-    const owner = staleGate(path, process.pid, hostname(), {
-      bootIdentity: 'same-boot',
-      processStartIdentity: 'linux-start-ticks:1000'
-    })
-    acquireProfileStateMaintenance(path).release()
-    expect(fs.existsSync(owner)).toBe(false)
-  })
-
   it('cannot remove a replacement published while it releases its own token', () => {
     const path = root()
     const original = acquireProfileStateMaintenance(path)

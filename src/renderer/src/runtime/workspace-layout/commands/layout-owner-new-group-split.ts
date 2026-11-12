@@ -1,5 +1,5 @@
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
-import { removeGroupLayoutLeaf } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { removeGroupLayoutLeaf } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import type { NewGroupSplit } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { TabsSlice } from '@/store/slices/tabs/tabs-slice-contract'
 

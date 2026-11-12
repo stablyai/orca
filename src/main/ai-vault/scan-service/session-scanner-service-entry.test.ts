@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { listLocalAiVaultSubagentSessions } from '../session-subagent-reader'
-import { noteAiVaultScanWorkChanged } from '../ai-vault-scan-progress'
+import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
+import { noteAiVaultScanWorkChanged } from '../scan-lifecycle/ai-vault-scan-progress'
 import { AI_VAULT_SERVICE_PROTOCOL_VERSION } from './session-scanner-service-protocol'
 
 const invalidateSessionParseCacheEntry = vi.hoisted(() => vi.fn())
@@ -15,7 +15,7 @@ vi.mock('../parse-cache/session-parse-cache-persistence', () => ({
   flushSessionParseCachePersist: vi.fn(() => Promise.resolve()),
   initSessionParseCachePersistence: vi.fn()
 }))
-vi.mock('../session-subagent-reader', () => ({
+vi.mock('./session-subagent-reader', () => ({
   listLocalAiVaultSubagentSessions: vi.fn(() => Promise.resolve({ sessions: [], issues: [] }))
 }))
 

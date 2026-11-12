@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { decodeWslBase64Payload } from '../codex-accounts/wsl-codex-auth-batch-reader'
+import { decodeWslBase64Payload } from '../codex-accounts/runtime-home/wsl/wsl-codex-auth-batch-reader'
 import { readWslDistroRunningState } from '../wsl/discovery/wsl-background-distro-gate'
 import { runWslProcess, type WslSpec } from '../wsl/execution/wsl-runner'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
