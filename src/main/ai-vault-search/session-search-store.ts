@@ -21,6 +21,7 @@ import {
   type SessionSearchFileIdentity,
   type SessionSearchIndexedFile
 } from './session-search-file-cursor'
+import { readSessionSearchFileRows } from './session-search-file-rows'
 import {
   SESSION_SEARCH_COMMIT_CHARS,
   SessionSearchIndexWriter,
@@ -203,7 +204,7 @@ export class SessionSearchStore {
 
   /** Snapshot every indexed file with its stat, for diffing against a fresh discovery pass. */
   files(): SessionSearchFileRow[] {
-    return (
+    return readSessionSearchFileRows(
       this.db
         .prepare(
           // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
@@ -213,24 +214,8 @@ export class SessionSearchStore {
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
            FROM files`
         )
-        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-        dev: number | null
-        ino: number | null
-      })[]
-    ).map((row) => ({
-      path: row.path,
-      identity:
-        typeof row.dev === 'number' && typeof row.ino === 'number'
-          ? { dev: row.dev, ino: row.ino }
-          : null,
-      mtimeMs: row.mtimeMs,
-      sizeBytes: row.sizeBytes,
-      sidecarMtimeMs: row.sidecarMtimeMs,
-      sidecarSizeBytes: row.sidecarSizeBytes,
-      state: row.state,
-      failCount: row.failCount,
-      failedMtimeMs: row.failedMtimeMs
-    }))
+        .all()
+    )
   }
 
   setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
