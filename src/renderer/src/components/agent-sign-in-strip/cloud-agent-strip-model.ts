@@ -29,8 +29,6 @@ export type CloudStripPrimary =
 export type CloudStripModel = {
   status: CloudStripStatus
   title: string
-  /** Below 360 px the strip shows one line: this, then the primary. */
-  compactTitle?: string
   detail: string
   /** Full sentence for the tooltip and aria-describedby when the detail is shortened. */
   description: string | null
@@ -119,7 +117,6 @@ export function cloudAgentStripModel(args: {
     return {
       status: 'warning',
       title: t('agentSignInStrip.expired', 'Your {{agent}} sign-in expired', { agent }),
-      compactTitle: t('agentSignInStrip.expiredCompact', '{{agent}} sign-in expired', { agent }),
       detail: t('agentSignInStrip.expiredDetail', 'Sign in once to fix every workspace'),
       description: null,
       primary: { label: t('agentSignInStrip.renew', 'Renew'), action: { kind: 'renew' } },
