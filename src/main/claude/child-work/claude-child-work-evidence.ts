@@ -9,7 +9,10 @@ import type {
   AgentChildWorkLiveObservation
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { taskText, taskUsageTotalTokens } from '../background-tasks/claude-background-task-frames'
-import type { ClaudeSession, ClaudeStructuredSessionAdapterDeps } from '../structured/claude-structured-session-state'
+import type {
+  ClaudeSession,
+  ClaudeStructuredSessionAdapterDeps
+} from '../structured/claude-structured-session-state'
 import type { ClaudeStructuredSessionEvent } from '../structured/claude-structured-session-event'
 import { deriveToolInputPreview } from '../../../shared/agent-hook-listener/tool-input-preview'
 import {
