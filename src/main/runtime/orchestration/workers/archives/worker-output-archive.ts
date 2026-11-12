@@ -1,7 +1,7 @@
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { WorkerStructuredJournalArchive } from './structured-worker-journal-archive'
-import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
+import { canReadWorkerTranscript } from '../transcripts/worker-transcript-read'
 import {
   ORCHESTRATION_WORKER_READ_FALLBACK_REASONS,
   type ExactWorkerProviderSession,
@@ -129,7 +129,8 @@ function transcriptUnreachableReason(
   if ((isWslSession && !session.wslDistro) || (session.connectionId && !isWslSession)) {
     return 'remote_capability_unavailable'
   }
-  return resolveNativeChatTranscriptAgent(session.agent) ? null : 'provider_unsupported'
+  // The released read uses the same reader, so record only what it can open.
+  return canReadWorkerTranscript(session.agent) ? null : 'provider_unsupported'
 }
 
 /** The reference a row holds; check isWorkerOutputReference first. */
