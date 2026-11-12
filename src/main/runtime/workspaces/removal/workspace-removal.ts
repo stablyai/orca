@@ -40,6 +40,7 @@ import {
   assertWslMoveWorkspaceWritable,
   isWslMoveSourceHost
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
 export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorkspaceMetadata {
   abstract removeWorktreeMetadataAndHistory(
@@ -96,21 +97,19 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
       await waitForWorktreeRemovalAcceptance(removalTarget.id, cleanupHostId)
       return options.waitForBackgroundRemoval ? await pending : { removing: true }
     }
-    const emitRemoved = (): void =>
-      this.emitWorktreeLifecycle({
-        kind: 'removed',
-        worktreeId: removalTarget.id,
-        path: removalTarget.path
-      })
-    const { id: worktreeId } = removalTarget
-    const cleanupScopeKey = preservedBranchCleanupScopeKey({ worktreeId, hostId: cleanupHostId })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey({
-      force,
-      runHooks,
-      allowUnverifiedPtyStop,
-      allowFailedArchiveHook,
-      deleteBranch: options.deleteBranch
+    // Identity read now: the purge drops the row before listeners hear `removed`.
+    const removed = {
+      kind: 'removed' as const,
+      worktreeId: removalTarget.id,
+      path: removalTarget.path,
+      ...worktreeHostIdentity(store, removalTarget.id, fenceHostId)
+    }
+    const emitRemoved = (): void => this.emitWorktreeLifecycle(removed)
+    const cleanupScopeKey = preservedBranchCleanupScopeKey({
+      worktreeId: removalTarget.id,
+      hostId: cleanupHostId
     })
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(options)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,

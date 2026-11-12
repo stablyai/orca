@@ -1,4 +1,4 @@
-import type { CommandSpec } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
 import { ACCOUNT_COMMAND_SPECS } from './account'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
 import { BROWSER_BASIC_COMMAND_SPECS } from './browser-basic'

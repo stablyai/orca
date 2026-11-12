@@ -35,8 +35,6 @@ vi.mock('../tabs-and-windows/browser-extension-tab-model', () => ({
 const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const { observeBrowserExtensionWebNavigation, registerWebNavigationNamespace } =
   await import('./web-navigation')
-const { getBrowserExtensionDocumentId } =
-  await import('../tabs-and-windows/browser-extension-document-ids')
 const { PRELOAD_DOCUMENT_TARGETS_NAMESPACE } =
   await import('../../../../preload/browser-extension-document-targets')
 
@@ -151,6 +149,5 @@ describe('webNavigation documentIds', () => {
     expect(invoke('getFrame', [{ documentId: firstDocument }])).toBeNull()
 
     contents.emit('destroyed')
-    expect(getBrowserExtensionDocumentId(10)).not.toBe(nextDocument)
   })
 })

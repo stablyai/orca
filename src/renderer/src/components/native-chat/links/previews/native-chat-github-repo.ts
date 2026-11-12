@@ -20,11 +20,11 @@ import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,
   repoUpstreamIdentityKey
-} from '../../../../../../shared/github/repository-identity-key'
+} from '../../../../../../shared/github/repositories/repository-identity-key'
 import {
   githubReferenceRepo,
   type GitHubRepoReference
-} from '../../../../../../shared/github/github-reference-links'
+} from '../../../../../../shared/github/markdown/github-reference-links'
 
 export type NativeChatGitHubRepo = {
   repo: Repo

@@ -28,7 +28,7 @@ import type {
   Worktree,
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
-import { getPRForBranch } from '../github/client'
+import { getPRForBranch } from '../github/client/lookup/get-pr-for-branch'
 import { addWorktree } from '../git/worktrees/creation/worktree-add'
 import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
 import type {

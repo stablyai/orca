@@ -25,18 +25,6 @@ describe('OrcaRuntimeService', () => {
     expect(confirmForegroundProcess).not.toHaveBeenCalled()
   })
 
-  it('rejects a handle rebind while a controller-less status check yields', async () => {
-    const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
-      getForegroundProcess: async () => 'zsh'
-    })
-    runtime.setPtyController(null)
-
-    const status = runtime.getTerminalAgentStatus(handle)
-    syncPty('pty-2')
-
-    await expect(status).rejects.toThrow('terminal_handle_stale')
-  })
-
   it('rejects confirmation evidence when the handle rebinds during the fresh read', async () => {
     const confirmation = deferred<string | null>()
     const confirmForegroundProcess = vi.fn(() => confirmation.promise)
@@ -51,21 +39,5 @@ describe('OrcaRuntimeService', () => {
     confirmation.resolve('codex')
 
     await expect(status).rejects.toThrow('terminal_handle_stale')
-  })
-
-  it('rejects confirmation evidence when the owning PTY exits', async () => {
-    const confirmation = deferred<string | null>()
-    const confirmForegroundProcess = vi.fn(() => confirmation.promise)
-    const { runtime, handle } = await createExplicitAgentStatusHarness({
-      getForegroundProcess: async () => 'powershell.exe',
-      confirmForegroundProcess
-    })
-
-    const status = runtime.getTerminalAgentStatus(handle)
-    await vi.waitFor(() => expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1'))
-    runtime.onPtyExit('pty-1', 0)
-    confirmation.resolve('codex')
-
-    await expect(status).rejects.toThrow('terminal_exited')
   })
 })

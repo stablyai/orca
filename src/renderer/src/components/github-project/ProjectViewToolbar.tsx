@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import ProjectPicker from './ProjectPicker'
 import type { ProjectViewTableState } from './useProjectViewTable'
-import { githubProjectHost } from '../../../../shared/github/project-identity'
+import { githubProjectHost } from '../../../../shared/github/projects/project-identity'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 

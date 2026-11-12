@@ -16501,6 +16501,14 @@
                     "logins": {
                       "title": "로그인 상태 유지",
                       "body": "기존 로그인 정보를 Orca로 가져와 바로 로그인 상태를 유지하세요."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 확장 프로그램",
+                        "body": "Chrome 웹 스토어에서 설치하고 주소 표시줄 옆에 고정하세요.",
+                        "action": "웹 스토어 열기",
+                        "secondaryAction": "확인"
+                      }
                     }
                   },
                   "tasks": {
@@ -20568,7 +20576,8 @@
       "remove": "제거…",
       "empty": "이 프로필에 켜진 확장 프로그램이 없습니다",
       "visitWebStore": "Chrome 웹 스토어 방문",
-      "manage": "확장 프로그램 관리"
+      "manage": "확장 프로그램 관리",
+      "openWebStoreFailed": "Chrome 웹 스토어를 열 수 없습니다."
     },
     "viewport": {
       "mobile-s": "소형 모바일 — 320 × 568",
@@ -21472,7 +21481,6 @@
       "cancel": "취소"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 채팅",
       "chatSignIn": "로그인",
       "chatChangeAccount": "계정 변경",
       "chatRetry": "로그인 다시 시도",
@@ -21490,23 +21498,13 @@
       "chatFailed": "로그인하지 못했습니다. 다시 시도하세요.",
       "chatOtherClient": "다른 클라이언트에서 로그인이 진행 중입니다.",
       "chatReadFailed": "{{host}}의 로그인을 확인할 수 없습니다.",
-      "signIn": "이 호스트에서 agy를 실행하고 브라우저 로그인을 완료한 후 현재 계정을 저장하세요. 다른 계정을 추가하려면 agy에서 /logout 명령을 실행하고 다시 로그인하세요.",
-      "docs": "로그인 안내",
       "retry": "다시 시도",
-      "identityUnknown": "로그인한 ID를 사용할 수 없음",
-      "signedOut": "로그인된 agy 자체 계정이 없습니다.",
       "changed": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요.",
-      "save": "현재 계정 저장",
       "refresh": "계정 새로고침",
       "usage": "사용량 새로 고침",
-      "working": "계정 업데이트",
       "usageReading": "세션: {{session}} · 주간: {{weekly}}",
       "saved": "저장된 Google 계정",
-      "nativeActive": "기본 계정",
-      "selected": "선택됨",
-      "select": "선택",
       "remove": "제거",
-      "sessions": "선택한 계정은 이 호스트의 새 agy 세션에 적용됩니다. 기존 세션은 이전 계정을 계속 사용할 수 있습니다.",
       "searchDescription": "실행 호스트에서 기본 agy Google 계정을 저장하고 선택합니다.",
       "title": "Antigravity",
       "keyword": {
@@ -21518,7 +21516,6 @@
       "authMethod": "로그인 방법",
       "personal": "Google 계정",
       "gcpProject": "Google Cloud 프로젝트",
-      "gcpLocation": "Google Cloud 위치",
       "settingsIncomplete": "Antigravity 계정 유형을 선택하고 Google Cloud 프로젝트와 위치를 입력하세요.",
       "settingsLoadFailed": "Orca에서 Antigravity 로그인 설정을 불러오지 못했습니다. 다시 시도하세요.",
       "settingsSaveFailed": "Orca에서 Antigravity 로그인 설정을 저장하지 못했습니다. 다시 시도하세요.",

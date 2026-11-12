@@ -2,6 +2,7 @@ import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
 import { parseWslPath } from '../wsl/filesystem/unc-path-access'
 import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
+import { msysDrivePathToWindows } from '../../shared/cross-platform-path'
 import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand
@@ -118,18 +119,6 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   return buildWslExecArgs(distro, ['sh', '-c', setupCommand])
 }
 
-/** Converts an MSYS drive spelling to the native cwd used by Windows terminal processes. */
-export function normalizeWindowsTerminalCwd(cwd: string): string {
-  const match = cwd.match(/^\/([A-Za-z])(?:\/(.*))?$/)
-  if (!match) {
-    return cwd
-  }
-
-  const driveLetter = match[1].toUpperCase()
-  const rest = match[2]?.replace(/\//g, '\\') ?? ''
-  return rest ? `${driveLetter}:\\${rest}` : `${driveLetter}:\\`
-}
-
 /** Apply UTF-8/bootstrap profiles, preserve guest cwd, and share argv semantics across local and daemon spawns. */
 export function resolveWindowsShellLaunchArgs(
   shellPath: string,
@@ -140,7 +129,7 @@ export function resolveWindowsShellLaunchArgs(
   codexLaunchPreflightCommand?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
-  const nativeCwd = normalizeWindowsTerminalCwd(cwd)
+  const nativeCwd = msysDrivePathToWindows(cwd)
 
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)

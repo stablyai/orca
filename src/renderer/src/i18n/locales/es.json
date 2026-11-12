@@ -16909,6 +16909,14 @@
                     "logins": {
                       "title": "Mantén la sesión iniciada",
                       "body": "Lleva tus inicios de sesión existentes a Orca para seguir conectado de inmediato."
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Extensiones de Chrome",
+                        "body": "Instala extensiones desde Chrome Web Store y fíjalas junto a la barra de direcciones.",
+                        "action": "Abrir Web Store",
+                        "secondaryAction": "Entendido"
+                      }
                     }
                   },
                   "tasks": {
@@ -21152,7 +21160,8 @@
       "remove": "Eliminar…",
       "empty": "No hay extensiones activadas para este perfil",
       "visitWebStore": "Visitar Chrome Web Store",
-      "manage": "Administrar extensiones"
+      "manage": "Administrar extensiones",
+      "openWebStoreFailed": "No se pudo abrir Chrome Web Store."
     },
     "viewport": {
       "mobile-s": "Móvil S — 320 × 568",
@@ -21476,7 +21485,6 @@
       "cancel": "Cancelar"
     },
     "antigravity": {
-      "chatTitle": "Chats de Antigravity",
       "chatSignIn": "Iniciar sesión",
       "chatChangeAccount": "Cambiar de cuenta",
       "chatRetry": "Reintentar inicio de sesión",
@@ -21497,20 +21505,10 @@
       "retry": "Reintentar",
       "remove": "Eliminar",
       "usage": "Actualizar uso",
-      "signIn": "Inicia agy en este host y completa su inicio de sesión en el navegador, luego guarda la cuenta actual. Para agregar otra cuenta, usa /logout en agy e inicia sesión de nuevo.",
-      "docs": "Instrucciones de inicio de sesión",
-      "identityUnknown": "Identidad de sesión no disponible",
-      "signedOut": "No hay ninguna cuenta nativa de agy con sesión iniciada.",
       "changed": "La cuenta nativa cambió. Selecciona de nuevo una cuenta guardada antes de iniciar agy.",
-      "save": "Guardar cuenta actual",
       "refresh": "Actualizar cuentas",
-      "working": "Actualizando cuenta",
       "usageReading": "Sesión: {{session}} · Semanal: {{weekly}}",
       "saved": "Cuenta de Google guardada",
-      "nativeActive": "Cuenta nativa",
-      "selected": "Seleccionada",
-      "select": "Seleccionar",
-      "sessions": "La selección se aplica a las nuevas sesiones de agy en este host. Las sesiones existentes pueden conservar su cuenta anterior.",
       "searchDescription": "Guarda y selecciona cuentas nativas de Google de agy en el host de ejecución.",
       "title": "Antigravity",
       "keyword": {
@@ -21522,7 +21520,6 @@
       "authMethod": "Iniciar sesión con",
       "personal": "Cuenta de Google",
       "gcpProject": "Proyecto de Google Cloud",
-      "gcpLocation": "Ubicación de Google Cloud",
       "settingsIncomplete": "Elige un tipo de cuenta de Antigravity e introduce su proyecto y ubicación de Google Cloud.",
       "settingsLoadFailed": "Orca no pudo cargar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
       "settingsSaveFailed": "Orca no pudo guardar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",

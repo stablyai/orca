@@ -899,12 +899,15 @@ final class Provider {
             return true
         }
         switch coercion.compare(readback: readback) {
-        case let .match(actualPreview):
-            verification = verifiedAction(property: "value", expected: expected, actualPreview: actualPreview)
+        case .match:
+            verification = verifiedAction(property: "value")
         case let .mismatch(actualPreview):
-            verification = unverifiedAction(reason: "value_mismatch", expected: expected, actualPreview: actualPreview)
+            // Why: a secure field can read back masked, so its value neither disproves the write nor gets shown.
+            verification = AXSnapshotReader().isSecureTextElement(record.element)
+                ? unverifiedAction(reason: "readback_unsupported")
+                : unverifiedAction(reason: "value_mismatch", actualPreview: actualPreview)
         case .unsupported:
-            verification = unverifiedAction(reason: "readback_unsupported", expected: expected)
+            verification = unverifiedAction(reason: "readback_unsupported")
         }
         return actionMetadata(path: "accessibility", actionName: "AXSetValue", verification: verification)
     }
@@ -2426,6 +2429,10 @@ private final class AXSnapshotReader {
         return Array((visible.isEmpty ? rows : visible).prefix(20))
     }
 
+    func isSecureTextElement(_ element: AXUIElement) -> Bool {
+        isSecureTextElement(element, role: stringAttribute(element, kAXRoleAttribute as String) ?? "")
+    }
+
     private func isSecureTextElement(_ element: AXUIElement, role: String) -> Bool {
         guard SnapshotRenderHeuristics.shouldProbeSecureTextMetadata(role: role) else {
             return false
@@ -2550,20 +2557,15 @@ private func actionMetadata(
     return metadata
 }
 
-private func verifiedAction(property: String, expected: String? = nil, actualPreview: String? = nil) -> [String: Any] {
-    [
-        "state": "verified",
-        "property": property,
-        "expected": jsonNullable(expected),
-        "actualPreview": jsonNullable(actualPreview),
-    ]
+// Why: results never repeat the written text or field contents, so --value-stdin / --text-stdin secrets stay out of transcripts.
+private func verifiedAction(property: String) -> [String: Any] {
+    ["state": "verified", "property": property]
 }
 
-private func unverifiedAction(reason: String, expected: String? = nil, actualPreview: String? = nil) -> [String: Any] {
+private func unverifiedAction(reason: String, actualPreview: String? = nil) -> [String: Any] {
     [
         "state": "unverified",
         "reason": reason,
-        "expected": jsonNullable(expected),
         "actualPreview": jsonNullable(actualPreview),
     ]
 }
@@ -2976,21 +2978,18 @@ private enum TextInput {
         guard result == .success else {
             return nil
         }
-        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
         // Why: a cached, out-of-process AX tree can show the old value for a moment; any other value is final.
         let readback = settledValueReadback(element) { next == current || ($0 as? String) != current } as? String
-        guard readback == next else {
-            // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
-            if readback == current {
-                return nil
-            }
-            return unverifiedAction(reason: "accessibility_action_unasserted", expected: text, actualPreview: readback.map { preview($0) })
+        // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
+        if readback == current && next != current {
+            return nil
         }
-        return verifiedAction(
-            property: "focusedText",
-            expected: text,
-            actualPreview: preview(next)
-        )
+        // Why: moving the caret before a refused write would send the fallback keys to the wrong place.
+        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
+        guard readback == next else {
+            return unverifiedAction(reason: "accessibility_action_unasserted")
+        }
+        return verifiedAction(property: "focusedText")
     }
 
     static func selectAll(_ element: AXUIElement) -> Bool {
@@ -3008,7 +3007,7 @@ private enum TextInput {
         else {
             return unverifiedAction(reason: "provider_unavailable")
         }
-        return verifiedAction(property: "selection", actualPreview: preview(current))
+        return verifiedAction(property: "selection")
     }
 
     private static func selectedTextRange(_ element: AXUIElement) -> CFRange? {

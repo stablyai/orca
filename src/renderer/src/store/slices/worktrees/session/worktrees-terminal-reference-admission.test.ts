@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { singlePaneLayoutSnapshot } from '../../../terminals/terminal-single-pane-layout'

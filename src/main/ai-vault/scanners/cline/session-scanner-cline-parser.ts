@@ -10,13 +10,16 @@ import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
-import { arrayValue, extractString } from '../../session-scanner-values'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText, normalizeTitleText } from '../../session-scanner-text-normalization'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import {
+  extractContentText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId

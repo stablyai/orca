@@ -377,7 +377,8 @@
       "remove": "移除…",
       "empty": "此設定檔未啟用任何擴充功能",
       "visitWebStore": "前往 Chrome Web Store",
-      "manage": "管理擴充功能"
+      "manage": "管理擴充功能",
+      "openWebStoreFailed": "無法開啟 Chrome Web Store。"
     },
     "history": {
       "clear": "清除瀏覽記錄",
@@ -16975,6 +16976,14 @@
                     "logins": {
                       "title": "保持登入狀態",
                       "body": "將現有的登入資訊匯入 Orca，即可直接保持登入狀態。"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "Chrome 擴充功能",
+                        "body": "從 Chrome Web Store 安裝擴充功能，並將其釘選在網址列旁。",
+                        "action": "開啟 Chrome Web Store",
+                        "secondaryAction": "知道了"
+                      }
                     }
                   },
                   "tasks": {
@@ -21549,7 +21558,6 @@
       "description": "在 WSL 中的 Orca 更新之前，那裡的代理程式將使用該發行版預設的 Claude 和 Codex 帳戶。"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 聊天",
       "chatSignIn": "登入",
       "chatChangeAccount": "變更帳戶",
       "chatRetry": "重試登入",
@@ -21567,23 +21575,13 @@
       "chatFailed": "登入失敗。請再試一次。",
       "chatOtherClient": "另一個應用程式正在登入。",
       "chatReadFailed": "無法檢查 {{host}} 上的登入狀態。",
-      "signIn": "在此主機上啟動 agy 並完成其瀏覽器登入，然後儲存目前的帳戶。要新增其他帳戶，請在 agy 中使用 /logout 並再次登入。",
-      "docs": "登入說明",
       "retry": "重試",
-      "identityUnknown": "無法取得登入身分",
-      "signedOut": "目前未登入任何 agy 原生帳戶。",
       "changed": "原生帳戶已變更。請在啟動 agy 前重新選擇已儲存的帳戶。",
-      "save": "儲存目前的帳戶",
       "refresh": "重新整理帳戶",
       "usage": "重新整理用量",
-      "working": "正在更新帳戶",
       "usageReading": "工作階段：{{session}} · 每週：{{weekly}}",
       "saved": "已儲存的 Google 帳戶",
-      "nativeActive": "原生帳戶",
-      "selected": "已選擇",
-      "select": "選擇",
       "remove": "移除",
-      "sessions": "選擇適用於該主機上的新 agy 工作階段。現有工作階段可能會保留其以前的帳戶。",
       "searchDescription": "在執行主機上儲存並選擇 agy 的原生 Google 帳戶。",
       "title": "Antigravity",
       "keyword": {
@@ -21595,7 +21593,6 @@
       "authMethod": "登入方式",
       "personal": "Google 帳戶",
       "gcpProject": "Google Cloud 專案",
-      "gcpLocation": "Google Cloud 位置",
       "settingsIncomplete": "請選擇 Antigravity 帳戶類型並輸入其 Google Cloud 專案和位置。",
       "settingsLoadFailed": "Orca 無法載入 Antigravity 登入設定。請再試一次。",
       "settingsSaveFailed": "Orca 無法儲存 Antigravity 登入設定。請再試一次。",

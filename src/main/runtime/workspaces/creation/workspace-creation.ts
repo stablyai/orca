@@ -40,6 +40,7 @@ import { workspaceLifecycleKey } from '../lifecycle/workspace-lifecycle-commands
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
+import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   abstract resolveLineageForWorktreeCreate(
@@ -240,7 +241,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       kind: 'created',
       worktreeId: worktree.id,
       path: worktree.path,
-      branch: worktree.branch
+      branch: worktree.branch,
+      ...createdWorktreeLifecycleIdentity(worktree)
     })
     return {
       worktree: {

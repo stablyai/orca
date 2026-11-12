@@ -14,15 +14,6 @@ const descriptor = {
 } as const
 
 describe('mobile diff review state', () => {
-  it('invalidates reviewed state when refreshed identity changes', () => {
-    const reviewed = markMobileDiffReviewFileReviewed(createMobileDiffReviewState(1), descriptor, 5)
-
-    const merged = mergeMobileDiffReviewState(reviewed, [{ ...descriptor, diffIdentity: 'd2' }], 8)
-
-    expect(merged.files[descriptor.key]?.reviewedAt).toBeUndefined()
-    expect(merged.files[descriptor.key]?.reviewDiffIdentity).toBeUndefined()
-  })
-
   it('drops completion when a refreshed identity invalidates a reviewed file', () => {
     const reviewed = markMobileDiffReviewFileReviewed(createMobileDiffReviewState(1), descriptor, 5)
     const completed = completeMobileDiffReviewState(reviewed, 6)

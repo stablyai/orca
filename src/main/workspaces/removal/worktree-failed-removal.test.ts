@@ -25,7 +25,7 @@ import {
   withUnregisteredRemovalCheckouts
 } from './worktree-removal-listing'
 import { readWorktreeRemovalRecords } from './worktree-removal-records'
-import { loadWorktreeRemovalRecordsForStore } from '../../startup/worktree-removal-records-load'
+import { loadWorktreeRemovalRecordsForStore } from '../../startup/workspace-startup/worktree-removal-records-load'
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn(async () => []))
 

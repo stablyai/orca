@@ -2,7 +2,7 @@ import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
 import {
   readOpenCodeTranscriptPage,
@@ -256,5 +256,44 @@ it.each(['stop', 'tool-calls', undefined])(
       readPage: async (args) => readOpenCodeTranscriptPage(args)
     })
     expect(imported).toMatchObject({ forkTipItemIds: finish === 'stop' ? ['u1', 'a1'] : [] })
+  }
+)
+
+it.each([100, 1000])(
+  'decodes each of %i v1 messages once for content and fork evidence',
+  (count) => {
+    const { db, path } = createTempDb()
+    applySchema(db)
+    const raw = JSON.stringify({ role: 'assistant', time: { completed: 2 }, finish: 'stop' })
+    db.exec('BEGIN')
+    for (let index = 1; index <= count; index++) {
+      insertMessage(db, { id: `msg-${index}`, time: index, role: 'assistant' })
+      insertPart(db, {
+        id: `part-${index}`,
+        messageId: `msg-${index}`,
+        time: index,
+        data: { type: 'text', text: 'response' }
+      })
+    }
+    db.prepare('UPDATE message SET data = ?').run(raw)
+    db.exec('COMMIT')
+    const parse = vi.spyOn(JSON, 'parse')
+    let page
+    let decodes
+    try {
+      page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: count })
+      decodes = parse.mock.calls.filter(([input]) => input === raw).length
+    } finally {
+      parse.mockRestore()
+    }
+    expect(decodes).toBe(count)
+    expect(page?.items).toHaveLength(count)
+    expect(page?.items[0].message).toMatchObject({
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'response' }]
+    })
+    expect(page?.forkTip).toHaveLength(count)
+    expect(page?.forkTip?.[0]).toEqual({ id: 'msg-1', role: 'assistant', terminal: true })
+    expect(page?.hasMore).toBe(false)
   }
 )

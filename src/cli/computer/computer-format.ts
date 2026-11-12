@@ -1,0 +1,263 @@
+import { writeCliScreenshotTempFile } from '../screenshots/cli-screenshot-temp-file'
+import { formatBase64PayloadByteCount } from '../screenshots/base64-payload-byte-count'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
+import type {
+  ComputerActionMetadata,
+  ComputerActionResult,
+  ComputerListAppsResult,
+  ComputerListWindowsResult,
+  ComputerSnapshotResult
+} from '../../shared/computer-use-runtime-types'
+import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+
+export function formatGetAppState(result: ComputerSnapshotResult): string {
+  const app = result.snapshot.app
+  const bundle = app.bundleId ? `, ${app.bundleId}` : ''
+  const focused =
+    result.snapshot.focusedElementId === null ? 'none' : `#${result.snapshot.focusedElementId}`
+  const windowId =
+    result.snapshot.window.id === null || result.snapshot.window.id === undefined
+      ? ''
+      : ` id:${result.snapshot.window.id}`
+  const windowIndex =
+    result.snapshot.window.index === null || result.snapshot.window.index === undefined
+      ? ''
+      : ` index:${result.snapshot.window.index}`
+  const origin =
+    result.snapshot.window.x === null ||
+    result.snapshot.window.x === undefined ||
+    result.snapshot.window.y === null ||
+    result.snapshot.window.y === undefined
+      ? ''
+      : ` @ ${result.snapshot.window.x},${result.snapshot.window.y}`
+  const truncation = result.snapshot.truncation?.truncated
+    ? `  Truncated: yes (max nodes ${result.snapshot.truncation.maxNodes ?? 'unknown'}, max depth ${result.snapshot.truncation.maxDepth ?? 'unknown'})`
+    : '  Truncated: no'
+  return [
+    `${app.name} (pid ${app.pid}${bundle})`,
+    `  Window:${windowId}${windowIndex} "${result.snapshot.window.title}" (${result.snapshot.window.width}x${result.snapshot.window.height}${origin})`,
+    `  Visible elements: ${result.snapshot.elementCount}  Focused: ${focused}  Coordinates: ${result.snapshot.coordinateSpace}`,
+    truncation,
+    `  ${formatComputerScreenshotStatus(result)}`,
+    '',
+    result.snapshot.treeText
+  ].join('\n')
+}
+
+export function prepareComputerCliJsonResult<TResult>(
+  response: RuntimeRpcSuccess<TResult>
+): RuntimeRpcSuccess<TResult> {
+  const record = response as RuntimeRpcSuccess<TResult> & {
+    result?: {
+      screenshot?: { data?: unknown; format?: unknown; path?: unknown } | null
+      screenshotStatus?: unknown
+    }
+  }
+  if (
+    !record.result ||
+    typeof record.result !== 'object' ||
+    !('screenshotStatus' in record.result)
+  ) {
+    return response
+  }
+  const screenshot = record.result?.screenshot
+  if (!screenshot || typeof screenshot.data !== 'string' || screenshot.data.length === 0) {
+    return response
+  }
+  try {
+    const { path, expiresAt } = writeCliScreenshotTempFile(
+      COMPUTER_SCREENSHOT_TEMP_DIR,
+      response.id,
+      screenshot.data,
+      screenshot.format === 'png' ? 'png' : 'img'
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the screenshot field is rewritten; every other TResult field is spread through unchanged.
+    return {
+      ...response,
+      result: {
+        ...record.result,
+        screenshot: {
+          ...screenshot,
+          data: undefined,
+          path,
+          dataOmitted: true,
+          expiresAt
+        }
+      }
+    } as RuntimeRpcSuccess<TResult>
+  } catch {
+    // Preserve inline screenshot data if the optional temp-file export fails.
+    return response
+  }
+}
+
+const COMPUTER_SCREENSHOT_TEMP_DIR = {
+  envVar: 'ORCA_COMPUTER_SCREENSHOT_TMPDIR',
+  dirName: 'orca-computer-use'
+}
+
+export function formatListApps(result: ComputerListAppsResult): string {
+  if (result.apps.length === 0) {
+    return 'No apps found.'
+  }
+  return result.apps
+    .map((app) => {
+      const bundle = app.bundleId ? `  ${app.bundleId}` : ''
+      return `${app.name}  pid:${app.pid}${bundle}`
+    })
+    .join('\n')
+}
+
+export function formatListWindows(result: ComputerListWindowsResult): string {
+  if (result.windows.length === 0) {
+    return `No windows found for ${result.app.name}.`
+  }
+  return result.windows
+    .map((window) => {
+      const id = window.id === null || window.id === undefined ? 'none' : String(window.id)
+      const origin =
+        window.x === null || window.x === undefined || window.y === null || window.y === undefined
+          ? ''
+          : ` @ ${window.x},${window.y}`
+      const screen =
+        window.screenIndex === null || window.screenIndex === undefined
+          ? ''
+          : ` screen:${window.screenIndex}`
+      const state = [
+        window.isMinimized ? 'minimized' : null,
+        window.isOffscreen ? 'offscreen' : null
+      ].filter(Boolean)
+      const stateText = state.length > 0 ? ` ${state.join(',')}` : ''
+      return `[${window.index}] id:${id} "${window.title}" (${window.width}x${window.height}${origin})${screen}${stateText}`
+    })
+    .join('\n')
+}
+
+export type ComputerActionFollowUpTarget = {
+  session?: string
+  worktree?: string
+  windowId?: number
+  windowIndex?: number
+  restoreWindow?: boolean
+}
+
+export function formatComputerAction(
+  verb: string,
+  result: ComputerActionResult,
+  target: ComputerActionFollowUpTarget = {}
+): string {
+  const path = result.action?.path ? ` via ${result.action.path}` : ''
+  const verification = formatActionVerification(result.action)
+  const followUpCommand = formatComputerFollowUpCommand(result, target)
+  const unverified = result.action?.verification?.state !== 'verified'
+  const outcome = unverified ? 'attempted' : 'completed'
+  const screenshotFailure = formatComputerActionScreenshotFailure(result)
+  const inspectTail = unverified
+    ? 'Inspect with the command above or use the --json result before assuming it worked.'
+    : 'Use the --json result or rerun state before choosing the next element index.'
+  return `${formatActionVerb(verb)} ${outcome}${path}${verification}; ${result.snapshot.elementCount} visible elements in current window.${screenshotFailure} Use \`${followUpCommand}\` to inspect. ${inspectTail}${result.snapshot.treeText ? `\n\n${result.snapshot.treeText}` : ''}`
+}
+
+function formatComputerFollowUpCommand(
+  result: ComputerActionResult,
+  target: ComputerActionFollowUpTarget
+): string {
+  const args = [
+    'orca',
+    'computer',
+    'get-app-state',
+    '--app',
+    quoteCliCommandArgument(result.snapshot.app.bundleId ?? result.snapshot.app.name)
+  ]
+  if (target.session) {
+    args.push('--session', quoteCliCommandArgument(target.session))
+  } else if (target.worktree) {
+    args.push('--worktree', quoteCliCommandArgument(target.worktree))
+  }
+  const windowChanged =
+    result.action?.verification?.state === 'unverified' &&
+    result.action.verification.reason === 'window_changed'
+  if (!windowChanged && target.windowId !== undefined) {
+    args.push('--window-id', String(target.windowId))
+  } else if (!windowChanged && target.windowIndex !== undefined) {
+    args.push('--window-index', String(target.windowIndex))
+  } else {
+    const windowId = result.action?.targetWindowId ?? result.snapshot.window.id
+    const windowIndex = result.action?.targetWindowIndex ?? result.snapshot.window.index
+    if (windowId !== null && windowId !== undefined) {
+      args.push('--window-id', String(windowId))
+    } else if (windowIndex !== null && windowIndex !== undefined) {
+      args.push('--window-index', String(windowIndex))
+    }
+  }
+  if (target.restoreWindow) {
+    args.push('--restore-window')
+  }
+  return args.join(' ')
+}
+
+const UNVERIFIED_ACTION_REASONS: Record<ComputerActionMetadata['path'], string> = {
+  accessibility: 'accessibility action unasserted',
+  clipboard: 'clipboard paste',
+  synthetic: 'synthetic input'
+}
+
+function formatActionVerification(action: ComputerActionMetadata | undefined): string {
+  if (!action) {
+    return ', unverified (verification metadata unavailable)'
+  }
+  const verification = action.verification
+  if (!verification) {
+    return `, unverified (${UNVERIFIED_ACTION_REASONS[action.path]})`
+  }
+  if (verification.state === 'verified') {
+    return `, verified ${verification.property}`
+  }
+  return `, unverified (${verification.reason.replaceAll('_', ' ')})`
+}
+
+function formatComputerActionScreenshotFailure(result: ComputerActionResult): string {
+  if (result.screenshotStatus.state !== 'failed') {
+    return ''
+  }
+  return ` Screenshot failed (${result.screenshotStatus.code}): ${result.screenshotStatus.message}.`
+}
+
+function formatComputerScreenshotStatus(result: ComputerSnapshotResult): string {
+  if (result.screenshotStatus.state === 'captured' && result.screenshot) {
+    const bytes = result.screenshot.data
+      ? formatBase64PayloadByteCount(result.screenshot.data)
+      : `saved to ${result.screenshot.path ?? 'temporary file'}`
+    const dimensions = `${result.screenshot.width}x${result.screenshot.height}`
+    const scale = result.screenshot.scale
+    const scaleDetail =
+      Number.isFinite(scale) && scale > 0 && scale !== 1
+        ? `, scale ${formatComputerScreenshotScale(scale)}; coordinate x/y = screenshot pixels / ${formatComputerScreenshotScale(scale)}`
+        : ''
+    const engine = result.screenshotStatus.metadata?.engine
+    const detail = engine
+      ? `${result.screenshot.format}, ${bytes}, ${dimensions}${scaleDetail}, ${engine}`
+      : `${result.screenshot.format}, ${bytes}, ${dimensions}${scaleDetail}`
+    return `Screenshot captured (${detail})`
+  }
+  if (result.screenshotStatus.state === 'skipped') {
+    return 'Screenshot skipped (--no-screenshot)'
+  }
+  if (result.screenshotStatus.state === 'failed') {
+    return `Screenshot failed (${result.screenshotStatus.code}): ${result.screenshotStatus.message}`
+  }
+  return 'Screenshot was not captured'
+}
+
+function formatComputerScreenshotScale(scale: number): string {
+  return Number.isInteger(scale)
+    ? String(scale)
+    : scale.toFixed(3).replace(/0+$/u, '').replace(/\.$/u, '')
+}
+
+function formatActionVerb(verb: string): string {
+  return verb
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}

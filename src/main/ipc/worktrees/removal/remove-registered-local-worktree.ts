@@ -42,6 +42,7 @@ import {
   startBackgroundWorktreeRemoval,
   waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
+import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
 export async function removeRegisteredLocalWorktree(
   context: WorktreeIpcContext,
@@ -130,6 +131,8 @@ export async function removeRegisteredLocalWorktree(
       context.store,
       localWorktreeGitOptions
     )
+  // Read before the purge drops the row; listeners hear `removed` after it.
+  const removedIdentity = worktreeHostIdentity(context.store, args.worktreeId, removalHostId)
   const finish = (checkoutDeleteSignal?: AbortSignal): Promise<RemoveWorktreeResult> =>
     finishLocalWorktreeRemoval({
       context,
@@ -167,7 +170,8 @@ export async function removeRegisteredLocalWorktree(
       context.options?.onWorktreeLifecycle?.({
         kind: 'removed',
         worktreeId: args.worktreeId,
-        path: canonicalWorktreePath
+        path: canonicalWorktreePath,
+        ...removedIdentity
       })
       return result
     },
@@ -267,12 +271,11 @@ async function finishLocalWorktreeRemoval({
           removalHostId,
           args.snapshotPruneBatchId
         )
-        preservedBranchCleanupByScope.delete(
-          preservedBranchCleanupScopeKey({
-            worktreeId: args.worktreeId,
-            hostId: removalHostId
-          })
-        )
+        const cleanupScopeKey = preservedBranchCleanupScopeKey({
+          worktreeId: args.worktreeId,
+          hostId: removalHostId
+        })
+        preservedBranchCleanupByScope.delete(cleanupScopeKey)
         invalidateAuthorizedRootsCacheForRepo(store, repoId)
         removalCompleted = true
         return {}

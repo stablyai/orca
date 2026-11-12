@@ -7,7 +7,7 @@ import { renameFileWithWindowsRetryAsync } from '../../shared/windows-retry-file
 import {
   ensureOwnedTempStagingRoot,
   getOwnedTempStagingRoot
-} from '../window/owned-temp-staging-root'
+} from '../filesystem/owned-temp-staging-root'
 
 const claims = new Map<string, object>()
 const publications = new Map<string, Promise<void>>()
