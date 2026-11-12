@@ -45,22 +45,31 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
     await git(['config', 'remote.origin.push', 'HEAD'])
     expect((await snapshot()).get('feature')).toMatchObject({ branchName: 'feature' })
     await git(['config', 'remote.origin.push', 'refs/heads/main:refs/heads/main'])
-    expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
+    expect((await snapshot()).get('feature')).toMatchObject({
+      branchName: 'feature',
+      trackedBranchName: 'main',
+      pushBranchName: null
+    })
     await git(['config', '--unset', 'remote.origin.push'])
     await git(['config', 'push.default', 'nothing'])
-    expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
+    expect((await snapshot()).get('feature')).toMatchObject({
+      branchName: 'feature',
+      pushBranchName: null
+    })
     await git(['config', 'branch.feature.merge', 'refs/tags/v1'])
     await git(['config', 'push.default', 'upstream'])
     expect((await snapshot()).get('feature')).toEqual({
       remoteName: 'origin',
       branchName: 'feature',
+      pushBranchName: null,
       urls: ['https://gitlab.com/team/repo.git']
     })
     await git(['config', 'branch.feature.merge', 'refs/heads/published'])
     await git(['config', 'remote.origin.pushurl', 'https://gitlab.com/me/repo.git'])
     expect((await snapshot()).get('feature')).toMatchObject({
       remoteName: 'origin',
-      branchName: 'published',
+      branchName: 'feature',
+      pushBranchName: 'published',
       urls: ['https://gitlab.com/me/repo.git']
     })
     await git(['config', '--unset', 'remote.origin.pushurl'])

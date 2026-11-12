@@ -9,6 +9,8 @@ export type GitReviewBranchSource = {
   remoteName: string
   urls: string[]
   branchName: string
+  /** A constrained publish destination; null leaves discovery usable without claiming a push head. */
+  pushBranchName?: string | null
   trackedBranchName?: string
   trackedUrls?: string[]
 }
@@ -125,10 +127,11 @@ export async function readGitReviewBranchSources(
       if (destinations.size > 1) {
         throw new Error('Review push destination is ambiguous')
       }
-      if (destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing')) {
-        throw new Error('Review push destination is not configured for this branch')
-      }
-      let branchName = destinations.values().next().value ?? branch
+      const branchName = destinations.values().next().value ?? branch
+      let pushBranchName: string | null =
+        destinations.size === 0 && (specs.length > 0 || get('push.default') === 'nothing')
+          ? null
+          : branchName
       if (destinations.size === 0) {
         if (!localTracking && remote === trackedRemote) {
           const merge = get(`branch.${branch}.merge`)
@@ -142,11 +145,14 @@ export async function readGitReviewBranchSources(
           ) {
             trackedBranchName = tracked
           }
+          if ((get('push.default') ?? 'simple') === 'simple' && tracked && tracked !== branch) {
+            pushBranchName = null
+          }
           if (get('push.default') === 'upstream') {
             if (!merge) {
               throw new Error('Review upstream is unavailable')
             }
-            branchName = tracked ?? branch
+            pushBranchName = tracked ?? null
           }
         } else if (
           get('push.default') === 'upstream' &&
@@ -160,6 +166,7 @@ export async function readGitReviewBranchSources(
         remoteName: remote,
         urls: urlsFor(remote),
         branchName,
+        ...(pushBranchName !== branchName ? { pushBranchName } : {}),
         ...(trackedBranchName
           ? { trackedBranchName, trackedUrls: remotes.get(remote)?.fetch ?? [remote] }
           : {})

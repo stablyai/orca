@@ -33,6 +33,9 @@ export async function getConfiguredPushHead(
   } catch {
     return null
   }
+  if (source.pushBranchName === null) {
+    return null
+  }
   const repositories = await Promise.all(
     source.urls.map((url) =>
       getGitHubApiRepositoryForRemoteUrl(repoPath, url, connectionId, localGitOptions)
@@ -50,7 +53,10 @@ export async function getConfiguredPushHead(
     return null
   }
   return {
-    branch: { remoteName: source.remoteName, branchName: source.branchName },
+    branch: {
+      remoteName: source.remoteName,
+      branchName: source.pushBranchName ?? source.branchName
+    },
     headRepo,
     configuredPush: true
   }
