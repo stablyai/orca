@@ -15,11 +15,6 @@ import { formatCents } from '../billing/plans/plans-pricing'
 /** The four ways billing can refuse a create (JA-21 progressive billing). */
 export type BillingBlockKind = 'plan' | 'hoursUsed' | 'spendCap' | 'payment'
 
-/** Overage turned on from the blocker: the same $25 cap as Plan & billing's off state. */
-export const BLOCKER_OVERAGE_CAP_CENTS = 2500
-/** Raising a reached cap suggests this much more. */
-export const BLOCKER_CAP_STEP_CENTS = 2500
-
 export type BillingBlockerPhase =
   | { kind: 'idle' }
   | { kind: 'saving' }
@@ -80,6 +75,8 @@ export type VmBuildBillingBlockerViewProps = {
   phase: BillingBlockerPhase
   /** Spend cap reached: the field's starting value, in whole dollars. */
   suggestedCapDollars: number
+  /** Billing's default cap for "Turn on with a $X cap"; null: plain "Turn on overage" (ENTITLEMENTS-C). */
+  defaultCapCents: number | null
   onTurnOnOverage: () => void
   onRaiseCap: (dollars: number) => void
   onComparePlans: () => void
@@ -97,6 +94,7 @@ export function VmBuildBillingBlockerView({
   canManageBilling,
   phase,
   suggestedCapDollars,
+  defaultCapCents,
   onTurnOnOverage,
   onRaiseCap,
   onComparePlans,
@@ -205,9 +203,11 @@ export function VmBuildBillingBlockerView({
                     onClick={saving ? undefined : onTurnOnOverage}
                   >
                     {saving ? <Loader2 className="animate-spin" /> : null}
-                    {t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
-                      cap: formatCents(BLOCKER_OVERAGE_CAP_CENTS, locale)
-                    })}
+                    {defaultCapCents === null
+                      ? t('auto.components.billing.overage.turnOnNoCap', 'Turn on overage')
+                      : t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
+                          cap: formatCents(defaultCapCents, locale)
+                        })}
                   </Button>
                 ) : null}
                 {kind === 'payment' ? (
@@ -278,14 +278,19 @@ export function VmBuildBillingBlocker({
   const [phase, setPhase] = React.useState<BillingBlockerPhase>({
     kind: 'idle'
   })
+  // Plan numbers come from billing, never guessed (ENTITLEMENTS-C): a reached cap suggests one more
+  // default cap on top; without billing's default, double the current cap.
   const currentCap = entitlement?.overage.spendCapCents ?? 0
-  const suggestedCapDollars = Math.round((currentCap + BLOCKER_CAP_STEP_CENTS) / 100)
+  const defaultCapCents = entitlement?.offers?.team.defaultSpendCapCents ?? null
+  const suggestedCapDollars = Math.round((currentCap + (defaultCapCents ?? currentCap)) / 100)
   const maxCap = entitlement?.offers?.team.maxSpendCapCents ?? null
 
-  const saveOverage = async (spendCapCents: number): Promise<void> => {
+  const saveOverage = async (spendCapCents: number | null): Promise<void> => {
     setPhase({ kind: 'saving' })
     const outcome = await window.api.orcaProfiles
-      .billingSetOverage({ enabled: true, spendCapCents })
+      .billingSetOverage(
+        spendCapCents === null ? { enabled: true } : { enabled: true, spendCapCents }
+      )
       .catch((error: unknown): OrcaBillingOverageResult => ({
         status: 'failed',
         error: String(error)
@@ -336,7 +341,8 @@ export function VmBuildBillingBlocker({
       canManageBilling={canManageBilling}
       phase={phase}
       suggestedCapDollars={suggestedCapDollars}
-      onTurnOnOverage={() => void saveOverage(BLOCKER_OVERAGE_CAP_CENTS)}
+      defaultCapCents={defaultCapCents}
+      onTurnOnOverage={() => void saveOverage(defaultCapCents)}
       onRaiseCap={(dollars) => void saveOverage(dollars * 100)}
       onComparePlans={() => {
         // Once paid, the plans page closes and continues this create.

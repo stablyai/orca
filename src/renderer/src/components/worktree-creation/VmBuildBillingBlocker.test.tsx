@@ -38,7 +38,7 @@ afterEach(() => {
 
 function renderBlocker(
   kind: BillingBlockKind,
-  { canManageBilling = true, capCents = 2500 } = {}
+  { canManageBilling = true, capCents = 2500, offers = true } = {}
 ): {
   onContinue: ReturnType<typeof vi.fn>
   onBackToDraft: ReturnType<typeof vi.fn>
@@ -52,6 +52,7 @@ function renderBlocker(
       canManageBilling={canManageBilling}
       entitlement={{
         ...sampleTeam,
+        offers: offers ? sampleTeam.offers : null,
         overage: { ...sampleTeam.overage, spendCapCents: capCents }
       }}
       onContinue={onContinue}
@@ -72,6 +73,14 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
       enabled: true,
       spendCapCents: 2500
     })
+  })
+
+  it("without billing's default cap: plain Turn on overage, and billing applies its default", async () => {
+    setOverage.mockResolvedValue({ status: 'ok', entitlement: sampleTeam })
+    const { onContinue } = renderBlocker('hoursUsed', { offers: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on overage' }))
+    await waitFor(() => expect(onContinue).toHaveBeenCalledOnce())
+    expect(setOverage).toHaveBeenCalledWith({ enabled: true })
   })
 
   it('a failed save shows inline and does not continue', async () => {
