@@ -164,6 +164,33 @@ it('keeps a Windows-host generation in a WSL-share workspace on the selected hos
   ).resolves.toMatchObject({ success: true, rawOutput: 'Keep the selected Windows host' })
 })
 
+it('uses the workspace share distro when it supersedes a configured WSL hint', async () => {
+  const child = createMockDiscoveryChild()
+  child.stdin.end.mockImplementation(() =>
+    queueMicrotask(() => {
+      child.stdout.emit('data', Buffer.from('Use the workspace distro\n'))
+      child.emit('close', 0)
+    })
+  )
+  await expect(
+    runLocalPlanForAgent({
+      agentId: 'claude',
+      plan: planned('claude'),
+      target: {
+        kind: 'local',
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
+        wslDistro: 'Debian'
+      },
+      operation: 'commit-message',
+      spawnAgent: (input) => {
+        expect(input.cwd).toBe('/home/repo')
+        expect(input.wslDistro).toBe('Ubuntu')
+        return child
+      }
+    })
+  ).resolves.toMatchObject({ success: true, rawOutput: 'Use the workspace distro' })
+})
+
 it('uses the resolved project for Antigravity policy discovery and the resulting generation', async () => {
   runWsl.mockResolvedValue(output('/c/repo\n'))
   const child = createMockDiscoveryChild()
