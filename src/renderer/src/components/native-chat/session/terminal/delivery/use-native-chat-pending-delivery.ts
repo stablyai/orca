@@ -106,7 +106,7 @@ export function useNativeChatPendingDelivery(args: {
     },
     [messages, readEmptySessionId, scope, workingEpoch, sessionId]
   )
-  const useSourceEvidence = useCallback(
+  const setSourceEvidence = useCallback(
     (id: string, source: boolean) =>
       save((entries) => resolvePendingSendEvidence(entries, id, agent, source)),
     [agent, save]
@@ -284,7 +284,7 @@ export function useNativeChatPendingDelivery(args: {
     pending,
     record,
     cancel,
-    useSourceEvidence,
+    setSourceEvidence,
     finishSourceEvidence,
     reject,
     holdUnconfirmed,

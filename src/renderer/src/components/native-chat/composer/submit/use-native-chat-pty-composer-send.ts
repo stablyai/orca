@@ -144,7 +144,7 @@ export function useNativeChatPtyComposerSend(args: {
           onEvidenceMode: (source) => {
             sourceEvidence = source
             if (pendingId) {
-              args.optimisticSendOutcome?.useSourceEvidence?.(pendingId, source)
+              args.optimisticSendOutcome?.setSourceEvidence?.(pendingId, source)
             }
           }
         })
