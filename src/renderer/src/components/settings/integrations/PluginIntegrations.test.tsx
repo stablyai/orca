@@ -14,7 +14,26 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace('{{name}}', options?.name ?? '')
 }))
 vi.mock('@/components/right-sidebar/plugin-panels/PluginPanel', () => ({
-  default: ({ tabKey }: { tabKey: string }) => <div data-testid="settings-panel">{tabKey}</div>
+  default: ({
+    tabKey,
+    onSettingsChanged
+  }: {
+    tabKey: string
+    onSettingsChanged?: (key: string, origin: 'plugin') => void
+  }) => (
+    <div>
+      <div data-testid="settings-panel">{tabKey}</div>
+      <button
+        type="button"
+        onClick={() => {
+          url = ''
+          onSettingsChanged?.('api_url', 'plugin')
+        }}
+      >
+        Reset integration
+      </button>
+    </div>
+  )
 }))
 
 import { PluginIntegrationSettings, PluginIntegrationsGroup } from './PluginIntegrations'
@@ -113,6 +132,19 @@ it('opens an installed plugin connection in Integrations and edits its existing 
     pluginKey: 'acme.tasks',
     key: 'api_url',
     value: 'https://tasks.example'
+  })
+  fireEvent.change(input, { target: { value: 'https://draft.example' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Reset integration' }))
+  await screen.findByDisplayValue('')
+  await act(async () => {
+    fireEvent.blur(input)
+  })
+  expect(url).toBe('')
+  fireEvent.click(screen.getByRole('button', { name: 'Manage plugin' }))
+  expect(app.openSettingsTarget).toHaveBeenLastCalledWith({
+    pane: 'plugins',
+    repoId: null,
+    intent: undefined
   })
   fireEvent.click(screen.getByRole('button', { name: 'All integrations' }))
   expect(screen.queryByTestId('settings-panel')).toBeNull()

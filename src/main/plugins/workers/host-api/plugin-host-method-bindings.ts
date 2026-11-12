@@ -293,7 +293,11 @@ function changed<T>(
   key: string,
   result: T
 ): T {
-  services.panels?.dataChanged(pluginId, area, key)
+  if (area === 'settings') {
+    services.panels?.dataChanged(pluginId, area, key, 'plugin')
+  } else {
+    services.panels?.dataChanged(pluginId, area, key)
+  }
   return result
 }
 

@@ -12818,7 +12818,9 @@
           "description": "Its data is removed too.",
           "cancel": "Cancel",
           "remove": "Remove",
-          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again."
+          "pausesAutomations": "Automations it created are paused, and stay paused if you install it again.",
+          "devTitle": "Remove development folder for {{value0}}?",
+          "devDescription": "Orca stops loading this folder. Its source files, saved data and approval are kept."
         },
         "PluginRollbackDialog": {
           "title": "Roll back {{value0}}?",
@@ -13961,7 +13963,8 @@
           "reviewUpdate": "Review update",
           "updateNeedsReview": "update {{value0}} needs review",
           "updatedTo": "updated to {{value0}}",
-          "dataLoadFailed": "Couldn’t load its files"
+          "dataLoadFailed": "Couldn’t load its files",
+          "unloadDevFolder": "Remove development folder…"
         },
         "PluginSettingsOverview": {
           "offTitle": "Plugins are off",

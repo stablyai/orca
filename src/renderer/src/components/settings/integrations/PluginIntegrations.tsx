@@ -1,4 +1,6 @@
 import { ArrowLeft, ChevronDown, Plug } from 'lucide-react'
+import { useCallback, useState } from 'react'
+import type { PluginSettingsChangeOrigin } from '../../../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -86,6 +88,14 @@ export function PluginIntegrationsGroup(): React.JSX.Element | null {
 
 export function PluginIntegrationSettings({ pluginKey }: { pluginKey: string }): React.JSX.Element {
   const t = useTranslate()
+  const [settingsRevision, setSettingsRevision] = useState(0)
+  const [draftRevisions, setDraftRevisions] = useState<Readonly<Record<string, number>>>({})
+  const onSettingsChanged = useCallback((key: string, origin?: PluginSettingsChangeOrigin) => {
+    setSettingsRevision((revision) => revision + 1)
+    if (origin === 'plugin') {
+      setDraftRevisions((revisions) => ({ ...revisions, [key]: (revisions[key] ?? 0) + 1 }))
+    }
+  }, [])
   const panels = usePluginListDerived(collectPluginSettingsPanels)
   const plugins = usePluginPanelsStore((state) => state.plugins)
   const panel = panels.find((entry) => entry.pluginKey === pluginKey)
@@ -93,19 +103,30 @@ export function PluginIntegrationSettings({ pluginKey }: { pluginKey: string }):
   const enabled = plugin && isLivePlugin(plugin) && !plugin.needsReconsent
   return (
     <div id={PLUGIN_INTEGRATION_SETTINGS_TARGET} className="space-y-6 scroll-mt-8">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => usePluginIntegrationNavigation.getState().show(null)}
-      >
-        <ArrowLeft />
-        {t('pluginIntegrations.back', 'All integrations')}
-      </Button>
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => usePluginIntegrationNavigation.getState().show(null)}
+        >
+          <ArrowLeft />
+          {t('pluginIntegrations.back', 'All integrations')}
+        </Button>
+        {panel && enabled ? (
+          <Button variant="outline" size="sm" onClick={openPluginsSettings}>
+            {t('pluginIntegrations.manage', 'Manage plugin')}
+          </Button>
+        ) : null}
+      </div>
       {panel && enabled ? (
         <>
           <SettingsGroup title={panel.title} bodyClassName="px-0">
             <div className="flex min-h-64 flex-col">
-              <PluginPanel tabKey={panel.tabKey} location="settings" />
+              <PluginPanel
+                tabKey={panel.tabKey}
+                location="settings"
+                onSettingsChanged={onSettingsChanged}
+              />
             </div>
           </SettingsGroup>
           {plugin.hasSettings ? (
@@ -118,6 +139,8 @@ export function PluginIntegrationSettings({ pluginKey }: { pluginKey: string }):
                 <PluginSettingsSection
                   pluginKey={pluginKey}
                   revision={`${plugin.version}:${plugin.devChangeCount ?? 0}`}
+                  settingsRevision={settingsRevision}
+                  draftRevisions={draftRevisions}
                   presentation="settings"
                 />
               </CollapsibleContent>

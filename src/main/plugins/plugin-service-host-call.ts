@@ -119,7 +119,7 @@ export function pluginPanelBridgeServices(bridge: PluginPanelBridge): PluginPane
   return {
     request: (pluginKey, request, caller) => bridge.request({ pluginKey, caller, ...request }),
     subscribe: (pluginKey, panelId, event) => bridge.subscribe(pluginKey, panelId, event),
-    dataChanged: (pluginKey, area, key) => bridge.dataChanged(pluginKey, area, key)
+    dataChanged: (pluginKey, area, key, origin) => bridge.dataChanged(pluginKey, area, key, origin)
   }
 }
 

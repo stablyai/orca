@@ -296,6 +296,51 @@ afterEach(() => {
 })
 
 describe('PluginsSettingsSection lifecycle', () => {
+  it('removes a development mount through its non-deleting action', async () => {
+    const development = { ...plugin, isDev: true }
+    const unloadDevFolder = vi.fn().mockResolvedValue([])
+    const remove = vi.fn().mockResolvedValue([])
+    installApi({ list: vi.fn().mockResolvedValue([development]), unloadDevFolder, remove })
+    const { root, container } = await renderSection()
+    const button = (label: string) =>
+      Array.from(container.querySelectorAll('button')).find(
+        (node) => node.textContent?.trim() === label
+      )
+    await act(async () => click(button('Remove development folder…')!))
+    await act(async () => click(button('Confirm remove')!))
+    expect(unloadDevFolder).toHaveBeenCalledWith({ pluginKey: 'acme.notes' })
+    expect(remove).not.toHaveBeenCalled()
+    act(() => root.unmount())
+  })
+
+  it('cancels a development confirmation when its key becomes an installed plugin', async () => {
+    let onChanged: (() => void) | undefined
+    const development = { ...plugin, isDev: true }
+    const unloadDevFolder = vi.fn()
+    const remove = vi.fn()
+    installApi({
+      list: vi.fn().mockResolvedValueOnce([development]).mockResolvedValue([plugin]),
+      onChanged: vi.fn((callback: () => void) => {
+        onChanged = callback
+        return () => {}
+      }),
+      unloadDevFolder,
+      remove
+    })
+    const { root, container } = await renderSection()
+    const button = (label: string) =>
+      Array.from(container.querySelectorAll('button')).find(
+        (node) => node.textContent?.trim() === label
+      )
+    await act(async () => click(button('Remove development folder…')!))
+    expect(button('Confirm remove')).toBeDefined()
+    await act(async () => onChanged?.())
+    expect(button('Confirm remove')).toBeUndefined()
+    expect(unloadDevFolder).not.toHaveBeenCalled()
+    expect(remove).not.toHaveBeenCalled()
+    act(() => root.unmount())
+  })
+
   it('suppresses stale lists and cleans up the change subscription', async () => {
     const first = deferred<PluginHostListEntry[]>()
     const second = deferred<PluginHostListEntry[]>()

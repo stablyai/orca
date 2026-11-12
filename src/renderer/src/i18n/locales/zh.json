@@ -11663,7 +11663,9 @@
           "title": "移除 {{value0}}？",
           "description": "其数据也会被移除",
           "cancel": "取消",
-          "remove": "移除"
+          "remove": "移除",
+          "devTitle": "移除 {{value0}} 的开发目录？",
+          "devDescription": "Orca 将停止加载此目录。源码、已保存的数据和插件授权将保留。"
         },
         "PluginRollbackDialog": {
           "title": "回滚 {{value0}}？",
@@ -12849,7 +12851,8 @@
           "reviewUpdate": "审核更新",
           "dataLoadFailed": "无法加载其文件",
           "updateNeedsReview": "更新 {{value0}} 需要审查",
-          "updatedTo": "已更新到 {{value0}}"
+          "updatedTo": "已更新到 {{value0}}",
+          "unloadDevFolder": "移除开发目录…"
         },
         "PluginSettingsOverview": {
           "offTitle": "插件已关闭"

@@ -308,6 +308,8 @@
     "auto.components.settings.PluginNotOfficialWarning.update",
     "auto.components.settings.PluginRemoveDialog.cancel",
     "auto.components.settings.PluginRemoveDialog.description",
+    "auto.components.settings.PluginRemoveDialog.devDescription",
+    "auto.components.settings.PluginRemoveDialog.devTitle",
     "auto.components.settings.PluginRemoveDialog.pausesAutomations",
     "auto.components.settings.PluginRemoveDialog.remove",
     "auto.components.settings.PluginRemoveDialog.title",

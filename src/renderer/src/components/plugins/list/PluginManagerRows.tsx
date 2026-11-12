@@ -15,6 +15,7 @@ import { invalidPluginErrorMessage } from '../presentation/plugin-error-presenta
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
 import { copyContentHash, copyPluginId, DetailsItem, MoreButton } from './PluginRowMenu'
 import { StatusWord } from './PluginStatusWord'
+import { isQualifiedPluginKey } from '../../../../../shared/plugins/manifest/plugin-manifest'
 
 export type InstalledRowHandlers = {
   onOpen: (pluginKey: string) => void
@@ -65,6 +66,7 @@ export function installedPluginControls(
     t
   )
   const needsReview = pluginNeedsReview(plugin)
+  const canUnload = plugin.isDev && isQualifiedPluginKey(plugin.pluginKey)
 
   let description: React.ReactNode = entry.description ?? ''
   let tone: 'default' | 'destructive' = 'default'
@@ -218,7 +220,7 @@ export function installedPluginControls(
             {t('auto.components.settings.PluginManagerRows.checkUpdate', 'Check for update')}
           </DropdownMenuItem>
         ) : null}
-        {plugin.source?.kind === 'marketplace' || removable || plugin.bundled ? (
+        {plugin.source?.kind === 'marketplace' || removable || canUnload || plugin.bundled ? (
           <DropdownMenuSeparator />
         ) : null}
         {plugin.source?.kind === 'marketplace' ? (
@@ -227,7 +229,15 @@ export function installedPluginControls(
             onSelect={() => handlers.onRollbackRequest(plugin.pluginKey)}
           />
         ) : null}
-        {removable ? (
+        {canUnload ? (
+          <DropdownMenuItem onSelect={() => handlers.onRemoveRequest(plugin.pluginKey)}>
+            <Trash2 />
+            {t(
+              'auto.components.settings.PluginManagerRows.unloadDevFolder',
+              'Remove development folder…'
+            )}
+          </DropdownMenuItem>
+        ) : removable ? (
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => handlers.onRemoveRequest(plugin.pluginKey)}

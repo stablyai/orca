@@ -30,7 +30,7 @@ export function IntegrationsPane(): React.JSX.Element {
   const pluginKey = usePluginIntegrationNavigation((state) => state.pluginKey)
   useIntegrationProviderStatusRefresh()
   if (pluginKey) {
-    return <PluginIntegrationSettings pluginKey={pluginKey} />
+    return <PluginIntegrationSettings key={pluginKey} pluginKey={pluginKey} />
   }
 
   return (

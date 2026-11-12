@@ -251,6 +251,8 @@ export type PluginsApi = {
   /** An installed plugin's parsed manifest, read on demand; works while the plugin system is off. */
   getInstalledManifest: (args: { pluginKey: string }) => Promise<PluginManifest | null>
   remove: (args: { pluginKey: string }) => Promise<PluginHostListEntry[]>
+  /** Detaches a development folder; keeps its source files, approval and saved data. */
+  unloadDevFolder: (args: { pluginKey: string }) => Promise<PluginHostListEntry[]>
   getLogs: (args: { pluginKey: string }) => Promise<PluginHostLogLine[]>
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>

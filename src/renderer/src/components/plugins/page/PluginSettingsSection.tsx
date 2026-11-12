@@ -16,28 +16,37 @@ type SettingControlProps = {
   id: string
   setting: PluginSettingContribution
   value: PluginJsonValue | undefined
+  draftRevision?: number
   onCommit: (value: PluginJsonValue) => void
 }
 
 /** Text and numbers commit on blur or Enter, so a half-typed value is never written. */
-function TextSetting({ id, setting, value, onCommit }: SettingControlProps): React.JSX.Element {
+function TextSetting({
+  id,
+  setting,
+  value,
+  draftRevision = 0,
+  onCommit
+}: SettingControlProps): React.JSX.Element {
   const shown = value === undefined || value === null ? '' : String(value)
-  const [draft, setDraft] = useState<string | null>(null)
+  const [edit, setEdit] = useState<{ value: string; revision: number } | null>(null)
+  const draft = edit?.revision === draftRevision ? edit.value : null
   const numeric = setting.type === 'number' || setting.type === 'integer'
   const commit = (): void => {
     if (draft === null || draft === shown) {
-      setDraft(null)
+      setEdit(null)
       return
     }
     // An emptied field goes back to the default.
     onCommit(draft === '' ? null : numeric ? Number(draft) : draft)
-    setDraft(null)
+    setEdit(null)
   }
   const shared = {
     id,
     value: draft ?? shown,
     placeholder: setting.placeholder,
-    onChange: (event: { target: { value: string } }) => setDraft(event.target.value),
+    onChange: (event: { target: { value: string } }) =>
+      setEdit({ value: event.target.value, revision: draftRevision }),
     onBlur: commit
   }
   return setting.multiline ? (
@@ -104,12 +113,14 @@ function SettingRow({
   setting,
   value,
   error,
-  onWrite
+  onWrite,
+  draftRevision
 }: {
   setting: PluginSettingContribution
   value: PluginJsonValue | undefined
   error: string | undefined
   onWrite: (value: PluginJsonValue) => void
+  draftRevision?: number
 }): React.JSX.Element {
   const t = useTranslate()
   const id = useId()
@@ -131,7 +142,13 @@ function SettingRow({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <SettingControl id={id} setting={setting} value={value} onCommit={onWrite} />
+          <SettingControl
+            id={id}
+            setting={setting}
+            value={value}
+            draftRevision={draftRevision}
+            onCommit={onWrite}
+          />
           {changed && setting.default !== undefined ? (
             <Button variant="ghost" size="xs" onClick={() => onWrite(null)}>
               {t('auto.components.settings.PluginSettingsSection.reset', 'Reset')}
@@ -148,15 +165,23 @@ function SettingRow({
 export function PluginSettingsSection({
   pluginKey,
   revision,
-  presentation
+  presentation,
+  settingsRevision,
+  draftRevisions
 }: {
   pluginKey: string
   /** Re-reads when the installed plugin changes. */
   revision: string
   presentation?: 'settings'
+  settingsRevision?: number
+  draftRevisions?: Readonly<Record<string, number>>
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { snapshot, errors, write } = usePluginDeclaredSettings(pluginKey, revision)
+  const { snapshot, errors, write } = usePluginDeclaredSettings(
+    pluginKey,
+    revision,
+    settingsRevision
+  )
   if (!snapshot || snapshot.settings.length === 0) {
     return null
   }
@@ -167,6 +192,7 @@ export function PluginSettingsSection({
       value={snapshot.values[setting.key]}
       error={errors[setting.key]}
       onWrite={(value) => write(setting.key, value)}
+      draftRevision={draftRevisions?.[setting.key]}
     />
   ))
   return presentation === 'settings' ? (

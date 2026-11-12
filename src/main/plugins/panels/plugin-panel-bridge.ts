@@ -18,6 +18,7 @@ import {
   type PluginDataArea,
   type PluginPanelCaller,
   type PluginPanelPush,
+  type PluginSettingsChangeOrigin,
   type PluginWorkerPanelPost
 } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import { normalizePluginErrorCode } from '../../../shared/plugins/frames/plugin-protocol'
@@ -235,10 +236,20 @@ export class PluginPanelBridge {
   }
 
   /** Storage or settings changed: open panels and a running worker re-read the key. */
-  dataChanged(pluginKey: string, area: PluginDataArea, key: string): void {
+  dataChanged(
+    pluginKey: string,
+    area: PluginDataArea,
+    key: string,
+    origin?: PluginSettingsChangeOrigin
+  ): void {
     for (const channel of this.channels.values()) {
       if (channel.pluginKey === pluginKey) {
-        channel.deliver({ kind: 'changed', area, key })
+        channel.deliver({
+          kind: 'changed',
+          area,
+          key,
+          ...(area === 'settings' && origin ? { origin } : {})
+        })
       }
     }
     this.deps.runningWorker(pluginKey)?.notifyDataChanged({ area, key })
