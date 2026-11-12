@@ -7,6 +7,7 @@ import {
 import { createLocalHookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
 import { getPtyIdForPaneKey } from '../../ipc/pty/pane/key-state'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
+import { createLocalPaneAgentCommandLineReader } from './local-pane-agent-command-line'
 
 /** Hooks posted on this host name panes its own provider owns; their roots come from that
  *  provider's inventory, read lazily because daemon swaps replace the provider. */
@@ -20,5 +21,6 @@ export function installLocalHookRootEvidence(server: AgentHookServer): LocalPtyI
       createLocalHookRootEvidenceReader(createLocalHookPaneRootResolver(readInventory))
     )
   }
+  server.setPaneAgentCommandLineReader(createLocalPaneAgentCommandLineReader(readInventory))
   return readInventory
 }

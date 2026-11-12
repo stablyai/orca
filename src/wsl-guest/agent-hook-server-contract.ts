@@ -4,6 +4,7 @@ import type {
 } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { TmuxManagedPty } from '../shared/tmux-agent-hook-contract'
 import type { HookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import type { PaneAgentCommandLineReader } from '../shared/agent-hook-listener/permissions/pane-permission-observation'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -26,6 +27,8 @@ export type RelayHookServerOptions = {
   isPaneSurfaceRetired?: (paneKey: string) => boolean
   /** Reads this guest's process table when a hook tries to acquire a pane with no proven owner. */
   readHookRootEvidence?: HookRootEvidenceReader
+  /** Reads the root agent process's guest command line when hooks omit permission_mode. */
+  readPaneAgentCommandLine?: PaneAgentCommandLineReader
 }
 
 export type RelayHookServerStartOptions = {

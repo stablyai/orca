@@ -4,11 +4,12 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { normalizeHookPayload } from '../../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../../../../shared/agent-hook-listener/listener-state'
+import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resumeRecordFromStatus } from '../../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 import { getAgentResumeArgv } from '../../../../../../shared/agent-launch/startup/agent-resume-argv'
 import { TRANSCRIPT_MAX_SCAN_BYTES } from '../../../../../../shared/agent-hook-listener/transcript-reader'
 import { AgentHookServer } from '../../../agent-hook-server'
-import { buildBody, PANE } from '../../server.test-fixtures'
+import { buildBody, GOOD_PANE, PANE } from '../../server.test-fixtures'
 
 // Exact origin metadata and hook shape captured from agy 1.4.11; paths/IDs are test-local.
 const ROOT = '6bba92d4-47e1-440a-9571-b12bb2d474bc'
@@ -169,6 +170,105 @@ it('derives root identity from bounded first-record provenance, independently of
     })
     server.ingestRemote(normalized(hook(transcriptPath, CHILD)), null)
     expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
+  } finally {
+    server.stop()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('records bypass permissionMode from the pane agent command line and clears it on bare or unreadable reruns', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agy-bypass-'))
+  const transcriptPath = join(dir, 'transcript.jsonl')
+  writeFileSync(transcriptPath, jsonl(ROOT_ORIGIN))
+  let commandLine: string | null =
+    '"C:\\Users\\me\\AppData\\Local\\Programs\\Antigravity\\agy.exe" --dangerously-skip-permissions'
+  const server = new AgentHookServer()
+  server.setPaneAgentCommandLineReader(async () => commandLine)
+  await server.start({ env: 'production', userDataPath: dir })
+  try {
+    const env = server.buildPtyEnv()
+    const post = async (source: 'antigravity' | 'zcode', payload: Record<string, unknown>) => {
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/${source}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(buildBody(payload))
+      })
+      expect(response.status).toBe(204)
+    }
+
+    await post('antigravity', hook(transcriptPath))
+    expect(server.getStatusSnapshot()[0]?.providerSession).toMatchObject({
+      id: ROOT,
+      permissionMode: 'bypassPermissions'
+    })
+
+    // Subagent hooks reporting their own permission_mode must not wipe the root CLI bypass.
+    await post(
+      'antigravity',
+      hook(transcriptPath, ROOT, {
+        hook_event_name: 'PreToolUse',
+        agent_id: 'subagent-1',
+        permission_mode: 'default'
+      })
+    )
+
+    // Non-boundary hooks keep the turn's observed bypass even if process argv changes mid-turn.
+    commandLine = `"C:\\Users\\me\\AppData\\Local\\Programs\\Antigravity\\agy.exe" --conversation ${ROOT}`
+    await post(
+      'antigravity',
+      hook(transcriptPath, ROOT, { hook_event_name: 'Stop', fullyIdle: true })
+    )
+    const status = server.getStatusSnapshot()[0]
+    expect(status?.providerSession?.permissionMode).toBe('bypassPermissions')
+    expect(resolveResumeLaunchRecipe(undefined, 'antigravity', status?.providerSession)).toEqual({
+      agentArgs: '--dangerously-skip-permissions',
+      agentEnv: {}
+    })
+
+    // An unreadable/ambiguous process tree on a new turn fails closed instead of inheriting bypass.
+    commandLine = null
+    await post('antigravity', hook(transcriptPath))
+    expect(server.getStatusSnapshot()[0]?.providerSession?.permissionMode).toBeUndefined()
+
+    // Re-establish bypass, then verify a bare rerun clears it.
+    commandLine =
+      '"C:\\Users\\me\\AppData\\Local\\Programs\\Antigravity\\agy.exe" --dangerously-skip-permissions'
+    await post('antigravity', hook(transcriptPath))
+    expect(server.getStatusSnapshot()[0]?.providerSession?.permissionMode).toBe('bypassPermissions')
+    commandLine = `"C:\\Users\\me\\AppData\\Local\\Programs\\Antigravity\\agy.exe" --conversation ${ROOT}`
+    await post('antigravity', hook(transcriptPath))
+    expect(server.getStatusSnapshot()[0]?.providerSession?.permissionMode).toBeUndefined()
+
+    // Hook-reported permission_mode overrides a bare process command line.
+    commandLine = 'zcode'
+    const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/zcode`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+      },
+      body: JSON.stringify(
+        buildBody(
+          {
+            session_id: 'zcode-session-1',
+            hook_event_name: 'UserPromptSubmit',
+            prompt: 'hi',
+            permission_mode: 'yolo'
+          },
+          { paneKey: GOOD_PANE, tabId: 'tab-good' }
+        )
+      )
+    })
+    expect(response.status).toBe(204)
+    expect(
+      server.getStatusSnapshot().find((entry) => entry.paneKey === GOOD_PANE)?.providerSession
+    ).toMatchObject({
+      id: 'zcode-session-1',
+      permissionMode: 'bypassPermissions'
+    })
   } finally {
     server.stop()
     rmSync(dir, { recursive: true, force: true })

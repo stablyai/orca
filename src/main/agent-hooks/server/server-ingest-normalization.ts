@@ -1,4 +1,9 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
+import {
+  applyObservedPanePermission,
+  observePanePermissionBeforeHook,
+  type PaneAgentCommandLineReader
+} from '../../../shared/agent-hook-listener/permissions/pane-permission-observation'
 import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import {
   buildSpoolHookBody,
@@ -26,9 +31,14 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
   /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
   protected readHookRootEvidence: HookRootEvidenceReader | undefined
+  private readPaneAgentCommandLine: PaneAgentCommandLineReader | undefined
 
   setHookRootEvidenceReader(reader: HookRootEvidenceReader): void {
     this.readHookRootEvidence = reader
+  }
+
+  setPaneAgentCommandLineReader(reader: PaneAgentCommandLineReader): void {
+    this.readPaneAgentCommandLine = reader
   }
 
   /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
@@ -38,6 +48,28 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   /** HTTP and spool hooks share one ownership preflight before provider folds; a drain passes
    *  the one answer deadline all its records share. */
   protected checkHookOwner(
+    source: AgentHookSource,
+    body: unknown,
+    answerBy?: number,
+    isReplay = false
+  ): Promise<unknown> | undefined {
+    const permissionPending = isReplay
+      ? undefined
+      : observePanePermissionBeforeHook(
+          this.state,
+          this.readPaneAgentCommandLine,
+          source,
+          body,
+          this.env,
+          (paneKey) => this.resolvePaneKeyAlias(paneKey)
+        )
+    if (permissionPending) {
+      return permissionPending.then(() => this.checkHookOwnerPresenceOnly(source, body, answerBy))
+    }
+    return this.checkHookOwnerPresenceOnly(source, body, answerBy)
+  }
+
+  private checkHookOwnerPresenceOnly(
     source: AgentHookSource,
     body: unknown,
     answerBy?: number
@@ -123,7 +155,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     isReplay = false
   ): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
-      const event = normalizeHookPayload(this.state, source, body, this.env, {
+      const rawEvent = normalizeHookPayload(this.state, source, body, this.env, {
         admitOpenCodeTui: (identity) => {
           const disposition = this.getAgentStatusDisposition(identity.paneKey, {
             ...identity,
@@ -136,6 +168,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
           return disposition !== 'suppress'
         }
       })
+      const event = applyObservedPanePermission(this.state, rawEvent, isReplay, (paneKey) =>
+        this.resolvePaneKeyAlias(paneKey)
+      )
       retainOpenCodeWriterTopology(event, source, body)
       if (
         event &&
@@ -194,7 +229,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.applySpoolHook(record, body)
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const pending = this.checkHookOwner(record.source, body, answerBy)
+    const pending = this.checkHookOwner(record.source, body, answerBy, true)
     return pending ? pending.then(apply) : apply()
   }
 

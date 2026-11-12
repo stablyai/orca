@@ -1,5 +1,10 @@
 import { checkHookOwnerPresence } from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
 import type { HookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import {
+  applyObservedPanePermission,
+  observePanePermissionBeforeHook,
+  type PaneAgentCommandLineReader
+} from '../shared/agent-hook-listener/permissions/pane-permission-observation'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
 import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
@@ -31,6 +36,7 @@ export async function handleRelayHookRequest(
     state: HookListenerState
     checkAgentPresence: (paneKey: string) => Promise<void>
     readHookRootEvidence?: HookRootEvidenceReader
+    readPaneAgentCommandLine?: PaneAgentCommandLineReader
     providerNormalization: RelayProviderHookNormalization
     isPaneSurfaceRetired: (paneKey: string) => boolean
     getAgentLaunchToken: (paneKey: string) => string | undefined
@@ -89,6 +95,13 @@ export async function handleRelayHookRequest(
       res.end()
       return
     }
+    await observePanePermissionBeforeHook(
+      options.state,
+      options.readPaneAgentCommandLine,
+      source,
+      hookBody,
+      options.env
+    )
     await checkHookOwnerPresence(
       options.state,
       source,
@@ -107,19 +120,17 @@ export async function handleRelayHookRequest(
       return
     }
     let admittedOpenCodeTuiOwner = false
-    const event = options.providerNormalization.normalize(
+    const event = applyObservedPanePermission(
       options.state,
-      source,
-      hookBody,
-      options.env,
-      {
+      options.providerNormalization.normalize(options.state, source, hookBody, options.env, {
         deferCompactOwnershipToClient: true,
         admitOpenCodeTui: (identity) => {
           const admission = admitRelayOpenCodeTui(options, identity)
           admittedOpenCodeTuiOwner = admission === true
           return admission
         }
-      }
+      }),
+      false
     )
     if (source === 'muse' && !event) {
       options.retryScheduler.rearmIgnoredMuseHook(hookBody)
