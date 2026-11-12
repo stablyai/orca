@@ -44,6 +44,7 @@ function createController(rows: FolderWorkspace[], onTeardown: () => void = () =
     getProjectGroups: () => [],
     getRepos: () => [],
     getFolderWorkspaces: () => folders.getFolderWorkspaces(),
+    getFolderWorkspace: (id: string) => folders.getFolderWorkspace(id),
     updateFolderWorkspace: (id, updates) => folders.updateFolderWorkspace(id, updates),
     removeFolderWorkspace: (id) => folders.removeFolderWorkspace(id),
     getRepo: unused,

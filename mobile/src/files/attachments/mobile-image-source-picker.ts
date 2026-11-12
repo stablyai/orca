@@ -16,7 +16,7 @@ const MOBILE_IMAGE_READ_CHUNK_BYTES = 256 * 1024
 
 type MobileImageFileHandle = {
   readonly size: number | null
-  readBytes(length: number): Uint8Array
+  readBytesSync(length: number): Uint8Array
   close(): void
 }
 
@@ -55,7 +55,7 @@ export async function readUriAsBase64(
         MOBILE_IMAGE_READ_CHUNK_BYTES,
         CLIPBOARD_IMAGE_MAX_SOURCE_BYTES - bytesRead + 1
       )
-      const bytes = handle.readBytes(requested)
+      const bytes = handle.readBytesSync(requested)
       if (bytes.byteLength === 0) {
         break
       }

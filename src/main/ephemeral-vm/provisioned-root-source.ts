@@ -1,7 +1,7 @@
 import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
-import { resolveDefaultBaseRefWithLocalGit } from '../git/repo-default-base-ref'
+import { resolveDefaultBaseRefWithLocalGit } from '../git/refs/resolution/repo-default-base-ref'
 import { getLocalProjectGitExecOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'

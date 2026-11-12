@@ -5,23 +5,22 @@ import {
   type NativeChatEditPatchHunk,
   type NativeChatMessage
 } from '../../shared/native-chat/native-chat-types'
-import {
-  asRecord,
-  extractString,
-  parseJsonObject,
-  timestampMs
-} from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/trimmed-string'
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
+import { timestampMs } from '../ai-vault/parsing/session-record-time'
 import { imageSourcePathFromText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { isKnownRasterImageMimeType } from '../../shared/file-preview/raster-image-preview-limits'
 import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
 import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
-import { claudeStopHookFeedbackRow } from '../claude/claude-stop-hook-feedback'
+import { claudeStopHookFeedbackRow } from '../claude/structured/journal/claude-stop-hook-feedback'
 import { structuredAgentSessionStatusBlock } from '../../shared/agent-session/view/structured-agent-session-status-block'
 import {
   claudeMessageWithoutSyntheticText,
   isClaudeInjectedUserMessage
-} from '../claude/claude-internal-message-content'
+} from '../claude/structured/journal/claude-internal-message-content'
 
 const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400
@@ -161,7 +160,25 @@ function claudeQueuedPromptAsUserRecord(
   if (typeof prompt !== 'string' && !Array.isArray(prompt)) {
     return null
   }
-  return { ...record, type: 'user', message: { role: 'user', content: prompt } }
+  const content = Array.isArray(prompt) ? prompt.map(queuedPromptImageAsDataUrl) : prompt
+  return { ...record, type: 'user', message: { role: 'user', content } }
+}
+
+// Queued prompts get no image-source companion row; their inline base64 is the only image record.
+function queuedPromptImageAsDataUrl(item: unknown): unknown {
+  const record = asRecord(item)
+  const source = asRecord(record?.source)
+  const mediaType = extractString(source?.media_type) ?? undefined
+  const data = extractString(source?.data)
+  if (
+    record?.type !== 'image' ||
+    source?.type !== 'base64' ||
+    !data ||
+    !isKnownRasterImageMimeType(mediaType)
+  ) {
+    return item
+  }
+  return { ...record, source: { url: `data:${mediaType};base64,${data}` } }
 }
 
 function claudeStopHookFeedbackMessage(

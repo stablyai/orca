@@ -57,6 +57,7 @@ export async function startBrowserScreencast(
   })
   const isClosed = (): boolean => closed
   const isStopping = (): boolean => stopping
+  const stopRequested = new AbortController()
 
   // Preserve the client request so the viewport can grow back after the guest view limit shrinks it.
   const embedderSizedGuest = isEmbedderSizedScreencastGuest(webContents)
@@ -88,6 +89,7 @@ export async function startBrowserScreencast(
     options,
     isClosed,
     isStopping,
+    stopSignal: stopRequested.signal,
     getSeq: framePacer.getSeq,
     queueFrame: framePacer.queueFrame,
     applyDeviceMetricsOverride: () => {
@@ -235,6 +237,7 @@ export async function startBrowserScreencast(
         return
       }
       stopping = true
+      stopRequested.abort()
       snapshotCapture.bumpGeneration()
       snapshotCapture.clearNavigationCaptureTimer()
       framePacer.clearPending(true)

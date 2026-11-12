@@ -1,4 +1,4 @@
-import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
+import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
@@ -7,13 +7,13 @@ import {
   type NativeChatTranscriptAgent
 } from '../../shared/native-chat/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { forEachSessionFile } from '../ai-vault/session-scanner-discovery'
-import { resolveOmpSessionsDir } from '../ai-vault/scanners/omp/omp-session-root'
+import { forEachSessionFile } from '../ai-vault/discovery/session-scanner-discovery'
 import {
   claudeProjectsHostDirs,
   codexHomeSessionsDir,
+  ompSessionsRootDirs,
   uniqueDirs
-} from '../ai-vault/session-scanner-roots'
+} from '../ai-vault/discovery/session-scanner-roots'
 import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -29,7 +29,8 @@ import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-fi
 import { findWslSessionPath } from './wsl-session-path-scan'
 import { findClaudeSessionFile } from './session-file-resolver-claude-probe'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
-import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import type { WslTranscriptFsError } from './wsl-transcript-fs-error'
 
 // Read shared discovery roots per call; preference order prevents cross-account matches.
 function claudeProjectsDirs(): string[] {
@@ -181,8 +182,7 @@ async function resolveSessionFileById(
   }
   if (transcriptAgent === 'omp') {
     const override = options.ompSessionsDir
-    const root = resolveOmpSessionsDir({ sessionsDir: override })
-    return resolveTiered('omp', trimmedId, root ? [root] : [], {
+    return resolveTiered('omp', trimmedId, ompSessionsRootDirs({ ompSessionsDir: override }), {
       wslTier: wslTier && override === undefined,
       signal,
       strictErrors: options.strictErrors

@@ -12,6 +12,26 @@ import { useTranslate } from '../../i18n/use-translate'
 
 type FieldState = ReturnType<typeof useWorkItemSourceState>
 
+/**
+ * Last known `glab` availability per preflight context. The preflight status is one app-wide slot:
+ * opening the composer for a different host/workspace context invalidates it until the async probe
+ * returns, which hid the GitLab source on some opens and showed it on others. Remembering the last
+ * answer per context keeps GitLab steady while a fresh probe runs.
+ */
+const lastKnownGlabByContext = new Map<string, boolean>()
+
+export function resolveLocalGitlabAvailable(args: {
+  preflightStatusCurrent: boolean
+  glabInstalled: boolean | undefined
+  contextKey: string
+  lastKnown: ReadonlyMap<string, boolean>
+}): boolean {
+  if (args.preflightStatusCurrent && args.glabInstalled !== undefined) {
+    return args.glabInstalled
+  }
+  return args.lastKnown.get(args.contextKey) === true
+}
+
 export function useSmartWorkspaceFieldAvailability({
   props,
   state,
@@ -48,7 +68,18 @@ export function useSmartWorkspaceFieldAvailability({
   const { disabled, textOnly, repoBackedSourcesDisabled, branchesEnabled, value } = props
   const { mode: storedMode, setMode, setDebouncedQuery } = state
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
-  const localGitlabAvailable = preflightStatusCurrent && preflightStatus?.glab?.installed === true
+  const glabInstalled = preflightStatusCurrent ? preflightStatus?.glab?.installed : undefined
+  useEffect(() => {
+    if (glabInstalled !== undefined) {
+      lastKnownGlabByContext.set(expectedPreflightContextKey, glabInstalled)
+    }
+  }, [expectedPreflightContextKey, glabInstalled])
+  const localGitlabAvailable = resolveLocalGitlabAvailable({
+    preflightStatusCurrent,
+    glabInstalled,
+    contextKey: expectedPreflightContextKey,
+    lastKnown: lastKnownGlabByContext
+  })
   const gitlabSourceAvailable = repoBackedSearchTargets.some((target) =>
     canUseGitLabSmartSource({
       localGitlabAvailable,
@@ -89,7 +120,8 @@ export function useSmartWorkspaceFieldAvailability({
   // Why: an unknown status is not a disconnect; keep a chosen Linear tab until it settles.
   const mode =
     availableModes.some((item) => item.id === storedMode) ||
-    (storedMode === 'linear' && linearStatusPending && !textOnly)
+    (storedMode === 'linear' && linearStatusPending && !textOnly) ||
+    (storedMode === 'gitlab' && !preflightStatusCurrent && !textOnly && !repoBackedSourcesDisabled)
       ? storedMode
       : (availableModes[0]?.id ?? 'text')
   useEffect(() => {

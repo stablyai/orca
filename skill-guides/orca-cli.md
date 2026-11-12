@@ -103,6 +103,8 @@ ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
 ORCA repo add --path /abs/folder --kind folder --json
 ORCA repo set --repo id:<repoId> --external-worktree-visibility show --json
+ORCA repo hide --repo id:<repoId> --json
+ORCA repo unhide --repo id:<repoId> --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ORCA worktree list --repo id:<repoId> --json
@@ -282,8 +284,8 @@ Use them only when the user explicitly asks to publish through Orca. A generic r
 public link, page, or URL does not select Orca, and a provider the user names always wins.
 
 **Only a human can turn publishing on or off.** `share` and `update` need the device-wide
-setting under Settings → Artifacts ("Allow publishing public artifact links"); there is no
-CLI or RPC way to grant it. `list`, `unshare`, and `delete` are never gated, so old links
+setting under Settings → Artifacts ("Allow publishing public artifact links"), which is on
+for new profiles; there is no CLI or RPC way to grant it. `list`, `unshare`, and `delete` are never gated, so old links
 stay auditable and revocable.
 
 A denied share fails with `artifact_sharing_disabled` before any upload. Do not retry. Tell

@@ -8,10 +8,8 @@ import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/wo
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import {
-  folderWorkspaceActivationBlocked,
-  notifyBlockedFolderWorkspacePath
-} from '../paths/folder-workspace-path-status'
+import { notifyBlockedFolderWorkspacePath } from '../paths/folder-workspace-path-status'
+import { blocksFolderWorkspaceActivation } from '../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
@@ -30,7 +28,10 @@ import {
   type WorktreeActivationOptions
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
-import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
+import {
+  isWorktreeInHiddenProject,
+  liftSidebarFiltersHidingWorktree
+} from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from '../creation/pending-worktree-creation'
@@ -81,7 +82,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
     },
     { runtimeEnvironmentId }
   )
-  if (folderWorkspaceActivationBlocked(pathStatus)) {
+  if (blocksFolderWorkspaceActivation(pathStatus)) {
     notifyBlockedFolderWorkspacePath(pathStatus, folderWorkspace.folderPath)
     return { refused: { reason: 'path-blocked', failureNotified: true } }
   }
@@ -256,11 +257,13 @@ export function activateAndRevealWorktreeWithOutcome(
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
   }
-  if (opts?.clearSidebarFilters !== false) {
+  // No sidebar card to reveal; lifting filters for it would only discard the user's.
+  const inHiddenProject = isWorktreeInHiddenProject(wt)
+  if (opts?.clearSidebarFilters !== false && !inHiddenProject) {
     liftSidebarFiltersHidingWorktree(wt)
   }
 
-  if (opts?.revealInSidebar !== false) {
+  if (opts?.revealInSidebar !== false && !inHiddenProject) {
     if (opts?.sidebarRevealBehavior || opts?.executionHostId) {
       state.revealWorktreeInSidebar(worktreeId, {
         ...(opts.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : {}),

@@ -6,6 +6,17 @@ import type { EnrichedAgentHookEventPayload } from '../server-types'
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
 export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
 
+function isOpenCodeAgent(agentType: string | undefined): boolean {
+  return agentType === 'opencode' || agentType === 'opencode2'
+}
+
+/** OpenCode's OSC 7501 covers every session sharing its folder's tabs; its hook covers only the pane's own. */
+export function isOpenCodeHookRow(
+  row: Pick<EnrichedAgentHookEventPayload, 'observation' | 'payload'>
+): boolean {
+  return row.observation?.origin === 'hook' && isOpenCodeAgent(row.payload.agentType)
+}
+
 /** Hook precedence ends at this time; undefined means no yield, Infinity means silence cannot end it. */
 export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
@@ -14,6 +25,14 @@ export function programStatusHookYieldEndsAt(
 ): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
+  }
+  // OpenCode's OSC 7501 idle means every session rests, so only that can overrule a silent hook.
+  if (
+    isOpenCodeHookRow(previous) &&
+    isOpenCodeAgent(payload.agentType) &&
+    payload.state !== 'done'
+  ) {
+    return Infinity
   }
   const sameAgent =
     payload.agentType === undefined || payload.agentType === previous.payload.agentType

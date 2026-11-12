@@ -20,7 +20,7 @@ import {
   createShutdownCheckpointGuard
 } from './shutdown/shutdown-checkpoint-guard'
 import { showShutdownCheckpointFailureToast } from './shutdown/shutdown-checkpoint-failure-toast'
-import { isPairedWebClientWindow } from '../lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from './chrome/desktop-window-chrome'
 import { createShutdownCheckpointPersist } from './shutdown-checkpoint-persist'
 import { shutdownBufferCaptures } from '../components/terminal-pane/snapshots/shutdown-buffer-captures'
 import {

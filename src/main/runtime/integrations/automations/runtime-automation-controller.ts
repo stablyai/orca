@@ -94,12 +94,16 @@ export class RuntimeAutomationController {
 
   async create(
     input: RuntimeAutomationCreateInput,
-    destination?: AutomationDestination
+    destination?: AutomationDestination,
+    /** Runs after the target resolves, right before the write; a throw refuses it (a plugin
+     *  creator that lost its approval meanwhile). */
+    beforeWrite?: () => void
   ): Promise<Automation> {
     if (!this.store?.createAutomation) {
       throw new Error('runtime_unavailable')
     }
     const target = await this.resolveTarget(input)
+    beforeWrite?.()
     assertAutomationRunContextMatchesTarget(input.runContext, target.repo)
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
@@ -126,7 +130,8 @@ export class RuntimeAutomationController {
         rrule: input.rrule,
         dtstart: input.dtstart,
         enabled: input.enabled,
-        missedRunGraceMinutes: input.missedRunGraceMinutes
+        missedRunGraceMinutes: input.missedRunGraceMinutes,
+        createdBy: input.createdBy
       },
       { destination: destination ?? input.destination, resolvedRepo: target.repo ?? undefined }
     )

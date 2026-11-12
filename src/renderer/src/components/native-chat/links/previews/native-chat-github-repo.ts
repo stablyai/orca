@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
-import { resolveRepoSlug } from '@/lib/repo-slug-index'
+import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 import {
   readRepoSlugCache,
   REPO_SLUG_FAILURE_TTL_MS,
   repoSlugCacheKey
-} from '@/lib/repo-slug-cache'
+} from '@/lib/workspace/catalog/repo-slug-cache'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
@@ -20,11 +20,11 @@ import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,
   repoUpstreamIdentityKey
-} from '../../../../../../shared/github/repository-identity-key'
+} from '../../../../../../shared/github/repositories/repository-identity-key'
 import {
   githubReferenceRepo,
   type GitHubRepoReference
-} from '../../../../../../shared/github/github-reference-links'
+} from '../../../../../../shared/github/markdown/github-reference-links'
 
 export type NativeChatGitHubRepo = {
   repo: Repo

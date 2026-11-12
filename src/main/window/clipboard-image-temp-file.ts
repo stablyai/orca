@@ -10,7 +10,7 @@ import {
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentClipboardTarget
 } from '../../shared/agent-session/agent-session-attachments'
-import { detectImageFileSignature } from '../media/image-file-signature'
+import { detectImageFileExtension } from '../../shared/image-file-signature'
 import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {
@@ -52,12 +52,8 @@ export async function saveClipboardImageBufferAsTempFile(
     ? path.join(folder, `orca-paste-${randomUUID()}`, shellInertFileName(args.fileName))
     : path.join(
         folder,
-        // Phone library picks are often JPEG; agents trust the extension over the bytes.
-        agentSessionPastedImageName(
-          Date.now(),
-          randomUUID(),
-          detectImageFileSignature(buffer)?.extension
-        )
+        // Phone picks are often JPEG or HEIC; agents trust the extension over the bytes.
+        agentSessionPastedImageName(Date.now(), randomUUID(), detectImageFileExtension(buffer))
       )
   if (args?.fileName) {
     await fs.mkdir(path.dirname(tempPath), { recursive: true })

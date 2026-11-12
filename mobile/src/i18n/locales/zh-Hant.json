@@ -2494,6 +2494,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "加入附件失敗（重新連線中）"
     },
+    "useCloseActions": {
+      "closeFailed": "無法關閉分頁。請再試一次。",
+      "closeFailedDesktopNotReady": "無法關閉分頁。電腦上的 Orca 仍在載入中，請稍後再試。"
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "瀏覽器命令執行失敗",
       "browserCreateFailed": "建立瀏覽器失敗",
@@ -3360,6 +3364,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "要合併 PR #{{number}} 嗎？",
+      "confirmGitHubSquash": "要將 PR #{{number}} 的提交壓縮後合併嗎？",
+      "confirmGitHubRebase": "要將 PR #{{number}} 變基後合併嗎？",
+      "confirmGitLabMerge": "要合併合併請求 #{{number}} 嗎？",
+      "confirmGitLabSquash": "要將合併請求 #{{number}} 的提交壓縮後合併嗎？",
+      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？",
       "merged": "已合併",
       "closed": "已關閉",
       "conflicts": "有衝突",

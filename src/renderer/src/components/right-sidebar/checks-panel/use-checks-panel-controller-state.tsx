@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'react'
 import { useWorktreeGitOwnerTarget } from '../source-control/sync/worktree-git-owner-target'
-import { useWorktreeGitCopyHostId } from '@/lib/worktree-git-copy'
-import { useAppStore } from '@/store'
+import { useWorktreeGitCopyHostId } from '@/lib/workspace/ownership/worktree-git-copy'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { selectReviewRepositoryForWorkspace } from '@/store/slices/hosted-review/workspace-review-repository'
@@ -20,9 +20,9 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { PRRefreshErrorType } from '../../../../../shared/github/pull-request-refresh-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { PRRefreshErrorType } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
 import type { PRCommentsListSelectionClearRequest } from './comments/pr-comments-list-selection'
 import {

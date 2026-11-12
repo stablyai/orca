@@ -1,7 +1,7 @@
 import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
-import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { createIdleSshApiStub } from './ipc-events-ssh-api-test-fixtures'
 
 export type RequestTabCloseListener = (data: {
@@ -107,6 +107,7 @@ export async function useIpcEventsForCloseRouting({
         activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
         browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
         browserPagesByWorkspace: {},
+        browserAnnotationsByPageId: {},
         openFiles: [],
         unifiedTabsByWorktree: {},
         closeBrowserTab: vi.fn(),
@@ -117,10 +118,10 @@ export async function useIpcEventsForCloseRouting({
     }
   }
 
-  vi.doMock('../store', () => appStoreModule)
-  vi.doMock('@/store', () => appStoreModule)
+  vi.doMock('../store/index', () => appStoreModule)
+  vi.doMock('@/store/index', () => appStoreModule)
 
-  vi.doMock('@/lib/ui-zoom', () => ({
+  vi.doMock('@/app-shell/chrome/ui-zoom', () => ({
     applyUIZoom: vi.fn()
   }))
   vi.doMock('@/lib/workspace/activation/worktree-activation', () => ({
@@ -136,7 +137,7 @@ export async function useIpcEventsForCloseRouting({
     UI_ZOOM_MIN: -3,
     UI_ZOOM_MAX: 3
   }))
-  vi.doMock('@/lib/zoom-events', () => ({
+  vi.doMock('@/app-shell/chrome/zoom-events', () => ({
     dispatchZoomLevelChanged: vi.fn()
   }))
   vi.doMock('@/lib/workspace/persistence/workspace-session-host-persistence', () => ({

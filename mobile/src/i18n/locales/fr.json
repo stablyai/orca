@@ -2568,6 +2568,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Échec de l'ajout (reconnexion en cours)"
     },
+    "useCloseActions": {
+      "closeFailed": "Impossible de fermer l’onglet. Réessayez.",
+      "closeFailedDesktopNotReady": "Impossible de fermer l’onglet. Orca est encore en cours de chargement sur votre ordinateur. Réessayez dans un instant."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "Échec de la commande du navigateur",
       "browserCreateFailed": "Échec de la création du navigateur",
@@ -2638,7 +2642,7 @@
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
       "inserted": "Dictée insérée",
       "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes.",
-      "stoppedAfterSilenceSeconds": "Arrêté après {{seconds}} secondes de silence"
+      "stoppedAfterSilenceSeconds": "Arrêt après {{seconds}} secondes de silence"
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",
@@ -3452,6 +3456,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "Fusionner la PR nº {{number}} ?",
+      "confirmGitHubSquash": "Compresser les commits et fusionner la PR nº {{number}} ?",
+      "confirmGitHubRebase": "Rebaser et fusionner la PR nº {{number}} ?",
+      "confirmGitLabMerge": "Fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabSquash": "Compresser les commits et fusionner la demande de fusion nº {{number}} ?",
+      "confirmGitLabRebase": "Rebaser et fusionner la demande de fusion nº {{number}} ?",
       "merged": "Fusionné",
       "closed": "Fermé",
       "conflicts": "Conflits",

@@ -2,7 +2,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadHooks } from './hooks'
-import type { GitRuntimeOptions } from '../git/git-runtime-options'
+import type { GitRuntimeOptions } from '../git/command-runner/git-runtime-options'
 import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
 import { listTrackedPathSpecs } from '../git/source-control/discard-changes'
 import {

@@ -2498,6 +2498,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Eklenemedi (yeniden bağlanılıyor)"
     },
+    "useCloseActions": {
+      "closeFailed": "Sekme kapatılamadı. Tekrar deneyin.",
+      "closeFailedDesktopNotReady": "Sekme kapatılamadı. Orca bilgisayarınızda hâlâ yükleniyor. Birazdan tekrar deneyin."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "Tarayıcı komutu çalıştırılamadı",
       "browserCreateFailed": "Tarayıcı oluşturulamadı",
@@ -3364,6 +3368,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} birleştirilsin mi?",
+      "confirmGitHubSquash": "PR #{{number}} commit’leri squash edilerek birleştirilsin mi?",
+      "confirmGitHubRebase": "PR #{{number}} yeniden temellendirilip birleştirilsin mi?",
+      "confirmGitLabMerge": "Birleştirme isteği #{{number}} birleştirilsin mi?",
+      "confirmGitLabSquash": "Birleştirme isteği #{{number}} commit’leri squash edilerek birleştirilsin mi?",
+      "confirmGitLabRebase": "Birleştirme isteği #{{number}} yeniden temellendirilip birleştirilsin mi?",
       "merged": "Birleştirildi",
       "closed": "Kapatıldı",
       "conflicts": "Çakışmalar",

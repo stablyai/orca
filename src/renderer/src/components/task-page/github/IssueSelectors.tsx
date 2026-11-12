@@ -4,7 +4,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Button } from '@/components/ui/button'
 import { LoaderCircle, Check } from 'lucide-react'
 import { cn } from '@/lib/class-names'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { GitHubAssigneeAvatar } from './Avatars'
 export function GitHubIssueLabelSelector({
   labels,

@@ -894,13 +894,20 @@ final class Provider {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
         }
         let verification: [String: Any]
-        switch coercion.compare(readback: rawAttributeValue(record.element, kAXValueAttribute as String)) {
-        case let .match(actualPreview):
-            verification = verifiedAction(property: "value", expected: expected, actualPreview: actualPreview)
+        let readback = settledValueReadback(record.element) { readback in
+            if case .mismatch = coercion.compare(readback: readback) { return false }
+            return true
+        }
+        switch coercion.compare(readback: readback) {
+        case .match:
+            verification = verifiedAction(property: "value")
         case let .mismatch(actualPreview):
-            verification = unverifiedAction(reason: "value_mismatch", expected: expected, actualPreview: actualPreview)
+            // Why: a secure field can read back masked, so its value neither disproves the write nor gets shown.
+            verification = AXSnapshotReader().isSecureTextElement(record.element)
+                ? unverifiedAction(reason: "readback_unsupported")
+                : unverifiedAction(reason: "value_mismatch", actualPreview: actualPreview)
         case .unsupported:
-            verification = unverifiedAction(reason: "readback_unsupported", expected: expected)
+            verification = unverifiedAction(reason: "readback_unsupported")
         }
         return actionMetadata(path: "accessibility", actionName: "AXSetValue", verification: verification)
     }
@@ -1751,6 +1758,19 @@ private func rawStringAttribute(_ element: AXUIElement, _ attribute: String) -> 
     return value as? String
 }
 
+/// Reads the value until `settled` accepts it: Chromium answers from a cache that trails a successful write by about 100 ms.
+private func settledValueReadback(_ element: AXUIElement, settled: (CFTypeRef) -> Bool) -> CFTypeRef? {
+    var readback: CFTypeRef?
+    // Why: settle counts only its sleeps, and one slow or failed AX read can take the full 3 s timeout.
+    let deadline = CFAbsoluteTimeGetCurrent() + 0.5
+    _ = PermissionTrustSettling.settle(timeoutMs: 500, intervalMs: 25) {
+        readback = rawAttributeValue(element, kAXValueAttribute as String)
+        guard let readback, CFAbsoluteTimeGetCurrent() < deadline else { return true }
+        return settled(readback)
+    }
+    return readback
+}
+
 private func rawAttributeValue(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
@@ -2409,6 +2429,10 @@ private final class AXSnapshotReader {
         return Array((visible.isEmpty ? rows : visible).prefix(20))
     }
 
+    func isSecureTextElement(_ element: AXUIElement) -> Bool {
+        isSecureTextElement(element, role: stringAttribute(element, kAXRoleAttribute as String) ?? "")
+    }
+
     private func isSecureTextElement(_ element: AXUIElement, role: String) -> Bool {
         guard SnapshotRenderHeuristics.shouldProbeSecureTextMetadata(role: role) else {
             return false
@@ -2533,20 +2557,15 @@ private func actionMetadata(
     return metadata
 }
 
-private func verifiedAction(property: String, expected: String? = nil, actualPreview: String? = nil) -> [String: Any] {
-    [
-        "state": "verified",
-        "property": property,
-        "expected": jsonNullable(expected),
-        "actualPreview": jsonNullable(actualPreview),
-    ]
+// Why: results never repeat the written text or field contents, so --value-stdin / --text-stdin secrets stay out of transcripts.
+private func verifiedAction(property: String) -> [String: Any] {
+    ["state": "verified", "property": property]
 }
 
-private func unverifiedAction(reason: String, expected: String? = nil, actualPreview: String? = nil) -> [String: Any] {
+private func unverifiedAction(reason: String, actualPreview: String? = nil) -> [String: Any] {
     [
         "state": "unverified",
         "reason": reason,
-        "expected": jsonNullable(expected),
         "actualPreview": jsonNullable(actualPreview),
     ]
 }
@@ -2937,7 +2956,9 @@ private enum Input {
 
 private enum TextInput {
     static func replaceSelection(_ element: AXUIElement, with text: String) throws -> [String: Any]? {
-        guard isSettable(element, kAXValueAttribute as String),
+        // Why: Chromium applies AX value writes without the input events pages listen to; a contenteditable gets none, so editors like Discord's never see the text.
+        guard !BackgroundInputTransport.isChromiumNode(element),
+              isSettable(element, kAXValueAttribute as String),
               let current = rawStringAttribute(element, kAXValueAttribute as String)
         else {
             return nil
@@ -2957,15 +2978,18 @@ private enum TextInput {
         guard result == .success else {
             return nil
         }
-        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
-        guard rawStringAttribute(element, kAXValueAttribute as String) == next else {
+        // Why: a cached, out-of-process AX tree can show the old value for a moment; any other value is final.
+        let readback = settledValueReadback(element) { next == current || ($0 as? String) != current } as? String
+        // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
+        if readback == current && next != current {
             return nil
         }
-        return verifiedAction(
-            property: "focusedText",
-            expected: text,
-            actualPreview: preview(next)
-        )
+        // Why: moving the caret before a refused write would send the fallback keys to the wrong place.
+        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
+        guard readback == next else {
+            return unverifiedAction(reason: "accessibility_action_unasserted")
+        }
+        return verifiedAction(property: "focusedText")
     }
 
     static func selectAll(_ element: AXUIElement) -> Bool {
@@ -2983,7 +3007,7 @@ private enum TextInput {
         else {
             return unverifiedAction(reason: "provider_unavailable")
         }
-        return verifiedAction(property: "selection", actualPreview: preview(current))
+        return verifiedAction(property: "selection")
     }
 
     private static func selectedTextRange(_ element: AXUIElement) -> CFRange? {
@@ -3155,15 +3179,18 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
 private final class PermissionRuntime: NSObject, NSApplicationDelegate {
     private let initialPermission: PermissionKind?
+    private let copy: PermissionWindowCopy
     private var windowController: PermissionWindowController?
 
-    init(initialPermission: PermissionKind?) {
+    init(initialPermission: PermissionKind?, copy: PermissionWindowCopy) {
         self.initialPermission = initialPermission
+        self.copy = copy
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowController = PermissionWindowController(
             initialPermission: initialPermission,
+            copy: copy,
             terminateWhenDragAssistantCloses: initialPermission != nil
         )
         if let initialPermission {
@@ -3189,25 +3216,36 @@ private final class PermissionWindowController: NSWindowController {
     private var dragAssistant: PermissionDragAssistantController?
     private var dragAssistantPermission: PermissionKind?
     private let initialPermission: PermissionKind?
+    private let copy: PermissionWindowCopy
     private let terminateWhenDragAssistantCloses: Bool
     private var permissionStatusRefresh: PermissionStatusRefreshCoordinator?
 
-    convenience init(initialPermission: PermissionKind? = nil, terminateWhenDragAssistantCloses: Bool = false) {
+    convenience init(
+        initialPermission: PermissionKind? = nil,
+        copy: PermissionWindowCopy,
+        terminateWhenDragAssistantCloses: Bool = false
+    ) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 315),
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "Enable Orca Computer Use"
+        window.title = copy.windowTitle
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.backgroundColor = PermissionPalette.background
         window.center()
         window.isReleasedWhenClosed = false
-        self.init(window: window, initialPermission: initialPermission, terminateWhenDragAssistantCloses: terminateWhenDragAssistantCloses)
+        self.init(
+            window: window,
+            initialPermission: initialPermission,
+            copy: copy,
+            terminateWhenDragAssistantCloses: terminateWhenDragAssistantCloses
+        )
         window.contentView = PermissionView(
             frame: window.contentView?.bounds ?? .zero,
+            copy: copy,
             showDragAssistant: { [weak self] permission in
                 self?.showDragAssistant(for: permission)
             },
@@ -3217,8 +3255,14 @@ private final class PermissionWindowController: NSWindowController {
         )
     }
 
-    init(window: NSWindow?, initialPermission: PermissionKind?, terminateWhenDragAssistantCloses: Bool) {
+    init(
+        window: NSWindow?,
+        initialPermission: PermissionKind?,
+        copy: PermissionWindowCopy,
+        terminateWhenDragAssistantCloses: Bool
+    ) {
         self.initialPermission = initialPermission
+        self.copy = copy
         self.terminateWhenDragAssistantCloses = terminateWhenDragAssistantCloses
         super.init(window: window)
         permissionStatusRefresh = PermissionStatusRefreshCoordinator(
@@ -3240,6 +3284,7 @@ private final class PermissionWindowController: NSWindowController {
         dragAssistantPermission = permission
         dragAssistant = PermissionDragAssistantController(
             permission: permission,
+            copy: copy,
             fallbackVisibleFrame: window?.screen?.visibleFrame,
             onRefreshPermissions: { [weak self] in
                 self?.refreshPermissions()
@@ -3322,39 +3367,39 @@ private enum PermissionKind: CaseIterable {
         }
     }
 
-    var dragInstruction: String {
+    func dragInstruction(copy: PermissionWindowCopy) -> String {
         switch self {
         case .accessibility:
-            "Drag Orca Computer Use into the list above to allow Accessibility."
+            copy.dragAccessibilityInstruction
         case .screenshots:
-            "Drag Orca Computer Use into the list above to allow Screenshots."
+            copy.dragScreenshotsInstruction
         }
     }
 
-    var title: String {
+    func title(copy: PermissionWindowCopy) -> String {
         switch self {
         case .accessibility:
-            "Accessibility"
+            copy.accessibilityTitle
         case .screenshots:
-            "Screenshots"
+            copy.screenshotsTitle
         }
     }
 
-    var detail: String {
+    func detail(copy: PermissionWindowCopy) -> String {
         switch self {
         case .accessibility:
-            "Read and control app interfaces"
+            copy.accessibilityDetail
         case .screenshots:
-            "Capture windows for visual state"
+            copy.screenshotsDetail
         }
     }
 
-    var icon: NSImage {
+    func icon(copy: PermissionWindowCopy) -> NSImage {
         switch self {
         case .accessibility:
-            NSImage(systemSymbolName: "figure", accessibilityDescription: "Accessibility") ?? NSImage()
+            NSImage(systemSymbolName: "figure", accessibilityDescription: copy.accessibilityTitle) ?? NSImage()
         case .screenshots:
-            NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Screen Recording") ?? NSImage()
+            NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: copy.screenRecordingDescription) ?? NSImage()
         }
     }
 
@@ -3380,13 +3425,20 @@ private enum PermissionKind: CaseIterable {
 
 private final class PermissionView: NSView {
     private let appURL = Bundle.main.bundleURL
+    private let copy: PermissionWindowCopy
     private let showDragAssistant: (PermissionKind) -> Void
     private let close: () -> Void
     private var contentStack: NSStackView?
     private var contentConstraints: [NSLayoutConstraint] = []
     private var permissionStatus: PermissionStatusSnapshot?
 
-    init(frame frameRect: NSRect, showDragAssistant: @escaping (PermissionKind) -> Void, close: @escaping () -> Void) {
+    init(
+        frame frameRect: NSRect,
+        copy: PermissionWindowCopy,
+        showDragAssistant: @escaping (PermissionKind) -> Void,
+        close: @escaping () -> Void
+    ) {
+        self.copy = copy
         self.showDragAssistant = showDragAssistant
         self.close = close
         super.init(frame: frameRect)
@@ -3428,15 +3480,15 @@ private final class PermissionView: NSView {
         let ready = !checking && missingPermissions.isEmpty
 
         let titleText = checking
-            ? "Checking Computer Use"
-            : (ready ? "Computer Use is Ready" : "Enable Orca Computer Use")
+            ? copy.checkingTitle
+            : (ready ? copy.readyTitle : copy.enableTitle)
         let title = label(titleText, size: 22, weight: .bold)
         let subtitle = label(
             checking
-                ? "Checking Accessibility and Screenshots."
+                ? copy.checkingSubtitle
                 : (ready
-                    ? "Orca can use local apps when you ask."
-                    : "Grant permissions so Orca can use apps when you ask."),
+                    ? copy.readySubtitle
+                    : copy.permissionSubtitle),
             size: 12,
             weight: .regular
         )
@@ -3497,13 +3549,13 @@ private final class PermissionView: NSView {
         row.layer?.backgroundColor = PermissionPalette.card.cgColor
         row.translatesAutoresizingMaskIntoConstraints = false
 
-        let iconView = NSImageView(image: permission.icon)
+        let iconView = NSImageView(image: permission.icon(copy: copy))
         iconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 30, weight: .regular)
         iconView.contentTintColor = .controlAccentColor
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
-        let titleLabel = label(permission.title, size: 13, weight: .bold)
-        let detailLabel = label(permission.detail, size: 11, weight: .regular)
+        let titleLabel = label(permission.title(copy: copy), size: 13, weight: .bold)
+        let detailLabel = label(permission.detail(copy: copy), size: 11, weight: .regular)
         detailLabel.textColor = PermissionPalette.secondaryText
         let textStack = NSStackView(views: [titleLabel, detailLabel])
         textStack.orientation = .vertical
@@ -3511,7 +3563,7 @@ private final class PermissionView: NSView {
         textStack.spacing = 4
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let button = NSButton(title: "Allow", target: nil, action: nil)
+        let button = NSButton(title: copy.allowButton, target: nil, action: nil)
         button.bezelStyle = .rounded
         button.controlSize = .regular
         button.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
@@ -3521,8 +3573,8 @@ private final class PermissionView: NSView {
             .foregroundColor: NSColor.white,
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
         ]
-        button.attributedTitle = NSAttributedString(string: "Allow", attributes: buttonTitleAttributes)
-        button.attributedAlternateTitle = NSAttributedString(string: "Allow", attributes: buttonTitleAttributes)
+        button.attributedTitle = NSAttributedString(string: copy.allowButton, attributes: buttonTitleAttributes)
+        button.attributedAlternateTitle = NSAttributedString(string: copy.allowButton, attributes: buttonTitleAttributes)
         let target = ButtonTarget(action)
         button.target = target
         button.action = #selector(ButtonTarget.run)
@@ -3550,7 +3602,7 @@ private final class PermissionView: NSView {
     }
 
     private func doneButton() -> NSView {
-        let button = NSButton(title: "Done", target: nil, action: nil)
+        let button = NSButton(title: copy.doneButton, target: nil, action: nil)
         button.bezelStyle = .rounded
         button.controlSize = .regular
         button.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
@@ -3560,8 +3612,8 @@ private final class PermissionView: NSView {
             .foregroundColor: NSColor.white,
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
         ]
-        button.attributedTitle = NSAttributedString(string: "Done", attributes: buttonTitleAttributes)
-        button.attributedAlternateTitle = NSAttributedString(string: "Done", attributes: buttonTitleAttributes)
+        button.attributedTitle = NSAttributedString(string: copy.doneButton, attributes: buttonTitleAttributes)
+        button.attributedAlternateTitle = NSAttributedString(string: copy.doneButton, attributes: buttonTitleAttributes)
         let target = ButtonTarget(close)
         button.target = target
         button.action = #selector(ButtonTarget.run)
@@ -3598,6 +3650,7 @@ private final class PermissionDragAssistantController: NSWindowController {
 
     convenience init(
         permission: PermissionKind,
+        copy: PermissionWindowCopy,
         fallbackVisibleFrame: NSRect?,
         onRefreshPermissions: @escaping () -> Void,
         onClose: @escaping () -> Void
@@ -3608,7 +3661,7 @@ private final class PermissionDragAssistantController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "Drag Orca Computer Use"
+        window.title = copy.dragWindowTitle
         window.backgroundColor = .clear
         window.isOpaque = false
         window.isReleasedWhenClosed = false
@@ -3627,7 +3680,11 @@ private final class PermissionDragAssistantController: NSWindowController {
             onRefreshPermissions: onRefreshPermissions,
             onClose: onClose
         )
-        window.contentView = PermissionDragAssistantView(permission: permission, appURL: Bundle.main.bundleURL) { [weak self] in
+        window.contentView = PermissionDragAssistantView(
+            permission: permission,
+            copy: copy,
+            appURL: Bundle.main.bundleURL
+        ) { [weak self] in
             self?.dismissFromCloseButton()
         }
     }
@@ -3902,11 +3959,18 @@ private final class PermissionDragAssistantController: NSWindowController {
 
 private final class PermissionDragAssistantView: NSView {
     private let permission: PermissionKind
+    private let copy: PermissionWindowCopy
     private let appURL: URL
     private let close: () -> Void
 
-    init(permission: PermissionKind, appURL: URL, close: @escaping () -> Void) {
+    init(
+        permission: PermissionKind,
+        copy: PermissionWindowCopy,
+        appURL: URL,
+        close: @escaping () -> Void
+    ) {
         self.permission = permission
+        self.copy = copy
         self.appURL = appURL
         self.close = close
         super.init(frame: .zero)
@@ -3927,7 +3991,10 @@ private final class PermissionDragAssistantView: NSView {
         let closeButton = NSButton(title: "", target: nil, action: nil)
         closeButton.bezelStyle = .shadowlessSquare
         closeButton.isBordered = false
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")
+        closeButton.image = NSImage(
+            systemSymbolName: "xmark",
+            accessibilityDescription: copy.closeButtonDescription
+        )
         closeButton.imagePosition = .imageOnly
         closeButton.contentTintColor = PermissionPalette.secondaryText
         closeButton.controlSize = .small
@@ -3937,7 +4004,7 @@ private final class PermissionDragAssistantView: NSView {
         closeButton.action = #selector(ButtonTarget.run)
         objc_setAssociatedObject(closeButton, "orca-action", target, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
-        let instruction = label(permission.dragInstruction, size: 12, weight: .semibold)
+        let instruction = label(permission.dragInstruction(copy: copy), size: 12, weight: .semibold)
         instruction.textColor = PermissionPalette.primaryText
         instruction.maximumNumberOfLines = 2
 
@@ -4360,9 +4427,12 @@ private func runAgent(socketPath: String, token: String?) {
 }
 
 @MainActor
-private func runPermissionCheck(initialPermission: PermissionKind? = nil) {
+private func runPermissionCheck(
+    initialPermission: PermissionKind? = nil,
+    copy: PermissionWindowCopy
+) {
     let app = NSApplication.shared
-    let delegate = PermissionRuntime(initialPermission: initialPermission)
+    let delegate = PermissionRuntime(initialPermission: initialPermission, copy: copy)
     app.delegate = delegate
     // Why: setup must foreground reliably; the long-running agent path stays accessory-only.
     app.setActivationPolicy(.regular)
@@ -4486,6 +4556,11 @@ private func writeAll(_ data: Data, to fd: Int32) -> Bool {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+let permissionLocale = arguments.firstIndex(of: "--locale").flatMap { index -> String? in
+    let valueIndex = index + 1
+    return valueIndex < arguments.count ? arguments[valueIndex] : nil
+}
+let permissionCopy = PermissionWindowCopy(localeIdentifier: permissionLocale)
 if arguments.first == "--agent" {
     guard arguments.count >= 2 else {
         fputs("usage: orca-computer-use-macos --agent <socket-path> --token-file <token-path>\n", stderr)
@@ -4505,9 +4580,12 @@ if arguments.first == "--agent" {
     }
     runAgent(socketPath: arguments[1], token: token)
 } else if arguments.first == "--permissions" {
-    runPermissionCheck()
+    runPermissionCheck(copy: permissionCopy)
 } else if arguments.first == "--permission" {
-    runPermissionCheck(initialPermission: PermissionKind.parse(arguments.dropFirst().first))
+    runPermissionCheck(
+        initialPermission: PermissionKind.parse(arguments.dropFirst().first),
+        copy: permissionCopy
+    )
 } else if arguments.first == "--permission-status" {
     printPermissionStatus()
 } else if arguments.first == "--permission-status-file" {

@@ -7,7 +7,7 @@ import { getRuntimeGitConflictOperation } from '@/runtime/source-control/git/run
 import {
   createCoalescedPollRunner,
   type SlowTaskBackoffOptions
-} from '../../../../lib/repository-refresh/coalesced-poll-runner'
+} from '../../../../lib/source-control/refresh/coalesced-poll-runner'
 import {
   installWindowVisibilityInterval,
   isWindowVisible

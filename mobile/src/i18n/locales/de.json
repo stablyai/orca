@@ -2498,6 +2498,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Anhängen fehlgeschlagen (erneuter Verbindungsaufbau)"
     },
+    "useCloseActions": {
+      "closeFailed": "Der Tab konnte nicht geschlossen werden. Versuche es erneut.",
+      "closeFailedDesktopNotReady": "Der Tab konnte nicht geschlossen werden. Orca wird auf deinem Computer noch geladen. Versuche es gleich noch einmal."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "Browser-Befehl fehlgeschlagen",
       "browserCreateFailed": "Browser konnte nicht erstellt werden",
@@ -3364,6 +3368,12 @@
   },
   "tasks": {
     "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} zusammenführen?",
+      "confirmGitHubSquash": "PR #{{number}} mit Squash zusammenführen?",
+      "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
+      "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
+      "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
       "merged": "Zusammengeführt",
       "closed": "Geschlossen",
       "conflicts": "Konflikte",

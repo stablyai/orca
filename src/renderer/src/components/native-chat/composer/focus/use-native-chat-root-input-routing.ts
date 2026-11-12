@@ -6,7 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject
 } from 'react'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { DICTATION_FOCUS_INPUT_EVENT } from '../../../dictation/dictation-control-events'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'

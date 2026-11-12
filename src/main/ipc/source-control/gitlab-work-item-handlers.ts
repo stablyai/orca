@@ -5,11 +5,11 @@ import {
   normalizeGitLabMRListState,
   normalizeGitLabPositiveInteger,
   normalizeGitLabSearchQuery
-} from '../../gitlab/gitlab-preload-args'
-import { recordGitLabProjectRecent } from '../../gitlab/gitlab-project-recents'
-import { getWorkItemByProjectRef, listWorkItems } from '../../gitlab/work-item-queries'
-import { getWorkItemDetails } from '../../gitlab/work-item-details'
-import type { ProjectRef } from '../../gitlab/project-ref-parser'
+} from '../../gitlab/requests/gitlab-preload-args'
+import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
+import { getWorkItemByProjectRef, listWorkItems } from '../../gitlab/work-items/work-item-queries'
+import { getWorkItemDetails } from '../../gitlab/work-items/work-item-details'
+import type { ProjectRef } from '../../gitlab/projects/project-ref-parser'
 
 import {
   type GitLabRepoSelectorArgs,

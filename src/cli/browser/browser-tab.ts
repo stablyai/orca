@@ -1,21 +1,27 @@
 import type {
+  BrowserTabAnnotationsResult,
   BrowserTabCurrentResult,
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { formatTabList, formatTabListWithProfiles, formatTabShow } from './browser-format'
-import { printResult } from '../format'
+import type { CommandHandler } from '../dispatch/dispatch'
+import {
+  formatTabAnnotations,
+  formatTabList,
+  formatTabListWithProfiles,
+  formatTabShow
+} from './browser-format'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
   getPresentStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
-import { getBrowserWorktreeSelector } from '../selectors'
+import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
@@ -41,6 +47,11 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserTabShowResult>('browser.tabShow', target)
     printResult(result, json, formatTabShow)
+  },
+  'tab annotations': async ({ flags, client, cwd, json }) => {
+    const target = await getBrowserCommandTarget(flags, cwd, client)
+    const result = await client.call<BrowserTabAnnotationsResult>('browser.tabAnnotations', target)
+    printResult(result, json, formatTabAnnotations)
   },
   'tab current': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { normalizeRepoSourceControlAiOverrides } from '../source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
-import { normalizeGhAccountBinding } from '../github/account-binding'
+import { normalizeGhAccountBinding } from '../github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../jira/jira-project-reference'
 import {
   normalizeCustomWorktreeVisibilitySources,
@@ -11,6 +11,7 @@ import {
 import { OptionalFiniteNumber, OptionalString } from './rpc-param-primitives'
 import { editorFormatterSchema } from '../editor-formatter'
 import { normalizeDictationTerms } from '../dictation-dictionary'
+import { RepoWorkspaceCleanupPolicyParam } from './workspace-cleanup-policy-params'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -90,9 +91,11 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .transform((value) => normalizeWorktreeVisibilitySourcePreferences(value))
         .optional(),
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
+      hiddenAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber.nullable().optional(),
-      sourceControlAi: RepoSourceControlAiOverrides
+      sourceControlAi: RepoSourceControlAiOverrides,
+      workspaceCleanupPolicy: RepoWorkspaceCleanupPolicyParam.optional()
     })
   })
 }

@@ -3,12 +3,15 @@ import {
   collectFixChecksPromptDetails,
   hasGitHubCheckHandle
 } from '../../../../src/shared/source-control/checks/pr-checks-fix-prompt'
-import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { fetchPRCheckDetails } from './github-pr-rpc'
 import { splitWorktreeIdForFilesystem } from '../../../../src/shared/worktree/id'
 import { buildResolvePullRequestConflictsPrompt } from '../../../../src/shared/source-control/recovery/source-control-conflict-prompts'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../src/shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../src/shared/github/checks/check-types'
 
 // Like desktop, the agent gets the failing steps' log tails, not just check names.
 export async function buildFixChecksPrompt(input: {

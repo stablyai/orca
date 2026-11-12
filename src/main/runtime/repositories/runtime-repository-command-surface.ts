@@ -3,6 +3,7 @@ import type { RuntimeHostedReviewCommands } from '../integrations/reviews/runtim
 import type { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import type { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
+import type { RuntimeRepositoryForkBackfill } from './runtime-repository-fork-backfill'
 import type { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 import type { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
 import type { RuntimeRepositoryIssueCommand } from './runtime-repository-issue-command'
@@ -69,6 +70,7 @@ export type RuntimeRepositoryCommandSurface = {
   showRepo: RuntimeRepositorySettingsController['show']
   setRepoBaseRef: RuntimeRepositorySettingsController['setBaseRef']
   updateRepo: RuntimeRepositorySettingsController['update']
+  setRepoHidden: RuntimeRepositorySettingsController['setHidden']
   removeProject: RuntimeRepositorySettingsController['remove']
   reorderRepos: RuntimeRepositorySettingsController['reorder']
   getRepoBaseRefDefault: RuntimeRepositoryRefQueries['getDefault']
@@ -97,7 +99,9 @@ type RuntimeRepositoryCommandOwners = {
 }
 
 export function installRuntimeRepositoryCommandSurface(
-  target: RuntimeRepositoryCommandSurface,
+  target: RuntimeRepositoryCommandSurface & {
+    readonly repositoryForkBackfill: RuntimeRepositoryForkBackfill
+  },
   owners: RuntimeRepositoryCommandOwners
 ): void {
   const host = owners.projectHostSetups
@@ -142,13 +146,28 @@ export function installRuntimeRepositoryCommandSurface(
     isGitAvailable: server.isGitAvailable.bind(server),
     listSparsePresets: sparse.list.bind(sparse),
     saveSparsePreset: sparse.save.bind(sparse),
-    addRepo: registrations.add.bind(registrations),
-    createRepo: registrations.create.bind(registrations),
-    cloneRepo: clones.clone.bind(clones),
+    addRepo: async (...args: Parameters<typeof registrations.add>) => {
+      const repo = await registrations.add(...args)
+      void target.repositoryForkBackfill.enqueue([repo])
+      return repo
+    },
+    createRepo: async (...args: Parameters<typeof registrations.create>) => {
+      const result = await registrations.create(...args)
+      if ('repo' in result) {
+        void target.repositoryForkBackfill.enqueue([result.repo])
+      }
+      return result
+    },
+    cloneRepo: async (...args: Parameters<typeof clones.clone>) => {
+      const repo = await clones.clone(...args)
+      void target.repositoryForkBackfill.enqueue([repo])
+      return repo
+    },
     checkCloneTarget: clones.checkTarget.bind(clones),
     showRepo: settings.show.bind(settings),
     setRepoBaseRef: settings.setBaseRef.bind(settings),
     updateRepo: settings.update.bind(settings),
+    setRepoHidden: settings.setHidden.bind(settings),
     removeProject: settings.remove.bind(settings),
     reorderRepos: settings.reorder.bind(settings),
     getRepoBaseRefDefault: refs.getDefault.bind(refs),

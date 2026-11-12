@@ -1,3 +1,4 @@
+import type { WorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -12,12 +13,12 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-reveal-identity'
-import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-pane-reveal'
+import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import type {
   TerminalLeafMoveResult,
   TerminalPaneMoveToNewTabRequest
-} from '../../../../shared/workspace-layout/terminal-leaf-move'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -49,6 +50,7 @@ export type RuntimeNotifier = {
     // Why: false for metadata-only changes (sort order) that leave Git scan results valid.
     options?: { invalidateGitScans?: boolean }
   ): void
+  workspaceMetadataSet?(set: WorkspaceMetadataSet): void
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void

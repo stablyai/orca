@@ -62,7 +62,8 @@ export async function resolveAgentModelCatalogScope(
   // The list belongs to the account and the CLI a chat here would launch, not to this folder:
   // resolve the executable where the chat runs, but list from an empty Orca-owned folder so the
   // listing reads only account settings (a home folder can hold another account's settings as
-  // project settings) and every workspace sharing that invocation shares one listing.
+  // project settings) and every workspace sharing that invocation shares one listing. A command
+  // line that may name files in the chat's folder lists there instead (`catalogListingDirectory`).
   let listIn: string
   try {
     listIn = resolveHiddenProbeCwd()
