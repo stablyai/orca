@@ -113,9 +113,10 @@ export function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserT
 /** Our guest row owns content; host metadata is delayed echo/create defaults. Rewinding URL also defeats staged-title matching next frame. Other clients have no guest evidence and must follow host content rather than freeze their first snapshot. */
 export function resolveMirroredBrowserPageContent(
   tab: RuntimeMobileSessionBrowserTab,
-  existingPage: BrowserPage | undefined
+  existingPage: BrowserPage | undefined,
+  clientHosted = clientHostsMirroredBrowserPage(tab)
 ): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl'> {
-  if (clientHostsMirroredBrowserPage(tab) && existingPage) {
+  if (clientHosted && existingPage) {
     return {
       url: existingPage.url,
       title: existingPage.title,
@@ -182,7 +183,8 @@ export function buildMirroredBrowserTabs(
         ? preferredClientGroupId
         : undefined
     const groupId = clientGroupId ?? hostGroupId
-    const content = resolveMirroredBrowserPageContent(tab, existing?.page)
+    const preservesLoading = clientHostsMirroredBrowserPage(tab)
+    const content = resolveMirroredBrowserPageContent(tab, existing?.page, preservesLoading)
     const nextPage: BrowserPage = {
       id: pageId,
       workspaceId,
@@ -222,7 +224,7 @@ export function buildMirroredBrowserTabs(
       workspace,
       page,
       previousPage: existing?.page,
-      preservesLoading: clientHostsMirroredBrowserPage(tab),
+      preservesLoading,
       certificateFailure: tab.certificateFailure ?? null,
       remotePageId: tab.browserPageId,
       ...(tab.browserProfileId ? { browserProfileId: tab.browserProfileId } : {}),
