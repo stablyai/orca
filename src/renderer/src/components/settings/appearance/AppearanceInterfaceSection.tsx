@@ -339,75 +339,73 @@ export function AppearanceInterfaceSection({
 
       {showAdvanced ? (
         <SettingsGroupDisclosure>
-          <>
+          <SearchableSetting
+            title={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
+            description={titlebarEntry?.description}
+            keywords={titlebarEntry?.keywords ?? ['titlebar', 'orca', 'app', 'name']}
+          >
+            <SettingsSwitchRow
+              label={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
+              checked={settings.showTitlebarAppName}
+              onChange={() =>
+                updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
+              }
+            />
+          </SearchableSetting>
+
+          <ReduceVisualEffectsSetting
+            entry={reduceVisualEffectsEntry}
+            enabled={settings.reduceVisualEffects === true}
+            updateSettings={updateSettings}
+          />
+
+          {isDesktopWindows ? (
             <SearchableSetting
-              title={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
-              description={titlebarEntry?.description}
-              keywords={titlebarEntry?.keywords ?? ['titlebar', 'orca', 'app', 'name']}
+              title={t(
+                'auto.components.settings.AppearancePane.95a5581f66',
+                'Minimize to tray on close'
+              )}
+              description={systemTrayEntry?.description}
+              keywords={systemTrayEntry?.keywords ?? ['tray', 'minimize', 'close']}
             >
               <SettingsSwitchRow
-                label={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
-                checked={settings.showTitlebarAppName}
-                onChange={() =>
-                  updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
-                }
-              />
-            </SearchableSetting>
-
-            <ReduceVisualEffectsSetting
-              entry={reduceVisualEffectsEntry}
-              enabled={settings.reduceVisualEffects === true}
-              updateSettings={updateSettings}
-            />
-
-            {isDesktopWindows ? (
-              <SearchableSetting
-                title={t(
+                label={t(
                   'auto.components.settings.AppearancePane.95a5581f66',
                   'Minimize to tray on close'
                 )}
-                description={systemTrayEntry?.description}
-                keywords={systemTrayEntry?.keywords ?? ['tray', 'minimize', 'close']}
-              >
-                <SettingsSwitchRow
-                  label={t(
-                    'auto.components.settings.AppearancePane.95a5581f66',
-                    'Minimize to tray on close'
-                  )}
-                  // Explain the non-obvious platform restriction and keep-running consequence.
-                  description={t(
-                    'auto.components.settings.AppearancePane.b707773a0d',
-                    'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
-                  )}
-                  checked={settings.minimizeToTrayOnClose === true}
-                  onChange={() =>
-                    updateSettings({ minimizeToTrayOnClose: !settings.minimizeToTrayOnClose })
-                  }
-                />
-              </SearchableSetting>
-            ) : null}
+                // Explain the non-obvious platform restriction and keep-running consequence.
+                description={t(
+                  'auto.components.settings.AppearancePane.b707773a0d',
+                  'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
+                )}
+                checked={settings.minimizeToTrayOnClose === true}
+                onChange={() =>
+                  updateSettings({ minimizeToTrayOnClose: !settings.minimizeToTrayOnClose })
+                }
+              />
+            </SearchableSetting>
+          ) : null}
 
-            {isDesktopMac ? (
-              <SearchableSetting
-                title={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
-                description={menuBarIconEntry?.description}
-                keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
-              >
-                <SettingsSwitchRow
-                  label={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
-                  // Hiding the status item preserves Dock activation and close-keeps-running behavior.
-                  description={t(
-                    'settings.appearance.menuBarIcon.description',
-                    'Keep an Orca shortcut and activity indicator in the macOS menu bar.'
-                  )}
-                  checked={settings.showMenuBarIcon !== false}
-                  onChange={() =>
-                    updateSettings({ showMenuBarIcon: settings.showMenuBarIcon === false })
-                  }
-                />
-              </SearchableSetting>
-            ) : null}
-          </>
+          {isDesktopMac ? (
+            <SearchableSetting
+              title={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
+              description={menuBarIconEntry?.description}
+              keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
+            >
+              <SettingsSwitchRow
+                label={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
+                // Hiding the status item preserves Dock activation and close-keeps-running behavior.
+                description={t(
+                  'settings.appearance.menuBarIcon.description',
+                  'Keep an Orca shortcut and activity indicator in the macOS menu bar.'
+                )}
+                checked={settings.showMenuBarIcon !== false}
+                onChange={() =>
+                  updateSettings({ showMenuBarIcon: settings.showMenuBarIcon === false })
+                }
+              />
+            </SearchableSetting>
+          ) : null}
         </SettingsGroupDisclosure>
       ) : null}
     </>

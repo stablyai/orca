@@ -34,7 +34,7 @@ export function SettingsGroupDisclosure({
         onClick={() => setOpen((prev) => !prev)}
         // Search matches and unsaved edits must remain reachable.
         disabled={forced}
-        className="flex min-h-11 w-full items-center gap-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default"
+        className="flex min-h-11 w-full items-center gap-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default"
       >
         <ChevronRight
           className={cn(

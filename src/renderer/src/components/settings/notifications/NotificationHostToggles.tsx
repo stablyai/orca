@@ -47,9 +47,10 @@ export function NotificationHostToggles({
   }
   return (
     // One row: the host switches inside it are sub-fields, so they draw no rules of their own.
+    // The trigger is a row too so this wrapper never flips into leaf-row padding when hosts mount.
     <div data-settings-row="">
       <Collapsible>
-        <CollapsibleTrigger variant="row">
+        <CollapsibleTrigger variant="row" data-settings-row="">
           <span className="min-w-0 space-y-0.5">
             <span className="flex items-center gap-2">
               <Server className="size-4" />

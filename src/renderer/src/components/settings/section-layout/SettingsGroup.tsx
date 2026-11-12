@@ -123,8 +123,25 @@ export function SettingsGroupHeader({
       {description}
     </p>
   ) : null
+  const toggleFromHeader = collapse && !collapse.disabled ? collapse.onToggle : undefined
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    onClick?.(event)
+    // The whole header toggles, as the old accordion did; buttons (the toggle itself, actions) handle their own clicks.
+    if (toggleFromHeader && !(event.target as Element).closest('button, a, input')) {
+      toggleFromHeader()
+    }
+  }
   return (
-    <div className={cn('flex items-end justify-between gap-3 px-1', className)} onClick={onClick}>
+    <div
+      className={cn(
+        'flex items-end justify-between gap-3 px-1',
+        // Same box whether or not search disables the toggle, so forcing it open shifts nothing.
+        collapse && '-mx-1 rounded-md px-2 py-1.5 transition-colors',
+        toggleFromHeader && 'cursor-pointer hover:bg-accent/15',
+        className
+      )}
+      onClick={handleClick}
+    >
       <div className={cn('min-w-0 space-y-1', collapse && 'flex-1')}>
         <h3 data-settings-group-heading="" className="text-base font-semibold leading-tight">
           {collapse ? (

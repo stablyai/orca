@@ -200,10 +200,10 @@ export function ChatNamingSetting({
     return null
   }
   return (
-    <SettingsGroup title={searchEntry.title}>
+    // The anchor wraps the group so navigation lands on the Chat names heading.
+    <SettingsGroup id="chat-names" title={searchEntry.title}>
       <SearchableSetting
         {...searchEntry}
-        id="chat-names"
         forceVisible={forceVisible || dirty}
         className="max-w-none"
       >
