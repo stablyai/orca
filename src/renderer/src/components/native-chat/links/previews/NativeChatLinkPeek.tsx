@@ -5,6 +5,8 @@ import { NativeChatWebPeekBody } from './NativeChatWebLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import { previewableWebUrl } from './native-chat-web-link-preview'
 import { NativeChatLinearPeekBody } from './NativeChatLinearLinkPeek'
+import { linearLinkPreviewKey } from './native-chat-linear-link-preview'
+import { gitLabLinkPreviewKey, jiraLinkPreviewKey } from './native-chat-tracker-link-previews'
 import { NativeChatGitLabPeekBody, NativeChatJiraPeekBody } from './NativeChatTrackerLinkPeek'
 import { resolveNativeChatTrackerLink } from './native-chat-tracker-links'
 
@@ -33,9 +35,9 @@ export function NativeChatLinkPeek({
     }
     switch (tracker.kind) {
       case 'linear':
-        return <NativeChatLinearPeekBody key={href} link={tracker} />
+        return <NativeChatLinearPeekBody key={linearLinkPreviewKey(tracker)} link={tracker} />
       case 'jira':
-        return <NativeChatJiraPeekBody key={href} link={tracker} />
+        return <NativeChatJiraPeekBody key={jiraLinkPreviewKey(tracker)} link={tracker} />
       case 'github':
         return (
           <NativeChatGitHubPeekBody
@@ -46,7 +48,13 @@ export function NativeChatLinkPeek({
           />
         )
       case 'gitlab':
-        return <NativeChatGitLabPeekBody key={href} repo={tracker.repo} link={tracker.link} />
+        return (
+          <NativeChatGitLabPeekBody
+            key={gitLabLinkPreviewKey(tracker.repo, tracker.link)}
+            repo={tracker.repo}
+            link={tracker.link}
+          />
+        )
     }
   }, [href, peek])
   if (!body) {

@@ -1,4 +1,4 @@
-import { createContext, useMemo, type ReactNode } from 'react'
+import { createContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useAppStore } from '@/store'
 import type { NativeChatFileLinkContext } from '../actions/native-chat-file-link-context'
 import {
@@ -8,6 +8,7 @@ import {
 } from './native-chat-github-repo'
 import { useNativeChatIssueKeys } from './native-chat-issue-keys'
 import { trustedGitLabHosts } from './native-chat-tracker-links'
+import { clearLinearLinkPreviews } from './native-chat-linear-link-preview'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -55,6 +56,22 @@ export const NativeChatLinkPeekContext = createContext<NativeChatLinkPeek>({
   referenceChips: 'full'
 })
 
+/** Clears cached Linear previews when the connection or its workspaces change. */
+function useClearLinearPreviewsOnAccountChange(): void {
+  const account = useAppStore((state) => {
+    const status = state.linearStatus
+    const ids = (status.workspaces ?? []).map((workspace) => workspace.id).join(',')
+    return status.connected ? `on:${ids}` : 'off'
+  })
+  const previous = useRef(account)
+  useEffect(() => {
+    if (previous.current !== account) {
+      previous.current = account
+      clearLinearLinkPreviews()
+    }
+  }, [account])
+}
+
 /** Resolved once per chat; every message's links read it. */
 export function NativeChatLinkPeekProvider({
   fileLinkContext,
@@ -68,6 +85,7 @@ export function NativeChatLinkPeekProvider({
   const gitLabLookupRepo = useNativeChatLookupRepo(fileLinkContext?.worktreeId)
   const { issueKeys, jiraSites } = useNativeChatIssueKeys(runtimeEnvironmentId)
   const linearConnected = useAppStore((state) => state.linearStatus.connected)
+  useClearLinearPreviewsOnAccountChange()
   const repos = useAppStore((state) => state.repos)
   const gitLabHosts = useMemo(() => trustedGitLabHosts(repos), [repos])
   const trackerHostId: ExecutionHostId = runtimeEnvironmentId

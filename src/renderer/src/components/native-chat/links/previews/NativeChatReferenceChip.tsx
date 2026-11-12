@@ -1,6 +1,7 @@
 import { isValidElement, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -29,6 +30,7 @@ import {
   type GitLabChatLink
 } from './native-chat-tracker-link-previews'
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
+import { trackerStateLabel } from './native-chat-tracker-state-label'
 
 /** The plain text a link's children render, so the label can be compared with its target. */
 function textOf(children: ReactNode): string {
@@ -141,6 +143,11 @@ function ChipTitle({ title }: { title: string | null | undefined }): React.JSX.E
   return title ? <span className="native-chat-ref-chip-title">{title}</span> : null
 }
 
+/** The item's state for screen readers; sighted readers also get it from the dot or icon color. */
+function ChipState({ label }: { label: string | null | undefined }): React.JSX.Element | null {
+  return label ? <span className="sr-only">{`, ${label}`}</span> : null
+}
+
 const GITHUB_STATE_CLASS: Record<GitHubWorkItem['state'], string> = {
   open: 'text-emerald-600 dark:text-emerald-400',
   draft: 'text-muted-foreground',
@@ -164,6 +171,7 @@ function LinearChip({ link }: { link: NativeChatTrackerLink & { kind: 'linear' }
       {issue ? <LinearStateDot color={issue.state.color} /> : null}
       <ChipId link={link} />
       <ChipTitle title={issue?.title} />
+      <ChipState label={issue?.state.name} />
     </>
   )
 }
@@ -177,6 +185,7 @@ function JiraChip({ link }: { link: NativeChatTrackerLink & { kind: 'jira' } }) 
       {issue ? <JiraStatusDot categoryKey={issue.status.categoryKey} /> : null}
       <ChipId link={link} />
       <ChipTitle title={issue?.title} />
+      <ChipState label={issue?.status.name} />
     </>
   )
 }
@@ -196,12 +205,14 @@ function GitHubChip({
     () => readCachedGitHubLinkPreview(repo, issue),
     () => loadGitHubLinkPreview(repo, issue)
   )
+  const t = useTranslate()
   const item = state.status === 'ready' ? state.value : null
   return (
     <>
       <GitHubChipIcon state={item?.state} />
       <ChipId link={link} />
       <ChipTitle title={item?.title} />
+      <ChipState label={item ? trackerStateLabel(t, item.state) : null} />
     </>
   )
 }
@@ -216,6 +227,7 @@ function GitLabChip({
   repo: Repo
   target: GitLabChatLink
 }) {
+  const t = useTranslate()
   const { state } = useGitLabWorkItemPreview(repo, target)
   const item = state.status === 'ready' ? state.value : null
   return (
@@ -223,6 +235,7 @@ function GitLabChip({
       <GitLabItemIcon type={target.type} state={item?.state} />
       <ChipId link={link} />
       <ChipTitle title={item?.title} />
+      <ChipState label={item ? trackerStateLabel(t, item.state) : null} />
     </>
   )
 }

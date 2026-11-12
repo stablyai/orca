@@ -22,6 +22,8 @@ export function createHoverPreviewCache<T>({
   load: (key: string, fetch: () => Promise<T | null>) => Promise<T | null>
   /** The next load asks again, even past one already under way; `read` keeps the old answer. */
   expire: (key: string) => void
+  /** Forgets every answer, for when the account that read them is gone. */
+  clear: () => void
 } {
   const entries = new Map<string, Entry<T>>()
   let totalBytes = 0
@@ -40,6 +42,10 @@ export function createHoverPreviewCache<T>({
   }
   return {
     read: (key) => entries.get(key)?.value ?? null,
+    clear: () => {
+      entries.clear()
+      totalBytes = 0
+    },
     expire: (key) => {
       const entry = entries.get(key)
       if (entry?.settledAt != null) {

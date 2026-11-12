@@ -17,6 +17,7 @@ import {
   type JiraChatLink
 } from './native-chat-tracker-link-previews'
 import { useNativeChatHoverPreview, type HoverPreviewState } from './use-native-chat-hover-preview'
+import { trackerStateLabel } from './native-chat-tracker-state-label'
 
 /** Title and status of a linked Jira issue, cached across chips and hover cards. */
 export function useJiraIssuePreview(link: JiraChatLink): {
@@ -171,6 +172,7 @@ export function NativeChatGitLabPeekBody({
   repo: Repo
   link: GitLabChatLink
 }): React.JSX.Element {
+  const t = useTranslate()
   const { state, retry } = useGitLabWorkItemPreview(repo, link)
   const item = state.status === 'ready' ? state.value : null
   return (
@@ -182,7 +184,7 @@ export function NativeChatGitLabPeekBody({
           {link.type === 'mr' ? '!' : '#'}
           {link.number}
         </span>
-        {item ? <span className="ml-auto shrink-0 capitalize">{item.state}</span> : null}
+        {item ? <span className="ml-auto shrink-0">{trackerStateLabel(t, item.state)}</span> : null}
       </div>
       {item ? (
         <>

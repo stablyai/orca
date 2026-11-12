@@ -21505,6 +21505,13 @@
         "retry": "Retry"
       },
       "trackerPeek": {
+        "state": {
+          "open": "Open",
+          "draft": "Draft",
+          "merged": "Merged",
+          "closed": "Closed",
+          "locked": "Locked"
+        },
         "unavailable": "Preview unavailable.",
         "retry": "Retry",
         "updated": "updated {{time}}",

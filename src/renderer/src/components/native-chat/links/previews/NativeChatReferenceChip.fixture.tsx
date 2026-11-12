@@ -108,7 +108,7 @@ function stubApis(): void {
       : null
   window.api.jira = { ...window.api.jira, getIssue: getJiraIssue }
 
-  window.api.gh.workItemByOwnerRepo = async ({ number }) =>
+  const workItemByOwnerRepo: typeof window.api.gh.workItemByOwnerRepo = async ({ number }) =>
     number === 48
       ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture data; the chip and peek read only these fields.
         ({
@@ -126,6 +126,8 @@ function stubApis(): void {
           deletions: 14
         } as GitHubWorkItem)
       : null
+
+  window.api.gh = { ...window.api.gh, workItemByOwnerRepo }
 
   const workItemByPath: typeof window.api.gl.workItemByPath = async ({ iid }) =>
     iid === 12

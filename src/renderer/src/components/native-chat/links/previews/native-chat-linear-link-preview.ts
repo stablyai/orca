@@ -39,6 +39,11 @@ async function fetchIssue(link: LinearChatLink): Promise<LinearIssue | null> {
   }
 }
 
+/** Drops every Linear preview; a different Linear account must not see the last one's issues. */
+export function clearLinearLinkPreviews(): void {
+  previews.clear()
+}
+
 /** Loads the issue a Linear link points to, or null when no connected workspace has it. */
 export function loadLinearLinkPreview(link: LinearChatLink): Promise<LinearIssue | null> {
   return previews.load(linearLinkPreviewKey(link), () => fetchIssue(link))

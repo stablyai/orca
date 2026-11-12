@@ -16,7 +16,7 @@ const TEAM_URL_ORG_PATTERN = /^https:\/\/linear\.app\/([A-Za-z0-9_-]+)\//
 function orgUrlKeyForTeam(team: LinearTeam, workspaces: readonly LinearWorkspace[]): string | null {
   const workspace =
     workspaces.find((candidate) => candidate.id === team.workspaceId) ??
-    (workspaces.length === 1 ? workspaces[0] : undefined)
+    (!team.workspaceId && workspaces.length === 1 ? workspaces[0] : undefined)
   return workspace?.organizationUrlKey ?? TEAM_URL_ORG_PATTERN.exec(team.url ?? '')?.[1] ?? null
 }
 

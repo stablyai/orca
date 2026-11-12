@@ -3,7 +3,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import { isTrustedGitLabHost, trustedGitLabHosts } from './native-chat-tracker-links'
 import { linearIssueMatchesLink } from './native-chat-linear-link-preview'
-import { selectNativeChatLookupRepo } from './native-chat-github-repo'
+import { borrowableGitHubRepos, selectNativeChatLookupRepo } from './native-chat-github-repo'
 
 function repo(id: string, fields: Partial<Repo> = {}): Repo {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these helpers read only id, kind, host and remote identity.
@@ -51,6 +51,21 @@ describe('linearIssueMatchesLink', () => {
 
   it('rejects the same identifier from another organization', () => {
     expect(linearIssueMatchesLink(issue, { orgUrlKey: 'other', identifier: 'ENG-1' })).toBe(false)
+  })
+})
+
+describe('borrowableGitHubRepos', () => {
+  const localGit = repo('local-git')
+  const remoteGit = repo('remote-git', { executionHostId: 'runtime:env-1' })
+
+  it("lends only repos on the chat's host", () => {
+    expect(borrowableGitHubRepos([localGit, remoteGit], 'runtime:env-1')).toEqual([remoteGit])
+    expect(borrowableGitHubRepos([localGit, remoteGit], 'local')).toEqual([localGit])
+    expect(borrowableGitHubRepos([localGit, remoteGit], 'runtime:env-2')).toEqual([])
+  })
+
+  it('lends nothing when the chat host is unknown', () => {
+    expect(borrowableGitHubRepos([localGit], null)).toEqual([])
   })
 })
 

@@ -38,6 +38,23 @@ describe('linearIssueKeyPrefixes', () => {
     ])
   })
 
+  it('uses the team URL, not the only workspace, for a team naming a removed workspace', () => {
+    expect(
+      linearIssueKeyPrefixes(
+        [
+          {
+            id: '1',
+            workspaceId: 'gone',
+            name: 'Engineering',
+            key: 'ENG',
+            url: 'https://linear.app/oldorg/team/ENG/active'
+          }
+        ],
+        [workspace('a', 'acme')]
+      )
+    ).toEqual([['ENG', 'https://linear.app/oldorg/issue/']])
+  })
+
   it("falls back to the team URL's organization when the workspace has no URL key", () => {
     expect(
       linearIssueKeyPrefixes(

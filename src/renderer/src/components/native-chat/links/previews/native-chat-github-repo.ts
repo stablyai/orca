@@ -167,6 +167,20 @@ function isLocal(repo: Repo): boolean {
   return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
 }
 
+/** Git repos on the chat's own host that may lend it GitHub previews, so a remote chat never sends
+ *  previews with this computer's sign-in. None when the chat's host is unknown. */
+export function borrowableGitHubRepos(
+  repos: readonly Repo[],
+  ownerHostId: ExecutionHostId | null
+): readonly Repo[] {
+  if (!ownerHostId) {
+    return []
+  }
+  return repos
+    .filter((repo) => isGitRepo(repo) && getRepoExecutionHostId(repo) === ownerHostId)
+    .slice(0, MAX_BORROWED_REPO_CANDIDATES)
+}
+
 /** A local repo to send GitHub previews through for a chat whose workspace has none (a plain
  *  folder). A github.com git repo is preferred; failing that, the chat's own local folder, which
  *  main lets preview github.com links only. Bare `#123` stays text either way, since no repo owns it. */
@@ -175,14 +189,10 @@ function useBorrowedGitHubRepo(
   owner: NativeChatOwner | null
 ): NativeChatGitHubRepo | null {
   const repos = useAppStore(selectLocalGitRepos)
+  const ownerHostId = owner?.hostId ?? null
   const gitCandidates = useMemo(
-    () =>
-      enabled
-        ? repos
-            .filter((repo) => (!repo.kind || repo.kind === 'git') && isLocal(repo))
-            .slice(0, MAX_BORROWED_REPO_CANDIDATES)
-        : [],
-    [enabled, repos]
+    () => (enabled ? borrowableGitHubRepos(repos, ownerHostId) : []),
+    [enabled, ownerHostId, repos]
   )
   const ownRepo = owner?.repo ?? null
   const folder = enabled && ownRepo?.kind === 'folder' && isLocal(ownRepo) ? ownRepo : null
