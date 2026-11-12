@@ -12,8 +12,7 @@ export const ENTITLEMENT_KEYS = [
   'max_concurrent_sandboxes',
   'max_concurrent_sandboxes_per_member',
   'machine_sizes',
-  'overage_allowed',
-  'max_seats'
+  'overage_allowed'
 ] as const
 export type EntitlementKey = (typeof ENTITLEMENT_KEYS)[number]
 
@@ -28,8 +27,7 @@ export const ENTITLEMENT_REGISTRY: Record<EntitlementKey, { schema: z.ZodType; a
   max_concurrent_sandboxes: { schema: NonNegativeInt, aggregate: 'sum', perSeatAllowed: true },
   max_concurrent_sandboxes_per_member: { schema: NonNegativeInt, aggregate: 'max', perSeatAllowed: false },
   machine_sizes: { schema: z.array(z.enum(MACHINE_SIZES)).max(MACHINE_SIZES.length), aggregate: 'union', perSeatAllowed: false },
-  overage_allowed: { schema: z.boolean(), aggregate: 'or', perSeatAllowed: false },
-  max_seats: { schema: NonNegativeInt, aggregate: 'max', perSeatAllowed: false }
+  overage_allowed: { schema: z.boolean(), aggregate: 'or', perSeatAllowed: false }
 }
 
 export function isEntitlementKey(value: string): value is EntitlementKey {
@@ -64,7 +62,6 @@ export type EffectiveValues = {
   maxConcurrentSandboxesPerMember: number
   machineSizes: MachineSize[]
   overageAllowed: boolean
-  maxSeats: number
 }
 
 /** Combines grant values by each key's rule. Per-seat values multiply by max(1, seats). */
@@ -101,7 +98,6 @@ export function aggregateGrants(grants: readonly GrantValue[]): EffectiveValues 
     maxConcurrentSandboxesPerMember: maxes.max_concurrent_sandboxes_per_member ?? 0,
     // Registry order, so the list is stable whatever order grants came in.
     machineSizes: MACHINE_SIZES.filter((size) => sizes.has(size)),
-    overageAllowed: overage,
-    maxSeats: maxes.max_seats ?? 0
+    overageAllowed: overage
   }
 }

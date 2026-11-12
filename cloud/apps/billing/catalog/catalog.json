@@ -22,8 +22,7 @@
             "max_concurrent_sandboxes": { "value": 3, "perSeat": true },
             "max_concurrent_sandboxes_per_member": { "value": 3 },
             "machine_sizes": { "value": ["standard", "large"] },
-            "overage_allowed": { "value": true },
-            "max_seats": { "value": 500 }
+            "overage_allowed": { "value": true }
           },
           "policy": {
             "paymentGraceHours": 96,

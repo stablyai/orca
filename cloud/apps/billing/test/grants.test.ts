@@ -74,7 +74,7 @@ describe('catalog', () => {
     }
     expect(() => parseCatalogFile(withEntitlement('gpu_hours', { value: 1 }))).toThrow(/unknown entitlement key/)
     expect(() => parseCatalogFile(withEntitlement('sandbox_hours_monthly', { value: 'lots' }))).toThrow(/invalid value/)
-    expect(() => parseCatalogFile(withEntitlement('max_seats', { value: 5, perSeat: true }))).toThrow(/cannot be per seat/)
+    expect(() => parseCatalogFile(withEntitlement('max_concurrent_sandboxes_per_member', { value: 5, perSeat: true }))).toThrow(/cannot be per seat/)
     expect(() => parseCatalogFile(withEntitlement('machine_sizes', { value: ['huge'] }))).toThrow(/invalid value/)
     const noPolicy = repoCatalog()
     noPolicy.plans[0]!.versions[0]!.policy = {}
@@ -111,8 +111,7 @@ describe('aggregation', () => {
       maxConcurrentSandboxes: 3,
       maxConcurrentSandboxesPerMember: 5,
       machineSizes: ['standard', 'large'],
-      overageAllowed: true,
-      maxSeats: 0
+      overageAllowed: true
     })
   })
 })
@@ -125,7 +124,6 @@ describe('subscription grants (ENTITLEMENTS_MODE=on)', () => {
       { entitlement_key: 'machine_sizes', value_json: '["standard","large"]', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
       { entitlement_key: 'max_concurrent_sandboxes', value_json: '3', per_seat: 1, seat_quantity: 2, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
       { entitlement_key: 'max_concurrent_sandboxes_per_member', value_json: '3', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
-      { entitlement_key: 'max_seats', value_json: '500', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
       { entitlement_key: 'overage_allowed', value_json: 'true', per_seat: 0, seat_quantity: null, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 },
       { entitlement_key: 'sandbox_hours_monthly', value_json: '60', per_seat: 1, seat_quantity: 2, state: 'active', hold_reason: null, ends_at: null, revoked_reason: null, plan_version: 1 }
     ])
@@ -138,7 +136,7 @@ describe('subscription grants (ENTITLEMENTS_MODE=on)', () => {
       canStartSandbox: true
     })
     const audit = h.raw.prepare("SELECT action, actor FROM entitlement_audit WHERE source_type = 'subscription'").all()
-    expect(audit).toHaveLength(6)
+    expect(audit).toHaveLength(5)
     expect(audit[0]).toEqual({ action: 'grant', actor: 'stripe_webhook' })
   })
 
