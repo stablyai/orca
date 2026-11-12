@@ -1,0 +1,699 @@
+{
+  "config": {
+    "scenario": "serve-after",
+    "host": "dotcom",
+    "n": 20,
+    "clients": 3,
+    "hours": 1.5,
+    "workload": "mixed",
+    "focus": "focused",
+    "idle": "pause",
+    "jitter": 0.1,
+    "events": false,
+    "staggerS": 25,
+    "disjoint": true,
+    "seed": 1,
+    "eventTargets": 7,
+    "noci": true,
+    "gate": "d3",
+    "selectedIds": 1,
+    "selectedRunning": false,
+    "checks": false,
+    "slowEvery": 0,
+    "slowMs": 25000,
+    "disconnectMin": null,
+    "allGoneMin": null,
+    "fgEveryS": 0,
+    "runMinMin": 20,
+    "runMaxMin": 30,
+    "gapMinMin": 50,
+    "gapMaxMin": 80,
+    "capSelectedMin": 30,
+    "capVisibleMin": 60
+  },
+  "simulatedSeconds": 5400,
+  "gh": {
+    "spawns": 176,
+    "perHour": 117.3,
+    "byKind": {
+      "graphql:sidebar": 149,
+      "graphql:merge-metadata": 9,
+      "rest:pulls-by-head": 18
+    },
+    "apiRequestsByHost": {
+      "github.com": 176
+    },
+    "apiRequestsPerHourByHost": {
+      "github.com": 117.3
+    },
+    "firstHour": 154,
+    "perHourCounts": [
+      154,
+      22
+    ],
+    "lastHourByKind": {
+      "graphql:sidebar": 18,
+      "rest:pulls-by-head": 2,
+      "graphql:merge-metadata": 2
+    },
+    "lastHourRollingPeak60s": 6,
+    "first15min": 62,
+    "steadyPerHour": 91.2,
+    "steadyPerMinute": 1.52,
+    "rollingPeak60s": 12,
+    "rollingPeak60sSteady": 8,
+    "worstPeakToMean15min": 15,
+    "timelinePerMinute": [
+      12,
+      8,
+      4,
+      0,
+      0,
+      7,
+      8,
+      4,
+      1,
+      0,
+      7,
+      6,
+      4,
+      0,
+      1,
+      7,
+      7,
+      3,
+      0,
+      0,
+      8,
+      3,
+      6,
+      1,
+      0,
+      6,
+      3,
+      3,
+      2,
+      2,
+      4,
+      2,
+      1,
+      1,
+      3,
+      3,
+      2,
+      3,
+      3,
+      2,
+      4,
+      3,
+      2,
+      0,
+      0,
+      1,
+      2,
+      0,
+      2,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      4,
+      3,
+      3,
+      1,
+      2,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      1
+    ]
+  },
+  "git": {
+    "total": 316
+  },
+  "serve": {
+    "gate": "d3",
+    "upstreamStarts": 155,
+    "maxStartsPer5min": 20,
+    "maxStartsPer60s": 9,
+    "admits": {
+      "selected-own": 16,
+      "visible": 139
+    },
+    "lanes": {
+      "gate": "d3",
+      "simulatedSeconds": 5400,
+      "lanes": {
+        "selected-own": {
+          "starts": 16,
+          "overdueAtStartS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 79
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 79
+          },
+          "peak60s": 3,
+          "peak5min": 5
+        },
+        "selected-borrowed": {
+          "starts": 0,
+          "overdueAtStartS": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          },
+          "peak60s": 0,
+          "peak5min": 0
+        },
+        "visible": {
+          "starts": 139,
+          "overdueAtStartS": {
+            "p50": 69,
+            "p90": 268,
+            "max": 405
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 69,
+            "p90": 268,
+            "max": 405
+          },
+          "peak60s": 6,
+          "peak5min": 15
+        },
+        "interactive": {
+          "starts": 0,
+          "overdueAtStartS": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          },
+          "peak60s": 0,
+          "peak5min": 0
+        }
+      },
+      "selectedTotal": {
+        "starts": 16,
+        "peak60s": 3,
+        "peak5min": 5
+      },
+      "budgeted": {
+        "starts": 155,
+        "peak60s": 9,
+        "peak5min": 20
+      },
+      "refusals": {
+        "selected": 1,
+        "visible": 233
+      },
+      "visibleIdentities": {
+        "seen": 23,
+        "neverServed": 0,
+        "worstWaitFromFirstSeenToFirstStartS": 330
+      }
+    },
+    "selectedIdentities": [
+      {
+        "identity": "pr:feat/wt-0",
+        "starts": 8,
+        "medianGapS": 469,
+        "maxGapS": 1702
+      },
+      {
+        "identity": "pr:feat/other-0",
+        "starts": 8,
+        "medianGapS": 454,
+        "maxGapS": 1752
+      }
+    ],
+    "cacheHits": 42,
+    "lastGoodServedOverBudget": 157,
+    "deferredCold": 77,
+    "replyDeadlineHits": 0,
+    "interactiveOverflow": 0,
+    "legacy": {
+      "hits": 0,
+      "upstreamReads": 0
+    },
+    "maxRpcSimulatedMs": 800,
+    "rpcSimulatedMs": {
+      "p50": 0,
+      "p99": 800,
+      "over10s": 0
+    },
+    "queueAgeSeries": {
+      "windowSeconds": 300,
+      "windows": 18,
+      "byClient": {
+        "1": {
+          "starts": [
+            18,
+            12,
+            12,
+            11,
+            15,
+            12,
+            9,
+            11,
+            4,
+            6,
+            0,
+            1,
+            1,
+            9,
+            1,
+            0,
+            1,
+            0
+          ],
+          "refusals": [
+            53,
+            10,
+            15,
+            10,
+            10,
+            2,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0
+          ],
+          "ageP50S": [
+            60,
+            268,
+            220,
+            138,
+            69,
+            89,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            null
+          ],
+          "ageMaxS": [
+            140,
+            330,
+            405,
+            243,
+            150,
+            140,
+            29,
+            10,
+            10,
+            0,
+            null,
+            0,
+            0,
+            20,
+            0,
+            null,
+            0,
+            null
+          ],
+          "overdueMaxS": [
+            140,
+            330,
+            405,
+            243,
+            150,
+            140,
+            29,
+            10,
+            10,
+            0,
+            null,
+            0,
+            0,
+            20,
+            0,
+            null,
+            0,
+            null
+          ]
+        },
+        "2": {
+          "starts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "refusals": [
+            44,
+            10,
+            15,
+            10,
+            10,
+            2,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0,
+            0,
+            4,
+            0,
+            0,
+            0,
+            0
+          ],
+          "ageP50S": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "ageMaxS": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "overdueMaxS": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        "3": {
+          "starts": [
+            2,
+            6,
+            4,
+            5,
+            0,
+            4,
+            1,
+            0,
+            4,
+            0,
+            0,
+            0,
+            1,
+            0,
+            4,
+            0,
+            0,
+            1
+          ],
+          "refusals": [
+            9,
+            4,
+            2,
+            2,
+            4,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "ageP50S": [
+            0,
+            300,
+            205,
+            101,
+            null,
+            106,
+            0,
+            null,
+            0,
+            null,
+            null,
+            null,
+            0,
+            null,
+            0,
+            null,
+            null,
+            0
+          ],
+          "ageMaxS": [
+            0,
+            320,
+            207,
+            108,
+            null,
+            146,
+            0,
+            null,
+            10,
+            null,
+            null,
+            null,
+            0,
+            null,
+            0,
+            null,
+            null,
+            0
+          ],
+          "overdueMaxS": [
+            0,
+            320,
+            207,
+            108,
+            null,
+            146,
+            0,
+            null,
+            10,
+            null,
+            null,
+            null,
+            0,
+            null,
+            0,
+            null,
+            null,
+            0
+          ]
+        }
+      },
+      "open": [
+        {
+          "identities": 20,
+          "oldestS": 300
+        },
+        {
+          "identities": 12,
+          "oldestS": 405
+        },
+        {
+          "identities": 11,
+          "oldestS": 241
+        },
+        {
+          "identities": 9,
+          "oldestS": 150
+        },
+        {
+          "identities": 11,
+          "oldestS": 98
+        },
+        {
+          "identities": 1,
+          "oldestS": 29
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        }
+      ]
+    },
+    "queueAgeSecondsByClient": {
+      "1": {
+        "admits": 123,
+        "p50": 20,
+        "max": 405
+      },
+      "3": {
+        "admits": 32,
+        "p50": 98,
+        "max": 320
+      }
+    },
+    "clientRefreshCalls": 548,
+    "clientFailures": 0,
+    "checksCalls": 0,
+    "foregroundCalls": 0,
+    "hintsDroppedAsLate": 0,
+    "upstreamStartsAfterAllClientsGone": null
+  },
+  "detection": null,
+  "focusReturn": null,
+  "determinism": {
+    "spawnDigest": "2e2394776800d39fa59ca7dac7dab0115f4ba91ca693db31c494ba1429e27fb1",
+    "gateDigest": "7da57db0c776f0460d4e725be7065620b07de8872b1fd2e0eef8dd007b963634",
+    "realEventLoopTurns": 11699
+  },
+  "unknownGit": [],
+  "unknownGh": []
+}

@@ -1,0 +1,133 @@
+{
+  "d2-4 expired resource + headerless reads": {
+    "today": {
+      "probes": 51,
+      "probeFailures": 0,
+      "blocked": 89,
+      "admitted": 13,
+      "staleResponsesIgnored": 0,
+      "admittedAfterRollover": 11,
+      "serverRemainingAtEnd": 49
+    },
+    "d2": {
+      "probes": 0,
+      "probeFailures": 0,
+      "blocked": 0,
+      "admitted": 102,
+      "staleResponsesIgnored": 0,
+      "admittedAfterRollover": 100,
+      "serverRemainingAtEnd": 0
+    },
+    "d3": {
+      "probes": 1,
+      "probeFailures": 0,
+      "blocked": 89,
+      "admitted": 13,
+      "staleResponsesIgnored": 0,
+      "admittedAfterRollover": 11,
+      "serverRemainingAtEnd": 49
+    }
+  },
+  "d2-4 mixed: fresh core, unknown graphql": {
+    "d2": {
+      "probes": 0,
+      "probeFailures": 0,
+      "blocked": 0,
+      "admitted": 20,
+      "staleResponsesIgnored": 0,
+      "coreRemainingKept": 4900
+    },
+    "d3": {
+      "probes": 1,
+      "probeFailures": 0,
+      "blocked": 14,
+      "admitted": 6,
+      "staleResponsesIgnored": 0,
+      "coreRemainingKept": 4900
+    }
+  },
+  "probe volume over 3 h (540 reads)": {
+    "headerBearingOnly": {
+      "today": {
+        "probes": 270,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      },
+      "d2": {
+        "probes": 0,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      },
+      "d3": {
+        "probes": 0,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      }
+    },
+    "headerlessOnly": {
+      "today": {
+        "probes": 270,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      },
+      "d2": {
+        "probes": 1,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      },
+      "d3": {
+        "probes": 4,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      }
+    },
+    "mixed": {
+      "today": {
+        "probes": 270,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      },
+      "d2": {
+        "probes": 1,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      },
+      "d3": {
+        "probes": 4,
+        "probeFailures": 0,
+        "blocked": 0,
+        "admitted": 540,
+        "staleResponsesIgnored": 0
+      }
+    }
+  },
+  "refresh failure, credential switch, ordering": {
+    "probes": 6,
+    "probeFailures": 5,
+    "blocked": 0,
+    "admitted": 31,
+    "staleResponsesIgnored": 2,
+    "admittedWhileFailing": 30,
+    "probesWhileFailing": 5,
+    "knownAfterRecovery": 5000,
+    "afterSwitch": null,
+    "orderedRemaining": 4000,
+    "orderedResetAt": 2000000000
+  }
+}

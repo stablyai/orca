@@ -1,0 +1,50 @@
+13:27  up 19:04, 81 users, load averages: 12.63 17.65 21.59
+local-detect-desk-after-n10-8h rc=0 wall=49s
+local-detect-desk-before-n10-8h rc=0 wall=51s
+local-detect-desk-after-n10-8h-seed2 rc=0 wall=48s
+local-detect-desk-after-n10-8h-seed3 rc=0 wall=48s
+local-detect-serve-after-n14-c2-8h rc=0 wall=37s
+local-detect-serve-before-n14-c2-8h rc=0 wall=39s
+local-detect-serve-after-n14-c2-8h-seed2 rc=0 wall=42s
+local-detect-serve-after-n14-c2-8h-seed3 rc=0 wall=43s
+local-detect-desk-after-n10-8h-longrun rc=0 wall=39s
+local-detect-serve-oldclient-n14-c2-8h rc=0 wall=40s
+local-detect-desk-after-n10-8h-shortrun rc=0 wall=40s
+local-detect-serve-after-n14-c2-8h-longrun rc=0 wall=40s
+local-detect-desk-after-n10-8h-sel15 rc=0 wall=45s
+local-detect-desk-after-n10-8h-sel10 rc=0 wall=45s
+local-detect-desk-after-n10-8h-sel5 rc=0 wall=41s
+local-detect-desk-after-n10-8h-vis30 rc=0 wall=41s
+local-detect-desk-after-n10-8h-vis20 rc=0 wall=46s
+local-detect-desk-after-n10-8h-sel10-vis20 rc=0 wall=46s
+ghes-desk-after-n10-focused rc=0 wall=44s
+ghes-desk-before-n10-focused rc=0 wall=46s
+ghes-desk-after-n10-mixed rc=0 wall=53s
+ghes-desk-after-n10-unfocused rc=0 wall=53s
+capcost-ghes-n10-sel15 rc=0 wall=83s
+capcost-ghes-n10-sel10 rc=0 wall=83s
+capcost-ghes-n10-vis30 rc=0 wall=64s
+capcost-ghes-n10-sel5 rc=0 wall=64s
+capcost-ghes-n10-vis20 rc=0 wall=62s
+capcost-ghes-n10-sel10-vis20 rc=0 wall=62s
+dotcom-desk-after-n10 rc=0 wall=99s
+dotcom-desk-before-n10 rc=0 wall=100s
+serve-after-n14-c2 rc=0 wall=53s
+serve-before-n14-c2 rc=0 wall=55s
+serve-after-n14-c2-settled rc=0 wall=113s
+serve-oldclient-n14-c2 rc=0 wall=113s
+lanes-4sel-n30-c4-gate-d3 rc=0 wall=661s
+lanes-4sel-n30-c4-gate-d2 rc=0 wall=672s
+lanes-4sel-checks-n30-c4-gate-d2 rc=0 wall=1427s
+lanes-4sel-checks-n30-c4-gate-d3 rc=0 wall=1428s
+lanes-2sel-checks-n14-c2-gate-d3 rc=0 wall=55s
+lanes-1sel-checks-n14-c2-gate-d3 rc=0 wall=56s
+cancel-ref-n20-c3 rc=0 wall=73s
+lanes-4sel-checks-n20-c4-gate-d3 rc=0 wall=87s
+cancel-hidden-n14-c2 rc=0 wall=155s
+cancel-disconnect15-n20-c3 rc=0 wall=156s
+timeout-slow3-n14-c2 rc=0 wall=63s
+ALL DONE
+14:24  up 20:01, 84 users, load averages: 38.28 51.91 50.83
+
+[exited with code 0]

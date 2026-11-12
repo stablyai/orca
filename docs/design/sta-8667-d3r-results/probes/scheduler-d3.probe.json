@@ -1,0 +1,204 @@
+{
+  "d2-1 hint vs no-timer (existing successful cache)": {
+    "base": {
+      "refreshCallsAfterStop": []
+    },
+    "d2": {
+      "refreshCallsAfterStop": [
+        300000
+      ]
+    },
+    "d3": {
+      "refreshCallsAfterStop": []
+    }
+  },
+  "d2-1 hint vs no-timer (cold deferred)": {
+    "base": {
+      "refreshCalls": [
+        0
+      ]
+    },
+    "d2": {
+      "refreshCalls": [
+        0,
+        200000
+      ]
+    },
+    "d3": {
+      "refreshCalls": [
+        0
+      ]
+    }
+  },
+  "d2-1 hint honoured while valid, retired on speed-up": {
+    "base": {
+      "callsWhileHinted": [
+        60000
+      ],
+      "callsAfterHintRetired": [
+        120000,
+        180000
+      ]
+    },
+    "d2": {
+      "callsWhileHinted": [],
+      "callsAfterHintRetired": [
+        100000,
+        160000
+      ]
+    },
+    "d3": {
+      "callsWhileHinted": [],
+      "callsAfterHintRetired": [
+        100000,
+        160000
+      ]
+    }
+  },
+  "d2-1 hint store: late reply, newer data, identity change, explicit null": {
+    "installed": false,
+    "valid": 1300000,
+    "hostSaysNoTimer": null
+  },
+  "r-c4-1 stale failed completion (B interval none)": {
+    "base": {
+      "readsWithin55s": [
+        "A@0"
+      ],
+      "readsWithin30min": [
+        "A@0",
+        "B@63000"
+      ]
+    },
+    "d2": {
+      "readsWithin55s": [
+        "A@0"
+      ],
+      "readsWithin30min": [
+        "A@0",
+        "B@63000"
+      ]
+    },
+    "d3": {
+      "readsWithin55s": [
+        "A@0",
+        "B@10000"
+      ],
+      "readsWithin30min": [
+        "A@0",
+        "B@10000"
+      ]
+    }
+  },
+  "r-c4-1 stale failed completion (B interval 120 s)": {
+    "base": {
+      "readsWithin55s": [
+        "A@0"
+      ],
+      "readsWithin30min": [
+        "A@0",
+        "B@123000",
+        "B@243000",
+        "B@363000",
+        "B@483000",
+        "B@603000",
+        "B@723000",
+        "B@843000",
+        "B@963000",
+        "B@1083000",
+        "B@1203000",
+        "B@1323000",
+        "B@1443000",
+        "B@1563000",
+        "B@1683000",
+        "B@1803000"
+      ]
+    },
+    "d2": {
+      "readsWithin55s": [
+        "A@0"
+      ],
+      "readsWithin30min": [
+        "A@0",
+        "B@123000",
+        "B@243000",
+        "B@363000",
+        "B@483000",
+        "B@603000",
+        "B@723000",
+        "B@843000",
+        "B@963000",
+        "B@1083000",
+        "B@1203000",
+        "B@1323000",
+        "B@1443000",
+        "B@1563000",
+        "B@1683000",
+        "B@1803000"
+      ]
+    },
+    "d3": {
+      "readsWithin55s": [
+        "A@0",
+        "B@10000"
+      ],
+      "readsWithin30min": [
+        "A@0",
+        "B@10000",
+        "B@130000",
+        "B@250000",
+        "B@370000",
+        "B@490000",
+        "B@610000",
+        "B@730000",
+        "B@850000",
+        "B@970000",
+        "B@1090000",
+        "B@1210000",
+        "B@1330000",
+        "B@1450000",
+        "B@1570000",
+        "B@1690000",
+        "B@1810000"
+      ]
+    }
+  },
+  "r-c4-3 foreground freshness (hinted selected target, stopped target, focus-only)": {
+    "base": {
+      "onFirstShow": [
+        "selected@0s",
+        "merged@0s"
+      ],
+      "onReturnAfter90s": [
+        "selected@91s",
+        "merged@91s"
+      ],
+      "onFocusOnlyAfter90s": "no foreground() entry point",
+      "onFocusOnlyAfter20s": "no foreground() entry point"
+    },
+    "d2": {
+      "onFirstShow": [
+        "selected@0s",
+        "merged@0s"
+      ],
+      "onReturnAfter90s": [
+        "merged@91s"
+      ],
+      "onFocusOnlyAfter90s": "no foreground() entry point",
+      "onFocusOnlyAfter20s": "no foreground() entry point"
+    },
+    "d3": {
+      "onFirstShow": [
+        "selected@0s",
+        "merged@0s"
+      ],
+      "onReturnAfter90s": [
+        "selected@91s"
+      ],
+      "onFocusOnlyAfter90s": [
+        "selected@182s"
+      ],
+      "onFocusOnlyAfter20s": []
+    }
+  }
+}

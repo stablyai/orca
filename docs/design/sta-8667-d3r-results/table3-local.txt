@@ -1,0 +1,425 @@
+cancel-disconnect15-n20-c3                     spawns/h=[154, 22] lastH: prReads=18 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=22 pk60=6 | pk60all=12 pk/mean15=15
+      gate=d3 starts=155 max5min=20 max60s=9 admits={'selected-own': 16, 'visible': 139} hits=24 lastGood=125 deferredCold=77 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 800, 'over10s': 0} max=800 calls=417 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   16 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 79} waitedS={'p50': 0, 'p90': 0, 'max': 79}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  139 pk60= 6 pk5min=15 overdueAtStartS={'p50': 69, 'p90': 268, 'max': 405} waitedS={'p50': 69, 'p90': 268, 'max': 405}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=9 pk5min=20 selectedTotal pk5min=5 refusals={'selected': 1, 'visible': 201} visibleIdentities={'seen': 23, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 330}
+      selected identity pr:feat/wt-0             starts=   8 medianGapS=469 maxGapS=1702
+      selected identity pr:feat/other-0          starts=   8 medianGapS=454 maxGapS=1752
+      queueAgeByClient={'1': {'admits': 42, 'p50': 120, 'max': 405}, '2': {'admits': 81, 'p50': 0, 'max': 243}, '3': {'admits': 32, 'p50': 98, 'max': 320}}
+      digest spawn=2e2394776800d39f gate=9357700312eb1357
+      queueAge client 1 per 300 s window: max=[140, 330, 405, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None] starts=[18, 12, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      queueAge client 2 per 300 s window: max=[None, None, None, 243, 150, 140, 29, 10, 10, 0, None, 0, 0, 20, 0, None, 0, None] starts=[0, 0, 0, 11, 15, 12, 9, 11, 4, 6, 0, 1, 1, 9, 1, 0, 1, 0]
+      queueAge client 3 per 300 s window: max=[0, 320, 207, 108, None, 146, 0, None, 10, None, None, None, 0, None, 0, None, None, 0] starts=[2, 6, 4, 5, 0, 4, 1, 0, 4, 0, 0, 0, 1, 0, 4, 0, 0, 1]
+cancel-hidden-n14-c2                           spawns/h=[5] lastH: prReads=3 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=5 pk60=5 | pk60all=5 pk/mean15=0
+      gate=d3 starts=3 max5min=3 max60s=3 admits={'selected-own': 1, 'visible': 2} hits=2 lastGood=0 deferredCold=1 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=6 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    1 pk60= 1 pk5min= 1 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=    2 pk60= 2 pk5min= 2 overdueAtStartS={'p50': 25, 'p90': 25, 'max': 25} waitedS={'p50': 25, 'p90': 25, 'max': 25}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=3 pk5min=3 selectedTotal pk5min=1 refusals={'selected': 0, 'visible': 1} visibleIdentities={'seen': 2, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 25}
+      selected identity pr:feat/wt-0             starts=   1 medianGapS=0 maxGapS=0
+      queueAgeByClient={'1': {'admits': 2, 'p50': 0, 'max': 0}, '2': {'admits': 1, 'p50': 25, 'max': 25}}
+      digest spawn=95b7b809b069a370 gate=4fc174077effaa40
+cancel-ref-n20-c3                              spawns/h=[154, 22] lastH: prReads=18 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=22 pk60=6 | pk60all=12 pk/mean15=15
+      gate=d3 starts=155 max5min=20 max60s=9 admits={'selected-own': 16, 'visible': 139} hits=42 lastGood=157 deferredCold=77 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 800, 'over10s': 0} max=800 calls=548 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   16 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 79} waitedS={'p50': 0, 'p90': 0, 'max': 79}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  139 pk60= 6 pk5min=15 overdueAtStartS={'p50': 69, 'p90': 268, 'max': 405} waitedS={'p50': 69, 'p90': 268, 'max': 405}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=9 pk5min=20 selectedTotal pk5min=5 refusals={'selected': 1, 'visible': 233} visibleIdentities={'seen': 23, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 330}
+      selected identity pr:feat/wt-0             starts=   8 medianGapS=469 maxGapS=1702
+      selected identity pr:feat/other-0          starts=   8 medianGapS=454 maxGapS=1752
+      queueAgeByClient={'1': {'admits': 123, 'p50': 20, 'max': 405}, '3': {'admits': 32, 'p50': 98, 'max': 320}}
+      digest spawn=2e2394776800d39f gate=7da57db0c776f046
+capcost-ghes-n10-sel10-vis20                   spawns/h=[175, 107, 106, 115] lastH: prReads=27 auth=27 rateLimitProbes=0 reqLowerBound(auth x3)=169 pk60=11 | pk60all=25 pk/mean15=10.71
+      digest spawn=48152499ec521d96 gate=None
+capcost-ghes-n10-sel10                         spawns/h=[158, 71, 50, 51] lastH: prReads=12 auth=10 rateLimitProbes=0 reqLowerBound(auth x3)=71 pk60=8 | pk60all=25 pk/mean15=15
+      digest spawn=085fa1bc3b1e7312 gate=None
+capcost-ghes-n10-sel15                         spawns/h=[159, 56, 44, 44] lastH: prReads=10 auth=9 rateLimitProbes=0 reqLowerBound(auth x3)=62 pk60=12 | pk60all=25 pk/mean15=15
+      digest spawn=4f3a29a054c70a5a gate=None
+capcost-ghes-n10-sel5                          spawns/h=[181, 81, 72, 69] lastH: prReads=18 auth=10 rateLimitProbes=0 reqLowerBound(auth x3)=89 pk60=11 | pk60all=25 pk/mean15=9.78
+      digest spawn=78b10fc0d09b37be gate=None
+capcost-ghes-n10-vis20                         spawns/h=[165, 94, 97, 101] lastH: prReads=23 auth=26 rateLimitProbes=0 reqLowerBound(auth x3)=153 pk60=8 | pk60all=25 pk/mean15=15
+      digest spawn=38658656a22971df gate=None
+capcost-ghes-n10-vis30                         spawns/h=[163, 66, 62, 62] lastH: prReads=14 auth=16 rateLimitProbes=0 reqLowerBound(auth x3)=94 pk60=12 | pk60all=25 pk/mean15=15
+      digest spawn=758b62eb6c60c527 gate=None
+dotcom-desk-after-n10                          spawns/h=[57, 15, 13, 13] lastH: prReads=8 auth=0 rateLimitProbes=1 reqLowerBound(auth x3)=13 pk60=3 | pk60all=9 pk/mean15=15
+      digest spawn=357632f998142607 gate=None
+dotcom-desk-before-n10                         spawns/h=[364, 364, 363, 364] lastH: prReads=235 auth=0 rateLimitProbes=90 reqLowerBound(auth x3)=364 pk60=9 | pk60all=10 pk/mean15=1.35
+      digest spawn=dad0561aa917f5ca gate=None
+ghes-desk-after-n10-focused                    spawns/h=[151, 52, 36, 36] lastH: prReads=8 auth=9 rateLimitProbes=0 reqLowerBound(auth x3)=54 pk60=8 | pk60all=25 pk/mean15=15
+      digest spawn=613613754cacbdfb gate=None
+ghes-desk-after-n10-mixed                      spawns/h=[254, 45, 37, 37] lastH: prReads=8 auth=9 rateLimitProbes=0 reqLowerBound(auth x3)=55 pk60=8 | pk60all=25 pk/mean15=15
+      digest spawn=c96cbe1314bcc7ab gate=None
+ghes-desk-after-n10-unfocused                  spawns/h=[80, 10, 10, 10] lastH: prReads=2 auth=2 rateLimitProbes=0 reqLowerBound(auth x3)=14 pk60=5 | pk60all=25 pk/mean15=15
+      digest spawn=92be3c72692c91b1 gate=None
+ghes-desk-before-n10-focused                   spawns/h=[746, 738, 735, 741] lastH: prReads=233 auth=32 rateLimitProbes=0 reqLowerBound(auth x3)=805 pk60=19 | pk60all=25 pk/mean15=1.51
+      digest spawn=b80b70d69a847581 gate=None
+lanes-1sel-checks-n14-c2-gate-d3               spawns/h=[191, 138, 141] lastH: prReads=72 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=141 pk60=7 | pk60all=11 pk/mean15=2.27
+      gate=d3 starts=443 max5min=20 max60s=8 admits={'selected-own': 180, 'visible': 102, 'selected-borrowed': 161} hits=25 lastGood=138 deferredCold=36 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=1200 calls=716 fail=0 checks=362 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  180 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 179} waitedS={'p50': 0, 'p90': 0, 'max': 179}
+      lane selected-borrowed  starts=  161 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 116} waitedS={'p50': 0, 'p90': 0, 'max': 116}
+      lane visible            starts=  102 pk60= 6 pk5min=15 overdueAtStartS={'p50': 10, 'p90': 90, 'max': 171} waitedS={'p50': 10, 'p90': 90, 'max': 171}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 44, 'visible': 130} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-2             starts= 170 medianGapS=60 maxGapS=239
+      selected identity checks:feat/wt-2         starts= 171 medianGapS=60 maxGapS=189
+      queueAgeByClient={'1': {'admits': 443, 'p50': 0, 'max': 179}}
+      digest spawn=ec4d10f12c789d47 gate=8b9bbb2c117f57a1
+lanes-2sel-checks-n14-c2-gate-d3               spawns/h=[195, 138, 136] lastH: prReads=71 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=136 pk60=6 | pk60all=13 pk/mean15=2.73
+      gate=d3 starts=443 max5min=20 max60s=10 admits={'selected-own': 180, 'visible': 95, 'selected-borrowed': 168} hits=63 lastGood=344 deferredCold=34 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=658 fail=0 checks=302 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  180 pk60= 4 pk5min= 5 overdueAtStartS={'p50': 40, 'p90': 179, 'max': 230} waitedS={'p50': 40, 'p90': 179, 'max': 230}
+      lane selected-borrowed  starts=  168 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 149, 'max': 189} waitedS={'p50': 0, 'p90': 149, 'max': 189}
+      lane visible            starts=   95 pk60= 6 pk5min=15 overdueAtStartS={'p50': 10, 'p90': 100, 'max': 215} waitedS={'p50': 10, 'p90': 100, 'max': 215}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=10 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 253, 'visible': 125} visibleIdentities={'seen': 14, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 110}
+      selected identity pr:feat/wt-2             starts=  92 medianGapS=80 maxGapS=248
+      selected identity checks:feat/wt-2         starts=  79 medianGapS=90 maxGapS=280
+      selected identity pr:feat/wt-7             starts=  99 medianGapS=80 maxGapS=275
+      selected identity checks:feat/wt-7         starts=  92 medianGapS=80 maxGapS=290
+      queueAgeByClient={'1': {'admits': 210, 'p50': 20, 'max': 220}, '2': {'admits': 233, 'p50': 10, 'max': 230}}
+      digest spawn=15dd8c6fc4be8501 gate=7b1d682ccbd59e12
+lanes-4sel-checks-n20-c4-gate-d3               spawns/h=[215, 138, 145] lastH: prReads=76 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=145 pk60=7 | pk60all=14 pk/mean15=3.75
+      gate=d3 starts=463 max5min=20 max60s=11 admits={'selected-own': 180, 'visible': 128, 'selected-borrowed': 155} hits=165 lastGood=923 deferredCold=77 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 800, 'over10s': 0} max=1200 calls=1577 fail=0 checks=380 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  180 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 230, 'p90': 278, 'max': 490} waitedS={'p50': 230, 'p90': 278, 'max': 490}
+      lane selected-borrowed  starts=  155 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 20, 'p90': 230, 'max': 260} waitedS={'p50': 10, 'p90': 230, 'max': 260}
+      lane visible            starts=  128 pk60= 6 pk5min=15 overdueAtStartS={'p50': 68, 'p90': 231, 'max': 385} waitedS={'p50': 68, 'p90': 231, 'max': 385}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=11 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 404, 'visible': 596} visibleIdentities={'seen': 20, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 310}
+      selected identity pr:feat/wt-2             starts=  47 medianGapS=280 maxGapS=530
+      selected identity checks:feat/wt-2         starts=  40 medianGapS=290 maxGapS=530
+      selected identity pr:feat/wt-7             starts=  51 medianGapS=280 maxGapS=510
+      selected identity checks:feat/wt-7         starts=  47 medianGapS=280 maxGapS=550
+      selected identity pr:feat/wt-12            starts=  51 medianGapS=270 maxGapS=530
+      selected identity checks:feat/wt-12        starts=  43 medianGapS=290 maxGapS=540
+      selected identity pr:feat/wt-17            starts=  51 medianGapS=280 maxGapS=341
+      selected identity checks:feat/wt-17        starts=  44 medianGapS=290 maxGapS=530
+      queueAgeByClient={'1': {'admits': 115, 'p50': 209, 'max': 470}, '2': {'admits': 104, 'p50': 219, 'max': 490}, '3': {'admits': 124, 'p50': 220, 'max': 479}, '4': {'admits': 120, 'p50': 195, 'max': 470}}
+      digest spawn=c85b3651e4db6ffc gate=67b93bf7abc4b9fd
+lanes-4sel-checks-n30-c4-gate-d2               spawns/h=[253, 129] lastH: prReads=48 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=129 pk60=11 | pk60all=16 pk/mean15=2.62
+      gate=d2 starts=363 max5min=20 max60s=14 admits={'selected-own': 351, 'visible': 12} hits=122 lastGood=1187 deferredCold=2047 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 400, 'over10s': 0} max=800 calls=3437 fail=0 checks=299 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  351 pk60= 8 pk5min=20 overdueAtStartS={'p50': 10, 'p90': 169, 'max': 190} waitedS={'p50': 0, 'p90': 0, 'max': 160}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   12 pk60= 6 pk5min= 8 overdueAtStartS={'p50': 60, 'p90': 390, 'max': 690} waitedS={'p50': 60, 'p90': 390, 'max': 690}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=14 pk5min=20 selectedTotal pk5min=20 refusals={'selected': 413, 'visible': 2821} visibleIdentities={'seen': 30, 'neverServed': 14, 'worstWaitFromFirstSeenToFirstStartS': 5400}
+      selected identity pr:feat/wt-2             starts=  36 medianGapS=81 maxGapS=269
+      selected identity checks:feat/wt-2         starts=  53 medianGapS=60 maxGapS=240
+      selected identity pr:feat/wt-7             starts=  36 medianGapS=80 maxGapS=245
+      selected identity checks:feat/wt-7         starts=  52 medianGapS=60 maxGapS=230
+      selected identity pr:feat/wt-12            starts=  35 medianGapS=219 maxGapS=280
+      selected identity checks:feat/wt-12        starts=  52 medianGapS=60 maxGapS=250
+      selected identity pr:feat/wt-17            starts=  35 medianGapS=219 maxGapS=249
+      selected identity checks:feat/wt-17        starts=  52 medianGapS=60 maxGapS=240
+      queueAgeByClient={'1': {'admits': 96, 'p50': 0, 'max': 390}, '2': {'admits': 89, 'p50': 0, 'max': 690}, '3': {'admits': 89, 'p50': 0, 'max': 160}, '4': {'admits': 89, 'p50': 0, 'max': 380}}
+      digest spawn=19c9012c83020808 gate=9f8db9e5afa2a631
+lanes-4sel-checks-n30-c4-gate-d3               spawns/h=[240, 80] lastH: prReads=46 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=80 pk60=8 | pk60all=15 pk/mean15=2.86
+      gate=d3 starts=291 max5min=20 max60s=11 admits={'selected-own': 90, 'visible': 150, 'selected-borrowed': 51} hits=154 lastGood=864 deferredCold=158 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 800, 'over10s': 0} max=800 calls=1713 fail=0 checks=164 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   90 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 250, 'p90': 419, 'max': 515} waitedS={'p50': 250, 'p90': 419, 'max': 515}
+      lane selected-borrowed  starts=   51 pk60= 5 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 240, 'max': 250} waitedS={'p50': 0, 'p90': 240, 'max': 250}
+      lane visible            starts=  150 pk60= 6 pk5min=15 overdueAtStartS={'p50': 140, 'p90': 400, 'max': 492} waitedS={'p50': 140, 'p90': 400, 'max': 492}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=11 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 188, 'visible': 834} visibleIdentities={'seen': 30, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 410}
+      selected identity pr:feat/wt-2             starts=  25 medianGapS=240 maxGapS=442
+      selected identity checks:feat/wt-2         starts=  19 medianGapS=310 maxGapS=570
+      selected identity pr:feat/wt-7             starts=  22 medianGapS=260 maxGapS=500
+      selected identity checks:feat/wt-7         starts=  19 medianGapS=310 maxGapS=575
+      selected identity pr:feat/wt-12            starts=  22 medianGapS=250 maxGapS=480
+      selected identity checks:feat/wt-12        starts=  18 medianGapS=310 maxGapS=550
+      selected identity pr:feat/wt-17            starts=  22 medianGapS=250 maxGapS=480
+      selected identity checks:feat/wt-17        starts=  18 medianGapS=310 maxGapS=560
+      queueAgeByClient={'1': {'admits': 89, 'p50': 160, 'max': 510}, '2': {'admits': 59, 'p50': 230, 'max': 515}, '3': {'admits': 75, 'p50': 209, 'max': 492}, '4': {'admits': 68, 'p50': 165, 'max': 500}}
+      digest spawn=ff1b37e108baa923 gate=ac6588decbe03d8c
+lanes-4sel-n30-c4-gate-d2                      spawns/h=[250, 123] lastH: prReads=120 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=123 pk60=5 | pk60all=12 pk/mean15=1.23
+      gate=d2 starts=360 max5min=20 max60s=10 admits={'selected-own': 343, 'visible': 17} hits=351 lastGood=1300 deferredCold=2029 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 400, 'over10s': 0} max=800 calls=4071 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  343 pk60= 4 pk5min=20 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 79} waitedS={'p50': 0, 'p90': 0, 'max': 79}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   17 pk60= 6 pk5min=10 overdueAtStartS={'p50': 80, 'p90': 710, 'max': 781} waitedS={'p50': 80, 'p90': 710, 'max': 781}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=10 pk5min=20 selectedTotal pk5min=20 refusals={'selected': 19, 'visible': 3310} visibleIdentities={'seen': 30, 'neverServed': 9, 'worstWaitFromFirstSeenToFirstStartS': 5400}
+      selected identity pr:feat/wt-2             starts=  86 medianGapS=60 maxGapS=179
+      selected identity pr:feat/wt-7             starts=  86 medianGapS=60 maxGapS=174
+      selected identity pr:feat/wt-12            starts=  85 medianGapS=60 maxGapS=200
+      selected identity pr:feat/wt-17            starts=  86 medianGapS=60 maxGapS=165
+      queueAgeByClient={'1': {'admits': 94, 'p50': 0, 'max': 360}, '2': {'admits': 88, 'p50': 0, 'max': 781}, '3': {'admits': 88, 'p50': 0, 'max': 80}, '4': {'admits': 90, 'p50': 0, 'max': 410}}
+      digest spawn=6fa5dc2818cb6829 gate=351eda0cd7cf6764
+lanes-4sel-n30-c4-gate-d3                      spawns/h=[232, 81] lastH: prReads=75 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=81 pk60=6 | pk60all=12 pk/mean15=2.81
+      gate=d3 starts=284 max5min=20 max60s=10 admits={'selected-own': 90, 'visible': 139, 'selected-borrowed': 55} hits=262 lastGood=836 deferredCold=145 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 0, 'p99': 800, 'over10s': 0} max=1200 calls=1900 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   90 pk60= 4 pk5min= 5 overdueAtStartS={'p50': 103, 'p90': 215, 'max': 235} waitedS={'p50': 103, 'p90': 215, 'max': 235}
+      lane selected-borrowed  starts=   55 pk60= 3 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 139, 'max': 179} waitedS={'p50': 0, 'p90': 139, 'max': 179}
+      lane visible            starts=  139 pk60= 6 pk5min=15 overdueAtStartS={'p50': 115, 'p90': 360, 'max': 471} waitedS={'p50': 115, 'p90': 360, 'max': 471}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=10 pk5min=20 selectedTotal pk5min=10 refusals={'selected': 139, 'visible': 842} visibleIdentities={'seen': 30, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 400}
+      selected identity pr:feat/wt-2             starts=  40 medianGapS=76 maxGapS=289
+      selected identity pr:feat/wt-7             starts=  38 medianGapS=81 maxGapS=289
+      selected identity pr:feat/wt-12            starts=  38 medianGapS=90 maxGapS=275
+      selected identity pr:feat/wt-17            starts=  39 medianGapS=80 maxGapS=295
+      queueAgeByClient={'1': {'admits': 78, 'p50': 81, 'max': 330}, '2': {'admits': 70, 'p50': 25, 'max': 471}, '3': {'admits': 73, 'p50': 60, 'max': 430}, '4': {'admits': 63, 'p50': 96, 'max': 400}}
+      digest spawn=dd02124e4eacec05 gate=dd35401fc267c2d2
+local-detect-desk-after-n10-8h-longrun         spawns/h=[151, 125, 40, 152, 57, 183, 60, 195] lastH: prReads=59 auth=13 rateLimitProbes=0 reqLowerBound(auth x3)=221 pk60=11 | pk60all=25 pk/mean15=15
+      detection events=24 undetected=5 startSelected:4/696/1243/1243 startVisible:3/1305/2281/2281 finishSelected:4/51/57/57 finishVisible:8/419/898/898 (samples/p50/p90/max s)
+      detection D3r pairs=24 transientRunPairs=5 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=7
+        finishSeenRunningSelected    n=  4 boundS=70 latency=51/57/57 slotWait=0/0/0 latencyMinusSlotWait=51/57/57 over=0
+        finishSeenRunningVisible     n=  3 boundS=130 latency=65/96/96 slotWait=0/0/0 latencyMinusSlotWait=65/96/96 over=0
+        finishRunNeverSeenVisible    n=  5 boundS=3610 latency=496/898/898 slotWait=0/7/7 latencyMinusSlotWait=496/891/891 over=0
+        startSeenSelected            n=  4 boundS=1810 latency=696/1243/1243 slotWait=0/0/0 latencyMinusSlotWait=696/1243/1243 over=0
+        startSeenVisible             n=  3 boundS=3610 latency=1305/2281/2281 slotWait=0/0/0 latencyMinusSlotWait=1305/2281/2281 over=0
+        startTransientVisible        n=  5 boundS=3610 latency=3326/3382/3382 slotWait=0/7/7 latencyMinusSlotWait=3325/3382/3382 over=0
+      digest spawn=78918f84dc279228 gate=None
+local-detect-desk-after-n10-8h-seed2           spawns/h=[151, 171, 82, 43, 116, 48, 82, 120] lastH: prReads=34 auth=12 rateLimitProbes=0 reqLowerBound(auth x3)=144 pk60=12 | pk60all=25 pk/mean15=15
+      detection events=30 undetected=5 startSelected:4/1035/1522/1522 startVisible:6/859/1213/1213 finishSelected:5/35/52/52 finishVisible:10/105/1738/1738 (samples/p50/p90/max s)
+      detection D3r pairs=30 transientRunPairs=5 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=10
+        finishSeenRunningSelected    n=  4 boundS=70 latency=44/52/52 slotWait=0/10/10 latencyMinusSlotWait=44/52/52 over=0
+        finishSeenRunningVisible     n=  6 boundS=130 latency=51/105/105 slotWait=0/1/1 latencyMinusSlotWait=51/105/105 over=0
+        finishRunNeverSeenSelected   n=  1 boundS=1810 latency=7/7/7 slotWait=0/0/0 latencyMinusSlotWait=7/7/7 over=0
+        finishRunNeverSeenVisible    n=  4 boundS=3610 latency=1455/1738/1738 slotWait=0/0/0 latencyMinusSlotWait=1455/1738/1738 over=0
+        startSeenSelected            n=  4 boundS=1810 latency=1035/1522/1522 slotWait=0/0/0 latencyMinusSlotWait=1035/1522/1522 over=0
+        startSeenVisible             n=  6 boundS=3610 latency=859/1213/1213 slotWait=0/8/8 latencyMinusSlotWait=851/1213/1213 over=0
+        startTransientSelected       n=  1 boundS=1810 latency=1526/1526/1526 slotWait=0/0/0 latencyMinusSlotWait=1526/1526/1526 over=0
+        startTransientVisible        n=  4 boundS=3610 latency=3057/3199/3199 slotWait=0/0/0 latencyMinusSlotWait=3057/3199/3199 over=0
+      digest spawn=55f8f4ee6c6f01c4 gate=None
+local-detect-desk-after-n10-8h-seed3           spawns/h=[151, 199, 117, 76, 95, 179, 45, 37] lastH: prReads=8 auth=9 rateLimitProbes=0 reqLowerBound(auth x3)=55 pk60=9 | pk60all=25 pk/mean15=15
+      detection events=30 undetected=6 startSelected:3/195/246/246 startVisible:6/777/1111/1111 finishSelected:5/59/146/146 finishVisible:10/97/2211/2211 (samples/p50/p90/max s)
+      detection D3r pairs=30 transientRunPairs=6 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=14
+        finishSeenRunningSelected    n=  3 boundS=70 latency=48/59/59 slotWait=0/0/0 latencyMinusSlotWait=48/59/59 over=0
+        finishSeenRunningVisible     n=  6 boundS=130 latency=38/97/97 slotWait=0/2/2 latencyMinusSlotWait=38/95/95 over=0
+        finishRunNeverSeenSelected   n=  2 boundS=1810 latency=146/146/146 slotWait=0/0/0 latencyMinusSlotWait=146/146/146 over=0
+        finishRunNeverSeenVisible    n=  4 boundS=3610 latency=1599/2211/2211 slotWait=0/0/0 latencyMinusSlotWait=1599/2211/2211 over=0
+        startSeenSelected            n=  3 boundS=1810 latency=195/246/246 slotWait=0/0/0 latencyMinusSlotWait=195/246/246 over=0
+        startSeenVisible             n=  6 boundS=3610 latency=777/1111/1111 slotWait=6/14/14 latencyMinusSlotWait=768/1111/1111 over=0
+        startTransientSelected       n=  2 boundS=1810 latency=1696/1696/1696 slotWait=0/0/0 latencyMinusSlotWait=1696/1696/1696 over=0
+        startTransientVisible        n=  4 boundS=3610 latency=3382/3472/3472 slotWait=0/0/0 latencyMinusSlotWait=3382/3472/3472 over=0
+      digest spawn=1855bab3930bb84d gate=None
+local-detect-desk-after-n10-8h-sel10-vis20     spawns/h=[175, 235, 171, 198, 213, 169, 191, 153] lastH: prReads=40 auth=24 rateLimitProbes=0 reqLowerBound(auth x3)=201 pk60=13 | pk60all=25 pk/mean15=8.18
+      detection events=29 undetected=0 startSelected:4/437/487/487 startVisible:10/635/1074/1074 finishSelected:4/38/49/49 finishVisible:10/45/129/129 (samples/p50/p90/max s)
+      detection D3r pairs=29 transientRunPairs=0 uncovered=0 pendingAtEnd=1 overBound=0 worstSlotWaitS=11
+        finishSeenRunningSelected    n=  4 boundS=70 latency=38/49/49 slotWait=0/0/0 latencyMinusSlotWait=38/49/49 over=0
+        finishSeenRunningVisible     n= 10 boundS=130 latency=45/129/129 slotWait=0/11/11 latencyMinusSlotWait=45/118/118 over=0
+        startSeenSelected            n=  4 boundS=610 latency=437/487/487 slotWait=0/0/0 latencyMinusSlotWait=437/487/487 over=0
+        startSeenVisible             n= 10 boundS=1210 latency=635/1074/1074 slotWait=0/10/10 latencyMinusSlotWait=635/1074/1074 over=0
+      digest spawn=5c76a1a398ee5f76 gate=None
+local-detect-desk-after-n10-8h-sel10           spawns/h=[158, 131, 80, 146, 149, 55, 128, 103] lastH: prReads=28 auth=13 rateLimitProbes=0 reqLowerBound(auth x3)=129 pk60=15 | pk60all=25 pk/mean15=15
+      detection events=29 undetected=5 startSelected:4/396/479/479 startVisible:5/877/1567/1567 finishSelected:4/12/41/41 finishVisible:10/313/1791/1791 (samples/p50/p90/max s)
+      detection D3r pairs=29 transientRunPairs=5 uncovered=0 pendingAtEnd=1 overBound=0 worstSlotWaitS=10
+        finishSeenRunningSelected    n=  4 boundS=70 latency=12/41/41 slotWait=0/0/0 latencyMinusSlotWait=12/41/41 over=0
+        finishSeenRunningVisible     n=  5 boundS=130 latency=46/114/114 slotWait=0/1/1 latencyMinusSlotWait=46/114/114 over=0
+        finishRunNeverSeenVisible    n=  5 boundS=3610 latency=1595/1791/1791 slotWait=0/0/0 latencyMinusSlotWait=1595/1791/1791 over=0
+        startSeenSelected            n=  4 boundS=610 latency=396/479/479 slotWait=0/10/10 latencyMinusSlotWait=396/479/479 over=0
+        startSeenVisible             n=  5 boundS=3610 latency=877/1567/1567 slotWait=0/0/0 latencyMinusSlotWait=877/1567/1567 over=0
+        startTransientVisible        n=  5 boundS=3610 latency=3025/3382/3382 slotWait=0/0/0 latencyMinusSlotWait=3025/3382/3382 over=0
+      digest spawn=d6c7b4faf61723b2 gate=None
+local-detect-desk-after-n10-8h-sel15           spawns/h=[159, 118, 60, 150, 129, 57, 113, 96] lastH: prReads=26 auth=13 rateLimitProbes=0 reqLowerBound(auth x3)=122 pk60=15 | pk60all=25 pk/mean15=15
+      detection events=29 undetected=5 startSelected:4/602/728/728 startVisible:5/1034/1466/1466 finishSelected:4/29/48/48 finishVisible:10/182/1696/1696 (samples/p50/p90/max s)
+      detection D3r pairs=29 transientRunPairs=5 uncovered=0 pendingAtEnd=1 overBound=0 worstSlotWaitS=1
+        finishSeenRunningSelected    n=  4 boundS=70 latency=29/48/48 slotWait=0/0/0 latencyMinusSlotWait=29/48/48 over=0
+        finishSeenRunningVisible     n=  5 boundS=130 latency=50/74/74 slotWait=0/1/1 latencyMinusSlotWait=49/74/74 over=0
+        finishRunNeverSeenVisible    n=  5 boundS=3610 latency=1633/1696/1696 slotWait=0/0/0 latencyMinusSlotWait=1633/1696/1696 over=0
+        startSeenSelected            n=  4 boundS=910 latency=602/728/728 slotWait=0/0/0 latencyMinusSlotWait=602/728/728 over=0
+        startSeenVisible             n=  5 boundS=3610 latency=1034/1466/1466 slotWait=0/0/0 latencyMinusSlotWait=1034/1466/1466 over=0
+        startTransientVisible        n=  5 boundS=3610 latency=2968/3382/3382 slotWait=0/0/0 latencyMinusSlotWait=2968/3382/3382 over=0
+      digest spawn=e35b280e514616cc gate=None
+local-detect-desk-after-n10-8h-sel5            spawns/h=[181, 138, 116, 158, 173, 75, 136, 125] lastH: prReads=35 auth=14 rateLimitProbes=0 reqLowerBound(auth x3)=153 pk60=11 | pk60all=25 pk/mean15=9.17
+      detection events=29 undetected=5 startSelected:4/167/208/208 startVisible:5/841/1540/1540 finishSelected:4/22/22/22 finishVisible:10/528/1829/1829 (samples/p50/p90/max s)
+      detection D3r pairs=29 transientRunPairs=5 uncovered=0 pendingAtEnd=1 overBound=0 worstSlotWaitS=7
+        finishSeenRunningSelected    n=  4 boundS=70 latency=22/22/22 slotWait=0/0/0 latencyMinusSlotWait=22/22/22 over=0
+        finishSeenRunningVisible     n=  5 boundS=130 latency=87/119/119 slotWait=0/2/2 latencyMinusSlotWait=87/117/117 over=0
+        finishRunNeverSeenVisible    n=  5 boundS=3610 latency=1575/1829/1829 slotWait=0/7/7 latencyMinusSlotWait=1575/1829/1829 over=0
+        startSeenSelected            n=  4 boundS=310 latency=167/208/208 slotWait=0/1/1 latencyMinusSlotWait=167/208/208 over=0
+        startSeenVisible             n=  5 boundS=3610 latency=841/1540/1540 slotWait=0/0/0 latencyMinusSlotWait=841/1540/1540 over=0
+        startTransientVisible        n=  5 boundS=3610 latency=3064/3261/3261 slotWait=0/7/7 latencyMinusSlotWait=3064/3261/3261 over=0
+      digest spawn=156dd7fb5ee6c399 gate=None
+local-detect-desk-after-n10-8h-shortrun        spawns/h=[151, 52, 36, 52, 61, 38, 50, 52] lastH: prReads=12 auth=11 rateLimitProbes=0 reqLowerBound(auth x3)=74 pk60=9 | pk60all=25 pk/mean15=15
+      detection events=38 undetected=14 startSelected:1/305/305/305 startVisible:3/232/429/429 finishSelected:6/482/1167/1167 finishVisible:12/1602/2839/2890 (samples/p50/p90/max s)
+      detection D3r pairs=38 transientRunPairs=15 uncovered=0 pendingAtEnd=1 overBound=0 worstSlotWaitS=3
+        finishSeenRunningSelected    n=  1 boundS=70 latency=35/35/35 slotWait=0/0/0 latencyMinusSlotWait=35/35/35 over=0
+        finishSeenRunningVisible     n=  2 boundS=130 latency=101/101/101 slotWait=0/0/0 latencyMinusSlotWait=101/101/101 over=0
+        finishRunNeverSeenSelected   n=  5 boundS=1810 latency=482/1167/1167 slotWait=0/2/2 latencyMinusSlotWait=480/1167/1167 over=0
+        finishRunNeverSeenVisible    n= 10 boundS=3610 latency=1627/2890/2890 slotWait=0/3/3 latencyMinusSlotWait=1627/2890/2890 over=0
+        startSeenSelected            n=  1 boundS=1810 latency=305/305/305 slotWait=0/0/0 latencyMinusSlotWait=305/305/305 over=0
+        startSeenVisible             n=  3 boundS=3610 latency=232/429/429 slotWait=0/0/0 latencyMinusSlotWait=232/429/429 over=0
+        startTransientSelected       n=  5 boundS=1810 latency=960/1644/1644 slotWait=0/2/2 latencyMinusSlotWait=958/1644/1644 over=0
+        startTransientVisible        n= 10 boundS=3610 latency=2067/3382/3382 slotWait=0/3/3 latencyMinusSlotWait=2067/3382/3382 over=0
+      digest spawn=859d34ae9705ce68 gate=None
+local-detect-desk-after-n10-8h-vis20           spawns/h=[165, 175, 153, 189, 185, 166, 167, 140] lastH: prReads=36 auth=24 rateLimitProbes=0 reqLowerBound(auth x3)=188 pk60=14 | pk60all=25 pk/mean15=15
+      detection events=29 undetected=0 startSelected:4/991/1206/1206 startVisible:10/592/1000/1000 finishSelected:4/34/38/38 finishVisible:10/82/119/119 (samples/p50/p90/max s)
+      detection D3r pairs=29 transientRunPairs=0 uncovered=0 pendingAtEnd=1 overBound=0 worstSlotWaitS=10
+        finishSeenRunningSelected    n=  4 boundS=70 latency=34/38/38 slotWait=0/0/0 latencyMinusSlotWait=34/38/38 over=0
+        finishSeenRunningVisible     n= 10 boundS=130 latency=82/119/119 slotWait=0/10/10 latencyMinusSlotWait=82/119/119 over=0
+        startSeenSelected            n=  4 boundS=1810 latency=991/1206/1206 slotWait=0/3/3 latencyMinusSlotWait=991/1206/1206 over=0
+        startSeenVisible             n= 10 boundS=1210 latency=592/1000/1000 slotWait=0/0/0 latencyMinusSlotWait=592/1000/1000 over=0
+      digest spawn=4210ad205e73ac8a gate=None
+local-detect-desk-after-n10-8h-vis30           spawns/h=[163, 124, 78, 157, 149, 123, 170, 116] lastH: prReads=31 auth=17 rateLimitProbes=0 reqLowerBound(auth x3)=150 pk60=11 | pk60all=25 pk/mean15=15
+      detection events=29 undetected=1 startSelected:4/806/1243/1243 startVisible:9/955/1436/1436 finishSelected:4/29/33/33 finishVisible:10/67/121/121 (samples/p50/p90/max s)
+      detection D3r pairs=29 transientRunPairs=1 uncovered=0 pendingAtEnd=1 overBound=0 worstSlotWaitS=8
+        finishSeenRunningSelected    n=  4 boundS=70 latency=29/33/33 slotWait=0/8/8 latencyMinusSlotWait=21/33/33 over=0
+        finishSeenRunningVisible     n=  9 boundS=130 latency=67/121/121 slotWait=0/0/0 latencyMinusSlotWait=67/121/121 over=0
+        finishRunNeverSeenVisible    n=  1 boundS=1810 latency=10/10/10 slotWait=0/0/0 latencyMinusSlotWait=10/10/10 over=0
+        startSeenSelected            n=  4 boundS=1810 latency=806/1243/1243 slotWait=0/0/0 latencyMinusSlotWait=806/1243/1243 over=0
+        startSeenVisible             n=  9 boundS=1810 latency=955/1436/1436 slotWait=0/0/0 latencyMinusSlotWait=955/1436/1436 over=0
+        startTransientVisible        n=  1 boundS=1810 latency=1244/1244/1244 slotWait=0/0/0 latencyMinusSlotWait=1244/1244/1244 over=0
+      digest spawn=9e5a2a89617a3b65 gate=None
+local-detect-desk-after-n10-8h                 spawns/h=[151, 67, 48, 147, 119, 53, 89, 70] lastH: prReads=18 auth=11 rateLimitProbes=0 reqLowerBound(auth x3)=92 pk60=12 | pk60all=25 pk/mean15=15
+      detection events=29 undetected=6 startSelected:4/895/1243/1243 startVisible:4/1034/1151/1151 finishSelected:4/44/60/60 finishVisible:10/537/1893/1893 (samples/p50/p90/max s)
+      detection D3r pairs=29 transientRunPairs=6 uncovered=0 pendingAtEnd=1 overBound=0 worstSlotWaitS=2
+        finishSeenRunningSelected    n=  4 boundS=70 latency=44/60/60 slotWait=0/0/0 latencyMinusSlotWait=44/60/60 over=0
+        finishSeenRunningVisible     n=  4 boundS=130 latency=67/103/103 slotWait=0/2/2 latencyMinusSlotWait=67/103/103 over=0
+        finishRunNeverSeenVisible    n=  6 boundS=3610 latency=1696/1893/1893 slotWait=0/0/0 latencyMinusSlotWait=1696/1893/1893 over=0
+        startSeenSelected            n=  4 boundS=1810 latency=895/1243/1243 slotWait=0/0/0 latencyMinusSlotWait=895/1243/1243 over=0
+        startSeenVisible             n=  4 boundS=3610 latency=1034/1151/1151 slotWait=0/0/0 latencyMinusSlotWait=1034/1151/1151 over=0
+        startTransientVisible        n=  6 boundS=3610 latency=3127/3382/3382 slotWait=0/0/0 latencyMinusSlotWait=3127/3382/3382 over=0
+      digest spawn=6366ce7942c9dc39 gate=None
+local-detect-desk-before-n10-8h                spawns/h=[746, 738, 735, 741, 738, 735, 741, 740] lastH: prReads=233 auth=31 rateLimitProbes=0 reqLowerBound(auth x3)=802 pk60=16 | pk60all=25 pk/mean15=1.51
+      detection events=29 undetected=0 startSelected:5/40/53/53 startVisible:10/73/100/100 finishSelected:4/57/59/59 finishVisible:10/80/118/118 (samples/p50/p90/max s)
+      detection D3r pairs=29 transientRunPairs=0 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=14
+        finishSeenRunningSelected    n=  4 boundS=70 latency=57/59/59 slotWait=0/5/5 latencyMinusSlotWait=54/57/57 over=0
+        finishSeenRunningVisible     n= 10 boundS=130 latency=80/118/118 slotWait=0/14/14 latencyMinusSlotWait=66/111/111 over=0
+        startSeenSelected            n=  5 boundS=1810 latency=40/53/53 slotWait=0/5/5 latencyMinusSlotWait=35/53/53 over=0
+        startSeenVisible             n= 10 boundS=3610 latency=73/100/100 slotWait=0/12/12 latencyMinusSlotWait=72/100/100 over=0
+      digest spawn=b1e6668f44fcfa1a gate=None
+local-detect-serve-after-n14-c2-8h-longrun     spawns/h=[68, 76, 24, 61, 27, 63, 30, 68] lastH: prReads=61 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=68 pk60=3 | pk60all=11 pk/mean15=15
+      gate=d3 starts=364 max5min=18 max60s=8 admits={'selected-own': 159, 'visible': 203, 'selected-borrowed': 2} hits=14 lastGood=86 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=859 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  159 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    2 pk60= 1 pk5min= 1 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane visible            starts=  203 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 20, 'max': 169} waitedS={'p50': 0, 'p90': 20, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=6 refusals={'selected': 0, 'visible': 123} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts= 161 medianGapS=60 maxGapS=1782
+      queueAgeByClient={'1': {'admits': 364, 'p50': 0, 'max': 169}}
+      detection events=24 undetected=3 startSelected:8/810/925/925 startVisible:10/624/2833/2833 finishSelected:8/46/59/59 finishVisible:16/115/337/337 (samples/p50/p90/max s)
+      detection D3r pairs=48 transientRunPairs=6 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=11
+        finishSeenRunningSelected    n=  8 boundS=70 latency=46/59/59 slotWait=0/0/0 latencyMinusSlotWait=46/59/59 over=0
+        finishSeenRunningVisible     n=  4 boundS=130 latency=82/82/82 slotWait=11/11/11 latencyMinusSlotWait=76/76/76 over=0
+        finishSeenStuckVisible       n=  6 boundS=490 latency=97/115/115 slotWait=0/0/0 latencyMinusSlotWait=97/115/115 over=0
+        finishRunNeverSeenVisible    n=  6 boundS=3610 latency=181/337/337 slotWait=0/0/0 latencyMinusSlotWait=181/337/337 over=0
+        startSeenSelected            n=  8 boundS=1810 latency=810/925/925 slotWait=0/0/0 latencyMinusSlotWait=810/925/925 over=0
+        startSeenVisible             n= 10 boundS=3610 latency=624/2833/2833 slotWait=0/0/0 latencyMinusSlotWait=624/2833/2833 over=0
+        startTransientVisible        n=  6 boundS=3610 latency=2961/3089/3089 slotWait=0/0/0 latencyMinusSlotWait=2961/3089/3089 over=0
+      digest spawn=863ca3c039638243 gate=b8e051160bb2341c
+local-detect-serve-after-n14-c2-8h-seed2       spawns/h=[70, 65, 33, 19, 44, 20, 31, 46] lastH: prReads=38 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=46 pk60=4 | pk60all=11 pk/mean15=15
+      gate=d3 starts=280 max5min=18 max60s=8 admits={'selected-own': 77, 'visible': 202, 'selected-borrowed': 1} hits=6 lastGood=88 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=685 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   77 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 10} waitedS={'p50': 0, 'p90': 0, 'max': 10}
+      lane selected-borrowed  starts=    1 pk60= 1 pk5min= 1 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane visible            starts=  202 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 20, 'max': 169} waitedS={'p50': 0, 'p90': 20, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=6 refusals={'selected': 2, 'visible': 123} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  78 medianGapS=60 maxGapS=1800
+      queueAgeByClient={'1': {'admits': 280, 'p50': 0, 'max': 169}}
+      detection events=30 undetected=5 startSelected:8/945/1578/1578 startVisible:12/530/1167/1167 finishSelected:10/19/139/139 finishVisible:20/117/1581/1581 (samples/p50/p90/max s)
+      detection D3r pairs=60 transientRunPairs=10 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=0
+        finishSeenRunningSelected    n=  8 boundS=70 latency=19/58/58 slotWait=0/0/0 latencyMinusSlotWait=19/58/58 over=0
+        finishSeenRunningVisible     n= 12 boundS=130 latency=63/117/117 slotWait=0/0/0 latencyMinusSlotWait=63/117/117 over=0
+        finishRunNeverSeenSelected   n=  2 boundS=1810 latency=139/139/139 slotWait=0/0/0 latencyMinusSlotWait=139/139/139 over=0
+        finishRunNeverSeenVisible    n=  8 boundS=3610 latency=1317/1581/1581 slotWait=0/0/0 latencyMinusSlotWait=1317/1581/1581 over=0
+        startSeenSelected            n=  8 boundS=1810 latency=945/1578/1578 slotWait=0/0/0 latencyMinusSlotWait=945/1578/1578 over=0
+        startSeenVisible             n= 12 boundS=3610 latency=530/1167/1167 slotWait=0/0/0 latencyMinusSlotWait=530/1167/1167 over=0
+        startTransientSelected       n=  2 boundS=1810 latency=1658/1658/1658 slotWait=0/0/0 latencyMinusSlotWait=1658/1658/1658 over=0
+        startTransientVisible        n=  8 boundS=3610 latency=2900/3061/3061 slotWait=0/0/0 latencyMinusSlotWait=2900/3061/3061 over=0
+      digest spawn=698cfbdde87bfa66 gate=daa6eaa82b23e204
+local-detect-serve-after-n14-c2-8h-seed3       spawns/h=[70, 72, 46, 44, 37, 58, 23, 23] lastH: prReads=17 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=23 pk60=4 | pk60all=11 pk/mean15=15
+      gate=d3 starts=324 max5min=18 max60s=8 admits={'selected-own': 108, 'visible': 214, 'selected-borrowed': 2} hits=6 lastGood=96 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=781 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=  108 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 10} waitedS={'p50': 0, 'p90': 0, 'max': 10}
+      lane selected-borrowed  starts=    2 pk60= 1 pk5min= 1 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane visible            starts=  214 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 20, 'max': 169} waitedS={'p50': 0, 'p90': 20, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=6 refusals={'selected': 2, 'visible': 131} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts= 110 medianGapS=60 maxGapS=1796
+      queueAgeByClient={'1': {'admits': 324, 'p50': 0, 'max': 169}}
+      detection events=30 undetected=5 startSelected:6/100/188/188 startVisible:14/467/1196/1196 finishSelected:10/20/154/154 finishVisible:20/115/1598/1598 (samples/p50/p90/max s)
+      detection D3r pairs=60 transientRunPairs=10 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=0
+        finishSeenRunningSelected    n=  6 boundS=70 latency=20/51/51 slotWait=0/0/0 latencyMinusSlotWait=20/51/51 over=0
+        finishSeenRunningVisible     n= 14 boundS=130 latency=43/117/117 slotWait=0/0/0 latencyMinusSlotWait=43/117/117 over=0
+        finishRunNeverSeenSelected   n=  4 boundS=1810 latency=154/154/154 slotWait=0/0/0 latencyMinusSlotWait=154/154/154 over=0
+        finishRunNeverSeenVisible    n=  6 boundS=3610 latency=1482/1598/1598 slotWait=0/0/0 latencyMinusSlotWait=1482/1598/1598 over=0
+        startSeenSelected            n=  6 boundS=1810 latency=100/188/188 slotWait=0/0/0 latencyMinusSlotWait=100/188/188 over=0
+        startSeenVisible             n= 14 boundS=3610 latency=467/1196/1196 slotWait=0/0/0 latencyMinusSlotWait=467/1196/1196 over=0
+        startTransientSelected       n=  4 boundS=1810 latency=1703/1703/1703 slotWait=0/0/0 latencyMinusSlotWait=1703/1703/1703 over=0
+        startTransientVisible        n=  6 boundS=3610 latency=2829/3381/3381 slotWait=0/0/0 latencyMinusSlotWait=2829/3381/3381 over=0
+      digest spawn=cd536e2572cfb9b2 gate=d9b15481dde35408
+local-detect-serve-after-n14-c2-8h             spawns/h=[68, 53, 20, 47, 35, 22, 37, 27] lastH: prReads=21 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=27 pk60=5 | pk60all=11 pk/mean15=15
+      gate=d3 starts=262 max5min=18 max60s=8 admits={'selected-own': 92, 'visible': 169, 'selected-borrowed': 1} hits=6 lastGood=82 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=1200 calls=643 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   92 pk60= 2 pk5min= 5 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 10} waitedS={'p50': 0, 'p90': 0, 'max': 10}
+      lane selected-borrowed  starts=    1 pk60= 1 pk5min= 1 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane visible            starts=  169 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 43, 'max': 169} waitedS={'p50': 0, 'p90': 43, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=6 refusals={'selected': 4, 'visible': 115} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  93 medianGapS=60 maxGapS=1772
+      queueAgeByClient={'1': {'admits': 262, 'p50': 0, 'max': 169}}
+      detection events=29 undetected=7 startSelected:8/824/925/925 startVisible:6/779/780/780 finishSelected:8/13/52/52 finishVisible:20/317/1792/1792 (samples/p50/p90/max s)
+      detection D3r pairs=58 transientRunPairs=14 uncovered=0 pendingAtEnd=2 overBound=0 worstSlotWaitS=0
+        finishSeenRunningSelected    n=  8 boundS=70 latency=13/52/52 slotWait=0/0/0 latencyMinusSlotWait=13/52/52 over=0
+        finishSeenRunningVisible     n=  6 boundS=130 latency=36/73/73 slotWait=0/0/0 latencyMinusSlotWait=36/73/73 over=0
+        finishRunNeverSeenVisible    n= 14 boundS=3610 latency=1151/1792/1792 slotWait=0/0/0 latencyMinusSlotWait=1151/1792/1792 over=0
+        startSeenSelected            n=  8 boundS=1810 latency=824/925/925 slotWait=0/0/0 latencyMinusSlotWait=824/925/925 over=0
+        startSeenVisible             n=  6 boundS=3610 latency=779/780/780 slotWait=0/0/0 latencyMinusSlotWait=779/780/780 over=0
+        startTransientVisible        n= 14 boundS=3610 latency=2833/3027/3027 slotWait=0/0/0 latencyMinusSlotWait=2833/3027/3027 over=0
+      digest spawn=b85047b5883a586c gate=77e0fa6b88e8e5b3
+local-detect-serve-before-n14-c2-8h            spawns/h=[751, 745, 745, 741, 744, 745, 741, 737] lastH: prReads=651 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=737 pk60=25 | pk60all=33 pk/mean15=2.31
+      gate=none starts=5334 max5min=72 max60s=28 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=5334 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+      detection events=29 undetected=0 startSelected:10/34/58/58 startVisible:20/73/115/120 finishSelected:8/39/52/52 finishVisible:20/59/113/118 (samples/p50/p90/max s)
+      detection D3r pairs=58 transientRunPairs=0 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=0
+        finishSeenRunningSelected    n=  8 boundS=70 latency=39/52/52 slotWait=0/0/0 latencyMinusSlotWait=39/52/52 over=0
+        finishSeenRunningVisible     n= 20 boundS=130 latency=59/113/118 slotWait=0/0/0 latencyMinusSlotWait=59/113/118 over=0
+        startSeenSelected            n= 10 boundS=1810 latency=34/58/58 slotWait=0/0/0 latencyMinusSlotWait=34/58/58 over=0
+        startSeenVisible             n= 20 boundS=3610 latency=73/115/120 slotWait=0/0/0 latencyMinusSlotWait=73/115/120 over=0
+      digest spawn=56d97e913a6e17a5 gate=None
+local-detect-serve-oldclient-n14-c2-8h         spawns/h=[384, 382, 381, 382, 380, 381, 379, 381] lastH: prReads=329 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=381 pk60=14 | pk60all=18 pk/mean15=2.53
+      gate=d3 starts=2671 max5min=36 max60s=14 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 529, 'upstreamReads': 2671} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=5342 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=0 pk5min=0 selectedTotal pk5min=0 refusals={'selected': 0, 'visible': 0} visibleIdentities={'seen': 0, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 0}
+      queueAgeByClient={}
+      detection events=29 undetected=0 startSelected:10/19/41/41 startVisible:20/74/104/109 finishSelected:8/40/52/52 finishVisible:20/74/118/118 (samples/p50/p90/max s)
+      detection D3r pairs=58 transientRunPairs=0 uncovered=0 pendingAtEnd=0 overBound=0 worstSlotWaitS=0
+        finishSeenRunningSelected    n=  8 boundS=70 latency=40/52/52 slotWait=0/0/0 latencyMinusSlotWait=40/52/52 over=0
+        finishSeenRunningVisible     n= 20 boundS=130 latency=74/118/118 slotWait=0/0/0 latencyMinusSlotWait=74/118/118 over=0
+        startSeenSelected            n= 10 boundS=1810 latency=19/41/41 slotWait=0/0/0 latencyMinusSlotWait=19/41/41 over=0
+        startSeenVisible             n= 20 boundS=3610 latency=74/104/109 slotWait=0/0/0 latencyMinusSlotWait=74/104/109 over=0
+      digest spawn=4c637aca20842839 gate=e3b0c44298fc1c14
+serve-after-n14-c2-settled                     spawns/h=[68, 21, 19, 16] lastH: prReads=11 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=16 pk60=3 | pk60all=11 pk/mean15=15
+      gate=d3 starts=102 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 89} hits=6 lastGood=64 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=305 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   89 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 110, 'max': 169} waitedS={'p50': 0, 'p90': 110, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 101} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1631 maxGapS=1775
+      queueAgeByClient={'1': {'admits': 102, 'p50': 0, 'max': 169}}
+      digest spawn=f5a3e1de3ca60e65 gate=ef82719477461298
+serve-after-n14-c2                             spawns/h=[108, 21, 18, 16] lastH: prReads=11 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=16 pk60=5 | pk60all=11 pk/mean15=15
+      gate=d3 starts=138 max5min=18 max60s=8 admits={'selected-own': 13, 'visible': 125} hits=32 lastGood=62 deferredCold=37 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=401 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=   13 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=  125 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 70, 'max': 169} waitedS={'p50': 0, 'p90': 70, 'max': 169}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 99} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=  13 medianGapS=1631 maxGapS=1783
+      queueAgeByClient={'1': {'admits': 138, 'p50': 0, 'max': 169}}
+      digest spawn=121a887142ee451c gate=62cf103b55a9c057
+serve-before-n14-c2                            spawns/h=[751, 745, 745, 741] lastH: prReads=658 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=741 pk60=25 | pk60all=33 pk/mean15=2.31
+      gate=none starts=2674 max5min=72 max60s=28 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=2674 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      queueAgeByClient={}
+      digest spawn=22e136f945226f21 gate=None
+serve-oldclient-n14-c2                         spawns/h=[384, 382] lastH: prReads=330 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=382 pk60=15 | pk60all=18 pk/mean15=2.53
+      gate=d3 starts=671 max5min=36 max60s=14 admits={} hits=0 lastGood=0 deferredCold=0 deadlineHits=0 fgOverflow=0 legacy={'hits': 505, 'upstreamReads': 671} rpcMs={'p50': 400, 'p99': 800, 'over10s': 0} max=800 calls=1342 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=0 pk5min=0 selectedTotal pk5min=0 refusals={'selected': 0, 'visible': 0} visibleIdentities={'seen': 0, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 0}
+      queueAgeByClient={}
+      digest spawn=1031ea529b145d24 gate=e3b0c44298fc1c14
+timeout-slow3-n14-c2                           spawns/h=[105, 20] lastH: prReads=14 auth=0 rateLimitProbes=0 reqLowerBound(auth x3)=20 pk60=4 | pk60all=11 pk/mean15=15
+      gate=d3 starts=108 max5min=18 max60s=8 admits={'selected-own': 9, 'visible': 99} hits=37 lastGood=56 deferredCold=44 deadlineHits=68 fgOverflow=0 legacy={'hits': 0, 'upstreamReads': 0} rpcMs={'p50': 400, 'p99': 10000, 'over10s': 0} max=10000 calls=412 fail=0 checks=0 fg=0 lateHints=0 afterAllGone=None
+      lane selected-own       starts=    9 pk60= 2 pk5min= 3 overdueAtStartS={'p50': 0, 'p90': 0, 'max': 0} waitedS={'p50': 0, 'p90': 0, 'max': 0}
+      lane selected-borrowed  starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      lane visible            starts=   99 pk60= 6 pk5min=15 overdueAtStartS={'p50': 0, 'p90': 100, 'max': 165} waitedS={'p50': 0, 'p90': 100, 'max': 165}
+      lane interactive        starts=    0 pk60= 0 pk5min= 0 overdueAtStartS={'p50': None, 'p90': None, 'max': None} waitedS={'p50': None, 'p90': None, 'max': None}
+      budgeted pk60=8 pk5min=18 selectedTotal pk5min=3 refusals={'selected': 0, 'visible': 100} visibleIdentities={'seen': 13, 'neverServed': 0, 'worstWaitFromFirstSeenToFirstStartS': 120}
+      selected identity pr:feat/wt-0             starts=   9 medianGapS=880 maxGapS=1739
+      queueAgeByClient={'1': {'admits': 107, 'p50': 0, 'max': 165}, '2': {'admits': 1, 'p50': 40, 'max': 40}}
+      digest spawn=99ec624fb6ad0403 gate=327db66e644aa721

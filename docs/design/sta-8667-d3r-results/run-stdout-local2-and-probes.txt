@@ -1,0 +1,79 @@
+
+ Test Files  4 passed (4)
+      Tests  17 passed (17)
+   Start at  14:27:21
+   Duration  385ms (transform 39%, setup 28%, tests 21%, worker 10%, import 2%)
+
+local-detect-serve-after-n14-c2-8h rc=0 wall=62s
+local-detect-desk-after-n10-8h rc=0 wall=62s
+ghes-desk-after-n10-focused rc=0 wall=115s
+local-detect-serve-after-n14-c2-8h-seed2 rc=0 wall=116s
+serve-after-n14-c2 rc=0 wall=77s
+serve-before-n14-c2 rc=0 wall=84s
+lanes-4sel-n30-c4-gate-d3 rc=0 wall=182s
+cancel-disconnect15-n20-c3 rc=0 wall=190s
+ALL DONE
+PASS   cancel-disconnect15-n20-c3                   G rerun digest identical           2e2394776800d39f vs 2e2394776800d39f
+PASS   ghes-desk-after-n10-focused                  G rerun digest identical           613613754cacbdfb vs 613613754cacbdfb
+FAIL   lanes-4sel-n30-c4-gate-d3                    G rerun digest identical           dd02124e4eacec05 vs dd02124e4eacec05
+PASS   local-detect-desk-after-n10-8h               G rerun digest identical           6366ce7942c9dc39 vs 6366ce7942c9dc39
+PASS   local-detect-serve-after-n14-c2-8h-seed2     G rerun digest identical           698cfbdde87bfa66 vs 698cfbdde87bfa66
+PASS   local-detect-serve-after-n14-c2-8h           G rerun digest identical           b85047b5883a586c vs b85047b5883a586c
+PASS   serve-after-n14-c2                           G rerun digest identical           121a887142ee451c vs 121a887142ee451c
+PASS   serve-before-n14-c2                          G rerun digest identical           22e136f945226f21 vs 22e136f945226f21
+PASS   cancel-disconnect15-n20-c3                   G digest equals authoring Mac      2e2394776800d39f vs 2e2394776800d39f
+PASS   cancel-hidden-n14-c2                         G digest equals authoring Mac      95b7b809b069a370 vs 95b7b809b069a370
+PASS   cancel-ref-n20-c3                            G digest equals authoring Mac      2e2394776800d39f vs 2e2394776800d39f
+PASS   capcost-ghes-n10-sel10-vis20                 G digest equals authoring Mac      48152499ec521d96 vs 48152499ec521d96
+PASS   capcost-ghes-n10-sel10                       G digest equals authoring Mac      085fa1bc3b1e7312 vs 085fa1bc3b1e7312
+PASS   capcost-ghes-n10-sel15                       G digest equals authoring Mac      4f3a29a054c70a5a vs 4f3a29a054c70a5a
+PASS   capcost-ghes-n10-sel5                        G digest equals authoring Mac      78b10fc0d09b37be vs 78b10fc0d09b37be
+PASS   capcost-ghes-n10-vis20                       G digest equals authoring Mac      38658656a22971df vs 38658656a22971df
+PASS   capcost-ghes-n10-vis30                       G digest equals authoring Mac      758b62eb6c60c527 vs 758b62eb6c60c527
+PASS   dotcom-desk-after-n10                        G digest equals authoring Mac      357632f998142607 vs 357632f998142607
+PASS   dotcom-desk-before-n10                       G digest equals authoring Mac      dad0561aa917f5ca vs dad0561aa917f5ca
+PASS   ghes-desk-after-n10-focused                  G digest equals authoring Mac      613613754cacbdfb vs 613613754cacbdfb
+PASS   ghes-desk-after-n10-mixed                    G digest equals authoring Mac      c96cbe1314bcc7ab vs c96cbe1314bcc7ab
+PASS   ghes-desk-after-n10-unfocused                G digest equals authoring Mac      92be3c72692c91b1 vs 92be3c72692c91b1
+PASS   ghes-desk-before-n10-focused                 G digest equals authoring Mac      b80b70d69a847581 vs b80b70d69a847581
+PASS   lanes-1sel-checks-n14-c2-gate-d3             G digest equals authoring Mac      ec4d10f12c789d47 vs ec4d10f12c789d47
+PASS   lanes-2sel-checks-n14-c2-gate-d3             G digest equals authoring Mac      15dd8c6fc4be8501 vs 15dd8c6fc4be8501
+PASS   lanes-4sel-checks-n20-c4-gate-d3             G digest equals authoring Mac      c85b3651e4db6ffc vs c85b3651e4db6ffc
+PASS   lanes-4sel-checks-n30-c4-gate-d2             G digest equals authoring Mac      19c9012c83020808 vs 19c9012c83020808
+PASS   lanes-4sel-checks-n30-c4-gate-d3             G digest equals authoring Mac      ff1b37e108baa923 vs ff1b37e108baa923
+PASS   lanes-4sel-n30-c4-gate-d2                    G digest equals authoring Mac      6fa5dc2818cb6829 vs 6fa5dc2818cb6829
+PASS   lanes-4sel-n30-c4-gate-d3                    G digest equals authoring Mac      dd02124e4eacec05 vs dd02124e4eacec05
+PASS   local-detect-desk-after-n10-8h-longrun       G digest equals authoring Mac      78918f84dc279228 vs 78918f84dc279228
+PASS   local-detect-desk-after-n10-8h-seed2         G digest equals authoring Mac      55f8f4ee6c6f01c4 vs 55f8f4ee6c6f01c4
+PASS   local-detect-desk-after-n10-8h-seed3         G digest equals authoring Mac      1855bab3930bb84d vs 1855bab3930bb84d
+PASS   local-detect-desk-after-n10-8h-sel10-vis20   G digest equals authoring Mac      5c76a1a398ee5f76 vs 5c76a1a398ee5f76
+PASS   local-detect-desk-after-n10-8h-sel10         G digest equals authoring Mac      d6c7b4faf61723b2 vs d6c7b4faf61723b2
+PASS   local-detect-desk-after-n10-8h-sel15         G digest equals authoring Mac      e35b280e514616cc vs e35b280e514616cc
+PASS   local-detect-desk-after-n10-8h-sel5          G digest equals authoring Mac      156dd7fb5ee6c399 vs 156dd7fb5ee6c399
+PASS   local-detect-desk-after-n10-8h-shortrun      G digest equals authoring Mac      859d34ae9705ce68 vs 859d34ae9705ce68
+PASS   local-detect-desk-after-n10-8h-vis20         G digest equals authoring Mac      4210ad205e73ac8a vs 4210ad205e73ac8a
+PASS   local-detect-desk-after-n10-8h-vis30         G digest equals authoring Mac      9e5a2a89617a3b65 vs 9e5a2a89617a3b65
+PASS   local-detect-desk-after-n10-8h               G digest equals authoring Mac      6366ce7942c9dc39 vs 6366ce7942c9dc39
+PASS   local-detect-desk-before-n10-8h              G digest equals authoring Mac      b1e6668f44fcfa1a vs b1e6668f44fcfa1a
+PASS   local-detect-serve-after-n14-c2-8h-longrun   G digest equals authoring Mac      863ca3c039638243 vs 863ca3c039638243
+PASS   local-detect-serve-after-n14-c2-8h-seed2     G digest equals authoring Mac      698cfbdde87bfa66 vs 698cfbdde87bfa66
+PASS   local-detect-serve-after-n14-c2-8h-seed3     G digest equals authoring Mac      cd536e2572cfb9b2 vs cd536e2572cfb9b2
+PASS   local-detect-serve-after-n14-c2-8h           G digest equals authoring Mac      b85047b5883a586c vs b85047b5883a586c
+PASS   local-detect-serve-before-n14-c2-8h          G digest equals authoring Mac      56d97e913a6e17a5 vs 56d97e913a6e17a5
+PASS   local-detect-serve-oldclient-n14-c2-8h       G digest equals authoring Mac      4c637aca20842839 vs 4c637aca20842839
+PASS   serve-after-n14-c2-settled                   G digest equals authoring Mac      f5a3e1de3ca60e65 vs f5a3e1de3ca60e65
+PASS   serve-after-n14-c2                           G digest equals authoring Mac      121a887142ee451c vs 121a887142ee451c
+PASS   serve-before-n14-c2                          G digest equals authoring Mac      22e136f945226f21 vs 22e136f945226f21
+PASS   serve-oldclient-n14-c2                       G digest equals authoring Mac      1031ea529b145d24 vs 1031ea529b145d24
+PASS   timeout-slow3-n14-c2                         G digest equals authoring Mac      99ec624fb6ad0403 vs 99ec624fb6ad0403
+SUMMARY scenarios=45 PASS=142 FAIL=1
+DIFFERS cancel-disconnect15-n20-c3.json
+DIFFERS ghes-desk-after-n10-focused.json
+DIFFERS lanes-4sel-n30-c4-gate-d3.json
+DIFFERS local-detect-desk-after-n10-8h.json
+DIFFERS local-detect-serve-after-n14-c2-8h-seed2.json
+DIFFERS local-detect-serve-after-n14-c2-8h.json
+DIFFERS serve-after-n14-c2.json
+DIFFERS serve-before-n14-c2.json
+
+[exited with code 0]

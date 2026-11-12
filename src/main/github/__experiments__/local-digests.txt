@@ -1,3 +1,5 @@
+# STALE (WIP checkpoint): these digests are from the D3 caps 30 / 60 (harness 51a1489). The default selected cap is now
+# 10 min (PD-1 = C) and the local list has NOT been rerun; regenerate this file before using rule G.
 # <scenario> <determinism.spawnDigest>, authoring Mac, node v26.10.0, specs3r-local.txt
 cancel-disconnect15-n20-c3 2e2394776800d39fa59ca7dac7dab0115f4ba91ca693db31c494ba1429e27fb1
 cancel-hidden-n14-c2 95b7b809b069a370cbfbed7f00241f7e66d20454d83151327c36379dbc87b672

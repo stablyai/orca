@@ -1,5 +1,7 @@
 # STA-8667 D3r run list (automatic-only; no cadence setting). Supersedes specs3.txt (kept for the record). One scenario per line: <name> ENV=VALUE ...
 # "before" = code as checked out. "after" = D3 proposal (policy-d3.ts, gate-d3.ts, scheduler d3 patch).
+# Caps after product decision PD-1 (option C): selected 10 min, visible 60 min. These are the harness defaults.
+# Lines named -sel30 set EXP_CAP_SELECTED_MIN=30: the D3 caps (30 / 60), kept as the named comparison.
 # Cost scenarios run 4 simulated hours: the backoff ladder needs 62 min to reach the 60 min cap, so hour 4 is the warm hour.
 
 # --- A. Desktop app, GHES host ---
@@ -92,25 +94,28 @@ cancel-ref-n20-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=20 EXP_CLIENTS=
 cancel-disconnect15-n20-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=20 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_DISJOINT=1 EXP_DISCONNECT_MIN=15 EXP_JITTER=0.1 EXP_HOURS=1.5
 cancel-ref-n50-c3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=50 EXP_CLIENTS=3 EXP_WORKLOAD=mixed EXP_DISJOINT=1 EXP_JITTER=0.1 EXP_HOURS=2
 
-# --- F (added). More seeds, and the cap options of the product decision PD-1 (24 h each) ---
+# --- F (added). More seeds, and the cap options that were on the table for PD-1 (24 h each). -sel30 = the D3 caps ---
 detect-desk-after-n10-seed2 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_SEED=2
 detect-desk-after-n10-seed3 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_SEED=3
 detect-serve-after-n14-c2-seed3 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_SEED=3
 detect-desk-after-n10-sel15 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=15
-detect-desk-after-n10-sel10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=10
+detect-desk-after-n10-sel30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=30
+detect-serve-after-n14-c2-sel30 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=30
 detect-desk-after-n10-sel5 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=5
 detect-desk-after-n10-vis30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_VISIBLE_MIN=30
 detect-desk-after-n10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_VISIBLE_MIN=20
 detect-desk-after-n10-sel10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=24 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=10 EXP_CAP_VISIBLE_MIN=20
 
-# --- H (new). Cost of the PD-1 cap options in a quiet world (4 h; compare with ghes-desk-after-n10-focused / -n50-focused) ---
+# --- H (new). Cost of the cap options in a quiet world (4 h; compare with ghes-desk-after-n10-focused / -n50-focused,
+# which now run the decided caps 10 / 60). -sel30 = the D3 caps; capcost-serve-*-sel30 compares with serve-after-n14-c2 ---
 capcost-ghes-n10-sel15 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=15
-capcost-ghes-n10-sel10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=10
+capcost-ghes-n10-sel30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=30
 capcost-ghes-n10-sel5 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=5
 capcost-ghes-n10-vis30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=30
 capcost-ghes-n10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=20
 capcost-ghes-n10-sel10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=10 EXP_CAP_VISIBLE_MIN=20
-capcost-ghes-n50-sel10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=10
+capcost-ghes-n50-sel30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=30
+capcost-serve-n14-c2-sel30 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=30
 capcost-ghes-n50-vis30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=30
 capcost-ghes-n50-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=50 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=20
 

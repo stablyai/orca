@@ -1,0 +1,3184 @@
+{
+  "config": {
+    "scenario": "serve-after",
+    "host": "dotcom",
+    "n": 14,
+    "clients": 2,
+    "hours": 8,
+    "workload": "settled",
+    "focus": "focused",
+    "idle": "pause",
+    "jitter": 0.1,
+    "events": true,
+    "staggerS": 25,
+    "disjoint": false,
+    "seed": 1,
+    "eventTargets": 3,
+    "noci": true,
+    "gate": "d3",
+    "selectedIds": 1,
+    "selectedRunning": false,
+    "checks": false,
+    "slowEvery": 0,
+    "slowMs": 25000,
+    "disconnectMin": null,
+    "allGoneMin": null,
+    "fgEveryS": 0,
+    "runMinMin": 20,
+    "runMaxMin": 30,
+    "gapMinMin": 50,
+    "gapMaxMin": 80,
+    "capSelectedMin": 30,
+    "capVisibleMin": 60
+  },
+  "simulatedSeconds": 28800,
+  "gh": {
+    "spawns": 309,
+    "perHour": 38.6,
+    "byKind": {
+      "graphql:sidebar": 252,
+      "graphql:merge-metadata": 34,
+      "rest:pulls-by-head": 23
+    },
+    "apiRequestsByHost": {
+      "github.com": 309
+    },
+    "apiRequestsPerHourByHost": {
+      "github.com": 38.6
+    },
+    "firstHour": 68,
+    "perHourCounts": [
+      68,
+      53,
+      20,
+      47,
+      35,
+      22,
+      37,
+      27
+    ],
+    "lastHourByKind": {
+      "graphql:sidebar": 21,
+      "graphql:merge-metadata": 4,
+      "rest:pulls-by-head": 2
+    },
+    "lastHourRollingPeak60s": 5,
+    "first15min": 44,
+    "steadyPerHour": 34.2,
+    "steadyPerMinute": 0.57,
+    "rollingPeak60s": 11,
+    "rollingPeak60sSteady": 6,
+    "worstPeakToMean15min": 15,
+    "timelinePerMinute": [
+      11,
+      6,
+      4,
+      0,
+      0,
+      7,
+      4,
+      0,
+      3,
+      4,
+      2,
+      0,
+      0,
+      2,
+      1,
+      0,
+      3,
+      5,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      2,
+      0,
+      1,
+      4,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      2,
+      2,
+      4,
+      1,
+      0,
+      2,
+      0,
+      2,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      2,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      1,
+      2,
+      1,
+      3,
+      1,
+      2,
+      1,
+      2,
+      1,
+      2,
+      0,
+      1,
+      0,
+      1,
+      0,
+      2,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      1,
+      1,
+      3,
+      0,
+      1,
+      1,
+      2,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      1,
+      0,
+      1,
+      3,
+      2,
+      1,
+      2,
+      0,
+      4,
+      1,
+      2,
+      1,
+      2,
+      1,
+      2,
+      1,
+      2,
+      1,
+      3,
+      1,
+      1,
+      1,
+      2,
+      1,
+      1,
+      1,
+      0,
+      1,
+      0,
+      0,
+      2,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      4,
+      1,
+      0,
+      1,
+      0,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      3,
+      1,
+      1,
+      2,
+      2,
+      4,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      2,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      2,
+      1,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      1,
+      2,
+      1,
+      1,
+      1,
+      3,
+      2,
+      1,
+      3,
+      1,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      0,
+      0,
+      2,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      2,
+      0,
+      2,
+      0,
+      2,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      1,
+      0,
+      0,
+      3,
+      4,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "git": {
+    "total": 534
+  },
+  "serve": {
+    "gate": "d3",
+    "upstreamStarts": 262,
+    "maxStartsPer5min": 18,
+    "maxStartsPer60s": 8,
+    "admits": {
+      "selected-own": 92,
+      "visible": 169,
+      "selected-borrowed": 1
+    },
+    "lanes": {
+      "gate": "d3",
+      "simulatedSeconds": 28800,
+      "lanes": {
+        "selected-own": {
+          "starts": 92,
+          "overdueAtStartS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 10
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 10
+          },
+          "peak60s": 2,
+          "peak5min": 5
+        },
+        "selected-borrowed": {
+          "starts": 1,
+          "overdueAtStartS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 0
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 0,
+            "p90": 0,
+            "max": 0
+          },
+          "peak60s": 1,
+          "peak5min": 1
+        },
+        "visible": {
+          "starts": 169,
+          "overdueAtStartS": {
+            "p50": 0,
+            "p90": 43,
+            "max": 169
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 0,
+            "p90": 43,
+            "max": 169
+          },
+          "peak60s": 6,
+          "peak5min": 15
+        },
+        "interactive": {
+          "starts": 0,
+          "overdueAtStartS": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          },
+          "peak60s": 0,
+          "peak5min": 0
+        }
+      },
+      "selectedTotal": {
+        "starts": 93,
+        "peak60s": 2,
+        "peak5min": 6
+      },
+      "budgeted": {
+        "starts": 262,
+        "peak60s": 8,
+        "peak5min": 18
+      },
+      "refusals": {
+        "selected": 4,
+        "visible": 115
+      },
+      "visibleIdentities": {
+        "seen": 13,
+        "neverServed": 0,
+        "worstWaitFromFirstSeenToFirstStartS": 120
+      }
+    },
+    "selectedIdentities": [
+      {
+        "identity": "pr:feat/wt-0",
+        "starts": 93,
+        "medianGapS": 60,
+        "maxGapS": 1772
+      }
+    ],
+    "cacheHits": 6,
+    "lastGoodServedOverBudget": 82,
+    "deferredCold": 37,
+    "replyDeadlineHits": 0,
+    "interactiveOverflow": 0,
+    "legacy": {
+      "hits": 0,
+      "upstreamReads": 0
+    },
+    "maxRpcSimulatedMs": 1200,
+    "rpcSimulatedMs": {
+      "p50": 400,
+      "p99": 800,
+      "over10s": 0
+    },
+    "queueAgeSeries": {
+      "windowSeconds": 300,
+      "windows": 96,
+      "byClient": {
+        "1": {
+          "starts": [
+            18,
+            16,
+            4,
+            8,
+            0,
+            3,
+            7,
+            0,
+            1,
+            0,
+            0,
+            1,
+            8,
+            4,
+            2,
+            3,
+            3,
+            8,
+            6,
+            3,
+            1,
+            2,
+            1,
+            5,
+            4,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            0,
+            1,
+            2,
+            7,
+            9,
+            7,
+            7,
+            4,
+            2,
+            1,
+            2,
+            1,
+            0,
+            2,
+            4,
+            2,
+            0,
+            1,
+            1,
+            1,
+            0,
+            0,
+            1,
+            0,
+            5,
+            7,
+            9,
+            5,
+            2,
+            2,
+            2,
+            0,
+            0,
+            2,
+            0,
+            0,
+            1,
+            6,
+            0,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            3,
+            5,
+            6,
+            7,
+            5,
+            1,
+            2,
+            2,
+            2,
+            5,
+            2,
+            1,
+            1,
+            0,
+            2,
+            7,
+            0,
+            0,
+            0
+          ],
+          "refusals": [
+            33,
+            7,
+            0,
+            11,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0
+          ],
+          "ageP50S": [
+            40,
+            24,
+            0,
+            10,
+            null,
+            0,
+            0,
+            null,
+            0,
+            null,
+            null,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null,
+            null,
+            null,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            0,
+            null,
+            null,
+            0,
+            null,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null,
+            0,
+            null,
+            null,
+            0,
+            0,
+            null,
+            0,
+            0,
+            null,
+            0,
+            null,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            null,
+            null,
+            null
+          ],
+          "ageMaxS": [
+            120,
+            169,
+            10,
+            58,
+            null,
+            0,
+            0,
+            null,
+            0,
+            null,
+            null,
+            0,
+            10,
+            10,
+            0,
+            0,
+            0,
+            0,
+            10,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null,
+            null,
+            null,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            0,
+            null,
+            null,
+            0,
+            null,
+            0,
+            0,
+            10,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null,
+            0,
+            null,
+            null,
+            0,
+            10,
+            null,
+            0,
+            0,
+            null,
+            0,
+            null,
+            0,
+            0,
+            0,
+            0,
+            10,
+            10,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            10,
+            null,
+            null,
+            null
+          ],
+          "overdueMaxS": [
+            120,
+            169,
+            10,
+            58,
+            null,
+            0,
+            0,
+            null,
+            0,
+            null,
+            null,
+            0,
+            10,
+            10,
+            0,
+            0,
+            0,
+            0,
+            10,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null,
+            null,
+            null,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            0,
+            null,
+            0,
+            0,
+            0,
+            null,
+            null,
+            0,
+            null,
+            0,
+            0,
+            10,
+            0,
+            0,
+            0,
+            0,
+            null,
+            null,
+            0,
+            null,
+            null,
+            0,
+            10,
+            null,
+            0,
+            0,
+            null,
+            0,
+            null,
+            0,
+            0,
+            0,
+            0,
+            10,
+            10,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            null,
+            0,
+            10,
+            null,
+            null,
+            null
+          ]
+        },
+        "2": {
+          "starts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "refusals": [
+            24,
+            7,
+            0,
+            11,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0
+          ],
+          "ageP50S": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "ageMaxS": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "overdueMaxS": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      },
+      "open": [
+        {
+          "identities": 7,
+          "oldestS": 169
+        },
+        {
+          "identities": 1,
+          "oldestS": 2
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        },
+        {
+          "identities": 0,
+          "oldestS": 0
+        }
+      ]
+    },
+    "queueAgeSecondsByClient": {
+      "1": {
+        "admits": 262,
+        "p50": 0,
+        "max": 169
+      }
+    },
+    "clientRefreshCalls": 643,
+    "clientFailures": 0,
+    "checksCalls": 0,
+    "foregroundCalls": 0,
+    "hintsDroppedAsLate": 0,
+    "upstreamStartsAfterAllClientsGone": null
+  },
+  "detection": {
+    "events": 29,
+    "observers": 2,
+    "bounds": {
+      "finishSelectedS": 70,
+      "finishVisibleS": 130,
+      "capSelectedS": 1810,
+      "capVisibleS": 3610
+    },
+    "startSelected": {
+      "samples": 8,
+      "p50": 824,
+      "p90": 925,
+      "max": 925
+    },
+    "startVisible": {
+      "samples": 6,
+      "p50": 779,
+      "p90": 780,
+      "max": 780
+    },
+    "finishSelected": {
+      "samples": 8,
+      "p50": 13,
+      "p90": 52,
+      "max": 52
+    },
+    "finishVisible": {
+      "samples": 20,
+      "p50": 317,
+      "p90": 1792,
+      "max": 1792
+    },
+    "undetected": 7,
+    "pairs": 58,
+    "d3UndetectedPairs": 14,
+    "transientRunPairs": 14,
+    "uncovered": 0,
+    "pendingAtEnd": 2,
+    "overBound": 0,
+    "worstSlotWaitS": 0,
+    "classes": {
+      "finishSeenRunningSelected": {
+        "boundS": 70,
+        "latencyS": {
+          "samples": 8,
+          "p50": 13,
+          "p90": 52,
+          "max": 52
+        },
+        "slotWaitS": {
+          "samples": 8,
+          "p50": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 8,
+          "p50": 13,
+          "p90": 52,
+          "max": 52
+        },
+        "overBound": 0
+      },
+      "finishSeenRunningVisible": {
+        "boundS": 130,
+        "latencyS": {
+          "samples": 6,
+          "p50": 36,
+          "p90": 73,
+          "max": 73
+        },
+        "slotWaitS": {
+          "samples": 6,
+          "p50": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 6,
+          "p50": 36,
+          "p90": 73,
+          "max": 73
+        },
+        "overBound": 0
+      },
+      "finishSeenStuckSelected": {
+        "boundS": null,
+        "latencyS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "slotWaitS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "overBound": 0
+      },
+      "finishSeenStuckVisible": {
+        "boundS": null,
+        "latencyS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "slotWaitS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "overBound": 0
+      },
+      "finishRunNeverSeenSelected": {
+        "boundS": null,
+        "latencyS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "slotWaitS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "overBound": 0
+      },
+      "finishRunNeverSeenVisible": {
+        "boundS": 3610,
+        "latencyS": {
+          "samples": 14,
+          "p50": 1151,
+          "p90": 1792,
+          "max": 1792
+        },
+        "slotWaitS": {
+          "samples": 14,
+          "p50": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 14,
+          "p50": 1151,
+          "p90": 1792,
+          "max": 1792
+        },
+        "overBound": 0
+      },
+      "startSeenSelected": {
+        "boundS": 1810,
+        "latencyS": {
+          "samples": 8,
+          "p50": 824,
+          "p90": 925,
+          "max": 925
+        },
+        "slotWaitS": {
+          "samples": 8,
+          "p50": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 8,
+          "p50": 824,
+          "p90": 925,
+          "max": 925
+        },
+        "overBound": 0
+      },
+      "startSeenVisible": {
+        "boundS": 3610,
+        "latencyS": {
+          "samples": 6,
+          "p50": 779,
+          "p90": 780,
+          "max": 780
+        },
+        "slotWaitS": {
+          "samples": 6,
+          "p50": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 6,
+          "p50": 779,
+          "p90": 780,
+          "max": 780
+        },
+        "overBound": 0
+      },
+      "startTransientSelected": {
+        "boundS": null,
+        "latencyS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "slotWaitS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 0,
+          "p50": null,
+          "p90": null,
+          "max": null
+        },
+        "overBound": 0
+      },
+      "startTransientVisible": {
+        "boundS": 3610,
+        "latencyS": {
+          "samples": 14,
+          "p50": 2833,
+          "p90": 3027,
+          "max": 3027
+        },
+        "slotWaitS": {
+          "samples": 14,
+          "p50": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "latencyMinusSlotWaitS": {
+          "samples": 14,
+          "p50": 2833,
+          "p90": 3027,
+          "max": 3027
+        },
+        "overBound": 0
+      }
+    },
+    "overBoundRows": [],
+    "perEvent": [
+      {
+        "pr": 105,
+        "kind": "start",
+        "selected": false,
+        "atS": 3735,
+        "runS": 1686,
+        "nextDueInS": 62,
+        "seenS": {
+          "c1": 63,
+          "c2": 63
+        },
+        "covers": {
+          "host": {
+            "latencyS": 63,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c1": {
+            "latencyS": 63,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c2": {
+            "latencyS": 63,
+            "slotWaitS": 0,
+            "sawRunning": true
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "start",
+        "selected": false,
+        "atS": 4116,
+        "runS": 1682,
+        "nextDueInS": 2833,
+        "seenS": {},
+        "covers": {
+          "host": {
+            "latencyS": 2833,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 2833,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 2833,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "start",
+        "selected": true,
+        "atS": 4149,
+        "runS": 1356,
+        "nextDueInS": 925,
+        "seenS": {
+          "c1": 925,
+          "c2": 925
+        },
+        "covers": {
+          "host": {
+            "latencyS": 925,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c1": {
+            "latencyS": 925,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c2": {
+            "latencyS": 925,
+            "slotWaitS": 0,
+            "sawRunning": true
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "finish",
+        "selected": false,
+        "atS": 5421,
+        "runS": null,
+        "nextDueInS": 73,
+        "startSeenBy": [
+          "host",
+          "c1",
+          "c2"
+        ],
+        "seenS": {
+          "c1": 73,
+          "c2": 73
+        },
+        "covers": {
+          "host": {
+            "latencyS": 73,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 73,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 73,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "finish",
+        "selected": true,
+        "atS": 5506,
+        "runS": null,
+        "nextDueInS": 52,
+        "startSeenBy": [
+          "host",
+          "c1",
+          "c2"
+        ],
+        "seenS": {
+          "c1": 52,
+          "c2": 52
+        },
+        "covers": {
+          "host": {
+            "latencyS": 52,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 52,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 52,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "finish",
+        "selected": false,
+        "atS": 5798,
+        "runS": null,
+        "nextDueInS": 1150,
+        "startSeenBy": [],
+        "seenS": {
+          "c1": 1151,
+          "c2": 1151
+        },
+        "covers": {
+          "host": {
+            "latencyS": 1151,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 1151,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 1151,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "start",
+        "selected": false,
+        "atS": 9418,
+        "runS": 1593,
+        "nextDueInS": 2904,
+        "seenS": {},
+        "covers": {
+          "host": {
+            "latencyS": 2904,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 2904,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 2904,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "start",
+        "selected": false,
+        "atS": 9575,
+        "runS": 1708,
+        "nextDueInS": 780,
+        "seenS": {
+          "c1": 780,
+          "c2": 780
+        },
+        "covers": {
+          "host": {
+            "latencyS": 780,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c1": {
+            "latencyS": 780,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c2": {
+            "latencyS": 780,
+            "slotWaitS": 0,
+            "sawRunning": true
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "start",
+        "selected": true,
+        "atS": 10020,
+        "runS": 1780,
+        "nextDueInS": 823,
+        "seenS": {
+          "c1": 824,
+          "c2": 824
+        },
+        "covers": {
+          "host": {
+            "latencyS": 824,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c1": {
+            "latencyS": 824,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c2": {
+            "latencyS": 824,
+            "slotWaitS": 0,
+            "sawRunning": true
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "finish",
+        "selected": false,
+        "atS": 11011,
+        "runS": null,
+        "nextDueInS": 1311,
+        "startSeenBy": [],
+        "seenS": {
+          "c1": 1311,
+          "c2": 1311
+        },
+        "covers": {
+          "host": {
+            "latencyS": 1311,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 1311,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 1311,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "finish",
+        "selected": false,
+        "atS": 11283,
+        "runS": null,
+        "nextDueInS": 35,
+        "startSeenBy": [
+          "host",
+          "c1",
+          "c2"
+        ],
+        "seenS": {
+          "c1": 36,
+          "c2": 36
+        },
+        "covers": {
+          "host": {
+            "latencyS": 36,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 36,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 36,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "finish",
+        "selected": true,
+        "atS": 11800,
+        "runS": null,
+        "nextDueInS": 10,
+        "startSeenBy": [
+          "host",
+          "c1",
+          "c2"
+        ],
+        "seenS": {
+          "c1": 10,
+          "c2": 10
+        },
+        "covers": {
+          "host": {
+            "latencyS": 10,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 10,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 10,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "start",
+        "selected": false,
+        "atS": 14215,
+        "runS": 1214,
+        "nextDueInS": 1378,
+        "seenS": {},
+        "covers": {
+          "host": {
+            "latencyS": 1379,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 1379,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 1379,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "start",
+        "selected": false,
+        "atS": 15347,
+        "runS": 1235,
+        "nextDueInS": 3026,
+        "seenS": {},
+        "covers": {
+          "host": {
+            "latencyS": 3027,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 3027,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 3027,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "finish",
+        "selected": false,
+        "atS": 15429,
+        "runS": null,
+        "nextDueInS": 164,
+        "startSeenBy": [],
+        "seenS": {
+          "c1": 165,
+          "c2": 165
+        },
+        "covers": {
+          "host": {
+            "latencyS": 165,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 165,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 165,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "start",
+        "selected": true,
+        "atS": 16207,
+        "runS": 1753,
+        "nextDueInS": 678,
+        "seenS": {
+          "c1": 679,
+          "c2": 679
+        },
+        "covers": {
+          "host": {
+            "latencyS": 679,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c1": {
+            "latencyS": 679,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c2": {
+            "latencyS": 679,
+            "slotWaitS": 0,
+            "sawRunning": true
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "finish",
+        "selected": false,
+        "atS": 16582,
+        "runS": null,
+        "nextDueInS": 1792,
+        "startSeenBy": [],
+        "seenS": {
+          "c1": 1792,
+          "c2": 1792
+        },
+        "covers": {
+          "host": {
+            "latencyS": 1792,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 1792,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 1792,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "finish",
+        "selected": true,
+        "atS": 17961,
+        "runS": null,
+        "nextDueInS": 13,
+        "startSeenBy": [
+          "host",
+          "c1",
+          "c2"
+        ],
+        "seenS": {
+          "c1": 13,
+          "c2": 13
+        },
+        "covers": {
+          "host": {
+            "latencyS": 13,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 13,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 13,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "start",
+        "selected": false,
+        "atS": 19324,
+        "runS": 1465,
+        "nextDueInS": 2922,
+        "seenS": {},
+        "covers": {
+          "host": {
+            "latencyS": 2923,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 2923,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 2923,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "start",
+        "selected": false,
+        "atS": 19656,
+        "runS": 1647,
+        "nextDueInS": 1964,
+        "seenS": {},
+        "covers": {
+          "host": {
+            "latencyS": 1965,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 1965,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 1965,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "finish",
+        "selected": false,
+        "atS": 20789,
+        "runS": null,
+        "nextDueInS": 1458,
+        "startSeenBy": [],
+        "seenS": {
+          "c1": 1458,
+          "c2": 1458
+        },
+        "covers": {
+          "host": {
+            "latencyS": 1458,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 1458,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 1458,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "finish",
+        "selected": false,
+        "atS": 21303,
+        "runS": null,
+        "nextDueInS": 317,
+        "startSeenBy": [],
+        "seenS": {
+          "c1": 317,
+          "c2": 317
+        },
+        "covers": {
+          "host": {
+            "latencyS": 317,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 317,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 317,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "start",
+        "selected": true,
+        "atS": 22519,
+        "runS": 1677,
+        "nextDueInS": 717,
+        "seenS": {
+          "c1": 718,
+          "c2": 718
+        },
+        "covers": {
+          "host": {
+            "latencyS": 718,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c1": {
+            "latencyS": 718,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c2": {
+            "latencyS": 718,
+            "slotWaitS": 0,
+            "sawRunning": true
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "finish",
+        "selected": true,
+        "atS": 24196,
+        "runS": null,
+        "nextDueInS": 7,
+        "startSeenBy": [
+          "host",
+          "c1",
+          "c2"
+        ],
+        "seenS": {
+          "c1": 8,
+          "c2": 8
+        },
+        "covers": {
+          "host": {
+            "latencyS": 8,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 8,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 8,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "start",
+        "selected": false,
+        "atS": 24212,
+        "runS": 1573,
+        "nextDueInS": 1615,
+        "seenS": {},
+        "covers": {
+          "host": {
+            "latencyS": 1615,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 1615,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 1615,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "start",
+        "selected": false,
+        "atS": 24421,
+        "runS": 1622,
+        "nextDueInS": 779,
+        "seenS": {
+          "c1": 779,
+          "c2": 779
+        },
+        "covers": {
+          "host": {
+            "latencyS": 779,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c1": {
+            "latencyS": 779,
+            "slotWaitS": 0,
+            "sawRunning": true
+          },
+          "c2": {
+            "latencyS": 779,
+            "slotWaitS": 0,
+            "sawRunning": true
+          }
+        }
+      },
+      {
+        "pr": 105,
+        "kind": "finish",
+        "selected": false,
+        "atS": 25785,
+        "runS": null,
+        "nextDueInS": 41,
+        "startSeenBy": [],
+        "seenS": {
+          "c1": 42,
+          "c2": 42
+        },
+        "covers": {
+          "host": {
+            "latencyS": 42,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 42,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 42,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 101,
+        "kind": "finish",
+        "selected": false,
+        "atS": 26043,
+        "runS": null,
+        "nextDueInS": 1,
+        "startSeenBy": [
+          "host",
+          "c1",
+          "c2"
+        ],
+        "seenS": {
+          "c1": 1,
+          "c2": 1
+        },
+        "covers": {
+          "host": {
+            "latencyS": 1,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c1": {
+            "latencyS": 1,
+            "slotWaitS": 0,
+            "sawRunning": false
+          },
+          "c2": {
+            "latencyS": 1,
+            "slotWaitS": 0,
+            "sawRunning": false
+          }
+        }
+      },
+      {
+        "pr": 100,
+        "kind": "start",
+        "selected": true,
+        "atS": 28658,
+        "runS": 1556,
+        "nextDueInS": 869,
+        "seenS": {},
+        "covers": {}
+      }
+    ]
+  },
+  "focusReturn": null,
+  "determinism": {
+    "spawnDigest": "b85047b5883a586cac3cd5e3060793c05b982277c171711772cb15534def5afe",
+    "gateDigest": "77e0fa6b88e8e5b3f1fb3b2f1575b3f5eba41a6280893c0457e1a822f115d20c",
+    "realEventLoopTurns": 59103
+  },
+  "unknownGit": [],
+  "unknownGh": []
+}

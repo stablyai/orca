@@ -1,0 +1,850 @@
+{
+  "config": {
+    "scenario": "serve-after",
+    "host": "dotcom",
+    "n": 30,
+    "clients": 4,
+    "hours": 1.5,
+    "workload": "mixed",
+    "focus": "focused",
+    "idle": "pause",
+    "jitter": 0.1,
+    "events": false,
+    "staggerS": 25,
+    "disjoint": false,
+    "seed": 1,
+    "eventTargets": 7,
+    "noci": true,
+    "gate": "d3",
+    "selectedIds": 4,
+    "selectedRunning": false,
+    "checks": true,
+    "slowEvery": 0,
+    "slowMs": 25000,
+    "disconnectMin": null,
+    "allGoneMin": null,
+    "fgEveryS": 0,
+    "runMinMin": 20,
+    "runMaxMin": 30,
+    "gapMinMin": 50,
+    "gapMaxMin": 80,
+    "capSelectedMin": 30,
+    "capVisibleMin": 60
+  },
+  "simulatedSeconds": 5400,
+  "gh": {
+    "spawns": 320,
+    "perHour": 213.3,
+    "byKind": {
+      "graphql:checks": 74,
+      "graphql:sidebar": 208,
+      "graphql:merge-metadata": 11,
+      "rest:pulls-by-head": 27
+    },
+    "apiRequestsByHost": {
+      "github.com": 320
+    },
+    "apiRequestsPerHourByHost": {
+      "github.com": 213.3
+    },
+    "firstHour": 240,
+    "perHourCounts": [
+      240,
+      80
+    ],
+    "lastHourByKind": {
+      "graphql:checks": 28,
+      "graphql:sidebar": 46,
+      "graphql:merge-metadata": 3,
+      "rest:pulls-by-head": 3
+    },
+    "lastHourRollingPeak60s": 8,
+    "first15min": 70,
+    "steadyPerHour": 200,
+    "steadyPerMinute": 3.33,
+    "rollingPeak60s": 15,
+    "rollingPeak60sSteady": 11,
+    "worstPeakToMean15min": 2.86,
+    "timelinePerMinute": [
+      14,
+      7,
+      3,
+      0,
+      0,
+      12,
+      6,
+      4,
+      0,
+      0,
+      15,
+      6,
+      3,
+      0,
+      0,
+      11,
+      6,
+      6,
+      0,
+      0,
+      10,
+      5,
+      6,
+      0,
+      0,
+      10,
+      5,
+      8,
+      0,
+      0,
+      10,
+      5,
+      2,
+      2,
+      2,
+      8,
+      3,
+      0,
+      2,
+      5,
+      7,
+      7,
+      1,
+      4,
+      3,
+      8,
+      5,
+      2,
+      1,
+      3,
+      4,
+      6,
+      3,
+      0,
+      0,
+      4,
+      3,
+      3,
+      0,
+      0,
+      4,
+      5,
+      3,
+      0,
+      0,
+      4,
+      3,
+      3,
+      0,
+      0,
+      6,
+      5,
+      4,
+      2,
+      4,
+      6,
+      5,
+      3,
+      2,
+      1,
+      5,
+      3,
+      2,
+      1,
+      1,
+      4,
+      3,
+      1,
+      0,
+      0
+    ]
+  },
+  "git": {
+    "total": 443
+  },
+  "serve": {
+    "gate": "d3",
+    "upstreamStarts": 291,
+    "maxStartsPer5min": 20,
+    "maxStartsPer60s": 11,
+    "admits": {
+      "selected-own": 90,
+      "visible": 150,
+      "selected-borrowed": 51
+    },
+    "lanes": {
+      "gate": "d3",
+      "simulatedSeconds": 5400,
+      "lanes": {
+        "selected-own": {
+          "starts": 90,
+          "overdueAtStartS": {
+            "p50": 250,
+            "p90": 419,
+            "max": 515
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 250,
+            "p90": 419,
+            "max": 515
+          },
+          "peak60s": 5,
+          "peak5min": 5
+        },
+        "selected-borrowed": {
+          "starts": 51,
+          "overdueAtStartS": {
+            "p50": 0,
+            "p90": 240,
+            "max": 250
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 0,
+            "p90": 240,
+            "max": 250
+          },
+          "peak60s": 5,
+          "peak5min": 5
+        },
+        "visible": {
+          "starts": 150,
+          "overdueAtStartS": {
+            "p50": 140,
+            "p90": 400,
+            "max": 492
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": 140,
+            "p90": 400,
+            "max": 492
+          },
+          "peak60s": 6,
+          "peak5min": 15
+        },
+        "interactive": {
+          "starts": 0,
+          "overdueAtStartS": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          },
+          "waitedSinceFirstRefusalS": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          },
+          "peak60s": 0,
+          "peak5min": 0
+        }
+      },
+      "selectedTotal": {
+        "starts": 141,
+        "peak60s": 8,
+        "peak5min": 10
+      },
+      "budgeted": {
+        "starts": 291,
+        "peak60s": 11,
+        "peak5min": 20
+      },
+      "refusals": {
+        "selected": 188,
+        "visible": 834
+      },
+      "visibleIdentities": {
+        "seen": 30,
+        "neverServed": 0,
+        "worstWaitFromFirstSeenToFirstStartS": 410
+      }
+    },
+    "selectedIdentities": [
+      {
+        "identity": "pr:feat/wt-2",
+        "starts": 25,
+        "medianGapS": 240,
+        "maxGapS": 442
+      },
+      {
+        "identity": "checks:feat/wt-2",
+        "starts": 19,
+        "medianGapS": 310,
+        "maxGapS": 570
+      },
+      {
+        "identity": "pr:feat/wt-7",
+        "starts": 22,
+        "medianGapS": 260,
+        "maxGapS": 500
+      },
+      {
+        "identity": "checks:feat/wt-7",
+        "starts": 19,
+        "medianGapS": 310,
+        "maxGapS": 575
+      },
+      {
+        "identity": "pr:feat/wt-12",
+        "starts": 22,
+        "medianGapS": 250,
+        "maxGapS": 480
+      },
+      {
+        "identity": "checks:feat/wt-12",
+        "starts": 18,
+        "medianGapS": 310,
+        "maxGapS": 550
+      },
+      {
+        "identity": "pr:feat/wt-17",
+        "starts": 22,
+        "medianGapS": 250,
+        "maxGapS": 480
+      },
+      {
+        "identity": "checks:feat/wt-17",
+        "starts": 18,
+        "medianGapS": 310,
+        "maxGapS": 560
+      }
+    ],
+    "cacheHits": 154,
+    "lastGoodServedOverBudget": 864,
+    "deferredCold": 158,
+    "replyDeadlineHits": 0,
+    "interactiveOverflow": 0,
+    "legacy": {
+      "hits": 0,
+      "upstreamReads": 0
+    },
+    "maxRpcSimulatedMs": 800,
+    "rpcSimulatedMs": {
+      "p50": 0,
+      "p99": 800,
+      "over10s": 0
+    },
+    "queueAgeSeries": {
+      "windowSeconds": 300,
+      "windows": 18,
+      "byClient": {
+        "1": {
+          "starts": [
+            10,
+            8,
+            7,
+            13,
+            3,
+            3,
+            8,
+            4,
+            5,
+            4,
+            3,
+            2,
+            4,
+            3,
+            4,
+            5,
+            1,
+            2
+          ],
+          "refusals": [
+            65,
+            28,
+            21,
+            29,
+            20,
+            27,
+            14,
+            6,
+            18,
+            11,
+            4,
+            2,
+            2,
+            2,
+            7,
+            4,
+            3,
+            2
+          ],
+          "ageP50S": [
+            30,
+            310,
+            298,
+            166,
+            240,
+            140,
+            156,
+            181,
+            0,
+            10,
+            0,
+            250,
+            250,
+            189,
+            189,
+            0,
+            240,
+            308
+          ],
+          "ageMaxS": [
+            140,
+            355,
+            449,
+            409,
+            291,
+            510,
+            260,
+            240,
+            230,
+            20,
+            459,
+            250,
+            250,
+            250,
+            250,
+            250,
+            240,
+            308
+          ],
+          "overdueMaxS": [
+            140,
+            355,
+            449,
+            409,
+            291,
+            510,
+            260,
+            240,
+            230,
+            20,
+            459,
+            250,
+            250,
+            250,
+            250,
+            250,
+            240,
+            308
+          ]
+        },
+        "2": {
+          "starts": [
+            2,
+            1,
+            1,
+            4,
+            7,
+            5,
+            1,
+            6,
+            4,
+            7,
+            2,
+            1,
+            2,
+            2,
+            3,
+            4,
+            5,
+            2
+          ],
+          "refusals": [
+            58,
+            27,
+            21,
+            30,
+            23,
+            27,
+            13,
+            5,
+            20,
+            9,
+            4,
+            2,
+            2,
+            2,
+            5,
+            5,
+            1,
+            3
+          ],
+          "ageP50S": [
+            25,
+            340,
+            515,
+            270,
+            302,
+            156,
+            60,
+            0,
+            173,
+            0,
+            209,
+            439,
+            419,
+            250,
+            250,
+            250,
+            0,
+            250
+          ],
+          "ageMaxS": [
+            25,
+            340,
+            515,
+            276,
+            312,
+            250,
+            60,
+            480,
+            239,
+            382,
+            209,
+            439,
+            419,
+            250,
+            250,
+            250,
+            250,
+            250
+          ],
+          "overdueMaxS": [
+            25,
+            340,
+            515,
+            276,
+            312,
+            250,
+            60,
+            480,
+            239,
+            382,
+            209,
+            439,
+            419,
+            250,
+            250,
+            250,
+            250,
+            250
+          ]
+        },
+        "3": {
+          "starts": [
+            5,
+            9,
+            10,
+            1,
+            2,
+            6,
+            2,
+            3,
+            6,
+            7,
+            4,
+            4,
+            2,
+            3,
+            1,
+            5,
+            3,
+            2
+          ],
+          "refusals": [
+            52,
+            25,
+            20,
+            30,
+            23,
+            25,
+            14,
+            5,
+            22,
+            9,
+            5,
+            2,
+            2,
+            2,
+            5,
+            5,
+            2,
+            2
+          ],
+          "ageP50S": [
+            70,
+            370,
+            484,
+            260,
+            280,
+            129,
+            270,
+            0,
+            114,
+            10,
+            209,
+            189,
+            189,
+            189,
+            250,
+            10,
+            250,
+            250
+          ],
+          "ageMaxS": [
+            90,
+            410,
+            492,
+            260,
+            280,
+            490,
+            270,
+            260,
+            220,
+            250,
+            270,
+            250,
+            189,
+            419,
+            250,
+            419,
+            250,
+            250
+          ],
+          "overdueMaxS": [
+            90,
+            410,
+            492,
+            260,
+            280,
+            490,
+            270,
+            260,
+            220,
+            256,
+            270,
+            250,
+            189,
+            419,
+            250,
+            419,
+            250,
+            250
+          ]
+        },
+        "4": {
+          "starts": [
+            3,
+            2,
+            2,
+            2,
+            8,
+            6,
+            9,
+            4,
+            4,
+            1,
+            3,
+            3,
+            3,
+            2,
+            10,
+            2,
+            2,
+            2
+          ],
+          "refusals": [
+            54,
+            27,
+            20,
+            29,
+            22,
+            26,
+            15,
+            5,
+            18,
+            10,
+            4,
+            2,
+            2,
+            2,
+            5,
+            5,
+            2,
+            2
+          ],
+          "ageP50S": [
+            110,
+            275,
+            315,
+            500,
+            181,
+            110,
+            166,
+            179,
+            76,
+            248,
+            270,
+            189,
+            189,
+            250,
+            0,
+            250,
+            369,
+            250
+          ],
+          "ageMaxS": [
+            120,
+            275,
+            315,
+            500,
+            240,
+            280,
+            250,
+            240,
+            230,
+            248,
+            459,
+            250,
+            250,
+            250,
+            419,
+            250,
+            369,
+            250
+          ],
+          "overdueMaxS": [
+            120,
+            275,
+            315,
+            500,
+            240,
+            280,
+            250,
+            240,
+            230,
+            248,
+            459,
+            250,
+            250,
+            250,
+            419,
+            250,
+            369,
+            250
+          ]
+        }
+      },
+      "open": [
+        {
+          "identities": 31,
+          "oldestS": 300
+        },
+        {
+          "identities": 24,
+          "oldestS": 515
+        },
+        {
+          "identities": 21,
+          "oldestS": 490
+        },
+        {
+          "identities": 18,
+          "oldestS": 308
+        },
+        {
+          "identities": 18,
+          "oldestS": 490
+        },
+        {
+          "identities": 17,
+          "oldestS": 240
+        },
+        {
+          "identities": 4,
+          "oldestS": 480
+        },
+        {
+          "identities": 5,
+          "oldestS": 190
+        },
+        {
+          "identities": 8,
+          "oldestS": 230
+        },
+        {
+          "identities": 7,
+          "oldestS": 439
+        },
+        {
+          "identities": 8,
+          "oldestS": 419
+        },
+        {
+          "identities": 8,
+          "oldestS": 399
+        },
+        {
+          "identities": 8,
+          "oldestS": 399
+        },
+        {
+          "identities": 8,
+          "oldestS": 399
+        },
+        {
+          "identities": 9,
+          "oldestS": 399
+        },
+        {
+          "identities": 7,
+          "oldestS": 349
+        },
+        {
+          "identities": 7,
+          "oldestS": 288
+        },
+        {
+          "identities": 8,
+          "oldestS": 288
+        }
+      ]
+    },
+    "queueAgeSecondsByClient": {
+      "1": {
+        "admits": 89,
+        "p50": 160,
+        "max": 510
+      },
+      "2": {
+        "admits": 59,
+        "p50": 230,
+        "max": 515
+      },
+      "3": {
+        "admits": 75,
+        "p50": 209,
+        "max": 492
+      },
+      "4": {
+        "admits": 68,
+        "p50": 165,
+        "max": 500
+      }
+    },
+    "clientRefreshCalls": 1713,
+    "clientFailures": 0,
+    "checksCalls": 164,
+    "foregroundCalls": 0,
+    "hintsDroppedAsLate": 0,
+    "upstreamStartsAfterAllClientsGone": null
+  },
+  "detection": null,
+  "focusReturn": null,
+  "determinism": {
+    "spawnDigest": "ff1b37e108baa92367a79832de71143f5c8734b2b3999166274ff3228fcac742",
+    "gateDigest": "ac6588decbe03d8c337536779cdacd5f0eab0b11a7b0aab45b8cd6749a5f1486",
+    "realEventLoopTurns": 12291
+  },
+  "unknownGit": [],
+  "unknownGh": []
+}

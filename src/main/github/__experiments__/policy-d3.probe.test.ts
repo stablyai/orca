@@ -1,7 +1,7 @@
 /**
  * DISPOSABLE EXPERIMENT (STA-8667 D3). Policy probes: the real check classifier from
  * src/shared feeds the D3 policy module. Covers D2-3 (complete-empty rollups) and the fixed
- * 30/60 min caps. Pure; fake clock only.
+ * 10/60 min caps (PD-1 = option C; the D3 caps 30/60 are checked as a named comparison). Pure; fake clock only.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -76,7 +76,7 @@ it('D2-3: activity classes from the real classifier, and the interval after 10 u
   }
   out['d2-3 activity and interval after 10 unchanged reads'] = rows
   const r = rows as Record<string, { selectedIntervalMin: number | 'none'; visibleIntervalMin: number | 'none' }>
-  expect(r['complete, empty (no CI) / open']).toMatchObject({ selectedIntervalMin: 30, visibleIntervalMin: 60 })
+  expect(r['complete, empty (no CI) / open']).toMatchObject({ selectedIntervalMin: 10, visibleIntervalMin: 60 })
   expect(r['complete, empty (no CI) / merged']).toMatchObject({ selectedIntervalMin: 'none', visibleIntervalMin: 'none' })
   expect(r['failed + running / open']).toMatchObject({ selectedIntervalMin: 1, visibleIntervalMin: 2 })
   expect(r['awaiting approval / open']).toMatchObject({ selectedIntervalMin: 1 })
@@ -113,9 +113,19 @@ it('fixed caps: the backoff ladder for an unchanged settled row, and resets', ()
     policy.note('n', { kind: 'not-found' })
     return [min(policy.interval('n', true, T, 0)), min(policy.interval('n', false, T, 0))]
   })
-  const r = { selectedMinutes: selected, visibleMinutes: visible, afterChangeVisibleMin: afterChange, selectedBeforeResetMin: before, selectedAfterResetMin: afterReset, jitterNeverLengthens: maxJittered <= 60_000, noPRSelectedVisibleMinutes: noPR }
+  // Named comparison: the D3 caps (30 / 60), reproducible through setCaps.
+  const defaults = [policy.POLICY_D3.SELECTED_CAP_MS / 60_000, policy.POLICY_D3.VISIBLE_CAP_MS / 60_000]
+  policy.setCaps(30, 60)
+  const selectedD3Caps = ladder(true)
+  const visibleD3Caps = ladder(false)
+  policy.setCaps(defaults[0], defaults[1])
+  policy.backoff.clear()
+  const r = { defaultCapsMin: defaults, selectedMinutes: selected, visibleMinutes: visible, comparisonD3Caps30_60: { selectedMinutes: selectedD3Caps, visibleMinutes: visibleD3Caps }, afterChangeVisibleMin: afterChange, selectedBeforeResetMin: before, selectedAfterResetMin: afterReset, jitterNeverLengthens: maxJittered <= 60_000, noPRSelectedVisibleMinutes: noPR }
   out['fixed caps ladder'] = r
-  expect(selected).toEqual([1, 2, 4, 8, 16, 30, 30, 30, 30])
+  expect(defaults).toEqual([10, 60])
+  expect(selected).toEqual([1, 2, 4, 8, 10, 10, 10, 10, 10])
+  expect(selectedD3Caps).toEqual([1, 2, 4, 8, 16, 30, 30, 30, 30])
+  expect(visibleD3Caps).toEqual(visible)
   expect(visible).toEqual([2, 4, 8, 16, 32, 60, 60, 60, 60])
   expect(afterChange).toBe(2)
   expect(afterReset).toBe(1)

@@ -1,0 +1,9 @@
+
+ RUN  v5.0.5 /Users/jinjingliang/Documents/projects/orca/sta-8667-auto-polling
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  13:35:52
+   Duration  4.81s (transform 60%, tests 26%, import 12%, setup 1%)
+

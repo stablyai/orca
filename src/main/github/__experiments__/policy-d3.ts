@@ -8,7 +8,9 @@ export const POLICY_D3: Record<string, number> = {
   SELECTED_BASE_MS: 60_000,
   VISIBLE_BASE_MS: 120_000,
   NO_REVIEW_VISIBLE_BASE_MS: 15 * 60_000,
-  SELECTED_CAP_MS: 30 * 60_000,
+  // PD-1 = option C (coordinator decision, D3r refreeze): selected cap 10 min, visible cap 60 min.
+  // The D3 setting (30 / 60) stays reproducible with EXP_CAP_SELECTED_MIN=30 (the `-sel30` spec lines).
+  SELECTED_CAP_MS: 10 * 60_000,
   VISIBLE_CAP_MS: 60 * 60_000,
   UNKNOWN_MERGE_HOLD_MS: 10 * 60_000,
   STUCK_AFTER_MS: 30 * 60_000,
@@ -17,7 +19,7 @@ export const POLICY_D3: Record<string, number> = {
 }
 
 /** D3r: cap overrides for the option table (EXP_CAP_SELECTED_MIN / EXP_CAP_VISIBLE_MIN). The
- *  defaults are the D3 contract; nothing calls this unless a spec line asks for other caps. */
+ *  defaults are the contract after PD-1 (10 / 60); a spec line may ask for other caps. */
 export function setCaps(selectedMin: number, visibleMin: number): void {
   POLICY_D3.SELECTED_CAP_MS = selectedMin * 60_000
   POLICY_D3.VISIBLE_CAP_MS = visibleMin * 60_000

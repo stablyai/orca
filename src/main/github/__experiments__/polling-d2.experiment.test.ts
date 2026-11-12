@@ -9,7 +9,7 @@
  *
  * D3 is AUTOMATIC ONLY: there is no cadence setting anywhere in this file. "before" scenarios
  * are the code as checked out; "after" scenarios prototype the D3 proposal next to it:
- *   - B (policy-d3.ts: unchanged-result backoff to fixed caps 30/60 min, completion-based
+ *   - B (policy-d3.ts: unchanged-result backoff to fixed caps 10/60 min (PD-1; D3 had 30/60), completion-based
  *     activity classes incl. complete-empty = settled, rich signature) via a partial mock of
  *     pr-refresh-candidate-policy (desktop) and a host store (serve).
  *   - C (gate-d3.ts: non-blocking admission gate with reserved lanes) in `createHostAfter`,
@@ -76,7 +76,7 @@ const cfg = vi.hoisted(() => ({
   runMaxMin: Number(process.env.EXP_RUN_MAX_MIN ?? 30),
   gapMinMin: Number(process.env.EXP_GAP_MIN_MIN ?? 50),
   gapMaxMin: Number(process.env.EXP_GAP_MAX_MIN ?? 80),
-  capSelectedMin: Number(process.env.EXP_CAP_SELECTED_MIN ?? 30),
+  capSelectedMin: Number(process.env.EXP_CAP_SELECTED_MIN ?? 10),
   capVisibleMin: Number(process.env.EXP_CAP_VISIBLE_MIN ?? 60)
 }))
 

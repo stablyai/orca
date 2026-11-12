@@ -13,9 +13,11 @@ local-detect-serve-oldclient-n14-c2-8h EXP_SCENARIO=serve-after-oldclient EXP_HO
 local-detect-desk-after-n10-8h-longrun EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_RUN_MIN_MIN=40 EXP_RUN_MAX_MIN=50
 local-detect-serve-after-n14-c2-8h-longrun EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_RUN_MIN_MIN=40 EXP_RUN_MAX_MIN=50
 local-detect-desk-after-n10-8h-shortrun EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_RUN_MIN_MIN=5 EXP_RUN_MAX_MIN=10
-# PD-1 cap options, detection (8 h) and quiet-world cost (4 h)
+# Cap options of PD-1, detection (8 h) and quiet-world cost (4 h). The defaults are the decided caps 10 / 60;
+# -sel30 = the D3 caps (30 / 60), the named comparison.
 local-detect-desk-after-n10-8h-sel15 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=15
-local-detect-desk-after-n10-8h-sel10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=10
+local-detect-desk-after-n10-8h-sel30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=30
+local-detect-serve-after-n14-c2-8h-sel30 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=30
 local-detect-desk-after-n10-8h-sel5 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_SELECTED_MIN=5
 local-detect-desk-after-n10-8h-vis30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_VISIBLE_MIN=30
 local-detect-desk-after-n10-8h-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_HOURS=8 EXP_EVENTS=1 EXP_EVENT_TARGETS=3 EXP_JITTER=0.1 EXP_CAP_VISIBLE_MIN=20
@@ -25,7 +27,8 @@ ghes-desk-after-n10-focused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EX
 ghes-desk-after-n10-unfocused EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=unfocused EXP_JITTER=0.1 EXP_HOURS=4
 ghes-desk-after-n10-mixed EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4
 capcost-ghes-n10-sel15 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=15
-capcost-ghes-n10-sel10 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=10
+capcost-ghes-n10-sel30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=30
+capcost-serve-n14-c2-sel30 EXP_SCENARIO=serve-after EXP_HOST=dotcom EXP_N=14 EXP_CLIENTS=2 EXP_WORKLOAD=mixed EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=30
 capcost-ghes-n10-sel5 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_SELECTED_MIN=5
 capcost-ghes-n10-vis30 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=30
 capcost-ghes-n10-vis20 EXP_SCENARIO=desktop-after EXP_HOST=ghes EXP_N=10 EXP_FOCUS=focused EXP_JITTER=0.1 EXP_HOURS=4 EXP_CAP_VISIBLE_MIN=20

@@ -1,0 +1,191 @@
+PASS   lanes-1sel-checks-n14-c2-gate-d3             D neverServed = 0                  0
+PASS   lanes-1sel-checks-n14-c2-gate-d3             D visible pk5min <= 15             15
+PASS   lanes-1sel-checks-n14-c2-gate-d3             D selected pk5min <= 10            10
+PASS   lanes-1sel-checks-n14-c2-gate-d3             D budgeted pk5min <= 20            20
+PASS   lanes-1sel-checks-n14-c2-gate-d3             D budgeted pk60 <= 11              8
+PASS   lanes-1sel-checks-n14-c2-gate-d3             D visible wait max <= 600          171 s (R=14)
+REPORT lanes-1sel-checks-n14-c2-gate-d3             D selected identities maxGapS      pr:feat/wt-2=239 checks:feat/wt-2=189
+PASS   lanes-2sel-checks-n14-c2-gate-d3             D neverServed = 0                  0
+PASS   lanes-2sel-checks-n14-c2-gate-d3             D visible pk5min <= 15             15
+PASS   lanes-2sel-checks-n14-c2-gate-d3             D selected pk5min <= 10            10
+PASS   lanes-2sel-checks-n14-c2-gate-d3             D budgeted pk5min <= 20            20
+PASS   lanes-2sel-checks-n14-c2-gate-d3             D budgeted pk60 <= 11              10
+PASS   lanes-2sel-checks-n14-c2-gate-d3             D visible wait max <= 600          215 s (R=14)
+REPORT lanes-2sel-checks-n14-c2-gate-d3             D selected identities maxGapS      pr:feat/wt-2=248 checks:feat/wt-2=280 pr:feat/wt-7=275 checks:feat/wt-7=290
+PASS   lanes-4sel-checks-n20-c4-gate-d3             D neverServed = 0                  0
+PASS   lanes-4sel-checks-n20-c4-gate-d3             D visible pk5min <= 15             15
+PASS   lanes-4sel-checks-n20-c4-gate-d3             D selected pk5min <= 10            10
+PASS   lanes-4sel-checks-n20-c4-gate-d3             D budgeted pk5min <= 20            20
+PASS   lanes-4sel-checks-n20-c4-gate-d3             D budgeted pk60 <= 11              11
+PASS   lanes-4sel-checks-n20-c4-gate-d3             D visible wait max <= 600          385 s (R=20)
+REPORT lanes-4sel-checks-n20-c4-gate-d3             D selected identities maxGapS      pr:feat/wt-2=530 checks:feat/wt-2=530 pr:feat/wt-7=510 checks:feat/wt-7=550 pr:feat/wt-12=530 checks:feat/wt-12=540 pr:feat/wt-17=341 checks:feat/wt-17=530
+REPORT lanes-4sel-checks-n30-c4-gate-d2             D before (D2 gate)                 neverServed=14 of 30 visibleStarts=12
+PASS   lanes-4sel-checks-n30-c4-gate-d3             D neverServed = 0                  0
+PASS   lanes-4sel-checks-n30-c4-gate-d3             D visible pk5min <= 15             15
+PASS   lanes-4sel-checks-n30-c4-gate-d3             D selected pk5min <= 10            10
+PASS   lanes-4sel-checks-n30-c4-gate-d3             D budgeted pk5min <= 20            20
+PASS   lanes-4sel-checks-n30-c4-gate-d3             D budgeted pk60 <= 11              11
+PASS   lanes-4sel-checks-n30-c4-gate-d3             D visible wait max <= 900          492 s (R=30)
+REPORT lanes-4sel-checks-n30-c4-gate-d3             D selected identities maxGapS      pr:feat/wt-2=442 checks:feat/wt-2=570 pr:feat/wt-7=500 checks:feat/wt-7=575 pr:feat/wt-12=480 checks:feat/wt-12=550 pr:feat/wt-17=480 checks:feat/wt-17=560
+REPORT lanes-4sel-n30-c4-gate-d2                    D before (D2 gate)                 neverServed=9 of 30 visibleStarts=17
+PASS   lanes-4sel-n30-c4-gate-d3                    D neverServed = 0                  0
+PASS   lanes-4sel-n30-c4-gate-d3                    D visible pk5min <= 15             15
+PASS   lanes-4sel-n30-c4-gate-d3                    D selected pk5min <= 10            10
+PASS   lanes-4sel-n30-c4-gate-d3                    D budgeted pk5min <= 20            20
+PASS   lanes-4sel-n30-c4-gate-d3                    D budgeted pk60 <= 11              10
+PASS   lanes-4sel-n30-c4-gate-d3                    D visible wait max <= 900          471 s (R=30)
+REPORT lanes-4sel-n30-c4-gate-d3                    D selected identities maxGapS      pr:feat/wt-2=289 pr:feat/wt-7=289 pr:feat/wt-12=275 pr:feat/wt-17=295
+PASS   cancel-disconnect15-n20-c3                   E rpc over 10 s = 0                0 (max 800 ms)
+PASS   cancel-disconnect15-n20-c3                   E clientFailures = 0               0 of 417
+       host queue age per 300 s window, windows 4..17: disconnect=[150, 146, 29, 10, 10, 0, 0, 0, 0, 20, 0, 0, 0, 0] reference=[150, 146, 29, 10, 10, 0, 0, 0, 0, 20, 0, 0, 0, 0]
+PASS   cancel-disconnect15-n20-c3                   E queue age at reference level from window 4 worst 150 s vs reference 150 s; windows over reference+15 s: none [ref cancel-ref-n20-c3]
+PASS   cancel-hidden-n14-c2                         E rpc over 10 s = 0                0 (max 800 ms)
+PASS   cancel-hidden-n14-c2                         E clientFailures = 0               0 of 6
+PASS   cancel-hidden-n14-c2                         E hidden: spawns after minute 0 = 0 0
+PASS   timeout-slow3-n14-c2                         E rpc over 10 s = 0                0 (max 10000 ms)
+PASS   timeout-slow3-n14-c2                         E clientFailures = 0               0 of 412
+PASS   timeout-slow3-n14-c2                         E replyDeadlineHits > 0            68
+PASS   serve-after-n14-c2-settled                   C clientFailures = 0               0 of 305
+REPORT serve-after-n14-c2-settled                   C spawns per hour                  [68, 21, 19, 16]
+PASS   serve-after-n14-c2                           C clientFailures = 0               0 of 401
+REPORT serve-after-n14-c2                           C spawns per hour                  [108, 21, 18, 16]
+PASS   serve-before-n14-c2                          C clientFailures = 0               0 of 2674
+REPORT serve-before-n14-c2                          C spawns per hour                  [751, 745, 745, 741]
+PASS   serve-oldclient-n14-c2                       C clientFailures = 0               0 of 1342
+PASS   serve-oldclient-n14-c2                       C legacy: gate untouched           admits={} legacy={'hits': 505, 'upstreamReads': 671}
+REPORT serve-oldclient-n14-c2                       C spawns per hour                  [384, 382]
+REPORT capcost-ghes-n10-sel10-vis20                 A/B/H spawns per hour              [175, 107, 106, 115] lastHour auth=27 reqLowerBound=169
+REPORT capcost-ghes-n10-sel10                       A/B/H spawns per hour              [158, 71, 50, 51] lastHour auth=10 reqLowerBound=71
+REPORT capcost-ghes-n10-sel15                       A/B/H spawns per hour              [159, 56, 44, 44] lastHour auth=9 reqLowerBound=62
+REPORT capcost-ghes-n10-sel5                        A/B/H spawns per hour              [181, 81, 72, 69] lastHour auth=10 reqLowerBound=89
+REPORT capcost-ghes-n10-vis20                       A/B/H spawns per hour              [165, 94, 97, 101] lastHour auth=26 reqLowerBound=153
+REPORT capcost-ghes-n10-vis30                       A/B/H spawns per hour              [163, 66, 62, 62] lastHour auth=16 reqLowerBound=94
+REPORT dotcom-desk-after-n10                        A/B/H spawns per hour              [57, 15, 13, 13] lastHour auth=0 reqLowerBound=13
+REPORT dotcom-desk-before-n10                       A/B/H spawns per hour              [364, 364, 363, 364] lastHour auth=0 reqLowerBound=364
+REPORT ghes-desk-after-n10-focused                  A/B/H spawns per hour              [151, 52, 36, 36] lastHour auth=9 reqLowerBound=54
+REPORT ghes-desk-after-n10-mixed                    A/B/H spawns per hour              [254, 45, 37, 37] lastHour auth=9 reqLowerBound=55
+REPORT ghes-desk-after-n10-unfocused                A/B/H spawns per hour              [80, 10, 10, 10] lastHour auth=2 reqLowerBound=14
+REPORT ghes-desk-before-n10-focused                 A/B/H spawns per hour              [746, 738, 735, 741] lastHour auth=32 reqLowerBound=805
+PASS   local-detect-desk-after-n10-8h-longrun       F1 finish of a seen run in 70/130+slot sel[n=4 max=57 slotMax=0 netMax=57 bound=70 over=0] vis[n=3 max=96 slotMax=0 netMax=96 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-longrun       F2 every other event in cap+10+slot startSeen sel[n=4 max=1243 slotMax=0 netMax=1243 bound=1810 over=0] vis[n=3 max=2281 slotMax=0 netMax=2281 bound=3610 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=5 max=3382 slotMax=7 netMax=3382 bound=3610 over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=5 max=898 slotMax=7 netMax=891 bound=3610 over=0]
+PASS   local-detect-desk-after-n10-8h-longrun       F3 uncovered = 0                   0 (pending at end of run: 0)
+REPORT local-detect-desk-after-n10-8h-longrun       F runs never shown as running      5 of 12 (run, observer) pairs; D3 'undetected' counter=5; worst slot wait 7 s
+PASS   local-detect-desk-after-n10-8h-seed2         F1 finish of a seen run in 70/130+slot sel[n=4 max=52 slotMax=10 netMax=52 bound=70 over=0] vis[n=6 max=105 slotMax=1 netMax=105 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-seed2         F2 every other event in cap+10+slot startSeen sel[n=4 max=1522 slotMax=0 netMax=1522 bound=1810 over=0] vis[n=6 max=1213 slotMax=8 netMax=1213 bound=3610 over=0] transient sel[n=1 max=1526 slotMax=0 netMax=1526 bound=1810 over=0] vis[n=4 max=3199 slotMax=0 netMax=3199 bound=3610 over=0] finishUnseen sel[n=1 max=7 slotMax=0 netMax=7 bound=1810 over=0] vis[n=4 max=1738 slotMax=0 netMax=1738 bound=3610 over=0]
+PASS   local-detect-desk-after-n10-8h-seed2         F3 uncovered = 0                   0 (pending at end of run: 0)
+REPORT local-detect-desk-after-n10-8h-seed2         F runs never shown as running      5 of 15 (run, observer) pairs; D3 'undetected' counter=5; worst slot wait 10 s
+PASS   local-detect-desk-after-n10-8h-seed3         F1 finish of a seen run in 70/130+slot sel[n=3 max=59 slotMax=0 netMax=59 bound=70 over=0] vis[n=6 max=97 slotMax=2 netMax=95 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-seed3         F2 every other event in cap+10+slot startSeen sel[n=3 max=246 slotMax=0 netMax=246 bound=1810 over=0] vis[n=6 max=1111 slotMax=14 netMax=1111 bound=3610 over=0] transient sel[n=2 max=1696 slotMax=0 netMax=1696 bound=1810 over=0] vis[n=4 max=3472 slotMax=0 netMax=3472 bound=3610 over=0] finishUnseen sel[n=2 max=146 slotMax=0 netMax=146 bound=1810 over=0] vis[n=4 max=2211 slotMax=0 netMax=2211 bound=3610 over=0]
+PASS   local-detect-desk-after-n10-8h-seed3         F3 uncovered = 0                   0 (pending at end of run: 0)
+REPORT local-detect-desk-after-n10-8h-seed3         F runs never shown as running      6 of 15 (run, observer) pairs; D3 'undetected' counter=6; worst slot wait 14 s
+PASS   local-detect-desk-after-n10-8h-sel10-vis20   F1 finish of a seen run in 70/130+slot sel[n=4 max=49 slotMax=0 netMax=49 bound=70 over=0] vis[n=10 max=129 slotMax=11 netMax=118 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-sel10-vis20   F2 every other event in cap+10+slot startSeen sel[n=4 max=487 slotMax=0 netMax=487 bound=610 over=0] vis[n=10 max=1074 slotMax=10 netMax=1074 bound=1210 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=0 max=None slotMax=None netMax=None bound=None over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=0 max=None slotMax=None netMax=None bound=None over=0]
+PASS   local-detect-desk-after-n10-8h-sel10-vis20   F3 uncovered = 0                   0 (pending at end of run: 1)
+REPORT local-detect-desk-after-n10-8h-sel10-vis20   F runs never shown as running      0 of 15 (run, observer) pairs; D3 'undetected' counter=0; worst slot wait 11 s
+PASS   local-detect-desk-after-n10-8h-sel10         F1 finish of a seen run in 70/130+slot sel[n=4 max=41 slotMax=0 netMax=41 bound=70 over=0] vis[n=5 max=114 slotMax=1 netMax=114 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-sel10         F2 every other event in cap+10+slot startSeen sel[n=4 max=479 slotMax=10 netMax=479 bound=610 over=0] vis[n=5 max=1567 slotMax=0 netMax=1567 bound=3610 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=5 max=3382 slotMax=0 netMax=3382 bound=3610 over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=5 max=1791 slotMax=0 netMax=1791 bound=3610 over=0]
+PASS   local-detect-desk-after-n10-8h-sel10         F3 uncovered = 0                   0 (pending at end of run: 1)
+REPORT local-detect-desk-after-n10-8h-sel10         F runs never shown as running      5 of 15 (run, observer) pairs; D3 'undetected' counter=5; worst slot wait 10 s
+PASS   local-detect-desk-after-n10-8h-sel15         F1 finish of a seen run in 70/130+slot sel[n=4 max=48 slotMax=0 netMax=48 bound=70 over=0] vis[n=5 max=74 slotMax=1 netMax=74 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-sel15         F2 every other event in cap+10+slot startSeen sel[n=4 max=728 slotMax=0 netMax=728 bound=910 over=0] vis[n=5 max=1466 slotMax=0 netMax=1466 bound=3610 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=5 max=3382 slotMax=0 netMax=3382 bound=3610 over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=5 max=1696 slotMax=0 netMax=1696 bound=3610 over=0]
+PASS   local-detect-desk-after-n10-8h-sel15         F3 uncovered = 0                   0 (pending at end of run: 1)
+REPORT local-detect-desk-after-n10-8h-sel15         F runs never shown as running      5 of 15 (run, observer) pairs; D3 'undetected' counter=5; worst slot wait 1 s
+PASS   local-detect-desk-after-n10-8h-sel5          F1 finish of a seen run in 70/130+slot sel[n=4 max=22 slotMax=0 netMax=22 bound=70 over=0] vis[n=5 max=119 slotMax=2 netMax=117 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-sel5          F2 every other event in cap+10+slot startSeen sel[n=4 max=208 slotMax=1 netMax=208 bound=310 over=0] vis[n=5 max=1540 slotMax=0 netMax=1540 bound=3610 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=5 max=3261 slotMax=7 netMax=3261 bound=3610 over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=5 max=1829 slotMax=7 netMax=1829 bound=3610 over=0]
+PASS   local-detect-desk-after-n10-8h-sel5          F3 uncovered = 0                   0 (pending at end of run: 1)
+REPORT local-detect-desk-after-n10-8h-sel5          F runs never shown as running      5 of 15 (run, observer) pairs; D3 'undetected' counter=5; worst slot wait 7 s
+PASS   local-detect-desk-after-n10-8h-shortrun      F1 finish of a seen run in 70/130+slot sel[n=1 max=35 slotMax=0 netMax=35 bound=70 over=0] vis[n=2 max=101 slotMax=0 netMax=101 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-shortrun      F2 every other event in cap+10+slot startSeen sel[n=1 max=305 slotMax=0 netMax=305 bound=1810 over=0] vis[n=3 max=429 slotMax=0 netMax=429 bound=3610 over=0] transient sel[n=5 max=1644 slotMax=2 netMax=1644 bound=1810 over=0] vis[n=10 max=3382 slotMax=3 netMax=3382 bound=3610 over=0] finishUnseen sel[n=5 max=1167 slotMax=2 netMax=1167 bound=1810 over=0] vis[n=10 max=2890 slotMax=3 netMax=2890 bound=3610 over=0]
+PASS   local-detect-desk-after-n10-8h-shortrun      F3 uncovered = 0                   0 (pending at end of run: 1)
+REPORT local-detect-desk-after-n10-8h-shortrun      F runs never shown as running      15 of 20 (run, observer) pairs; D3 'undetected' counter=14; worst slot wait 3 s
+PASS   local-detect-desk-after-n10-8h-vis20         F1 finish of a seen run in 70/130+slot sel[n=4 max=38 slotMax=0 netMax=38 bound=70 over=0] vis[n=10 max=119 slotMax=10 netMax=119 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-vis20         F2 every other event in cap+10+slot startSeen sel[n=4 max=1206 slotMax=3 netMax=1206 bound=1810 over=0] vis[n=10 max=1000 slotMax=0 netMax=1000 bound=1210 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=0 max=None slotMax=None netMax=None bound=None over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=0 max=None slotMax=None netMax=None bound=None over=0]
+PASS   local-detect-desk-after-n10-8h-vis20         F3 uncovered = 0                   0 (pending at end of run: 1)
+REPORT local-detect-desk-after-n10-8h-vis20         F runs never shown as running      0 of 15 (run, observer) pairs; D3 'undetected' counter=0; worst slot wait 10 s
+PASS   local-detect-desk-after-n10-8h-vis30         F1 finish of a seen run in 70/130+slot sel[n=4 max=33 slotMax=8 netMax=33 bound=70 over=0] vis[n=9 max=121 slotMax=0 netMax=121 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h-vis30         F2 every other event in cap+10+slot startSeen sel[n=4 max=1243 slotMax=0 netMax=1243 bound=1810 over=0] vis[n=9 max=1436 slotMax=0 netMax=1436 bound=1810 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=1 max=1244 slotMax=0 netMax=1244 bound=1810 over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=1 max=10 slotMax=0 netMax=10 bound=1810 over=0]
+PASS   local-detect-desk-after-n10-8h-vis30         F3 uncovered = 0                   0 (pending at end of run: 1)
+REPORT local-detect-desk-after-n10-8h-vis30         F runs never shown as running      1 of 15 (run, observer) pairs; D3 'undetected' counter=1; worst slot wait 8 s
+PASS   local-detect-desk-after-n10-8h               F1 finish of a seen run in 70/130+slot sel[n=4 max=60 slotMax=0 netMax=60 bound=70 over=0] vis[n=4 max=103 slotMax=2 netMax=103 bound=130 over=0]
+PASS   local-detect-desk-after-n10-8h               F2 every other event in cap+10+slot startSeen sel[n=4 max=1243 slotMax=0 netMax=1243 bound=1810 over=0] vis[n=4 max=1151 slotMax=0 netMax=1151 bound=3610 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=6 max=3382 slotMax=0 netMax=3382 bound=3610 over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=6 max=1893 slotMax=0 netMax=1893 bound=3610 over=0]
+PASS   local-detect-desk-after-n10-8h               F3 uncovered = 0                   0 (pending at end of run: 1)
+REPORT local-detect-desk-after-n10-8h               F runs never shown as running      6 of 15 (run, observer) pairs; D3 'undetected' counter=6; worst slot wait 2 s
+REPORT local-detect-desk-before-n10-8h              F before / legacy                  finishSeen sel[n=4 max=59 slotMax=5 netMax=57 bound=70 over=0] vis[n=10 max=118 slotMax=14 netMax=111 bound=130 over=0] uncovered=0
+REPORT local-detect-desk-before-n10-8h              F runs never shown as running      0 of 15 (run, observer) pairs; D3 'undetected' counter=0; worst slot wait 14 s
+PASS   local-detect-serve-after-n14-c2-8h-longrun   F1b finish on the stuck ladder     vis[n=6 max=115 slotMax=0 netMax=115 bound=490 over=0]
+PASS   local-detect-serve-after-n14-c2-8h-longrun   F1 finish of a seen run in 70/130+slot sel[n=8 max=59 slotMax=0 netMax=59 bound=70 over=0] vis[n=4 max=82 slotMax=11 netMax=76 bound=130 over=0]
+PASS   local-detect-serve-after-n14-c2-8h-longrun   F2 every other event in cap+10+slot startSeen sel[n=8 max=925 slotMax=0 netMax=925 bound=1810 over=0] vis[n=10 max=2833 slotMax=0 netMax=2833 bound=3610 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=6 max=3089 slotMax=0 netMax=3089 bound=3610 over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=6 max=337 slotMax=0 netMax=337 bound=3610 over=0]
+PASS   local-detect-serve-after-n14-c2-8h-longrun   F3 uncovered = 0                   0 (pending at end of run: 0)
+REPORT local-detect-serve-after-n14-c2-8h-longrun   F runs never shown as running      6 of 24 (run, observer) pairs; D3 'undetected' counter=3; worst slot wait 11 s
+PASS   local-detect-serve-after-n14-c2-8h-seed2     F1 finish of a seen run in 70/130+slot sel[n=8 max=58 slotMax=0 netMax=58 bound=70 over=0] vis[n=12 max=117 slotMax=0 netMax=117 bound=130 over=0]
+PASS   local-detect-serve-after-n14-c2-8h-seed2     F2 every other event in cap+10+slot startSeen sel[n=8 max=1578 slotMax=0 netMax=1578 bound=1810 over=0] vis[n=12 max=1167 slotMax=0 netMax=1167 bound=3610 over=0] transient sel[n=2 max=1658 slotMax=0 netMax=1658 bound=1810 over=0] vis[n=8 max=3061 slotMax=0 netMax=3061 bound=3610 over=0] finishUnseen sel[n=2 max=139 slotMax=0 netMax=139 bound=1810 over=0] vis[n=8 max=1581 slotMax=0 netMax=1581 bound=3610 over=0]
+PASS   local-detect-serve-after-n14-c2-8h-seed2     F3 uncovered = 0                   0 (pending at end of run: 0)
+REPORT local-detect-serve-after-n14-c2-8h-seed2     F runs never shown as running      10 of 30 (run, observer) pairs; D3 'undetected' counter=5; worst slot wait 0 s
+PASS   local-detect-serve-after-n14-c2-8h-seed3     F1 finish of a seen run in 70/130+slot sel[n=6 max=51 slotMax=0 netMax=51 bound=70 over=0] vis[n=14 max=117 slotMax=0 netMax=117 bound=130 over=0]
+PASS   local-detect-serve-after-n14-c2-8h-seed3     F2 every other event in cap+10+slot startSeen sel[n=6 max=188 slotMax=0 netMax=188 bound=1810 over=0] vis[n=14 max=1196 slotMax=0 netMax=1196 bound=3610 over=0] transient sel[n=4 max=1703 slotMax=0 netMax=1703 bound=1810 over=0] vis[n=6 max=3381 slotMax=0 netMax=3381 bound=3610 over=0] finishUnseen sel[n=4 max=154 slotMax=0 netMax=154 bound=1810 over=0] vis[n=6 max=1598 slotMax=0 netMax=1598 bound=3610 over=0]
+PASS   local-detect-serve-after-n14-c2-8h-seed3     F3 uncovered = 0                   0 (pending at end of run: 0)
+REPORT local-detect-serve-after-n14-c2-8h-seed3     F runs never shown as running      10 of 30 (run, observer) pairs; D3 'undetected' counter=5; worst slot wait 0 s
+PASS   local-detect-serve-after-n14-c2-8h           F1 finish of a seen run in 70/130+slot sel[n=8 max=52 slotMax=0 netMax=52 bound=70 over=0] vis[n=6 max=73 slotMax=0 netMax=73 bound=130 over=0]
+PASS   local-detect-serve-after-n14-c2-8h           F2 every other event in cap+10+slot startSeen sel[n=8 max=925 slotMax=0 netMax=925 bound=1810 over=0] vis[n=6 max=780 slotMax=0 netMax=780 bound=3610 over=0] transient sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=14 max=3027 slotMax=0 netMax=3027 bound=3610 over=0] finishUnseen sel[n=0 max=None slotMax=None netMax=None bound=None over=0] vis[n=14 max=1792 slotMax=0 netMax=1792 bound=3610 over=0]
+PASS   local-detect-serve-after-n14-c2-8h           F3 uncovered = 0                   0 (pending at end of run: 2)
+REPORT local-detect-serve-after-n14-c2-8h           F runs never shown as running      14 of 30 (run, observer) pairs; D3 'undetected' counter=7; worst slot wait 0 s
+REPORT local-detect-serve-before-n14-c2-8h          F before / legacy                  finishSeen sel[n=8 max=52 slotMax=0 netMax=52 bound=70 over=0] vis[n=20 max=118 slotMax=0 netMax=118 bound=130 over=0] uncovered=0
+REPORT local-detect-serve-before-n14-c2-8h          F runs never shown as running      0 of 30 (run, observer) pairs; D3 'undetected' counter=0; worst slot wait 0 s
+REPORT local-detect-serve-oldclient-n14-c2-8h       F before / legacy                  finishSeen sel[n=8 max=52 slotMax=0 netMax=52 bound=70 over=0] vis[n=20 max=118 slotMax=0 netMax=118 bound=130 over=0] uncovered=0
+REPORT local-detect-serve-oldclient-n14-c2-8h       F runs never shown as running      0 of 30 (run, observer) pairs; D3 'undetected' counter=0; worst slot wait 0 s
+PASS   cancel-disconnect15-n20-c3                   G rerun identical (host level)     spawnDigest 2e2394776800d39f vs 2e2394776800d39f
+PASS   ghes-desk-after-n10-focused                  G rerun identical (host level)     spawnDigest 613613754cacbdfb vs 613613754cacbdfb
+PASS   lanes-4sel-n30-c4-gate-d3                    G rerun identical (host level)     spawnDigest dd02124e4eacec05 vs dd02124e4eacec05
+REPORT lanes-4sel-n30-c4-gate-d3                    G per-client attribution differs   {'1': {'admits': 78, 'p50': 81, 'max': 330}, '2': {'admits': 70, 'p50': 25, 'max': 471}, '3': {'admits': 73, 'p50': 60, 'max': 430}, '4': {'admits': 63, 'p50': 96, 'max': 400}} vs {'1': {'admits': 78, 'p50': 81, 'max': 330}, '2': {'admits': 71, 'p50': 25, 'max': 471}, '3': {'admits': 72, 'p50': 60, 'max': 322}, '4': {'admits': 63, 'p50': 96, 'max': 400}}
+PASS   local-detect-desk-after-n10-8h               G rerun identical (host level)     spawnDigest 6366ce7942c9dc39 vs 6366ce7942c9dc39
+PASS   local-detect-serve-after-n14-c2-8h-seed2     G rerun identical (host level)     spawnDigest 698cfbdde87bfa66 vs 698cfbdde87bfa66
+PASS   local-detect-serve-after-n14-c2-8h           G rerun identical (host level)     spawnDigest b85047b5883a586c vs b85047b5883a586c
+PASS   serve-after-n14-c2                           G rerun identical (host level)     spawnDigest 121a887142ee451c vs 121a887142ee451c
+PASS   serve-before-n14-c2                          G rerun identical (host level)     spawnDigest 22e136f945226f21 vs 22e136f945226f21
+PASS   cancel-disconnect15-n20-c3                   G digest equals authoring Mac      2e2394776800d39f vs 2e2394776800d39f
+PASS   cancel-hidden-n14-c2                         G digest equals authoring Mac      95b7b809b069a370 vs 95b7b809b069a370
+PASS   cancel-ref-n20-c3                            G digest equals authoring Mac      2e2394776800d39f vs 2e2394776800d39f
+PASS   capcost-ghes-n10-sel10-vis20                 G digest equals authoring Mac      48152499ec521d96 vs 48152499ec521d96
+PASS   capcost-ghes-n10-sel10                       G digest equals authoring Mac      085fa1bc3b1e7312 vs 085fa1bc3b1e7312
+PASS   capcost-ghes-n10-sel15                       G digest equals authoring Mac      4f3a29a054c70a5a vs 4f3a29a054c70a5a
+PASS   capcost-ghes-n10-sel5                        G digest equals authoring Mac      78b10fc0d09b37be vs 78b10fc0d09b37be
+PASS   capcost-ghes-n10-vis20                       G digest equals authoring Mac      38658656a22971df vs 38658656a22971df
+PASS   capcost-ghes-n10-vis30                       G digest equals authoring Mac      758b62eb6c60c527 vs 758b62eb6c60c527
+PASS   dotcom-desk-after-n10                        G digest equals authoring Mac      357632f998142607 vs 357632f998142607
+PASS   dotcom-desk-before-n10                       G digest equals authoring Mac      dad0561aa917f5ca vs dad0561aa917f5ca
+PASS   ghes-desk-after-n10-focused                  G digest equals authoring Mac      613613754cacbdfb vs 613613754cacbdfb
+PASS   ghes-desk-after-n10-mixed                    G digest equals authoring Mac      c96cbe1314bcc7ab vs c96cbe1314bcc7ab
+PASS   ghes-desk-after-n10-unfocused                G digest equals authoring Mac      92be3c72692c91b1 vs 92be3c72692c91b1
+PASS   ghes-desk-before-n10-focused                 G digest equals authoring Mac      b80b70d69a847581 vs b80b70d69a847581
+PASS   lanes-1sel-checks-n14-c2-gate-d3             G digest equals authoring Mac      ec4d10f12c789d47 vs ec4d10f12c789d47
+PASS   lanes-2sel-checks-n14-c2-gate-d3             G digest equals authoring Mac      15dd8c6fc4be8501 vs 15dd8c6fc4be8501
+PASS   lanes-4sel-checks-n20-c4-gate-d3             G digest equals authoring Mac      c85b3651e4db6ffc vs c85b3651e4db6ffc
+PASS   lanes-4sel-checks-n30-c4-gate-d2             G digest equals authoring Mac      19c9012c83020808 vs 19c9012c83020808
+PASS   lanes-4sel-checks-n30-c4-gate-d3             G digest equals authoring Mac      ff1b37e108baa923 vs ff1b37e108baa923
+PASS   lanes-4sel-n30-c4-gate-d2                    G digest equals authoring Mac      6fa5dc2818cb6829 vs 6fa5dc2818cb6829
+PASS   lanes-4sel-n30-c4-gate-d3                    G digest equals authoring Mac      dd02124e4eacec05 vs dd02124e4eacec05
+PASS   local-detect-desk-after-n10-8h-longrun       G digest equals authoring Mac      78918f84dc279228 vs 78918f84dc279228
+PASS   local-detect-desk-after-n10-8h-seed2         G digest equals authoring Mac      55f8f4ee6c6f01c4 vs 55f8f4ee6c6f01c4
+PASS   local-detect-desk-after-n10-8h-seed3         G digest equals authoring Mac      1855bab3930bb84d vs 1855bab3930bb84d
+PASS   local-detect-desk-after-n10-8h-sel10-vis20   G digest equals authoring Mac      5c76a1a398ee5f76 vs 5c76a1a398ee5f76
+PASS   local-detect-desk-after-n10-8h-sel10         G digest equals authoring Mac      d6c7b4faf61723b2 vs d6c7b4faf61723b2
+PASS   local-detect-desk-after-n10-8h-sel15         G digest equals authoring Mac      e35b280e514616cc vs e35b280e514616cc
+PASS   local-detect-desk-after-n10-8h-sel5          G digest equals authoring Mac      156dd7fb5ee6c399 vs 156dd7fb5ee6c399
+PASS   local-detect-desk-after-n10-8h-shortrun      G digest equals authoring Mac      859d34ae9705ce68 vs 859d34ae9705ce68
+PASS   local-detect-desk-after-n10-8h-vis20         G digest equals authoring Mac      4210ad205e73ac8a vs 4210ad205e73ac8a
+PASS   local-detect-desk-after-n10-8h-vis30         G digest equals authoring Mac      9e5a2a89617a3b65 vs 9e5a2a89617a3b65
+PASS   local-detect-desk-after-n10-8h               G digest equals authoring Mac      6366ce7942c9dc39 vs 6366ce7942c9dc39
+PASS   local-detect-desk-before-n10-8h              G digest equals authoring Mac      b1e6668f44fcfa1a vs b1e6668f44fcfa1a
+PASS   local-detect-serve-after-n14-c2-8h-longrun   G digest equals authoring Mac      863ca3c039638243 vs 863ca3c039638243
+PASS   local-detect-serve-after-n14-c2-8h-seed2     G digest equals authoring Mac      698cfbdde87bfa66 vs 698cfbdde87bfa66
+PASS   local-detect-serve-after-n14-c2-8h-seed3     G digest equals authoring Mac      cd536e2572cfb9b2 vs cd536e2572cfb9b2
+PASS   local-detect-serve-after-n14-c2-8h           G digest equals authoring Mac      b85047b5883a586c vs b85047b5883a586c
+PASS   local-detect-serve-before-n14-c2-8h          G digest equals authoring Mac      56d97e913a6e17a5 vs 56d97e913a6e17a5
+PASS   local-detect-serve-oldclient-n14-c2-8h       G digest equals authoring Mac      4c637aca20842839 vs 4c637aca20842839
+PASS   serve-after-n14-c2-settled                   G digest equals authoring Mac      f5a3e1de3ca60e65 vs f5a3e1de3ca60e65
+PASS   serve-after-n14-c2                           G digest equals authoring Mac      121a887142ee451c vs 121a887142ee451c
+PASS   serve-before-n14-c2                          G digest equals authoring Mac      22e136f945226f21 vs 22e136f945226f21
+PASS   serve-oldclient-n14-c2                       G digest equals authoring Mac      1031ea529b145d24 vs 1031ea529b145d24
+PASS   timeout-slow3-n14-c2                         G digest equals authoring Mac      99ec624fb6ad0403 vs 99ec624fb6ad0403
+
+SUMMARY scenarios=45 PASS=143 FAIL=0
