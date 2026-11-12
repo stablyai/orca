@@ -61,6 +61,11 @@ const DEFAULT_RESULTS: Record<string, unknown> = {
   'files.saveAs': { status: 'saved' },
   'agents.list': { agents: [] },
   'project.list': { projects: [], truncated: false },
+  // Echoes the request, as a host that changed the copy does.
+  'project.setHidden': (params: { hostId?: string; hidden: boolean }) => ({
+    hostId: params.hostId ?? 'local',
+    hidden: params.hidden
+  }),
   'terminal.list': { terminals: [], truncated: false },
   'terminal.focus': { focused: true },
   'terminal.close': { closed: true },

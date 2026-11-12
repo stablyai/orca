@@ -106,7 +106,10 @@ const projectListResult = z.object({
         /** Always named: `local` for this machine, `ssh:<connection>` or `runtime:<environment>`. */
         hostId: pluginHostIdSchema,
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
-        path: z.string().max(ID_MAX)
+        path: z.string().max(ID_MAX),
+        /** Hidden from Orca's sidebar on this host (`project.setHidden`); its workspaces still
+         *  run. Absent before host API 1.9. */
+        hidden: z.boolean().optional()
       })
     )
     .max(PLUGIN_PROJECT_LIST_LIMIT),
