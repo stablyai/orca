@@ -61,7 +61,10 @@ test('orca serve starts on Windows when the home has no AppData folder', async (
           try {
             return (await client.getCliStatus()).result.app.desktopWindowStatus
           } catch (error) {
-            if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
+            if (
+              error instanceof RuntimeClientError &&
+              (error.code === 'runtime_unavailable' || error.code === 'runtime_timeout')
+            ) {
               return 'starting'
             }
             throw error
