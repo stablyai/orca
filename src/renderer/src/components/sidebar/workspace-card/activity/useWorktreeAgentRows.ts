@@ -12,8 +12,8 @@ export function useAgentPresentation<T>(
   read: (projection: AgentStatusProjection) => T,
   active = true
 ): T {
-  const store = useAppStateView()
-  const projection = store((state) => state.agentStatusByPaneKey.projection)
+  const useViewStore = useAppStateView()
+  const projection = useViewStore((state) => state.agentStatusByPaneKey.projection)
   const subscribe = useCallback(
     (listener: () => void) => projection.subscribe(channel, listener),
     [projection, channel]
