@@ -28,15 +28,18 @@ export function ToknUploadPreview(): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [preview, setPreview] = useState<ToknUploadPreviewData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
 
   const handleOpenChange = async (nextOpen: boolean): Promise<void> => {
     setOpen(nextOpen)
     if (!nextOpen) {
       return
     }
-    const next = await fetchPreview(setLoading, () => mountedRef.current)
+    // A failed usage scan or a restarting usage service fails the read; say so instead of going blank.
+    const next = await fetchPreview(setLoading, () => mountedRef.current).catch(() => null)
     if (mountedRef.current) {
       setPreview(next)
+      setFailed(next === null)
     }
   }
 
@@ -61,6 +64,13 @@ export function ToknUploadPreview(): React.JSX.Element {
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
               {t('auto.components.stats.ToknUploadPreview.loading', 'Reading tracked usage')}
+            </p>
+          ) : failed ? (
+            <p className="text-xs text-destructive" role="alert">
+              {t(
+                'auto.components.stats.ToknUploadPreview.failed',
+                'Could not read tracked usage. Reopen the preview to try again.'
+              )}
             </p>
           ) : preview ? (
             <>

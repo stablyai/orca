@@ -79,15 +79,29 @@ export const connectedWithError = defineFixture({
   render: () => <ToknPublishCard />
 })
 
+async function openPreview(frame: HTMLElement): Promise<void> {
+  const trigger = [...frame.querySelectorAll('button')].find((button) =>
+    button.textContent?.includes('Preview upload')
+  )
+  trigger?.click()
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+
 export const previewOpen = defineFixture({
   width: 640,
   setup: stubTokn(CONNECTED),
   render: () => <ToknPublishCard />,
-  interact: async (frame) => {
-    const trigger = [...frame.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Preview upload')
-    )
-    trigger?.click()
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
+  interact: openPreview
+})
+
+export const previewFailed = defineFixture({
+  width: 640,
+  setup: () => {
+    stubTokn(CONNECTED)()
+    window.api.tokn.previewUpload = async () => {
+      throw new Error('The last usage scan failed')
+    }
+  },
+  render: () => <ToknPublishCard />,
+  interact: openPreview
 })

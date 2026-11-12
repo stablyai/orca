@@ -84,7 +84,12 @@ export function saveToknAccountRecord(record: ToknAccountRecord): void {
   writeSecureJsonFile(accountRecordPath(), record)
 }
 
-export function saveToknAccount(accessToken: string, record: ToknAccountRecord): void {
+/** A token loads only beside a record, so dropping the old record first makes a failed write sign out. */
+export async function saveToknAccount(
+  accessToken: string,
+  record: ToknAccountRecord
+): Promise<void> {
+  await rm(accountRecordPath(), { force: true })
   accessTokenFile.save(accessToken)
   saveToknAccountRecord(record)
 }
@@ -99,7 +104,14 @@ export function readToknAccessToken(): string | null {
   }
 }
 
+/** Tries both files: either one gone is enough to keep the next launch signed out. */
 export async function clearToknAccount(): Promise<void> {
-  accessTokenFile.clear()
-  await rm(accountRecordPath(), { force: true })
+  const results = await Promise.allSettled([
+    rm(accountRecordPath(), { force: true }),
+    Promise.resolve().then(() => accessTokenFile.clear())
+  ])
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure) {
+    throw failure.reason
+  }
 }

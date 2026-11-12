@@ -6024,6 +6024,7 @@
         "ToknUploadPreview": {
           "trigger": "Preview upload",
           "loading": "Reading tracked usage",
+          "failed": "Could not read tracked usage. Reopen the preview to try again.",
           "empty": "No tracked usage to upload yet.",
           "summary_one": "{{count}} row from {{first}} to {{last}}, sent to {{endpoint}}",
           "summary_other": "{{count}} rows from {{first}} to {{last}}, sent to {{endpoint}}"

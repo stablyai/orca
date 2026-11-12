@@ -31,8 +31,11 @@ export async function buildToknUploadBody(
   usage: ToknUsageReader,
   appVersion: string
 ): Promise<ToknUploadPreview['body']> {
+  const rows = await usage.readRows()
+  // Read after the scan: a tool whose tracking was turned off meanwhile contributes no rows.
+  const tracking = await usage.readTracking()
   return {
-    rows: await usage.readRows(),
+    rows: rows.filter((row) => (row.tool === 'codex' ? tracking.codex : tracking.claude)),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     scannedAt: new Date().toISOString(),
     cliVersion: appVersion

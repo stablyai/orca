@@ -128,8 +128,10 @@ export class ToknSyncService {
         lastSyncAccepted: null,
         lastSyncRejected: null
       }
+      // An upload still carrying the replaced account's token must not land after this one takes over.
+      this.syncAbort?.abort()
       try {
-        saveToknAccount(grant.accessToken, record)
+        await saveToknAccount(grant.accessToken, record)
       } catch (error) {
         // Never leave one account's token beside another's record; sign out of both instead.
         this.record = null
@@ -178,7 +180,10 @@ export class ToknSyncService {
     this.record = null
     this.signedOutRemotely = false
     this.stop()
-    await clearToknAccount()
+    // Revoke even if a file survives: tokn then refuses that token after a restart too.
+    await clearToknAccount().catch((error) => {
+      console.warn('[tokn] Could not delete the saved connection', error)
+    })
     if (token) {
       await revokeToknToken(origin, token).catch((error) => {
         console.warn(
@@ -284,7 +289,9 @@ export class ToknSyncService {
         if (this.record === record) {
           this.record = null
           this.signedOutRemotely = true
-          await clearToknAccount()
+          await clearToknAccount().catch((error) => {
+            console.warn('[tokn] Could not delete the revoked connection', error)
+          })
         }
         return
       }

@@ -4,7 +4,7 @@ import type { CodexUsageDailyAggregate } from '../codex-usage/types'
 import { buildToknSyncRows } from './tokn-sync-rows'
 
 type ToknUsageStore<Aggregate> = {
-  getScanState(): { enabled: boolean }
+  getScanState(): { enabled: boolean; lastScanError: string | null }
   refresh(force?: boolean): Promise<unknown>
   getDailyAggregates(): readonly Aggregate[]
 }
@@ -30,6 +30,11 @@ async function readAggregates<Aggregate>(
   }
   // Reuses a scan from the last few minutes; otherwise rescans the local logs.
   await store.refresh(false)
+  const scan = store.getScanState()
+  // A failed scan keeps the previous totals; uploading them would report a sync that read nothing.
+  if (scan.enabled && scan.lastScanError) {
+    throw new Error('The last usage scan failed')
+  }
   return store.getDailyAggregates()
 }
 
