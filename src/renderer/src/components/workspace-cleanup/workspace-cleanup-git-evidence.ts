@@ -55,7 +55,12 @@ export function selectWorkspaceCleanupGitEvidenceTargets(
     if (targets.length >= max) {
       break
     }
-    if (!hasWorkspaceCleanupGitEvidence(candidate) && !resolved.has(candidate.worktreeId)) {
+    // An unreachable host has no evidence to give until a fresh scan reaches it.
+    if (
+      !hasWorkspaceCleanupGitEvidence(candidate) &&
+      !resolved.has(candidate.worktreeId) &&
+      !candidate.blockers.includes('ssh-disconnected')
+    ) {
       targets.push(candidate.worktreeId)
     }
   }

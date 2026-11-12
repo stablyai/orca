@@ -18,6 +18,10 @@ import {
   readWorkspaceCleanupGitEvidence
 } from './workspace-cleanup-git-evidence'
 import { appendWorkspaceCleanupItems } from './workspace-cleanup-scan-primitives'
+import {
+  getNewestWorkspaceCleanupDiffCommentAt,
+  shortWorkspaceCleanupBranchName
+} from '../../../shared/workspace-cleanup/workspace-cleanup-candidate-fields'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
 export async function buildWorkspaceCleanupCandidate(args: {
@@ -146,23 +150,6 @@ export function buildWorkspaceCleanupLocalContext(
   }
 }
 
-export function getNewestWorkspaceCleanupDiffCommentAt(
-  diffComments: Worktree['diffComments'] | undefined
-): number | null {
-  if (!diffComments || diffComments.length === 0) {
-    return null
-  }
-  // Large persisted note arrays can exceed JavaScript's spread argument limit.
-  let newest = diffComments[0]?.createdAt ?? null
-  for (let index = 1; index < diffComments.length; index += 1) {
-    const createdAt = diffComments[index]?.createdAt
-    if (createdAt !== undefined && (newest === null || createdAt > newest)) {
-      newest = createdAt
-    }
-  }
-  return newest
-}
-
 export function isWorkspaceInactiveForCleanup(
   workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
   scannedAt: number
@@ -175,10 +162,6 @@ export function getWorkspaceCleanupInactivityReasonsForWorkspace(
   scannedAt: number
 ): WorkspaceCleanupReason[] {
   return getWorkspaceCleanupInactivityReasons(workspace, scannedAt)
-}
-
-export function shortWorkspaceCleanupBranchName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '') || 'HEAD'
 }
 
 function shouldReadWorkspaceCleanupGitEvidence(args: {
