@@ -158,7 +158,12 @@ export function nativeChatModelPillLabel(
 ): string {
   // The tooltip names the category; default sources still identify a model, while unknown sources do not.
   const choice = descriptor.valueSource === 'unknown' ? null : selectedNativeChatChoice(descriptor)
-  return choice ? nativeChatSessionChoiceLabel(choice, say) : say('model')
+  if (choice) {
+    return nativeChatSessionChoiceLabel(choice, say)
+  }
+  return descriptor.kind.type === 'select'
+    ? (descriptor.kind.placeholder ?? say('model'))
+    : say('model')
 }
 
 export function nativeChatOptionsPillTitle(

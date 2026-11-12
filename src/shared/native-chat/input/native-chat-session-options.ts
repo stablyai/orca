@@ -32,6 +32,8 @@ export type SessionOptionDescriptor = {
         type: 'select'
         currentValue?: string
         choices: SessionOptionSelectChoice[]
+        /** Presentation when no value is known; never an input selection. */
+        placeholder?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
