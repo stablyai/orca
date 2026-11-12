@@ -3,7 +3,10 @@
 // setup stops only that setup: the launch stays held on "Set up once", and a setup finished from
 // anywhere (here or Settings) turns the strip into "Start". Cancel with no setup running gives up
 // the held launch and opens a plain shell, like cancelling any held launch (RR-a).
-import { releaseCloudAgentHold } from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import {
+  releaseCloudAgentHold,
+  startCloudAgentHold
+} from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import {
   reloadOrcaCloudAgentAccounts,
   runOrcaCloudAgentSetups,
@@ -38,7 +41,8 @@ export function cloudSetupStripActions(args: {
         args.copyText(action.code)
         args.openLink(action.url)
       } else if (action.kind === 'start') {
-        releaseCloudAgentHold(holdKey, 'proceed')
+        // HELD-STALE-COVERED: Start reads the account again; a revoked sign-in shows Renew instead.
+        void startCloudAgentHold(holdKey)
       }
     },
     submitCode: (token) => {
