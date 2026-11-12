@@ -44,12 +44,6 @@ export function useWorktreeJumpPaletteListEntries({
   const languageRevision = useUiLanguageRevision()
   const { listEntries, defaultSelectionStart } = useMemo(() => {
     const entries: PaletteListEntry[] = []
-    // Rows above this index lead the list without taking the default selection.
-    let defaultSelectionStart = 0
-    const result = (): { listEntries: PaletteListEntry[]; defaultSelectionStart: number } => ({
-      listEntries: entries,
-      defaultSelectionStart
-    })
     const {
       visibleWorktreeItems,
       visibleProjectTargetItems,
@@ -192,15 +186,16 @@ export function useWorktreeJumpPaletteListEntries({
       if (browserNavigationItem) {
         entries.push(browserNavigationItem)
       }
-      return result()
+      return { listEntries: entries, defaultSelectionStart: 0 }
     }
     if (!hasQuery) {
       pushExtras({ emptyQuery: 'first' })
-      defaultSelectionStart = entries.length
+      // Rows above this index lead the list without taking the default selection.
+      const defaultSelectionStart = entries.length
       pushOpenTabSection()
       pushWorktreeSection()
       pushExtras({ emptyQuery: 'last' })
-      return result()
+      return { listEntries: entries, defaultSelectionStart }
     }
     if (browserNavigationItem) {
       entries.push(browserNavigationItem)
@@ -223,7 +218,7 @@ export function useWorktreeJumpPaletteListEntries({
       if (showCreateAction) {
         entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
       }
-      return result()
+      return { listEntries: entries, defaultSelectionStart: 0 }
     }
     if (middleLeadsSections) {
       pushProjectAndMiddleSections()
@@ -245,7 +240,7 @@ export function useWorktreeJumpPaletteListEntries({
     if (showCreateAction) {
       entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
     }
-    return result()
+    return { listEntries: entries, defaultSelectionStart: 0 }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
   }, [
     handleExpandSection,
