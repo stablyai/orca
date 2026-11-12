@@ -6,7 +6,7 @@ import type {
 } from '../../../browser/cdp/screencast/browser-screencast-stream-types'
 import type { ScreencastSubscriberDeliveryState } from './browser-screencast-ghost-subscriber-eviction'
 import type { BrowserScreencastFrameCredit } from './browser-screencast-frame-credit'
-import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../../rpc/transports/rpc-binary-sender'
 import type { BrowserCommandTargetParams } from '../commands/browser-command-contracts'
 
 export type BrowserScreencastParams = {

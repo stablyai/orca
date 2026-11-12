@@ -21,7 +21,7 @@ import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
 import { AcpScriptedAgent, deferred } from '../acp/process/testing/acp-scripted-agent.test-support'
 import type { RpcContext } from '../runtime/rpc/core'
-import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
+import type { RpcCallerIdentity } from '../runtime/rpc/callers/rpc-caller-identity'
 import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts/antigravity-accounts'
 import type { AntigravityChatSignInStatus } from '../../shared/antigravity-account-types'
 
