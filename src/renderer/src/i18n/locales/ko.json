@@ -352,6 +352,7 @@
       "defaultOpensAsChat": "채팅",
       "defaultOpensAsCli": "CLI",
       "save": "저장",
+      "clearDefault": "기본 에이전트 지우기",
       "customArgsBadge": "사용자 정의",
       "rowPermissions": "권한",
       "permissionsAutoDescription": "<agents>지원되는 에이전트</agents>는 안전한 작업을 스스로 승인합니다.",

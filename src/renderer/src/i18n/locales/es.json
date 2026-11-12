@@ -352,6 +352,7 @@
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
       "save": "Guardar",
+      "clearDefault": "Borrar agente predeterminado",
       "customArgsBadge": "Personalizado",
       "rowPermissions": "Permisos",
       "otherAgentsPermissions": "Otros agentes",

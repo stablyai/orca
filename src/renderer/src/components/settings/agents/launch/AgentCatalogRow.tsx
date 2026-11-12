@@ -8,7 +8,6 @@ import { Button } from '../../../ui/button'
 import { Switch } from '../../../ui/switch'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -259,17 +258,16 @@ export function AgentCatalogRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-44">
-              <DropdownMenuCheckboxItem
-                checked={isSavedDefault}
+              <DropdownMenuItem
                 disabled={!isSavedDefault && !(isDetected && isEnabled)}
-                onCheckedChange={onSetDefault}
+                onSelect={() => onSetDefault(!isSavedDefault)}
               >
                 {isSavedDefault
-                  ? t('auto.components.settings.AgentsPane.24e032fa34', 'Default')
+                  ? t('settings.agents.clearDefault', 'Clear default agent')
                   : t('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')}
-              </DropdownMenuCheckboxItem>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem inset asChild>
+              <DropdownMenuItem asChild>
                 <a
                   href={homepageUrl}
                   target="_blank"

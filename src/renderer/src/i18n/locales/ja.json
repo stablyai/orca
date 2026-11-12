@@ -352,6 +352,7 @@
       "defaultOpensAsChat": "チャット",
       "defaultOpensAsCli": "CLI",
       "save": "保存",
+      "clearDefault": "デフォルトの Agent をクリア",
       "customArgsBadge": "カスタム",
       "rowPermissions": "権限",
       "otherAgentsPermissionsLabel": "他の Agent の権限",

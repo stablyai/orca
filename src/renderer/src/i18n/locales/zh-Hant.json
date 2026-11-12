@@ -793,6 +793,7 @@
       "defaultOpensAsChat": "聊天",
       "defaultOpensAsCli": "CLI",
       "save": "儲存",
+      "clearDefault": "清除預設代理程式",
       "autoUnsupported": "使用「替我核准」需要此主機上較新版本的 Orca。",
       "permissionsDescription": "設定代理程式無須詢問即可執行的操作範圍。已自訂啟動參數的代理程式會保留這些參數。",
       "permissionsAutoDescription": "<agents>支援的代理程式</agents>會自行核准安全的操作。",

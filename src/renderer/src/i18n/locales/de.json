@@ -828,6 +828,7 @@
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
       "save": "Speichern",
+      "clearDefault": "Standardagent-Auswahl aufheben",
       "autoUnsupported": "„Genehmigen lassen“ erfordert eine neuere Orca-Version auf diesem Host.",
       "permissionsDescription": "Legt fest, wie viel Agenten ohne Rückfrage tun dürfen. Agenten mit benutzerdefinierten Startargumenten behalten diese bei.",
       "permissionsAutoDescription": "<agents>Unterstützte Agenten</agents> genehmigen sichere Aktionen selbstständig.",

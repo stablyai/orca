@@ -355,6 +355,7 @@
       "defaultOpensAsChat": "聊天",
       "defaultOpensAsCli": "CLI",
       "save": "保存",
+      "clearDefault": "清除默认代理",
       "customArgsBadge": "自定义",
       "rowPermissions": "权限",
       "permissionsDescription": "代理在不询问你的情况下可以做多少事，使用自定义启动参数的代理会保留其参数",

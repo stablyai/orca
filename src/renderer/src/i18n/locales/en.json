@@ -982,6 +982,7 @@
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
       "save": "Save",
+      "clearDefault": "Clear default agent",
       "autoUnsupported": "Approve for me needs a newer Orca on this host.",
       "permissionsDescription": "How much agents can do without asking you. Agents with custom launch arguments keep them.",
       "permissionsAutoDescription": "<agents>Supported agents</agents> approve safe actions on their own.",

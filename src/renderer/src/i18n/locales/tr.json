@@ -820,6 +820,7 @@
       "defaultOpensAsChat": "Sohbet",
       "defaultOpensAsCli": "CLI",
       "save": "Kaydet",
+      "clearDefault": "Varsayılan ajanı temizle",
       "autoUnsupported": "“Benim yerime onayla” için bu ana makinede daha yeni bir Orca sürümü gerekir.",
       "permissionsDescription": "Ajanların size sormadan ne kadar işlem yapabileceği. Özel başlatma argümanları olan ajanlar bunları korur.",
       "permissionsAutoDescription": "<agents>Desteklenen ajanlar</agents> güvenli işlemleri kendileri onaylar.",

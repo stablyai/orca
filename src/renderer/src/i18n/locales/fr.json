@@ -605,6 +605,7 @@
       "defaultOpensAsChat": "Chat",
       "defaultOpensAsCli": "CLI",
       "save": "Enregistrer",
+      "clearDefault": "Effacer l'agent par défaut",
       "customArgsBadge": "Personnalisé",
       "rowPermissions": "Autorisations",
       "autoUnsupported": "« Approuver pour moi » nécessite une version plus récente d’Orca sur cet hôte.",

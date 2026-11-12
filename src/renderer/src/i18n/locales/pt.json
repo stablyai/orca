@@ -1724,6 +1724,7 @@
       "saveFailed": "Não foi possível salvar as configurações dos agentes. Verifique a conexão com o host e tente novamente.",
       "hostDefaults": "Padrões para novos agentes no host selecionado.",
       "save": "Salvar",
+      "clearDefault": "Limpar agente padrão",
       "autoUnsupported": "Aprovar por mim requer uma versão mais recente do Orca neste host.",
       "permissionsDescription": "O que os agentes podem fazer sem pedir sua aprovação. Agentes com argumentos de inicialização personalizados os mantêm.",
       "permissionsAutoDescription": "<agents>Agentes compatíveis</agents> aprovam ações seguras por conta própria.",
