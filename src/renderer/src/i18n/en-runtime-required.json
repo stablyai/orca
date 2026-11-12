@@ -1739,6 +1739,8 @@
   },
   "cloudSkillsSync": {
     "row": {
+      "localRefs_one": "Imports 1 file from elsewhere on this computer; it isn’t copied",
+      "localRefs_other": "Imports {{count}} files from elsewhere on this computer; those aren’t copied",
       "withheld_one": "Synced without 1 file that looks like a key or credential",
       "withheld_other": "Synced without {{count}} files that look like keys or credentials"
     },

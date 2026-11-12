@@ -3,6 +3,7 @@ import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import {
   AGENT_CONFIG_FILE_KINDS,
+  AGENT_CONFIG_LEGACY_KINDS,
   AGENT_CONFIG_LIMITS,
   AGENT_CONFIG_SELF_PATH,
   AgentConfigItemKind,
@@ -137,8 +138,11 @@ export async function planHostAgentConfigSync(
     }
   }
   let removed = 0
+  // Only the kinds this call manages are pruned: an older desktop that knows only the first five
+  // never removes subagents or memory a newer one wrote.
+  const managed: ReadonlySet<string> = new Set(params.kinds ?? AGENT_CONFIG_LEGACY_KINDS)
   for (const [key, digest] of Object.entries(ledger.items)) {
-    if (wanted.has(key)) {
+    if (wanted.has(key) || !managed.has(key.split(':')[1] ?? '')) {
       continue
     }
     delete ledger.items[key]

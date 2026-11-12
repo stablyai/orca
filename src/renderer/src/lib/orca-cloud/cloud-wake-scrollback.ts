@@ -2,6 +2,7 @@
 // VM and the woken pane attaches to a new terminal whose snapshot replay erases scrollback; the
 // output the pane showed before the sleep is written back above a "Slept 14:02–14:31 · processes
 // stopped" divider, client-side only (nothing reaches the PTY), as rendered text + SGR.
+import { wakeAnchoredRow, wakeAnchorText } from './cloud-wake-scroll-anchor'
 import { translate } from '@/i18n/i18n'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isOrcaCloudEnvironmentId } from './orca-cloud-environment-id'
@@ -27,6 +28,8 @@ type PendingHistory = {
   ptyId: string | null
   /** The line the person had scrolled up to (kept across the wake's remount), or null at the bottom. */
   scrolledTo: number | null
+  /** That line's text (REG-13: the restore can shift rows, so its text finds it again). */
+  scrolledText: string | null
 }
 
 /**
@@ -48,7 +51,7 @@ export type ScrollbackSource = {
   rows: number
   buffer: {
     normal: RestoreBuffer & { baseY: number }
-    active?: { viewportY: number; baseY: number }
+    active?: { viewportY: number; baseY: number } & Partial<Pick<RestoreBuffer, 'getLine'>>
   }
 }
 
@@ -117,7 +120,9 @@ export function captureWakeScrollback(
     armed: false,
     ptyId: options.ptyId ?? null,
     text: text.replace(SGR, '').trim() === '' ? null : text,
-    scrolledTo: active && active.viewportY < active.baseY ? active.viewportY : null
+    scrolledTo: active && active.viewportY < active.baseY ? active.viewportY : null,
+    scrolledText:
+      active && active.viewportY < active.baseY ? wakeAnchorText(active, active.viewportY) : null
   }
   pending.set(leafId, entry)
   if (entry.text !== null || !options.readOnlyCopy) {
@@ -241,12 +246,18 @@ export function forgetPreReplayCopy(leafId: string): void {
 /** The person scrolled the waking pane: where to put them back after the restore. */
 export function noteWakeViewport(
   leafId: string,
-  terminal: { buffer: { active: { viewportY: number; baseY: number } } }
+  terminal: {
+    buffer: {
+      active: { viewportY: number; baseY: number } & Partial<Pick<RestoreBuffer, 'getLine'>>
+    }
+  }
 ): void {
   const entry = pending.get(leafId)
   if (entry) {
-    const { viewportY, baseY } = terminal.buffer.active
-    entry.scrolledTo = viewportY < baseY ? viewportY : null
+    const active = terminal.buffer.active
+    const scrolled = active.viewportY < active.baseY
+    entry.scrolledTo = scrolled ? active.viewportY : null
+    entry.scrolledText = scrolled ? wakeAnchorText(active, active.viewportY) : null
   }
 }
 
@@ -274,6 +285,8 @@ export type WakeScrollbackRestore = {
   block: string
   /** Where a person who had scrolled up was, or null when pinned to the bottom. */
   scrolledTo: number | null
+  /** That line's text, so the rewrite (which can shift rows) finds it again (REG-13). */
+  anchor: string | null
 }
 
 /**
@@ -298,10 +311,12 @@ export function beginWakeScrollbackRestore(
   if (entry.text === null) {
     return null
   }
-  const { viewportY, baseY } = terminal.buffer.active
+  const active = terminal.buffer.active
+  const scrolledHere = active.viewportY < active.baseY
   return {
     // A remount on wake starts at the bottom: the person's scroll is the one noted before it.
-    scrolledTo: viewportY < baseY ? viewportY : entry.scrolledTo,
+    scrolledTo: scrolledHere ? active.viewportY : entry.scrolledTo,
+    anchor: scrolledHere ? wakeAnchorText(active, active.viewportY) : entry.scrolledText,
     block: `\x1b[0m${sanitizeRestoredText(entry.text)}\x1b[0m\r\n${wakeDividerLine(entry.sleptAt, wokeAt, terminal.cols)}`
   }
 }
@@ -369,7 +384,7 @@ export async function finishWakeScrollbackRestore(
     return false
   }
   if (restore.scrolledTo !== null) {
-    scrollTo(restore.scrolledTo)
+    scrollTo(wakeAnchoredRow(terminal.buffer.active, restore.anchor, restore.scrolledTo))
   }
   return true
 }

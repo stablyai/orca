@@ -1,37 +1,15 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import {
+  AGENT_CONFIG_OPT_IN_KINDS,
   agentOfKind,
   isSkillKind,
   type AgentConfigSyncRow,
   type AgentConfigSyncStatus
 } from '../../../../../../shared/agent-config-sync/agent-config-sync-contract'
+import { AGENT_LABEL, cloudSkillsDisplayName, cloudSkillsKindLabel } from './cloud-skills-labels'
 
-// Glossary: the agent is "Claude" in UI copy, never "Claude Code".
-export const AGENT_LABEL = { claude: 'Claude', codex: 'Codex' } as const
-
-/** What the user types: `/frontend:review` for a namespaced Claude command, `/prompts:x` in Codex. */
-export function cloudSkillsDisplayName(row: Pick<AgentConfigSyncRow, 'kind' | 'name'>): string {
-  if (row.kind === 'claude-command') {
-    return `/${row.name.split('/').join(':')}`
-  }
-  if (row.kind === 'codex-prompt') {
-    return `/prompts:${row.name}`
-  }
-  return row.name
-}
-
-export function cloudSkillsKindLabel(row: AgentConfigSyncRow, t: Translate = translate): string {
-  const agent = AGENT_LABEL[agentOfKind(row.kind)]
-  const kind = isSkillKind(row.kind)
-    ? t('cloudSkillsSync.kind.skill', '{{agent}} skill', { agent })
-    : row.kind === 'codex-prompt'
-      ? t('cloudSkillsSync.kind.prompt', 'Codex prompt')
-      : t('cloudSkillsSync.kind.command', '{{agent}} command', { agent })
-  return row.scope === 'project'
-    ? t('cloudSkillsSync.kind.project', '{{kind}}, this project', { kind })
-    : kind
-}
+export { AGENT_LABEL, cloudSkillsDisplayName, cloudSkillsKindLabel } from './cloud-skills-labels'
 
 /** Rows the user's switches apply to: a copy for the other agent follows its original. */
 export function cloudSkillsRowIncluded(
@@ -117,6 +95,16 @@ export function cloudSkillsRowNote(
       }
     )
   }
+  if (row.state !== 'skipped' && row.localRefs) {
+    return t(
+      'cloudSkillsSync.row.localRefs',
+      'Imports {{count}} files from elsewhere on this computer; those aren’t copied',
+      {
+        count: row.localRefs,
+        defaultValue_one: 'Imports 1 file from elsewhere on this computer; it isn’t copied'
+      }
+    )
+  }
   if (row.state !== 'skipped') {
     return row.convertedFrom
       ? t('cloudSkillsSync.row.converted', 'Copied from {{agent}} so both agents have it', {
@@ -127,7 +115,17 @@ export function cloudSkillsRowNote(
   const key = row.outcome ?? row.skipReason
   switch (key) {
     case 'turned-off':
-      return t('cloudSkillsSync.row.turnedOff', 'Turned off')
+      return AGENT_CONFIG_OPT_IN_KINDS.has(row.kind)
+        ? t(
+            'cloudSkillsSync.row.memoryOff',
+            'Your personal instructions stay on this computer until you turn this on'
+          )
+        : t('cloudSkillsSync.row.turnedOff', 'Turned off')
+    case 'host-outdated':
+      return t(
+        'cloudSkillsSync.row.hostOutdated',
+        'This workspace was created before this could sync. A new workspace gets it.'
+      )
     case 'in-repo':
       return t('cloudSkillsSync.row.inRepo', 'Committed to the repo, so the sandbox already has it')
     case 'too-large':
@@ -161,6 +159,7 @@ export function cloudSkillsRowNote(
 }
 
 const FIXED_SKIPS: ReadonlySet<string> = new Set([
+  'host-outdated',
   'in-repo',
   'too-large',
   'secret',

@@ -1,5 +1,6 @@
 import {
   AGENT_CONFIG_LIMITS,
+  AGENT_CONFIG_OPT_IN_KINDS,
   agentConfigItemKey,
   type AgentConfigItemKind,
   type AgentConfigItemPayload,
@@ -34,6 +35,12 @@ function counterpartKind(item: LocalAgentConfigItem): AgentConfigItemKind | null
       return item.name.includes('/') ? null : 'codex-prompt'
     case 'codex-prompt':
       return 'claude-command'
+    // Subagents and output styles have no Codex form; memory stays per agent by design.
+    case 'claude-agent':
+    case 'claude-output-style':
+    case 'claude-memory':
+    case 'codex-memory':
+      return null
   }
 }
 
@@ -43,7 +50,11 @@ const NATIVE_FOR: Record<AgentConfigItemKind, AgentConfigItemKind[]> = {
   'codex-skill': ['agents-skill', 'codex-skill'],
   'claude-skill': ['claude-skill'],
   'claude-command': ['claude-command'],
-  'codex-prompt': ['codex-prompt']
+  'codex-prompt': ['codex-prompt'],
+  'claude-agent': ['claude-agent'],
+  'claude-output-style': ['claude-output-style'],
+  'claude-memory': ['claude-memory'],
+  'codex-memory': ['codex-memory']
 }
 
 function rowOf(item: LocalAgentConfigItem, key: string, included: boolean): AgentConfigSyncRow {
@@ -55,16 +66,29 @@ function rowOf(item: LocalAgentConfigItem, key: string, included: boolean): Agen
     bytes: item.bytes,
     fileCount: item.fileCount,
     withheldFiles: item.withheldFiles,
+    ...(item.localRefs ? { localRefs: item.localRefs } : {}),
     ...(item.digest ? { digest: item.digest } : {}),
     included,
     state: 'pending'
   }
 }
 
+/** Opt-in kinds (memory) sync only when turned on; everything else unless turned off. */
+export function agentConfigItemIncluded(
+  key: string,
+  kind: AgentConfigItemKind,
+  excluded: ReadonlySet<string>,
+  optedIn: ReadonlySet<string> = new Set()
+): boolean {
+  return AGENT_CONFIG_OPT_IN_KINDS.has(kind) ? optedIn.has(key) : !excluded.has(key)
+}
+
 /** What to send and how each local item shows, before the host answers. */
 export function planAgentConfigSync(args: {
   items: readonly LocalAgentConfigItem[]
   excluded: ReadonlySet<string>
+  /** Opt-in (memory) items the user turned on; they stay off otherwise. */
+  optedIn?: ReadonlySet<string>
   shareAcrossAgents: boolean
 }): AgentConfigSyncPlan {
   const rows: AgentConfigSyncRow[] = []
@@ -75,7 +99,7 @@ export function planAgentConfigSync(args: {
   const converted = new Set<string>()
   for (const item of args.items) {
     const key = agentConfigItemKey(item.scope, item.kind, item.name)
-    const included = !args.excluded.has(key)
+    const included = agentConfigItemIncluded(key, item.kind, args.excluded, args.optedIn)
     const row = rowOf(item, key, included)
     if (item.skipReason) {
       rows.push({ ...row, state: 'skipped', skipReason: item.skipReason })

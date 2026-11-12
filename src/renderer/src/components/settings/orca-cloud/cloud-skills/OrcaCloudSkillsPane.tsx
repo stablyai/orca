@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { BookOpenText } from 'lucide-react'
 import { toast } from 'sonner'
 import { InlineError } from '@/components/ui/inline-error'
@@ -22,6 +22,7 @@ import {
   runningOrcaCloudMcpWorkspaces,
   type OrcaCloudMcpWorkspace
 } from '../OrcaCloudMcpServersPane'
+import { cloudSkillsEffectiveExcluded } from './cloud-skills-filter'
 import { CloudSkillsSyncPanel, CloudSkillsSyncSkeleton } from './CloudSkillsSyncPanel'
 
 function SwitchRow({
@@ -95,11 +96,13 @@ export function CloudSkillsSyncSettingsView({
 function CloudSkillsSyncSection({
   environmentId,
   excluded,
+  optedIn,
   autoSync,
   defaultExpanded
 }: {
   environmentId: string
-  excluded: ReadonlySet<string>
+  excluded: readonly string[]
+  optedIn: readonly string[]
   autoSync: boolean
   defaultExpanded: boolean
 }): React.JSX.Element | null {
@@ -120,7 +123,7 @@ function CloudSkillsSyncSection({
   return (
     <CloudSkillsSyncPanel
       status={status}
-      excluded={excluded}
+      excluded={cloudSkillsEffectiveExcluded(status.rows, excluded, optedIn)}
       autoSync={autoSync}
       expanded={expanded}
       onToggleExpanded={() => setExpanded((value) => !value)}
@@ -225,7 +228,6 @@ export function OrcaCloudSkillsPane(): React.JSX.Element {
     setWorkspaces(null)
     setAttempt((value) => value + 1)
   }, [])
-  const excluded = useMemo(() => new Set(preferences?.excluded ?? []), [preferences])
   if (preferences === undefined) {
     return <Skeleton className="h-28 w-full" />
   }
@@ -252,7 +254,8 @@ export function OrcaCloudSkillsPane(): React.JSX.Element {
         renderSync={(workspace, onlyOne) => (
           <CloudSkillsSyncSection
             environmentId={workspace.environmentId}
-            excluded={excluded}
+            excluded={preferences.excluded}
+            optedIn={preferences.optedIn ?? []}
             autoSync={preferences.autoSync}
             defaultExpanded={onlyOne}
           />
