@@ -135,11 +135,17 @@ export function NativeChatToolRunMembers({
   )
   const [marks] = useState(createProgrammaticScrollMarks)
   const [fades, setFades] = useState({ top: false, bottom: false })
+  // The row whose real measurement says new work has landed: the last one that draws something
+  // (a thought with no words draws nothing, so it can never be measured).
+  const followTailKey = useMemo(
+    () => rows.findLast((row) => row.kind !== 'aside' || row.focusable)?.key,
+    [rows]
+  )
   const isVisibleRef = useRef(isVisible)
-  const lastRowKeyRef = useRef(rows.at(-1)?.key)
+  const followTailKeyRef = useRef(followTailKey)
   useLayoutEffect(() => {
     isVisibleRef.current = isVisible
-    lastRowKeyRef.current = rows.at(-1)?.key
+    followTailKeyRef.current = followTailKey
   })
 
   const rowIndexByKey = useMemo(() => new Map(rows.map((row, index) => [row.key, index])), [rows])
@@ -171,7 +177,13 @@ export function NativeChatToolRunMembers({
       }
       detailRoom.record(key, element)
       const follow = followRef.current
-      if (follow && !follow.observedTail && key === lastRowKeyRef.current) {
+      // Only a laid-out tail counts: a callback can carry a cached or zero size.
+      if (
+        follow &&
+        !follow.observedTail &&
+        key === followTailKeyRef.current &&
+        element.getBoundingClientRect().height > 0
+      ) {
         follow.observedTail = true
         setTailObservations((count) => count + 1)
       }
@@ -251,8 +263,12 @@ export function NativeChatToolRunMembers({
     if (!follow || !isVisible) {
       return
     }
+    if (!follow.observedTail && followTailKeyRef.current === undefined) {
+      // Nothing in the run draws: there is no landing to wait for.
+      follow.observedTail = true
+    }
     if (!follow.observedTail) {
-      const tail = lastRowKeyRef.current
+      const tail = followTailKeyRef.current
       const tailElement = Array.from(
         scrollerRef.current?.querySelectorAll<HTMLDivElement>(`[${ROW_KEY_ATTRIBUTE}]`) ?? []
       ).findLast((element) => element.getAttribute(ROW_KEY_ATTRIBUTE) === tail)

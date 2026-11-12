@@ -16,6 +16,8 @@ import {
 const BOX_HEIGHT_PX = 288
 /** Measured rows are taller than the 26px estimate, so a pixel position alone lands on the wrong row. */
 const ROW_HEIGHT_PX = 40
+/** Every row's laid-out height unless a test says otherwise. */
+const layout = { rowPx: ROW_HEIGHT_PX }
 const ROW = '[data-native-chat-tool-run-row]'
 /** Rows that have grown in place, by row key. */
 const grownRows = new Map<string, number>()
@@ -58,7 +60,7 @@ function resized(element: Element, height: number): void {
 }
 
 function rowHeight(element: Element): number {
-  return grownRows.get(element.getAttribute('data-native-chat-tool-run-row') ?? '') ?? ROW_HEIGHT_PX
+  return grownRows.get(element.getAttribute('data-native-chat-tool-run-row') ?? '') ?? layout.rowPx
 }
 
 /** happy-dom lays nothing out: stack the run box's children by their stated heights. */
@@ -210,6 +212,19 @@ async function settle(): Promise<void> {
   }
 }
 
+/** A drawn row's laid-out height changes, as a browser's ResizeObserver reports it. */
+async function growRow(container: HTMLElement, key: string, height: number): Promise<void> {
+  const row = container.querySelector(`[data-native-chat-tool-run-row="${key}"]`)
+  if (!row) {
+    throw new Error(`row ${key} is not drawn`)
+  }
+  grownRows.set(key, height)
+  await act(async () => {
+    resized(row, height)
+  })
+  await settle()
+}
+
 async function scrollBox(container: HTMLElement, top: number): Promise<void> {
   const box = membersBox(container)
   await act(async () => {
@@ -225,6 +240,7 @@ describe('NativeChatToolRun opened-run reader', () => {
       toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame']
     })
     grownRows.clear()
+    layout.rowPx = ROW_HEIGHT_PX
     pane.hidden = false
     vi.stubGlobal('ResizeObserver', StubResizeObserver)
     layOutRunBox()
@@ -368,6 +384,38 @@ describe('NativeChatToolRun opened-run reader', () => {
     await settle()
     const box = membersBox(container)
     expect(box.scrollTop).toBeGreaterThanOrEqual(box.scrollHeight - BOX_HEIGHT_PX - 1)
+
+    // Once landed, growth that is not new work leaves the reader where they are.
+    const landed = box.scrollTop
+    await growRow(container, 'call:call-229', 300)
+    expect(box.scrollTop).toBe(landed)
+  })
+
+  it('finishes a follow whose tail first measures exactly as estimated', async () => {
+    // 26px rows: the tail's real measurement changes no size, so only the measurement itself can end the follow.
+    layout.rowPx = 26
+    const { container } = render(<Transcript blocks={calls(200)} live />)
+    await settle()
+    const box = membersBox(container)
+    expect(box.scrollTop).toBeGreaterThanOrEqual(box.scrollHeight - BOX_HEIGHT_PX - 1)
+    const landed = box.scrollTop
+    await growRow(container, 'call:call-199', 300)
+    expect(box.scrollTop).toBe(landed)
+  })
+
+  it('waits for a tail with no size yet, then lands on it once it has one', async () => {
+    grownRows.set('call:call-259', 0)
+    const { container, rerender } = render(<Transcript blocks={calls(200)} live />)
+    await settle()
+    rerender(<Transcript blocks={calls(260)} live />)
+    await settle()
+    // The tail now lays out: the follow that waited for it lands on the new end.
+    await growRow(container, 'call:call-259', 40)
+    const box = membersBox(container)
+    expect(box.scrollTop).toBeGreaterThanOrEqual(box.scrollHeight - BOX_HEIGHT_PX - 1)
+    const landed = box.scrollTop
+    await growRow(container, 'call:call-259', 300)
+    expect(box.scrollTop).toBe(landed)
   })
 
   it('does not keep a selection span drawn after it ended while the pane was hidden', async () => {
