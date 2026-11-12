@@ -1,17 +1,13 @@
 import { readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { AgentTokenUsageReporter } from '../reporting/token-usage/agent-token-usage-reporter'
-
-import { isTelemetryEnabled } from '../../telemetry/client'
 import { join, parse } from 'node:path'
 import {
   AnalyticsSessionIdStore,
   type AnalyticsSessionId
 } from '../reporting/token-usage/analytics-session-id-store'
-import type { Store } from '../../persistence/loading-store/store'
+import type { UsageStoreHost } from '../usage-store-host'
 import { UsageCacheSnapshotWriter } from '../cache/usage-cache-snapshot-writer'
-import { loadKnownUsageWorktreesByRepo } from '../worktree-attribution/usage-worktree-metadata'
-
 import {
   createWorktreeRefs,
   getUsageWorktreeFingerprint
@@ -38,13 +34,14 @@ export abstract class UsageProviderStoreLifecycle<
   private readonly loaded: Promise<void>
   private readonly schemaVersion: number
   private scanPromise: Promise<void> | null = null
+  private stopping = false
   private tokenReporter: AgentTokenUsageReporter | null = null
   private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
   private readonly inlineCache = new UsageInlineCachePreservation()
 
   constructor(
-    private readonly store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
+    private readonly host: UsageStoreHost,
     private readonly config: UsageProviderStoreLifecycleConfig<SourceKey, State, DataPresenceKey>
   ) {
     this.writer = new UsageCacheSnapshotWriter(config.logTag, config.resolveCacheFile)
@@ -80,6 +77,14 @@ export abstract class UsageProviderStoreLifecycle<
   }
 
   /** Await queued cache writes so quit does not drop the final snapshot. */
+  stopScanAdmission(): void {
+    this.stopping = true
+  }
+
+  async settleScansForShutdown(): Promise<void> {
+    await this.scanPromise
+  }
+
   async flush(): Promise<void> {
     await this.loaded
     await this.inlineCache.settle()
@@ -96,17 +101,22 @@ export abstract class UsageProviderStoreLifecycle<
 
   async refresh(force = false): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     await this.loaded
-    if (!this.state.scanState.enabled) {
+    if (this.stopping || !this.state.scanState.enabled) {
       return this.getScanState()
     }
-    const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
+    const catalog = await this.host.readCatalog()
+    this.host.signal.throwIfAborted()
+    const currentWorktreeFingerprint = getUsageWorktreeFingerprint(new Map(catalog.worktreesByRepo))
     if (!force && this.state.scanState.lastScanCompletedAt) {
       const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
       if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
         return this.getScanState()
       }
     }
-    await this.runScan()
+    if (this.stopping || !this.state.scanState.enabled) {
+      return this.getScanState()
+    }
+    await this.runScan(catalog)
     return this.getScanState()
   }
 
@@ -217,7 +227,9 @@ export abstract class UsageProviderStoreLifecycle<
     })
   }
 
-  private async runScan(): Promise<void> {
+  private async runScan(
+    catalog: Awaited<ReturnType<UsageStoreHost['readCatalog']>>
+  ): Promise<void> {
     if (this.scanPromise) {
       await this.scanPromise
       return
@@ -229,15 +241,22 @@ export abstract class UsageProviderStoreLifecycle<
     // Assign before yielding so concurrent refreshes share one scan.
     this.scanPromise = (async () => {
       try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
+        const { repoIds, worktreesByRepo: entries } = catalog
+        this.host.signal.throwIfAborted()
+        const worktreesByRepo = new Map(entries)
         const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
-        const result = await this.config.scan(createWorktreeRefs(repos, worktreesByRepo), {
-          path: usageSourceCachePath(this.config.resolveCacheFile()),
-          schemaVersion: this.schemaVersion,
-          worktreeFingerprint,
-          reuse: this.state.worktreeFingerprint === worktreeFingerprint
-        })
+        const result = await this.config.scan(
+          createWorktreeRefs(
+            repoIds.map((id) => ({ id })),
+            worktreesByRepo
+          ),
+          {
+            path: usageSourceCachePath(this.config.resolveCacheFile()),
+            schemaVersion: this.schemaVersion,
+            worktreeFingerprint,
+            reuse: this.state.worktreeFingerprint === worktreeFingerprint
+          }
+        )
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
         this.state.worktreeFingerprint = worktreeFingerprint
@@ -249,6 +268,9 @@ export abstract class UsageProviderStoreLifecycle<
         await this.writeToDisk().catch(() => {})
         await this.reportTokenUsage()
       } catch (error) {
+        if (this.stopping || this.host.signal.aborted) {
+          return
+        }
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
         await this.writeToDisk().catch(() => {})
       } finally {
@@ -261,16 +283,20 @@ export abstract class UsageProviderStoreLifecycle<
 
   private async reportTokenUsage(): Promise<void> {
     const config = this.config.tokenUsage
-    if (!config || !isTelemetryEnabled() || !this.state.scanState.enabled) {
+    if (!config) {
       return
     }
     try {
+      if (!(await this.host.telemetry.isEnabled()) || !this.state.scanState.enabled) {
+        return
+      }
       if (!this.tokenReporter) {
         const { dir, name } = parse(this.config.resolveCacheFile())
         this.tokenReporter = new AgentTokenUsageReporter(
           join(dir, `${name}-token-usage.json`),
           config.provider,
-          (ids) => this.getAnalyticsSessionIds(ids)
+          (ids) => this.getAnalyticsSessionIds(ids),
+          this.host.telemetry
         )
       }
       await this.tokenReporter.report(config.selectSessions(this.state))
@@ -280,11 +306,6 @@ export abstract class UsageProviderStoreLifecycle<
         '[agent-token-usage] Could not report token usage; will retry after the next scan'
       )
     }
-  }
-
-  private async getCurrentWorktreeFingerprint(): Promise<string> {
-    const repos = this.store.getRepos()
-    return getUsageWorktreeFingerprint(loadKnownUsageWorktreesByRepo(this.store, repos))
   }
 }
 

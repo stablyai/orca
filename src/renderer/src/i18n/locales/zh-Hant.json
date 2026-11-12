@@ -809,8 +809,6 @@
       "rowPermissionsLabel": "{{agent}} 權限",
       "customPermissions": "自訂參數",
       "replaceWithPermissionMode": "替換為 {{mode}}",
-      "expandAgentSettings": "展開代理程式設定",
-      "collapseAgentSettings": "收合代理程式設定",
       "permissionArgsTerminalOnly": "這些參數可能會控制 {{agent}} 的終端機權限，因此 Orca 不會加入旗標。聊天則使用上方的「權限」設定。",
       "localSaveFailed": "無法儲存代理程式設定。請再試一次。",
       "localSaveFailedAgent": "無法儲存 {{agent}} 的設定。請再試一次。",
@@ -3159,7 +3157,6 @@
       "Terminal": {
         "73768427cf": "關閉",
         "f82e9f02df": "取消",
-        "7958465754": "部分終端機中仍有執行中的行程。仍要關閉視窗嗎？",
         "b7c1f0a934": "無法連線至遠端主機，因此 Orca 無法判斷該主機上的工作是否仍在執行。仍要關閉視窗嗎？",
         "2fa9c69ff3": "關閉視窗？",
         "cd51e28d8b": "儲存",
@@ -7484,14 +7481,11 @@
           "remoteDetectionFailed": "無法偵測已安裝的代理程式。請檢查主機連線後重試。",
           "retryDetection": "重試",
           "02e0143be5": "已安裝",
-          "92033495ff": "自動",
           "f9f127d664": "覆寫執行檔路徑或名稱，並編輯此代理程式的預設啟動參數或環境。",
           "f95b5c79b8": "安裝",
           "fe4d630c94": "文件",
-          "8dc0192e48": "已停用",
           "5200dac9da": "重設",
           "2e45ca29b6": "命令",
-          "d4d2a45d63": "啟用",
           "1c9a9679ec": "{{value0}} 可用性",
           "0d9e293a02": "重新整理",
           "c9b33eb5c0": "重新整理中…",
@@ -7506,10 +7500,8 @@
           "codexSessionSource": "要匯入的 Codex 主目錄",
           "codexSessionSourceInfo": "關於匯入 Codex 歷史記錄",
           "codexSessionSourceTooltip": "Orca 在隔離的主目錄中執行 Codex。將此項指向您現有的 Codex 主目錄以匯入工作階段歷史記錄。留空則使用 ~/.codex。",
-          "storedDefaultUndetected": "已儲存為預設值，但目前未偵測到",
           "noAgentsDetected": "未偵測到代理程式。若已安裝代理程式，可能是偵測作業逾時。",
-          "9f30095d49": "代理程式權限",
-          "3bddd54c9e": "預設代理程式"
+          "9f30095d49": "代理程式權限"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一個圖示",
@@ -18954,7 +18946,6 @@
           "browsePlugins": "瀏覽外掛程式",
           "browseThemePlugins": "瀏覽主題外掛程式",
           "colorMode": "色彩模式",
-          "colorModeCaption": "淺色、深色或跟隨系統。",
           "darkLook": "深色外觀",
           "darkLooks": "深色外觀",
           "lightLook": "淺色外觀",
@@ -18970,10 +18961,8 @@
           "slotLabel": "要編輯的外觀",
           "sourceBuiltIn": "內建",
           "sourceCommunity": "終端機調色盤",
-          "themes": "主題",
-          "themesCaption": "選用。使用 App 主題和終端機調色盤進一步自訂。"
-        },
-        "subtitle": "選擇淺色或深色，也可以再選一個主題。兩者都能隨時在設定中變更。"
+          "themes": "主題"
+        }
       },
       "integrations": {
         "capabilities": {
@@ -20500,11 +20489,11 @@
           "label": "靜音後停止",
           "short": "你停止說話時結束聽寫。"
         },
-        "pageDescription": "在任何面板中用說話取代打字。",
+        "pageDescription": "在任何窗格中用說話取代打字。",
         "dictation": {
           "label": "聽寫",
-          "ready": "在任何面板中按 {{shortcut}}。",
-          "off": "開啟後，可在任何面板中按 {{shortcut}} 聽寫。",
+          "ready": "在任何窗格中按 {{shortcut}}。",
+          "off": "開啟後，可在任何窗格中按 {{shortcut}} 聽寫。",
           "noModel": "在下方下載一個語音模型即可開始。它在這台電腦上執行，音訊不會離開這裡。",
           "downloading": "{{model}} 下載完成後即可使用。",
           "needsUpdate": "在下方更新 {{model}} 以繼續聽寫。"
@@ -23314,11 +23303,10 @@
     "setByArguments": "由引數設定",
     "searchModels": "搜尋模型",
     "noModels": "沒有符合搜尋條件的模型。",
-    "legacyModels": "舊版模型",
     "toggleArguments": "切換引數顯示",
     "argumentsTerminalHint": "僅適用於終端機（CLI）啟動",
     "searchAgentModels": "搜尋 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 個模型",
+    "moreModelsWithCount": "更多模型 ({{total}})",
     "search": "搜尋，例如 Opus 5.5…",
     "configure": "設定 {{agent}}",
     "arguments": "引數",
@@ -23429,14 +23417,14 @@
     "update": "更新",
     "cancel": "取消",
     "pill": {
-      "updateNotice": "更快的語音輸入已可安裝",
-      "retiredNotice": "語音輸入已改用更快的語音模型",
+      "updateNotice": "更快的聽寫功能已可安裝",
+      "retiredNotice": "聽寫已改用更快的語音模型",
       "install": "安裝",
       "installTooltip": "一次性下載 · {{size}} MB",
-      "downloading": "正在設定語音輸入",
+      "downloading": "正在設定聽寫",
       "downloadingTooltip": "{{done}} / {{size}} MB",
-      "ready": "語音輸入已就緒。按下 <kbd></kbd>",
-      "readyNoShortcut": "語音輸入已就緒。",
+      "ready": "聽寫已就緒。按下 <kbd></kbd>",
+      "readyNoShortcut": "聽寫已就緒。",
       "failed": "下載已中斷。請檢查網路連線。",
       "tryAgain": "重試",
       "deleteOld": "刪除舊模型",

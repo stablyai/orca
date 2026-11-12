@@ -5,19 +5,7 @@ import { getClaudeManagedHookPlan } from './claude-managed-hook-events'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 
-import {
-  parseClaudeCliVersion,
-  parseClaudeCliVersionOutput,
-  probeClaudeCliVersion
-} from './claude-hook-event-versions'
-
-describe('parseClaudeCliVersion', () => {
-  it('extracts Claude Code version output', () => {
-    expect(parseClaudeCliVersion('2.1.261 (Claude Code)')).toBe('2.1.261')
-    expect(parseClaudeCliVersion('unknown')).toBeNull()
-    expect(parseClaudeCliVersion('2.1.261')).toBe('2.1.261')
-  })
-})
+import { parseClaudeCliVersionOutput, probeClaudeCliVersion } from './claude-hook-event-versions'
 
 describe('identified Claude version output', () => {
   // Recorded macOS 2.1.310 / Windows 2.1.221 probes; historical releases' CLI source

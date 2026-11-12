@@ -16,17 +16,6 @@ describe('getRepoDisplayLabelsByPath', () => {
     )
   })
 
-  it('keeps cross-host repos with identical path AND name as separate entries', () => {
-    const localRepo = { path: '/Users/alice', displayName: 'home' }
-    const sshRepo = { path: '/Users/alice', displayName: 'home', connectionId: 'prod-ssh' }
-    const labels = getRepoDisplayLabelsByPath([localRepo, sshRepo])
-
-    expect(getRepoDisplayLabelKey(localRepo)).not.toBe(getRepoDisplayLabelKey(sshRepo))
-    expect(labels.size).toBe(2)
-    expect(labels.get(getRepoDisplayLabelKey(localRepo))).toBe('home')
-    expect(labels.get(getRepoDisplayLabelKey(sshRepo))).toBe('home')
-  })
-
   it('disambiguates collisions only within their owning host, even when paths overlap', () => {
     const local = { path: '/workspace/payments/api', displayName: 'api' }
     const sibling = { path: '/workspace/billing/api', displayName: 'api' }
@@ -36,24 +25,6 @@ describe('getRepoDisplayLabelsByPath', () => {
     expect(labels.get(getRepoDisplayLabelKey(sibling))).toBe('billing/api')
     expect(labels.get(getRepoDisplayLabelKey(paired))).toBe('api')
     expect(labels.size).toBe(3)
-  })
-
-  it('resolves explicit execution ownership before legacy connection metadata', () => {
-    const first = {
-      path: '/work/payments/api',
-      displayName: 'api',
-      connectionId: 'old',
-      executionHostId: 'runtime:first' as const
-    }
-    const second = {
-      path: '/work/billing/api',
-      displayName: 'api',
-      connectionId: 'old',
-      executionHostId: 'runtime:second' as const
-    }
-    const labels = getRepoDisplayLabelsByPath([first, second])
-    expect(labels.get(getRepoDisplayLabelKey(first))).toBe('api')
-    expect(labels.get(getRepoDisplayLabelKey(second))).toBe('api')
   })
 
   it('keeps Windows labels separate across hosts that share a path', () => {

@@ -20,7 +20,7 @@ vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('../../git/command-runner/gh-exec-file', () => ({
+vi.mock('../../git/command-runner/hosted-cli/gh-exec-file', () => ({
   ghExecFileAsync: vi.fn(async () => ({ stdout: '{"isFork":false}' }))
 }))
 

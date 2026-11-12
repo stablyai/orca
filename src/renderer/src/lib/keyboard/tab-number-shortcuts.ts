@@ -2,7 +2,7 @@ import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { Tab } from '../../../../shared/tab-types'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'

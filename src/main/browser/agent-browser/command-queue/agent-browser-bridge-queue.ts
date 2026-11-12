@@ -9,6 +9,7 @@ import { runWithActionEffects } from '../observation/agent-browser-action-effect
 import { getRequestedPageUrl, runExpectingPageUrl } from '../../cdp/input/browser-expected-page-url'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from '../session-lifecycle/agent-browser-cleanup-options'
 import { releaseHeldPageInput } from '../../cdp/input/guest-direct-key-input'
+import { withFileChooserBlocked } from '../../cdp/input/guest-file-chooser'
 import { onBrowserJavaScriptDialogOpened } from '../../guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
   assertNoJavaScriptDialog,
@@ -71,7 +72,21 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
   ): Promise<T> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, execute, {
       ...options,
-      reportEffects: options.reportEffects !== false
+      reportEffects: options.reportEffects !== false,
+      blockFileChooser: options.blockFileChooser !== false
+    })
+  }
+
+  /** Navigation, pointer moves, wheel and scrolling deliver no user activation, so they open no file picker to block. */
+  protected enqueueInertAction<T>(
+    worktreeId: string | undefined,
+    browserPageId: string | undefined,
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: EnqueueTargetedCommandOptions = {}
+  ): Promise<T> {
+    return this.enqueuePageAction(worktreeId, browserPageId, execute, {
+      ...options,
+      blockFileChooser: false
     })
   }
 
@@ -103,6 +118,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     const inThisCall = captureActiveRpcCall()
     // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
     const reportEffects = options.reportEffects === true && agentCommand.agent
+    // A desktop picker would activate Orca over the user's work.
+    const blockFileChooser = options.blockFileChooser === true
     const expectedUrl = getRequestedPageUrl()
 
     // A dialog blocks the page until it is answered. A command still waiting never runs; one
@@ -147,14 +164,22 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
                 }
                 running = true
                 // The effects baseline can take seconds, so the check sits inside it, next to the action.
+                const wc = blockFileChooser ? this.getWebContents(target.webContentsId) : null
+                // Only the input itself, so the user's own pickers work during the effects wait.
+                const deliver = (): Promise<T> =>
+                  wc
+                    ? withFileChooserBlocked(wc, () => execute(session, target), {
+                        agent: agentCommand.agent
+                      })
+                    : execute(session, target)
                 const guarded = (): Promise<T> =>
                   expectedUrl === undefined
-                    ? execute(session, target)
+                    ? deliver()
                     : runExpectingPageUrl(
                         expectedUrl,
                         target.browserPageId,
                         () => this.livePageUrls(target),
-                        () => execute(session, target)
+                        deliver
                       )
                 const act = (): Promise<T> =>
                   reportEffects

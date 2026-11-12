@@ -15,7 +15,6 @@ export type HandlerGroup = {
   load: () => Promise<Record<string, CommandHandler>>
 }
 
-// handler-group-manifest.test.ts checks keys against the real exports to prevent drift.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
@@ -135,6 +134,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration worker-show',
       'orchestration worker-read',
       'orchestration worker-stop',
+      'orchestration approve',
+      'orchestration deny',
       'orchestration worker-abandon',
       'orchestration worker-release',
       'orchestration worker-keep-open',
@@ -207,7 +208,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'chat',
-    keys: ['chat rename', 'chat list', 'chat read', 'chat send', 'chat wait'],
+    keys: ['chat rename'],
     load: async () => (await import('./handlers/chat.js')).CHAT_HANDLERS
   },
   {
