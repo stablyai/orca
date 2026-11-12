@@ -9,13 +9,14 @@ import { isUnsupportedMergeTreeWriteTreeError } from '../../shared/git/branches/
 
 describe('merged review head equivalence (real Git)', () => {
   let repoPath = ''
-  const git = (...args: string[]): string => {
-    const result = runProcessSync({ program: 'git', args, cwd: repoPath })
+  const gitWithInput = (args: string[], input?: string | Uint8Array): string => {
+    const result = runProcessSync({ program: 'git', args, cwd: repoPath, input })
     if (result.code !== 0) {
       throw new Error(result.stderr)
     }
     return result.stdout.trim()
   }
+  const git = (...args: string[]): string => gitWithInput(args)
   const commit = (file: string, content: string, message: string): string => {
     writeFileSync(join(repoPath, file), content)
     git('add', file)
@@ -82,6 +83,26 @@ describe('merged review head equivalence (real Git)', () => {
       await expect(prove(reviewHead, rebasedHead)).resolves.toBe(true)
       const extraHead = commit('local.txt', 'unpushed\n', 'local work')
       await expect(prove(reviewHead, extraHead)).resolves.toBe(false)
+    } finally {
+      capabilities.clear()
+    }
+  })
+
+  it('refuses distinct non-UTF-8 paths with identical blobs in the older-Git fallback', async () => {
+    const base = git('rev-parse', 'HEAD')
+    const blob = gitWithInput(['hash-object', '-w', '--stdin'], 'review content\n')
+    const tree = (pathByte: number) =>
+      gitWithInput(
+        ['mktree', '-z'],
+        Buffer.concat([Buffer.from(`100644 blob ${blob}\tpath-`), Buffer.from([pathByte, 0])])
+      )
+    const reviewHead = git('commit-tree', tree(0xff), '-p', base, '-m', 'review')
+    const localHead = git('commit-tree', tree(0xfe), '-p', base, '-m', 'local rename')
+    git('update-ref', 'refs/remotes/origin/main', base)
+    const capabilities = getLocalGitCapabilityCache({ cwd: repoPath })
+    capabilities.rememberUnsupported('merge-tree-write-tree')
+    try {
+      await expect(prove(reviewHead, localHead)).resolves.toBe(false)
     } finally {
       capabilities.clear()
     }

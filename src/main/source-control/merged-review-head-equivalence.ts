@@ -1,4 +1,4 @@
-import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
+import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../git/command-runner/git-exec-file'
 import { gitOptionsForWorktree } from '../git/command-runner/git-runtime-options'
 import { createLocalGitObjectQuarantine } from '../git/objects/local-git-object-quarantine'
 import { withLocalGitCapabilityCacheForExecution } from '../git/command-runner/host-routing/git-capability-state'
@@ -139,13 +139,18 @@ async function proveEquivalence(
           // Git < 2.38: exact per-path mode/blob transitions only match when base never touched them.
           async () => {
             const reviewBase = await read(['merge-base', reviewHead, base])
-            const delta = (from: string, to: string) =>
-              read(['diff-tree', '-r', '-z', '--no-abbrev', '--no-renames', from, to])
+            const delta = async (from: string, to: string) =>
+              (
+                await gitExecFileAsyncBuffer(
+                  ['diff-tree', '-r', '-z', '--no-abbrev', '--no-renames', from, to],
+                  gitOptions
+                )
+              ).stdout
             const [reviewDelta, headDelta] = await Promise.all([
               delta(reviewBase, reviewHead),
               delta(base, head)
             ])
-            return reviewDelta.length > 0 && reviewDelta === headDelta
+            return reviewDelta.length > 0 && reviewDelta.equals(headDelta)
           },
           isUnsupportedMergeTreeWriteTreeError
         )
