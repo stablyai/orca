@@ -396,24 +396,28 @@ it('discovers an unstamped folder and follows group and repo ownership while ope
     configurable: true,
     value: { git: { discoverTerminalModels: read } }
   })
-  const hook = renderHook(() => {
-    const key = useAgentPickerTerminalDiscoveryKey('local', { worktreeId: 'folder:f1' })
-    return useAgentLaunchPickerInventory(
-      'folder:f1',
-      {
-        state: 'settled',
-        rows: [{ agent: 'antigravity', kind: 'cli' }],
-        detection: { ...detection, detectedIds: ['antigravity'] },
-        pickerContext: {
-          workspace: { kind: 'folder', worktreeId: 'folder:f1' },
-          executionHostId: 'local',
-          settings: {},
-          key: key ?? 'unavailable'
-        }
-      },
-      true
-    )
-  })
+  const hook = renderHook(
+    ({ cwd }: { cwd: string | undefined }) => {
+      const key = useAgentPickerTerminalDiscoveryKey('local', { worktreeId: 'folder:f1' }, cwd)
+      return useAgentLaunchPickerInventory(
+        'folder:f1',
+        {
+          state: 'settled',
+          rows: [{ agent: 'antigravity', kind: 'cli' }],
+          detection: { ...detection, detectedIds: ['antigravity'] },
+          pickerContext: {
+            workspace: { kind: 'folder', worktreeId: 'folder:f1' },
+            executionHostId: 'local',
+            launchCwd: cwd,
+            settings: {},
+            key: key ?? 'unavailable'
+          }
+        },
+        true
+      )
+    },
+    { initialProps: { cwd: undefined } }
+  )
   await waitFor(() =>
     expect(hook.result.current[0].terminalCatalog).toMatchObject({
       models: [{ id: 'gemini-3.8-flash', efforts: [{ value: 'low' }, { value: 'high' }] }]
@@ -435,7 +439,7 @@ it('discovers an unstamped folder and follows group and repo ownership while ope
   fireEvent.click(screen.getByRole('option', { name: 'Flash' }))
   expect(screen.getByRole('radio', { name: 'High' })).toBeTruthy()
   act(() => useAppStore.setState({ projectGroups: [{ ...group, connectionId: 'ssh-1' }] }))
-  await waitFor(() => expect(hook.result.current[0].terminalCatalogRead).not.toBe('settled'))
+  await waitFor(() => expect(hook.result.current[0].terminalCatalog).toEqual({ origin: 'unknown' }))
   act(() => useAppStore.setState({ projectGroups: [group] }))
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
   act(() =>
@@ -443,13 +447,21 @@ it('discovers an unstamped folder and follows group and repo ownership while ope
       repos: [{ ...TEST_REPO, projectGroupId: group.id, connectionId: 'ssh-1' }]
     })
   )
-  await waitFor(() => expect(hook.result.current[0].terminalCatalogRead).not.toBe('settled'))
-  act(() => useAppStore.setState({ repos: [] }))
+  await waitFor(() => expect(hook.result.current[0].terminalCatalog).toEqual({ origin: 'unknown' }))
+  act(() => {
+    useAppStore.setState({ repos: [] })
+    hook.rerender({ cwd: '/work/platform/next' })
+  })
   await waitFor(() =>
     expect(hook.result.current[0].terminalCatalog).toMatchObject({
       models: [{ id: 'gemini-3.8-flash' }]
     })
   )
+  expect(read).toHaveBeenCalledWith({
+    agentId: 'antigravity',
+    worktree: 'id:folder:f1',
+    cwd: '/work/platform/next'
+  })
   await act(async () =>
     old.resolve({
       success: true,

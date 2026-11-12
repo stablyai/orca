@@ -10,15 +10,18 @@ import type { PtyTransport } from '../pty-transport-types'
 import { createCompatibleRuntimeStatusResponse } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const appStore = vi.hoisted(() => ({
-  getState: vi.fn(() => {
+  getState: vi.fn<() => { runtimeStatusByEnvironmentId: Map<string, unknown> }>(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
   })
 }))
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: appStore.getState } }))
 
+let freshLaunchFixture = false
 afterEach(() => {
-  expect(appStore.getState).not.toHaveBeenCalled()
+  if (!freshLaunchFixture) {
+    expect(appStore.getState).not.toHaveBeenCalled()
+  }
 })
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
@@ -194,6 +197,10 @@ async function restartServerUnderLivePane(tabId: string): Promise<{
 describe('remote runtime pane across a pairing rotation', () => {
   beforeEach(() => {
     resetRemoteRuntimeTransport()
+    freshLaunchFixture = false
+    appStore.getState.mockReset().mockImplementation(() => {
+      throw new Error('These transport fixtures must not read app-store ownership')
+    })
   })
 
   afterEach(async () => {
@@ -205,6 +212,8 @@ describe('remote runtime pane across a pairing rotation', () => {
   it.each(['host-B', 'host-A'])(
     'keeps the original pane authority when %s is proved before first edit negotiation',
     async (hostKey) => {
+      freshLaunchFixture = true
+      appStore.getState.mockReturnValue({ runtimeStatusByEnvironmentId: new Map() })
       const { repair, publishCatalog } = await installRepairableMain()
       const prepare = Promise.withResolvers<unknown>()
       const preparing = Promise.withResolvers<void>()

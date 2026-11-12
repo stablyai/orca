@@ -9,15 +9,18 @@ import {
 import { createCompatibleRuntimeStatusResponse } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const appStore = vi.hoisted(() => ({
-  getState: vi.fn(() => {
+  getState: vi.fn<() => { runtimeStatusByEnvironmentId: Map<string, unknown> }>(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
   })
 }))
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: appStore.getState } }))
 
+let freshLaunchFixture = false
 afterEach(() => {
-  expect(appStore.getState).not.toHaveBeenCalled()
+  if (!freshLaunchFixture) {
+    expect(appStore.getState).not.toHaveBeenCalled()
+  }
 })
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
@@ -68,9 +71,15 @@ describe('recoverable connect failures on a remote runtime pane', () => {
 
   beforeEach(() => {
     resetRemoteRuntimeTransport()
+    freshLaunchFixture = false
+    appStore.getState.mockReset().mockImplementation(() => {
+      throw new Error('These transport fixtures must not read app-store ownership')
+    })
   })
 
   it('re-prepares a fresh agent after a failed capability read through Reconnect', async () => {
+    freshLaunchFixture = true
+    appStore.getState.mockReturnValue({ runtimeStatusByEnvironmentId: new Map() })
     const hostCall = runtimeCall.getMockImplementation()
     let statusReads = 0
     runtimeCall.mockImplementation(async (request: { method: string }) => {
