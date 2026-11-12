@@ -45,6 +45,7 @@ import { JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY } from '../../../../shared/jira/
 export type JiraConnectResult = { ok: true; viewer: JiraViewer } | { ok: false; error: string }
 
 import type { JiraCommentResult } from './runtime-jira-detail-client'
+import { translate } from '@/i18n/i18n'
 
 export async function jiraStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
   return jiraStatusForTarget(rowLessSourceTarget(settings))
@@ -155,7 +156,10 @@ export async function jiraListIssuesForTarget(
       await assertRuntimeEnvironmentCapability(
         target.environmentId,
         JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY,
-        'Update the remote Orca server to filter preset issues by current sprint.'
+        translate(
+          'auto.runtime.jira.currentSprintNeedsUpdate',
+          'Update the remote Orca server to filter preset issues by current sprint.'
+        )
       )
     }
     if (filters?.statuses?.length) {

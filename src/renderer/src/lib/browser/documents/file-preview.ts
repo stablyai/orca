@@ -13,11 +13,11 @@ import { activateBrowserWorkspaceTab } from '@/lib/browser/workspace/browser-wor
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import {
-  REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
-  TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE
+  remoteFileBrowserUnsupportedMessage,
+  twinFileBrowserUnsupportedMessage
 } from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
-import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
@@ -69,7 +69,7 @@ export function getWorkspaceFilePreviewPlan(
   if (isTwinWorkspace(state, worktreeId)) {
     return {
       status: 'unsupported',
-      message: TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE,
+      message: twinFileBrowserUnsupportedMessage(),
       reason: 'no-channel'
     }
   }
@@ -78,7 +78,7 @@ export function getWorkspaceFilePreviewPlan(
     // Unresolved ownership cannot choose a channel; local fallback would read a remote path on this machine.
     return {
       status: 'unsupported',
-      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
+      message: remoteFileBrowserUnsupportedMessage(),
       reason: 'no-channel'
     }
   }

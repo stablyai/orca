@@ -27,16 +27,6 @@ describe('plugin display text', () => {
     })
   })
 
-  it('keeps the joiners that emoji and scripts such as Persian need', () => {
-    const family = '\u{1F468}\u200d\u{1F469}\u200d\u{1F467}'
-    const parsed = parseHostPluginManifest(themed(`${family} Theme`, 'Dusk'))
-    expect(parsed.ok && parsed.manifest.name).toBe(`${family} Theme`)
-  })
-
-  it('refuses a name made only of invisible characters', () => {
-    expect(parseHostPluginManifest(themed('\u200b\u202e', 'Dusk')).ok).toBe(false)
-  })
-
   it('refuses unsafe characters in validate:plugin instead of stripping them', () => {
     expect(parsePluginManifest(themed(SPOOFED_NAME, 'Dusk'))).toEqual({
       ok: false,

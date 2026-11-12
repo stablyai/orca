@@ -2,10 +2,11 @@ import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatFileLoadErrorMessage } from './file-load-error-copy'
 import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { isFileTooLargeCodeMessage } from '../../../../shared/file-write/file-write-disk-precondition'
 import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
-import { useStoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
+import { useWslHostReadOutage } from '../wsl-host-stopped/use-stopped-wsl-host'
 import { WslHostStoppedNotice } from '../wsl-host-stopped/WslHostStoppedNotice'
 
 // Localize by machine code; stored English remains readable for logs without coupling upstream state checks to UI language.
@@ -38,20 +39,21 @@ export function EditorFileLoadErrorView({
 }: {
   message: string
   code?: string
-  /** The file's workspace; a stopped WSL host there gets Start instead of this error. */
+  /** The file's workspace; a stopped or still-connecting WSL host there gets its notice instead of this error. */
   worktreeId?: string
   onRetry: () => void
   /** Reloads after Start without asking to wake again: the click already booted the host. */
   onHostStarted?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const stoppedWslHost = useStoppedWslHost(worktreeId)
-  if (stoppedWslHost) {
+  const wslHostOutage = useWslHostReadOutage(worktreeId)
+  if (wslHostOutage) {
     return (
       <div className="flex h-full items-center justify-center bg-editor-surface p-6 text-sm">
         <WslHostStoppedNotice
-          environmentId={stoppedWslHost.environmentId}
-          distro={stoppedWslHost.distro}
+          environmentId={wslHostOutage.environmentId}
+          distro={wslHostOutage.distro}
+          connecting={wslHostOutage.connecting}
           size="sm"
           onStarted={onHostStarted}
         />
@@ -66,7 +68,9 @@ export function EditorFileLoadErrorView({
           <div className="font-medium text-foreground">
             {t('auto.components.editor.EditorContent.39f018b052', 'Unable to load file')}
           </div>
-          <div className="mt-1 break-words">{localizeFileLoadError(message, code, t)}</div>
+          <div className="mt-1 break-words">
+            {formatFileLoadErrorMessage(localizeFileLoadError(message, code, t))}
+          </div>
           <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
             <RefreshCw className="size-3.5" />
             {t('auto.components.editor.EditorContent.2a512bb46a', 'Retry')}

@@ -3,7 +3,7 @@ import {
   hasClaudeUsageProtectedCheckpoint,
   initializePersistedClaudeUsageProjections
 } from './persisted-projection-validation'
-import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/usage-cache-json-integrity'
+import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/cache/usage-cache-json-integrity'
 
 const REPORT_DOMAIN = 'claude-usage-report-v1'
 

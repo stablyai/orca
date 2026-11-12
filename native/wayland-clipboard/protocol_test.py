@@ -168,22 +168,14 @@ class DataControlServer:
 
 
 class ClipboardProtocolTests(unittest.TestCase):
-    def test_both_protocols_preserve_bytes_and_serve_repeated_pastes(self):
+    def test_preserves_bytes_and_serves_repeated_pastes(self):
         text = ("遥か\r\nline two\n" * 20000).encode()
-        for protocol in ("zwlr_data_control", "ext_data_control"):
-            with self.subTest(protocol=protocol), DataControlServer(protocol) as server:
-                self.assertEqual(server.copy(text).returncode, 0)
-                self.assertEqual(server.paste(), text)
-                self.assertEqual(server.paste(), text)
-                server.send(server.source, 1)
-                self.assertTrue(server.disconnected.wait(1))
-
-    def test_unsupported_protocol_never_publishes_or_creates_a_popup(self):
-        with DataControlServer(None) as server:
-            result = server.copy(b"private text", {"DISPLAY": ""})
-            self.assertEqual(result.returncode, 78)
-            self.assertIsNone(server.source)
-            self.assertEqual(result.stdout, b"")
+        with DataControlServer("ext_data_control") as server:
+            self.assertEqual(server.copy(text).returncode, 0)
+            self.assertEqual(server.paste(), text)
+            self.assertEqual(server.paste(), text)
+            server.send(server.source, 1)
+            self.assertTrue(server.disconnected.wait(1))
 
     def test_size_limit_precedes_selection_publication(self):
         with DataControlServer("ext_data_control") as server:

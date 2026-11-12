@@ -29,6 +29,13 @@ type CachedEnvironment = {
 
 const environmentCache = new Map<string, CachedEnvironment>()
 const MAX_CACHED_ENVIRONMENTS = 8
+/** Moves whenever a cached capture is replaced or dropped. */
+let cacheRevision = 0
+
+/** Lets a reader of the cached capture tell, synchronously, that what it read is still current. */
+export function loginShellEnvironmentRevision(): number {
+  return cacheRevision
+}
 
 function cachedEnvironment(key: string): CachedEnvironment {
   const existing = environmentCache.get(key)
@@ -41,6 +48,7 @@ function cachedEnvironment(key: string): CachedEnvironment {
       break
     }
     environmentCache.delete(oldest)
+    cacheRevision++
   }
   const entry: CachedEnvironment = { attemptedAt: -Infinity, lastStartedAt: -Infinity }
   environmentCache.set(key, entry)
@@ -222,6 +230,7 @@ export function captureLoginShellEnvironment(
       if (result.status === 'captured' || entry.last?.status !== 'captured') {
         entry.last = result
         entry.lastStartedAt = startedAt
+        cacheRevision++
       }
     })
     return capture
@@ -258,4 +267,5 @@ export function resolveLoginShellEnvironment(
 
 export function resetLoginShellEnvironmentCacheForTests(): void {
   environmentCache.clear()
+  cacheRevision++
 }

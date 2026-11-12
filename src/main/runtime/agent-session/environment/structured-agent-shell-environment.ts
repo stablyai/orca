@@ -1,5 +1,8 @@
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
+import {
+  loginShellEnvironmentRevision,
+  resolveLoginShellEnvironment
+} from '../../../startup/login-shell-environment'
 import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   cachedPersistedWindowsPathSegments,
@@ -12,6 +15,7 @@ import {
 } from '../../../pty/environment/windows-path-segment-merge'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
@@ -57,15 +61,17 @@ export function structuredAgentBaseEnvironment(input: {
   processEnv?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
 }): Record<string, string> {
-  if (input.policy.inheritAll) {
-    return definedEnv(input.shellEnv)
-  }
   const platform = input.platform ?? process.platform
-  return overlayEnvironmentVariables(
-    definedEnv(input.processEnv ?? process.env),
-    pickShellVariables(input.shellEnv, input.policy.names, platform),
-    platform
-  )
+  const base = input.policy.inheritAll
+    ? definedEnv(input.shellEnv)
+    : overlayEnvironmentVariables(
+        definedEnv(input.processEnv ?? process.env),
+        pickShellVariables(input.shellEnv, input.policy.names, platform),
+        platform
+      )
+  // The user's per-agent overlay, applied later, owns any deliberate session values.
+  stripInheritedAgentSessionEnv(base, { platform })
+  return base
 }
 
 // Share one capture across launch bursts while discovering newly installed CLIs without restart.
@@ -94,6 +100,11 @@ export async function hostShellEnvironment(cachedOnly = false): Promise<NodeJS.P
     await mergePersistedWindowsPathAsync(withSavedPath)
   }
   return withSavedPath
+}
+
+/** Moves whenever the capture `hostShellEnvironment` serves is replaced; synchronous, starts nothing. */
+export function hostShellEnvironmentRevision(): number {
+  return loginShellEnvironmentRevision()
 }
 
 /** After a missing-program lookup, await a capture (Windows: saved PATH read) started no earlier than askedAt; the shell timeout bounds it. */

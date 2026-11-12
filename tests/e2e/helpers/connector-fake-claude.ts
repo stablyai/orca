@@ -1,7 +1,7 @@
 // A scripted Claude for connector E2E: real managed hooks, Claude's OSC 7501 activity reports, no model.
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { getManagedScript } from '../../../src/main/claude/hook-script'
+import { getManagedScript } from '../../../src/main/claude/hooks/hook-script'
 
 /** A message containing this asks for Bash approval, as in the captured approve/deny transcript. */
 export const FAKE_CLAUDE_NEEDS_APPROVAL = '[needs-approval]'

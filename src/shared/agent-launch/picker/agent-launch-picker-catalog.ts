@@ -1,9 +1,14 @@
+import { modelMenuOptions } from '../../agent-session/options/model-menu-options'
+import { listedModelDescribing } from '../../agent-session/options/structured-agent-session-listed-model'
 import {
   discoveredModel,
   structuredModelEfforts
 } from '../../agent-session/options/structured-agent-session-discovered-model'
 import { createClaudeCatalogOptions } from '../../agent-session/options/agent-session-option-catalog-claude-codex'
-import type { CatalogOption } from '../../agent-session/options/agent-session-option-catalog-types'
+import type {
+  CatalogModel,
+  CatalogOption
+} from '../../agent-session/options/agent-session-option-catalog-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import { sourceControlActionOptions } from '../../source-control/ai/recipes/source-control-action-options'
 import {
@@ -12,6 +17,12 @@ import {
 } from '../permissions/tui-agent-permission-choice'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
+import { legacyAgentModelIds } from '../../legacy-agent-models'
+
+type ModelMenuEntry = Pick<AgentPickerEntry, 'agent' | 'catalog'> &
+  Partial<
+    Pick<AgentPickerEntry, 'defaultSurface' | 'textGeneration' | 'catalogRead' | 'coherentCatalog'>
+  >
 
 export function agentPickerOptions(
   agent: TuiAgent,
@@ -24,7 +35,7 @@ export function agentPickerOptions(
 }
 
 export function agentPickerEntryOptions(
-  entry: Pick<AgentPickerEntry, 'agent' | 'catalog' | 'terminal' | 'textGeneration'>,
+  entry: ModelMenuEntry & Pick<AgentPickerEntry, 'terminal'>,
   model: string | undefined,
   surface: AgentPickerSurface
 ): CatalogOption[] {
@@ -43,9 +54,16 @@ export function agentPickerEntryOptions(
       : []
   }
   let options = agentPickerOptions(entry.agent, model, surface)
-  const live = agentPickerModels(entry).find(
-    (row) => row.id === model || (model === undefined && row.isDefault)
-  )
+  const rows = agentPickerModels(entry, surface)
+  const composer = agentPickerUsesComposerModelMenu(entry, surface)
+  const live = composer
+    ? model
+      ? listedModelDescribing(rows, undefined, model)
+      : rows.find((row) => row.isDefault)
+    : rows.find((row) => row.id === model || (model === undefined && row.isDefault))
+  if (composer && !live && model) {
+    return []
+  }
   if (entry.catalog.origin === 'unknown' || !live) {
     return options.filter(
       (option) => option.kind.type !== 'select' || option.kind.choices.length > 0
@@ -81,7 +99,7 @@ export function agentPickerEntryOptions(
       return [option]
     }
     if (!live.efforts.length) {
-      return live.effortsKnown === false ? [option] : []
+      return !composer && live.effortsKnown === false ? [option] : []
     }
     return [
       {
@@ -102,13 +120,51 @@ export function agentPickerPermissions(agent: TuiAgent, surface: AgentPickerSurf
   )
 }
 
+export function agentPickerModelMenu(
+  entry: ModelMenuEntry,
+  surface: AgentPickerSurface = entry.defaultSurface ?? 'terminal',
+  saved?: Readonly<Record<string, string>>
+) {
+  return modelMenuOptions(entry.catalog, {
+    agent: entry.agent,
+    surface: entry.textGeneration ? 'textGeneration' : surface,
+    seed: getAgentSessionOptionLaunchCatalog(entry.agent) ?? { models: [], modelApply: {} },
+    pending: entry.catalogRead === 'pending',
+    coherentCatalog: entry.coherentCatalog,
+    newLaunch: true,
+    seedsModel: true,
+    saved
+  })
+}
+
 export function agentPickerModels(
-  entry: Pick<AgentPickerEntry, 'agent' | 'catalog'>
+  entry: ModelMenuEntry,
+  surface: AgentPickerSurface = entry.defaultSurface ?? 'terminal'
 ): AgentPickerModel[] {
-  if (entry.catalog.origin !== 'unknown') {
-    return entry.catalog.models
+  if (!agentPickerUsesComposerModelMenu(entry, surface)) {
+    if (entry.catalog.origin !== 'unknown') {
+      return withLegacyModels(entry.agent, entry.catalog.models)
+    }
+    return withLegacyModels(
+      entry.agent,
+      (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map(
+        agentPickerModelFromCatalogModel
+      )
+    )
   }
-  return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map((model) => ({
+  return withLegacyModels(entry.agent, agentPickerModelMenu(entry, surface).rows)
+}
+
+/** Terminal discovery is a separate change; these menus keep their existing catalog policy. */
+export function agentPickerUsesComposerModelMenu(
+  entry: ModelMenuEntry,
+  surface: AgentPickerSurface
+) {
+  return !entry.textGeneration && !(entry.agent === 'antigravity' && surface === 'terminal')
+}
+
+export function agentPickerModelFromCatalogModel(model: CatalogModel): AgentPickerModel {
+  return {
     id: model.id,
     label: model.label,
     description: model.description,
@@ -116,5 +172,12 @@ export function agentPickerModels(
     efforts: model.options.flatMap((option) =>
       option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
     )
-  }))
+  }
+}
+
+function withLegacyModels(agent: TuiAgent, models: AgentPickerModel[]): AgentPickerModel[] {
+  const legacy = legacyAgentModelIds(agent, models)
+  return legacy.size
+    ? models.map((model) => (legacy.has(model.id) ? { ...model, isLegacy: true } : model))
+    : models
 }

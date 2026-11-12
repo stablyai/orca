@@ -2450,8 +2450,7 @@
     "tabStrip": {
       "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
       "newTab": "新規タブ",
-      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。",
-      "tabStatus": "{{title}}、{{status}}"
+      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "ターミナルをクリア",
@@ -2494,6 +2493,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "添付に失敗しました（再接続中）。"
+    },
+    "useCloseActions": {
+      "closeFailed": "タブを閉じられませんでした。もう一度お試しください。",
+      "closeFailedDesktopNotReady": "タブを閉じられませんでした。コンピューターの Orca はまだ読み込み中です。少ししてからもう一度お試しください。"
     },
     "useContentCreateActions": {
       "browserCommandFailed": "ブラウザコマンドの実行に失敗しました。",
@@ -3441,6 +3444,12 @@
       "openView": "GitHub でビューを開く"
     },
     "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} をマージしますか？",
+      "confirmGitHubSquash": "PR #{{number}} のコミットをまとめてマージしますか？",
+      "confirmGitHubRebase": "PR #{{number}} をリベースしてマージしますか？",
+      "confirmGitLabMerge": "マージリクエスト #{{number}} をマージしますか？",
+      "confirmGitLabSquash": "マージリクエスト #{{number}} のコミットをまとめてマージしますか？",
+      "confirmGitLabRebase": "マージリクエスト #{{number}} をリベースしてマージしますか？",
       "merged": "マージ済み",
       "closed": "クローズ済み",
       "conflicts": "競合あり",

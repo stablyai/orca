@@ -3,7 +3,10 @@ import {
   findOrphanedTccLogStreams,
   reclaimOrphanedTccLogStreams
 } from './macos-tcc-log-stream-orphans'
-import { parsePsArgsLine, type ProcessIdentityRow } from '../opencode/opencode-client-sweep'
+import {
+  parsePsArgsLine,
+  type ProcessIdentityRow
+} from '../opencode/session-correlation/opencode-client-sweep'
 
 // Captured from `ps -eo pid=,ppid=,etime=,args=` on a Mac holding leaked watchers.
 const LEGACY_ARGS =

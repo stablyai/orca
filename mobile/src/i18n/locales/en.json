@@ -2184,10 +2184,10 @@
       "renameTerminal": "Rename Terminal",
       "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
-      "allowAutoClose": "Allow Auto-Close"
+      "allowAutoClose": "Allow Auto-Close",
+      "agents": "Agents"
     },
     "tabStrip": {
-      "tabStatus": "{{title}}, {{status}}",
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
       "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
@@ -2545,6 +2545,10 @@
       "copyFailed": "Couldn't copy",
       "selectionCleared": "Selection cleared (scrolled out of buffer)"
     },
+    "useCloseActions": {
+      "closeFailed": "Couldn't close the tab. Try again.",
+      "closeFailedDesktopNotReady": "Couldn't close the tab. Orca on your computer is still loading. Try again in a moment."
+    },
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
       "untitledNoteCreateFailed": "Unable to create untitled markdown note",
@@ -2889,8 +2893,6 @@
     },
     "presentation": {
       "loadingTabs": "Loading tabs",
-      "oneTab": "1 tab",
-      "tabCount": "{{tabCount}} tabs",
       "tapToRetry": "{{status}} — tap to retry"
     },
     "documentReaders": {
@@ -2928,6 +2930,29 @@
       "skip": "Skip",
       "stop": "Stop",
       "yes": "Yes"
+    },
+    "tabsSheet": {
+      "needsYou": "Needs you",
+      "working": "Working",
+      "everythingElse": "Everything else",
+      "open": "Open",
+      "closeTab": "Close {{title}}"
+    },
+    "tabRows": {
+      "browser": "Browser",
+      "markdown": "Markdown note",
+      "file": "File",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
+    "tabBar": {
+      "oneTab": "1 tab",
+      "tabCount": "{{count}} tabs",
+      "anotherNeedsYou": "another tab needs you",
+      "actionsHint": "Shows actions for this tab",
+      "next": "Next tab",
+      "previous": "Previous tab",
+      "hint": "Shows all tabs"
     }
   },
   "chat": {
@@ -3373,6 +3398,8 @@
     },
     "agentMessage": {
       "startedWorker": "Started worker",
+      "reopenedWorker": "Reopened worker",
+      "sentFollowUpToWorker": "Sent follow-up to worker",
       "handedOffToAgent": "Handed off to agent",
       "startedAgent": "Started agent",
       "taskFromCoordinator": "Task from coordinator",
@@ -4553,6 +4580,12 @@
       "createFailed": "Failed to create workspace"
     },
     "hostedMerge": {
+      "confirmGitHubMerge": "Merge PR #{{number}}?",
+      "confirmGitHubSquash": "Squash and merge PR #{{number}}?",
+      "confirmGitHubRebase": "Rebase and merge PR #{{number}}?",
+      "confirmGitLabMerge": "Merge merge request #{{number}}?",
+      "confirmGitLabSquash": "Squash and merge merge request #{{number}}?",
+      "confirmGitLabRebase": "Rebase and merge merge request #{{number}}?",
       "merged": "Merged",
       "closed": "Closed",
       "conflicts": "Conflicts",

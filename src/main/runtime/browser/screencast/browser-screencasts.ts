@@ -19,7 +19,7 @@ import {
   screencastSubscriberIsGhost
 } from './browser-screencast-ghost-subscriber-eviction'
 import type { BrowserScreencastSession } from '../../../browser/cdp/screencast/browser-screencast-stream-types'
-import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
+import type { RpcBinarySender } from '../../rpc/transports/rpc-binary-sender'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
