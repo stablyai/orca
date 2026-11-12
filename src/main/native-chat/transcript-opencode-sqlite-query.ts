@@ -182,18 +182,7 @@ export function readOpenCodeTranscriptPage(args: {
       hasMore = rows.length > limit
       const selected = hasMore ? rows.slice(0, limit) : rows
       cursor = selected.at(-1)!.message_rowid
-      for (const row of selected) {
-        const record = row.data === null ? null : parseJsonObject(row.data)
-        forkTip.push({
-          id: row.id,
-          role: String(record?.role),
-          terminal:
-            record?.role === 'assistant' &&
-            typeof asRecord(record.time)?.completed === 'number' &&
-            record.finish !== 'tool-calls'
-        })
-      }
-      const mapped = mapMessageRows(db, args.sessionId, selected, rawBudget, args.agent)
+      const mapped = mapMessageRows(db, args.sessionId, selected, rawBudget, forkTip, args.agent)
       pageBytes += Buffer.byteLength(JSON.stringify(mapped))
       if (pageBytes > 16 * 1024 * 1024) {
         throw new Error('OpenCode transcript page exceeds its byte limit')
@@ -245,6 +234,7 @@ function mapMessageRows(
   sessionId: string,
   rows: MessageRow[],
   rawBudget: { bytes: number },
+  forkTip: OpenCodeForkTipEvent[],
   agent?: 'zcode'
 ): OpenCodeTranscriptItem[] {
   if (rows.length === 0) {
@@ -281,6 +271,14 @@ function mapMessageRows(
   for (const row of rows) {
     const partList = partsByMessage.get(row.id) ?? []
     const record = row.data === null ? null : parseJsonObject(row.data)
+    forkTip.push({
+      id: row.id,
+      role: String(record?.role),
+      terminal:
+        record?.role === 'assistant' &&
+        typeof asRecord(record.time)?.completed === 'number' &&
+        record.finish !== 'tool-calls'
+    })
     const role = extractString(record?.role)
     const messages = opencodeMessages(
       {
