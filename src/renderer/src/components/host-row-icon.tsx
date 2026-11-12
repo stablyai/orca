@@ -4,6 +4,10 @@ import { Box, Cloud, Monitor, Server } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
+import {
+  CloudStatusGlyph,
+  type CloudGlyphState
+} from '@/components/orca-cloud/CloudStatusGlyph'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostVmState } from '../../../shared/execution-host/execution-host-health'
 
@@ -21,8 +25,8 @@ const GLYPH: Record<HostGlyphKind, typeof Cloud> = {
 const SIZE = { 12: 'size-3', 14: 'size-3.5', 16: 'size-4' } as const
 
 /**
- * The one host glyph every surface puts before a workspace name: always muted, never swapped by
- * state. Lifecycle state rides on it as a CloudStateDot corner badge, so the glyph keeps its shape.
+ * The one host glyph every surface puts before a workspace name. Orca Cloud shows its state in the
+ * cloud itself (fill and colour, no badge); a recipe VM's state rides on its box as a corner dot.
  */
 export function HostGlyph({
   kind,
@@ -34,7 +38,7 @@ export function HostGlyph({
 }: {
   kind: HostGlyphKind
   size?: 12 | 14 | 16
-  state?: CloudDotState | null
+  state?: CloudGlyphState | null
   /** The badge sits in a ring of the surface's background; pass that background here. */
   badgeRingClassName?: string
   className?: string
@@ -42,6 +46,20 @@ export function HostGlyph({
   label?: string
 }): React.JSX.Element {
   const Icon = GLYPH[kind]
+  if (kind === 'orca-cloud' && state) {
+    return (
+      <span
+        data-host-glyph={kind}
+        role={label ? 'img' : undefined}
+        aria-label={label}
+        aria-hidden={label ? undefined : true}
+        className={cn('relative inline-flex shrink-0', SIZE[size], className)}
+      >
+        <CloudStatusGlyph state={state} size={size} />
+      </span>
+    )
+  }
+  const badgeState = state && isDotState(state) ? state : null
   return (
     <span
       data-host-glyph={kind}
@@ -51,7 +69,7 @@ export function HostGlyph({
       className={cn('relative inline-flex shrink-0 text-muted-foreground', SIZE[size], className)}
     >
       <Icon className={SIZE[size]} aria-hidden="true" />
-      {state ? (
+      {badgeState ? (
         <span
           className={cn(
             'absolute -right-1 -bottom-1 inline-flex items-center justify-center rounded-full',
@@ -59,11 +77,15 @@ export function HostGlyph({
             badgeRingClassName
           )}
         >
-          <CloudStateDot state={state} size={size === 12 ? 'badge' : 'md'} />
+          <CloudStateDot state={badgeState} size={size === 12 ? 'badge' : 'md'} />
         </span>
       ) : null}
     </span>
   )
+}
+
+function isDotState(state: CloudGlyphState): state is CloudDotState {
+  return state !== 'goingToSleep' && state !== 'restarting'
 }
 
 /** A recipe VM's lifecycle on the same dot vocabulary as Orca Cloud (null = running). */
