@@ -22804,6 +22804,7 @@
       "worktreeNavigateDown": "Zum nächsten Worktree wechseln",
       "workspaceCreate": "Worktree erstellen",
       "workspaceRename": "Worktree umbenennen",
+      "workspaceSleep": "Arbeitsbereich in Ruhezustand versetzen",
       "voiceDictation": "Diktieren",
       "sidebarExplorerToggle": "Datei-Explorer anzeigen",
       "sidebarFocusWorktreeList": "Worktree-Liste fokussieren",

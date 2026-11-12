@@ -224,6 +224,9 @@ export function useGlobalKeybindings(args: {
       if (matchAppShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
         return
       }
+      if (matchAppShortcut('workspace.sleep') && handlers.get('workspace.sleep')?.()) {
+        return
+      }
       if (
         matchAppShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()

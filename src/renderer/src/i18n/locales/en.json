@@ -24310,6 +24310,7 @@
       "worktreeNavigateDown": "Next worktree",
       "workspaceCreate": "Create worktree",
       "workspaceRename": "Rename worktree",
+      "workspaceSleep": "Sleep Workspace",
       "voiceDictation": "Dictation",
       "sidebarExplorerToggle": "Show Explorer",
       "sidebarFocusWorktreeList": "Focus worktree list",

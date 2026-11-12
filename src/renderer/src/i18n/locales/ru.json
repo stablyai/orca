@@ -23411,6 +23411,7 @@
       "voiceDictation": "Начать диктовку",
       "workspaceCreate": "Создать рабочее дерево",
       "workspaceRename": "Переименовать рабочее дерево",
+      "workspaceSleep": "Перевести рабочее пространство в сон",
       "worktreeNavigateDown": "Перейти к следующему рабочему дереву",
       "worktreeNavigateUp": "Перейти к предыдущему рабочему дереву",
       "worktreePalette": "Переключиться на другое рабочее дерево",

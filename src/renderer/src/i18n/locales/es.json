@@ -23016,6 +23016,7 @@
       "worktreeNavigateDown": "Worktree siguiente",
       "workspaceCreate": "Crear worktree",
       "workspaceRename": "Renombrar worktree",
+      "workspaceSleep": "Suspender espacio de trabajo",
       "voiceDictation": "Dictado",
       "sidebarExplorerToggle": "Mostrar explorador",
       "sidebarFocusWorktreeList": "Enfocar la lista de worktrees",

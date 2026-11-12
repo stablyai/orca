@@ -64,6 +64,27 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'workspace.sleep',
+    title: 'Sleep Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'workspace',
+      'current workspace',
+      'worktree',
+      'sleep',
+      'suspend',
+      'close terminals',
+      'free memory'
+    ],
+    // Why: ship unbound like the sleeping toggle; a chord the user picks also runs from terminals and text fields.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true,
+    allowInTextField: 'non-default-chords'
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',

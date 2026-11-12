@@ -22313,6 +22313,7 @@
       "worktreeNavigateDown": "下一個工作樹",
       "workspaceCreate": "建立工作樹",
       "workspaceRename": "重新命名工作樹",
+      "workspaceSleep": "讓工作區進入休眠",
       "voiceDictation": "聽寫",
       "sidebarExplorerToggle": "顯示檔案總管",
       "sidebarFocusWorktreeList": "將焦點移至工作樹清單",

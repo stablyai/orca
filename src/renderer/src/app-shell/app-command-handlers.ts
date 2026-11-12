@@ -22,6 +22,7 @@ import { isGitRepoKind } from '../../../shared/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
+import { createWorkspaceSleepShortcutHandler } from './workspace-sleep-shortcut-handler'
 import type {
   KeybindingActionId,
   KeybindingContext,
@@ -238,6 +239,12 @@ export function createAppCommandHandlers(
           deleteActiveWorkspaceFromShortcut(store, target)
         })
       }
+    ],
+    [
+      'workspace.sleep',
+      createWorkspaceSleepShortcutHandler(floatingWorkspaceFocused, (run) =>
+        claim('workspace.sleep', run)
+      )
     ],
     [
       'workspace.openBoard',
