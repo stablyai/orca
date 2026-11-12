@@ -24,6 +24,7 @@ export type InstalledAgentDetectionOptions = {
   disabledTuiAgents?: readonly TuiAgent[]
   /** Settings → Agents command overrides on this host; a resolvable override counts as installed. */
   agentCmdOverrides?: Partial<Record<TuiAgent, string>> | null
+  failOnProbeError?: boolean
 }
 
 function activeDetectionCommands(
@@ -76,7 +77,7 @@ function overrideProbeCommands(
     if (!token) {
       continue
     }
-    // The terminal shell expands `~`; the WSL probe runs unexpanded, so only expand on this machine.
+    // Expand local home paths here; WSL resolves them against the guest HOME.
     const command =
       runtime !== 'wsl' &&
       (token.startsWith('~/') || (platform === 'win32' && token.startsWith('~\\')))
@@ -107,7 +108,10 @@ export async function detectInstalledAgents(
       ...[...overrides.values()].map((probe) => probe.command)
     ])
   ]
-  const found = await detectAgentCommandsOnHost(probeCommands, { context })
+  const found = await detectAgentCommandsOnHost(probeCommands, {
+    context,
+    failOnProbeError: options?.failOnProbeError
+  })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
   for (const [id, probe] of overrides) {
     if (

@@ -151,6 +151,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   ...ORCHESTRATION_FEDERATION_ERROR_CODES,
   'dispatch_capability_invalid',
   'agent_unconfigured',
+  'agent_not_available',
+  'ssh_host_not_served',
   'worker_prompt_too_large',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',

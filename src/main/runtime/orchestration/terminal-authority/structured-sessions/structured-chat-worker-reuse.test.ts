@@ -342,6 +342,7 @@ describe('a send to a finished structured worker', () => {
     const { identity, firstDispatchId } = await finishedStructuredWorker(taskId)
     // The rig has no settings store; reopening validates the worker's agent against it.
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
     await call(
       'orchestration.workerRelease',
       { dispatch: firstDispatchId },

@@ -29,7 +29,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     chmodSync(file, 0o755)
   }
 
-  const runScript = async (): Promise<string> => {
+  const runScript = async (commands = ['orca-fake-cli', 'nosuchtool']): Promise<string> => {
     runWslProcessMock.mockResolvedValue({
       environmentResolved: false,
       code: 0,
@@ -37,7 +37,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
       stderr: '',
       timedOut: false
     })
-    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['orca-fake-cli', 'nosuchtool'])
+    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, commands)
     const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
     const options: ExecFileSyncOptions = {
       encoding: 'utf8',
@@ -72,6 +72,13 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     // Directories pass -x but would fail to launch with EISDIR.
     mkdirSync(join(home, '.local/bin/orca-fake-cli'), { recursive: true })
     expect(await runScript()).not.toContain('__ORCA_AGENT_PATH__orca-fake-cli')
+  })
+
+  itPosix('resolves a tilde executable without changing its inventory identity', async () => {
+    plant('custom bin', 'orca-fake-cli')
+    expect(await runScript(['~/custom bin/orca-fake-cli'])).toBe(
+      `__ORCA_AGENT_PATH__~/custom bin/orca-fake-cli\t${home}/custom bin/orca-fake-cli\n`
+    )
   })
 })
 
@@ -152,5 +159,68 @@ describe('the mount table read, counted against a real shell', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+describe('strict WSL execution-host admission', () => {
+  const success = {
+    environmentResolved: true,
+    code: 0,
+    stdout: '__ORCA_AGENT_PATH__claude\t/usr/bin/claude\n',
+    stderr: '',
+    timedOut: false
+  }
+
+  beforeEach(() => {
+    runWslProcessMock.mockReset()
+  })
+
+  it.each([{ environmentResolved: false }, { timedOut: true }, { code: 1 }])(
+    'rejects failed inventory probes but keeps background inventory empty: %j',
+    async (failure) => {
+      runWslProcessMock.mockImplementation(async ({ script }) =>
+        script === ':' ? success : { ...success, ...failure }
+      )
+      await expect(
+        detectWslCommandsOnPath({}, ['claude'], { failOnProbeError: true })
+      ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+      await expect(detectWslCommandsOnPath({}, ['claude'])).resolves.toEqual(new Set())
+    }
+  )
+
+  it.each([{ environmentResolved: false }, { timedOut: true }, { code: 1 }])(
+    'rejects an unavailable guest before inventory can report a launcher: %j',
+    async (failure) => {
+      runWslProcessMock.mockImplementation(async ({ script }) =>
+        script === ':' ? { ...success, ...failure } : success
+      )
+      await expect(
+        detectWslCommandsOnPath({}, ['claude'], { failOnProbeError: true })
+      ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+    }
+  )
+
+  it('classifies process exceptions without breaking background discovery', async () => {
+    runWslProcessMock.mockRejectedValue(new Error('WSL unavailable'))
+    await expect(
+      detectWslCommandsOnPath({}, ['claude'], { failOnProbeError: true })
+    ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
+    await expect(detectWslCommandsOnPath({}, ['claude'])).resolves.toEqual(new Set())
+  })
+
+  it('allows a cold guest to boot separately from its bounded login-PATH inventory', async () => {
+    let ready = false
+    runWslProcessMock.mockImplementation(async ({ script, shell, loginPath, timeoutMs }) => {
+      if (script === ':') {
+        ready = shell === 'sh' && loginPath === 'none' && timeoutMs === 60_000
+        return ready ? success : { ...success, timedOut: true }
+      }
+      return ready && shell === 'sh' && loginPath === 'preferred' && timeoutMs === 10_000
+        ? success
+        : { ...success, timedOut: true }
+    })
+    await expect(
+      detectWslCommandsOnPath({}, ['claude'], { failOnProbeError: true })
+    ).resolves.toEqual(new Set(['claude']))
   })
 })

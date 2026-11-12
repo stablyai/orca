@@ -17,6 +17,7 @@ export function createOrdinaryCrewCommandFixture(
 ) {
   const ref: { current: unknown } = { current: null }
   const h = createSessionCallerHarness(ref)
+  vi.spyOn(h.runtime, 'validateOrchestrationAgentLauncherForWorktree').mockResolvedValue()
   h.records.clear()
   hostRef.current = ref.current
   const panes = new Map([

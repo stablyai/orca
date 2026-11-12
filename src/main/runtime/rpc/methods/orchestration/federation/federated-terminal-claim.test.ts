@@ -28,10 +28,13 @@ describe('a paired-server worker start onto a terminal another Dispatch holds', 
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     configureFederationWorkerRuntime(runtime, TERMINAL)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach reads only the workspace id in this rig.
-    vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
-      id: 'repo::windows-worktree'
-    } as never)
+    vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope').mockResolvedValue({
+      id: 'repo::windows-worktree',
+      path: '/workspace/windows-worktree',
+      connectionId: null,
+      repo: null,
+      folderWorkspace: null
+    })
     vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(null)
     vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')

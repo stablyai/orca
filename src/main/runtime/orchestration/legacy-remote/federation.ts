@@ -6,7 +6,10 @@ import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../orchestration-error'
 import { defineOrchestrationMethod } from '../../rpc/methods/orchestration/access/orchestration-method-access'
-import { assertOrchestrationWorktreeCreationSupported } from '../../rpc/methods/orchestration/worker/folder-worktree-placement'
+import {
+  resolveFederatedExistingWorktreePreflight,
+  validateFederatedCreationPreflight
+} from './federation-agent-preflight'
 import type { FederationEffect } from './federation-effects'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
 import type { WorkerSetupReceipt } from '../../rpc/methods/orchestration/worker/worker-topology'
@@ -66,12 +69,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         createsWorktree,
         runtime
       })
+      const existingWorktree = createsWorktree
+        ? undefined
+        : await resolveFederatedExistingWorktreePreflight(runtime, agent, params.worktree)
       if (createsWorktree) {
-        await assertOrchestrationWorktreeCreationSupported({
-          runtime,
-          repoSelector: params.repo as string,
-          existingPlacement: 'an exact existing folder workspace'
-        })
+        await validateFederatedCreationPreflight(runtime, agent, params.repo)
       }
 
       const db = runtime.getOrchestrationDb()
@@ -97,7 +99,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       }
       const effects: FederationEffect[] = []
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
-      let worktree
+      let worktree: { id: string } | undefined = existingWorktree
       let terminalHandle = params.terminal
       let terminalCreation: RuntimeTerminalCreate | undefined
       const setupSource = createsWorktree
@@ -134,12 +136,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         if (createsWorktree) {
           ;({ worktree, terminalHandle, terminalCreation } = await launchAgent())
         } else {
-          worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
-            throw new OrchestrationError(
-              'worktree_not_found_on_server',
-              `Worktree ${params.worktree} was not found on the selected worker server.`
-            )
-          })
+          if (!worktree) {
+            throw new Error('Federated worker topology did not resolve.')
+          }
           effects.push(
             { kind: 'worktree', action: 'reused', id: worktree.id },
             { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }

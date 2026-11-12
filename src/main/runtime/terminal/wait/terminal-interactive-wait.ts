@@ -1,6 +1,5 @@
 import { heldLaunchConfig } from '../launch/launch-evidence'
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
 import type {
   RuntimeTerminalAgentStatus,
@@ -27,21 +26,24 @@ import {
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchMode } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
-  resolveStartupShell,
-  type AgentStartupShell
-} from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch/configured-worker-agent-selector'
+  resolveConfiguredWorkerAgent,
+  resolveConfiguredWorkerAgentForTarget
+} from '../../orchestration/workers/launch/configured-worker-agent-selector'
 import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import {
+  validateWorkerAgentForRepo,
+  validateWorkerAgentForWorktree
+} from '../../orchestration/workers/launch/worker-agent-availability'
 
 export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
   protected abstract getTerminalAgentStatusPtyId(handle: string): string
@@ -242,24 +244,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     selector: string,
     target: { repo?: string; worktree?: string }
   ): Promise<TuiAgent | undefined> {
-    if (isTuiAgent(selector)) {
-      return selector
-    }
-    const repo = target.repo ? await this.resolveRepoSelector(target.repo) : null
-    // SAFETY: Forward an absent target unchanged; the existing resolver owns validation.
-    const workspace = repo
-      ? { repo, path: repo.path, connectionId: getRepoRoutingConnectionId(repo) }
-      : await this.resolveTerminalWorkspaceLaunchScope(target.worktree!)
-    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
-    const shell = resolveStartupShell(
-      platform,
-      resolveLocalWindowsAgentStartupShell({
-        platform,
-        isRemote: Boolean(workspace.connectionId),
-        terminalWindowsShell: this.store?.getSettings().terminalWindowsShell
-      })
-    )
-    return this.resolveOrchestrationAgentLauncher(selector, platform, shell)
+    return resolveConfiguredWorkerAgentForTarget(this, selector, target, this.store)
   }
 
   async probeOrchestrationOpenCodeModelLaunchSupport(target: {
@@ -309,6 +294,22 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       hostIdentity: this.getRuntimeId()
     })
     return true
+  }
+
+  async validateOrchestrationAgentLauncherForRepo(
+    agent: TuiAgent,
+    repoSelector: string,
+    mode?: AgentLaunchMode
+  ): Promise<void> {
+    await validateWorkerAgentForRepo(this, this.requireStore(), agent, repoSelector, mode)
+  }
+
+  async validateOrchestrationAgentLauncherForWorktree(
+    agent: TuiAgent,
+    worktreeSelector: string,
+    mode?: AgentLaunchMode
+  ): Promise<void> {
+    await validateWorkerAgentForWorktree(this, this.requireStore(), agent, worktreeSelector, mode)
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {

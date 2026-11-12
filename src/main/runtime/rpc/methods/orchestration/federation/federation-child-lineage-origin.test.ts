@@ -24,6 +24,7 @@ describe('a server nesting an orchestration worker under a workspace on another 
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree-creation support reads only id and kind.
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo', kind: 'git' } as never)
     const create = vi

@@ -42,6 +42,7 @@ describe('orchestration new-worktree workers', () => {
       handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
     )
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: 'term_coord',
       worktreeId: 'repo::parent',
@@ -136,6 +137,32 @@ describe('orchestration new-worktree workers', () => {
       } as never)
     }
   }
+
+  it('refuses a missing launcher before persisting a worker dispatch or creating its worktree', async () => {
+    const task = db.createTask({ spec: 'Refused worker', runId })
+    mockCreatedWorktree()
+    vi.mocked(runtime.validateOrchestrationAgentLauncherForRepo).mockRejectedValue(
+      Object.assign(new Error('Launcher unavailable'), { code: 'agent_not_available' })
+    )
+    const method = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.workerStart'
+    )
+    if (!method) {
+      throw new Error('workerStart method is not registered')
+    }
+    const params = method.params!.parse({
+      task: task.id,
+      from: 'term_coord',
+      worktree: 'new-child',
+      name: 'refused-worker',
+      agent: 'codex'
+    })
+    await expect(method.handler(params, { runtime })).rejects.toMatchObject({
+      code: 'agent_not_available'
+    })
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+  })
 
   it("skips setup when the project's setup is off and the coordinator did not ask for it", async () => {
     vi.mocked(runtime.showRepo).mockResolvedValue({

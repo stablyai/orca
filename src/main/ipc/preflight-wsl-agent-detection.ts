@@ -5,6 +5,7 @@ import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-pa
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
+const WSL_AGENT_BOOT_TIMEOUT_MS = 60_000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
 
 export type WslPreflightTarget = {
@@ -13,10 +14,11 @@ export type WslPreflightTarget = {
 
 export async function detectWslCommandsOnPath(
   wslTarget: WslPreflightTarget,
-  commands: readonly string[]
+  commands: readonly string[],
+  options: { failOnProbeError?: boolean } = {}
 ): Promise<Set<string>> {
   const uniqueCommands = [...new Set(commands.filter(Boolean))]
-  if (uniqueCommands.length === 0) {
+  if (uniqueCommands.length === 0 && !options.failOnProbeError) {
     return new Set()
   }
 
@@ -30,15 +32,33 @@ export async function detectWslCommandsOnPath(
   const script = [
     // Reuse the common version-manager fallback and executable lookup, including directory rejection.
     buildPosixFallbackPathPrelude(),
-    `for cmd in ${commandList}; do`,
+    `for raw_cmd in ${commandList}; do`,
+    'cmd="$raw_cmd"',
+    'case "$cmd" in "~/"*) cmd="$HOME/${cmd#\\~/}" ;; esac',
     lookupScript,
     'if [ -n "$resolved" ]; then',
-    `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
+    `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$raw_cmd" "$resolved";`,
     'fi',
     'done'
   ].join('\n')
 
   try {
+    if (options.failOnProbeError) {
+      // Cold boot must finish before the short login-PATH and inventory deadlines begin.
+      const ready = await runWslProcess({
+        distro: wslTarget.distro,
+        loginPath: 'none',
+        script: ':',
+        shell: 'sh',
+        timeoutMs: WSL_AGENT_BOOT_TIMEOUT_MS
+      })
+      if (ready.environmentResolved === false || ready.timedOut || ready.code !== 0) {
+        throw new Error('The WSL execution host did not become ready.')
+      }
+    }
+    if (uniqueCommands.length === 0) {
+      return new Set()
+    }
     // Use cached login PATH without shell startup banners.
     const result = await runWslProcess({
       distro: wslTarget.distro,
@@ -48,12 +68,21 @@ export async function detectWslCommandsOnPath(
       shell: 'sh',
       timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
     })
-    // Timeout/nonzero results may contain partial stdout, not a complete inventory.
-    if (result.timedOut || result.code !== 0) {
+    // Failed probes cannot establish a complete launcher inventory.
+    if (result.environmentResolved === false || result.timedOut || result.code !== 0) {
+      if (options.failOnProbeError) {
+        throw new Error('The WSL execution host probe failed.')
+      }
       return new Set()
     }
     return parseWslDetectedCommands(result.stdout)
-  } catch {
+  } catch (error) {
+    if (options.failOnProbeError) {
+      throw Object.assign(new Error('The WSL execution host is unavailable.'), {
+        code: 'remote_runtime_unavailable',
+        cause: error
+      })
+    }
     return new Set()
   }
 }

@@ -8,6 +8,11 @@ import {
   tokenizeStartupCommand
 } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { OrchestrationError } from '../../orchestration-error'
+import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { RuntimeStore } from '../../../construction/runtime-store-contract'
+import { agentLaunchPlatformForScope } from '../../../terminal/launch/agent-launch-scope-runtime'
+import { getRepoRoutingConnectionId } from '../../../../../shared/execution-host'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
 
 export function resolveConfiguredWorkerAgent(
   selector: string,
@@ -48,4 +53,41 @@ export function resolveConfiguredWorkerAgent(
     )
   }
   return matches[0]
+}
+
+export async function resolveConfiguredWorkerAgentForTarget(
+  runtime: Pick<
+    OrcaRuntimeService,
+    'showRepo' | 'resolveTerminalWorkspaceLaunchScope' | 'resolveOrchestrationAgentLauncher'
+  >,
+  selector: string,
+  target: { repo?: string; worktree?: string },
+  store: RuntimeStore | null | undefined
+): Promise<TuiAgent | undefined> {
+  if (isTuiAgent(selector)) {
+    return selector
+  }
+  const repo = target.repo ? await runtime.showRepo(target.repo) : null
+  // SAFETY: Forward an absent target unchanged; the existing resolver owns validation.
+  const workspace = repo
+    ? { repo, path: repo.path, connectionId: getRepoRoutingConnectionId(repo) }
+    : await runtime.resolveTerminalWorkspaceLaunchScope(target.worktree!)
+  if (!store) {
+    throw new Error('runtime_unavailable')
+  }
+  const platform = agentLaunchPlatformForScope(store, {
+    id: '',
+    folderWorkspace: null,
+    ...workspace,
+    connectionId: workspace.connectionId ?? null
+  })
+  const shell = resolveStartupShell(
+    platform,
+    resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote: Boolean(workspace.connectionId),
+      terminalWindowsShell: store.getSettings().terminalWindowsShell
+    })
+  )
+  return runtime.resolveOrchestrationAgentLauncher(selector, platform, shell)
 }
