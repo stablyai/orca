@@ -401,6 +401,15 @@ def accessible_id(node):
     return str(attempt(node.get_accessible_id, "") or "")
 
 
+def is_disabled(node):
+    # Why: toolkits set ENABLED and SENSITIVE on usable nodes; a node whose states can't be read is not called disabled.
+    usable = [getattr(Atspi.StateType, name, None) for name in ("ENABLED", "SENSITIVE")]
+    state_set = attempt(node.get_state_set)
+    if state_set is None or None in usable:
+        return False
+    return not any(attempt(lambda state=state: state_set.contains(state), True) for state in usable)
+
+
 def record(node, index, path):
     role = role_of(node)
     return {
@@ -413,6 +422,7 @@ def record(node, index, path):
         "className": str(attempt(node.get_toolkit_name, "") or ""),
         "value": string_value(node),
         "isSelected": has_state(node, Atspi.StateType.SELECTED),
+        "isDisabled": is_disabled(node),
         "nativeWindowHandle": 0,
         "frame": None,
         "actions": action_labels(node),
@@ -500,7 +510,8 @@ def render_accessibility_tree(root, root_path, compact_browser_tabs=False, geome
         if geometry_nodes is not None:
             geometry_nodes[id(item)] = node
         role_label = item["localizedControlType"] or item["controlType"]
-        line = f'{item["index"]} {role_label} {sanitize_text(title)}'.rstrip()
+        traits = " (disabled)" if item["isDisabled"] else ""
+        line = f'{item["index"]} {role_label}{traits} {sanitize_text(title)}'.rstrip()
         line += formatted_value(role_key, title, item["value"])
         if generic_summary and generic_summary != title:
             line += ", Text: " + sanitize_text(generic_summary)
@@ -1264,7 +1275,7 @@ def handshake_response():
         "supports": {
             "apps": {"list": True, "bundleIds": False, "pids": True},
             "windows": {"list": True, "targetById": False, "targetByIndex": True, "focus": False, "moveResize": False},
-            "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False},
+            "observation": {"screenshot": has_screenshot, "annotatedScreenshot": False, "elementFrames": True, "ocr": False, "disabledState": True},
             "actions": {
                 "click": True,
                 "typeText": True,

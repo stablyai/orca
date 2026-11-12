@@ -39,6 +39,18 @@ Element indexes are scoped to the latest `get-app-state` result and may be **spa
 
 Action results return only the accessibility-tree lines that changed since the last state for that window (`~` changed, `+` added, `-` removed), marked by `snapshot.treeDiff`; pass `--full-tree` to get the whole tree. To find one control in a large window, `get-app-state --query <text>` prints only matching elements and their ancestors, and `--max-elements <n>` caps the output.
 
+## Waiting for the app
+
+Instead of sleeping between actions, wait for what the app should show next. `wait` returns as soon as the condition holds, prints the matching elements or windows, and fails with `wait_timeout` after `--timeout` milliseconds (default 10000, at most 120000):
+
+```bash
+orca computer wait --app com.apple.TextEdit --text "Saved" --json
+orca computer wait --app com.apple.TextEdit --enabled "Continue" --json
+orca computer wait --app com.apple.TextEdit --window-title "Save As" --json
+```
+
+`--text` matches element lines the same way as `get-app-state --query`. `--enabled` holds once elements containing the text exist and none of them is disabled. `--window-title` checks the titles of all the app's windows. `wait` only reads the app and keeps checking while the app or window doesn't exist yet. `--enabled` needs a runtime whose provider marks disabled elements (`supports.observation.disabledState` in `capabilities`).
+
 ## Multi-window apps
 
 ```bash

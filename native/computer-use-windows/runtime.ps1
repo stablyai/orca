@@ -761,10 +761,15 @@ function New-OrcaElementRecord($Element, [int]$Index, $WindowFrame) {
         className = Get-OrcaProperty $Element "ClassName"
         value = Get-OrcaValueText $Element
         isSelected = Test-OrcaElementSelected $Element
+        isDisabled = Test-OrcaElementDisabled $Element
         nativeWindowHandle = $nativeWindowHandle
         frame = Get-OrcaElementFrame $Element $WindowFrame
         actions = @(Get-OrcaActions $Element)
     }
+}
+
+function Test-OrcaElementDisabled($Element) {
+    try { return -not [bool]$Element.Current.IsEnabled } catch { return $false }
 }
 
 function Test-OrcaElementSelected($Element) {
@@ -824,7 +829,8 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         $records.Add($record)
         $nextIndex.Value++
 
-        $line = "$($record.index) $role $(Format-OrcaSnapshotText $title)".TrimEnd()
+        $traits = if ($record.isDisabled) { " (disabled)" } else { "" }
+        $line = "$($record.index) $role$traits $(Format-OrcaSnapshotText $title)".TrimEnd()
         $line += Format-OrcaValueSegment $roleKey $title $record.value
         if (-not [string]::IsNullOrWhiteSpace($genericSummary) -and $genericSummary -ne $title) {
             $line += ", Text: " + (Format-OrcaSnapshotText $genericSummary)
@@ -1099,7 +1105,7 @@ function Get-OrcaHandshake {
         supports = [pscustomobject]@{
             apps = [pscustomobject]@{ list = $true; bundleIds = $false; pids = $true }
             windows = [pscustomobject]@{ list = $true; targetById = $true; targetByIndex = $true; focus = $false; moveResize = $false }
-            observation = [pscustomobject]@{ screenshot = $true; annotatedScreenshot = $false; elementFrames = $true; ocr = $false }
+            observation = [pscustomobject]@{ screenshot = $true; annotatedScreenshot = $false; elementFrames = $true; ocr = $false; disabledState = $true }
             actions = [pscustomobject]@{
                 click = $true
                 typeText = $true

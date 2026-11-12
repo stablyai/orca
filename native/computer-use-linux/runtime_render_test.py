@@ -18,6 +18,8 @@ class FakeStateType:
     SHOWING = 4
     FOCUSED = 5
     EDITABLE = 6
+    ENABLED = 7
+    SENSITIVE = 8
 
 
 class FakeStateSet:
@@ -667,6 +669,19 @@ class RuntimeRenderTest(unittest.TestCase):
                 self.assertEqual((field.value, field.caret), ("Hello there", 6))
                 keys.assert_not_called()
                 paste.assert_not_called()
+
+    def test_tree_marks_controls_without_enabled_or_sensitive_state_disabled(self):
+        disabled = FakeAccessible("push button", "Continue")
+        disabled.get_state_set = lambda: FakeStateSet(FakeStateType.SHOWING)
+        enabled = FakeAccessible("push button", "Cancel")
+        enabled.get_state_set = lambda: FakeStateSet(FakeStateType.ENABLED, FakeStateType.SENSITIVE)
+        unreadable = FakeAccessible("push button", "Help")
+        root = FakeAccessible("frame", "Form", children=[disabled, enabled, unreadable])
+        with SnapshotFixture(root):
+            lines = runtime.make_snapshot("Fixture", False)["treeLines"]
+        self.assertIn("\t1 push button (disabled) Continue", lines)
+        self.assertIn("\t2 push button Cancel", lines)
+        self.assertIn("\t3 push button Help", lines)
 
     def test_compacted_browser_records_keep_their_own_frames_and_indexes(self):
         tabs = [FakeAccessible("page tab", f"Tab {i}", value="1" if i == 9 else "") for i in range(10)]

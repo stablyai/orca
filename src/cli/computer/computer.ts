@@ -12,6 +12,7 @@ import {
   getRequiredStringFlag
 } from '../arguments/flags'
 import { queryComputerTreeText } from './computer-tree-query'
+import { runComputerWait } from './computer-wait-command'
 import { RuntimeClientError } from '../runtime/types'
 import {
   formatComputerAction,
@@ -95,6 +96,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(result, json, formatGetAppState)
   },
+  'computer wait': runComputerWait,
   'computer click': async ({ flags, client, cwd, json }) => {
     assertComputerAppFlag(flags)
     const observeFlags = getComputerActionObserveFlags(flags)

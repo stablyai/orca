@@ -13,9 +13,7 @@ export type ComputerTreeQuery = {
 export function queryComputerTreeText(treeText: string, options: ComputerTreeQuery): string {
   const { header, elements, footer } = parseComputerTreeText(treeText)
   const needle = options.query?.toLowerCase()
-  const candidates = needle
-    ? elements.filter((element) => elementText(element).toLowerCase().includes(needle))
-    : elements
+  const candidates = needle ? computerTreeElementsMatching(elements, needle) : elements
   const shown =
     options.maxElements === undefined ? candidates : candidates.slice(0, options.maxElements)
   const shownSet = new Set(shown)
@@ -31,6 +29,22 @@ export function queryComputerTreeText(treeText: string, options: ComputerTreeQue
       ? `Showing the first ${shown.length} of ${elements.length} elements.`
       : null
   return joinComputerTreeText(header, note ? [note, ...body] : body, footer)
+}
+
+// Case-insensitive, like --query, over each element's line without its index.
+export function computerTreeElementsMatching(
+  elements: ComputerTreeElement[],
+  query: string
+): ComputerTreeElement[] {
+  const needle = query.toLowerCase()
+  return elements.filter((element) => elementText(element).toLowerCase().includes(needle))
+}
+
+// Providers render traits right after the role: `12 push button (selected, disabled) Save`.
+const TRAITS = /^\t*\d+(?: [^(,]*?)? \(([^()]*)\)/u
+
+export function isComputerTreeElementDisabled(element: ComputerTreeElement): boolean {
+  return TRAITS.exec(element.lines[0])?.[1].split(', ').includes('disabled') ?? false
 }
 
 function elementText(element: ComputerTreeElement): string {
