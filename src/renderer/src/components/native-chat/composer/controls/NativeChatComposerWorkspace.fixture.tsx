@@ -1,6 +1,7 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { getDefaultSettings } from '../../../../../../shared/constants'
 import { NativeChatComposerWorkspace } from './NativeChatComposerWorkspace'
 import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
 import { useAppStore } from '@/store'
@@ -78,7 +79,7 @@ function workspaceFixture({
     },
     setup: () => {
       useAppStore.setState((state) => ({
-        settings: { ...state.settings, machineName }
+        settings: { ...getDefaultSettings(), ...state.settings, machineName }
       }))
     },
     render: () => (
@@ -92,6 +93,12 @@ function workspaceFixture({
       </div>
     ),
     interact: (frame) => {
+      if (machineName) {
+        const machine = frame.querySelector<HTMLElement>(`[title="${machineName}"]`)
+        if (!machine || machine.getBoundingClientRect().width === 0) {
+          throw new Error('The large-text case must include the visible machine context')
+        }
+      }
       const button =
         frame.querySelector<HTMLButtonElement>('[aria-label^="Switch branch:"]') ??
         Array.from(frame.querySelectorAll<HTMLButtonElement>('button')).at(-1)
@@ -177,7 +184,7 @@ export const constrainedLongBranch = workspaceFixture({
   width: 440
 })
 export const largeTextContext = workspaceFixture({
-  width: 552,
+  width: 584,
   fontSize: 20,
   checkout: 'workspace-with-a-long-checkout-name',
   machineName: 'Brennans-development-machine-with-a-long-name'
@@ -186,7 +193,7 @@ export const longCheckout = workspaceFixture({
   checkout: 'feature-keep-the-composer-branch-button-within-a-narrow-pane'
 })
 export const largeTextLongBranch = workspaceFixture({
-  width: 552,
+  width: 584,
   fontSize: 20,
   branch: 'feature/keep-the-composer-branch-button-within-a-narrow-pane',
   checkout: 'workspace-with-a-long-checkout-name',
