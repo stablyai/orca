@@ -3027,7 +3027,9 @@
       "applying": "Applying…",
       "onAttach": "Applies when the chat attaches",
       "heldPickRefused": "{{picked}} isn't available in this chat. Kept {{kept}}.",
-      "optionsSection": "Options"
+      "optionsSection": "Options",
+      "searchModels": "Search models…",
+      "noModelsMatch": "No models match your search."
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",

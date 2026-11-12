@@ -23,6 +23,7 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-session-speed-tiers'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { MobileSwitch } from '../../../components/MobileSwitch'
+import { nativeChatModelSearchScore } from '../../../../../src/shared/native-chat/input/native-chat-model-search'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   useMobileColorScheme()
@@ -131,6 +132,7 @@ type DescriptorRowsProps = {
   onInvokeAction: () => void
   /** A leading mark per choice, as each permission mode has its icon. */
   choiceLeading?: (value: string) => ReactNode
+  query?: string
   /** Whether search-only choices are revealed; without it they stay off the list. */
   moreChoices?: { shown: boolean; onToggle: () => void }
 }
@@ -157,6 +159,7 @@ export function descriptorRowElements(
     onSetOption,
     onInvokeAction,
     choiceLeading,
+    query,
     moreChoices
   }: DescriptorRowsProps,
   t: Translate
@@ -221,7 +224,22 @@ export function descriptorRowElements(
       onPress={() => onSetOption(choice.value)}
     />
   )
-  // No search here: search-only aliases follow a More models toggle, as compact pickers show them.
+  const terms = query?.toLowerCase().split(/\s+/).filter(Boolean) ?? []
+  if (query !== undefined) {
+    return choices
+      .filter((choice) => {
+        if (choice.searchOnly && terms.length === 0) {
+          return false
+        }
+        return (
+          nativeChatModelSearchScore(choice.value, query, [
+            nativeChatSessionChoiceLabel(choice, say, descriptor.id),
+            choice.description ?? ''
+          ]) > 0
+        )
+      })
+      .map(choiceRow)
+  }
   const more = moreChoices ? choices.filter((choice) => choice.searchOnly) : []
   return [
     ...choices.filter((choice) => !choice.searchOnly).map(choiceRow),

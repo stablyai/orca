@@ -29,6 +29,8 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Switch: 'Switch',
   Text: 'Text',
+  TextInput: 'TextInput',
+  useWindowDimensions: () => ({ width: 390, height: 844 }),
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({
@@ -39,6 +41,7 @@ vi.mock('lucide-react-native', () => ({
   FilePenLine: 'FilePenLine',
   Hand: 'Hand',
   LockKeyhole: 'LockKeyhole',
+  Search: 'Search',
   ShieldAlert: 'ShieldAlert',
   ShieldCheck: 'ShieldCheck',
   X: 'X'
@@ -168,7 +171,87 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     await act(async () => rowByText('Full access').props.onPress())
     expect(setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
   })
+
+  it('searches model aliases and descriptions without hiding the effort control', async () => {
+    mount(
+      [
+        {
+          ...MODEL_DESCRIPTOR,
+          kind: {
+            type: 'select',
+            currentValue: 'sonnet',
+            choices: [
+              { value: 'sonnet', label: 'Sonnet 5' },
+              {
+                value: 'opus-latest',
+                label: 'Opus latest',
+                description: 'Complex work',
+                searchOnly: true
+              }
+            ]
+          }
+        },
+        EFFORT_DESCRIPTOR
+      ],
+      false,
+      'model'
+    )
+    expect(() => rowByText('Opus latest')).toThrow('No row labeled Opus latest')
+    act(() => findByHostType(renderer!.root, 'TextInput').props.onChangeText('OPUS complex'))
+    expect(rowByText('Opus latest').props.disabled).toBe(false)
+    expect(() => rowByText('Sonnet 5')).toThrow('No row labeled Sonnet 5')
+    expect(
+      renderer!.root.findByProps({ accessibilityRole: 'adjustable' }).props.accessibilityValue.text
+    ).toBe('High')
+    await act(async () => rowByText('Opus latest').props.onPress())
+    expect(setOption).toHaveBeenCalledExactlyOnceWith('model', 'opus-latest')
+  })
+
+  it('previews effort while dragging, commits once on release and cancels interrupted drags', async () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], false, 'model')
+    const slider = () => renderer!.root.findByProps({ accessibilityRole: 'adjustable' })
+    act(() => slider().props.onLayout({ nativeEvent: { layout: { width: 220 } } }))
+    act(() => slider().props.onResponderGrant({ nativeEvent: { locationX: 10 } }))
+    act(() => slider().props.onResponderMove({ nativeEvent: { locationX: 210 } }))
+    expect(slider().props.accessibilityValue.text).toBe('Max')
+    expect(setOption).not.toHaveBeenCalled()
+    await act(async () => slider().props.onResponderRelease())
+    expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'max')
+    act(() => slider().props.onResponderGrant({ nativeEvent: { locationX: 10 } }))
+    expect(slider().props.accessibilityValue.text).toBe('Low')
+    act(() => slider().props.onResponderTerminate())
+    expect(slider().props.accessibilityValue.text).toBe('High')
+    expect(setOption).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps unknown effort unselected and lets accessibility choose a reported level', async () => {
+    mount([MODEL_DESCRIPTOR, { ...EFFORT_DESCRIPTOR, valueSource: 'unknown' }], false, 'model')
+    const slider = renderer!.root.findByProps({ accessibilityRole: 'adjustable' })
+    expect(slider.props.accessibilityValue).toMatchObject({ now: undefined, text: 'Not reported' })
+    await act(async () =>
+      slider.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } })
+    )
+    expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'low')
+  })
 })
+
+const EFFORT_DESCRIPTOR: SessionOptionDescriptor = {
+  id: 'effort',
+  label: 'Effort',
+  category: 'thought_level',
+  kind: {
+    type: 'select',
+    currentValue: 'high',
+    choices: [
+      { value: 'low', label: 'Low' },
+      { value: 'high', label: 'High' },
+      { value: 'max', label: 'Max' }
+    ]
+  },
+  valueSource: 'reported',
+  transport: 'agent-session',
+  settable: true
+}
 
 const PERMISSION_CHOICES: SessionOptionSelectChoice[] = [
   { value: 'ask', label: 'Ask for approval' },

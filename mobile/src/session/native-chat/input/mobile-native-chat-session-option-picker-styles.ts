@@ -11,6 +11,15 @@ export const sessionOptionPickerStyles = themedStyleSheet(() => ({
   sheet: {
     paddingBottom: spacing.xs
   },
+  modelSheet: { flex: 1, minHeight: 0 },
+  modelOptions: {
+    flexShrink: 0,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+    paddingTop: spacing.sm
+  },
+  modelOptionsLandscape: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  modelOptionColumn: { flex: 1, minWidth: 0 },
   header: {
     marginTop: -spacing.xs
   },
