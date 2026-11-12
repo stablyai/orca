@@ -12,6 +12,7 @@ import type { GitStatusResult } from '../../../../../../shared/git/status/git-st
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 import { orderDeleteWorktreeStatusHydrationTargets } from './delete-worktree-dirty-change-counts'
+import { mayContactDeleteTargetHost } from './delete-target-host-contact'
 
 /** Routes a delete target's git reads to its owning host; null when no host can serve it. */
 export function resolveDeleteTargetGitContext(
@@ -83,7 +84,10 @@ export function useDeleteWorktreeStatusHydration({
         setStatusByIdentity((current) => new Map(current).set(identity, existingStatus))
         continue
       }
-      const gitContext = resolveDeleteTargetGitContext(target, repos)
+      // An asleep Orca Cloud sandbox is not woken (or waited on) to count changes for a dialog.
+      const gitContext = mayContactDeleteTargetHost(target, 'git-status')
+        ? resolveDeleteTargetGitContext(target, repos)
+        : null
       if (!gitContext) {
         setStatusByIdentity((current) => new Map(current).set(identity, null))
         continue
