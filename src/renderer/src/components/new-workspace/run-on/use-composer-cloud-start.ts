@@ -46,7 +46,11 @@ export function useComposerCloudStart({
   // see that edit.
   const runCreate = useCallback(() => void handleCreate(), [handleCreate])
   const composerSnapshot = useCallback(
-    () => buildComposerSnapshot(modalData, cardProps, { ...quickAgentPick, agent: quickAgent }),
+    () =>
+      buildComposerSnapshot(modalData, cardProps, {
+        ...quickAgentPick,
+        agent: quickAgent
+      }),
     [cardProps, modalData, quickAgent, quickAgentPick]
   )
   const cloudStart = useCloudStartComposer({
@@ -79,8 +83,7 @@ export function useComposerCloudStart({
   return {
     cloudStart: { ...cloudStart, view },
     // Local and Orca Cloud share one button: same label, same rules for when it's enabled.
-    // JA-21b: a billing wall on the selected Orca Cloud holds Create until it's fixed.
-    primaryCreateDisabled: createDisabled || Boolean(cloudStart.view?.wall),
+    primaryCreateDisabled: createDisabled,
     onPrimary: guard.onPrimary
   }
 }

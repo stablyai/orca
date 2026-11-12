@@ -15,7 +15,6 @@ import {
   toOrcaCloudRunTargetAccess,
   type OrcaCloudRunTargetAccess
 } from './orca-cloud-run-target-access'
-import { devBillingFaultAccess } from '@/lib/orca-cloud/run-on-preflight'
 
 /**
  * The Run-on picker's and selection hint's view of the shared billing store. The composer prefetches
@@ -46,11 +45,6 @@ export function invalidateOrcaCloudBilling({ refetchNow = true } = {}): void {
 }
 
 function accessFrom(snapshot: BillingStoreState): OrcaCloudRunTargetAccess {
-  // Dev/QA: a simulated billing wall for real-app shots (never in production builds).
-  const fault = devBillingFaultAccess()
-  if (fault) {
-    return fault
-  }
   if (!snapshot.result && snapshot.loading) {
     return { state: 'loading' }
   }

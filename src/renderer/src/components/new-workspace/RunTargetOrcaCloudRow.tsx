@@ -14,7 +14,6 @@ import {
   type OrcaCloudRunTargetAccess
 } from './orca-cloud-run-target-access'
 import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
-import { orcaCloudNeedsFixFirst, useRunOnPreflightEnabled } from '@/lib/orca-cloud/run-on-preflight'
 
 /**
  * Looks like a button but is plain option content: focus stays in the combobox input, Enter on the
@@ -94,7 +93,9 @@ export function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string 
       'Trial · {{hours}} sandbox hours left · No card needed',
       {
         count: offered,
-        hours: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(offered),
+        hours: new Intl.NumberFormat(locale, {
+          maximumFractionDigits: 1
+        }).format(offered),
         defaultValue_one: 'Trial · {{hours}} sandbox hour left · No card needed'
       }
     )
@@ -110,7 +111,9 @@ export function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string 
       'Trial · {{hours}} sandbox hours left',
       {
         count,
-        hours: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(count),
+        hours: new Intl.NumberFormat(locale, {
+          maximumFractionDigits: 1
+        }).format(count),
         defaultValue_one: 'Trial · {{hours}} sandbox hour left'
       }
     )
@@ -294,28 +297,6 @@ function OrcaCloudMeta({
   }
 }
 
-/**
- * In the composer, hours and plan details wait until after create (Neil): the row only keeps what
- * explains why it can't be picked, "Ask an owner or admin".
- */
-function showsMetaAfterStart(access: OrcaCloudRunTargetAccess, preflight: boolean): boolean {
-  // JA-21 (flagged): a billing wall is fixed here, before Start, not on the setup page after it.
-  if (preflight && orcaCloudNeedsFixFirst(access)) {
-    return true
-  }
-  switch (access.state) {
-    case 'no-plan':
-    case 'out-of-hours':
-    case 'payment-issue':
-      return !access.canManageBilling
-    case 'loading':
-    case 'entitled':
-    case 'signed-out':
-    case 'unknown':
-      return false
-  }
-}
-
 /** Orca Cloud as a first-class Run-on target, with the fix for what blocks it (and hours, behind RUN_ON_SHOWS_HOURS_LEFT). */
 export function RunTargetOrcaCloudRow({
   recipe,
@@ -343,41 +324,44 @@ export function RunTargetOrcaCloudRow({
   setupAfterStart?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const preflight = useRunOnPreflightEnabled() && setupAfterStart
-  // A billing wall keeps "Orca Cloud" whole and wraps its reason under it (design-squad).
-  const wallShown = preflight && orcaCloudNeedsFixFirst(access)
+  // JA-21 (Neil): the composer says nothing about plan, hours or payment; Create checks and the
+  // creating sheet shows any blocker. Outside the composer the row still names the fix.
+  const shown: OrcaCloudRunTargetAccess =
+    setupAfterStart &&
+    (access.state === 'no-plan' ||
+      access.state === 'out-of-hours' ||
+      access.state === 'payment-issue')
+      ? { state: 'unknown' }
+      : access
   return (
     <RunTargetRow
       icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
       label={recipe?.name ?? ORCA_CLOUD_LABEL}
       labelBadge={
-        access.state === 'no-plan' && !access.lapsed ? (
+        shown.state === 'no-plan' && !shown.lapsed ? (
           <Badge variant="tag">
             {t('auto.components.new.workspace.RunTargetCombobox.orcaCloudTeamBadge', 'Team')}
           </Badge>
         ) : undefined
       }
       detail=""
-      detailNode={<OrcaCloudDetail access={access} />}
+      detailNode={<OrcaCloudDetail access={shown} />}
       armed={armed}
       current={current}
       disabled={
-        ((access.state === 'no-plan' ||
-          access.state === 'out-of-hours' ||
-          access.state === 'payment-issue') &&
-          !access.canManageBilling) ||
-        wallShown
+        (shown.state === 'no-plan' ||
+          shown.state === 'out-of-hours' ||
+          shown.state === 'payment-issue') &&
+        !shown.canManageBilling
       }
       optionId={optionId}
-      wrapDetail={wallShown}
       busy={pending}
       onArm={onArm}
       onCommit={onSelect}
-      description={orcaCloudRowHint(access, t)}
+      description={orcaCloudRowHint(shown, t)}
       trailing={
-        setupAfterStart && !showsMetaAfterStart(access, preflight) ? undefined : (
-          <OrcaCloudMeta access={access} onAction={onBlockedAction} alignTop={wallShown} />
-        )
+        // The composer walks sign-in on its setup page after Start: no inline meta here.
+        setupAfterStart ? undefined : <OrcaCloudMeta access={shown} onAction={onBlockedAction} />
       }
     />
   )

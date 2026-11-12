@@ -20,6 +20,7 @@ import { formatEnvironmentDoctorChecks } from '../../../../shared/environment-do
 import { VmBuildStepRow } from './VmBuildStepRow'
 import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
+import { VmBuildBillingBlocker } from './VmBuildBillingBlocker'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
 import { VmBuildSecretsRow } from '../cloud-secrets-ask/VmBuildSecretsRow'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
@@ -154,6 +155,9 @@ export function VmBuildSheet({
   const failure = classifyVmBuildFailure({ entry, error, cloud })
   const gated = isAccountGate(failure)
   const billing = useOrcaBillingStatus(isBillingFailure(failure))
+  // JA-21: on Orca Cloud a billing refusal is a blocker card in place of the steps, under the
+  // sheet's own title; nothing was created and the draft is kept.
+  const billingBlock = cloud && failure && isBillingFailure(failure) ? failure.kind : null
   // Unknown roles get the owner's copy; only a known member is told to ask someone else.
   const canManageBilling =
     billing.result?.status !== 'ok' || billing.result.entitlement.canManageBilling
@@ -210,7 +214,7 @@ export function VmBuildSheet({
     <div data-vm-build-sheet className="flex min-h-full justify-center pt-12">
       <div className="flex w-full max-w-2xl flex-col gap-4">
         {/* JA-24: on Orca Cloud a failure card carries the one title; no page title above it. */}
-        {cloud && failure ? null : (
+        {cloud && failure && !billingBlock ? null : (
           <div className="flex min-h-7 items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="grid size-4 shrink-0 place-items-center">
@@ -240,7 +244,9 @@ export function VmBuildSheet({
                 aria-live={failure ? 'off' : 'polite'}
                 className="text-sm font-medium text-foreground outline-none"
               >
-                {headerTitle(state, cloud, t, failure?.kind === 'create')}
+                {billingBlock
+                  ? headerTitle('building', cloud, t)
+                  : headerTitle(state, cloud, t, failure?.kind === 'create')}
               </h2>
               {/* Orca Cloud: each step carries its own timer, so the header has none. */}
               {gated || cloud ? null : (
@@ -258,117 +264,137 @@ export function VmBuildSheet({
           </div>
         )}
 
-        <div>
-          {/* An account refusal happens before anything starts, so there are no steps to show. */}
-          {gated ? null : (
-            <ol className="flex flex-col rounded-lg border border-border bg-card px-4 py-2 text-sm">
-              {steps.map((step) => (
-                <VmBuildStepRow
-                  key={step.id}
-                  step={step}
-                  cloud={cloud}
-                  detail={
-                    cloud && step.id === 'provision' && step.state === 'running'
-                      ? provisionStageLabel(entry, step.elapsedMs, t)
-                      : step.id === 'clone' && step.state === 'running'
-                        ? cloneStageLabel(step.stage, t, step.cloneMode)
-                        : null
-                  }
-                  timing={timings[step.id] ?? null}
-                  stopped={failure !== null}
-                  t={t}
-                  waitedMs={steps.find((candidate) => candidate.id === 'provision')?.elapsedMs ?? 0}
-                />
-              ))}
-              {/* Orca Cloud: agent setup happens after create (the setup page and the workspace's
-                  sign-in strip), so the build card has no agent row. Other VMs keep the host's own. */}
-              {agentSignInRow ??
-                (!cloud && entry.vmEnvironmentId ? (
-                  <VmBuildAgentSignInRow
-                    creationId={creationId}
-                    environmentId={entry.vmEnvironmentId}
-                  />
-                ) : null)}
-              {secretsRow !== undefined ? (
-                secretsRow
-              ) : cloud ? (
-                <VmBuildSecretsRow entry={entry} />
-              ) : null}
-            </ol>
-          )}
-
-          <VmBuildFailureCard
-            failure={failure}
-            cloud={cloud}
-            vmKept={
-              failure?.kind === 'checks'
-                ? failure.sandbox !== 'deleted'
-                : Boolean(entry.request.ephemeralVmRuntimeId)
-            }
-            firstErrorLine={firstErrorLine}
-            canFixWithAgent={Boolean(recipe)}
+        {billingBlock === 'plan' ||
+        billingBlock === 'hoursUsed' ||
+        billingBlock === 'spendCap' ||
+        billingBlock === 'payment' ? (
+          <VmBuildBillingBlocker
+            kind={billingBlock}
             canManageBilling={canManageBilling}
-            signingIn={signingIn}
-            connectingGitHub={connectingGitHub}
-            repoName={repoName}
-            actions={{
-              onFixWithAgent: () => {
-                if (recipe) {
-                  startFixWithAgent({
-                    repoId: recipe.sourceRepoId,
-                    recipeId: recipe.recipeId,
-                    failure: fixContext(failure, derived, entry, error, cloud, t)
-                  })
-                }
-              },
-              onRetry:
-                failure?.kind === 'checks'
-                  ? () => resolveVmEnvironmentCheckDecision(creationId, 'retry')
-                  : onRetry,
-              onEditRecipe,
-              onOpenAnyway: () => resolveVmEnvironmentCheckDecision(creationId, 'open-anyway'),
-              // A paused create deletes this sandbox and starts over; one already gone just retries.
-              onStartAgain: () =>
-                isAwaitingVmEnvironmentCheckDecision(creationId)
-                  ? resolveVmEnvironmentCheckDecision(creationId, 'restart')
-                  : onRetry(),
-              // Nothing was created, so leaving a billing refusal hands the typed prompt back.
-              onDismiss:
-                isBillingFailure(failure) && typedComposerPrompt(entry).trim()
-                  ? () => onReturnToComposer({ local: false })
-                  : onDismiss,
-              onSeePlans: () => {
-                // Once paid, the plans dialog closes and retries this create.
-                requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
-                openPlansPage('sandbox')
-              },
-              onCreateLocally: () => onReturnToComposer({ local: true }),
-              onOpenBilling: () => {
-                const store = useAppStore.getState()
-                store.openSettingsTarget({
-                  pane: 'cloud-billing',
-                  repoId: null,
-                  // "Turn on overage" / "Raise spend cap" land on the overage card itself; the
-                  // payment notice is at the top of the section already.
-                  ...(failure?.kind === 'payment'
-                    ? {}
-                    : { sectionId: ORCA_BILLING_OVERAGE_SECTION_ID })
-                })
-                store.openSettingsPage()
-              },
-              onSignIn: signIn,
-              // Your workspaces on Home, where you can put one to sleep or delete it.
-              onShowWorkspaces: () => openCloudWorkspacesHome({ running: true }),
-              onContactSupport: () => openAppHttpLink(SUPPORT_URL),
-              onConnectGitHub: connectGitHub,
-              onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)
+            entitlement={billing.result?.status === 'ok' ? billing.result.entitlement : null}
+            onContinue={onRetry}
+            onComparePlans={() => {
+              // Once paid, the plans page closes and continues this create.
+              requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
+              openPlansPage('sandbox')
             }}
+            onBackToDraft={() => onReturnToComposer({ local: false })}
           />
-        </div>
+        ) : (
+          <div>
+            {/* An account refusal happens before anything starts, so there are no steps to show. */}
+            {gated ? null : (
+              <ol className="flex flex-col rounded-lg border border-border bg-card px-4 py-2 text-sm">
+                {steps.map((step) => (
+                  <VmBuildStepRow
+                    key={step.id}
+                    step={step}
+                    cloud={cloud}
+                    detail={
+                      cloud && step.id === 'provision' && step.state === 'running'
+                        ? provisionStageLabel(entry, step.elapsedMs, t)
+                        : step.id === 'clone' && step.state === 'running'
+                          ? cloneStageLabel(step.stage, t, step.cloneMode)
+                          : null
+                    }
+                    timing={timings[step.id] ?? null}
+                    stopped={failure !== null}
+                    t={t}
+                    waitedMs={
+                      steps.find((candidate) => candidate.id === 'provision')?.elapsedMs ?? 0
+                    }
+                  />
+                ))}
+                {/* Orca Cloud: agent setup happens after create (the setup page and the workspace's
+                  sign-in strip), so the build card has no agent row. Other VMs keep the host's own. */}
+                {agentSignInRow ??
+                  (!cloud && entry.vmEnvironmentId ? (
+                    <VmBuildAgentSignInRow
+                      creationId={creationId}
+                      environmentId={entry.vmEnvironmentId}
+                    />
+                  ) : null)}
+                {secretsRow !== undefined ? (
+                  secretsRow
+                ) : cloud ? (
+                  <VmBuildSecretsRow entry={entry} />
+                ) : null}
+              </ol>
+            )}
+
+            <VmBuildFailureCard
+              failure={failure}
+              cloud={cloud}
+              vmKept={
+                failure?.kind === 'checks'
+                  ? failure.sandbox !== 'deleted'
+                  : Boolean(entry.request.ephemeralVmRuntimeId)
+              }
+              firstErrorLine={firstErrorLine}
+              canFixWithAgent={Boolean(recipe)}
+              canManageBilling={canManageBilling}
+              signingIn={signingIn}
+              connectingGitHub={connectingGitHub}
+              repoName={repoName}
+              actions={{
+                onFixWithAgent: () => {
+                  if (recipe) {
+                    startFixWithAgent({
+                      repoId: recipe.sourceRepoId,
+                      recipeId: recipe.recipeId,
+                      failure: fixContext(failure, derived, entry, error, cloud, t)
+                    })
+                  }
+                },
+                onRetry:
+                  failure?.kind === 'checks'
+                    ? () => resolveVmEnvironmentCheckDecision(creationId, 'retry')
+                    : onRetry,
+                onEditRecipe,
+                onOpenAnyway: () => resolveVmEnvironmentCheckDecision(creationId, 'open-anyway'),
+                // A paused create deletes this sandbox and starts over; one already gone just retries.
+                onStartAgain: () =>
+                  isAwaitingVmEnvironmentCheckDecision(creationId)
+                    ? resolveVmEnvironmentCheckDecision(creationId, 'restart')
+                    : onRetry(),
+                // Nothing was created, so leaving a billing refusal hands the typed prompt back.
+                onDismiss:
+                  isBillingFailure(failure) && typedComposerPrompt(entry).trim()
+                    ? () => onReturnToComposer({ local: false })
+                    : onDismiss,
+                onSeePlans: () => {
+                  // Once paid, the plans dialog closes and retries this create.
+                  requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
+                  openPlansPage('sandbox')
+                },
+                onCreateLocally: () => onReturnToComposer({ local: true }),
+                onOpenBilling: () => {
+                  const store = useAppStore.getState()
+                  store.openSettingsTarget({
+                    pane: 'cloud-billing',
+                    repoId: null,
+                    // "Turn on overage" / "Raise spend cap" land on the overage card itself; the
+                    // payment notice is at the top of the section already.
+                    ...(failure?.kind === 'payment'
+                      ? {}
+                      : { sectionId: ORCA_BILLING_OVERAGE_SECTION_ID })
+                  })
+                  store.openSettingsPage()
+                },
+                onSignIn: signIn,
+                // Your workspaces on Home, where you can put one to sleep or delete it.
+                onShowWorkspaces: () => openCloudWorkspacesHome({ running: true }),
+                onContactSupport: () => openAppHttpLink(SUPPORT_URL),
+                onConnectGitHub: connectGitHub,
+                onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)
+              }}
+            />
+          </div>
+        )}
 
         {building ? <OrcaCloudQueuedPrompt creationId={creationId} /> : null}
 
-        {cloud && !gated ? (
+        {cloud && !gated && !billingBlock ? (
           <Button
             type="button"
             variant="ghost"

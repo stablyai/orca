@@ -64,7 +64,7 @@ function Preview({
   recipes?: EphemeralVmRecipeOption[]
   recipeValue?: string | null
   access?: OrcaCloudRunTargetAccess
-  /** The composer's picker: setup comes after Start, JA-21's preflight applies when flagged. */
+  /** The composer's picker: setup and billing come after Create. */
   composer?: boolean
 }): React.JSX.Element {
   return (
@@ -286,82 +286,30 @@ export const rowActions = defineFixture({
   interact: pressKeys('ArrowDown', 'ArrowDown')
 })
 
-// JA-21 (flagged): the composer's picker for an owner at a billing wall, flag off then on.
-const preflight = (on: boolean): void => {
-  if (on) {
-    localStorage.setItem('orca:dev:runOnPreflight', '1')
-  } else {
-    localStorage.removeItem('orca:dev:runOnPreflight')
-  }
+// JA-21 (Neil): progressive billing. In the composer Orca Cloud is pickable whatever billing says,
+// with no plan, hours or payment words; the creating sheet shows any blocker after Create.
+function composerWith(access: OrcaCloudRunTargetAccess, width = 420) {
+  return defineFixture({
+    width,
+    render: () => <Preview composer recipes={withCloud} access={access} />,
+    interact: open
+  })
 }
-export const composerOutOfHoursPreflightOff = defineFixture({
-  width: 420,
-  render: () => {
-    preflight(false)
-    return (
-      <Preview
-        composer
-        recipes={withCloud}
-        access={{ state: 'out-of-hours', cause: 'hours', canManageBilling: true }}
-      />
-    )
-  },
-  interact: open
+export const composerOwnerOutOfHours = composerWith({
+  state: 'out-of-hours',
+  cause: 'hours',
+  canManageBilling: true
 })
-export const composerOutOfHoursPreflight = defineFixture({
-  width: 420,
-  render: () => {
-    preflight(true)
-    return (
-      <Preview
-        composer
-        recipes={withCloud}
-        access={{ state: 'out-of-hours', cause: 'hours', canManageBilling: true }}
-      />
-    )
-  },
-  interact: open
+export const composerMemberOutOfHours = composerWith({
+  state: 'out-of-hours',
+  cause: 'hours',
+  canManageBilling: false
 })
-export const composerPaymentIssuePreflight = defineFixture({
-  width: 420,
-  render: () => {
-    preflight(true)
-    return (
-      <Preview
-        composer
-        recipes={withCloud}
-        access={{ state: 'payment-issue', canManageBilling: true }}
-      />
-    )
-  },
-  interact: open
+export const composerMemberPaymentIssue = composerWith({
+  state: 'payment-issue',
+  canManageBilling: false
 })
-export const composerLapsedPreflight = defineFixture({
-  width: 420,
-  render: () => {
-    preflight(true)
-    return (
-      <Preview
-        composer
-        recipes={withCloud}
-        access={{ state: 'no-plan', lapsed: true, canManageBilling: true }}
-      />
-    )
-  },
-  interact: open
-})
-// The composer's Run on column is narrow (~300px): "Orca Cloud" stays whole, the reason wraps.
-export const composerOutOfHoursPreflightNarrow = defineFixture({
-  width: 320,
-  render: () => {
-    preflight(true)
-    return (
-      <Preview
-        composer
-        recipes={withCloud}
-        access={{ state: 'out-of-hours', cause: 'hours', canManageBilling: true }}
-      />
-    )
-  },
-  interact: open
-})
+export const composerMemberPlanEnded = composerWith(
+  { state: 'no-plan', lapsed: true, canManageBilling: false },
+  320
+)
