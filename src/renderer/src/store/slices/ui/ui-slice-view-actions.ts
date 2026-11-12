@@ -58,7 +58,8 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     closeAutomationsPage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeAutomations,
-        worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations')
+        worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations'),
+        automationsPageNextVisitMode: 'push'
       })),
     openSpacePage: () => {
       get().recordFeatureInteraction?.('workspace-cleanup')

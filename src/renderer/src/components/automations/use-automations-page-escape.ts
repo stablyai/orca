@@ -65,6 +65,10 @@ export function useAutomationsPageEscape({
       }
 
       event.preventDefault()
+      if (pageView !== 'run' && !isDetailOpen && pageView !== 'runs') {
+        closeAutomationsPage()
+        return
+      }
       // Why: Escape goes to the parent page; when that is the previous history entry, step
       // back to it rather than adding a new one, so Forward still returns here.
       useAppStore.getState().setAutomationsPageNextVisitMode('return')
@@ -89,11 +93,7 @@ export function useAutomationsPageEscape({
         navigation.showList()
         return
       }
-      if (pageView === 'runs') {
-        navigation.showList()
-        return
-      }
-      closeAutomationsPage()
+      navigation.showList()
     }
 
     addAppKeyListener('keydown', onKeyDown)

@@ -14,6 +14,8 @@ import {
 
 // A Run now request whose run never shows up (history read failed) must not lock the button.
 const RUN_NOW_PENDING_MAX_MS = 20_000
+// A dispatch that has not answered at all is released after this long.
+const RUN_NOW_DISPATCH_MAX_MS = 60_000
 
 // JSON string quoting is valid CSS string quoting for the ids and keys used here.
 function attributeSelector(name: string, value: string): string {
@@ -40,8 +42,11 @@ export function useAutomationsPageRouting(
   const selectedAutomationRunPage = setup.selectedAutomationRunPage
 
   // Run now stays busy until its run is listed; a run already in progress never blocks it.
+  // Why: selectedRuns belong to the open automation; another one's manual run must not clear it.
   const runNowListed =
-    runNowPending !== null && isAutomationRunNowListed(runNowPending, setup.selectedRuns)
+    runNowPending !== null &&
+    runNowPending.rowKey === selectedRow?.key &&
+    isAutomationRunNowListed(runNowPending, setup.selectedRuns)
   const isRunNowPending = isAutomationRunNowPending(
     runNowPending,
     selectedRow?.key,
@@ -55,13 +60,13 @@ export function useAutomationsPageRouting(
       setRunNowPending(null)
       return
     }
-    if (runNowPending.acknowledgedAt === null) {
-      return
-    }
-    const timer = setTimeout(
-      () => setRunNowPending(null),
-      Math.max(0, runNowPending.acknowledgedAt + RUN_NOW_PENDING_MAX_MS - Date.now())
-    )
+    // Why: a dispatch that never answers must not lock the button either; the dispatcher's
+    // own in-flight guard still refuses a duplicate after this cap.
+    const deadline =
+      runNowPending.acknowledgedAt === null
+        ? runNowPending.requestedAt + RUN_NOW_DISPATCH_MAX_MS
+        : runNowPending.acknowledgedAt + RUN_NOW_PENDING_MAX_MS
+    const timer = setTimeout(() => setRunNowPending(null), Math.max(0, deadline - Date.now()))
     return () => clearTimeout(timer)
   }, [runNowListed, runNowPending, setRunNowPending])
 

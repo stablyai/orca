@@ -31,17 +31,21 @@ export function useAutomationsPageHistory({
 
   const key = location ? automationsPageLocationKey(location) : null
   const locationRef = useRef(location)
+  const requestRef = useRef(request)
   useEffect(() => {
     locationRef.current = location
+    requestRef.current = request
   })
   useEffect(() => {
-    // Why: a replay's location matches the entry it came from, so recording it is a no-op;
-    // skipping while a request is pending keeps intermediate states out of history.
-    if (key === null || request || !locationRef.current) {
+    // Why: record only when the page itself changes. Clearing a replay request can render
+    // once before the page state it asked for, still showing the page Back just left;
+    // re-running on the request change would record that page and cut Forward history.
+    // A replay's own location matches the entry it came from, so recording it is a no-op.
+    if (key === null || requestRef.current || !locationRef.current) {
       return
     }
     record(locationRef.current)
-  }, [key, record, request])
+  }, [key, record])
 }
 
 export type AutomationsPageFocusTarget = {
