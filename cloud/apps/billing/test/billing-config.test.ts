@@ -23,7 +23,10 @@ describe('config: tax and plan catalog', () => {
   })
 
   it('takes Team numbers and labels and the Enterprise contact from BILLING_PLANS', async () => {
+    // BILLING_PLANS is the legacy catalog: with ENTITLEMENTS_MODE=on prices come from Stripe and the
+    // rest from the D1 catalog (test/plans-api.test.ts).
     const h = await createHarness({
+      ENTITLEMENTS_MODE: 'off',
       BILLING_PLANS: JSON.stringify({
         team: { includedHoursPerSeat: 40, monthlyPriceLabel: '$45 per seat per month', defaultSpendCapCents: 5000 },
         enterprise: { contactUrl: 'https://example.test/sales' }

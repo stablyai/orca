@@ -3,10 +3,14 @@ import { z } from 'zod'
 import type { BillingCaller } from './auth'
 import type { Env } from './env'
 import { BILLING_INTERVALS, PLAN_IDS, priceForPlan, type BillingInterval, type PlanId } from './plans'
-import { StripeError, type StripeClient } from './stripe'
+import { StripeError, assertKeyMode, type StripeClient } from './stripe'
 import { currentSubscription, customerFor, ensureAccount, linkCustomer } from './store'
 import { orgIdOf, type MembershipSource } from './membership'
 import { setupCheckoutReturnUrls } from './cloud-setup-urls'
+import { accountTerms } from './entitlements'
+import { entitlementsMode } from './entitlements-mode'
+import { loadCatalog } from './catalog'
+import { checkoutPrice } from './catalog-sync'
 
 export const MAX_TEAM_SEATS = 500
 
@@ -71,6 +75,18 @@ export async function createCheckout(
   const orgId = orgIdOf(caller.accountId)
   const live = orgId ? await membership(orgId) : null
   const seats = Math.max(1, live ?? request.seats)
+  const terms = await accountTerms(env, caller.accountId, now)
+  if (seats > terms.maxSeats) {
+    return { ok: false, status: 400, error: 'too_many_seats' }
+  }
+  // A misconfigured (live) key fails first, whatever the catalog says.
+  assertKeyMode(env)
+  const price = await seatPriceFor(env, request.plan, request.interval, now)
+  if (!price) {
+    // ENTITLEMENTS_MODE=on and Stripe has no price holding this plan's lookup key (yet): never
+    // sell at a guessed price.
+    return { ok: false, status: 409, error: 'plan_unavailable' }
+  }
   const customer = await ensureCustomer(env, stripe, caller, now)
   // One live Checkout per account: a reopened or retried checkout expires the earlier page, so
   // two browser tabs can never both be paid into two subscriptions. A session that can no longer
@@ -102,7 +118,7 @@ export async function createCheckout(
       // Seats only. Overage is opt-in later; its metered item is added then (overage.ts).
       line_items: [
         // Seats then follow org membership automatically (seats.ts); not editable on the page.
-        { price: priceForPlan(env, request.interval), quantity: seats }
+        { price, quantity: seats }
       ],
       payment_method_collection: 'always',
       allow_promotion_codes: true,
@@ -119,6 +135,15 @@ export async function createCheckout(
     `checkout:${caller.accountId}:${crypto.randomUUID()}`
   )
   return { ok: true, url: session.url }
+}
+
+/** The seat price Checkout sells: the catalog's lookup-key holder when on, else the env price id. */
+async function seatPriceFor(env: Env, plan: PlanId, interval: BillingInterval, now: number): Promise<string | null> {
+  if (entitlementsMode(env) !== 'on') {
+    return priceForPlan(env, interval)
+  }
+  const catalog = await loadCatalog(env.BILLING_DB, now)
+  return checkoutPrice(catalog, plan, interval)?.stripe_price_id ?? null
 }
 
 export async function createPortal(env: Env, stripe: StripeClient, caller: BillingCaller): Promise<CheckoutOutcome> {

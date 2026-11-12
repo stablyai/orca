@@ -91,10 +91,11 @@ export async function retireOverageItem(env: Env, stripe: StripeClient, subscrip
 }
 
 /** A metered item that is not a seat price and not the current overage price: an older overage price. */
-function isStaleOverageItem(env: Env, item: StripeSubscription['items']['data'][number]): boolean {
+function isStaleOverageItem(env: Env, subscription: SubscriptionRow, item: StripeSubscription['items']['data'][number]): boolean {
   return (
     item.price.id !== env.STRIPE_PRICE_OVERAGE &&
     planForPrice(env, item.price.id) === null &&
+    item.price.id !== subscription.seat_price_id &&
     item.price.recurring?.usage_type === 'metered'
   )
 }
@@ -104,7 +105,7 @@ async function ensureOverageItem(env: Env, stripe: StripeClient, subscription: S
   // Stripe is the source of truth for the items: the stored id can be missing or on an old price.
   const live = await stripe.retrieveSubscription(subscription.stripe_subscription_id)
   const current = live.items.data.find((item) => item.price.id === env.STRIPE_PRICE_OVERAGE)
-  const stale = live.items.data.filter((item) => isStaleOverageItem(env, item))
+  const stale = live.items.data.filter((item) => isStaleOverageItem(env, subscription, item))
   if (current) {
     // Never leave a second metered item on the same meter.
     for (const item of stale) {

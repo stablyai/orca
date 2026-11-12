@@ -12,10 +12,11 @@
 // Membership is owned by Orca Cloud auth (pull: /v1/internal/billing/org-members; push:
 // /v1/internal/seats). Seats are never below 1. See cloud/docs/accounts-billing-design.md.
 import { z } from 'zod'
-import { MAX_TEAM_SEATS, OPEN_STATUSES } from './checkout'
+import { OPEN_STATUSES } from './checkout'
+import { accountTerms } from './entitlements'
+import { catalogIfApplied, seatPriceMatch } from './catalog-sync'
 import type { Env } from './env'
 import { orgIdOf, type MembershipSource } from './membership'
-import { planCatalog, planForPrice } from './plans'
 import type { StripeClient } from './stripe'
 import { currentSubscription, openOrgAccounts, setMemberCount } from './store'
 import { syncSubscription } from './webhook'
@@ -50,7 +51,8 @@ export async function syncSeats(
     return { status: 'no_subscription' }
   }
   const desired = Math.max(1, members)
-  if (desired > MAX_TEAM_SEATS) {
+  const terms = await accountTerms(env, accountId, now)
+  if (desired > terms.maxSeats) {
     return { status: 'too_many_seats' }
   }
   // Remembered so the reconcile cron can apply a deferred decrease without a fresh push.
@@ -59,14 +61,17 @@ export async function syncSeats(
     return { status: 'unchanged', seats: desired }
   }
   const periodEnd = subscription.current_period_end
-  const trueDownFrom = periodEnd - planCatalog(env).team.seatTrueDownHours * 3600_000
+  const trueDownFrom = periodEnd - terms.seatTrueDownHours * 3600_000
   if (desired < subscription.seats && now < trueDownFrom) {
     return { status: 'deferred', seats: subscription.seats, members: desired, effectiveAt: periodEnd }
   }
 
   // Read the live item: the mirror can lag a webhook, and the item id is not stored.
   const live = await stripe.retrieveSubscription(subscription.stripe_subscription_id)
-  const seatItem = live.items.data.find((item) => planForPrice(env, item.price.id))
+  const catalog = await catalogIfApplied(db, now)
+  const seatItem = live.items.data.find(
+    (item) => seatPriceMatch(env, catalog, item.price) !== null || item.price.id === subscription.seat_price_id
+  )
   if (!seatItem) {
     return { status: 'no_subscription' }
   }

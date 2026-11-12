@@ -4,7 +4,12 @@ export type Env = {
   BILLING_DB: D1Database
 
   // Stripe. Use a RESTRICTED key (rk_test_...) scoped to: Customers write, Checkout Sessions
-  // write, Customer portal write, Subscriptions read, Billing meter events write. Nothing else.
+  // write, Customer portal write, Subscriptions read, Billing meter events write, and (plans &
+  // entitlements: catalog price sync, reconciliation) Prices read and Events read. Nothing else.
+  // Without Prices/Events read the catalog keeps its last prices and only the rolling re-sync runs.
+  // Webhook endpoint events: checkout.session.completed, customer.subscription.{created,updated,
+  // deleted,paused,resumed}, invoice.{paid,payment_failed}, customer.deleted, price.{created,updated,
+  // deleted}, product.updated (webhook.ts HANDLED_EVENT_TYPES).
   STRIPE_SECRET_KEY: string
   // Webhook endpoint signing secret(s), comma-separated during rotation (whsec_...).
   STRIPE_WEBHOOK_SECRET: string
