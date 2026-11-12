@@ -2978,14 +2978,15 @@ private enum TextInput {
         guard result == .success else {
             return nil
         }
-        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
         // Why: a cached, out-of-process AX tree can show the old value for a moment; any other value is final.
         let readback = settledValueReadback(element) { next == current || ($0 as? String) != current } as? String
+        // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
+        if readback == current && next != current {
+            return nil
+        }
+        // Why: moving the caret before a refused write would send the fallback keys to the wrong place.
+        setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
         guard readback == next else {
-            // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
-            if readback == current {
-                return nil
-            }
             return unverifiedAction(reason: "accessibility_action_unasserted")
         }
         return verifiedAction(property: "focusedText")
