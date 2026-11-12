@@ -108,7 +108,7 @@ export function useNativeChatToolRunPins({
     [rows.length]
   )
   // A selection's rows plus the pins, reused while the window stays inside the selection.
-  const span = tracksSelection ? selectionSpan : null
+  const span = tracksSelection && !drawsEveryRow ? selectionSpan : null
   const spanned = useMemo(() => {
     if (!span) {
       return null

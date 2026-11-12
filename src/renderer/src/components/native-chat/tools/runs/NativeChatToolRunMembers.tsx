@@ -213,6 +213,8 @@ export function NativeChatToolRunMembers({
     scrollElementRef: scrollerRef,
     scrollOffsetRef,
     shouldSkipRestore,
+    // Drawing every row, a scroll would scan all of them for an anchor; leaving records it once on cleanup.
+    recordAnchorOnScroll: !drawsEveryRow,
     // Restore only when rows arrive or the pane shows again: measurement churn is the virtualizer's
     // own, and a reveal or the reader's scrolling must not be pulled back to an older row.
     restoreSignal: `${rows.length}:${isVisible}`,
@@ -381,8 +383,8 @@ export function NativeChatToolRunMembers({
     [retainInteractedRow]
   )
 
-  const drawnEnd = drawn.reduce((end, row) => Math.max(end, row.end), 0)
-  const trailing = drawsEveryRow ? 0 : totalSize - drawnEnd
+  // Drawn rows are in index order, so the last one ends the drawn extent.
+  const trailing = drawsEveryRow ? 0 : totalSize - (drawn.at(-1)?.end ?? 0)
 
   return (
     <div

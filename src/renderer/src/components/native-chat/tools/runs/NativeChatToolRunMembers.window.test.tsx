@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { useMemo } from 'react'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { NativeChatToolRun } from './NativeChatToolRun'
@@ -26,14 +26,32 @@ function calls(count: number): NativeChatBlock[] {
   }))
 }
 
-function Run({ count, findActive = false }: { count: number; findActive?: boolean }) {
+/** Two task-list updates (the second shows its "Full task list" control), then Read calls up to `count` rows. */
+function withTaskList(count: number): NativeChatBlock[] {
+  const todo = (status: string): NativeChatBlock => ({
+    type: 'tool-call',
+    name: 'TodoWrite',
+    input: { todos: [{ content: 'Audit the window', status }] }
+  })
+  return [todo('pending'), todo('in_progress'), ...calls(count - 2)]
+}
+
+function Run({
+  count,
+  findActive = false,
+  blocks = calls(count)
+}: {
+  count: number
+  findActive?: boolean
+  blocks?: NativeChatBlock[]
+}) {
   const disclosures = useNativeChatDisclosures()
   const windowFacts = useMemo(() => ({ isVisible: true, findActive }), [findActive])
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatToolRunWindowContext.Provider value={windowFacts}>
         <NativeChatToolRun
-          blocks={calls(count)}
+          blocks={blocks}
           expandSignal
           activeTurnIsWorking={false}
           disclosureId="message-1"
@@ -102,13 +120,27 @@ describe('NativeChatToolRun opened-run window', () => {
     expect(rowButton(container, 0)).toBe(first)
   })
 
-  it('keeps a focused row through the run crossing into windowing', () => {
-    const { container, rerender } = render(<Run count={49} />)
+  it('keeps a focused row and an opened full task list through windowing and Find', () => {
+    const { container, rerender } = render(<Run count={49} blocks={withTaskList(49)} />)
+    fireEvent.click(screen.getByRole('button', { name: /Full task list/ }))
+    const fullList = screen.getByRole('button', { name: /Full task list/ })
+    expect(fullList).toHaveAttribute('aria-expanded', 'true')
     const focused = rowButton(container, 10)
     focused.focus()
 
-    rerender(<Run count={50} />)
+    rerender(<Run count={50} blocks={withTaskList(50)} />)
     expect(focused).toBeInTheDocument()
     expect(document.activeElement).toBe(focused)
+    expect(screen.getByRole('button', { name: /Full task list/ })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
+
+    rerender(<Run count={50} blocks={withTaskList(50)} findActive />)
+    rerender(<Run count={50} blocks={withTaskList(50)} />)
+    expect(screen.getByRole('button', { name: /Full task list/ })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    )
   })
 })

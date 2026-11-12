@@ -101,6 +101,18 @@ function layOutRunBox(): void {
       : null
     return content ? Array.from(content.children).reduce((sum, c) => sum + heightOf(c), 0) : 0
   })
+  // A browser clamps scrollTop to what the box can reach; an unclamped box would hide a wrong scroll.
+  const scrollTops = new WeakMap<Element, number>()
+  vi.spyOn(Element.prototype, 'scrollTop', 'get').mockImplementation(function (this: Element) {
+    return scrollTops.get(this) ?? 0
+  })
+  vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation(function (
+    this: Element,
+    value: number
+  ) {
+    const max = this instanceof HTMLElement ? Math.max(0, this.scrollHeight - this.clientHeight) : 0
+    scrollTops.set(this, Math.min(Math.max(0, value), max))
+  })
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const scroller = box(this)
     if (!scroller || pane.hidden) {
@@ -383,7 +395,7 @@ describe('NativeChatToolRun opened-run reader', () => {
     rerender(<Transcript blocks={calls(230)} live />)
     await settle()
     const box = membersBox(container)
-    expect(box.scrollTop).toBeGreaterThanOrEqual(box.scrollHeight - BOX_HEIGHT_PX - 1)
+    expect(box.scrollTop).toBe(box.scrollHeight - BOX_HEIGHT_PX)
 
     // Once landed, growth that is not new work leaves the reader where they are.
     const landed = box.scrollTop
@@ -392,27 +404,31 @@ describe('NativeChatToolRun opened-run reader', () => {
   })
 
   it('finishes a follow whose tail first measures exactly as estimated', async () => {
-    // 26px rows: the tail's real measurement changes no size, so only the measurement itself can end the follow.
+    // 26px rows: a live run opens following before any row is drawn; the tail's first real
+    // measurement then changes no size, so only that measurement can end the follow.
     layout.rowPx = 26
     const { container } = render(<Transcript blocks={calls(200)} live />)
     await settle()
     const box = membersBox(container)
-    expect(box.scrollTop).toBeGreaterThanOrEqual(box.scrollHeight - BOX_HEIGHT_PX - 1)
+    expect(box.scrollTop).toBe(box.scrollHeight - BOX_HEIGHT_PX)
+    // The follow ended, so growth that is not new work leaves the reader in place.
     const landed = box.scrollTop
     await growRow(container, 'call:call-199', 300)
     expect(box.scrollTop).toBe(landed)
   })
 
   it('waits for a tail with no size yet, then lands on it once it has one', async () => {
-    grownRows.set('call:call-259', 0)
     const { container, rerender } = render(<Transcript blocks={calls(200)} live />)
     await settle()
+    grownRows.set('call:call-259', 0)
     rerender(<Transcript blocks={calls(260)} live />)
     await settle()
+    // A measurement with no size does not count as landing.
+    await growRow(container, 'call:call-259', 0)
     // The tail now lays out: the follow that waited for it lands on the new end.
     await growRow(container, 'call:call-259', 40)
     const box = membersBox(container)
-    expect(box.scrollTop).toBeGreaterThanOrEqual(box.scrollHeight - BOX_HEIGHT_PX - 1)
+    expect(box.scrollTop).toBe(box.scrollHeight - BOX_HEIGHT_PX)
     const landed = box.scrollTop
     await growRow(container, 'call:call-259', 300)
     expect(box.scrollTop).toBe(landed)

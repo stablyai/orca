@@ -67,7 +67,7 @@ export function useNativeChatToolRunWindow({
   const virtualItems = virtualizer.getVirtualItems()
   const measurements = virtualizer.measurementsCache
   // Nothing measurable (a hidden pane): keep what was drawn rather than unmounting the window.
-  const lastDrawnRef = useRef<readonly number[]>([])
+  const lastDrawnRef = useRef<readonly NativeChatToolRunDrawnRow[]>([])
   // Every row drawn: the same array while only the scroll position moves, so the rows are not rebuilt.
   const everyRow = useMemo<readonly NativeChatToolRunDrawnRow[] | null>(
     () =>
@@ -76,22 +76,25 @@ export function useNativeChatToolRunWindow({
         : null,
     [drawsEveryRow, rows.length]
   )
-  const indexes = everyRow
-    ? null
-    : virtualItems.length > 0
-      ? virtualItems.map((item) => item.index)
-      : lastDrawnRef.current.filter((index) => index < rows.length)
+  // The window's rows keep their identity while the virtualizer's items and sizes do, so an
+  // unchanged window (a large selection span, say) re-renders no rows.
+  const windowRows = useMemo<readonly NativeChatToolRunDrawnRow[] | null>(
+    () =>
+      everyRow || virtualItems.length === 0
+        ? null
+        : virtualItems.map((item) => ({
+            index: item.index,
+            start: measurements[item.index]?.start ?? 0,
+            end: measurements[item.index]?.end ?? 0
+          })),
+    [everyRow, measurements, virtualItems]
+  )
   useLayoutEffect(() => {
-    if (indexes) {
-      lastDrawnRef.current = indexes
+    if (windowRows) {
+      lastDrawnRef.current = windowRows
     }
   })
   const drawn: readonly NativeChatToolRunDrawnRow[] =
-    everyRow ??
-    (indexes ?? []).map((index) => ({
-      index,
-      start: measurements[index]?.start ?? 0,
-      end: measurements[index]?.end ?? 0
-    }))
+    everyRow ?? windowRows ?? lastDrawnRef.current.filter((row) => row.index < rows.length)
   return { virtualizer, measureRow: virtualizer.measureElement, totalSize, drawn }
 }
