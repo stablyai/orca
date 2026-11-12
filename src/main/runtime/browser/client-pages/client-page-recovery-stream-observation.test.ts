@@ -196,3 +196,61 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
     }
   }
 )
+
+it.each([750, 7500])(
+  'does no completion projection for %i held read replies after that device unsubscribes',
+  async (count) => {
+    const h = createReconciliationDeliveryRuntime()
+    const runtime = h.hostRuntime
+    const snapshots = Array.from({ length: count }, (_, index) => ({
+      worktree: `repo-1::/tmp/unsubscribed-${index}`,
+      publicationEpoch: 'renderer',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    }))
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
+    const departed = openRecoveryTabsStream(runtime, 'departing-device-stream')
+    const other = openRecoveryTabsStream(
+      runtime,
+      'remaining-device-stream',
+      `id:${snapshots[0]!.worktree}`,
+      'device-b'
+    )
+    try {
+      await Promise.all([departed.initial, other.initial])
+      const rpc = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+      const reads: string[] = []
+      await rpc.dispatchStreaming(
+        { id: 'held-read', authToken: 'test', method: 'session.tabs.listAll', params: {} },
+        (reply) => reads.push(reply),
+        { connectionId: 'held-read', pairedDeviceId: 'device-a', clientKind: 'runtime' }
+      )
+      const supplied = JSON.parse(reads[0]!).result.snapshots
+      expect(supplied).toHaveLength(count)
+      expect(
+        supplied.every(
+          (frame: { clientHostedPagesUnreconciled?: true }) =>
+            frame.clientHostedPagesUnreconciled === true
+        )
+      ).toBe(true)
+      departed.stop()
+      await departed.completion
+      runtime.projectedFrames = 0
+      const sequence = runtime.sessionTabsSequence()
+      const delivered = other.frames.length
+      runtime.markClientHostedPagesReconciled('device-a')
+      expect(runtime.projectedFrames).toBe(0)
+      expect(runtime.sessionTabsSequence()).toBe(sequence)
+      expect(other.frames).toHaveLength(delivered)
+    } finally {
+      departed.stop()
+      other.stop()
+      await Promise.all([departed.completion, other.completion])
+      await h.close()
+    }
+  }
+)

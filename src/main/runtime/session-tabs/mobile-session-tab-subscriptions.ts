@@ -68,6 +68,15 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     this.clientHostedPageReconciliation.forgetObservation(clientNavigationId, observer)
   }
 
+  protected hasMobileSessionTabsListenersForClient(clientNavigationId: string): boolean {
+    for (const subscription of this.mobileSessionTabListeners) {
+      if (subscription.clientNavigationId === clientNavigationId) {
+        return true
+      }
+    }
+    return false
+  }
+
   protected hasAgentSenderListeners(): boolean {
     for (const { clientKind } of this.mobileSessionTabListeners) {
       if (clientKind !== 'mobile') {
