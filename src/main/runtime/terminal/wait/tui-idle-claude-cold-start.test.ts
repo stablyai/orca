@@ -143,6 +143,16 @@ describe('tui-idle on a slow-starting Claude', () => {
     await expect(wait).resolves.toMatchObject({ satisfied: true })
   })
 
+  it('settles a title-only `claude mcp serve` pane on the hook text; a subcommand draws no composer (F41366-C2-1)', async () => {
+    // The MCP server runs silently under a non-pager foreground, so only the title can tell it apart.
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'node')
+    write(shellRunsTitled('claude mcp serve') + LATER_PREEXEC_HOOK_PRINTS)
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
+
   it('settles a bare-titled `claude` pane once the quiet foreground probe shows a pager (F41366-1)', async () => {
     // A tab title carries only the command word; the live foreground is what tells the pager apart.
     const { runtime, handle, write } = await startClaudePane(undefined, 'title-only', 'less')

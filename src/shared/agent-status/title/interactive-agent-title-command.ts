@@ -6,6 +6,33 @@ import type { TerminalAgent } from '../identity/terminal-agent'
 // One-shot informational flags: the process prints and exits, so no composer ever follows.
 const INFORMATIONAL_FLAGS = new Set(['--help', '-h', '--version', '-v', '-V'])
 
+// Claude subcommands that run a server, an installer, an auth flow or a one-shot report instead
+// of a session, so no composer ever follows (list read from `claude --help`, 2.1.322). `agents`
+// and `attach` are left out: they open an interactive view or session in the terminal.
+const NON_SESSION_SUBCOMMANDS: Partial<Record<TerminalAgent, ReadonlySet<string>>> = {
+  claude: new Set([
+    'auth',
+    'auto-mode',
+    'doctor',
+    'gateway',
+    'import',
+    'install',
+    'kill',
+    'logs',
+    'mcp',
+    'plugin',
+    'plugins',
+    'purge',
+    'respawn',
+    'rm',
+    'setup-token',
+    'stop',
+    'ultrareview',
+    'update',
+    'upgrade'
+  ])
+}
+
 /** An unquoted pipe, redirect, separator or background operator: the title names a pipeline or a
  *  one-shot, not a TUI owning the terminal. Quoted operators are prompt text (`claude "a | b"`). */
 function hasUnquotedShellOperator(commandLine: string): boolean {
@@ -50,11 +77,25 @@ function hasInformationalFlag(tokens: readonly string[]): boolean {
   return false
 }
 
+/** Whether the first argument that is not an option names a non-session subcommand
+ *  (`claude mcp serve`, `claude --debug doctor`). Option values are not modelled: after a
+ *  value-taking option (`claude --model opus mcp serve`) the value is read as the first argument
+ *  and the title still counts as a session. */
+function hasNonSessionSubcommand(tokens: readonly string[], agent: TerminalAgent): boolean {
+  const subcommands = NON_SESSION_SUBCOMMANDS[agent]
+  if (!subcommands) {
+    return false
+  }
+  // `--` ends option parsing; what follows is a prompt (`claude -- mcp`).
+  const first = tokens.slice(1).find((token) => token === '--' || !token.startsWith('-'))
+  return first !== undefined && subcommands.has(first)
+}
+
 /**
  * Whether a shell's command-shaped title (`claude`, `claude --resume`) positively names an
  * interactive TUI launch of `agent`, as opposed to a pipeline, a redirect, a headless one-shot
- * (`claude -p …`, `--output-format json`) or an informational run (`claude --help`), none of which
- * ever draws the agent's composer. Why positive: a title is a retained heuristic, so only a title
+ * (`claude -p …`, `--output-format json`), an informational run (`claude --help`) or a non-session
+ * subcommand (`claude mcp serve`), none of which ever draws the agent's composer. Why positive: a title is a retained heuristic, so only a title
  * that reads as the TUI itself may make the tui-idle wait hold for that TUI's own paint
  * (STA-14925). A title that is not a command line at all does not qualify either.
  */
@@ -66,5 +107,6 @@ export function titleCommandLaunchesInteractiveTui(title: string, agent: Termina
   if (recognizeAgentLaunchCommand(title)?.agent !== agent) {
     return false
   }
-  return !hasInformationalFlag(tokenizeCommandLine(title))
+  const tokens = tokenizeCommandLine(title)
+  return !hasInformationalFlag(tokens) && !hasNonSessionSubcommand(tokens, agent)
 }
