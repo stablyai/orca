@@ -23,7 +23,8 @@ const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
   : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
-const gitEnv = gitSigningOffEnv()
+// An Orca terminal publishes its WSL hosts gate to children; empty reads as unset, so tests resolve their own.
+const gitEnv = { ...gitSigningOffEnv(), ORCA_WSL_HOSTS_GATE_STATE: '' }
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {

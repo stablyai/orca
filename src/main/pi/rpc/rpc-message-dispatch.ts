@@ -35,7 +35,7 @@ export async function dispatchPiRpcMessage(
 ): Promise<AgentSessionDispatchOutcome> {
   let prompt
   try {
-    prompt = await preparePiRpcPrompt(input.body)
+    prompt = await preparePiRpcPrompt(input.body, session.shrinksImages)
   } catch (error) {
     logger.warn('Pi prompt could not be prepared', {
       scope: 'pi-prompt',

@@ -8,7 +8,7 @@ import type {
   PRReviewDecision
 } from '../../../../shared/github/pull-request-types'
 import { gitExecFileAsync, type OwnerRepo } from '../../gh-utils'
-import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import { mapPRState } from '../../mappers'
 import type { MergedPRCommitMembership } from '../../merged-pr-commit-membership'
@@ -89,6 +89,8 @@ export const PR_BRANCH_LIST_JSON_FIELDS =
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   userRefresh?: boolean
+  /** CI watches need provider status, without local conflict or stack enrichment. */
+  includeDerivedData?: boolean
   acceptMergedFallbackPR?: boolean
   // Supply the actual worktree head without probing a different main-repo checkout.
   currentHeadOid?: string | null

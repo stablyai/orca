@@ -6,12 +6,12 @@ import {
   listOpenCodeDatabases,
   listOpenCodeDatabasesInDirectory
 } from '../../../opencode-usage/opencode-database-discovery'
-import { recordSessionScanIssue, scanIssueTextFromError } from '../../session-scan-issues'
+import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import { discoverOpenCodeSessions } from './sqlite/session-scanner-opencode-sqlite-discovery'
 import { listOpenCode2SqliteSessionsViaWorker } from './reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { isOpenCodeV2DatabaseName } from '../../../../shared/opencode-database-name'
 import type { AiVaultScanOptions, SessionFileDiscovery } from '../../session-scanner-types'
-import { scopeWalksAgentFiles } from '../../session-scope-cwd'
+import { scopeWalksAgentFiles } from '../../scope/session-scope-cwd'
 
 type OpenCodeSource = {
   storageDir: string

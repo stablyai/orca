@@ -4,7 +4,7 @@ import {
   getOrcaUserDataPath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { assertOwnedHostCodexManagedHomePath } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import { assertOwnedHostCodexManagedHomePath } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import type { UsageAccountRoot } from '../../../usage/usage-account-attribution'
 
 // Enumerate disk to include retired accounts without a settings store; WSL scans its own homes.

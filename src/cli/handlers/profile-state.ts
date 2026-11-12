@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import {
   getDefaultUserDataPath,

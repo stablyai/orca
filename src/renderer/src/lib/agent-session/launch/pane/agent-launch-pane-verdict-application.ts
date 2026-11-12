@@ -3,7 +3,7 @@
 import type { AgentLaunchPaneVerdictEvent } from '../../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout/close/closed-terminal-leaf-notice'
 import '../../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { useAppStore } from '@/store/index'
 import { forgetAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
 import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'

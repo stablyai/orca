@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -9,6 +9,8 @@ import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { UsageProviderStoreLifecycle } from './usage-provider-store-lifecycle'
 import {
   splitUsageCacheFile,
+  readUsageSourceCache,
+  usageSourceCachePath,
   type UsageCacheSplitRequest,
   type UsageCacheSplitResult,
   type UsageSourceCacheRef
@@ -146,47 +148,50 @@ describe('UsageProviderStoreLifecycle', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([100, 1000])('uses one consistent catalog per refresh at %i worktrees', async (count) => {
-    const worktrees = Array.from({ length: count }, (_, i) => ({
-      worktreeId: `repo::/work/${i}`,
-      path: `/work/${i}`,
-      displayName: `Work ${i}`
-    }))
-    const readCatalog = vi.fn<UsageStoreHost['readCatalog']>().mockResolvedValue({
-      repoIds: ['repo'],
-      worktreesByRepo: [['repo', worktrees]]
-    })
-    const store = new TestUsageStore(
-      join(tempDirectory, 'catalog.json'),
-      scan,
-      split,
-      capture,
-      readCatalog
+  it('preserves inline sources across failed migration, an enabled toggle and a later retry', async () => {
+    const cacheFile = join(tempDirectory, 'inline.json')
+    const sidecar = usageSourceCachePath(cacheFile)
+    const sources = [{ id: 'owner', ownedEventKeys: ['turn-1|10,0,0,0,10|'], checkpoint: 123 }]
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(
+        makeState({
+          processedSources: sources,
+          sessions: [{ id: 'session' }],
+          dailyAggregates: [{ day: '2026-04-10' }],
+          scanState: { enabled: true }
+        })
+      )
     )
-    stores.push(store)
-    await store.whenLoaded()
-    await store.refresh(true)
-    expect(readCatalog).not.toHaveBeenCalled()
-    await store.setEnabled(true)
-    const blocked = Promise.withResolvers<TestScanResult>()
-    scan.mockReturnValueOnce(blocked.promise)
-    const first = store.refresh(true)
-    const second = store.refresh(true)
-    await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(1))
-    expect(readCatalog).toHaveBeenCalledTimes(2)
-    expect(scan.mock.calls[0][0]).toHaveLength(count)
-    expect(scan.mock.calls[0][0][0]).toMatchObject({ path: '/work/0' })
-    blocked.resolve({ sessions: [{ id: 'catalog-result' }], dailyAggregates: [] })
-    await Promise.all([first, second])
-    expect(store.getState().sessions).toEqual([{ id: 'catalog-result' }])
-    readCatalog.mockClear()
-    await store.refresh()
-    expect(readCatalog).toHaveBeenCalledTimes(1)
-    expect(scan).toHaveBeenCalledTimes(1)
-    store.stopScanAdmission()
-    readCatalog.mockClear()
-    await store.refresh(true)
-    expect(readCatalog).not.toHaveBeenCalled()
+    mkdirSync(sidecar)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const first = new TestUsageStore(cacheFile, scan, split, capture)
+    stores.push(first)
+    await first.whenLoaded()
+    expect(first.getState().sessions).toEqual([{ id: 'session' }])
+    await first.setEnabled(false)
+    await first.flush()
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).toMatchObject({
+      processedSources: sources,
+      dailyAggregates: [{ day: '2026-04-10' }],
+      scanState: { enabled: false }
+    })
+    rmSync(sidecar, { recursive: true })
+    const retried = new TestUsageStore(cacheFile, scan, split, capture)
+    stores.push(retried)
+    await retried.whenLoaded()
+    await retried.flush()
+    expect(retried.getState().sessions).toEqual([{ id: 'session' }])
+    expect(retried.getScanState().enabled).toBe(false)
+    expect(
+      await readUsageSourceCache({
+        path: sidecar,
+        schemaVersion: 1,
+        worktreeFingerprint: null,
+        reuse: true
+      })
+    ).toEqual(sources)
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8')).processedSources).toBeUndefined()
   })
 
   it('keeps a successful scan when the first async telemetry consent request rejects', async () => {

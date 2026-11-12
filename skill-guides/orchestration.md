@@ -20,6 +20,9 @@ description: >-
 If your prompt has a preamble with Task and Dispatch IDs, you are a worker:
 follow the preamble. To ask your coordinator, run `ask`, then end your turn;
 Orca wakes you with the answer. To hand work off with nothing back, use `orca-cli`.
+When you report your effort, take it from the dispatch's `--effort` or your process
+argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 scale
+(claude-opus-5-5: low=5, medium=10, high=15, xhigh=40).
 
 ## Recipe
 
@@ -77,9 +80,6 @@ Never:
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
   `exited` or `lost` means it is gone: retry it or tell the user.
-- An `escalation` with an `approval` is a worker's permission prompt that only a
-  person can allow: carry on with other work until its closing message arrives,
-  and deny it with a reason only if it is holding up the task.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.

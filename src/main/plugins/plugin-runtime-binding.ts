@@ -5,11 +5,13 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/pl
 import type { PluginRuntimeDelegate } from './workers/host-api/plugin-host-service-bindings'
 import type { PluginService } from './plugin-service'
 import { installPluginHookRunner } from './hooks/plugin-hook-participants'
+import { installPluginOpenedTerminalPruning } from './workers/host-api/plugin-opened-terminals'
+import { installPluginAutomationOwnershipEnd } from './plugin-automation-ownership'
 import { installPluginResidentWorkerWarmer } from './workers/worker-admission/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 import type { DispatcherOptions } from '../runtime/rpc/dispatcher'
-import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-workspace-method-bindings'
+import type { PluginRuntimeRpc } from './workers/host-api/plugin-host-runtime-call'
 import {
   pluginTerminalTitle,
   projectPluginWorkspaceContext,
@@ -56,6 +58,8 @@ export function bindPluginRuntime(
   const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime, methods))
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
+  installPluginOpenedTerminalPruning(service)
+  installPluginAutomationOwnershipEnd(service, runtime)
   installPluginResidentWorkerWarmer(service)
   return delegate
 }

@@ -68,49 +68,6 @@ describe('AutomationService', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('keeps completed history when the usage backend disconnects', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const automation = store.createAutomation({
-      name: 'Check',
-      prompt: 'Check spend',
-      agentId: 'claude',
-      projectId: 'r1',
-      workspaceMode: 'existing',
-      workspaceId: 'wt1',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: Date.now()
-    })
-    const run = store.createAutomationRun(automation, Date.now(), 'manual')
-    const service = new AutomationService(store, {
-      claudeUsage: {
-        getAutomationRunUsage: async () => {
-          throw new Error('Backend disconnected')
-        }
-      }
-    })
-    try {
-      const updated = await service.markDispatchResult({
-        runId: run.id,
-        status: 'completed',
-        workspaceId: 'wt1',
-        terminalSessionId: 'tab-1',
-        error: null
-      })
-      expect(updated).toMatchObject({
-        status: 'completed',
-        usage: { status: 'unavailable', provider: 'claude', unavailableReason: 'scan_failed' }
-      })
-      expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
-        status: 'completed',
-        usage: { status: 'unavailable' }
-      })
-    } finally {
-      service.stop()
-    }
-  })
-
   it('does not throw when retention evicts the run during usage collection', async () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()

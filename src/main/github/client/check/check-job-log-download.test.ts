@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fixture from './__fixtures__/gh-api-unknown-escape-flag.json'
 import { startCheckJobLogDownload } from './check-job-log-download'
-import type { GhCaptureLifetimeHooks } from '../../../git/command-runner/gh-capture-lifetime'
+import type { GhCaptureLifetimeHooks } from '../../../git/command-runner/hosted-cli/gh-capture-lifetime'
 const { ghMock } = vi.hoisted(() => ({ ghMock: vi.fn() }))
 vi.mock('../../gh-utils', () => ({ ghExecFileAsync: ghMock }))
 const diagnostic = 'unknown flag: --allow-escape-sequences'

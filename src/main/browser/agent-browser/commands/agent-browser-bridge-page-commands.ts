@@ -18,6 +18,7 @@ import {
   getBrowserPasskeyRequest
 } from '../../webauthn/browser-passkey-requests'
 import { formatBrowserPasskeyRequest } from '../../../../shared/browser-passkey-request'
+import { browserGuestHasNothingToReload } from '../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
 import { cancelBrowserWebAuthnAccountRequests } from '../../webauthn/browser-webauthn-account-picker'
 import { captureRemoteCliBrowserRevocation } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import {
@@ -232,6 +233,12 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
       }
+      if (browserGuestHasNothingToReload({ url: wc.getURL(), loading: wc.isLoading() })) {
+        throw new BrowserError(
+          'browser_error',
+          'Nothing to reload: this page never finished loading. Navigate to its URL instead.'
+        )
+      }
       wc.reload()
       await new Promise<void>((resolve) => {
         let settled = false
@@ -261,6 +268,14 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
           fallbackTimer.unref()
         }
       })
+      // did-fail-load also ends the wait; the page then shows an error document, not a reload.
+      const loadError = this.browserManager.getBrowserPageLoadError(target.browserPageId)
+      if (loadError) {
+        throw new BrowserError(
+          'browser_error',
+          `Reload failed: ${loadError.description} (${loadError.code})`
+        )
+      }
       return { url: wc.getURL(), title: wc.getTitle() }
     })
   }

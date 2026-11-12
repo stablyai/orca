@@ -25,7 +25,11 @@ import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
 import { resolveAutomationRunUsage } from './claude-usage-automation-attribution'
-import { parseClaudeUsageReport, serializeClaudeUsageReport } from './persisted-usage-report'
+import {
+  parseClaudeUsageReport,
+  readClaudeUsageReportFile,
+  serializeClaudeUsageReport
+} from './persisted-usage-report'
 
 // Pre-v6 totals lack stable fork ownership or the 1-hour cache-write split and must be rescanned.
 // v7 stores protected column checkpoints on the worker and a separately protected report.
@@ -78,6 +82,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       parseReport: parseClaudeUsageReport,
+      readFallbackCache: readClaudeUsageReportFile,
       serializeReport: serializeClaudeUsageReport,
       providerId: 'claude',
       sourceKey: 'processedFiles',

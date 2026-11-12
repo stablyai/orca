@@ -11,6 +11,7 @@ import type { JiraProjectReference } from './jira/jira-project-reference'
 import type { OrcadRetainedMarker } from './orcad-retained-marker'
 import type { EditorFormatter } from './editor-formatter'
 import type { AgentWorkspaceTrustDecision } from './agent-launch/permissions/agent-workspace-trust-decision'
+import type { RepoWorkspaceCleanupPolicy } from './workspace-cleanup/workspace-cleanup-policy'
 
 export type RepoKind = 'git' | 'folder'
 
@@ -100,6 +101,8 @@ export type Repo = {
   projectGroupOrder?: number
   /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
   sourceControlAi?: RepoSourceControlAiOverrides
+  /** Project override of the host's cleanup rules; absent inherits them. */
+  workspaceCleanupPolicy?: RepoWorkspaceCleanupPolicy
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
   /** Local row a WSL host now owns, kept for a downgrade; set only by the mover's retention pass. */

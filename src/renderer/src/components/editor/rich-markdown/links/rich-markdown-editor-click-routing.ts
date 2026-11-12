@@ -28,6 +28,7 @@ import type { RichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-m
 import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 
@@ -98,7 +99,7 @@ export function handleRichMarkdownEditorClick({
     }
     return false
   }
-  const clickedNode = view.state.doc.nodeAt(pos)
+  const clickedNode = getClickedNode(view, pos, event)
   if (clickedNode?.type.name === 'image') {
     return activateMarkdownImageClick({
       activateMarkdownLink,
@@ -181,6 +182,19 @@ function activateMarkdownImageClick({
     sourceOwner
   })
   return true
+}
+
+// posAtCoords resolves a click on an inline atom's right half to the position after it.
+function getClickedNode(view: EditorView, pos: number, event: MouseEvent): ProseMirrorNode | null {
+  const before = view.state.doc.resolve(pos).nodeBefore
+  if (
+    before?.isAtom &&
+    event.target instanceof Node &&
+    view.nodeDOM(pos - before.nodeSize)?.contains(event.target)
+  ) {
+    return before
+  }
+  return view.state.doc.nodeAt(pos)
 }
 
 function getClickedLinkHref(view: EditorView, event: MouseEvent): string {

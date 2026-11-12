@@ -7,7 +7,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { resolveRootlessTerminalLayoutLeafId } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function surfaceKey(tabId: string, leafId: string): string {
   return `${tabId}\0${leafId}`

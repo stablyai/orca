@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { printOrchestrationResult } from './agent-view'
 import { TASK_LIST_VIEW, TASK_RECEIPT_VIEW, type TaskListResult } from './task-agent-views'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'

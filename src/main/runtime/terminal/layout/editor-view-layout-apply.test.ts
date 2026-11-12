@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { LayoutEditorView } from '../../../../shared/workspace-layout/layout-editor-view'
+import type { LayoutEditorView } from '../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
 import type { Store } from '../../../persistence/loading-store/store'
 import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
 import {

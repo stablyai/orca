@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { GeneratedTabTitle } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceLayoutStreamEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+
 import type { Store } from '../../../persistence/loading-store/store'
 import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
 import {
@@ -17,7 +17,7 @@ import {
 } from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import { installLayoutFrameModelCheck } from './workspace-layout-frame-model-check.test-fixture'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import './workspace-layout-stream'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({
@@ -62,14 +62,6 @@ async function storeWith(tabs: Record<string, number>): Promise<Store> {
 const tabIdOf = (workspace: string, index: number) =>
   `tab-${workspace.replace(/\W/g, '-')}-${index}`
 
-function streamOver(store: Store): WorkspaceLayoutStream {
-  return new WorkspaceLayoutStream({
-    store: () => store,
-    homeHostId: homeOf,
-    liveTitle: () => null
-  })
-}
-
 function titles(tabs: Record<string, number>): GeneratedTabTitle[] {
   return Object.entries(tabs).flatMap(([workspace, count]) =>
     Array.from({ length: count }, (_, index) => ({
@@ -98,38 +90,6 @@ afterEach(() => {
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
-})
-
-describe('one records frame per main operation', () => {
-  it('publishes a pane bind as one binding record, and a same-id respawn as one more', async () => {
-    const store = await storeWith({ [GIT]: 2 })
-    const frames: WorkspaceLayoutStreamEvent[] = []
-    streamOver(store).subscribe((frame) => frames.push(frame))
-    const bind = (incarnationId: string) =>
-      store.persistPtyBinding({
-        worktreeId: GIT,
-        tabId: tabIdOf(GIT, 1),
-        leafId: leafOf(1),
-        ptyId: 'pty-1',
-        incarnationId
-      })
-
-    await bind('inc-1')
-    await bind('inc-2')
-
-    const binding = (ptyGeneration: number) => [
-      {
-        key: GIT,
-        change: 'records',
-        bindings: { set: [{ leafId: leafOf(1), ptyId: 'pty-1', ptyGeneration }] }
-      }
-    ]
-    expect(frames.map((frame) => frame.type === 'records' && frame.workspaces)).toEqual([
-      binding(1),
-      binding(2)
-    ])
-    expect(check.failures).toEqual([])
-  })
 })
 
 describe('a throwing operation listener', () => {

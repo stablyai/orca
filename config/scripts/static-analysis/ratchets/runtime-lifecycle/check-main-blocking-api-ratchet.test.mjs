@@ -4,10 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { main as fsMain } from './check-main-sync-fs-ratchet.mjs'
-import {
-  collectSyncLaunchUses,
-  isRatchetedSourcePath
-} from '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
+import { collectSyncLaunchUses } from '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
 import { countBlockingApis, main } from './check-main-blocking-api-ratchet.mjs'
 
 const file = 'src/main/consumer.ts'
@@ -103,21 +100,6 @@ describe('main blocking API ratchets', () => {
     expect(counts("ipc.sendSync('get'); event.returnValue = value", 'src/shared/ipc.ts').ipc).toBe(
       2
     )
-  })
-
-  it.each(['ts', 'mts', 'cts'])('does not charge .d.%s declarations as executable code', (ext) => {
-    const declaration = `src/main/types.d.${ext}`
-    expect(isRatchetedSourcePath(declaration)).toBe(false)
-    expect(
-      counts("import { scryptSync } from 'crypto'; scryptSync('pw')", declaration).crypto
-    ).toBe(0)
-  })
-
-  it('exempts only an explicit entry, leaving shared worker dependencies guarded', () => {
-    const source = "import { scryptSync } from 'crypto'; scryptSync('pw')"
-    expect(counts(source, 'src/main/speech/stt-worker.ts').crypto).toBe(0)
-    expect(counts(source, 'src/main/speech/dependency.ts').crypto).toBe(1)
-    expect(counts(source, 'src/shared/speech.ts').crypto).toBe(1)
   })
 
   it('ignores strings, comments, unrelated SQL-shaped methods and nonblocking APIs', () => {

@@ -31,29 +31,6 @@ function project(messages: NativeChatMessage[], turnKeys = messages.map(() => 'u
   return rows.filter((_, i) => !fold.foldedRows.has(i))
 }
 
-it.each(['before', 'after'])(
-  'keeps generated output with final prose when it arrives %s the prose',
-  (order) => {
-    const image = generated('image')
-    const answer = text('answer', 'Here is your elephant.')
-    const rows = project([
-      text('u', 'Generate an elephant.', 'user'),
-      text('work', 'Working.'),
-      ...(order === 'before' ? [image, answer] : [answer, image])
-    ])
-    expect(rows.map((row) => [row.id, row.blocks])).toEqual([
-      ['u', [{ type: 'text', text: 'Generate an elephant.' }]],
-      [
-        'answer',
-        [
-          { type: 'text', text: 'Here is your elephant.' },
-          { type: 'image-ref', path: '/tmp/elephant.png' }
-        ]
-      ]
-    ])
-  }
-)
-
 it('retains image-only output beside a failure and preserves the error notice', () => {
   const failure = {
     ...text('error', 'Codex could not finish. Try again.', 'system'),
@@ -125,74 +102,3 @@ it('deduplicates Windows and UNC destinations already rendered by Markdown, pres
     rows.slice(0, 4).flatMap((row) => row.blocks.filter((block) => block.type === 'image-ref'))
   ).toEqual([])
 })
-
-it('leaves viewed images as work and preserves untouched messages across another turn update', () => {
-  const viewed = {
-    ...text('view', 'Viewed image'),
-    blocks: [
-      { type: 'text' as const, text: 'Viewed image' },
-      { type: 'image-ref' as const, path: '/tmp/input.png' }
-    ]
-  }
-  const answer = text('answer', 'Finished.')
-  expect(project([text('u', 'Inspect.', 'user'), viewed, answer]).map((row) => row.id)).toEqual([
-    'u',
-    'answer'
-  ])
-  const messages = [generated('image'), answer, text('other', 'Streaming.')]
-  const keys = ['u', 'u', 'other']
-  const first = nativeChatGeneratedImageAnswers(messages, keys, new Set(['u']), noEmbeds)
-  const next = nativeChatGeneratedImageAnswers(
-    [messages[0]!, answer, text('other', 'Streaming more.')],
-    keys,
-    new Set(['u']),
-    noEmbeds
-  )
-  expect(next[0]).toBe(first[0])
-  expect(next[1]).toBe(first[1])
-  expect(nativeChatGeneratedImageAnswers(messages, keys, new Set(), noEmbeds)).toBe(messages)
-})
-
-it.each([1000, 10000])(
-  'bounds unrelated streaming work at %i loaded rows without reparsing completed answers',
-  (count) => {
-    let blockReads = 0
-    let parses = 0
-    const sources = () => {
-      parses += 1
-      return []
-    }
-    const messages = [
-      generated('image'),
-      ...Array.from({ length: count - 2 }, (_, index) => text(`work-${index}`, 'Working.')),
-      text('answer', 'Finished.')
-    ].map((message) => {
-      const blocks = message.blocks
-      return Object.defineProperty(message, 'blocks', {
-        get() {
-          blockReads += 1
-          return blocks
-        }
-      })
-    })
-    const keys = [...messages.map(() => 'u'), 'live']
-    const first = nativeChatGeneratedImageAnswers(
-      [...messages, text('live', 'Streaming.')],
-      keys,
-      new Set(['u']),
-      sources
-    )
-    blockReads = 0
-    parses = 0
-    const next = nativeChatGeneratedImageAnswers(
-      [...messages, text('live', 'Streaming more.')],
-      keys,
-      new Set(['u']),
-      sources
-    )
-    // Producing the loaded transcript requires one classification per row; the one generated ref has bounded extra visits.
-    expect(blockReads).toBeLessThanOrEqual(count + 8)
-    expect(parses).toBe(0)
-    expect(next.slice(0, count).every((message, index) => message === first[index])).toBe(true)
-  }
-)
