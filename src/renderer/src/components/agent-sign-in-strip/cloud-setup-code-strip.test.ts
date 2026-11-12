@@ -50,6 +50,7 @@ describe('the setup strip with a code to paste back', () => {
     })
     expect(refused.status).toBe('warning')
     expect(refused.title).toBe('Code didn’t work')
+    expect(refused.detail).toBe('Paste the newest code from the sign-in page, or open it again.')
     expect(refused.paste?.refusal).toBe(
       'That code didn’t work. Paste the newest code from the sign-in page, or open it again.'
     )

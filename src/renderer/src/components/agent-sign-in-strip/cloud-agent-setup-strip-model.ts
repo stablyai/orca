@@ -105,9 +105,10 @@ export function cloudAgentSetupStripModel(args: {
         // A refused code stays the detail until the next paste or "Open again".
         detail:
           setup.code === 'rejected'
-            ? t(
-                'agentSignInStrip.setupCodeRejected',
-                'That code didn’t work. Paste the newest code from the sign-in page, or open it again.'
+            ? // The title already says "Code didn’t work": the detail doesn't repeat it (design-squad).
+              t(
+                'agentSignInStrip.setupCodeRejectedDetail',
+                'Paste the newest code from the sign-in page, or open it again.'
               )
             : setup.acceptsCode
               ? t(

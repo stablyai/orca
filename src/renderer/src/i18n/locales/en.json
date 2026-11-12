@@ -28251,7 +28251,8 @@
     "setupCodeChecking": "Checking the code…",
     "finishSetup": "Finish setup",
     "finishInBrowserPaste": "Finish in your browser, then paste the code here.",
-    "setupCodeRejectedTitle": "Code didn’t work"
+    "setupCodeRejectedTitle": "Code didn’t work",
+    "setupCodeRejectedDetail": "Paste the newest code from the sign-in page, or open it again."
   },
   "cloudSetupPage": {
     "back": "Back",
