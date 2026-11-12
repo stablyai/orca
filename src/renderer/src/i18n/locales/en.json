@@ -6010,7 +6010,7 @@
           "connect": "Connect tokn",
           "statusConnected": "Connected",
           "statusNotConnected": "Not connected",
-          "privacy": "Uploads one total per day and model: requests, tokens, and estimated cost. Never prompts, code, file paths, or project names. Covers all Claude Code and Codex usage Orca tracks on this computer.",
+          "privacy": "Uploads one total per day and model: requests, tokens, and estimated cost. Never prompts, code, file paths, or project names. Covers all Claude Code and Codex usage Orca tracks on this computer. tokn also stores the name of this computer to list it under your account.",
           "lastSynced_one": "Last synced {{time}} · {{count}} row stored",
           "lastSynced_other": "Last synced {{time}} · {{count}} rows stored",
           "notSyncedYet": "Not synced yet",

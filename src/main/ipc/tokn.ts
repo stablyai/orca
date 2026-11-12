@@ -1,5 +1,6 @@
 import { app, ipcMain } from 'electron'
-import { ToknSyncService, type ToknUsageSources } from '../tokn/tokn-sync-service'
+import { ToknSyncService } from '../tokn/tokn-sync-service'
+import type { ToknUsageSources } from '../tokn/tokn-upload-body'
 
 export function registerToknHandlers(usage: ToknUsageSources): void {
   const service = new ToknSyncService(usage)

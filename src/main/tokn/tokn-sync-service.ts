@@ -5,8 +5,6 @@ import type {
   ToknSyncStatus,
   ToknUploadPreview
 } from '../../shared/tokn-sync-status'
-import type { ClaudeUsageDailyAggregate } from '../claude-usage/types'
-import type { CodexUsageDailyAggregate } from '../codex-usage/types'
 import { beginLoopbackPkceFlow } from '../oauth-loopback/loopback-pkce-flow'
 import {
   clearToknAccount,
@@ -23,7 +21,7 @@ import {
   uploadToknUsage
 } from './tokn-api-client'
 import { getToknOrigin, toknSignInFlowConfig } from './tokn-service-config'
-import { buildToknSyncRows } from './tokn-sync-rows'
+import { buildToknUploadBody, readToknTracking, type ToknUsageSources } from './tokn-upload-body'
 
 // tokn's board refreshes hourly; uploading more often only costs both sides work.
 const AUTO_SYNC_INTERVAL_MS = 60 * 60_000
@@ -31,18 +29,6 @@ const AUTO_SYNC_INTERVAL_MS = 60 * 60_000
 const STARTUP_SYNC_DELAY_MS = 2 * 60_000
 // tokn answers 429 to a second upload from one device this soon, and it would carry the same totals.
 const TOKN_MIN_SYNC_GAP_MS = 10_000
-
-type ToknUsageSource<Aggregate> = {
-  whenLoaded(): Promise<void>
-  getScanState(): { enabled: boolean }
-  refresh(force?: boolean): Promise<unknown>
-  getDailyAggregates(): readonly Aggregate[]
-}
-
-export type ToknUsageSources = {
-  claude: ToknUsageSource<ClaudeUsageDailyAggregate>
-  codex: ToknUsageSource<CodexUsageDailyAggregate>
-}
 
 function authOutcome(message: string): ToknConnectResult['outcome'] {
   if (message === 'tokn_auth_timeout') {
@@ -59,6 +45,7 @@ export class ToknSyncService {
   private readonly loaded: Promise<void>
   private connectAbort: AbortController | null = null
   private syncPromise: Promise<void> | null = null
+  private syncAbort: AbortController | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
   // tokn revoked this computer from its account page; say so until the next connect.
   private signedOutRemotely = false
@@ -85,6 +72,7 @@ export class ToknSyncService {
 
   stop(): void {
     this.connectAbort?.abort()
+    this.syncAbort?.abort()
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
@@ -92,7 +80,7 @@ export class ToknSyncService {
   }
 
   async getStatus(): Promise<ToknSyncStatus> {
-    await this.loaded
+    const [tracking] = await Promise.all([readToknTracking(this.usage), this.loaded])
     const record = this.record
     return {
       connected: record !== null,
@@ -105,10 +93,7 @@ export class ToknSyncService {
       lastSyncErrorDetail: record?.lastSyncErrorDetail ?? null,
       lastSyncAccepted: record?.lastSyncAccepted ?? null,
       lastSyncRejected: record?.lastSyncRejected ?? null,
-      tracking: {
-        claude: this.usage.claude.getScanState().enabled,
-        codex: this.usage.codex.getScanState().enabled
-      }
+      tracking
     }
   }
 
@@ -140,14 +125,27 @@ export class ToknSyncService {
         lastSyncAccepted: null,
         lastSyncRejected: null
       }
-      saveToknAccount(grant.accessToken, record)
+      try {
+        saveToknAccount(grant.accessToken, record)
+      } catch (error) {
+        // Never leave one account's token beside another's record; sign out of both instead.
+        this.record = null
+        await clearToknAccount().catch(() => {})
+        for (const token of [grant.accessToken, previousToken]) {
+          if (token) {
+            void revokeToknToken(origin, token).catch(() => {})
+          }
+        }
+        throw error
+      }
       this.record = record
       this.signedOutRemotely = false
       if (previousToken && previousToken !== grant.accessToken) {
         void revokeToknToken(origin, previousToken).catch(() => {})
       }
       this.connectAbort = null
-      void this.syncNow()
+      // A sync still running for the replaced account cannot upload for this one.
+      void Promise.resolve(this.syncPromise).then(() => this.syncNow())
       return { outcome: 'connected', status: await this.getStatus() }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -192,22 +190,23 @@ export class ToknSyncService {
   async previewUpload(): Promise<ToknUploadPreview> {
     return {
       endpoint: `${getToknOrigin()}/api/cli/sync`,
-      body: await this.buildUploadBody()
+      body: await buildToknUploadBody(this.usage, app.getVersion())
     }
   }
 
-  async syncNow(): Promise<ToknSyncStatus> {
-    await this.loaded
+  syncNow(): Promise<ToknSyncStatus> {
+    // Set synchronously so a status read right after this call already reports the sync.
     if (!this.syncPromise) {
-      this.syncPromise = this.runSync().finally(() => {
-        this.syncPromise = null
-        if (this.record) {
-          this.schedule(AUTO_SYNC_INTERVAL_MS)
-        }
-      })
+      this.syncPromise = this.loaded
+        .then(() => this.runSync())
+        .finally(() => {
+          this.syncPromise = null
+          if (this.record) {
+            this.schedule(AUTO_SYNC_INTERVAL_MS)
+          }
+        })
     }
-    await this.syncPromise
-    return this.getStatus()
+    return this.syncPromise.then(() => this.getStatus())
   }
 
   private schedule(delayMs: number): void {
@@ -221,47 +220,18 @@ export class ToknSyncService {
     this.timer.unref?.()
   }
 
-  private async buildUploadBody(): Promise<ToknUploadPreview['body']> {
-    const [claude, codex] = await Promise.all([
-      this.readAggregates(this.usage.claude),
-      this.readAggregates(this.usage.codex)
-    ])
-    return {
-      rows: buildToknSyncRows({ claude, codex }),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      scannedAt: new Date().toISOString(),
-      cliVersion: app.getVersion()
-    }
-  }
-
-  private async readAggregates<Aggregate>(
-    source: ToknUsageSource<Aggregate>
-  ): Promise<readonly Aggregate[]> {
-    await source.whenLoaded()
-    if (!source.getScanState().enabled) {
-      return []
-    }
-    // Reuses a scan from the last few minutes; otherwise rescans the local logs.
-    await source.refresh(false)
-    return source.getDailyAggregates()
-  }
-
   private async runSync(): Promise<void> {
     const record = this.record
     if (!record) {
       return
     }
-    if (!this.usage.claude.getScanState().enabled && !this.usage.codex.getScanState().enabled) {
+    const tracking = await readToknTracking(this.usage)
+    if (!tracking.claude && !tracking.codex) {
       this.saveRecord(record, {
         ...record,
         lastSyncError: 'tracking-off',
         lastSyncErrorDetail: null
       })
-      return
-    }
-    const token = readToknAccessToken()
-    if (!token) {
-      this.saveRecord(record, { ...record, lastSyncError: 'signed-out', lastSyncErrorDetail: null })
       return
     }
     if (
@@ -271,9 +241,22 @@ export class ToknSyncService {
     ) {
       return
     }
+    const abort = new AbortController()
+    this.syncAbort = abort
     let next: ToknAccountRecord
     try {
-      const reply = await uploadToknUsage(record.origin, token, await this.buildUploadBody())
+      const body = await buildToknUploadBody(this.usage, app.getVersion())
+      // Disconnecting while the logs were read withdraws consent for this upload.
+      const token = this.record === record ? readToknAccessToken() : null
+      if (!token) {
+        this.saveRecord(record, {
+          ...record,
+          lastSyncError: 'signed-out',
+          lastSyncErrorDetail: null
+        })
+        return
+      }
+      const reply = await uploadToknUsage(record.origin, token, body, abort.signal)
       next = {
         ...record,
         profileUrl: reply.profileUrl ?? record.profileUrl,
@@ -284,6 +267,10 @@ export class ToknSyncService {
         lastSyncRejected: reply.rejected
       }
     } catch (error) {
+      if (abort.signal.aborted) {
+        // Disconnect or quit cancelled it; neither is a sync failure to report.
+        return
+      }
       if (error instanceof ToknRequestError && error.code === 'signed-out') {
         // The token was revoked on tokn; keeping it would fail every hour.
         if (this.record === record) {
@@ -296,6 +283,10 @@ export class ToknSyncService {
       const code: ToknSyncErrorCode = error instanceof ToknRequestError ? error.code : 'server'
       const detail = error instanceof ToknRequestError ? error.detail : null
       next = { ...record, lastSyncError: code, lastSyncErrorDetail: detail }
+    } finally {
+      if (this.syncAbort === abort) {
+        this.syncAbort = null
+      }
     }
     this.saveRecord(record, next)
   }

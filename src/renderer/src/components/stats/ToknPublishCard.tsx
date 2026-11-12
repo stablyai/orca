@@ -94,9 +94,10 @@ export function ToknPublishCard(): React.JSX.Element {
     void refreshStatus()
   }, [refreshStatus])
 
-  // Depends on the status object, not `syncing`, so each poll schedules the next one.
+  // Depends on the status object, not its flags, so each poll schedules the next one.
+  // Polls during sign-in too: a card mounted mid-sign-in never sees the connect() result.
   useEffect(() => {
-    if (!status?.syncing) {
+    if (!status?.syncing && !status?.connecting) {
       return
     }
     const timer = setTimeout(() => void refreshStatus(), STATUS_POLL_MS)
@@ -215,7 +216,7 @@ export function ToknPublishCard(): React.JSX.Element {
         <p className="text-xs text-muted-foreground">
           {t(
             'auto.components.stats.ToknPublishCard.privacy',
-            'Uploads one total per day and model: requests, tokens, and estimated cost. Never prompts, code, file paths, or project names. Covers all Claude Code and Codex usage Orca tracks on this computer.'
+            'Uploads one total per day and model: requests, tokens, and estimated cost. Never prompts, code, file paths, or project names. Covers all Claude Code and Codex usage Orca tracks on this computer. tokn also stores the name of this computer to list it under your account.'
           )}
         </p>
         {connected && status ? (

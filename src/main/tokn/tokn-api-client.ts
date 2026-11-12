@@ -40,7 +40,8 @@ async function postJson(
   origin: string,
   path: string,
   body: JsonObject,
-  accessToken?: string
+  accessToken?: string,
+  signal?: AbortSignal
 ): Promise<JsonObject> {
   const headers: Record<string, string> = {
     accept: 'application/json',
@@ -56,7 +57,10 @@ async function postJson(
       headers,
       body: JSON.stringify(body),
       redirect: 'error',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      signal: AbortSignal.any([
+        AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        ...(signal ? [signal] : [])
+      ])
     })
   } catch (error) {
     throw new ToknRequestError('network', error instanceof Error ? error.message : null, null)
@@ -125,11 +129,16 @@ export type ToknSyncReply = {
 export async function uploadToknUsage(
   origin: string,
   accessToken: string,
-  body: ToknUploadPreview['body']
+  body: ToknUploadPreview['body'],
+  signal?: AbortSignal
 ): Promise<ToknSyncReply> {
-  const reply = await postJson(origin, '/api/cli/sync', body, accessToken)
+  const reply = await postJson(origin, '/api/cli/sync', body, accessToken, signal)
+  // A reply without a count proves nothing was stored, so it must not read as a sync.
+  if (typeof reply.accepted !== 'number') {
+    throw new ToknRequestError('server', 'tokn returned an incomplete sync reply', null)
+  }
   return {
-    accepted: typeof reply.accepted === 'number' ? reply.accepted : 0,
+    accepted: reply.accepted,
     rejected: Array.isArray(reply.rejected) ? reply.rejected.length : 0,
     profileUrl: toknOwnedUrl(reply.profileUrl, origin)
   }
