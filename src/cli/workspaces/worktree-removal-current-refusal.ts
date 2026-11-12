@@ -1,9 +1,9 @@
-import { getOptionalStringFlag } from '../flags'
+import { getOptionalStringFlag } from '../arguments/flags'
 import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeClient } from '../runtime/client'
 import { resolveCurrentWorktreeSelector } from '../workspace-selection/workspace-selector'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 /** What current/active names right now: one selector, the ambiguous choices, or nothing. */
 async function describeCurrent(

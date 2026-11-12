@@ -8,7 +8,7 @@ import {
   assertFolderParentSetSupported,
   supportsCrossStoreLineage
 } from '../../shared/worktree-runtime-capabilities'
-import { getOptionalStringFlag } from '../flags'
+import { getOptionalStringFlag } from '../arguments/flags'
 import { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
 import { resolveWorktreeCreateCwdContext } from '../workspace-selection/workspace-selector'

@@ -1,4 +1,4 @@
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 export const LINEAR_HANDLER_GROUP: HandlerGroup = {
   name: 'linear',

@@ -1,4 +1,4 @@
-import { getPresentStringFlag } from '../flags'
+import { getPresentStringFlag } from '../arguments/flags'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 
 // Hosts use generic runtime_error here; this message is the stable discriminator.

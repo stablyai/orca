@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import type { CommandHandler, HandlerContext } from '../../dispatch'
-import { getOptionalPositiveIntegerFlag } from '../../flags'
+import type { CommandHandler, HandlerContext } from '../../dispatch/dispatch'
+import { getOptionalPositiveIntegerFlag } from '../../arguments/flags'
 import { printPluginResult } from '../plugin-cli-output'
 import { RuntimeClientError } from '../../runtime/types'
 import {

@@ -18,7 +18,7 @@ import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 
 const PRESET_TRIGGERS = new Set<AutomationSchedulePreset>(['hourly', 'daily', 'weekdays', 'weekly'])

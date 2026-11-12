@@ -6,8 +6,8 @@ import {
   JIRA_ISSUE_KEY_PATTERN,
   parseJiraIssueUrl
 } from '../../shared/jira/jira-issue-url'
-import type { HandlerContext } from '../dispatch'
-import { getOptionalStringFlag } from '../flags'
+import type { HandlerContext } from '../dispatch/dispatch'
+import { getOptionalStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 
 export function resolveJiraTarget(

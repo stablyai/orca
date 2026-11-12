@@ -1,4 +1,4 @@
-import type { HandlerContext } from '../dispatch'
+import type { HandlerContext } from '../dispatch/dispatch'
 
 // Guides wrap feature-specific text in these blocks so agents only learn features the host has on.
 export const GUIDE_HOST_CAPABILITIES = ['artifact-publishing', 'skill-publishing'] as const

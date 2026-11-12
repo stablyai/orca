@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient } from '../runtime/client'
 import { RuntimeRpcFailureError } from '../runtime/types'
-import type { HandlerContext } from '../dispatch'
+import type { HandlerContext } from '../dispatch/dispatch'
 import { SKILL_SHARING_HANDLERS } from './skill-sharing'
 
 const successMeta = { runtimeId: 'runtime-1' }

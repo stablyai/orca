@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
-import type { CommandHandler, HandlerContext } from '../dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printPluginResult, requirePluginPathArg } from './plugin-cli-output'
 import { RuntimeClientError } from '../runtime/types'
 import { isQualifiedPluginKey } from '../../shared/plugins/frames/plugin-tab-key'

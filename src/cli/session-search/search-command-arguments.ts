@@ -9,7 +9,7 @@ import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRepeatedStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 
 export type SearchCommand =

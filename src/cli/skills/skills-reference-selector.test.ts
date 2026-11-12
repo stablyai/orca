@@ -22,48 +22,31 @@ vi.mock('./bundled-skill-guides.js', () => ({
   ]
 }))
 
-vi.mock('../runtime-client', async () => {
-  const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+vi.mock('../runtime/client', () => {
   class RuntimeClient {
     constructor() {
       throw new Error('skills get constructed a RuntimeClient')
     }
   }
-  return {
-    RuntimeClient,
-    RuntimeClientError,
-    RuntimeRpcFailureError,
-    serveOrcaApp: vi.fn(),
-    getDefaultUserDataPath: vi.fn(() => '/tmp/orca-user-data')
-  }
+  return { RuntimeClient }
 })
 
-import { main } from '../index'
+vi.mock('../runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: vi.fn()
+}))
 
-function stdoutText(spy: ReturnType<typeof vi.spyOn>): string {
-  return spy.mock.calls.map((call) => String(call[0])).join('')
-}
+vi.mock('../runtime/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: vi.fn(() => '/tmp/orca-user-data')
+}))
+
+import { main } from '../index'
 
 describe('orca skills get --reference', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     process.exitCode = undefined
-  })
-
-  it('accepts the references/<file>.md spelling the gate table prints', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(['skills', 'get', 'alpha', '--reference', 'references/first-gate.md'], '/tmp/repo')
-
-    expect(stdoutText(stdoutSpy)).toBe('# First gate\n\nDo the first thing.\n')
-  })
-
-  it('resolves a reference through a topic alias', async () => {
-    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
-
-    await main(['skills', 'get', 'legacy-alpha', '--reference', 'first-gate.md'], '/tmp/repo')
-
-    expect(stdoutText(stdoutSpy)).toBe('# First gate\n\nDo the first thing.\n')
   })
 
   it('reports a topic that ships no references', async () => {

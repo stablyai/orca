@@ -9,13 +9,13 @@ import {
   WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY
 } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalParentSelector } from '../workspace-selection/caller-folder-workspace'
-import { getOptionalStringFlag } from '../flags'
+import { getOptionalStringFlag } from '../arguments/flags'
 import { mayNameFolderWorkspace } from '../workspace-selection/folder-workspace-selector'
 import { isLocalEnvironmentSelector, LOCAL_ENVIRONMENT } from '../hosts/local-environment-selector'
 import { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import { describeClientEnvironment, environmentLabel } from './workspace-address'
 import { attachCliErrorData } from './worktree-setup-decision-recovery'
 

@@ -1,5 +1,5 @@
 import type { RuntimeFileOpenPosition } from '../../shared/file-access/runtime-editor-file-open'
-import { getOptionalPositiveIntegerFlag } from '../flags'
+import { getOptionalPositiveIntegerFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 
 export function getFileOpenPosition(
