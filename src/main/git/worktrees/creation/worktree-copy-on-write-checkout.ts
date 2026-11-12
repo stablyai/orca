@@ -57,13 +57,13 @@ function parseEntries(stdout: string, entryKey: (header: string) => string | nul
   return entries
 }
 
-/** Regular files whose blob in `commit` matches the main checkout's index entry. */
+/** Modes of regular files whose blob in `commit` matches the main checkout's index entry. */
 async function listCloneableFiles(
   repoPath: string,
   worktreePath: string,
   commit: string,
   options: GitWorktreeExecOptions
-): Promise<string[]> {
+): Promise<Map<string, string>> {
   const listOptions = (cwd: string) => ({
     ...gitExecOptions(cwd, options),
     maxBuffer: LIST_MAX_BUFFER
@@ -81,7 +81,11 @@ async function listCloneableFiles(
     const [mode, oid, stage] = header.split(' ')
     return stage === '0' ? `${mode} ${oid}` : null
   })
-  return [...wanted].filter(([path, key]) => checkedOut.get(path) === key).map(([path]) => path)
+  return new Map(
+    [...wanted]
+      .filter(([path, key]) => checkedOut.get(path) === key)
+      .map(([path, key]) => [path, key.slice(0, key.indexOf(' '))])
+  )
 }
 
 /** Drops files whose checkout applies a filter (e.g. Git LFS); Git writes those itself. */
@@ -111,13 +115,15 @@ async function withoutCheckoutConversion(
 }
 
 /**
- * Keeps sources that are regular files with the permissions a checkout would create, since clones
- * keep their source's mode. Git writes the rest, including files deleted from the main checkout.
+ * Keeps sources that are regular files with the permissions a checkout of their blob mode would
+ * create, since clones keep their source's mode. Git writes the rest, including files deleted from
+ * the main checkout and files whose exec bit differs from the index under core.fileMode=false.
  */
 async function withCheckoutPermissions(
   repoPath: string,
   worktreePath: string,
-  paths: string[]
+  paths: string[],
+  modes: Map<string, string>
 ): Promise<string[]> {
   // Git creates the worktree's `.git` file like a checked-out file: 0666 minus the umask.
   const regular = (await lstat(join(worktreePath, '.git'))).mode & 0o777
@@ -125,7 +131,7 @@ async function withCheckoutPermissions(
   const keep = await Promise.all(
     paths.map(async (path) => {
       const stat = await lstat(join(repoPath, path)).catch(() => null)
-      const expected = stat && stat.mode & 0o100 ? executable : regular
+      const expected = modes.get(path) === '100755' ? executable : regular
       return stat?.isFile() === true && (stat.mode & 0o7777) === expected
     })
   )
@@ -222,14 +228,15 @@ export async function cloneMainCheckoutIntoWorktree(
 ): Promise<void> {
   try {
     const candidates = await listCloneableFiles(repoPath, worktreePath, commit, options)
-    if (candidates.length === 0) {
+    if (candidates.size === 0) {
       return
     }
     await readTreeIntoPlainIndex(worktreePath, commit, options)
     const paths = await withCheckoutPermissions(
       repoPath,
       worktreePath,
-      await withoutCheckoutConversion(worktreePath, candidates, options)
+      await withoutCheckoutConversion(worktreePath, [...candidates.keys()], options),
+      candidates
     )
     if (paths.length === 0) {
       return

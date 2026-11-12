@@ -104,6 +104,21 @@ describe.runIf(process.platform === 'darwin')('copy-on-write worktree checkout',
     expect(existsSync(join(worktreePath, 'sub', '.git'))).toBe(false)
   })
 
+  it('gives executables their blob mode when core.fileMode hides a mismatch', async () => {
+    const { repoPath, root } = await createRepo()
+    git(repoPath, ['config', 'core.fileMode', 'false'])
+    await writeFile(join(repoPath, 'script.sh'), '#!/bin/sh\n')
+    git(repoPath, ['add', 'script.sh'])
+    git(repoPath, ['update-index', '--chmod=+x', 'script.sh'])
+    git(repoPath, ['commit', '--quiet', '-m', 'script'])
+    const worktreePath = join(root, 'feature')
+
+    await addWorktreeWithCopyOnWriteCheckout(repoPath, worktreePath, 'feature', 'main', false)
+
+    expect((await stat(join(worktreePath, 'script.sh'))).mode & 0o111).not.toBe(0)
+    expect(hasCloneMarker(join(worktreePath, 'shared.txt'))).toBe(true)
+  })
+
   it('lets Git write files that a checkout filter would change', async () => {
     const { repoPath, root } = await createRepo()
     git(repoPath, ['config', 'filter.tag.clean', "sed 's/^SMUDGE://'"])
