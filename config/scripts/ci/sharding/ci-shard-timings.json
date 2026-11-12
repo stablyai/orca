@@ -6596,7 +6596,6 @@
       "src/shared/plugins/authoring/plugin-host-typings.test.ts": 2140,
       "src/shared/plugins/catalog/plugin-catalog-release.test.ts": 229,
       "src/shared/plugins/catalog/plugin-catalog.test.ts": 630,
-      "src/shared/plugins/catalog/plugin-detail-fields.test.ts": 171,
       "src/shared/plugins/catalog/plugin-kill-list.test.ts": 195,
       "src/shared/plugins/catalog/plugin-marketplace.test.ts": 246,
       "src/shared/plugins/catalog/plugin-repository-link.test.ts": 205,
