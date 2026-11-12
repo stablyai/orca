@@ -28242,7 +28242,7 @@
       "notSetUp": "Set up {{agent}} above to start",
       "expired": "Renew {{agent}} sign-in above to start",
       "signIn": "Sign in to {{agent}} above to start",
-      "awaitingStart": "Start {{agent}} above"
+      "awaitingStart": "Start {{agent}} above to begin"
     },
     "continueOffer": {
       "title": "An agent was interrupted by the restart",
