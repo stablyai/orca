@@ -114,6 +114,29 @@ describe("another Orca build's copy on the same host", () => {
     expect(bundledSkillNudgeEntries(plan)).toEqual([])
   })
 
+  it("is not reported out of date when another build installed it under the skill's former name", async () => {
+    const home = await makeSkillHome()
+    const FORMER_NAME = 'former-test-skill'
+    const FORMER_DEV_TEXT = `---\nname: ${FORMER_NAME}\ndescription: Dev\n---\n\nFormer dev body\n`
+    // A build from before the rename, whose text the renamed build never shipped.
+    const formerBuild = asBuild(home, {
+      name: FORMER_NAME,
+      text: FORMER_DEV_TEXT,
+      releasedDigests: [digest(FORMER_DEV_TEXT)]
+    })
+    await previewAndInstall(formerBuild)
+
+    const renamed = asBuild(home, { ...NEW_SOURCE, aliases: [FORMER_NAME] })
+    const plan = await previewBundledSkillInstall({ ...renamed, installedOnly: true })
+    expect(plan.skills.flatMap((skill) => skill.ops.map((op) => op.reason))).not.toContain('edited')
+    expect(bundledSkillNudgeEntries(plan)).toEqual([])
+
+    // A user edit to that former-name copy is still asked about.
+    await appendFile(join(home.home, '.agents', 'skills', FORMER_NAME, 'SKILL.md'), '\nmy note\n')
+    const edited = await previewBundledSkillInstall({ ...renamed, installedOnly: true })
+    expect(bundledSkillNudgeEntries(edited).map((entry) => entry.name)).toEqual([NAME])
+  })
+
   it('writes no marker from a preview alone', async () => {
     const home = await makeSkillHome()
     await writeCopy(home.shared, NEW_TEXT)
