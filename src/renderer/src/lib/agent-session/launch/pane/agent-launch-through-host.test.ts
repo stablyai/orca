@@ -125,3 +125,52 @@ describe('a desktop AI-button launch', () => {
     expect(queuedLaunch(tabId)?.launch.cwd).toBe('/tmp/feature/sub')
   })
 })
+
+it.each([null, 'ssh-1'])(
+  'queues an edited empty-prompt launch through destination %s with pane identity retained',
+  async (connectionId) => {
+    const { launchNewTabThroughHost } = await import('../new-tab/launch-agent-new-tab-host-route')
+    const { planQueuedPaneAgentLaunch } =
+      await import('../../../../../../main/ipc/pty/pane-agent-launch.test-fixture')
+    const { tokenizeStartupCommand } =
+      await import('../../../../../../shared/agent-launch/startup/tui-agent-startup-shell')
+    const { tabId } = launchNewTabThroughHost({
+      agent: 'antigravity',
+      worktreeId: WT,
+      prompt: '',
+      terminalOptionEdits: { effort: null },
+      activate: false,
+      cwd: '/synthetic/project/sub'
+    })
+    const pending = queuedLaunch(tabId)
+    expect(pending).toEqual({
+      launch: {
+        agent: 'antigravity',
+        target: { kind: 'existing', worktree: `id:${WT}` },
+        terminalOptionEdits: { effort: null },
+        cwd: '/synthetic/project/sub'
+      }
+    })
+    const planned = await planQueuedPaneAgentLaunch(
+      pending,
+      {
+        agentCmdOverrides: { antigravity: 'agy' },
+        agentPermissionDefault: 'full-access',
+        agentDefaultArgs: { antigravity: '--effort=high --add-dir current' },
+        agentLaunchChoices: { antigravity: { options: { effort: 'low' } } }
+      },
+      { worktreeId: WT, tabId, leafId: launchTab(tabId)!.agentLaunchPane!.leafId },
+      { connectionId, ...(connectionId ? { startupCommandDelivery: 'shell-ready' as const } : {}) }
+    )
+    expect(tokenizeStartupCommand(planned.command ?? '', 'posix')).toEqual({
+      ok: true,
+      tokens: ['agy', '--dangerously-skip-permissions', '--add-dir', 'current']
+    })
+    expect(planned.tabId).toBe(tabId)
+    expect(planned.cwd).toBe('/synthetic/project/sub')
+    expect(planned.connectionId).toBe(connectionId)
+    if (connectionId) {
+      expect(planned.startupCommandDelivery).toBe('shell-ready')
+    }
+  }
+)

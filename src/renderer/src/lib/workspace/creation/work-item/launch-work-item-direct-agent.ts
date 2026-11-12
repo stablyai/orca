@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import type {
   AgentStartedTelemetry,
@@ -23,6 +24,7 @@ import { translate } from '@/i18n/i18n'
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   sessionOptions?: Readonly<Record<string, string>>
   sessionOptionsYieldToAgentArgs?: true
   draftContent: string
@@ -50,6 +52,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     agent: args.agent,
     settings: args.settings ?? {},
     agentArgs: args.agentArgs,
+    terminalOptionEdits: args.terminalOptionEdits,
     sessionOptions: args.sessionOptions,
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     platform: args.launchPlatform,

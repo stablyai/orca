@@ -1,3 +1,5 @@
+import { clearTerminalEffortArgs } from './terminal-effort-option-edit'
+import type { TerminalOptionEdits } from '../choices/agent-launch-choices'
 import { analyzeAgentChoiceArgs } from '../choices/agent-choice-args'
 import {
   removeOverriddenAgentSessionArgs,
@@ -218,6 +220,7 @@ function insertBeforeTerminator(
 export function terminalSessionOptionInputs(args: {
   agent: TuiAgent
   settings?: AgentLaunchProfileSettings | null
+  terminalOptionEdits?: TerminalOptionEdits
   sessionOptions: Readonly<Record<string, SessionOptionValue>> | undefined
   yieldToAgentArgs?: boolean
   agentArgs: string | null | undefined
@@ -257,10 +260,17 @@ export function terminalSessionOptionInputs(args: {
     }
     raw = merged.agentArgs
   }
+  const clearsEffort = args.terminalOptionEdits?.effort === null
+  if (clearsEffort && raw) {
+    raw = clearTerminalEffortArgs(args.agent, raw)
+  }
   const authored = args.settings?.agentLaunchChoices?.[args.agent]
-  let defaultValues = {
+  let defaultValues: Record<string, string> = {
     ...authored?.options,
     ...(authored?.model ? { model: authored.model } : {})
+  }
+  if (clearsEffort) {
+    delete defaultValues.effort
   }
   if (Object.keys(defaultValues).length) {
     const command = tokenizeStartupCommand(args.command ?? '', args.shell)
@@ -280,7 +290,11 @@ export function terminalSessionOptionInputs(args: {
             : {}),
           options: Object.fromEntries(
             Object.entries(args.sessionOptions)
-              .filter(([id]) => !['model', 'mode', 'permissionMode'].includes(id))
+              .filter(
+                ([id]) =>
+                  !['model', 'mode', 'permissionMode'].includes(id) &&
+                  !(clearsEffort && id === 'effort')
+              )
               .map(([id, value]) => [id, String(value)])
           ),
           ...(permission ? { permissionMode: permission } : {})

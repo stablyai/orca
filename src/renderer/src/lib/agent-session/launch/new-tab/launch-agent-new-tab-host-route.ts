@@ -48,3 +48,27 @@ export function launchNewTabPromptThroughHost(
   )
   return { tabId, promptDeliveryResult }
 }
+
+/** The same pane owner plans edited empty-prompt and inline-prompt launches from current settings. */
+export function launchNewTabThroughHost(
+  args: HostAgentLaunchArgs & { onPromptDelivered?: () => void }
+) {
+  const { onPromptDelivered, ...launch } = args
+  const { tabId, started } = launchAgentThroughHost({
+    ...launch,
+    ...(args.prompt ? { promptOnLaunch: true as const } : {})
+  })
+  return {
+    tabId,
+    ...(args.prompt
+      ? {
+          promptDeliveryResult: started.then((started) => {
+            if (started) {
+              onPromptDelivered?.()
+            }
+            return { delivered: Boolean(started), failureNotified: !started }
+          })
+        }
+      : {})
+  }
+}

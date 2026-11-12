@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
-import { rpc, server, status } from './new-tab-agent-menu-host-preferences-test-fixture'
-import { act, renderHook } from '@testing-library/react'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
+import * as terminalDiscovery from '@/runtime/terminal/terminal-model-discovery-client'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { resetRendererAppPlatformCacheForTests } from '@/app-shell/platform/renderer-app-platform'
+import { detection, rpc, server, status } from './new-tab-agent-menu-host-preferences-test-fixture'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
@@ -292,3 +298,257 @@ it('invalidates mounted picker seeds only for their effective authored-default s
   expect(host.result.current[0]?.ownerKey).not.toBe(previousOwner)
   expect(localRenders).toBe(beforeHostChange)
 })
+
+it('refreshes equal-row terminal inventories for global and owning-project runtime changes', async () => {
+  detection.ids = ['antigravity']
+  const previous = Object.getOwnPropertyDescriptor(window, 'api')
+  const old = Promise.withResolvers<unknown>()
+  const read = vi
+    .fn()
+    .mockReturnValueOnce(old.promise)
+    .mockImplementation(async () => ({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'new-runtime', label: 'New runtime' }]
+    }))
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      platform: { get: () => ({ platform: 'win32' }) },
+      git: { discoverTerminalModels: read }
+    }
+  })
+  resetRendererAppPlatformCacheForTests()
+  const id = 'repo1::C:/repo'
+  useAppStore.setState((state) => ({
+    settings: {
+      ...state.settings!,
+      disabledTuiAgents: [],
+      agentDefaultSurface: 'terminal',
+      localWindowsRuntimeDefault: { kind: 'windows-host' }
+    },
+    repos: [TEST_REPO],
+    worktreesByRepo: {
+      repo1: [makeWorktree({ id, path: 'C:/repo', repoId: 'repo1', hostId: 'local' })]
+    },
+    projects: [
+      {
+        id: 'project1',
+        displayName: 'Project',
+        badgeColor: 'blue',
+        sourceRepoIds: ['repo1'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ],
+    detectedAgentIds: ['antigravity']
+  }))
+  const hook = renderHook(() => {
+    const model = useNewTabAgentMenuRows(id, true, { kind: 'local' })
+    return {
+      model,
+      entries: useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource(id, model, true))
+    }
+  })
+  try {
+    await waitFor(() => expect(read).toHaveBeenCalledOnce())
+    const before = hook.result.current.model
+    await act(async () =>
+      useAppStore.setState((state) => ({
+        settings: {
+          ...state.settings!,
+          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      }))
+    )
+    await waitFor(() =>
+      expect(
+        hook.result.current.entries.find((entry) => entry.agent === 'antigravity')?.terminalCatalog
+      ).toMatchObject({
+        models: [{ id: 'new-runtime' }]
+      })
+    )
+    if (before.state !== 'settled' || hook.result.current.model.state !== 'settled') {
+      throw new Error('Expected settled menu')
+    }
+    expect(hook.result.current.model.rows).toEqual(before.rows)
+    await act(async () =>
+      old.resolve({
+        success: true,
+        catalogOrigin: 'probe',
+        models: [{ id: 'stale-host', label: 'Stale' }]
+      })
+    )
+    expect(
+      hook.result.current.entries.find((entry) => entry.agent === 'antigravity')?.terminalCatalog
+    ).toMatchObject({ models: [{ id: 'new-runtime' }] })
+    read.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'project-runtime', label: 'Project runtime' }]
+    })
+    await act(async () =>
+      useAppStore.setState((state) => ({
+        projects: state.projects.map((project) => ({
+          ...project,
+          localWindowsRuntimePreference: { kind: 'windows-host' as const }
+        }))
+      }))
+    )
+    await waitFor(() =>
+      expect(
+        hook.result.current.entries.find((entry) => entry.agent === 'antigravity')?.terminalCatalog
+      ).toMatchObject({ models: [{ id: 'project-runtime' }] })
+    )
+  } finally {
+    hook.unmount()
+    if (previous) {
+      Object.defineProperty(window, 'api', previous)
+    } else {
+      Reflect.deleteProperty(window, 'api')
+    }
+    resetRendererAppPlatformCacheForTests()
+  }
+})
+
+it.each([3, 30])(
+  'does no discovery work for %i closed menus or unrelated title and status changes',
+  async (count) => {
+    const ids = Array.from({ length: count + 1 }, (_, i) => `repo1::/repo/menu-${i}`)
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, disabledTuiAgents: [], agentDefaultSurface: 'terminal' },
+      worktreesByRepo: {
+        repo1: ids.map((id) => makeWorktree({ id, repoId: 'repo1', hostId: 'local' }))
+      },
+      activeWorktreeId: null,
+      agentStatusByPaneKey: {},
+      runtimeEnvironments: ['alpha', 'beta'].map((id) =>
+        publicRuntimeEnvironment({ id, createdAt: 7 })
+      ),
+      tabsByWorktree: { [ids[0]]: [makeTab({ id: 'menu-tab', worktreeId: ids[0] })] }
+    }))
+    // Measure steady-state publications after the real writer establishes contact identity.
+    for (const environmentId of ['alpha', 'beta']) {
+      useAppStore.getState().applyRuntimeHostStatusSnapshot({
+        environmentId,
+        pairingRevision: 7,
+        sequence: 0,
+        checkedAt: 0,
+        verification: 'verified',
+        transport: 'ready',
+        status: status(environmentId === 'alpha' ? 'runtime-1' : 'runtime-2').status
+      })
+    }
+    const derive = vi.spyOn(terminalDiscovery, 'terminalModelDiscoveryDescriptor')
+    const renders = [...ids.map(() => 0), 0]
+    const menus = ids.map((id, index) =>
+      renderHook(() => {
+        renders[index]++
+        return useNewTabAgentMenuRows(id, index === count, { kind: 'local' })
+      })
+    )
+    const remote = renderHook(() => {
+      renders[count + 1]++
+      return useNewTabAgentMenuRows('folder:f1', true, { kind: 'runtime', environmentId: 'alpha' })
+    })
+    try {
+      await act(async () => {})
+      expect(remote.result.current.state).toBe('settled')
+      if (remote.result.current.state !== 'settled') {
+        throw new Error('Expected settled remote menu')
+      }
+      expect(remote.result.current.pickerContext?.executionHostId).toBe('runtime:alpha')
+      derive.mockClear()
+      const settled = [...renders]
+      for (let index = 0; index < 10; index++) {
+        act(() =>
+          useAppStore.setState({
+            agentStatusByPaneKey: {
+              unrelated: {
+                paneKey: 'unrelated',
+                stateHistory: [],
+                state: 'working',
+                prompt: '',
+                updatedAt: index,
+                stateStartedAt: 0
+              }
+            }
+          })
+        )
+        act(() =>
+          useAppStore.setState((state) => ({
+            tabsByWorktree: {
+              ...state.tabsByWorktree,
+              [ids[0]]: [makeTab({ id: 'menu-tab', worktreeId: ids[0], title: `Reply ${index}` })]
+            }
+          }))
+        )
+      }
+      for (let sequence = 1; sequence <= 10; sequence++) {
+        for (const environmentId of ['beta', 'alpha']) {
+          const before = useAppStore.getState().runtimeStatusByEnvironmentId
+          act(() =>
+            useAppStore.getState().applyRuntimeHostStatusSnapshot({
+              environmentId,
+              pairingRevision: 7,
+              sequence,
+              checkedAt: sequence,
+              verification: 'verified',
+              transport: 'ready',
+              status: status(environmentId === 'alpha' ? 'runtime-1' : 'runtime-2').status
+            })
+          )
+          expect(useAppStore.getState().runtimeStatusByEnvironmentId).not.toBe(before)
+          expect(
+            useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)?.snapshot
+              ?.sequence
+          ).toBe(sequence)
+        }
+      }
+      expect(derive).not.toHaveBeenCalled()
+      expect(renders).toEqual(settled)
+      const priorRemote = remote.result.current
+      act(() =>
+        useAppStore.getState().applyRuntimeHostStatusSnapshot({
+          environmentId: 'alpha',
+          pairingRevision: 7,
+          sequence: 11,
+          checkedAt: 11,
+          verification: 'verified',
+          transport: 'ready',
+          status: status('replacement-runtime').status
+        })
+      )
+      await act(async () => {})
+      expect(derive).toHaveBeenCalledOnce()
+      expect(renders.slice(0, count + 1)).toEqual(settled.slice(0, count + 1))
+      const nextRemote = remote.result.current
+      if (priorRemote.state !== 'settled' || nextRemote.state !== 'settled') {
+        throw new Error('Expected settled remote menu')
+      }
+      expect(nextRemote.pickerContext?.key).not.toBe(priorRemote.pickerContext?.key)
+      derive.mockClear()
+      const before = menus[count].result.current
+      act(() =>
+        useAppStore.setState((state) => ({
+          settings: {
+            ...state.settings!,
+            localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+          }
+        }))
+      )
+      expect(derive).toHaveBeenCalledTimes(2)
+      expect(derive.mock.calls[0][1].worktreeId).toBe(ids[count])
+      expect(renders.slice(0, count)).toEqual(settled.slice(0, count))
+      const after = menus[count].result.current
+      if (before.state !== 'settled' || after.state !== 'settled') {
+        throw new Error('Expected settled menu')
+      }
+      expect(after.pickerContext?.key).not.toBe(before.pickerContext?.key)
+    } finally {
+      remote.unmount()
+      menus.forEach((menu) => menu.unmount())
+      derive.mockRestore()
+    }
+  }
+)

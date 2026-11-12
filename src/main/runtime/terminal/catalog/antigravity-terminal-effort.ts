@@ -18,6 +18,10 @@ export async function assertAntigravityTerminalEffort(
   if (input.agent !== 'antigravity' || !input.model || !input.effort) {
     return
   }
+  // A repo names the discovery scope, not the future worktree's launch directory.
+  if (input.repo && !input.worktree && !input.folder) {
+    return
+  }
   const result = await runtime
     .discoverTerminalModels(input.worktree, 'antigravity', {
       ...(input.repo ? { repo: input.repo } : {}),

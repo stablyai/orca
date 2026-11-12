@@ -56,6 +56,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           settings: settings ?? {},
           agentArgs: input.launchInputs?.agentArgs,
           sessionOptions: input.launchInputs?.sessionOptions,
+          terminalOptionEdits: input.launchInputs?.terminalOptionEdits,
           platform: requireExecutionHostPlatform(input.launchHost),
           shell: input.shell ?? undefined,
           isRemote: input.isRemote
@@ -165,6 +166,7 @@ export async function prepareQuickComposerStartup(
           settings: { agentLaunchChoices: settings?.agentLaunchChoices },
           agentArgs: input.launchInputs?.agentArgs,
           sessionOptions: input.launchInputs?.sessionOptions,
+          terminalOptionEdits: input.launchInputs?.terminalOptionEdits,
           shell: resolveStartupShell(
             requireExecutionHostPlatform(input.launchHost),
             input.shell ?? undefined

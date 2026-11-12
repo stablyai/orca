@@ -1,3 +1,4 @@
+import { useAgentPickerTerminalDiscoveryKey } from '../agent/agent-launch-picker-host-reads'
 import {
   createAgentMenuTerminalPendingSelector,
   readAgentMenuLaunchFacts
@@ -83,7 +84,6 @@ export function useAgentMenuObservation(
   const storedIds = useAppStateValue((state) =>
     detectionTarget ? readDetectedAgentsForTarget(state, detectionTarget) : null
   )
-  // No owner means no agents to offer; a later owner publication resumes normal detection.
   const detection = {
     ...acquired,
     detectedIds: unresolvedTarget ? [] : (acquired.detectedIds ?? storedIds),
@@ -92,11 +92,8 @@ export function useAgentMenuObservation(
   useHostStructuredAgentsVersion()
   const localCapabilities = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
-    readLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilityObservation
   )
-  // The observation owns these settings; picker consumers reuse its snapshot.
-  const desktopSettings = state.settings
   const workspace =
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
@@ -114,29 +111,28 @@ export function useAgentMenuObservation(
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
     unresolvedTarget ? null : facts,
-    desktopSettings,
+    state.settings,
     viewActive && (open || shown),
     viewActive && open
   )
   useAppStateValue(
-    useShallow((state) => [
-      state.settings?.defaultTuiAgent,
-      state.settings?.disabledTuiAgents,
-      state.settings?.agentDefaultSurface,
-      state.settings?.nativeChatProviders,
-      state.settings?.agentDefaultArgs,
-      state.settings?.agentPermissionDefault,
-      state.settings?.agentPermissionOverrides,
-      state.settings?.nativeChatSessionOptions,
-      settings?.agentLaunchChoices === desktopSettings?.agentLaunchChoices
-        ? state.settings?.agentLaunchChoices
+    useShallow((next) => [
+      next.settings?.defaultTuiAgent,
+      next.settings?.disabledTuiAgents,
+      next.settings?.agentDefaultSurface,
+      next.settings?.nativeChatProviders,
+      next.settings?.agentDefaultArgs,
+      next.settings?.agentPermissionDefault,
+      next.settings?.agentPermissionOverrides,
+      next.settings?.nativeChatSessionOptions,
+      settings?.agentLaunchChoices === state.settings?.agentLaunchChoices
+        ? next.settings?.agentLaunchChoices
         : undefined,
-      state.settings?.nativeChatPermissionMode
+      next.settings?.nativeChatPermissionMode
     ])
   )
   const plain = hostChatAnswer(input) === 'no-chats'
   const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
-  // Use published host-wide availability when supported; older hosts defer final admission to the launch request.
   const published =
     input.hostCapabilities?.includes(AVAILABILITY) === true &&
     Boolean(structuredAgentSessionTargetForHost(facts.executionHostId))
@@ -241,6 +237,11 @@ export function useAgentMenuObservation(
     offerAgentSetup: options?.offerAgentSetup,
     hostPlatform: facts.hostPlatform
   }).map((row) => ({ ...row, executionHostId }))
+  const terminalDiscoveryKey = useAgentPickerTerminalDiscoveryKey(
+    viewActive && open ? facts.executionHostId : null,
+    workspace,
+    launchCwd
+  )
   const model: NewTabAgentMenuModel = loading
     ? {
         state: 'loading',
@@ -259,7 +260,7 @@ export function useAgentMenuObservation(
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,
           settings,
-          key: JSON.stringify([workspace, launchCwd, facts])
+          key: JSON.stringify([workspace, launchCwd, facts, terminalDiscoveryKey])
         }
       }
   const { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices } = settings ?? {}

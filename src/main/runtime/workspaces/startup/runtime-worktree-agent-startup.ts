@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../shared/agent-launch/choices/agent-launch-choices'
 import { prepareWorktreeModelStartupInputs } from './runtime-worktree-model-startup'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
@@ -45,6 +46,7 @@ type StartupEnvironment = {
   getLaunchRuntime: (agent: TuiAgent) => ReturnType<typeof resolveStartupAgentLaunchRuntime>
   /** Replaces the configured arguments for this launch; `null` means none. */
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   /** An automation's saved extras, merged over the launch's arguments. */
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   extraAgentArgs?: string
@@ -118,6 +120,7 @@ export async function buildWorktreeStartupForDraft(
     ...(agent === (environment.originalAgent ?? environment.requestedAgent)
       ? {
           ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
+          terminalOptionEdits: environment.terminalOptionEdits,
           sessionOptions: environment.sessionOptions
         }
       : {})
@@ -202,6 +205,7 @@ export async function buildWorktreeStartupForAgent(
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     ...(environment.extraAgentArgs ? { extraAgentArgs: environment.extraAgentArgs } : {}),
     ...(environment.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+    terminalOptionEdits: environment.terminalOptionEdits,
     sessionOptions:
       environment.sessionOptions ?? environment.toSessionOptions(environment.launchPreferences)
   })
@@ -264,6 +268,7 @@ export async function resolveWorktreeCreateAgentStartup(
     preferences: AgentLaunchPreferences | undefined,
     inputs: {
       agentArgs?: string | null
+      terminalOptionEdits?: TerminalOptionEdits
       sessionOptions?: Readonly<Record<string, SessionOptionValue>>
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
@@ -290,6 +295,9 @@ export async function resolveWorktreeCreateAgentStartup(
   const built = await build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
     ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
     ...(args.startupSessionOptions ? { sessionOptions: args.startupSessionOptions } : {}),
+    ...(args.startupTerminalOptionEdits
+      ? { terminalOptionEdits: args.startupTerminalOptionEdits }
+      : {}),
     ...(args.startupExtraAgentArgs ? { extraAgentArgs: args.startupExtraAgentArgs } : {}),
     ...(args.startupSuppressUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
     ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {}),

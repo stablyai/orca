@@ -1,3 +1,4 @@
+import { TerminalOptionEditsParam } from './terminal-option-edits'
 /** Shared agent.launch schema lets remote clients use typed RpcSendParams.
  * The host honors an explicit surface or refuses it; migrated worktree.create startup-agent fields are stripped. */
 
@@ -66,6 +67,7 @@ export const AgentLaunchFields = z.object({
   reuseTerminal: z.object({ handle: z.string().min(1, 'Missing terminal handle') }).optional(),
   /** Nullable on purpose: `null` is "no arguments", absent is "use the settings default". */
   agentArgs: z.string().nullable().optional(),
+  terminalOptionEdits: TerminalOptionEditsParam.optional(),
   /** Terminal-only cwd; structured launches downgrade rather than silently ignoring it. */
   cwd: z.string().min(1, 'Empty launch cwd').optional(),
   launchSource: LaunchSourceParam.optional(),

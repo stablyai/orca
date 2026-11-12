@@ -28,8 +28,10 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: rpc.supports
 }))
+const detection = vi.hoisted(() => ({ ids: ['claude', 'codex', 'opencode'] }))
+export { detection }
 vi.mock('@/hooks/useDetectedAgents', () => ({
-  useDetectedAgents: () => ({ detectedIds: ['claude', 'codex', 'opencode'] })
+  useDetectedAgents: () => ({ detectedIds: detection.ids })
 }))
 const initial = useAppStore.getState()
 export const server = projectAgentLaunchSettings({
@@ -75,6 +77,7 @@ export function status(runtimeId = 'runtime-1'): RuntimeEnvironmentStatus {
   }
 }
 beforeEach(() => {
+  detection.ids = ['claude', 'codex', 'opencode']
   clearRuntimeCompatibilityCache()
   Object.assign(payloadWork, { entries: 0, bytes: 0, count: 0 })
   rpc.call

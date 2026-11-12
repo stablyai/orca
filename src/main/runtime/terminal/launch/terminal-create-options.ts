@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
@@ -44,6 +45,7 @@ export type TerminalCreateOptions = {
   onStartupPromptCarry?: (carried: boolean) => void
   /** Override Settings arguments for this agent (null means none); plan input is not a caller-supplied command and does not take launch ownership. */
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   extraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into this `startupAgent` once it starts. */
   suppressStartupUpdatePrompt?: boolean

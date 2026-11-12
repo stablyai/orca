@@ -25,7 +25,10 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 vi.mock('../inventory/host-chat-program-acquisition', () => ({
-  acquireAgentLaunchChoices: async () => ({ detected: ['codex'], offered: ['codex'] })
+  acquireAgentLaunchChoices: async () => ({
+    detected: ['codex', 'antigravity'],
+    offered: ['codex', 'antigravity']
+  })
 }))
 
 const initial = useAppStore.getState()
@@ -160,3 +163,26 @@ it.each(['target', 'folder:local-folder'])(
     expect(useAppStore.getState().tabsByWorktree[worktreeId]).toHaveLength(1)
   }
 )
+
+it('retains an Antigravity terminal effort clear across continuation delivery', async () => {
+  await expect(
+    launchAgentSessionContinuation({
+      agent: 'antigravity',
+      prompt: 'Continue',
+      worktreeId: 'target',
+      launchSource: 'sidebar',
+      launchChoice: { agent: 'antigravity', route: 'terminal-tui', executionHostId: 'local' },
+      terminalOptionEdits: { effort: null },
+      agentArgs: null
+    })
+  ).resolves.toBe(true)
+  expect(mocks.launch).toHaveBeenCalledWith(
+    expect.objectContaining({
+      agent: 'antigravity',
+      worktreeId: 'target',
+      prompt: 'Continue',
+      terminalOptionEdits: { effort: null },
+      agentArgs: null
+    })
+  )
+})

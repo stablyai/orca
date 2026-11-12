@@ -52,4 +52,37 @@ describe('local OpenCode model launch authority', () => {
     expect(callRuntimeRpc).not.toHaveBeenCalled()
     expect(spawn).not.toHaveBeenCalled()
   })
+
+  it('carries a folder composer effort clear to destination planning instead of its stale command', async () => {
+    await spawnIpcPty(
+      {
+        worktreeId: 'folder:private',
+        tabId: 'tab_private',
+        leafId: 'leaf_private',
+        launchAgent: 'antigravity',
+        command: 'agy --effort low',
+        cwd: '/folder/current',
+        freshAgentLaunch: {
+          prompt: 'Continue',
+          promptDelivery: 'auto-submit',
+          terminalOptionEdits: { effort: null }
+        }
+      },
+      connect
+    )
+    expect(spawn).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        agentLaunch: {
+          launch: {
+            agent: 'antigravity',
+            target: { kind: 'existing', worktree: 'id:folder:private' },
+            cwd: '/folder/current',
+            terminalOptionEdits: { effort: null },
+            prompt: { text: 'Continue', delivery: 'submit' }
+          },
+          startupPromptCarry: 'force-line'
+        }
+      })
+    )
+  })
 })

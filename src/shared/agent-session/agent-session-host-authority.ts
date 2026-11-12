@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../agent-launch/choices/agent-launch-choices'
 import {
   hasUnsafeProviderSessionIdChars,
   isResumableTuiAgent,
@@ -137,6 +138,7 @@ export type RuntimeCreateAgentSessionRequest = {
   /** Explicit client override. Omission keeps launch defaults host-owned. */
   agentArgs?: string | null
   sessionOptions?: Record<string, string>
+  terminalOptionEdits?: TerminalOptionEdits
   extraAgentArgs?: string
   launchPreferences?: AgentLaunchPreferences
   startupCwd?: string

@@ -1,3 +1,7 @@
+import {
+  createTerminalOptionEditNegotiation,
+  type TerminalOptionEditDispatch
+} from '@/runtime/hosted-terminals/creation/agent-launch/terminal-option-edit-capability'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
@@ -23,7 +27,8 @@ export async function createWorktreeOnRuntimeHost(
 ): Promise<CreatedWorktreeResult> {
   const call = (
     launch?: HostAgentLaunch,
-    creationLaunch?: NonNullable<WorktreeCreateRequest['options']>['creationAgentLaunch']
+    creationLaunch?: NonNullable<WorktreeCreateRequest['options']>['creationAgentLaunch'],
+    editProof?: Omit<TerminalOptionEditDispatch, 'terminalOptionEdits'>
   ): Promise<CreateWorktreeResult> =>
     callRuntimeRpc<CreateWorktreeResult>(
       { kind: 'environment', environmentId },
@@ -33,7 +38,7 @@ export async function createWorktreeOnRuntimeHost(
         // Why: the host's own store defaults would otherwise override the user's choices.
         ...clientCreateSettings
       },
-      { timeoutMs: 10 * 60_000 }
+      { timeoutMs: 10 * 60_000, ...editProof }
     )
   const creationLaunch = request.options?.creationAgentLaunch
   if (
@@ -41,7 +46,19 @@ export async function createWorktreeOnRuntimeHost(
     (await hostSupportsCapability(environmentId, WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY))
   ) {
     try {
-      return await call(undefined, creationLaunch)
+      const { terminalOptionEdits, ...editProof } = await createTerminalOptionEditNegotiation(
+        creationLaunch.inputs?.terminalOptionEdits
+      )(environmentId)
+      return await call(
+        undefined,
+        {
+          ...creationLaunch,
+          ...(creationLaunch.inputs
+            ? { inputs: { ...creationLaunch.inputs, terminalOptionEdits } }
+            : {})
+        },
+        editProof
+      )
     } catch (error) {
       if (!isUnknownAgentRefusal(error)) {
         throw error

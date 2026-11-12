@@ -24,6 +24,16 @@ function effortVariant(id: string) {
   return level && !/\s/.test(id) ? { base: id.slice(0, -level.length - 1), level } : undefined
 }
 
+function labelledEffort(label: string) {
+  const match = /\s+\((low|medium|high|xhigh|extra high|max)\)$/i.exec(label)
+  return match
+    ? {
+        level: match[1].toLowerCase().replace('extra high', 'xhigh'),
+        label: label.slice(0, match.index)
+      }
+    : undefined
+}
+
 /** Only distinct CLI-listed siblings establish a model's selectable efforts. */
 export function groupAntigravityModelEfforts(
   models: readonly ListedModel[]
@@ -36,6 +46,13 @@ export function groupAntigravityModelEfforts(
       const siblings = families.get(variant.base) ?? new Map()
       siblings.set(variant.level, model)
       families.set(variant.base, siblings)
+    }
+  }
+  for (const [base, siblings] of families) {
+    const bare = listed.get(base)
+    const labelled = bare && labelledEffort(bare.label)
+    if (bare && labelled && !siblings.has(labelled.level)) {
+      siblings.set(labelled.level, bare)
     }
   }
   const emitted = new Set<string>()
@@ -58,7 +75,7 @@ export function groupAntigravityModelEfforts(
     const bare = listed.get(base)
     const first = siblings.entries().next().value
     const label =
-      bare?.label ??
+      (bare && (labelledEffort(bare.label)?.label ?? bare.label)) ??
       (first &&
         first[1].label.replace(new RegExp(`\\s+(?:\\(${first[0]}\\)|${first[0]})$`, 'i'), ''))
     return [
@@ -175,9 +192,10 @@ export function antigravityTerminalCatalogModels(
           kind: { type: 'select' as const, choices: row.efforts, defaultValue: '' }
         }))
       : []
-    return [
-      { id: row.id, label: row.label, options },
-      ...Object.values(row.variants ?? {}).map((id) => ({ id, label: row.label, options }))
-    ]
+    return [...new Set([row.id, ...Object.values(row.variants ?? {})])].map((id) => ({
+      id,
+      label: row.label,
+      options
+    }))
   })
 }

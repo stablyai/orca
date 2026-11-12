@@ -1,3 +1,4 @@
+import { discoverWebTerminalModels } from './web-terminal-model-discovery'
 import { createGitCommitActionsApi } from './web-git-commit-actions-api'
 import { createGitHistoryApi } from './web-git-history-api'
 import type { PreloadApi } from '../../../../preload/api-types'
@@ -235,13 +236,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         'Commit message generation is unavailable in the web client.'
       )
     }),
-    discoverTerminalModels: async () => ({
-      success: false,
-      error: translate(
-        'agents.terminalModels.connectionUnavailable',
-        'Terminal model discovery is unavailable on this connection.'
-      )
-    }),
+    discoverTerminalModels: discoverWebTerminalModels,
     discoverCommitMessageModels: async () => ({
       success: false,
       error: translate(

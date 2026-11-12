@@ -201,6 +201,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         agent: effectiveAgent,
         agentArgs,
         sessionOptions,
+        terminalOptionEdits: inputs?.terminalOptionEdits,
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
         draftContent: args.draftContent,
         promptDelivery: args.promptDelivery,
@@ -222,6 +223,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
     effectiveAgent,
     agentArgs,
     freshLaunchInputs: {
+      ...(inputs?.terminalOptionEdits ? { terminalOptionEdits: inputs.terminalOptionEdits } : {}),
       ...(inputs?.actionAgentArgs !== undefined || args.actionAgentArgs !== undefined
         ? { actionAgentArgs: inputs?.actionAgentArgs ?? args.actionAgentArgs }
         : { agentArgs }),

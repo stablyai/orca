@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -40,6 +41,7 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   promptDelivery?: AgentPromptDelivery
   /** Explicit CLI override; omission leaves the remote host's defaults authoritative. */
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   launchPreferences?: AgentLaunchPreferences
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   extraAgentArgs?: string

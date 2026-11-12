@@ -16,6 +16,7 @@ export function captureRuntimeEnvironmentCall(
   method: string
   params?: unknown
   timeoutMs?: number
+  expectedEnvironmentRuntimeId?: string
 }) => Promise<RuntimeRpcResponse<unknown>> {
   return (args) =>
     window.api.runtimeEnvironments.call({

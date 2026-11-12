@@ -1,3 +1,11 @@
+import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
+import { resolveTuiAgentLaunchEnv } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import {
+  selectEffectiveTerminalExecutionContext,
+  TERMINAL_EXECUTION_CONTEXT_UNRESOLVED
+} from '../../../../shared/terminal/effective-terminal-execution-context'
+import { getWslContextFromWorktreeId } from '../../../providers/local-pty/local-pty-launch-context'
+import { listWslDistrosAsync } from '../../../wsl/discovery/distro-catalog'
 import {
   agentLaunchQuotingShell,
   executionRuntimePlatform,
@@ -131,5 +139,51 @@ export function resolveStartupAgentLaunchRuntime(
       shell: undefined,
       launchRuntime: error instanceof Error ? error : new Error(String(error))
     }
+  }
+}
+
+/** Startup and inventory use the same workspace root when no directory was requested. */
+export function effectiveTerminalStartupCwd(path: string, requestedCwd?: string | null): string {
+  return resolveTerminalStartupCwd(path, requestedCwd) ?? path
+}
+
+/** Resolve the probe's launch context without creating a terminal or workspace. */
+export async function resolveAgentTerminalDiscoveryLaunch(
+  store: AgentLaunchRuntimeStore,
+  scope: TerminalWorkspaceLaunchScope,
+  agent: TuiAgent,
+  requestedCwd?: string,
+  hostGlobal = false
+) {
+  const runtime = resolveAgentLaunchRuntime(store, scope, undefined, agent)
+  const settings = store.getSettings()
+  const cwd = hostGlobal ? undefined : effectiveTerminalStartupCwd(scope.path, requestedCwd)
+  const inputs = {
+    platform: process.platform,
+    cwd,
+    worktreeContext: getWslContextFromWorktreeId(scope.id),
+    shell:
+      runtime.pty.shellOverride ||
+      settings.terminalWindowsShell ||
+      process.env.COMSPEC ||
+      'powershell.exe',
+    preferredDistro: runtime.pty.terminalWindowsWslDistro
+  }
+  let selected = selectEffectiveTerminalExecutionContext(inputs)
+  if (selected.kind === 'unresolved-wsl') {
+    selected = selectEffectiveTerminalExecutionContext({
+      ...inputs,
+      defaultDistro: (await listWslDistrosAsync())[0]
+    })
+  }
+  if (selected.kind === 'unresolved-wsl') {
+    throw new Error(TERMINAL_EXECUTION_CONTEXT_UNRESOLVED)
+  }
+  const wslDistro = selected.kind === 'wsl' ? selected.context.distro : undefined
+  return {
+    cwd,
+    wslDistro,
+    command: settings.agentCmdOverrides?.[agent],
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings, wslDistro ? 'linux' : process.platform)
   }
 }

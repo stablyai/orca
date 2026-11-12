@@ -1,11 +1,12 @@
 import { agentPickerModels } from './agent-launch-picker-catalog'
 import { resolveAgentChoiceLayers } from '../choices/agent-choice-layers'
 import type { TuiAgent } from '../catalog/tui-agent'
-import type { AgentPickerEntry, AgentPickerModel } from './agent-launch-picker'
+import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
 import type { AgentDedicatedChoices } from '../choices/agent-launch-choices'
 
 export type AgentPickerSetup = {
   entry: AgentPickerEntry
+  surface: AgentPickerSurface
   model: AgentPickerModel
   choices: AgentDedicatedChoices
   label: string
@@ -71,45 +72,59 @@ export function searchAgentPickerSetups(
     if (words.every((word) => score(word, agentWords))) {
       continue
     }
-    for (const model of agentPickerModels(entry)) {
-      if (model.isLegacy || model.hidden) {
-        continue
-      }
-      const modelWords = tokens([model.id, model.label].join(' '))
-      if (!words.some((word) => !score(word, agentWords) && score(word, modelWords))) {
-        continue
-      }
-      const effortQuery = model.efforts.filter((effort) =>
-        words.some(
-          (word) =>
-            !score(word, agentWords) &&
-            !score(word, modelWords) &&
-            score(word, tokens(`${effort.value} ${effort.label}`))
-        )
-      )
-      const efforts = effortQuery.length ? effortQuery : [undefined]
-      for (const effort of efforts) {
-        const effortWords = effort ? tokens(`${effort.value} ${effort.label}`) : []
-        const values = words.map((word) =>
-          score(word, [...agentWords, ...modelWords, ...effortWords])
-        )
-        if (values.some((value) => value === 0)) {
+    const seen = new Set<string>()
+    // Prefer the default action when both surfaces offer the same setup.
+    const surfaces = [
+      entry.defaultSurface,
+      ...entry.surfaces.filter((s) => s !== entry.defaultSurface)
+    ]
+    for (const surface of surfaces) {
+      for (const model of agentPickerModels(entry, surface)) {
+        if (model.isLegacy || model.hidden) {
           continue
         }
-        const choices = resolveAgentChoiceLayers({
-          agent: entry.agent,
-          explicit: { model: model.id, ...(effort ? { options: { effort: effort.value } } : {}) },
-          argumentOwner: 'defaults'
-        })
-        matches.push({
-          setup: {
-            entry,
-            model,
-            choices,
-            label: [entry.label, model.label, effort?.label].filter(Boolean).join(' · ')
-          },
-          score: values.reduce((a, b) => a + b, 0)
-        })
+        const modelWords = tokens([model.id, model.label].join(' '))
+        if (!words.some((word) => !score(word, agentWords) && score(word, modelWords))) {
+          continue
+        }
+        const effortQuery = model.efforts.filter((effort) =>
+          words.some(
+            (word) =>
+              !score(word, agentWords) &&
+              !score(word, modelWords) &&
+              score(word, tokens(`${effort.value} ${effort.label}`))
+          )
+        )
+        const efforts = effortQuery.length ? effortQuery : [undefined]
+        for (const effort of efforts) {
+          const effortWords = effort ? tokens(`${effort.value} ${effort.label}`) : []
+          const values = words.map((word) =>
+            score(word, [...agentWords, ...modelWords, ...effortWords])
+          )
+          if (values.some((value) => value === 0)) {
+            continue
+          }
+          const choices = resolveAgentChoiceLayers({
+            agent: entry.agent,
+            explicit: { model: model.id, ...(effort ? { options: { effort: effort.value } } : {}) },
+            argumentOwner: 'defaults'
+          })
+          const identity = JSON.stringify([model.id, effort?.value])
+          if (seen.has(identity)) {
+            continue
+          }
+          seen.add(identity)
+          matches.push({
+            setup: {
+              entry,
+              surface,
+              model,
+              choices,
+              label: [entry.label, model.label, effort?.label].filter(Boolean).join(' · ')
+            },
+            score: values.reduce((a, b) => a + b, 0)
+          })
+        }
       }
     }
   }

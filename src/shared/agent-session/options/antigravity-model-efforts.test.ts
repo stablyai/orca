@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest'
-import { antigravityEffortRefusal, groupAntigravityModelEfforts } from './antigravity-model-efforts'
+import {
+  antigravityEffortRefusal,
+  antigravityTerminalCatalogModels,
+  groupAntigravityModelEfforts
+} from './antigravity-model-efforts'
 
 // Captured agy 1.4.11, Windows, 2026-11-09.
 export const AGY_1411_MODELS = [
@@ -10,6 +14,70 @@ export const AGY_1411_MODELS = [
   { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)' },
   { id: 'gpt-oss-120b-medium', label: 'GPT-OSS 120B (Medium)' }
 ]
+
+it('keeps the bare High id in the family from the captured agy 1.5.6 listing', () => {
+  const models = [
+    { id: 'gemini-3.5-flash-medium', label: 'Gemini 3.5 Flash (Medium)' },
+    { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (High)' },
+    { id: 'gemini-3.5-flash-low', label: 'Gemini 3.5 Flash (Low)' }
+  ]
+  const grouped = groupAntigravityModelEfforts(models)
+  expect(grouped).toEqual([
+    {
+      id: 'gemini-3.5-flash',
+      label: 'Gemini 3.5 Flash',
+      isDefault: false,
+      efforts: [
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' }
+      ],
+      variants: {
+        low: 'gemini-3.5-flash-low',
+        medium: 'gemini-3.5-flash-medium',
+        high: 'gemini-3.5-flash'
+      }
+    }
+  ])
+  expect(antigravityEffortRefusal(models, 'gemini-3.5-flash', 'high')).toBeUndefined()
+  expect(antigravityTerminalCatalogModels(grouped).map(({ id }) => id)).toEqual([
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-medium',
+    'gemini-3.5-flash-low'
+  ])
+})
+
+it('groups distinct bare and suffix levels without guessing duplicate or contradictory labels', () => {
+  const bare = { id: 'family', label: 'Family (High)' }
+  const low = { id: 'family-low', label: 'Family (High)' }
+  for (const listing of [
+    [bare, low],
+    [low, bare]
+  ]) {
+    expect(groupAntigravityModelEfforts(listing)).toMatchObject([
+      {
+        id: 'family',
+        label: 'Family',
+        efforts: [{ value: 'low' }, { value: 'high' }],
+        variants: { low: 'family-low', high: 'family' }
+      }
+    ])
+  }
+  expect(groupAntigravityModelEfforts([bare]).map(({ id, efforts }) => [id, efforts])).toEqual([
+    ['family', []]
+  ])
+  const high = { id: 'family-high', label: 'Family (High)' }
+  expect(
+    groupAntigravityModelEfforts([bare, high]).map(({ id, efforts }) => [id, efforts])
+  ).toEqual([
+    ['family', []],
+    ['family-high', []]
+  ])
+  expect(groupAntigravityModelEfforts([bare, low, high])[0]).toMatchObject({
+    label: 'Family',
+    variants: { low: 'family-low', high: 'family-high' }
+  })
+})
 
 it('offers only distinct listed siblings, leaving lone suffixed and legacy models literal', () => {
   expect(

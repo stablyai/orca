@@ -116,6 +116,9 @@ export function buildManagedWorktreeCreateArgs(
     ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
     ...(launchSource ? { startupLaunchSource: launchSource } : {}),
     ...(params.startupAgentArgs !== undefined ? { startupAgentArgs: params.startupAgentArgs } : {}),
+    ...(params.startupTerminalOptionEdits
+      ? { startupTerminalOptionEdits: params.startupTerminalOptionEdits }
+      : {}),
     ...(params.startupSessionOptions
       ? { startupSessionOptions: params.startupSessionOptions }
       : {}),

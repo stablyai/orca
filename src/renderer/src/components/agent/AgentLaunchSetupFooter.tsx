@@ -112,12 +112,14 @@ export function AgentLaunchSurfaceButtons({
 /** The optional first prompt and the Launch buttons, which send whatever it holds. */
 export function AgentLaunchSetupFooter({
   entry,
+  primary,
   ref,
   disabled,
   terminalBlocked,
   onLaunch
 }: {
   entry: AgentPickerEntry
+  primary: AgentPickerSurface
   ref?: Ref<AgentLaunchSetupFooterHandle>
   disabled?: boolean
   terminalBlocked?: boolean
@@ -125,7 +127,7 @@ export function AgentLaunchSetupFooter({
 }): React.JSX.Element {
   const composer = useRef<NativeChatComposerHandle>(null)
   // Enter launches the default way; a Launch button names its own before it submits the prompt.
-  const surface = useRef(entry.defaultSurface)
+  const surface = useRef(primary)
   const launch = (next: AgentPickerSurface): void => {
     if (disabled || (next === 'terminal' && terminalBlocked)) {
       return
@@ -141,7 +143,7 @@ export function AgentLaunchSetupFooter({
         className="px-3 pt-1.5 pb-2"
         onKeyDownCapture={(event) => {
           if (event.key === 'Enter') {
-            surface.current = entry.defaultSurface
+            surface.current = primary
           }
         }}
       >
@@ -160,7 +162,7 @@ export function AgentLaunchSetupFooter({
         <AgentLaunchSurfaceButtons
           entry={entry}
           disabled={disabled}
-          primary={entry.defaultSurface}
+          primary={primary}
           prominent
           terminalBlocked={terminalBlocked}
           onSelect={launch}

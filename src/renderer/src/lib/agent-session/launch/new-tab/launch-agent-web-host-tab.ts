@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { agentTabLaunchStore } from './launch-agent-execution-context'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
@@ -50,6 +51,7 @@ export async function launchAgentInWebHostTab(args: {
   prompt: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   actionAgentArgs?: string
   launchPlatform?: NodeJS.Platform
   launchShell?: AgentStartupShell

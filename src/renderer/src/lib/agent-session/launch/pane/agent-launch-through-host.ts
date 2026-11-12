@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 /** Allocate the prompt’s owning pane before mount; main plans and starts it at the pane’s real size. */
 
 import { useAppStore } from '@/store/index'
@@ -18,8 +19,10 @@ export type HostAgentLaunchArgs = {
   groupId?: string
   /** Kept by the window: a pane whose agent could not start offers to copy it. */
   prompt: string
+  promptOnLaunch?: true
   /** Absent uses the settings default; `null` means no arguments. */
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   cwd?: string
   trustWorktreeId?: string
   /** The launch's session options; the host decodes booleans sent as strings by catalog kind. */
@@ -44,6 +47,10 @@ function stringSessionOptions(options: Record<string, SessionOptionValue> | unde
 function launchParams(args: HostAgentLaunchArgs) {
   return {
     agent: args.agent,
+    ...(args.terminalOptionEdits ? { terminalOptionEdits: args.terminalOptionEdits } : {}),
+    ...(args.promptOnLaunch && args.prompt
+      ? { prompt: { text: args.prompt, delivery: 'submit' as const } }
+      : {}),
     target: { kind: 'existing' as const, worktree: `id:${args.worktreeId}` },
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
@@ -78,6 +85,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
       launchAgent: args.agent,
       agentLaunch: {
         launch: launchParams(args),
+        ...(args.promptOnLaunch ? { startupPromptCarry: 'force-line' as const } : {}),
         ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
       }
     }

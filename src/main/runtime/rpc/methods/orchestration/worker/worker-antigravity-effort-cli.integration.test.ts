@@ -64,7 +64,6 @@ describe('Antigravity effort through CLI argv, RPC and worker admission', () => 
 
   it.each([
     ['id:remote-worktree', [], true],
-    ['new-top-level', ['--repo', 'id:remote-repo'], true],
     ['id:remote-worktree', [], false]
   ] as const)(
     'checks %s on its destination before dispatch creation',
@@ -120,9 +119,7 @@ describe('Antigravity effort through CLI argv, RPC and worker admission', () => 
         {
           agentId: 'antigravity',
           ...(modern ? { workerStart: true } : {}),
-          ...(worktree === 'new-top-level'
-            ? { repo: 'id:remote-repo', repoHostId: undefined }
-            : { worktree }),
+          worktree,
           uncached: true
         },
         expect.any(Number),
@@ -182,7 +179,7 @@ describe('Antigravity effort through CLI argv, RPC and worker admission', () => 
   ]
   const started = { dispatchId: 'remote-dispatch', state: 'ready', run: { id: 'destination-run' } }
 
-  it.each(['valid', 'chat', 'old', 'unavailable'] as const)(
+  it.each(['valid', 'chat', 'old', 'unavailable', 'prospective'] as const)(
     'preserves literal remote arguments for %s discovery',
     async (kind) => {
       const dest = destination(kind === 'chat')
@@ -205,13 +202,19 @@ describe('Antigravity effort through CLI argv, RPC and worker admission', () => 
         throw new Error(`Unexpected remote method: ${method}`)
       })
       const args =
-        kind === 'valid'
-          ? remoteArgs.map((value) =>
-              value === 'gemini-3.8-flash-high' ? 'gemini-3.8-flash' : value
-            )
-          : remoteArgs
+        kind === 'prospective'
+          ? [
+              ...remoteArgs.map((arg) => (arg === 'id:remote-worktree' ? 'new-top-level' : arg)),
+              '--repo',
+              'id:remote-repo'
+            ]
+          : kind === 'valid'
+            ? remoteArgs.map((value) =>
+                value === 'gemini-3.8-flash-high' ? 'gemini-3.8-flash' : value
+              )
+            : remoteArgs
       expect((await cli(...args)).error).toBeUndefined()
-      expect(call).toHaveBeenLastCalledWith(
+      expect(call).toHaveBeenCalledWith(
         'destination',
         'orchestration.workerStart',
         expect.objectContaining({

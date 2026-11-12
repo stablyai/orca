@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { ensureDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
@@ -37,6 +38,7 @@ type LaunchAgentSessionContinuationArgs = {
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
 }
 
 /** Detected agents, then those that open as a chat on the workspace's host without their CLI. */
@@ -108,6 +110,7 @@ export async function launchAgentSessionContinuation({
   signal,
   sessionOptions,
   chatSessionOptions,
+  terminalOptionEdits,
   agentArgs
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
   const label = getAgentLabel(agent)
@@ -119,6 +122,7 @@ export async function launchAgentSessionContinuation({
     ...(sessionOptions ? { sessionOptions: { ...sessionOptions } } : {}),
     ...(chatSessionOptions !== undefined ? { chatSessionOptions: { ...chatSessionOptions } } : {}),
     ...(agentArgs !== undefined ? { agentArgs } : {}),
+    ...(terminalOptionEdits ? { terminalOptionEdits } : {}),
     ...(groupId ? { groupId } : {}),
     prompt,
     promptDelivery: agent === 'claude' ? ('draft' as const) : ('submit-after-ready' as const),

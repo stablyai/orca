@@ -128,6 +128,7 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     intent.target.worktree,
     {
       startupAgent: intent.agent,
+      terminalOptionEdits: intent.terminalOptionEdits,
       ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
       ...(request && 'extraAgentArgs' in request && typeof request.extraAgentArgs === 'string'
         ? { extraAgentArgs: request.extraAgentArgs }

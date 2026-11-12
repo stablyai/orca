@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createCompatibleRuntimeStatusResponse } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
@@ -117,6 +118,65 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
       } else {
         expect(requests[0].params).not.toHaveProperty('resumeOrigin')
       }
+      expect(onSpawnDeferred).toHaveBeenCalledWith('paused')
+    }
+  )
+
+  it.each([true, false])(
+    'retains fresh effort deletion negotiation across an unknown native outcome (%s)',
+    async (supported) => {
+      let attempts = 0
+      let upgraded = supported
+      runtimeCall.mockImplementation(async (args: RpcCall) => {
+        if (args.method === 'status.get') {
+          const status = createCompatibleRuntimeStatusResponse('runtime-remote')
+          if (!upgraded) {
+            status.result.capabilities = status.result.capabilities?.filter(
+              (value) => value !== 'agent.launch.terminal-option-edits.v1'
+            )
+          }
+          return status
+        }
+        if (args.method === 'terminal.createAgentSession' && attempts++ === 0) {
+          upgraded = !supported
+          throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+            code: 'runtime_timeout'
+          })
+        }
+        return ensureResponse
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'repo1::/remote/wt',
+        launchAgent: 'antigravity',
+        tabId: 'tab-1',
+        leafId: LEAF_ID,
+        freshAgentLaunch: {
+          prompt: '',
+          promptDelivery: 'auto-submit',
+          terminalOptionEdits: { effort: null }
+        }
+      })
+      const onSpawnDeferred = vi.fn()
+      await transport.connect({ url: '', callbacks: { onSpawnDeferred } })
+      const requests = runtimeCall.mock.calls
+        .map(([call]) => call)
+        .filter((call) => call.method === 'terminal.createAgentSession')
+      expect(requests).toHaveLength(2)
+      expect(requests[1]).toEqual(requests[0])
+      expect(requests[0].params).toMatchObject({
+        agent: 'antigravity',
+        clientOperationId: expect.any(String)
+      })
+      if (supported) {
+        expect(requests[0]).toMatchObject({
+          expectedEnvironmentRuntimeId: 'runtime-remote',
+          params: { terminalOptionEdits: { effort: null } }
+        })
+      } else {
+        expect(requests[0].params).not.toHaveProperty('terminalOptionEdits')
+      }
+      expect(runtimeCall.mock.calls.some(([call]) => call.method === 'terminal.create')).toBe(false)
       expect(onSpawnDeferred).toHaveBeenCalledWith('paused')
     }
   )

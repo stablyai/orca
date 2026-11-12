@@ -114,6 +114,15 @@ export function editAgentPickerArguments(draft: AgentPickerDraft, text: string):
 }
 
 export function agentPickerLaunchInputs(draft: AgentPickerDraft, entry?: AgentPickerEntry) {
+  const clearsEffort =
+    draft.agent === 'antigravity' &&
+    draft.surface === 'terminal' &&
+    draft.delegated?.includes('effort')
+  if (clearsEffort && draft.acceptedEdits?.arguments === undefined) {
+    // Control edits leave the destination's current raw defaults authoritative.
+    draft = { ...draft, arguments: undefined }
+    entry = undefined
+  }
   const authorized = !entry || agentPickerArgumentsKnown(entry, draft)
   const current = entry ? agentPickerPanelArguments(entry, draft) : undefined
   const choices = { ...draft.choices, options: { ...draft.choices.options } }
@@ -143,12 +152,16 @@ export function agentPickerLaunchInputs(draft: AgentPickerDraft, entry?: AgentPi
         ...agentPickerOptions(draft.agent, choices.model, 'terminal').map((option) => option.id)
       ])
     })
-  return projectAgentLaunchInputViews(draft.agent, choices, result, {
+  const input = projectAgentLaunchInputViews(draft.agent, choices, result, {
     ...(authorized && draft.arguments !== undefined ? { agentArgs: draft.arguments } : {}),
     modelContext: entry?.terminal.model,
     sourceKeys: current?.context.literalKeys,
     permissionContext: entry?.terminal.permissionMode
   })
+  if (clearsEffort) {
+    return { ...input, terminalOptionEdits: { effort: null } as const }
+  }
+  return input
 }
 
 export function agentPickerFreshLaunchInputs(

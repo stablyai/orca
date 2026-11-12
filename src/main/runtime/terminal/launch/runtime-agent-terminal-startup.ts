@@ -21,7 +21,7 @@ import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell
 } from './agent-launch-typed-line-shell'
-import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
+import { effectiveTerminalStartupCwd } from './agent-launch-scope-runtime'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telemetry'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
@@ -94,7 +94,7 @@ export async function resolveAgentTerminalCreateOptions(
               workspace.connectionId
             )
         : undefined,
-    cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
+    cwd: effectiveTerminalStartupCwd(workspace.path, opts.cwd),
     workspacePath: workspace.path
   })
   if (shellRefusal) {
@@ -187,13 +187,14 @@ async function buildRuntimeAgentTerminalStartupOptions(
         ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
         ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
         shell: agentLaunchQuotingShell(runtime),
+        terminalOptionEdits: opts.terminalOptionEdits,
         sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
       }),
       opts.env?.PATH
     ),
     prompt: opts.startupPrompt ?? '',
-    cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
+    cwd: effectiveTerminalStartupCwd(workspace.path, opts.cwd),
     hostIdentity: host.hostIdentity,
     signal: opts.signal
   }
@@ -277,7 +278,7 @@ function resolveQoderLaunchCommand(
   }
   // Where the process runs: a `\\wsl$` cwd first, then a WSL shell, as the spawn decides it.
   const wsl = resolveWslSessionContext({
-    cwd: resolveTerminalStartupCwd(workspace.path, launch.cwd) ?? workspace.path,
+    cwd: effectiveTerminalStartupCwd(workspace.path, launch.cwd),
     shellOverride: fact.pty.shellOverride,
     terminalWindowsWslDistro: fact.pty.terminalWindowsWslDistro
   })

@@ -99,6 +99,36 @@ export async function spawnIpcPty(
     resumesAgent && !admittedSessionId ? connectOptions.resumeSpawnIntent : undefined
   // Why: a reattach under an admitted session id must never stop the PTY it is reattaching.
   const replacesPtyId = admittedSessionId ? null : (connectOptions.claimReplacedPtyId?.() ?? null)
+  const fresh = transportOptions.freshAgentLaunch
+  const freshEditLaunch =
+    fresh?.terminalOptionEdits?.effort === null && launchAgent && worktreeId
+      ? {
+          launch: {
+            agent: launchAgent,
+            target: { kind: 'existing' as const, worktree: `id:${worktreeId}` },
+            ...(fresh.agentArgs !== undefined ? { agentArgs: fresh.agentArgs } : {}),
+            ...(fresh.sessionOptions
+              ? {
+                  sessionOptions: Object.fromEntries(
+                    Object.entries(fresh.sessionOptions).map(([key, value]) => [key, String(value)])
+                  )
+                }
+              : {}),
+            terminalOptionEdits: fresh.terminalOptionEdits,
+            ...(cwd ? { cwd } : {}),
+            ...(telemetry?.launch_source ? { launchSource: telemetry.launch_source } : {}),
+            ...(fresh.prompt && fresh.promptDelivery === 'auto-submit'
+              ? { prompt: { text: fresh.prompt, delivery: 'submit' as const } }
+              : {})
+          },
+          ...(fresh.prompt && fresh.promptDelivery === 'auto-submit'
+            ? { startupPromptCarry: 'force-line' as const }
+            : {}),
+          ...(fresh.promptDelivery === 'submit-after-ready'
+            ? { suppressStartupUpdatePrompt: true as const }
+            : {})
+        }
+      : undefined
   return window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
@@ -150,6 +180,8 @@ export async function spawnIpcPty(
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...(terminalKittyKeyboardProtocol === true ? { terminalKittyKeyboardProtocol: true } : {}),
     ...(telemetry ? { telemetry } : {}),
-    ...(agentLaunch && !admittedSessionId ? { agentLaunch } : {})
+    ...((agentLaunch ?? freshEditLaunch) && !admittedSessionId
+      ? { agentLaunch: agentLaunch ?? freshEditLaunch }
+      : {})
   })
 }

@@ -1,3 +1,4 @@
+import { AGENT_DEFAULT_VALUE } from './launch-settings/AgentChoiceControls'
 import { antigravityModelSelection } from '../../../../shared/agent-session/options/antigravity-model-efforts'
 import {
   agentPickerModelMenu,
@@ -103,13 +104,13 @@ export function agentLaunchSetupOptionRows(
   const rows: SessionOptionDescriptor[] = options
     .filter((option) => !sharedEffort || option.id !== 'effort')
     .map((option) => {
+      const terminalEffort =
+        entry.agent === 'antigravity' && draft.surface === 'terminal' && option.id === 'effort'
+
       const effortInArguments =
         entry.textGeneration?.effortInArguments &&
         (!draft.textChanges?.includes('effort') || entry.textGeneration.effortArgumentsUnrecognized)
-      const selected =
-        entry.agent === 'antigravity' && draft.surface === 'terminal'
-          ? antigravityModelSelection(models, currentModel)
-          : undefined
+      const selected = terminalEffort ? antigravityModelSelection(models, currentModel) : undefined
       const liveModel = selected?.row ?? models.find((model) => model.id === currentModel)
       const savedCurrent =
         argumentsView.choices.options?.[option.id] ??
@@ -123,9 +124,7 @@ export function agentLaunchSetupOptionRows(
                 : undefined
           : undefined)
       const current =
-        entry.agent === 'antigravity' &&
-        draft.surface === 'terminal' &&
-        option.id === 'effort' &&
+        terminalEffort &&
         option.kind.type === 'select' &&
         !option.kind.choices.some(({ value }) => value === savedCurrent)
           ? undefined
@@ -167,12 +166,10 @@ export function agentLaunchSetupOptionRows(
                         : []),
                       ...option.kind.choices
                     ]
-                  : entry.agent === 'antigravity' &&
-                      draft.surface === 'terminal' &&
-                      option.id === 'effort'
+                  : terminalEffort
                     ? [
                         {
-                          value: '',
+                          value: AGENT_DEFAULT_VALUE,
                           label: t('settings.sourceControl.actionModel.effortDefault', 'Default')
                         },
                         ...option.kind.choices
@@ -182,7 +179,11 @@ export function agentLaunchSetupOptionRows(
                         !option.kind.choices.some((choice) => choice.value === current)
                       ? [...option.kind.choices, { value: current, label: current }]
                       : option.kind.choices,
-                currentValue: effortInArguments ? 'arguments' : current
+                currentValue: effortInArguments
+                  ? 'arguments'
+                  : terminalEffort && !defaultsPending && savedCurrent === undefined
+                    ? AGENT_DEFAULT_VALUE
+                    : current
               },
         valueSource: valueKnown ? 'default' : 'unknown',
         transport: 'agent-session',

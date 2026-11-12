@@ -120,11 +120,13 @@ export function AgentLaunchPickerMenu({
         (setup) =>
           setup.entry.agent === entry.agent &&
           setup.model.id === activeSetup.preset?.model &&
+          setup.surface === activeSetup.preset?.surface &&
           setup.choices.options?.effort === activeSetup.preset.effort
       )
     ) {
       setups.push({
         entry,
+        surface: activeSetup.preset.surface ?? entry.defaultSurface,
         model: {
           id: activeSetup.preset.model,
           label: activeSetup.label,
@@ -242,10 +244,11 @@ export function AgentLaunchPickerMenu({
             const source = draftForEntry?.(setup.entry)
             return (
               <AgentPickerMenuRow
-                key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                key={`${setup.entry.agent}:${setup.surface}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
                 draftScope={draftScope}
-                draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                draftId={`${setup.surface}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
                 initialModel={setup.model.id}
+                initialSurface={setup.surface}
                 initialEffort={setup.choices.options?.effort}
                 entry={setup.entry}
                 mode={mode}

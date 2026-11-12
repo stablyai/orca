@@ -70,3 +70,62 @@ it('passes through inability and preserves saved profile pairs without discovery
     })
   )
 })
+
+it('does not use a prospective repo listing to refuse a future worktree launch', async () => {
+  const runtime = Object.assign(runtimeStub({ settings: {} }), {
+    discoverTerminalModels: vi.fn(async () => ({
+      success: true,
+      catalogOrigin: 'probe',
+      models: capturedModels
+    }))
+  })
+  const result = await method.handler(
+    method.params.parse({
+      ...request,
+      target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'future' } }
+    }),
+    rpcContext(runtime, CAPABLE_CLIENT)
+  )
+  expect(result.outcome.kind).toBe('terminal')
+  expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+    expect.objectContaining({
+      startupAgent: 'antigravity',
+      startupLaunchPreferences: { model: 'gemini-3.8-flash-high', effort: 'low' }
+    })
+  )
+})
+
+it.each(['existing', 'create-worktree', 'create-folder-workspace'] as const)(
+  'carries a model-less clear through the %s terminal launch owner',
+  async (kind) => {
+    const runtime = runtimeStub({ settings: {} })
+    const target =
+      kind === 'existing'
+        ? { kind, worktree: 'id:wt-7' }
+        : kind === 'create-worktree'
+          ? { kind, create: { repo: 'id:repo-1', name: 'future' } }
+          : { kind, create: { projectGroupId: 'group-1', folderPath: '/tmp/future' } }
+    const result = await method.handler(
+      method.params.parse({
+        ...request,
+        launchSource: 'new-tab',
+        target,
+        sessionOptions: undefined,
+        chatOptions: { effort: 'low' },
+        terminalOptionEdits: { effort: null }
+      }),
+      rpcContext(runtime, { ...CAPABLE_CLIENT, clientKind: 'runtime' })
+    )
+    expect(result.outcome.kind).toBe('terminal')
+    if (kind === 'create-worktree') {
+      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({ startupTerminalOptionEdits: { effort: null } })
+      )
+    } else {
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ terminalOptionEdits: { effort: null } })
+      )
+    }
+  }
+)

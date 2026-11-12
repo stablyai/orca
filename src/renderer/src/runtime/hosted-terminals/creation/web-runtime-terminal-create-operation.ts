@@ -1,3 +1,4 @@
+import { createTerminalOptionEditNegotiation } from './agent-launch/terminal-option-edit-capability'
 import { buildLegacyAgentCreateTerminalParams } from './web-runtime-legacy-agent-create-params'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-launch/agent-session-keyboard-capability'
@@ -96,6 +97,7 @@ export async function createWebRuntimeSessionTerminalResult(
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
       const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
       const trustOptions = createAgentSessionTrustWorktreeOptions(args.trustWorktreeId)
+      const terminalEditOptions = createTerminalOptionEditNegotiation(args.terminalOptionEdits)
       let legacyAlreadyPlacedInGroup = false
       // Keep legacy placement until structured creation supports afterTabId.
       // Focus belongs to this client; headless hosts have no renderer.
@@ -135,12 +137,14 @@ export async function createWebRuntimeSessionTerminalResult(
                   )
                 )
             : undefined
-          : async () =>
-              await createAgentSessionCreateOperation().run(async (clientOperationId) =>
+          : async () => {
+              const { terminalOptionEdits, ...editProof } = await terminalEditOptions(environmentId)
+              return await createAgentSessionCreateOperation().run(async (clientOperationId) =>
                 readCreatedAgentTerminalIdentity(
                   unwrapRuntimeRpcResult(
                     await callEnvironment({
                       method: 'terminal.createAgentSession',
+                      ...editProof,
                       params: withAgentSessionCreateOperationId(
                         {
                           ...(await keyboardOptions(environmentId)),
@@ -148,7 +152,8 @@ export async function createWebRuntimeSessionTerminalResult(
                           ...agentSessionCreateRequest({
                             ...args,
                             agent,
-                            agentArgs: args.agentArgs
+                            agentArgs: args.agentArgs,
+                            terminalOptionEdits
                           }),
                           ...(args.cwd ? { startupCwd: args.cwd } : {}),
                           ...(args.viewMode ? { viewMode: args.viewMode } : {})
@@ -160,6 +165,7 @@ export async function createWebRuntimeSessionTerminalResult(
                   )
                 )
               )
+            }
       const resumeHostAuthorityCapability =
         args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
       const created = await runRemoteAgentSessionLaunch<{

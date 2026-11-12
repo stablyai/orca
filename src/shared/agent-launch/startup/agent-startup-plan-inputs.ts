@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../choices/agent-launch-choices'
 import type { GlobalSettings } from '../../global-settings-types'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../catalog/tui-agent'
@@ -50,6 +51,7 @@ export function resolveAgentStartupPlanInputs(args: {
   /** Pass the actual PTY shell; omission is valid only when the Settings shell is what the PTY receives. */
   shell: AgentStartupShell | undefined
   sessionOptions?: Readonly<Record<string, SessionOptionValue>> | undefined
+  terminalOptionEdits?: TerminalOptionEdits
   sessionOptionsYieldToAgentArgs?: boolean
   /** Orca types into this launch after start (worker, automation, handoff), not a user. */
   suppressStartupUpdatePrompt?: boolean
@@ -68,6 +70,7 @@ export function resolveAgentStartupPlanInputs(args: {
     settings,
     agentArgs: args.agentArgs,
     sessionOptions,
+    terminalOptionEdits: args.terminalOptionEdits,
     yieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     command: settings.agentCmdOverrides?.[agent],
     extraAgentArgs: args.extraAgentArgs,

@@ -33,6 +33,10 @@ describe('transient cwd observation is not launch intent', () => {
     const input = { agent: 'codex', target }
     const before = JSON.stringify(input)
     expect(computeAgentLaunchFingerprint(input)).toBe(digest)
+    expect(computeAgentLaunchFingerprint({ ...input, terminalOptionEdits: {} })).toBe(digest)
+    expect(
+      computeAgentLaunchFingerprint({ ...input, terminalOptionEdits: { effort: null } })
+    ).not.toBe(digest)
     expect(
       computeAgentLaunchFingerprint({
         ...input,

@@ -44,6 +44,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   draftId,
   initialModel,
   initialEffort,
+  initialSurface,
   openSetup,
   onSetupOpenChange,
   label = entry.label,
@@ -65,6 +66,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   draftId?: string
   initialModel?: string
   initialEffort?: string
+  initialSurface?: AgentPickerSurface
   openSetup: string | null
   onSetupOpenChange: (
     setup: {
@@ -93,15 +95,24 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   const t = useTranslate()
   useUiLanguageRevision()
   const setupId = useId()
-  const preset = initialModel ? { model: initialModel, effort: initialEffort } : undefined
+  const preset = initialModel
+    ? { model: initialModel, effort: initialEffort, surface: initialSurface }
+    : undefined
   const initial = preset
-    ? applyAgentPickerEdit(entry, selected ?? source ?? agentPickerDraft(entry), {
-        kind: 'choice',
-        patch: {
-          model: preset.model,
-          ...(preset.effort ? { options: { effort: preset.effort } } : {})
+    ? applyAgentPickerEdit(
+        entry,
+        {
+          ...(selected ?? source ?? agentPickerDraft(entry)),
+          ...(initialSurface ? { surface: initialSurface } : {})
+        },
+        {
+          kind: 'choice',
+          patch: {
+            model: preset.model,
+            ...(preset.effort ? { options: { effort: preset.effort } } : {})
+          }
         }
-      })
+      )
     : undefined
   const closeMenu = useDropdownMenuClose()
   const surface =
@@ -148,7 +159,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       entry={entry}
       initial={source}
       seed={initial ?? selected ?? source}
-      surface={selected?.surface}
+      surface={initialSurface ?? selected?.surface}
       mode={mode}
       terminalBlocked={terminalBlocked}
       open={openSetup === setupId}

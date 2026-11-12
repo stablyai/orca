@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type * as TerminalDiscovery from '@/runtime/terminal/terminal-model-discovery-client'
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,7 +18,8 @@ const discoveryContext = vi.fn((terminalTabId: string) => ({
     worktreePath: '/repo'
   }
 }))
-vi.mock('@/runtime/terminal/terminal-model-discovery-client', () => ({
+vi.mock('@/runtime/terminal/terminal-model-discovery-client', async (original) => ({
+  ...(await original<typeof TerminalDiscovery>()),
   readAntigravityTerminalCatalog: (context: unknown) => terminalCatalog(context)
 }))
 
@@ -28,16 +30,20 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
 vi.mock('../catalog/native-chat-session-option-discovery', () => ({
   resolveNativeChatModelDiscoveryContext: (terminalTabId: string) =>
     discoveryContext(terminalTabId),
+  resolveWorktreeModelDiscoveryRuntime: (_state: unknown, id: string) =>
+    discoveryContext(id).runtime,
   discoverNativeChatCatalogModels: () => discoverModels()
 }))
 
 const storeListeners = new Set<(state: typeof storeState, previous: typeof storeState) => void>()
 const storeState: {
   settings: Record<string, unknown>
+  tabsByWorktree: Record<string, { id: string }[]>
   updateSettings: () => Promise<undefined>
   agentStatusByPaneKey: Record<string, { model?: string; modelSwitchCommand?: 'orca-model' }>
 } = {
   settings: {},
+  tabsByWorktree: { 'agy-tab': [{ id: 'agy-tab' }], 'open-context': [{ id: 'open-context' }] },
   updateSettings: async () => undefined,
   agentStatusByPaneKey: {}
 }

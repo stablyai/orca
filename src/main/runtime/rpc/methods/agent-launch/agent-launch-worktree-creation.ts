@@ -48,6 +48,7 @@ export function agentLaunchWorkspaceFactory(
       onWorkspaceCreated,
       startupPrompt,
       agentArgs,
+      terminalOptionEdits,
       cwd,
       launchSource,
       paneKey,
@@ -98,6 +99,7 @@ export function agentLaunchWorkspaceFactory(
             context
           ),
           ...(agentArgs !== undefined ? { startupAgentArgs: agentArgs } : {}),
+          ...(terminalOptionEdits ? { startupTerminalOptionEdits: terminalOptionEdits } : {}),
           ...(startupPrompt
             ? {
                 onStartupPromptCarry: (carried: boolean) => {

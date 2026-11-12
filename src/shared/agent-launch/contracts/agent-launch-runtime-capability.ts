@@ -60,7 +60,12 @@ export const AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY = 'settings.agent-permiss
 // explicit chat it cannot open before creating anything. Older hosts strip the field.
 export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1' as const
 
+// Host applies transient option deletions against its current terminal defaults on every fresh path.
+export const AGENT_LAUNCH_TERMINAL_OPTION_EDITS_CAPABILITY =
+  'agent.launch.terminal-option-edits.v1' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
+  AGENT_LAUNCH_TERMINAL_OPTION_EDITS_CAPABILITY,
   AGENT_LAUNCH_CHAT_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
   AGENT_LAUNCH_CHOICES_CAPABILITY,

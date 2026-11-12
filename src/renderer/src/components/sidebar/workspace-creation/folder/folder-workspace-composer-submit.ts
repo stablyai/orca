@@ -114,6 +114,7 @@ export async function submitFolderWorkspaceCreate({
           agentCmdOverrides,
           agentArgs,
           sessionOptions,
+          terminalOptionEdits: launchInputs?.terminalOptionEdits,
           agentEnv,
           platform: launchPlatform,
           shell: launchShell,
@@ -126,6 +127,7 @@ export async function submitFolderWorkspaceCreate({
               settings: effectiveSettings ?? { agentCmdOverrides },
               agentArgs: settings ? agentArgs : (agentArgs ?? null),
               sessionOptions,
+              terminalOptionEdits: launchInputs?.terminalOptionEdits,
               platform: launchPlatform,
               shell: launchShell,
               isRemote: launchIsRemote
@@ -208,6 +210,7 @@ export async function submitFolderWorkspaceCreate({
           ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
           launchAgent: quickAgent,
           freshAgentLaunch: {
+            terminalOptionEdits: launchInputs?.terminalOptionEdits,
             agentArgs: launchInputs ? launchInputs.agentArgs : requestedAgentArgs,
             sessionOptions,
             prompt: launchDraftPrompt ?? note,

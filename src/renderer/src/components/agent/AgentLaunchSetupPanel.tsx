@@ -1,3 +1,4 @@
+import { AGENT_DEFAULT_VALUE } from './launch-settings/AgentChoiceControls'
 import {
   agentLaunchDisplayModel,
   agentLaunchSetupChoiceChips,
@@ -141,15 +142,26 @@ export function AgentLaunchSetupPanel({
           editDraft(
             option.id === 'fastMode' || option.id === 'serviceTier'
               ? { kind: 'speed', key: option.id, value: String(value), model: currentModel }
-              : { kind: 'choice', patch: { options: { [option.id]: String(value) } } }
+              : {
+                  kind: 'choice',
+                  patch: {
+                    options: { [option.id]: value === AGENT_DEFAULT_VALUE ? null : String(value) }
+                  }
+                }
           )
         }}
         onAction={() => {}}
       />
     ) : null
-  const handleUse = (surface: AgentPickerSurface) => {
+  const handleUse = (surface: AgentPickerSurface, prompt?: string) => {
     const current = getDraft()
-    return current ? onUse({ ...acceptAgentPickerArguments(entry, current), surface }) : false
+    return current
+      ? onUse({
+          ...acceptAgentPickerArguments(entry, current),
+          surface,
+          ...(prompt ? { prompt } : {})
+        })
+      : false
   }
   const use = (surface: AgentPickerSurface) =>
     mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
@@ -167,7 +179,7 @@ export function AgentLaunchSetupPanel({
         if (isScreenSubmitShortcut(event)) {
           event.preventDefault()
           event.stopPropagation()
-          const primary = mode === 'select' ? draft.surface : entry.defaultSurface
+          const primary = draft.surface
           const alternate = entry.surfaces.find((surface) => surface !== primary)
           if (alternate && !disabled && !event.repeat) {
             use(alternate)
@@ -184,7 +196,7 @@ export function AgentLaunchSetupPanel({
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
           event.preventDefault()
-          use(mode === 'select' ? draft.surface : entry.defaultSurface)
+          use(draft.surface)
         }
       }}
     >
@@ -204,7 +216,7 @@ export function AgentLaunchSetupPanel({
           ) {
             event.preventDefault()
             event.stopPropagation()
-            use(mode === 'select' ? draft.surface : entry.defaultSurface)
+            use(draft.surface)
           }
         }}
         onKeyDown={(event) => {
@@ -379,18 +391,10 @@ export function AgentLaunchSetupPanel({
         <AgentLaunchSetupFooter
           ref={footer}
           entry={entry}
+          primary={draft.surface}
           terminalBlocked={terminalBlocked}
           disabled={disabled}
-          onLaunch={(surface, prompt) => {
-            const current = getDraft()
-            return current
-              ? onUse({
-                  ...acceptAgentPickerArguments(entry, current),
-                  surface,
-                  ...(prompt ? { prompt } : {})
-                })
-              : false
-          }}
+          onLaunch={handleUse}
         />
       )}
     </div>

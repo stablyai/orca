@@ -50,7 +50,7 @@ export function currentAgentPickerDraft(
 export type AgentPickerRetainedSetup = {
   target: AgentPickerEntry['draftTarget']
   agent: AgentPickerEntry['agent']
-  preset?: { model: string; effort?: string }
+  preset?: { model: string; effort?: string; surface?: AgentPickerDraft['surface'] }
   source: AgentPickerDraft | undefined
   draft: AgentPickerDraft
   active: boolean

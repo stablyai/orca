@@ -167,7 +167,17 @@ it('matches Antigravity and its model setups via the AGY acronym', async () => {
     ...codex,
     agent: 'antigravity',
     label: 'Antigravity',
-    rows: [{ agent: 'antigravity', kind: 'cli' }],
+    rows: [
+      { agent: 'antigravity', kind: 'chat' },
+      { agent: 'antigravity', kind: 'cli' }
+    ],
+    surfaces: ['chat', 'terminal'],
+    defaultSurface: 'chat',
+    catalog: {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [{ id: 'chat-only', label: 'Chat only', isDefault: false, efforts: [] }]
+    },
     terminalCatalog: {
       origin: 'probe',
       fetchedAt: 1,
@@ -189,7 +199,7 @@ it('matches Antigravity and its model setups via the AGY acronym', async () => {
     expect.stringContaining('Antigravity')
   ])
   await user.keyboard('{Enter}')
-  expect(launch).toHaveBeenCalledWith({ agent: 'antigravity', kind: 'cli' }, undefined)
+  expect(launch).toHaveBeenCalledWith({ agent: 'antigravity', kind: 'chat' }, undefined)
 
   launch.mockClear()
   await user.click(screen.getByRole('button', { name: 'Open' }))
@@ -198,6 +208,7 @@ it('matches Antigravity and its model setups via the AGY acronym', async () => {
     { agent: 'antigravity', kind: 'cli', executionHostId: undefined },
     expect.objectContaining({
       agent: 'antigravity',
+      surface: 'terminal',
       choices: { model: 'gemini-2.5-pro' }
     }),
     antigravity

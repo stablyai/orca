@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../choices/agent-launch-choices'
 /** Lost replies are retried, including mobile workspace creation: claim an operation ID durably before side effects, then replay its recorded answer. Unknown outcomes stay refused; this ledger neither adopts nor recovers orphaned surfaces. */
 
 import { canonicalAgentSessionDigest } from '../../agent-session/lifecycle/agent-session-mutation-envelope'
@@ -16,6 +17,7 @@ export type AgentLaunchFingerprintInput = {
   reuseTerminal?: { handle: string }
   /** Arguments change operation identity; null explicitly clears defaults and differs from absence. */
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   /** cwd changes both execution location and structured-to-terminal routing. */
   cwd?: string
   /** Pane identity enters the PTY env; another reservation must not replay an unreachable pane. */
@@ -43,6 +45,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     chatOptions: input.chatOptions,
     reuseTerminal: input.reuseTerminal,
     agentArgs: input.agentArgs,
+    terminalOptionEdits: input.terminalOptionEdits?.effort === null ? { effort: null } : undefined,
     cwd: input.cwd,
     // Absent keys are dropped by the canonical form, so every digest without one is unchanged.
     paneKey: input.paneKey,

@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import {
   resolveAgentStartupPlanInputs,
   type AgentStartupSettings
@@ -51,6 +52,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   note: string
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   sessionOptionsOverrideAgentArgs?: boolean
   agentEnv?: Record<string, string>
@@ -63,6 +65,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
     settings: args.settings ?? { agentCmdOverrides: args.agentCmdOverrides },
     agentArgs: args.settings ? args.agentArgs : (args.agentArgs ?? null),
     sessionOptions: args.sessionOptions,
+    terminalOptionEdits: args.terminalOptionEdits,
     platform: args.platform,
     shell: args.shell,
     isRemote: args.isRemote

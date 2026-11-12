@@ -25,7 +25,7 @@ import { sourceControlActionRouteHint } from './agent-choice-route-hint'
 import { useTranslate } from '@/i18n/use-translate'
 import { antigravityTerminalChoicePatch } from '../../../../../shared/agent-session/options/antigravity-model-efforts'
 
-const AGENT_DEFAULT_VALUE = '__agent_default__'
+export const AGENT_DEFAULT_VALUE = '__agent_default__'
 
 export type AgentChoiceControlsProps = {
   agent: TuiAgent | null | undefined

@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
@@ -84,6 +85,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   onStartupTerminalCreated?: (terminal: RuntimeTerminalCreate) => void
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
+  startupTerminalOptionEdits?: TerminalOptionEdits
   /** Main-internal: an automation's saved extras, merged over the startup agent's arguments. */
   startupExtraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into the startup agent once it starts. */

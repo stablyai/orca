@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../shared/agent-launch/choices/agent-launch-choices'
 import { OrcaRuntimeWithForegroundInspection } from './workspace-foreground-inspection'
 import {
   type RuntimeNavigationTarget,
@@ -146,6 +147,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     inputs?: {
       createdWithAgent?: TuiAgent
       startupAgentArgs?: string | null
+      startupTerminalOptionEdits?: TerminalOptionEdits
       startupSessionOptions?: Parameters<typeof buildWorktreeStartupForDraft>[0]['sessionOptions']
       startupLaunchPreferences?: AgentLaunchPreferences
     }
@@ -158,6 +160,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       draft,
       originalAgent: inputs?.createdWithAgent ?? requestedAgent,
       agentArgs: inputs?.startupAgentArgs,
+      terminalOptionEdits: inputs?.startupTerminalOptionEdits,
       sessionOptions:
         inputs?.startupSessionOptions ??
         this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
@@ -175,6 +178,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     launchPreferences?: AgentLaunchPreferences,
     launchInputs?: {
       agentArgs?: string | null
+      terminalOptionEdits?: TerminalOptionEdits
       sessionOptions?: Parameters<typeof buildWorktreeStartupForAgent>[0]['sessionOptions']
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
@@ -194,6 +198,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       ...(launchPreferences ? { launchPreferences } : {}),
       ...(launchInputs?.agentArgs !== undefined ? { agentArgs: launchInputs.agentArgs } : {}),
       ...(launchInputs?.sessionOptions ? { sessionOptions: launchInputs.sessionOptions } : {}),
+      ...(launchInputs?.terminalOptionEdits
+        ? { terminalOptionEdits: launchInputs.terminalOptionEdits }
+        : {}),
       ...(launchInputs?.extraAgentArgs ? { extraAgentArgs: launchInputs.extraAgentArgs } : {}),
       ...(launchInputs?.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
       ...(launchInputs?.launchSource ? { launchSource: launchInputs.launchSource } : {}),

@@ -162,7 +162,7 @@ export function useAgentLaunchPickerInventorySource(
     target,
     repo?.path
   )
-  const terminalDiscovery = agentPickerTerminalDiscovery({
+  const terminalDiscovery = agentPickerTerminalDiscovery(state, {
     target,
     concreteWorkspace,
     workspaceId,
@@ -191,7 +191,8 @@ export function useAgentLaunchPickerInventorySource(
         model.state === 'settled' ? model.rows : [],
         model.state === 'settled' ? model.detection.detectedIds : [],
         model.state === 'settled' ? model.defaultTuiAgent : undefined,
-        agentPickerCatalogSettingsKey(settings, state.settings)
+        agentPickerCatalogSettingsKey(settings),
+        terminalDiscovery?.key
       ]),
     [
       context,
@@ -200,7 +201,7 @@ export function useAgentLaunchPickerInventorySource(
       executionHostId,
       model,
       settings,
-      state.settings,
+      terminalDiscovery?.key,
       registeredAgents,
       coherentCatalog,
       observesHostCatalog

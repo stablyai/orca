@@ -1,7 +1,15 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { useMemo } from 'react'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AgentPickerDefaultSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
 import { resolveWorktreeModelDiscoveryRuntime } from '../native-chat/session/options/catalog/native-chat-session-option-discovery'
-import { readAntigravityTerminalCatalog } from '@/runtime/terminal/terminal-model-discovery-client'
+import {
+  createTerminalModelDiscoveryKeySelector,
+  readAntigravityTerminalCatalog,
+  terminalModelDiscoveryDescriptor,
+  type TerminalModelDiscoveryDescriptor
+} from '@/runtime/terminal/terminal-model-discovery-client'
+import type { AppState } from '@/store/types'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
@@ -19,17 +27,13 @@ import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/per
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { TerminalModelDiscoveryParams } from '../../../../shared/rpc-contract/agent-model-discovery-params'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export function agentPickerModelCatalogReads(
   input: Omit<ModelMenuReadScope, 'agent' | 'target'> & {
     target: RuntimeClientTarget | null
     cliDiscoveryRuntime?: RuntimeGitContext | null
-    terminalDiscovery?: {
-      runtime: RuntimeGitContext
-      launch: Omit<TerminalModelDiscoveryParams, 'agentId'>
-    } | null
+    terminalDiscovery?: TerminalModelDiscoveryDescriptor | null
   }
 ) {
   const { target, cliDiscoveryRuntime } = input
@@ -101,32 +105,36 @@ export async function readAgentPickerLaunchSupport(
   }
 }
 
-export function agentPickerTerminalDiscovery(input: {
-  target: RuntimeClientTarget | null
-  concreteWorkspace: boolean
-  workspaceId?: string
-  repo?: { id: string; executionHostId?: string | null }
-  cwd?: string | null
-}): { runtime: RuntimeGitContext; launch: Omit<TerminalModelDiscoveryParams, 'agentId'> } | null {
+export function agentPickerTerminalDiscovery(
+  state: AppState,
+  input: {
+    target: RuntimeClientTarget | null
+    concreteWorkspace: boolean
+    workspaceId?: string
+    repo?: { id: string; executionHostId?: string | null }
+    cwd?: string | null
+  }
+): TerminalModelDiscoveryDescriptor | null {
   const { target, workspaceId, repo, cwd } = input
   const concreteWorkspace = input.concreteWorkspace || workspaceId === FLOATING_TERMINAL_WORKTREE_ID
   if (!target || (!concreteWorkspace && !repo)) {
     return null
   }
-  return {
-    runtime: {
+  return terminalModelDiscoveryDescriptor(
+    state,
+    {
       target,
       worktreeId: concreteWorkspace ? (workspaceId ?? null) : null,
       worktreePath: ''
     },
-    launch: {
+    {
       ...(concreteWorkspace && workspaceId ? { worktree: `id:${workspaceId}` } : {}),
       ...(!concreteWorkspace && repo
         ? { repo: repo.id, repoHostId: getRepoExecutionHostId(repo) }
         : {}),
       ...(cwd ? { cwd } : {})
     }
-  }
+  )
 }
 
 export function agentPickerCliDiscoveryRuntime(
@@ -147,8 +155,7 @@ export function agentPickerCliDiscoveryRuntime(
 }
 
 export function agentPickerCatalogSettingsKey(
-  defaults: AgentPickerDefaultSettings | null | undefined,
-  settings: GlobalSettings | null
+  defaults: AgentPickerDefaultSettings | null | undefined
 ) {
   return [
     defaults && {
@@ -158,10 +165,33 @@ export function agentPickerCatalogSettingsKey(
       agentPermissionOverrides: defaults.agentPermissionOverrides,
       nativeChatSessionOptions: defaults.nativeChatSessionOptions,
       nativeChatPermissionMode: defaults.nativeChatPermissionMode
-    },
-    settings?.agentCmdOverrides?.antigravity,
-    settings?.agentDefaultEnv?.antigravity,
-    settings?.terminalWindowsShell,
-    settings?.terminalWindowsWslDistro
+    }
   ]
+}
+
+export function useAgentPickerTerminalDiscoveryKey(
+  executionHostId: string | null,
+  { worktreeId: workspaceId, repoId }: { worktreeId?: string; repoId?: string },
+  cwd?: string | null
+) {
+  const selector = useMemo(
+    () =>
+      executionHostId
+        ? createTerminalModelDiscoveryKeySelector((state) =>
+            agentPickerTerminalDiscovery(state, {
+              target: structuredAgentSessionTargetForHost(executionHostId),
+              concreteWorkspace: Boolean(workspaceId),
+              workspaceId,
+              repo: repoId
+                ? state.repos.find(
+                    (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
+                  )
+                : undefined,
+              cwd
+            })
+          )
+        : () => undefined,
+    [executionHostId, workspaceId, repoId, cwd]
+  )
+  return useAppStateValue(selector)
 }

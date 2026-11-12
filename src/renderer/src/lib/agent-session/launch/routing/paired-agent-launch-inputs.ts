@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { useAppStore } from '@/store/index'
 import {
   readHostAgentLaunchSettings,
@@ -38,6 +39,7 @@ export async function pairedAgentLaunchInputs(args: {
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   actionAgentArgs?: string
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
 }) {
   const { agent } = args
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions, agent)
@@ -62,6 +64,7 @@ export async function pairedAgentLaunchInputs(args: {
   if (args.complete && !actionNeedsHostPermission) {
     return {
       ...directArgs,
+      ...(args.terminalOptionEdits ? { terminalOptionEdits: args.terminalOptionEdits } : {}),
       sessionOptions,
       launchPreferences
     }
@@ -150,7 +153,12 @@ export async function pairedAgentLaunchInputs(args: {
       )
     : args.agentArgs
   if (args.complete) {
-    return { agentArgs, sessionOptions, launchPreferences }
+    return {
+      agentArgs,
+      sessionOptions,
+      launchPreferences,
+      ...(args.terminalOptionEdits ? { terminalOptionEdits: args.terminalOptionEdits } : {})
+    }
   }
   if (!needsArguments) {
     return { agentArgs, launchPreferences }

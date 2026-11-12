@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../shared/agent-launch/choices/agent-launch-choices'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 /**
  * The factories `executeAgentLaunch` is handed: how a surface and a workspace are BUILT once the
@@ -41,6 +42,7 @@ export type AgentLaunchSurfaceFactory = {
     startupPrompt?: string
     /** Replaces the settings default for this launch only; `null` means no arguments at all. */
     agentArgs?: string | null
+    terminalOptionEdits?: TerminalOptionEdits
     cwd?: string
     launchSource?: string
     /** Caller-minted pane; reject with AgentLaunchPaneAlreadyLiveError if live. */
@@ -103,6 +105,7 @@ export type AgentLaunchWorkspaceFactory = {
     /** Legacy delivery lets the create own all prompt lengths and agents. */
     legacyPrompt?: AgentLaunchPrompt
     agentArgs?: string | null
+    terminalOptionEdits?: TerminalOptionEdits
     cwd?: string
     launchSource?: string
     paneKey?: string
@@ -153,6 +156,7 @@ export function terminalLaunchInputs(intent: AgentLaunchIntent) {
   return {
     // Projected for this agent by each terminal builder, which keeps only what has a flag.
     options: terminalLaunchOptions(intent),
+    ...(intent.terminalOptionEdits ? { terminalOptionEdits: intent.terminalOptionEdits } : {}),
     // `null` is a value the caller meant, so this tests for absence rather than falsiness.
     ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
     ...(intent.cwd ? { cwd: intent.cwd } : {}),

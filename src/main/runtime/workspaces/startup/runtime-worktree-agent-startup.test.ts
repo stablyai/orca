@@ -4,6 +4,10 @@ import '../../../../shared/agent-kind'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
+import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
+import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-startup'
+import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 const mocks = vi.hoisted(() => ({
   detectInstalledAgentsWithShellPathHydration: vi.fn(),
@@ -60,6 +64,58 @@ const settings = {
   disabledTuiAgents: [],
   defaultTuiAgent: null
 }
+
+it.each([false, true])(
+  'applies a prospective effort clear at current managed startup (draft %s)',
+  async (draft) => {
+    const args = buildManagedWorktreeCreateArgs(
+      WorktreeCreate.parse({
+        repo: 'repo-1',
+        startupAgent: 'antigravity',
+        startupTerminalOptionEdits: { effort: null },
+        ...(draft ? { startupDraft: 'ship it' } : {})
+      }),
+      {}
+    )
+    const environment = {
+      repo: makeRepo({}),
+      settings: {
+        ...settings,
+        agentCmdOverrides: { antigravity: 'agy' },
+        agentPermissionDefault: 'full-access' as const,
+        agentDefaultArgs: { antigravity: '--effort=medium --add-dir current' },
+        agentLaunchChoices: { antigravity: { options: { effort: 'low' } } }
+      },
+      getLaunchRuntime: () => LINUX
+    }
+    const result = await resolveManagedWorktreeCreateStartup(args, [], {
+      agent: (agent, prompt, launchPreferences, inputs) =>
+        buildWorktreeStartupForAgent({
+          ...environment,
+          ...inputs,
+          agent,
+          prompt,
+          launchPreferences,
+          toSessionOptions: () => undefined
+        }),
+      draft: (content, requestedAgent, launchSource, inputs) =>
+        buildWorktreeStartupForDraft({
+          ...environment,
+          draft: content,
+          requestedAgent,
+          launchSource,
+          terminalOptionEdits: inputs?.startupTerminalOptionEdits
+        })
+    })
+    expect(tokenizeStartupCommand(result.effectiveStartup?.command ?? '', 'posix')).toEqual({
+      ok: true,
+      tokens: ['agy', '--dangerously-skip-permissions', '--add-dir', 'current']
+    })
+    if (draft) {
+      expect(result.effectiveDraftPaste).toEqual({ agent: 'antigravity', content: 'ship it' })
+    }
+  }
+)
 
 /** The launched CLI name is the whole decision: `orca` is the relay shim, `orca-ide` is local. */
 async function launchCliNameFor(repo: Repo): Promise<string> {

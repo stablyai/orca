@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../choices/agent-launch-choices'
 /** One launch intent for desktop/mobile/CLI/orchestration; the host resolves settings and per-launch feasibility once and reports the created surface. */
 
 import type { TuiAgent } from '../catalog/tui-agent'
@@ -44,6 +45,7 @@ export type AgentLaunchIntent = {
   reuseTerminal?: AgentLaunchReusedTerminal
   /** Tri-state arguments: absent uses defaults, null explicitly clears them. Overrides remain terminal-only; structured chat uses host settings and reports a warning. */
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   /** An outside-workspace cwd forces a terminal via tui_launch_command; structured sessions cannot start in another directory. */
   cwd?: string
   /** Caller-only UI source for agent_started telemetry; never affects launch behavior. */
@@ -255,6 +257,7 @@ function isAgentLaunchPromptDelivery(value: unknown): value is AgentLaunchPrompt
 /** Create payloads cannot carry agent fields that bypass the host's launch router. */
 export const AGENT_LAUNCH_RESERVED_CREATE_FIELDS = [
   'startupAgent',
+  'startupTerminalOptionEdits',
   'startupCommand',
   'startupPrompt',
   'startupDraft',

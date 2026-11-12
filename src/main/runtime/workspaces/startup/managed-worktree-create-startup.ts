@@ -15,7 +15,11 @@ type StartupBuilders = {
     launchSource?: string,
     inputs?: Pick<
       RuntimeManagedWorktreeCreateArgs,
-      'createdWithAgent' | 'startupAgentArgs' | 'startupSessionOptions' | 'startupLaunchPreferences'
+      | 'createdWithAgent'
+      | 'startupAgentArgs'
+      | 'startupSessionOptions'
+      | 'startupLaunchPreferences'
+      | 'startupTerminalOptionEdits'
     >
   ) => ReturnType<typeof buildWorktreeStartupForDraft>
 }

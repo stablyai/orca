@@ -17,6 +17,42 @@ describe('web preload runtime calls', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('serves terminal discovery from the connected runtime with the original launch context', async () => {
+    const call = vi.fn(async () => ({
+      id: 'terminal-models',
+      ok: true,
+      result: {
+        success: true,
+        catalogOrigin: 'probe',
+        models: [
+          { id: 'gemini-3.8-flash-low', label: 'Flash (Low)' },
+          { id: 'gemini-3.8-flash-high', label: 'Flash (High)' }
+        ]
+      },
+      _meta: { runtimeId: 'runtime-a' }
+    }))
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call = call
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const params = {
+      agentId: 'antigravity',
+      worktree: 'id:repo::/workspace',
+      cwd: '/workspace/child'
+    }
+    expect(await globals.window.api.git.discoverTerminalModels(params)).toMatchObject({
+      success: true,
+      models: [{ id: 'gemini-3.8-flash-low' }, { id: 'gemini-3.8-flash-high' }]
+    })
+    expect(call).toHaveBeenCalledWith('agent.discoverTerminalModels', params, { timeoutMs: 75_000 })
+  })
+
   it('revokes unsent work and refuses queued or delivered work after pairing replacement', async () => {
     let release!: () => void
     const blocked = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {

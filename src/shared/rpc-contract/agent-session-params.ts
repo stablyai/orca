@@ -1,3 +1,4 @@
+import { TerminalOptionEditsParam } from './terminal-option-edits'
 import * as z from 'zod'
 import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
 import {
@@ -189,6 +190,7 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
     sessionOptions: z.record(z.string(), z.string()).optional(),
+    terminalOptionEdits: TerminalOptionEditsParam.optional(),
     extraAgentArgs: z.string().optional(),
     launchPreferences: LaunchPreferences.optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),

@@ -94,3 +94,21 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 })
+
+it('replays an effort-clear create after defaults change and conflicts if the clear changes', async () => {
+  const settings = { agentLaunchChoices: { antigravity: { options: { effort: 'low' } } } }
+  const runtime = createRuntime(undefined, settings)
+  const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+  const id = operationId()
+  const input = request(id, { agent: 'antigravity', terminalOptionEdits: { effort: null } })
+  await expect(runtime.createAgentSession(input)).resolves.toMatchObject({ disposition: 'created' })
+  expect(createTerminal.mock.lastCall?.[1]).toMatchObject({ terminalOptionEdits: { effort: null } })
+  settings.agentLaunchChoices.antigravity.options.effort = 'high'
+  await expect(runtime.createAgentSession(input)).resolves.toMatchObject({
+    disposition: 'replayed'
+  })
+  await expect(
+    runtime.createAgentSession({ ...input, terminalOptionEdits: undefined })
+  ).rejects.toThrow('agent_session_operation_conflict')
+  expect(createTerminal).toHaveBeenCalledOnce()
+})

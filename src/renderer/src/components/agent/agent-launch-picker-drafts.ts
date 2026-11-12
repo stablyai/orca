@@ -29,7 +29,11 @@ import {
 import { subscribeToNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
 import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-composer-draft-memory'
 
-export type AgentPickerSetupIdentity = { model: string; effort?: string }
+export type AgentPickerSetupIdentity = {
+  model: string
+  effort?: string
+  surface?: AgentPickerDraft['surface']
+}
 const appSession: AgentPickerDraftOwner = {}
 const sessionDrafts = new WeakMap<AgentPickerDraftOwner, Map<string, RetainedSetup>>()
 // Why: a form re-derives its source (and may reset its scope) from each pick; the open panel stays the authority.
@@ -87,7 +91,7 @@ export function useAgentPickerSetup({
 }) {
   const currentSurface = surface ?? initial?.surface
   const [, publish] = useReducer((version: number) => version + 1, 0)
-  const key = JSON.stringify([entry.draftTarget?.key, entry.agent, draftId])
+  const key = JSON.stringify([entry.draftTarget?.key, entry.agent, draftId, preset?.surface])
   const launchKey = nativeChatLaunchPromptDraftScopeKey(
     entry.worktreeId ?? '',
     entry.agent,
@@ -97,18 +101,23 @@ export function useAgentPickerSetup({
     () =>
       preset ??
       (mode === 'launch' && initial?.choices.model
-        ? { model: initial.choices.model, effort: initial.choices.options?.effort ?? undefined }
+        ? {
+            model: initial.choices.model,
+            effort: initial.choices.options?.effort ?? undefined,
+            surface: initial.surface
+          }
         : undefined),
-    [preset, mode, initial?.choices.model, initial?.choices.options?.effort]
+    [preset, mode, initial?.choices.model, initial?.choices.options?.effort, initial?.surface]
   )
   // Original parsed preset identity is independent of edited choices and changing defaults.
   const slot = preset
     ? JSON.stringify({
         model: preset.model,
+        ...(preset.surface ? { surface: preset.surface } : {}),
         ...(preset.effort !== undefined ? { options: { effort: preset.effort } } : {})
       })
     : initial && mode === 'launch'
-      ? JSON.stringify(initial.choices)
+      ? JSON.stringify({ surface: initial.surface, ...initial.choices })
       : ''
   const read = useCallback(
     () =>

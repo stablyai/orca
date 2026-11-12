@@ -184,6 +184,9 @@ export function buildRuntimeWorktreeCreateParams(
           ...(creationAgentLaunch.inputs?.agentArgs !== undefined
             ? { startupAgentArgs: creationAgentLaunch.inputs.agentArgs }
             : {}),
+          ...(creationAgentLaunch.inputs?.terminalOptionEdits
+            ? { startupTerminalOptionEdits: creationAgentLaunch.inputs.terminalOptionEdits }
+            : {}),
           ...(creationAgentLaunch.inputs?.sessionOptions
             ? { startupSessionOptions: creationAgentLaunch.inputs.sessionOptions }
             : {}),

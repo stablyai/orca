@@ -1,3 +1,5 @@
+import { discoverTerminalModels } from '../runtime/terminal/catalog/runtime-terminal-model-discovery'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import {
   chmodSync,
   mkdirSync,
@@ -11,10 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
-import {
-  discoverCommitMessageModelsLocal,
-  generateConversationNameFromContext
-} from './commit-message-text-generation'
+import { generateConversationNameFromContext } from './commit-message-text-generation'
 
 const homes: string[] = []
 
@@ -82,7 +81,7 @@ describe.runIf(process.platform !== 'win32')('chat naming CLI discovery', () => 
 })
 
 describe.runIf(process.platform !== 'win32')('terminal discovery launch context', () => {
-  it('runs a cwd-sensitive CLI with the configured terminal account environment', async () => {
+  it('runs a cwd-sensitive CLI at the workspace root when cwd is omitted, with the terminal account environment', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-agy-discovery-'))
     homes.push(root)
     const workspace = join(root, 'workspace')
@@ -94,20 +93,39 @@ describe.runIf(process.platform !== 'win32')('terminal discovery launch context'
       '#!/bin/sh\nif [ "$PWD" = "$EXPECTED_CWD" ] && [ "$HOME" = "$USERPROFILE" ]; then printf "gemini-3.8-flash-low\tFlash (Low)\\n"; else printf "wrong-account\tWrong account\\n"; fi\n'
     )
     chmodSync(agy, 0o755)
-    const result = await discoverCommitMessageModelsLocal(
-      'antigravity',
-      { HOME: join(root, 'account-A'), PATH: '/usr/bin:/bin' },
-      agy,
+    const result = await discoverTerminalModels(
       {
-        uncached: true,
-        cwd,
-        useCwdForNative: true,
-        agentEnv: {
-          HOME: join(root, 'account-B'),
-          USERPROFILE: join(root, 'account-B'),
-          EXPECTED_CWD: cwd
-        }
-      }
+        store: {
+          getSettings: () => ({
+            agentCmdOverrides: { antigravity: agy },
+            agentDefaultEnv: {
+              antigravity: {
+                HOME: join(root, 'account-B'),
+                USERPROFILE: join(root, 'account-B'),
+                EXPECTED_CWD: cwd
+              }
+            }
+          })
+        } as unknown as RuntimeStore,
+        resolveTarget: async () => ({
+          managedWorktree: null,
+          scope: {
+            id: 'folder:test',
+            path: cwd,
+            connectionId: null,
+            repo: null,
+            folderWorkspace: null
+          }
+        }),
+        environment: {
+          resolveBaseEnvironment: async () => ({
+            HOME: join(root, 'account-A'),
+            PATH: '/usr/bin:/bin'
+          })
+        },
+        uncached: true
+      },
+      'antigravity'
     )
     expect(result).toMatchObject({
       success: true,

@@ -83,7 +83,10 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
           request.viewMode ?? null,
-          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
+          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : []),
+          ...(request.terminalOptionEdits?.effort === null
+            ? [['terminalOptionEdits', { effort: null }]]
+            : [])
         ])
       )
       .digest('base64url')
@@ -154,7 +157,10 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
             request.viewMode ?? null,
-            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
+            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : []),
+            ...(request.terminalOptionEdits?.effort === null
+              ? [['terminalOptionEdits', { effort: null }]]
+              : [])
           ])
         )
         .digest('base64url')
@@ -193,6 +199,9 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           // TEMPORARY: see `startupPromptCarry`.
           startupPromptCarry: 'force-line',
           ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
+          ...(request.terminalOptionEdits
+            ? { terminalOptionEdits: request.terminalOptionEdits }
+            : {}),
           ...(request.sessionOptions !== undefined
             ? { sessionOptions: request.sessionOptions }
             : {}),

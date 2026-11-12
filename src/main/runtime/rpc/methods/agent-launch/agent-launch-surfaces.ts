@@ -126,6 +126,7 @@ export function agentLaunchSurfaceFactory(
       agent,
       startupPrompt,
       agentArgs,
+      terminalOptionEdits,
       cwd,
       launchSource,
       paneKey,
@@ -157,6 +158,7 @@ export function agentLaunchSurfaceFactory(
             }
           : {}),
         ...(agentArgs !== undefined ? { agentArgs } : {}),
+        ...(terminalOptionEdits ? { terminalOptionEdits } : {}),
         ...(cwd ? { cwd } : {}),
         // The model the user picked outranks configured args here too, as it does on a chat.
         ...(launchPreferences ? { launchPreferences } : {}),

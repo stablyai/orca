@@ -1,3 +1,7 @@
+import {
+  createTerminalOptionEditNegotiation,
+  type TerminalOptionEditDispatch
+} from '@/runtime/hosted-terminals/creation/agent-launch/terminal-option-edit-capability'
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
@@ -634,6 +638,9 @@ export function createRemoteRuntimePtyTransport(
   const terminalCreateMutationId = createBrowserUuid()
   // Replay one stable host operation after lost responses so reconnect cannot launch a second agent.
   const agentCreateOperation = createAgentSessionCreateOperation()
+  const terminalEditOptions = createTerminalOptionEditNegotiation(
+    opts.freshAgentLaunch?.terminalOptionEdits
+  )
   const agentKeyboardOptions = createAgentSessionKeyboardOptions(terminalKittyKeyboardProtocol)
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
@@ -1381,14 +1388,16 @@ export function createRemoteRuntimePtyTransport(
     environmentId: string,
     method: string,
     params?: unknown,
-    timeoutMs = 15_000
+    timeoutMs = 15_000,
+    editProof?: Omit<TerminalOptionEditDispatch, 'terminalOptionEdits'>
   ): Promise<TResult> {
     const response = await window.api.runtimeEnvironments.call({
       selector: environmentId,
       method,
       params,
       timeoutMs,
-      expectedEnvironmentPairingRevision: currentPaneRevision()
+      expectedEnvironmentPairingRevision: currentPaneRevision(),
+      ...editProof
     })
     try {
       return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<TResult>)
@@ -3749,16 +3758,18 @@ export function createRemoteRuntimePtyTransport(
         }
         return result
       }
+      let freshCreateInputs: ReturnType<typeof pairedAgentLaunchInputs> | undefined
       const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
         const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
         const freshInputs =
           freshLaunch && launchAgentToSend
-            ? await pairedAgentLaunchInputs({
-                ...freshLaunch,
-                ...(await agentSessionCreateCapabilities(createEnvironmentId)),
-                environmentId: createEnvironmentId,
-                agent: launchAgentToSend
-              })
+            ? await (freshCreateInputs ??= (async () =>
+                pairedAgentLaunchInputs({
+                  ...freshLaunch,
+                  ...(await agentSessionCreateCapabilities(createEnvironmentId)),
+                  environmentId: createEnvironmentId,
+                  agent: launchAgentToSend
+                }))())
             : undefined
         const prepared = freshInputs && 'preparedAgentCommand' in freshInputs
         if (prepared && freshLaunch?.recovery) {
@@ -3766,6 +3777,9 @@ export function createRemoteRuntimePtyTransport(
         }
         // Older hosts keep their existing pane request when these inputs require preparation.
         const composed = freshInputs && !prepared ? freshInputs : undefined
+        const { terminalOptionEdits, ...editProof } = composed
+          ? await terminalEditOptions(createEnvironmentId)
+          : {}
         const promptRequest =
           composed && promptPlan && freshLaunch
             ? hostedAgentPromptRequest(promptPlan, freshLaunch.prompt, freshLaunch.promptDelivery)
@@ -3828,6 +3842,7 @@ export function createRemoteRuntimePtyTransport(
                               worktreeId,
                               agent: launchAgentToSend!,
                               ...composed,
+                              terminalOptionEdits,
                               ...promptRequest
                             })
                           }
@@ -3843,7 +3858,8 @@ export function createRemoteRuntimePtyTransport(
                     },
                     agentCreateOperation.clientOperationId
                   ),
-                  timeoutMs
+                  timeoutMs,
+                  editProof
                 ),
           createEnvironmentId,
           epoch

@@ -1,5 +1,20 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent
+} from '@/components/ui/dropdown-menu'
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+  render,
+  screen,
+  fireEvent
+} from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -18,6 +33,10 @@ import * as discovery from '../native-chat/session/options/catalog/native-chat-s
 import { createAntigravityTerminalModelDemand } from '../native-chat/session/options/terminal/antigravity-terminal-model-observation'
 import { useNativeChatSessionOptions } from '../native-chat/session/options/terminal/use-native-chat-session-options'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import {
+  publicRuntimeEnvironment,
+  connectedRuntimeStatus
+} from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 const transport = vi.hoisted(() => ({ call: vi.fn(), rpc: vi.fn(), defaults: vi.fn() }))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: transport.call
@@ -204,7 +223,7 @@ it('forwards a prospective paired repo and explicit launch cwd to terminal disco
       }
     ]
   })
-  transport.defaults.mockResolvedValue(undefined)
+  transport.defaults.mockResolvedValue({ settings: {}, structuredKnown: true })
   transport.rpc.mockResolvedValue({
     success: true,
     catalogOrigin: 'probe',
@@ -244,6 +263,26 @@ it('forwards a prospective paired repo and explicit launch cwd to terminal disco
   )
   expect(hook.result.current[0].terminalCatalog).toMatchObject({
     models: [{ id: 'gemini-3.8-flash' }]
+  })
+  const launch = vi.fn().mockReturnValue(true)
+  render(
+    <TooltipProvider>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>New workspace</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <AgentLaunchPickerMenu entries={hook.result.current} runLaunch={launch} />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Antigravity' }))
+  fireEvent.click(screen.getByRole('option', { name: 'Flash' }))
+  fireEvent.click(screen.getByRole('radio', { name: 'High' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
+  await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+  expect(launch.mock.lastCall?.[1]).toMatchObject({
+    surface: 'terminal',
+    choices: { model: 'gemini-3.8-flash', options: { effort: 'high' } }
   })
 })
 
@@ -316,6 +355,73 @@ it('clears an open terminal catalog when only detected ownership changes and fen
   }
 })
 
+it('keeps two live tabs distinct by startup cwd and fences a replaced cwd answer', async () => {
+  const id = 'repo1::/repo1/worktree'
+  const tabs = [
+    makeTab({ id: 'cwd-a', worktreeId: id, startupCwd: 'a' }),
+    makeTab({ id: 'cwd-b', worktreeId: id, startupCwd: 'b' })
+  ]
+  useAppStore.setState({
+    settings: getDefaultSettings('/synthetic'),
+    repos: [TEST_REPO],
+    worktreesByRepo: {
+      repo1: [makeWorktree({ id, repoId: 'repo1', path: '/repo1/worktree', hostId: 'local' })]
+    },
+    detectedWorktreesByRepo: {},
+    tabsByWorktree: { [id]: tabs },
+    activeWorktreeId: id,
+    activeWorkspaceExecutionHostId: 'local'
+  })
+  const old = Promise.withResolvers<unknown>()
+  const read = vi.fn().mockImplementation((params) =>
+    params.cwd === 'a'
+      ? old.promise
+      : Promise.resolve({
+          success: true,
+          catalogOrigin: 'probe',
+          models: [{ id: params.cwd, label: params.cwd }]
+        })
+  )
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { git: { discoverTerminalModels: read } }
+  })
+  const a = createAntigravityTerminalModelDemand('cwd-a'),
+    b = createAntigravityTerminalModelDemand('cwd-b')
+  const publishA = vi.fn(),
+    publishB = vi.fn()
+  const stopA = a.demand(publishA),
+    stopB = b.demand(publishB)
+  try {
+    await waitFor(() =>
+      expect(publishB).toHaveBeenLastCalledWith([expect.objectContaining({ id: 'b' })])
+    )
+    expect(read).toHaveBeenCalledWith({ agentId: 'antigravity', worktree: `id:${id}`, cwd: 'a' })
+    act(() =>
+      useAppStore.setState({
+        tabsByWorktree: { [id]: [{ ...tabs[0], startupCwd: 'new-a' }, tabs[1]] }
+      })
+    )
+    await waitFor(() =>
+      expect(publishA).toHaveBeenLastCalledWith([expect.objectContaining({ id: 'new-a' })])
+    )
+    await act(async () =>
+      old.resolve({
+        success: true,
+        catalogOrigin: 'probe',
+        models: [{ id: 'stale-a', label: 'Stale' }]
+      })
+    )
+    expect(publishA).toHaveBeenLastCalledWith([expect.objectContaining({ id: 'new-a' })])
+    expect(publishB).toHaveBeenLastCalledWith([expect.objectContaining({ id: 'b' })])
+  } finally {
+    stopA()
+    stopB()
+    a.dispose()
+    b.dispose()
+  }
+})
+
 it.each([3, 30])(
   'bounds repeated status updates across %i terminal consumers without rendering unaffected panes',
   async (count) => {
@@ -344,14 +450,25 @@ it.each([3, 30])(
       activeWorktreeId: null,
       activeWorkspaceExecutionHostId: null,
       runtimeEnvironmentCatalogHydrated: true,
-      agentStatusByPaneKey: {}
+      agentStatusByPaneKey: {},
+      runtimeEnvironments: ['other', 'unrelated'].map((id) => publicRuntimeEnvironment({ id })),
+      runtimeStatusByEnvironmentId: new Map([
+        ['other', connectedRuntimeStatus('runtime-a', 1)],
+        ['unrelated', connectedRuntimeStatus('runtime-b', 1)]
+      ])
+    })
+    const oldRemote = Promise.withResolvers<unknown>()
+    transport.rpc.mockReturnValueOnce(oldRemote.promise).mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'new-runtime-model', label: 'New runtime' }]
     })
     const localRead = vi.fn().mockResolvedValue({ success: false })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { git: { discoverTerminalModels: localRead } }
     })
-    const resolve = vi.spyOn(discovery, 'resolveNativeChatModelDiscoveryContext')
+    const resolve = vi.spyOn(discovery, 'resolveWorktreeModelDiscoveryRuntime')
     const renders = ids.map(() => 0)
     const dispatchCommand = vi.fn()
     const panes = ids.map((_, index) =>
@@ -369,9 +486,11 @@ it.each([3, 30])(
     try {
       act(() => {
         panes[0].result.current.surface?.demandModelCatalog?.()
+        panes[count - 1].result.current.surface?.demandModelCatalog?.()
       })
       await act(async () => {})
       expect(localRead).toHaveBeenCalledTimes(1)
+      expect(transport.rpc).toHaveBeenCalledTimes(1)
       resolve.mockClear()
       const settled = [...renders]
       for (let index = 0; index < 10; index++) {
@@ -393,8 +512,65 @@ it.each([3, 30])(
         )
       }
       expect(resolve).not.toHaveBeenCalled()
+      for (let sequence = 1; sequence <= 10; sequence++) {
+        for (const environmentId of ['unrelated', 'other']) {
+          const before = useAppStore.getState().runtimeStatusByEnvironmentId
+          act(() =>
+            useAppStore.getState().applyRuntimeHostStatusSnapshot({
+              environmentId,
+              pairingRevision: 1,
+              sequence,
+              checkedAt: sequence,
+              transport: 'ready',
+              verification: 'verified',
+              status: connectedRuntimeStatus(
+                environmentId === 'other' ? 'runtime-a' : 'runtime-b',
+                1
+              ).status
+            })
+          )
+          expect(useAppStore.getState().runtimeStatusByEnvironmentId).not.toBe(before)
+          expect(
+            useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)?.snapshot
+              ?.sequence
+          ).toBe(sequence)
+        }
+      }
+      expect(resolve).not.toHaveBeenCalled()
+      expect(transport.rpc).toHaveBeenCalledTimes(1)
       expect(localRead).toHaveBeenCalledTimes(1)
       expect(renders).toEqual(settled)
+      act(() =>
+        useAppStore.getState().applyRuntimeHostStatusSnapshot({
+          environmentId: 'other',
+          pairingRevision: 1,
+          sequence: 11,
+          checkedAt: 11,
+          transport: 'ready',
+          verification: 'verified',
+          status: connectedRuntimeStatus('runtime-a-restarted', 2).status
+        })
+      )
+      await waitFor(() => expect(transport.rpc).toHaveBeenCalledTimes(2))
+      expect(resolve).toHaveBeenCalledTimes(1)
+      expect(resolve.mock.calls[0][1]).toBe('remote::/remote/one')
+      await act(async () =>
+        oldRemote.resolve({
+          success: true,
+          catalogOrigin: 'probe',
+          models: [{ id: 'stale-runtime-model', label: 'Stale' }]
+        })
+      )
+      expect(JSON.stringify(panes[count - 1].result.current.snapshot)).toContain(
+        'new-runtime-model'
+      )
+      expect(JSON.stringify(panes[count - 1].result.current.snapshot)).not.toContain(
+        'stale-runtime-model'
+      )
+      expect(localRead).toHaveBeenCalledTimes(1)
+      expect(renders.slice(0, -1)).toEqual(settled.slice(0, -1))
+      const afterRestart = [...renders]
+      resolve.mockClear()
       act(() =>
         useAppStore.setState({
           detectedWorktreesByRepo: {
@@ -409,9 +585,9 @@ it.each([3, 30])(
           }
         })
       )
-      expect(resolve).toHaveBeenCalledTimes(1)
+      expect(resolve).toHaveBeenCalledTimes(2)
       expect(localRead).toHaveBeenCalledTimes(1)
-      expect(renders).toEqual(settled)
+      expect(renders).toEqual(afterRestart)
       act(() =>
         useAppStore.setState({
           agentStatusByPaneKey: {
@@ -430,8 +606,8 @@ it.each([3, 30])(
       )
       expect(modelId(panes[0].result.current.snapshot)).toBe('gemini-3.8-flash-medium')
       expect(renders[0]).toBeGreaterThan(settled[0])
-      expect(renders.slice(1)).toEqual(settled.slice(1))
-      expect(resolve).toHaveBeenCalledTimes(1)
+      expect(renders.slice(1)).toEqual(afterRestart.slice(1))
+      expect(resolve).toHaveBeenCalledTimes(2)
       expect(localRead).toHaveBeenCalledTimes(1)
     } finally {
       panes.forEach(({ unmount }) => unmount())

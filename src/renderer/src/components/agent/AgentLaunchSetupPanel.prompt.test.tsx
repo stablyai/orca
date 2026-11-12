@@ -2,6 +2,7 @@
 import { compilePickerTerminalLaunch } from './agent-launch-picker-menu-test-fixture'
 import {
   agentPickerLaunchInputs,
+  agentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { entry, root } from './agent-launch-setup-panel-test-fixture'
@@ -69,6 +70,172 @@ it('launches an untouched saved literal Antigravity pair through the actual setu
     tokens: ['antigravity', '--model', 'gemini-3.8-flash-high', '--effort', 'low']
   })
 })
+
+it.each(['dedicated', 'arguments'] as const)(
+  'clears %s Low through Configure Default while preserving permission and raw flags',
+  async (source) => {
+    const saved = { model: 'gemini-3.8-flash', options: { effort: 'low' } }
+    const own: AgentPickerEntry = {
+      ...entry,
+      agent: 'antigravity',
+      label: 'Antigravity',
+      worktreeId: 'repo::/clear-effort',
+      rows: [{ agent: 'antigravity', kind: 'cli' }],
+      surfaces: ['terminal'],
+      arguments: source === 'arguments' ? '--effort low --add-dir docs' : '--add-dir docs',
+      terminal: { ...saved, permissionMode: 'full-access' },
+      terminalCatalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: groupAntigravityModelEfforts([
+          { id: 'gemini-3.8-flash-low', label: 'Flash (Low)' },
+          { id: 'gemini-3.8-flash-high', label: 'Flash (High)' }
+        ])
+      }
+    }
+    const settings = {
+      agentPermissionDefault: 'full-access' as const,
+      agentDefaultArgs: { antigravity: own.arguments ?? '' },
+      agentLaunchChoices: { antigravity: saved }
+    }
+    const ordinary = compilePickerTerminalLaunch(agentPickerDraft(own), own, settings)
+    expect(ordinary).toMatchObject({
+      ok: true,
+      tokens: expect.arrayContaining([
+        'antigravity',
+        '--model',
+        'gemini-3.8-flash',
+        '--effort',
+        'low',
+        '--dangerously-skip-permissions',
+        '--add-dir',
+        'docs'
+      ])
+    })
+    expect(ordinary.ok && ordinary.tokens).toHaveLength(8)
+    const launch = vi.fn().mockReturnValue(true)
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <DropdownMenu defaultOpen modal={false}>
+            <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <AgentLaunchPickerMenu entries={[own]} runLaunch={launch} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TooltipProvider>
+      )
+    )
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Antigravity' }))
+    // Re-clicking the current level preserves it; Default must instead clear it.
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'Default' }))
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
+    await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+    expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], own, settings)).toMatchObject({
+      ok: true,
+      tokens: [
+        'antigravity',
+        '--model',
+        'gemini-3.8-flash',
+        '--dangerously-skip-permissions',
+        '--add-dir',
+        'docs'
+      ]
+    })
+  }
+)
+
+it.each(['button', 'enter'] as const)(
+  'keeps a terminal search edit through catalog refresh and launches via %s with a Chat default',
+  async (action) => {
+    const own: AgentPickerEntry = {
+      ...entry,
+      agent: 'antigravity',
+      label: 'Antigravity',
+      worktreeId: `repo::/terminal-search-${action}`,
+      rows: [
+        { agent: 'antigravity', kind: 'chat' },
+        { agent: 'antigravity', kind: 'cli' }
+      ],
+      defaultSurface: 'chat',
+      arguments: '',
+      terminal: {},
+      structured: { model: 'chat-only' },
+      catalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [{ id: 'chat-only', label: 'Chat only', isDefault: false, efforts: [] }]
+      },
+      terminalCatalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: groupAntigravityModelEfforts([
+          { id: 'gemini-3.8-flash-low', label: 'Flash (Low)' },
+          { id: 'gemini-3.8-flash-high', label: 'Flash (High)' }
+        ])
+      }
+    }
+    const launch = vi.fn().mockReturnValue(false)
+    const show = (value: AgentPickerEntry) =>
+      act(() =>
+        root.render(
+          <TooltipProvider>
+            <DropdownMenu defaultOpen modal={false}>
+              <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <AgentLaunchPickerMenu entries={[value]} runLaunch={launch} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TooltipProvider>
+        )
+      )
+    show(own)
+    const search = getByRole(document.body, 'textbox')
+    fireEvent.change(search, { target: { value: 'AGY Flash High' } })
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Antigravity' }))
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
+    if (!own.terminalCatalog || own.terminalCatalog.origin === 'unknown') {
+      throw new Error('Expected terminal catalog')
+    }
+    const refreshed: AgentPickerEntry = {
+      ...own,
+      terminalCatalog: { ...own.terminalCatalog, fetchedAt: 2 }
+    }
+    show(refreshed)
+    if (action === 'button') {
+      fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
+    } else {
+      const panel = document.querySelector<HTMLElement>(
+        '[data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"]'
+      )!
+      fireEvent.keyDown(panel.querySelector('input')!, { key: 'Enter' })
+    }
+    await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+    expect(launch.mock.lastCall![0]).toMatchObject({ agent: 'antigravity', kind: 'cli' })
+    expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], refreshed)).toMatchObject({
+      ok: true,
+      tokens: [
+        'antigravity',
+        '--dangerously-skip-permissions',
+        '--model',
+        'gemini-3.8-flash',
+        '--effort',
+        'low'
+      ]
+    })
+    fireEvent.keyDown(
+      document.querySelector<HTMLElement>(
+        '[data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"]'
+      )!,
+      { key: 'Escape' }
+    )
+    fireEvent.change(search, { target: { value: '' } })
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Antigravity' }))
+    expect(launch.mock.lastCall).toEqual([{ agent: 'antigravity', kind: 'chat' }, undefined])
+    expect(own.structured).toEqual({ model: 'chat-only' })
+  }
+)
 
 it.each(['claude', 'codex'] as const)(
   'both actual setup callers retain rich %s input/options across freshness, refusal and explicit retry',
@@ -203,3 +370,46 @@ it.each(['claude', 'codex'] as const)(
     )
   }
 )
+
+it('removes a model-less saved Low chip and uses current destination Arguments and permission', async () => {
+  const own: AgentPickerEntry = {
+    ...entry,
+    agent: 'antigravity',
+    label: 'Antigravity',
+    worktreeId: 'repo::/model-less-default',
+    rows: [{ agent: 'antigravity', kind: 'cli' }],
+    surfaces: ['terminal'],
+    terminal: { options: { effort: 'low' }, permissionMode: 'ask' },
+    arguments: '--add-dir old',
+    terminalCatalog: { origin: 'probe', fetchedAt: 1, models: [] }
+  }
+  const launch = vi.fn().mockReturnValue(true)
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <DropdownMenu defaultOpen modal={false}>
+          <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <AgentLaunchPickerMenu entries={[own]} runLaunch={launch} />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TooltipProvider>
+    )
+  )
+  fireEvent.click(getByRole(document.body, 'button', { name: 'Configure Antigravity' }))
+  fireEvent.click(getByRole(document.body, 'button', { name: 'Remove --effort low' }))
+  fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
+  await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+  const inputs = agentPickerLaunchInputs(launch.mock.lastCall![1], own)
+  expect(inputs).toEqual({ terminalOptionEdits: { effort: null } })
+  expect(
+    compilePickerTerminalLaunch(launch.mock.lastCall![1], own, {
+      agentPermissionDefault: 'full-access',
+      agentDefaultArgs: { antigravity: '--effort=medium --add-dir new' },
+      agentLaunchChoices: { antigravity: { options: { effort: 'high' } } }
+    })
+  ).toEqual({
+    ok: true,
+    tokens: ['antigravity', '--dangerously-skip-permissions', '--add-dir', 'new']
+  })
+})

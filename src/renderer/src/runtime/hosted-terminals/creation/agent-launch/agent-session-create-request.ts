@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY,
@@ -27,6 +28,7 @@ export function agentSessionCreateRequest(args: {
   worktreeId: string
   agent: TuiAgent
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   extraAgentArgs?: string
   prompt?: string
@@ -36,6 +38,9 @@ export function agentSessionCreateRequest(args: {
   return {
     worktree: toRuntimeWorktreeSelector(args.worktreeId),
     agent: args.agent,
+    ...(args.terminalOptionEdits?.effort === null
+      ? { terminalOptionEdits: args.terminalOptionEdits }
+      : {}),
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.sessionOptions !== undefined
       ? {

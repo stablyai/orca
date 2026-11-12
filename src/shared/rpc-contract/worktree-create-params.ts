@@ -1,3 +1,4 @@
+import { TerminalOptionEditsParam } from './terminal-option-edits'
 import { z } from 'zod'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
@@ -143,6 +144,7 @@ export const WorktreeCreate = z
     startupPrompt: OptionalString,
     startupAgentArgs: AgentArgs.optional(),
     startupSessionOptions: z.record(z.string(), z.string()).optional(),
+    startupTerminalOptionEdits: TerminalOptionEditsParam.optional(),
     startupLaunchPreferences: LaunchPreferences.optional(),
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),

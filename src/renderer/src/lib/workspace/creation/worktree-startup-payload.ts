@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { EventProps } from '../../../../../shared/telemetry-event-classification'
@@ -14,6 +15,7 @@ export type AgentStartedTelemetry = EventProps<'agent_started'>
 
 export type FreshWorkspaceAgentLaunch = {
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   actionAgentArgs?: string
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   prompt: string

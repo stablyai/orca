@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
@@ -35,6 +36,7 @@ import {
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   sessionOptions?: Readonly<Record<string, string>>
   sessionOptionsYieldToAgentArgs?: true
   draftContent: string
@@ -50,6 +52,7 @@ export function buildDirectWorkItemStartup(args: {
   return buildDirectWorkItemAgentStartupPlan({
     agent: args.agent,
     agentArgs: args.agentArgs,
+    terminalOptionEdits: args.terminalOptionEdits,
     sessionOptions: args.sessionOptions,
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     draftContent: args.draftContent,

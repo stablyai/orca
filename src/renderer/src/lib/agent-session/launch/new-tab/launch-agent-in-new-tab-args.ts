@@ -1,3 +1,4 @@
+import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { AgentSessionLaunchRequest } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
@@ -24,6 +25,7 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   presentsRefusal?: true
   /** Optional CLI arguments appended to the selected agent command; a chat has no command line. */
   agentArgs?: string | null
+  terminalOptionEdits?: TerminalOptionEdits
   /** Raw action Arguments replace configured Arguments while inheriting host permission. */
   actionAgentArgs?: string
   /** The launch's saved choice; a chat seeds it and a terminal applies it as flags. */
@@ -67,6 +69,7 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
 export function snapshotAgentTabLaunchArgs(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabArgs {
   return {
     ...args,
+    ...(args.terminalOptionEdits ? { terminalOptionEdits: { ...args.terminalOptionEdits } } : {}),
     ...(args.sessionOptions !== undefined ? { sessionOptions: { ...args.sessionOptions } } : {}),
     ...(args.chatSessionOptions !== undefined
       ? { chatSessionOptions: { ...args.chatSessionOptions } }

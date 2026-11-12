@@ -1,6 +1,7 @@
 import { refuseAgentTabLaunch, refuseUnavailableAgentTabLaunch } from './launch-agent-tab-refusal'
 import {
   launchNewTabPromptThroughHost,
+  launchNewTabThroughHost,
   newTabPromptLaunchesThroughHost
 } from '@/lib/agent-session/launch/new-tab/launch-agent-new-tab-host-route'
 import type { LaunchAgentInNewTabArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
@@ -88,7 +89,6 @@ function openAgentInNewTab(
   // Why: a followup-path agent gets its prompt pasted unsubmitted after start, so route it as a draft.
   const routePromptDelivery =
     hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
-  // Resolve structured ownership first; only terminal routes plan CLI arguments.
   const route = routeNewTabLaunch(store, args, {
     agent,
     requestedSurface: args.requestedSurface,
@@ -168,6 +168,7 @@ function openAgentInNewTab(
         settings: { ...store.settings, agentLaunchChoices },
         agentArgs,
         sessionOptions,
+        terminalOptionEdits: args.terminalOptionEdits,
         sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
         platform: resolvedLaunchPlatform,
         shell: queuedShell,
@@ -193,6 +194,7 @@ function openAgentInNewTab(
       ...(trustWorktreeId ? { trustWorktreeId } : {}),
       buildStartup,
       sessionOptions,
+      terminalOptionEdits: args.terminalOptionEdits,
       prompt: trimmedPrompt,
       promptDelivery,
       agentArgs: args.actionAgentArgs === undefined ? agentArgs : undefined,
@@ -221,31 +223,39 @@ function openAgentInNewTab(
     return null
   }
   if (
-    pasteDraftAfterLaunch !== null &&
-    newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
+    args.terminalOptionEdits?.effort === null ||
+    (pasteDraftAfterLaunch !== null &&
+      newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote }))
   ) {
-    const launched = launchNewTabPromptThroughHost({
+    const launch = {
       agent,
       worktreeId,
-      ...(groupId ? { groupId } : {}),
+      groupId,
       prompt: trimmedPrompt,
-      ...(agentArgs !== undefined ? { agentArgs } : {}),
-      ...(sessionOptions ? { sessionOptions } : {}),
-      ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
-      ...(trustWorktreeId ? { trustWorktreeId } : {}),
+      terminalOptionEdits: args.terminalOptionEdits,
+      agentArgs,
+      sessionOptions,
+      cwd: initialCwd ?? undefined,
+      trustWorktreeId,
       launchSource: launchSource ?? 'tab_bar_quick_launch',
       quickCommandLabel,
-      ...(activate === false ? { activate: false } : {}),
-      ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
-      pasteContent: pasteDraftAfterLaunch,
-      submit: submitPastedPrompt,
-      ...(onPromptDelivered ? { onPromptDelivered } : {}),
-      ...(onPromptDeliveryUnconfirmed ? { onPromptDeliveryUnconfirmed } : {})
-    })
+      activate,
+      pendingActivationSpawn,
+      onPromptDelivered
+    }
+    const launched =
+      pasteDraftAfterLaunch !== null
+        ? launchNewTabPromptThroughHost({
+            ...launch,
+            pasteContent: pasteDraftAfterLaunch,
+            submit: submitPastedPrompt,
+            ...(onPromptDeliveryUnconfirmed ? { onPromptDeliveryUnconfirmed } : {})
+          })
+        : launchNewTabThroughHost(launch)
     return {
       surface: { kind: 'local-terminal', tabId: launched.tabId },
       startupPlan,
-      pasteDraftAfterLaunch: true,
+      pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
       promptDeliveryResult: launched.promptDeliveryResult
     }
   }
@@ -281,7 +291,7 @@ function openAgentInNewTab(
     seedNativeChatLaunchDraftForAgentTab({ tabId: tab.id, agent, text: trimmedPrompt })
   }
   if (pasteDraftAfterLaunch !== null) {
-    const deliveryPromise = pasteAgentLaunchPromptOnceReady({
+    promptDeliveryResult = pasteAgentLaunchPromptOnceReady({
       worktreeId,
       tabId: tab.id,
       agent,
@@ -291,8 +301,7 @@ function openAgentInNewTab(
       ...(onPromptDelivered ? { onPromptDelivered } : {}),
       ...(onPromptDeliveryUnconfirmed ? { onPromptDeliveryUnconfirmed } : {})
     })
-    promptDeliveryResult = deliveryPromise
-    void deliveryPromise.catch((error) =>
+    void promptDeliveryResult.catch((error) =>
       console.error('Prompt delivery failed after launch', error)
     )
   } else if (hasPrompt) {

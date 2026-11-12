@@ -98,7 +98,10 @@ export function normalizeAgentLaunchChoices(value: unknown): AgentLaunchChoices 
   return choices
 }
 
+export type TerminalOptionEdits = Readonly<{ effort?: null }>
+
 export type AgentLaunchInputViews = {
+  terminalOptionEdits?: TerminalOptionEdits
   agentArgs?: string | null
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>

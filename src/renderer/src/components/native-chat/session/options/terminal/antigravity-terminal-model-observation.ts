@@ -1,11 +1,16 @@
-import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store/index'
 import { observeAgentPickerAcquisition } from '../../../../agent/agent-launch-picker-acquisition'
-import { readAntigravityTerminalCatalog } from '@/runtime/terminal/terminal-model-discovery-client'
+import {
+  readAntigravityTerminalCatalog,
+  terminalModelDiscoveryDescriptor,
+  terminalModelDiscoveryOwnerInputs,
+  terminalModelDiscoveryRuntimeIdentity,
+  type TerminalModelDiscoveryDescriptor
+} from '@/runtime/terminal/terminal-model-discovery-client'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { AgentSessionModelOption } from '../../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentPickerEntry } from '../../../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { resolveNativeChatModelDiscoveryContext } from '../catalog/native-chat-session-option-discovery'
+import { resolveWorktreeModelDiscoveryRuntime } from '../catalog/native-chat-session-option-discovery'
 import { antigravityTerminalCatalogModels } from '../../../../../../../shared/agent-session/options/antigravity-model-efforts'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
@@ -17,22 +22,26 @@ export function createAntigravityTerminalModelDemand(terminalTabId: string) {
       stop?.()
       let release: (() => void) | undefined
       let contextKey: string | undefined
+      let current: TerminalModelDiscoveryDescriptor | null = null
+      let identity: string | undefined
       const refresh = () => {
-        const current = resolveNativeChatModelDiscoveryContext(terminalTabId)
-        const settings = useAppStore.getState().settings
-        const key = JSON.stringify(
-          current && [
-            current.runtime.target,
-            current.runtime.worktreeId,
-            current.runtime.worktreePath,
-            current.runtime.connectionId,
-            current.hostKey,
-            current.runtime.prefs?.agentCmdOverrides?.antigravity,
-            settings?.agentDefaultEnv?.antigravity,
-            settings?.terminalWindowsShell,
-            settings?.terminalWindowsWslDistro
-          ]
-        )
+        const state = useAppStore.getState()
+        const owner = Object.entries(state.tabsByWorktree ?? {})
+          .map(([worktreeId, tabs]) => ({
+            worktreeId,
+            tab: tabs.find((tab) => tab.id === terminalTabId)
+          }))
+          .find(({ tab }) => tab)
+        const runtime = owner ? resolveWorktreeModelDiscoveryRuntime(state, owner.worktreeId) : null
+        current = runtime
+          ? terminalModelDiscoveryDescriptor(
+              state,
+              runtime,
+              owner?.tab?.startupCwd ? { cwd: owner.tab.startupCwd } : {}
+            )
+          : null
+        identity = terminalModelDiscoveryRuntimeIdentity(state, current?.runtime)
+        const key = current?.key
         if (key === contextKey) {
           return
         }
@@ -40,21 +49,25 @@ export function createAntigravityTerminalModelDemand(terminalTabId: string) {
         release?.()
         publish([])
         release = current
-          ? observeAntigravityTerminalModels(current.runtime, key, (models) =>
-              publish(antigravityTerminalCatalogModels(models))
+          ? observeAntigravityTerminalModels(
+              current.runtime,
+              current.key,
+              (models) => publish(antigravityTerminalCatalogModels(models)),
+              current
             )
           : undefined
       }
       refresh()
       // Closed panes have no subscription; status-only events never scan workspace or tab rows.
-      const ownerInputs = (state: ReturnType<typeof useAppStore.getState>) => [
-        state.tabsByWorktree,
-        state.projects,
-        ...structuredAgentSessionOwnerInputs(state)
-      ]
       const unsubscribe = useAppStore.subscribe((state, previous) => {
-        const before = ownerInputs(previous)
-        if (ownerInputs(state).some((value, index) => value !== before[index])) {
+        const before = terminalModelDiscoveryOwnerInputs(previous)
+        if (
+          state.tabsByWorktree !== previous.tabsByWorktree ||
+          terminalModelDiscoveryOwnerInputs(state).some(
+            (value, index) => value !== before[index]
+          ) ||
+          terminalModelDiscoveryRuntimeIdentity(state, current?.runtime) !== identity
+        ) {
           refresh()
         }
       })
@@ -81,7 +94,8 @@ export function createAntigravityTerminalModelDemand(terminalTabId: string) {
 export function observeAntigravityTerminalModels(
   runtime: RuntimeGitContext,
   hostKey: string,
-  publish: (models: AgentSessionModelOption[]) => void
+  publish: (models: AgentSessionModelOption[]) => void,
+  descriptor = terminalModelDiscoveryDescriptor(useAppStore.getState(), runtime)
 ): () => void {
   const entry: AgentPickerEntry = {
     agent: 'antigravity',
@@ -93,20 +107,12 @@ export function observeAntigravityTerminalModels(
     structured: {},
     catalog: { origin: 'unknown' }
   }
-  const key = JSON.stringify([
-    'antigravity-terminal-options',
-    runtime.target,
-    runtime.worktreeId,
-    runtime.worktreePath,
-    runtime.connectionId,
-    hostKey,
-    runtime.prefs?.agentCmdOverrides?.antigravity
-  ])
+  const key = JSON.stringify(['antigravity-terminal-options', hostKey, descriptor.key])
   return observeAgentPickerAcquisition(
     key,
     [entry],
     {
-      catalog: () => readAntigravityTerminalCatalog(runtime),
+      catalog: () => readAntigravityTerminalCatalog(descriptor.runtime, descriptor.launch),
       support: async () => undefined
     },
     {
