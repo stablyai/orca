@@ -39,6 +39,7 @@ export function registerTerminalPanePasteListeners({
 }): () => void {
   const { keybindings, managerRef, paneTransportsRef, setTerminalError, worktreeId } = controller
   const {
+    clipboardImageEnterHold,
     createPaneClipboardCopiedFiles,
     executePanePasteText,
     pasteFromClipboard,
@@ -194,8 +195,19 @@ export function registerTerminalPanePasteListeners({
         executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
       onTextPasteError: () =>
         setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
-      onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
-    }).catch(() => setTerminalError('Paste failed.'))
+      onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error)),
+      onImagePasteUploadStart: () => clipboardImageEnterHold.noteImageUploadStart(pane.id)
+    })
+      .then((result) =>
+        clipboardImageEnterHold.settleImageUpload(
+          pane.id,
+          result.status === 'pasted' && result.kind === 'image-path'
+        )
+      )
+      .catch(() => {
+        clipboardImageEnterHold.settleImageUpload(pane.id, false)
+        setTerminalError('Paste failed.')
+      })
   }
 
   const onAppMenuSelectionAction = (event: Event): void => {
@@ -233,6 +245,7 @@ export function registerTerminalPanePasteListeners({
   }
 
   container.addEventListener('keydown', onKeyPaste, { capture: true })
+  container.addEventListener('keydown', clipboardImageEnterHold.handleKeyDown, { capture: true })
   container.addEventListener('paste', onPaste, { capture: true })
   window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
   window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
@@ -241,6 +254,9 @@ export function registerTerminalPanePasteListeners({
       window.clearTimeout(pasteSuppressionTimerId)
     }
     container.removeEventListener('keydown', onKeyPaste, { capture: true })
+    container.removeEventListener('keydown', clipboardImageEnterHold.handleKeyDown, {
+      capture: true
+    })
     container.removeEventListener('paste', onPaste, { capture: true })
     window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
     window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)

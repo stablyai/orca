@@ -21,6 +21,10 @@ import type { ReadClipboardTextOptions } from '../../../../../../shared/clipboar
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
+import {
+  createClipboardImagePasteEnterHold,
+  type ClipboardImagePasteEnterHold
+} from './clipboard-image-paste-enter-hold'
 
 export type TerminalPanePasteExecution = ReturnType<typeof createTerminalPanePasteExecution>
 
@@ -139,6 +143,11 @@ export function createTerminalPanePasteExecution(
       pane
     })
 
+  // Holds a plain Enter typed while a pane's clipboard image upload is in flight (#41502).
+  const clipboardImageEnterHold: ClipboardImagePasteEnterHold = createClipboardImagePasteEnterHold({
+    getPanes: () => managerRef.current?.getPanes()
+  })
+
   const pasteFromClipboard = (
     pane: ManagedPane,
     source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
@@ -163,13 +172,23 @@ export function createTerminalPanePasteExecution(
         executePanePasteText(pane, source, activeElementAtDispatch, text, options),
       onTextPasteError: () =>
         setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
-      onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
-    }).catch(() => {
-      setTerminalError('Paste failed.')
+      onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error)),
+      onImagePasteUploadStart: () => clipboardImageEnterHold.noteImageUploadStart(pane.id)
     })
+      .then((result) =>
+        clipboardImageEnterHold.settleImageUpload(
+          pane.id,
+          result.status === 'pasted' && result.kind === 'image-path'
+        )
+      )
+      .catch(() => {
+        clipboardImageEnterHold.settleImageUpload(pane.id, false)
+        setTerminalError('Paste failed.')
+      })
   }
 
   return {
+    clipboardImageEnterHold,
     createPaneClipboardCopiedFiles,
     executePanePasteText,
     pasteFromClipboard,

@@ -36,4 +36,23 @@ describe('terminal clipboard paste', () => {
     expect(observedIgnoreBracketedPasteMode).toEqual([false])
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
+
+  it('announces an image upload start only on the image path', async () => {
+    const started = vi.fn()
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('just text'),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText: vi.fn(),
+      onImagePasteUploadStart: started
+    })
+    expect(started).not.toHaveBeenCalled()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue(''),
+      saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('/tmp/orca-paste-img.png'),
+      pasteText: vi.fn(),
+      onImagePasteUploadStart: started
+    })
+    expect(started).toHaveBeenCalledTimes(1)
+  })
 })
