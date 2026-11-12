@@ -125,6 +125,8 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       groupBy: props.groupBy,
       newCardStyle: args.newCardStyle,
       settings: args.settings,
+      groupKeyByRowKey: session.groupKeyByRowKey,
+      groupIndexByRowKey: session.groupIndexByRowKey,
       activeWorktreeId: props.activeWorktreeId,
       activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
       currentWorktreeId: props.currentWorktreeId,

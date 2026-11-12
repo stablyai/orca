@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
+import { makeFolderWorkspace } from '../../../../store/folder-workspaces/folder-workspace.test-fixture'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import { useWorktreeStatusMutations } from './use-status-mutations'
 import {
@@ -38,12 +41,15 @@ function seedManualOrderedRows(count: number): Worktree[] {
   return worktrees
 }
 
-function renderReorder(worktrees: readonly Worktree[]) {
+function renderReorder(
+  worktrees: readonly Worktree[],
+  folderWorkspaces: readonly FolderWorkspace[] = []
+) {
   return renderHook(() =>
     useWorktreeStatusMutations({
       manualOrderCatalog: buildWorktreeManualOrderCatalog({
         worktrees,
-        folderWorkspaces: []
+        folderWorkspaces
       }),
       workspaceStatuses: [],
       sortBy: 'smart'
@@ -94,5 +100,37 @@ describe('sidebar manual-order drop', () => {
       executionHostId: 'local',
       updates: { manualOrder: expect.any(Number) }
     })
+  })
+
+  it('does not route a remote folder workspace drop to this computer', async () => {
+    const folders = [
+      makeFolderWorkspace({ id: 'fw-a', manualOrder: 3000, executionHostId: 'ssh:remote-box' }),
+      makeFolderWorkspace({ id: 'fw-b', manualOrder: 2000, executionHostId: 'ssh:remote-box' })
+    ]
+    const updateFolderWorkspace = vi.fn().mockResolvedValue(true)
+    useAppStore.setState({ folderWorkspaces: folders, updateFolderWorkspace })
+    const keys = folders.map(getFolderWorkspaceHostIdentity)
+    const reorder = renderReorder([], folders)
+
+    await act(async () => {
+      reorder.current.reorderWorktrees({
+        groups: [{ key: GROUP_KEY, worktreeIds: keys }],
+        sourceGroupKey: GROUP_KEY,
+        draggedKeys: [keys[0]!],
+        dropIndex: 2
+      })
+    })
+
+    // The save goes to the folder's own host, not 'local'.
+    expect(updateFolderWorkspace).toHaveBeenCalledWith(
+      'fw-a',
+      { manualOrder: expect.any(Number) },
+      { executionHostId: 'ssh:remote-box' }
+    )
+    const folderOrder = buildWorktreeManualOrderCatalog({
+      worktrees: [],
+      folderWorkspaces: useAppStore.getState().folderWorkspaces
+    }).orderedKeys
+    expect(folderOrder).toEqual([keys[1], keys[0]])
   })
 })

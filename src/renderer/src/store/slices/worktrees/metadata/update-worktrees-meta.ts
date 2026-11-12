@@ -15,6 +15,7 @@ import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getIndexedWorktreesById } from '../listing/worktree-catalog-index'
+import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 
 function getKnownOwnerHostIds(
   state: ReturnType<WorktreeSliceGet>,
@@ -29,6 +30,35 @@ function getKnownOwnerHostIds(
   }
   return [...hostIds]
 }
+
+type FolderWorkspaceMetaUpdate = {
+  folderWorkspaceId: string
+  updates: ReturnType<typeof getFolderWorkspaceMetaUpdates>
+  executionHostId?: ExecutionHostId
+}
+
+// Why: like worktree rows, a dropped folder row must hold its new slot while the save is in flight.
+function applyFolderWorkspaceMetaUpdates(
+  state: ReturnType<WorktreeSliceGet>,
+  entries: readonly FolderWorkspaceMetaUpdate[]
+): ReturnType<WorktreeSliceGet>['folderWorkspaces'] {
+  // Same owner lookup as updateFolderWorkspace, so a same-id folder on another host stays as is.
+  const updatesByOwner = new Map<object, FolderWorkspaceMetaUpdate['updates']>()
+  for (const { folderWorkspaceId, updates, executionHostId } of entries) {
+    const owner = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+    if (owner) {
+      updatesByOwner.set(owner, { ...updatesByOwner.get(owner), ...updates })
+    }
+  }
+  if (updatesByOwner.size === 0) {
+    return state.folderWorkspaces
+  }
+  return state.folderWorkspaces.map((workspace) => {
+    const updates = updatesByOwner.get(workspace)
+    return updates ? { ...workspace, ...updates } : workspace
+  })
+}
+
 export function createUpdateWorktreesMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -39,10 +69,7 @@ export function createUpdateWorktreesMeta(
     }
 
     const gitWorktreeUpdates: WorktreeMetaBatchUpdate[] = []
-    const folderWorkspaceUpdates: {
-      folderWorkspaceId: string
-      updates: ReturnType<typeof getFolderWorkspaceMetaUpdates>
-    }[] = []
+    const folderWorkspaceUpdates: FolderWorkspaceMetaUpdate[] = []
     for (const entry of updates) {
       const scope = parseWorkspaceKey(entry.worktreeId)
       if (scope?.type === 'folder') {
@@ -50,7 +77,8 @@ export function createUpdateWorktreesMeta(
         if (Object.keys(folderUpdates).length > 0) {
           folderWorkspaceUpdates.push({
             folderWorkspaceId: scope.folderWorkspaceId,
-            updates: folderUpdates
+            updates: folderUpdates,
+            executionHostId: entry.executionHostId
           })
         }
       } else {
@@ -75,8 +103,10 @@ export function createUpdateWorktreesMeta(
           entry.executionHostId
         )
       }
+      const nextFolderWorkspaces = applyFolderWorkspaceMetaUpdates(s, folderWorkspaceUpdates)
       return nextWorktrees === s.worktreesByRepo &&
-        nextDetectedWorktrees === s.detectedWorktreesByRepo
+        nextDetectedWorktrees === s.detectedWorktreesByRepo &&
+        nextFolderWorkspaces === s.folderWorkspaces
         ? s
         : {
             ...(nextWorktrees !== s.worktreesByRepo
@@ -84,13 +114,16 @@ export function createUpdateWorktreesMeta(
               : {}),
             ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
               ? { detectedWorktreesByRepo: nextDetectedWorktrees }
+              : {}),
+            ...(nextFolderWorkspaces !== s.folderWorkspaces
+              ? { folderWorkspaces: nextFolderWorkspaces }
               : {})
           }
     })
 
     await Promise.all([
-      ...folderWorkspaceUpdates.map(({ folderWorkspaceId, updates }) =>
-        get().updateFolderWorkspace(folderWorkspaceId, updates)
+      ...folderWorkspaceUpdates.map(({ folderWorkspaceId, updates, executionHostId }) =>
+        get().updateFolderWorkspace(folderWorkspaceId, updates, { executionHostId })
       ),
       ...gitWorktreeUpdates.map(async ({ worktreeId, updates, executionHostId }) => {
         try {

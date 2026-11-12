@@ -1,9 +1,12 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folder-workspace-occurrences'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { getFolderWorkspaceRowDragGroupKey } from './groups'
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 
 export type WorktreeDragUnitGroup = WorktreeDragGroup & {
   units: { worktreeId: string; worktreeIds: string[] }[]
@@ -21,7 +24,13 @@ type WorktreeDragUnitRow =
   | { type: 'imported-worktrees-card' }
   | { type: 'new-external-worktrees-inbox' }
   | { type: 'pending-creation' }
-  | { type: 'folder-workspace' }
+  | {
+      type: 'folder-workspace'
+      folderWorkspace: Pick<
+        FolderWorkspace,
+        'id' | 'projectGroupId' | 'executionHostId' | 'connectionId'
+      >
+    }
 
 /** Unit members are host identities, matching getWorktreeDragGroups. */
 export function getWorktreeDragUnitGroups(
@@ -29,9 +38,10 @@ export function getWorktreeDragUnitGroups(
 ): WorktreeDragUnitGroup[] {
   const groups: WorktreeDragUnitGroup[] = []
   let current: { key: string; units: WorktreeDragUnitGroup['units'] } | null = null
+  let currentFolderUnits: WorktreeDragUnitGroup['units'] | null = null
   const folderLanes = new Map<string, { key: string; units: WorktreeDragUnitGroup['units'] }>()
-  // A folder workspace row joins no unit, so the rows nested under it start their own units; within
-  // them, a unit is a row plus the deeper rows below it.
+  // A folder workspace row joins no unit of its lane, so the rows nested under it start their own
+  // units; within them, a unit is a row plus the deeper rows below it.
   let folderChildUnit: { units: WorktreeDragUnitGroup['units']; depth: number } | null = null
   const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
 
@@ -39,6 +49,7 @@ export function getWorktreeDragUnitGroups(
     if (row.type === 'header') {
       folderChildUnit = null
       current = { key: row.key, units: [] }
+      currentFolderUnits = null
       groups.push({
         key: current.key,
         units: current.units,
@@ -46,16 +57,29 @@ export function getWorktreeDragUnitGroups(
       })
       continue
     }
+    if (row.type === 'folder-workspace') {
+      folderChildUnit = { units: [], depth: Number.POSITIVE_INFINITY }
+      const key = getFolderWorkspaceRowDragGroupKey(
+        current?.key ?? ALL_GROUP_KEY,
+        row.folderWorkspace
+      )
+      if (!key) {
+        continue
+      }
+      if (!currentFolderUnits) {
+        currentFolderUnits = []
+        groups.push({ key, units: currentFolderUnits, worktreeIds: [] })
+      }
+      const worktreeId = getFolderWorkspaceHostIdentity(row.folderWorkspace)
+      currentFolderUnits.push({ worktreeId, worktreeIds: [worktreeId] })
+      continue
+    }
     if (
       row.type === 'host-header' ||
       row.type === 'imported-worktrees-card' ||
       row.type === 'new-external-worktrees-inbox' ||
-      row.type === 'pending-creation' ||
-      row.type === 'folder-workspace'
+      row.type === 'pending-creation'
     ) {
-      if (row.type === 'folder-workspace') {
-        folderChildUnit = { units: [], depth: Number.POSITIVE_INFINITY }
-      }
       continue
     }
     const worktreeKey = composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id)
