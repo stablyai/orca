@@ -152,6 +152,17 @@
   --color-jira-priority-low: var(--jira-priority-low);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
+  /* GA-P3t: strips, banners and notices by severity (fill, 1px border, icon, body text). */
+  --color-banner-warning-fill: var(--banner-warning-fill);
+  --color-banner-warning-border: var(--banner-warning-border);
+  --color-banner-warning-icon: var(--banner-warning-icon);
+  --color-banner-error-fill: var(--banner-error-fill);
+  --color-banner-error-border: var(--banner-error-border);
+  --color-banner-error-icon: var(--banner-error-icon);
+  --color-banner-info-fill: var(--banner-info-fill);
+  --color-banner-info-border: var(--banner-info-border);
+  --color-banner-info-icon: var(--banner-info-icon);
+  --color-banner-body: var(--banner-body);
   --color-callout-note: var(--callout-note);
   --color-callout-important: var(--callout-important);
   --color-workspace-status-done: var(--workspace-status-done);
@@ -467,6 +478,18 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* GA-P3t (Neil): banners must stand out on white panes. Border >=3:1 on the surface; icon >=3:1
+     and text >=4.5:1 on the fill (measured on #fff and #fafafa). */
+  --banner-warning-fill: color-mix(in srgb, #f59e0b 14%, var(--background));
+  --banner-warning-border: #b45309;
+  --banner-warning-icon: #b45309;
+  --banner-error-fill: color-mix(in srgb, var(--destructive) 8%, var(--background));
+  --banner-error-border: #c20012;
+  --banner-error-icon: #c20012;
+  --banner-info-fill: color-mix(in srgb, var(--foreground) 7.5%, var(--background));
+  --banner-info-border: color-mix(in srgb, var(--foreground) 47%, var(--background));
+  --banner-info-icon: color-mix(in srgb, var(--foreground) 65%, var(--background));
+  --banner-body: color-mix(in srgb, var(--foreground) 70%, var(--background));
   /* GitHub's own hues for the two callout kinds no status token covers. */
   --callout-note: #0969da;
   --callout-important: #8250df;
@@ -504,6 +527,17 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
+  /* GA-P3t: dark keeps its fills and icons; borders raised to >=3:1 on #0a0a0a (error, info failed). */
+  --banner-warning-fill: color-mix(in srgb, var(--status-warning) 10%, var(--card));
+  --banner-warning-border: color-mix(in srgb, var(--status-warning) 45%, var(--card));
+  --banner-warning-icon: var(--status-warning);
+  --banner-error-fill: color-mix(in srgb, var(--destructive) 10%, var(--card));
+  --banner-error-border: color-mix(in srgb, var(--destructive) 62%, var(--card));
+  --banner-error-icon: var(--destructive);
+  --banner-info-fill: var(--card);
+  --banner-info-border: color-mix(in srgb, var(--foreground) 36%, var(--card));
+  --banner-info-icon: var(--muted-foreground);
+  --banner-body: var(--muted-foreground);
   --callout-note: #4493f8;
   --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;

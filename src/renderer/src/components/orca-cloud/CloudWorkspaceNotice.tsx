@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/utils'
+import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
 import type { CloudOomEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
 export type CloudNoticeKind = { kind: 'unresponsive' } | { kind: 'oom'; oom: CloudOomEvent }
@@ -43,20 +45,26 @@ function CloudNoticeCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const titleId = useId()
+  // GA-P3t: trouble now reads as a warning; news from a background check as info.
+  const tone = BANNER_TONE[role === 'alert' ? 'warning' : 'info']
   return (
     <div
       role={role}
       aria-labelledby={titleId}
       data-cloud-notice={noticeKind}
-      className="pointer-events-auto flex w-[22rem] max-w-[calc(100%-1.5rem)] items-start gap-3 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
+      className={cn(
+        'pointer-events-auto flex w-[22rem] max-w-[calc(100%-1.5rem)] items-start gap-3 rounded-lg border p-3 text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1',
+        tone.surface,
+        tone.border
+      )}
     >
-      <Icon className="mt-0.5 size-4 shrink-0 text-status-warning-text" aria-hidden="true" />
+      <Icon className={cn('mt-0.5 size-4 shrink-0', tone.icon)} aria-hidden="true" />
       <div className="min-w-0 flex-1 space-y-2">
         <div className="space-y-0.5">
           <div id={titleId} className="text-sm font-medium leading-5">
             {title}
           </div>
-          <p className="text-xs text-muted-foreground">{detail}</p>
+          <p className={cn('text-xs', BANNER_BODY_TEXT)}>{detail}</p>
         </div>
         {action}
       </div>
