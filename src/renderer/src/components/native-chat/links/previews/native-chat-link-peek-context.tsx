@@ -1,11 +1,9 @@
 import { createContext, useMemo, type ReactNode } from 'react'
 import { useAppStore } from '@/store'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { NativeChatFileLinkContext } from '../actions/native-chat-file-link-context'
 import { useNativeChatGitHubRepo, type NativeChatGitHubRepo } from './native-chat-github-repo'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 
 export type NativeChatLinkPeek = {
   githubRepo: NativeChatGitHubRepo | null
@@ -35,12 +33,14 @@ export function NativeChatLinkPeekProvider({
     (state) => state.settings?.nativeChatLinkPreviews !== false
   )
   const runtimeEnvironmentId = fileLinkContext?.runtimeEnvironmentId ?? null
-  // Like web previews, a chat on a runtime environment asks that host; any other chat asks this one.
-  const githubRoutingHostId = fileLinkContext
-    ? runtimeEnvironmentId
-      ? toRuntimeExecutionHostId(runtimeEnvironmentId)
-      : LOCAL_EXECUTION_HOST_ID
-    : null
+  // A null runtime ID may still belong to a directly dialed SSH workspace.
+  const githubRoutingHostId = useAppStore((state) =>
+    fileLinkContext
+      ? runtimeEnvironmentId
+        ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+        : getKnownExecutionHostIdForWorktree(state, fileLinkContext.worktreeId)
+      : null
+  )
   const value = useMemo(
     () => ({
       githubRepo,
