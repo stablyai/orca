@@ -12,7 +12,7 @@ import {
 // Cross-site frames need their own CDP session; widget input only reaches the guest renderer.
 
 export type FocusedFrameRoute =
-  // Electron's native insertText crashes the guest unless a local frame holds focus.
+  // The renderer still validates the editable target when committing text.
   | { kind: 'widget'; hasFocusedLocalFrame: boolean }
   | { kind: 'session'; sessionId: string }
   | { kind: 'unknown' }
@@ -27,8 +27,8 @@ const FOCUSED_FRAME_ELEMENT_EXPRESSION = `(() => {
   while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement
   const tag = element?.tagName
   const owner = tag === 'IFRAME' || tag === 'FRAME' || tag === 'FENCEDFRAME' || tag === 'OBJECT' || tag === 'EMBED'
-  // A body active element can mean no frame has focus, so only a focused element proves it.
-  return owner ? element : Boolean(element) && element !== document.body && element !== document.documentElement
+  // A fresh body is not a text target, but an editable body is a valid editing host.
+  return owner ? element : Boolean(element) && (element.isContentEditable || (element !== document.body && element !== document.documentElement))
 })()`
 
 type ProbeSite = { sessionId?: string; contextId?: number; targetId?: string }
