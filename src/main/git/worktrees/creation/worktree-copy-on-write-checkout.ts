@@ -3,7 +3,11 @@ import { lstat, mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { canCloneWithApfs } from '../../../ipc/worktree-apfs-clone'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { gitExecOptions, type GitWorktreeExecOptions } from '../worktree-operation-options'
+import {
+  gitExecOptions,
+  resolveWorktreeAddTimeoutMs,
+  type GitWorktreeExecOptions
+} from '../worktree-operation-options'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import {
   readTreeIntoPlainIndex,
@@ -293,10 +297,16 @@ export async function cloneMainCheckoutIntoWorktree(
     if (paths.length === 0) {
       return
     }
-    await cloneFiles(method, repoPath, worktreePath, paths, options)
+    // The same bound as a checkout, so a stalled filesystem falls back instead of hanging the create.
+    const deadline = AbortSignal.timeout(resolveWorktreeAddTimeoutMs())
+    const cloneOptions = {
+      ...options,
+      signal: options.signal ? AbortSignal.any([options.signal, deadline]) : deadline
+    }
+    await cloneFiles(method, repoPath, worktreePath, paths, cloneOptions)
     if (method === 'apfs') {
       // APFS clones keep file flags; a checkout never sets the ones that block editing or deleting.
-      await runTool('/usr/bin/chflags', ['-R', 'nouchg,nouappnd', worktreePath], options)
+      await runTool('/usr/bin/chflags', ['-R', 'nouchg,nouappnd', worktreePath], cloneOptions)
     }
     // Skips Git's re-read for clones of files it already knows are clean.
     await transferCleanIndexStats(repoPath, worktreePath, options).catch(() => 0)
