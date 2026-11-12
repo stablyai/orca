@@ -220,6 +220,7 @@ it.each([750, 7500])(
       `id:${snapshots[0]!.worktree}`,
       'device-b'
     )
+    const refresh = vi.spyOn(runtime.sidebarFacts!.workspaceActivityFacts, 'refreshWorkspace')
     try {
       await Promise.all([departed.initial, other.initial])
       const rpc = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -240,17 +241,20 @@ it.each([750, 7500])(
       departed.stop()
       await departed.completion
       runtime.projectedFrames = 0
+      refresh.mockClear()
       const sequence = runtime.sessionTabsSequence()
       const delivered = other.frames.length
       runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(0)
       expect(runtime.sessionTabsSequence()).toBe(sequence)
       expect(other.frames).toHaveLength(delivered)
+      expect(refresh).not.toHaveBeenCalled()
     } finally {
       departed.stop()
       other.stop()
       await Promise.all([departed.completion, other.completion])
       await h.close()
+      refresh.mockRestore()
     }
   }
 )
