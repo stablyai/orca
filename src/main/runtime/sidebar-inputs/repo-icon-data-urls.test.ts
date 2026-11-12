@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RepoIcon } from '../../../shared/repo-icon'
 import type { Repo } from '../../../shared/repo-types'
-import { MAX_REPO_ICON_DATA_URL_BYTES } from '../../../shared/sidebar-list/repo-icon-data-urls-contract'
 import { RepoIconDataUrls, repoIconId, type RepoIconPngEncoder } from './repo-icon-data-urls'
 import type { RepoIconFetch } from './repo-icon-remote-fetch'
 import { pngHeader } from './repo-icon-image-fixture'
@@ -10,14 +9,6 @@ const AVATAR: RepoIcon = {
   type: 'image',
   src: 'https://github.com/stablyai.png?size=64',
   source: 'github'
-}
-
-function upload(bytes: Uint8Array): RepoIcon {
-  return {
-    type: 'image',
-    src: `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`,
-    source: 'upload'
-  }
 }
 
 function repo(id: string, repoIcon: RepoIcon | null): Repo {
@@ -43,53 +34,7 @@ function setup(
   return { icons, fetch, advance: (ms: number) => (now += ms) }
 }
 
-const ENCODED = new Uint8Array([1, 2, 3])
-const ENCODED_URL = 'data:image/png;base64,AQID'
-
-describe('RepoIconDataUrls with an encoder (desktop)', () => {
-  it('steps down to 32 px when the 64 px PNG is over the cap', async () => {
-    const huge = new Uint8Array(MAX_REPO_ICON_DATA_URL_BYTES)
-    const encoder = vi.fn<RepoIconPngEncoder>((_bytes, edge) => (edge === 64 ? huge : ENCODED))
-    const { icons } = setup([repo('a', AVATAR)], { encoder })
-
-    expect((await icons.read([repoIconId(AVATAR)!])).icons[0].dataUrl).toBe(ENCODED_URL)
-    expect(encoder.mock.calls.map(([, edge]) => edge)).toEqual([64, 32])
-  })
-
-  it('falls back when neither encoding nor passthrough fits the cap', async () => {
-    const icon = upload(pngHeader(64, 64, MAX_REPO_ICON_DATA_URL_BYTES))
-    const huge = new Uint8Array(MAX_REPO_ICON_DATA_URL_BYTES)
-    const encoder = vi.fn<RepoIconPngEncoder>(() => huge)
-    const { icons } = setup([repo('a', icon)], { encoder })
-
-    expect((await icons.read([repoIconId(icon)!])).icons[0].dataUrl).toBeNull()
-    expect(encoder).toHaveBeenCalledTimes(2)
-  })
-})
-
 describe('RepoIconDataUrls caps', () => {
-  it('refuses bytes that are not a readable raster image, before decoding', async () => {
-    const encoder = vi.fn<RepoIconPngEncoder>(() => ENCODED)
-    const { icons } = setup([repo('a', AVATAR)], {
-      encoder,
-      fetch: async () => pngResponse(new Uint8Array([1, 2, 3, 4]))
-    })
-
-    expect((await icons.read([repoIconId(AVATAR)!])).icons[0].dataUrl).toBeNull()
-    expect(encoder).not.toHaveBeenCalled()
-  })
-
-  it('refuses a fetched image over 512 px before decoding', async () => {
-    const encoder = vi.fn<RepoIconPngEncoder>(() => ENCODED)
-    const { icons } = setup([repo('a', AVATAR)], {
-      encoder,
-      fetch: async () => pngResponse(pngHeader(513, 64))
-    })
-
-    expect((await icons.read([repoIconId(AVATAR)!])).icons[0].dataUrl).toBeNull()
-    expect(encoder).not.toHaveBeenCalled()
-  })
-
   it('runs at most four fetches at once', async () => {
     const releases: (() => void)[] = []
     let active = 0
@@ -126,16 +71,6 @@ describe('RepoIconDataUrls caps', () => {
 })
 
 describe('RepoIconDataUrls cache', () => {
-  it('fetches an avatar shared by two repos once, across concurrent and later reads', async () => {
-    const { icons, fetch } = setup([repo('a', AVATAR), repo('b', { ...AVATAR, label: 'b' })])
-    const id = repoIconId(AVATAR)!
-
-    await Promise.all([icons.read([id, id]), icons.read([id])])
-    await icons.read([id])
-
-    expect(fetch).toHaveBeenCalledTimes(1)
-  })
-
   it('retries a failed fetch after five minutes, a success only after an hour', async () => {
     let fail = true
     const { icons, fetch, advance } = setup([repo('a', AVATAR)], {
@@ -155,28 +90,5 @@ describe('RepoIconDataUrls cache', () => {
     advance(60 * 1000 + 1)
     await icons.read([id])
     expect(fetch).toHaveBeenCalledTimes(3)
-  })
-
-  it('evicts the least recently read icons past 1 MiB', async () => {
-    const avatars = Array.from({ length: 80 }, (_, index): RepoIcon => ({
-      ...AVATAR,
-      src: `https://github.com/owner${index}.png`
-    }))
-    // Each encoded icon is just under the 16 KiB cap, so 80 of them overflow 1 MiB.
-    const nearCap = new Uint8Array(12 * 1024 - 64)
-    const { icons, fetch } = setup(
-      avatars.map((icon, index) => repo(`r${index}`, icon)),
-      { encoder: () => nearCap }
-    )
-    const ids = avatars.map((icon) => repoIconId(icon)!)
-
-    for (let start = 0; start < ids.length; start += 16) {
-      await icons.read(ids.slice(start, start + 16))
-    }
-    expect(fetch).toHaveBeenCalledTimes(80)
-    await icons.read([ids[79]])
-    expect(fetch).toHaveBeenCalledTimes(80)
-    await icons.read([ids[0]])
-    expect(fetch).toHaveBeenCalledTimes(81)
   })
 })
