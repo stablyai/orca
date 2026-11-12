@@ -62,7 +62,10 @@ export function readOpenCode2TranscriptSignal(
   }
 }
 
-function messageItems(value: unknown): OpenCodeTranscriptItem[] {
+function messageItems(
+  value: unknown,
+  record: Record<string, unknown> | null
+): OpenCodeTranscriptItem[] {
   const row = asRecord(value)
   if (
     typeof row?.id !== 'string' ||
@@ -96,7 +99,6 @@ function messageItems(value: unknown): OpenCodeTranscriptItem[] {
     throw new Error('OpenCode transcript message is invalid')
   }
   const messageId = row.id
-  const record = parseJsonObject(row.data)
   if (!record) {
     throw new Error('OpenCode transcript message contains invalid JSON')
   }
@@ -228,7 +230,7 @@ export function readOpenCode2TranscriptPage(
           row.type === 'idle' &&
           ['succeeded', 'interrupted', 'failed'].includes(String(record?.outcome))
       })
-      const mapped = messageItems(value)
+      const mapped = messageItems(value, record)
       cursor = row.cursor
       for (const item of mapped) {
         pageBytes += Buffer.byteLength(JSON.stringify(item))
