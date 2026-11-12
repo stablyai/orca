@@ -46,6 +46,7 @@ export function useGitStatusTurnCompletion(
   enabled: boolean,
   scheduler: { readonly current: GitStatusRefreshScheduler | null }
 ): void {
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- Visibility releases all subscriptions; effect cleanup releases the remaining visible lease.
   useEffect(() => {
     if (!worktreeId || !enabled) {
       return
