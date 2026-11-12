@@ -12,7 +12,10 @@ import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-spar
 import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
 import { openWorktreeCreatePathClaim } from '../../../workspaces/creation/worktree-create-in-flight'
 import { exactNameLateCollision } from '../../../workspaces/creation/worktree-create-exact-name'
-import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
+import {
+  failedWorktreeRemovals,
+  pendingWorktreeRemovals
+} from '../../../workspaces/removal/worktree-removal-table'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
@@ -299,6 +302,87 @@ describe('explicit branch reuse with real Git', () => {
   })
 })
 
+describe('cleanup ownership before candidate fallbacks', () => {
+  it.each(['pending branch', 'failed branch reuse', 'failed path'])(
+    'explains %s before suffixing or missing-branch guidance',
+    async (scenario) => {
+      const f = await fixture()
+      const path = join(f.workspaceRoot, 'reserved')
+      const failed = scenario !== 'pending branch'
+      const records = failed ? failedWorktreeRemovals : pendingWorktreeRemovals
+      const record = {
+        worktreeId: `repo::${path}`,
+        repoId: 'repo',
+        repoPath: f.repoPath,
+        worktreePath: path,
+        branch: 'reserved',
+        head: f.initialTip,
+        deleteBranch: true,
+        force: true,
+        requestedAt: 0,
+        ...(failed ? { failure: { message: 'permission denied', failedAt: 1 } } : {})
+      }
+      records.set(record.worktreeId, record)
+      if (scenario === 'pending branch') {
+        await git(f.repoPath, 'branch', 'reserved')
+      } else if (scenario === 'failed path') {
+        await mkdir(path, { recursive: true })
+      }
+      try {
+        await expect(
+          f.candidate({
+            name: scenario === 'failed path' ? 'reserved' : 'free-name',
+            branchNameOverride: scenario === 'failed path' ? undefined : 'reserved',
+            branchIntent: scenario === 'failed branch reuse' ? 'open-existing-v2' : 'create-new'
+          })
+        ).rejects.toThrow(failed ? 'Retry deleting it before reusing' : 'Cleanup is pending')
+        expect(records.get(record.worktreeId)).toBe(record)
+        expect(await git(f.repoPath, 'branch', '--list', 'reserved-2')).toBe('')
+        await expect(runtimePathExists(join(f.workspaceRoot, 'free-name-2'))).resolves.toBe(false)
+      } finally {
+        records.delete(record.worktreeId)
+      }
+    }
+  )
+
+  it('keeps generated allocation and ordinary collision suffixes', async () => {
+    const f = await fixture()
+    const path = join(f.workspaceRoot, 'nautilus')
+    const record = {
+      worktreeId: `repo::${path}`,
+      repoId: 'repo',
+      repoPath: f.repoPath,
+      worktreePath: path,
+      branch: 'nautilus',
+      head: f.initialTip,
+      deleteBranch: true,
+      force: true,
+      requestedAt: 0
+    }
+    pendingWorktreeRemovals.set(record.worktreeId, record)
+    try {
+      const generated = await f.candidate({
+        name: 'nautilus',
+        nameWasGenerated: true,
+        branchNameOverride: undefined,
+        branchIntent: 'create-new'
+      })
+      expect(generated.worktreePath).toBe(join(f.workspaceRoot, 'nautilus-2'))
+      expect(generated.branchName).toBe('nautilus-2')
+      await git(f.repoPath, 'branch', 'occupied')
+      const ordinary = await f.candidate({
+        name: 'ordinary',
+        branchNameOverride: 'occupied',
+        branchIntent: 'create-new'
+      })
+      expect(ordinary.branchName).toBe('occupied-2')
+      expect(ordinary.worktreePath).toBe(join(f.workspaceRoot, 'ordinary-2'))
+    } finally {
+      pendingWorktreeRemovals.delete(record.worktreeId)
+    }
+  })
+})
+
 describe('exact-name create with real Git', () => {
   const exact = (name: string) => ({
     name,
@@ -356,7 +440,9 @@ describe('exact-name create with real Git', () => {
         expect(foreign.claim(path)).toBe(true)
       }
       try {
-        await expect(f.candidate(exact('Login fix'))).rejects.toMatchObject(refused)
+        await (holder === 'a pending removal'
+          ? expect(f.candidate(exact('Login fix'))).rejects.toThrow('Cleanup is pending')
+          : expect(f.candidate(exact('Login fix'))).rejects.toMatchObject(refused))
         const probe = openWorktreeCreatePathClaim()
         expect(probe.claim(path)).toBe(holder !== 'an in-flight create')
         probe.release()

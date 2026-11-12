@@ -172,7 +172,10 @@ import {
   retireGeneratedWorktreeName
 } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
+import {
+  assertNoPendingWorktreeRemovalConflict,
+  findPendingWorktreeRemovalConflict
+} from '../workspaces/removal/worktree-removal-table'
 import {
   exactNameBranchConflict,
   exactNameLateCollision,
@@ -1221,6 +1224,27 @@ async function performLocalWorktreeCreate(
   const shouldRetireGeneratedName =
     args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
   const exactName = args.branchIntent === 'create-exact'
+  if (args.nameWasGenerated !== true || args.branchNameOverride) {
+    assertNoPendingWorktreeRemovalConflict(repo.path, {
+      worktreePath:
+        args.nameWasGenerated === true
+          ? undefined
+          : ensurePathWithinWorkspace(
+              computeWorktreePath(sanitizedName, repo.path, worktreePathSettings, workspaceRoot),
+              workspaceRoot
+            ),
+      branch:
+        args.branchNameOverride ??
+        (await resolveCreateBranchName(
+          repo.path,
+          undefined,
+          sanitizedName,
+          settings,
+          username,
+          localWorktreeGitOptions
+        ))
+    })
+  }
   if (
     args.branchIntent === 'open-existing' &&
     args.branchNameOverride &&
