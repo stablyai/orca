@@ -53,7 +53,9 @@ export function buildStatusMap(entries: readonly GitStatusEntry[]): Map<string, 
   return statusByPath
 }
 
-export function buildFolderStatusMap(entries: GitStatusEntry[]): Map<string, GitFileStatus | null> {
+export function buildFolderStatusMap(
+  entries: readonly GitStatusEntry[]
+): Map<string, GitFileStatus | null> {
   const folderStatuses = new Map<string, GitFileStatus[]>()
 
   for (const entry of entries) {
@@ -90,7 +92,36 @@ export function shouldPropagateStatus(status: GitFileStatus): boolean {
   return status !== 'deleted'
 }
 
-export function isPathIgnored(ignored: Set<string>, relativePath: string): boolean {
+export type RepositoryIgnoredPathSet = Set<string> & {
+  repositories?: ReadonlyMap<string, ReadonlyMap<string, boolean>>
+}
+
+export function isPathIgnored(ignored: RepositoryIgnoredPathSet, relativePath: string): boolean {
+  if (ignored.repositories) {
+    let parent = relativePath
+    for (;;) {
+      const slash = parent.lastIndexOf('/')
+      parent = slash === -1 ? '' : parent.slice(0, slash)
+      const own = ignored.repositories.get(parent)
+      if (own) {
+        let path = parent ? relativePath.slice(parent.length + 1) : relativePath
+        for (;;) {
+          const answer = own.get(path)
+          if (answer !== undefined) {
+            return answer
+          }
+          const index = path.lastIndexOf('/')
+          if (index === -1) {
+            return false
+          }
+          path = path.slice(0, index)
+        }
+      }
+      if (parent === '') {
+        break
+      }
+    }
+  }
   if (ignored.size === 0) {
     return false
   }

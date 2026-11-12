@@ -2,6 +2,7 @@ import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 export type GetStatusOptions = GitRuntimeOptions & {
   includeIgnored?: boolean
+  skipEffectiveUpstream?: boolean
   includeLineStats?: boolean
   reuseLineStats?: boolean
   /** Omit to hide the branch chip and skip its ranged diff. */

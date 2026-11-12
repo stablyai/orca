@@ -24,6 +24,9 @@ import type {
 
 export type GitInspectionApi = {
   status: (args: {
+    repositoryPaths?: string[]
+    repositoryIntent?: 'probe' | 'status' | 'ignored'
+    repositoryQueryPaths?: string[]
     worktreePath: string
     connectionId?: string
     admissionTier?: 'interactive' | 'status' | 'background'

@@ -55,6 +55,9 @@ export function createGitStatusRefreshScheduler(
     pacing?: GitStatusRefreshPacing
     // Multiplies the activity floor and safety interval at schedule time (e.g. while unfocused).
     cadenceScale?: () => number
+    // Partial activity work cannot satisfy a separate missed-event healing obligation.
+    preserveSafetyDeadline?: boolean
+    nextSafetyAt?: () => number
   }
 ): GitStatusRefreshScheduler {
   let disposed = false
@@ -65,6 +68,7 @@ export function createGitStatusRefreshScheduler(
   let activityTimerFiresAt = Infinity
   let safetyTimer: ReturnType<typeof setTimeout> | null = null
   let safetyTimerFiresAt = Infinity
+  let safetyDueAt = Infinity
   let activeController: AbortController | null = null
   const pacing = options.pacing ?? createGitStatusRefreshPacing()
 
@@ -107,6 +111,9 @@ export function createGitStatusRefreshScheduler(
 
   const scheduleSafetyRunAt = (firesAt: number): void => {
     clearSafetyTimer()
+    if (firesAt === Infinity) {
+      return
+    }
     safetyTimerFiresAt = firesAt
     safetyTimer = setTimeout(
       () => {
@@ -153,6 +160,9 @@ export function createGitStatusRefreshScheduler(
     if (disposed || inFlight) {
       return
     }
+    if (options.preserveSafetyDeadline && Date.now() >= safetyDueAt) {
+      reason = 'safety'
+    }
     clearActivityTimer()
     clearSafetyTimer()
     inFlight = true
@@ -186,13 +196,33 @@ export function createGitStatusRefreshScheduler(
         if (disposed) {
           return
         }
+        if (options.nextSafetyAt) {
+          safetyDueAt = options.nextSafetyAt()
+        } else if (
+          !options.preserveSafetyDeadline ||
+          reason === 'safety' ||
+          safetyDueAt === Infinity
+        ) {
+          safetyDueAt = Date.now() + safetyDelayMs()
+        }
+        if (safetyEnabled) {
+          const backoff = slowTaskRequiredIdleMs(
+            pacing.lastRunDurationMs,
+            options.slowTaskBackoff.idleMultiplier,
+            0,
+            options.slowTaskBackoff.maxIntervalMs
+          )
+          scheduleSafetyRunAt(
+            Math.max(
+              safetyDueAt,
+              Date.now() + backoff,
+              options.nextSafetyAt ? pacing.lastRunEndedAt + requiredActivityIdleMs() : -Infinity
+            )
+          )
+        }
         if (pendingActivity) {
           pendingActivity = false
           scheduleActivityRun(0)
-          return
-        }
-        if (safetyEnabled) {
-          scheduleSafetyRunAt(Date.now() + safetyDelayMs())
         }
       })
   }
@@ -230,7 +260,9 @@ export function createGitStatusRefreshScheduler(
       if (disposed) {
         return
       }
-      clearSafetyTimer()
+      if (!options.preserveSafetyDeadline) {
+        clearSafetyTimer()
+      }
       scheduleActivityRun(options.activityDebounceMs)
     },
     refreshNow: () => {

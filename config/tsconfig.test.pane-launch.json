@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.web.json",
   "include": [
+    "../src/renderer/src/components/right-sidebar/file-explorer/tree/file-explorer-repository-host-idle.test.ts",
     "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/runtime/observed-provider-accounts.test.tsx",

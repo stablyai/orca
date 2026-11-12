@@ -1,3 +1,5 @@
+import { useExplorerRepositoryDecorations } from './file-explorer-repository-decorations'
+import type { ExplorerRepositorySource } from './file-explorer-repository-observer'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
@@ -6,13 +8,13 @@ import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type {
+  GitStatusEntry,
+  GitFileStatus
+} from '../../../../../../shared/git/status/git-status-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
-import {
-  buildFolderStatusMap,
-  buildStatusMap
-} from '../../../../lib/source-control/paths/git-path-decoration'
+
 import { useFileDeletion } from '../mutations/useFileDeletion'
 import { useFileExplorerDragDrop } from '../mutations/useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from '../mutations/useFileExplorerHandlers'
@@ -52,6 +54,7 @@ type UseFileExplorerTreePaneStateParams = {
   rowExpandedPaths: Set<string>
   visibleRowCount: number
   pathOwner: LocalPathOpenOwner
+  repositorySources: readonly ExplorerRepositorySource[]
 }
 
 type UseFileExplorerTreePaneStateResult = {
@@ -59,8 +62,8 @@ type UseFileExplorerTreePaneStateResult = {
   runtimeDownloadContext: RuntimeFileOperationArgs | null
   supportsFolderDownload: boolean
   canOpenWorkspaceFileBrowserForPath: ReturnType<typeof useWorkspaceFileBrowserActionPredicate>
-  statusByRelativePath: ReturnType<typeof buildStatusMap>
-  folderStatusByRelativePath: ReturnType<typeof buildFolderStatusMap>
+  statusByRelativePath: Pick<ReadonlyMap<string, GitFileStatus>, 'get'>
+  folderStatusByRelativePath: Pick<ReadonlyMap<string, GitFileStatus | null>, 'get'>
   deletion: ReturnType<typeof useFileDeletion>
   dragDrop: ReturnType<typeof useFileExplorerDragDrop>
   inlineInputState: ReturnType<typeof useFileExplorerInlineInput>
@@ -91,7 +94,8 @@ export function useFileExplorerTreePaneState({
   rowProjection,
   rowExpandedPaths,
   visibleRowCount,
-  pathOwner
+  pathOwner,
+  repositorySources
 }: UseFileExplorerTreePaneStateParams): UseFileExplorerTreePaneStateResult {
   const {
     dirCache,
@@ -160,8 +164,10 @@ export function useFileExplorerTreePaneState({
   )
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
 
-  const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
-  const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
+  const { statusByRelativePath, folderStatusByRelativePath } = useExplorerRepositoryDecorations(
+    entries,
+    repositorySources
+  )
 
   const deletion = useFileDeletion({
     activeWorktreeId,

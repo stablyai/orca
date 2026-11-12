@@ -19,5 +19,10 @@ describe('git check-ignore stdio', () => {
       ['ijk']
     ])
     expect(splitGitCheckIgnorePathsByStdinBytes(['éé', 'a'], 5)).toEqual([['éé'], ['a']])
+    expect(splitGitCheckIgnorePathsByStdinBytes([], 5)).toEqual([])
+    expect(splitGitCheckIgnorePathsByStdinBytes(['oversized', 'a'], 5)).toEqual([
+      ['oversized'],
+      ['a']
+    ])
   })
 })

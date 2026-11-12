@@ -1,3 +1,4 @@
+import { getRepositoryStatuses } from '../../../git/source-control/repository-status'
 import type {
   GitHistoryOptions,
   GitHistoryResult
@@ -48,6 +49,20 @@ export class RuntimeGitStatusCommands {
     worktreeSelector: string,
     options?: GitProviderStatusOptions
   ): Promise<GitStatusResult> {
+    if (options?.repositoryPaths) {
+      const target = await this.host.resolveRuntimeGitReadTarget?.(worktreeSelector)
+      if (!target) {
+        throw new Error('repository_read_target_unavailable')
+      }
+      requireLocalRuntimeGitRoute(target)
+      const gitOptions = target.localGitOptions ?? {}
+      await assertRuntimeReadWslDistroRunning(target, gitOptions.wslDistro)
+      return getRepositoryStatuses(target.worktree.path, options, {
+        ...gitOptions,
+        admissionTier: 'background',
+        signal: options.signal
+      })
+    }
     // A client showing this workspace is a user act; its status is the implicit wake (E9).
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)

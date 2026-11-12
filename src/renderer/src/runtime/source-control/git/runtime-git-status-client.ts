@@ -1,3 +1,9 @@
+import {
+  GIT_REPOSITORY_STATUS_CAPABILITY,
+  type GitRepositoryStatusRequest
+} from '../../../../../shared/git/status/git-repository-status'
+import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
+import { peekRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-compatibility-cache'
 import type {
   GitHistoryItemRef,
   GitHistoryOptions,
@@ -14,9 +20,25 @@ import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
+export async function supportsRuntimeGitRepositories(context: RuntimeGitContext): Promise<boolean> {
+  if (context.target.kind === 'local') {
+    return true
+  }
+  return (
+    peekRuntimeEnvironmentCapability(
+      context.target.environmentId,
+      GIT_REPOSITORY_STATUS_CAPABILITY
+    ) ??
+    (await runtimeEnvironmentSupportsCapability(
+      context.target.environmentId,
+      GIT_REPOSITORY_STATUS_CAPABILITY
+    ))
+  )
+}
+
 export async function getRuntimeGitStatus(
   context: RuntimeGitContext,
-  options?: {
+  options?: GitRepositoryStatusRequest & {
     admissionTier?: 'interactive' | 'status' | 'background'
     includeIgnored?: boolean
     includeLineStats?: boolean
@@ -29,6 +51,20 @@ export async function getRuntimeGitStatus(
   }
 ): Promise<GitStatusResult> {
   const target = context.target
+  const scopedArgs = options?.repositoryPaths
+    ? {
+        repositoryPaths: options.repositoryPaths,
+        repositoryIntent: options.repositoryIntent,
+        repositoryQueryPaths: options.repositoryQueryPaths
+      }
+    : {}
+  if (
+    options?.repositoryPaths &&
+    target.kind !== 'local' &&
+    !(await supportsRuntimeGitRepositories(context))
+  ) {
+    return { entries: [], conflictOperation: 'unknown' }
+  }
   const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
   const admissionTierArgs = options?.admissionTier ? { admissionTier: options.admissionTier } : {}
   const includeLineStatsArgs =
@@ -45,6 +81,7 @@ export async function getRuntimeGitStatus(
       {
         worktreePath: resolveLocalWorktreePath(context),
         connectionId: context.connectionId,
+        ...scopedArgs,
         ...admissionTierArgs,
         ...includeIgnoredArgs,
         ...includeLineStatsArgs,
@@ -61,6 +98,7 @@ export async function getRuntimeGitStatus(
     'git.status',
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      ...scopedArgs,
       ...admissionTierArgs,
       ...includeIgnoredArgs,
       ...includeLineStatsArgs,

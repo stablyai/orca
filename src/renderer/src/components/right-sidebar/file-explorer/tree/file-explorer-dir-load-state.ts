@@ -1,3 +1,4 @@
+import type { FileExplorerDirCacheUpdate } from './file-explorer-directory-cache'
 import type { DirCache } from './file-explorer-types'
 
 /** Track loading outside dirCache so spinner changes do not rebuild the entire tree projection. */
@@ -42,14 +43,14 @@ export function clearFileExplorerDirsLoading(
 export function withPendingFileExplorerDirCacheEntries(
   prev: Record<string, DirCache>,
   dirPaths: readonly string[]
-): Record<string, DirCache> {
+): FileExplorerDirCacheUpdate {
   const missing = dirPaths.filter((dirPath) => prev[dirPath] === undefined)
   if (missing.length === 0) {
-    return prev
+    return { dirCache: prev, changedPaths: [] }
   }
   const next = { ...prev }
   for (const dirPath of missing) {
     next[dirPath] = { children: [] }
   }
-  return next
+  return { dirCache: next, changedPaths: missing }
 }

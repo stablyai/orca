@@ -1,3 +1,5 @@
+import type { GitRepositoryStatus } from './git-repository-status'
+
 export type GitFileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'copied'
 export type GitStagingArea = 'staged' | 'unstaged' | 'untracked'
 export type GitConflictKind =
@@ -54,6 +56,7 @@ export type GitBranchLineTotal = {
 }
 
 export type GitStatusResult = {
+  repositoryStatuses?: GitRepositoryStatus[]
   entries: GitStatusEntry[]
   conflictOperation: GitConflictOperation
   head?: string

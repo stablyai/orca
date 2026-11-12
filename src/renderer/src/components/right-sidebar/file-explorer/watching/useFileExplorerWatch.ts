@@ -1,3 +1,4 @@
+import type { FileExplorerDirCacheSetter } from '../tree/file-explorer-directory-cache'
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type {
   FsChangedPayload,
@@ -38,7 +39,7 @@ type UseFileExplorerWatchParams = {
   worktreePath: string | null
   activeWorktreeId: string | null
   dirCache: Record<string, DirCache>
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  setDirCache: FileExplorerDirCacheSetter
   expanded: Set<string>
   setSelectedPath: Dispatch<SetStateAction<string | null>>
   refreshDir: (dirPath: string) => Promise<void>

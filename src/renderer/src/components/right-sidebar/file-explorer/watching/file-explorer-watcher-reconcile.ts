@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react'
+import type { FileExplorerDirCacheSetter } from '../tree/file-explorer-directory-cache'
 import type { DirCache } from '../tree/file-explorer-types'
 import { isPathEqualOrDescendant } from '../navigation/file-explorer-paths'
 import { useAppStore } from '@/store/index'
@@ -37,7 +37,7 @@ function createSubtreeMatcher(paths: ReadonlySet<string>): (candidatePath: strin
 }
 
 export function purgeDirCacheSubtrees(
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>,
+  setDirCache: FileExplorerDirCacheSetter,
   deletedPaths: ReadonlySet<string>,
   snapshot?: { cache: Record<string, DirCache>; keys: readonly string[] }
 ): void {
@@ -46,17 +46,17 @@ export function purgeDirCacheSubtrees(
   }
   const shouldPurge = createSubtreeMatcher(deletedPaths)
   setDirCache((prev) => {
-    let changed = false
+    const changedPaths: string[] = []
     const next: Record<string, DirCache> = {}
     const keys = prev === snapshot?.cache ? snapshot.keys : Object.keys(prev)
     for (const key of keys) {
       if (shouldPurge(key)) {
-        changed = true
+        changedPaths.push(key)
       } else {
         next[key] = prev[key]
       }
     }
-    return changed ? next : prev
+    return { dirCache: changedPaths.length ? next : prev, changedPaths }
   })
 }
 

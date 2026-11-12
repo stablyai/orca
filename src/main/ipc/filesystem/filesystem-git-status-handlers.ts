@@ -1,3 +1,6 @@
+import { getRepositoryStatuses } from '../../git/source-control/repository-status'
+import type { GitRepositoryStatusRequest } from '../../../shared/git/status/git-repository-status'
+import { resolveDesktopAuthorizedPath } from './access/local-file-access-resolution'
 import { ipcMain } from 'electron'
 import type {
   GitConflictOperation,
@@ -30,6 +33,7 @@ import { validateGitRelativeFilePath } from './access/filesystem-path-containmen
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalGitOptionsForRepo,
+  getLocalGitOptionsForWorkspaceRead,
   getLocalRepoForRegisteredWorktree
 } from '../local-worktree-runtime-options'
 import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
@@ -52,7 +56,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     'git:status',
     async (
       event,
-      args: {
+      args: GitRepositoryStatusRequest & {
         worktreePath: string
         connectionId?: string
         admissionTier?: GitAdmissionTier
@@ -82,6 +86,16 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       }
       try {
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+        if (args.repositoryPaths) {
+          const gitOptions = getLocalGitOptionsForWorkspaceRead(store, args.worktreePath)
+          await assertWslUncPathRunning(args.worktreePath, gitOptions.wslDistro)
+          const root = await resolveDesktopAuthorizedPath(args.worktreePath, store)
+          return await getRepositoryStatuses(root, args, {
+            ...gitOptions,
+            admissionTier: 'background',
+            ...(controller ? { signal: controller.signal } : {})
+          })
+        }
         // The active workspace's first status is a user act: it may start its stopped WSL distro.
         const wakeDistro = args.wakeWslDistro
           ? wslDistroForPath(

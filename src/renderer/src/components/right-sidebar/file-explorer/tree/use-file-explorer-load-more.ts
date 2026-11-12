@@ -1,4 +1,5 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react'
+import type { FileExplorerDirCacheSetter } from './file-explorer-directory-cache'
+import type { RefObject } from 'react'
 import { useCallback, useEffect } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { DirCache } from './file-explorer-types'
@@ -77,7 +78,7 @@ export function useFileExplorerLoadMoreDir({
   dirCacheRef: RefObject<Record<string, DirCache>>
   loadingDirPathsRef: RefObject<ReadonlySet<string>>
   dirLoadTrackerRef: RefObject<FileExplorerDirLoadTracker>
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  setDirCache: FileExplorerDirCacheSetter
   updateLoadingDirPaths: FileExplorerLoadingDirsUpdater
 }): (dirPath: string) => Promise<void> {
   return useCallback(

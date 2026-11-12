@@ -39,6 +39,7 @@ export const GIT_STATUS_METHODS = [
     params: GitStatusParams,
     handler: async (params, { runtime, signal, clientCapabilities }) => {
       const options =
+        params.repositoryPaths === undefined &&
         params.includeIgnored === undefined &&
         params.includeLineStats === undefined &&
         params.bypassEffectiveUpstreamNegativeCache === undefined &&
@@ -48,6 +49,13 @@ export const GIT_STATUS_METHODS = [
         signal === undefined
           ? undefined
           : {
+              ...(params.repositoryPaths
+                ? {
+                    repositoryPaths: params.repositoryPaths,
+                    repositoryIntent: params.repositoryIntent,
+                    repositoryQueryPaths: params.repositoryQueryPaths
+                  }
+                : {}),
               ...(params.includeIgnored === undefined
                 ? {}
                 : { includeIgnored: params.includeIgnored }),

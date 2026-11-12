@@ -13,6 +13,9 @@ export const WorktreeSelector = z.object({
 })
 
 export const GitStatusParams = WorktreeSelector.extend({
+  repositoryPaths: z.array(z.string()).max(100).optional(),
+  repositoryIntent: z.enum(['probe', 'status', 'ignored']).optional(),
+  repositoryQueryPaths: z.array(z.string()).max(2000).optional(),
   admissionTier: OptionalGitAdmissionTier,
   includeIgnored: z.boolean().optional(),
   includeLineStats: z.boolean().optional(),

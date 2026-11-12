@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type { FileExplorerDirCacheSetter } from '../tree/file-explorer-directory-cache'
 import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type { DirCache, TreeNode } from '../tree/file-explorer-types'
 import {
@@ -25,7 +26,7 @@ export type ProcessFileExplorerFsPayloadArgs = {
   cache: Record<string, DirCache>
   expanded: Set<string>
   followSymlinks?: boolean
-  setDirCache: Dispatch<SetStateAction<Record<string, DirCache>>>
+  setDirCache: FileExplorerDirCacheSetter
   setSelectedPath: Dispatch<SetStateAction<string | null>>
   refreshDir: (dirPath: string) => void
   refreshTree: () => void
