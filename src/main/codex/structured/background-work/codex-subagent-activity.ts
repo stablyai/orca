@@ -17,6 +17,8 @@ export type CodexSubagentActivity = {
   kind: string
   agentThreadId: string
   agentPath: string | null
+  /** What the child resolved to at creation, reported on `started`. */
+  launch: CodexChildLaunch
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -40,8 +42,16 @@ export function readCodexSubagentActivity(item: CodexThreadItem): CodexSubagentA
   return {
     kind: nonEmptyString(item.kind) ?? '',
     agentThreadId,
-    agentPath: nonEmptyString(item.agentPath)
+    agentPath: nonEmptyString(item.agentPath),
+    launch: codexChildLaunch(
+      nonEmptyString(item.model),
+      nonEmptyString(item.reasoningEffort) ?? nonEmptyString(item.reasoning_effort)
+    )
   }
+}
+
+function codexChildLaunch(model: string | null, effort: string | null): CodexChildLaunch {
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
 }
 
 const CODEX_ROOT_AGENT_SEGMENT = 'root'
@@ -84,7 +94,8 @@ function readAnnouncements(item: CodexThreadItem): CodexSubagentAnnouncement[] {
           {
             agentThreadId: activity.agentThreadId,
             label: codexSubagentLabel(activity),
-            spawned: activity.kind === 'started'
+            spawned: activity.kind === 'started',
+            launch: activity.launch
           }
         ]
   }
@@ -95,12 +106,7 @@ function readAnnouncements(item: CodexThreadItem): CodexSubagentAnnouncement[] {
   const spawned = call.tool === 'spawnAgent'
   // Follow-up prompts are messages, not the child's task label.
   const label = spawned ? codexCollabHelperLabel(call.prompt) : null
-  const launch: CodexChildLaunch | undefined = spawned
-    ? {
-        ...(call.model ? { model: call.model } : {}),
-        ...(call.reasoningEffort ? { effort: call.reasoningEffort } : {})
-      }
-    : undefined
+  const launch = spawned ? codexChildLaunch(call.model, call.reasoningEffort) : undefined
   return call.helperThreadIds.map((agentThreadId) => ({ agentThreadId, label, spawned, launch }))
 }
 

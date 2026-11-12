@@ -198,26 +198,22 @@ describe('Codex structured child-work producer', () => {
     ])
   })
 
-  it('records the model and reasoning effort the spawn asked the child to run on', async () => {
-    const { send, byDescription } = await producer()
+  it('records the model and reasoning effort Codex resolved for the child', async () => {
+    const { send, records } = await producer()
     send(turn('turn/started', THREAD_ID, 'p1'))
     send(
       item('item/completed', THREAD_ID, 'p1', {
-        type: 'collabAgentToolCall',
-        id: 'call-spawn',
-        tool: 'spawnAgent',
-        status: 'completed',
-        receiverThreadIds: [REVIEWER],
-        prompt: 'Review the diff',
-        model: 'gpt-5.5',
-        reasoningEffort: 'high',
-        agentsStates: { [REVIEWER]: { status: 'pendingInit', message: null } }
+        type: 'subAgentActivity',
+        id: 'spawn-reviewer',
+        kind: 'started',
+        agentThreadId: REVIEWER,
+        agentPath: '/root/inspect_folder',
+        model: 'gpt-6.1-sol',
+        reasoning_effort: 'xhigh'
       })
     )
     send(turn('turn/started', REVIEWER, 'r1'))
-    expect(byDescription('Review the diff')).toEqual(
-      expect.objectContaining({ model: 'gpt-5.5', effort: 'high' })
-    )
+    expect(records()).toEqual([expect.objectContaining({ model: 'gpt-6.1-sol', effort: 'xhigh' })])
   })
 
   it('ends an approval left unanswered when its turn ends: Codex never ran the command', async () => {
