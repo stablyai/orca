@@ -6,7 +6,7 @@ import { resolveCreatedWorktree } from '../../../ipc/created-worktree-reconcilia
 import { normalizeSparseDirectories } from '../../../ipc/sparse-checkout-directories'
 import { configureCreatedWorktreePushTarget } from '../../../ipc/worktree-remote'
 import { addSparseWorktree } from '../../../git/worktrees/creation/worktree-sparse-add'
-import { addWorktree } from '../../../git/worktrees/creation/worktree-add'
+import { addWorktreeWithCopyOnWriteCheckout } from '../../../git/worktrees/creation/worktree-copy-on-write-add'
 import type {
   AddWorktreeOptions,
   AddWorktreeResult
@@ -184,13 +184,12 @@ export async function createRuntimeLocalGitWorktree(args: {
         )
       }
       return (
-        (await addWorktree(
+        (await addWorktreeWithCopyOnWriteCheckout(
           args.repo.path,
           args.worktreePath,
           args.branchName,
           baseBranch,
           args.settings.refreshLocalBaseRefOnWorktreeCreate,
-          false,
           addOptions
         )) ?? {}
       )

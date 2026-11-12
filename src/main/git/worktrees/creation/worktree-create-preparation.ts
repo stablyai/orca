@@ -29,6 +29,10 @@ import {
   verifyWorktreePreparationLockAtPath
 } from './worktree-preparation-lock'
 import { addLockedWorktreePreparation } from './worktree-preparation-add'
+import {
+  cloneMainCheckoutIntoWorktree,
+  resolveCopyOnWriteCheckout
+} from './worktree-copy-on-write-checkout'
 
 export async function prepareWorktreeCreateCheckout(
   repoPath: string,
@@ -58,8 +62,9 @@ export async function prepareWorktreeCreateCheckout(
   try {
     await operation.withMaintenancePaused(() =>
       runWithGitReadCacheInvalidation(async () => {
-        // Overlaps preparation; never rejects.
+        // Overlap preparation; neither rejects.
         const checkoutWorkersArgs = checkoutWorkersGitArgs(repoPath, options)
+        const copyOnWrite = resolveCopyOnWriteCheckout(repoPath, worktreePath, options)
         const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
           hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
         )
@@ -87,8 +92,18 @@ export async function prepareWorktreeCreateCheckout(
           materializationBase = stdout.trim()
           await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
         }
-        const workers = await checkoutWorkersArgs
+        const [workers, cloneMethod] = await Promise.all([checkoutWorkersArgs, copyOnWrite])
         options.signal?.throwIfAborted()
+        if (cloneMethod) {
+          await cloneMainCheckoutIntoWorktree(
+            cloneMethod,
+            repoPath,
+            worktreePath,
+            materializationBase,
+            options
+          )
+          await verifyWorktreePreparationLockAtPath(lockPath, lockReason, options.signal)
+        }
         // Materialize with reset to defer user post-checkout hooks until submission.
         await gitExecFileAsync(
           [

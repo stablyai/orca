@@ -29,7 +29,7 @@ import type {
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
 import { getPRForBranch } from '../github/client'
-import { addWorktree } from '../git/worktrees/creation/worktree-add'
+import { addWorktreeWithCopyOnWriteCheckout } from '../git/worktrees/creation/worktree-copy-on-write-add'
 import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
 import type {
   AddWorktreeOptions,
@@ -1596,23 +1596,21 @@ async function performLocalWorktreeCreate(
         }
 
         if (checkoutExistingBranch) {
-          return addWorktree(
+          return addWorktreeWithCopyOnWriteCheckout(
             repo.path,
             worktreePath,
             branchName,
             baseBranch,
             settings.refreshLocalBaseRefOnWorktreeCreate,
-            false,
             addProjectGitOptions(existingBranchOption)
           )
         }
-        return addWorktree(
+        return addWorktreeWithCopyOnWriteCheckout(
           repo.path,
           worktreePath,
           branchName,
           baseBranch,
           settings.refreshLocalBaseRefOnWorktreeCreate,
-          false,
           newBranchOptions
         )
       })) ?? {}
