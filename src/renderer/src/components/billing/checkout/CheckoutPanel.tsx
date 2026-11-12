@@ -22,7 +22,7 @@ export type CheckoutPanelProps = {
   onReopen: () => void
   onKeepWaiting: () => void
   onBack: () => void
-  /** Where "Contact us" goes when billing can't sell the plan (the catalog's Enterprise contact). */
+  /** Where "Contact us" goes when billing can't sell the plan (the plan's supportUrl, else Enterprise's contact). */
   contactUrl?: string | null
   onContact?: (url: string) => void
 }
