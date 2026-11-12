@@ -17556,8 +17556,6 @@
           "18763ded26": "Zamanlama",
           "dbef8dc110": "Bu SSH otomasyonu yalnızca Orca, SSH sunucusuna ulaşabildiğinde çalışır. Yeniden bağlanma etkileşimli kimlik bilgileri gerektiriyorsa veya sunucu kullanılamıyorsa çalıştırma atlandı olarak kaydedilir.",
           "1f6026358e": "Otomasyonu sil",
-          "d79452fb30": "Otomasyonu sürdür",
-          "91a4155e95": "Otomasyonu duraklat",
           "2fb1605beb": "Şimdi Çalıştır",
           "221916d93c": "Ajan işlerini zamanlamaya başlamak için bir otomasyon oluşturun.",
           "b09b2384fd": "Duraklatıldı",
@@ -17634,7 +17632,6 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "Henüz çalıştırma yok.",
-          "9974a2b429": "Durum",
           "13988187b3": "Token",
           "86a248187e": "Harcama",
           "149c0b49c7": "Çalışma alanı",
@@ -17642,10 +17639,6 @@
           "53fc5f07ab": "Çalıştırma geçmişi",
           "a00e38d1a3": "yok",
           "historyUnavailable": "Çalıştırma geçmişi bu sunucudan alınamıyor. Bu, otomasyonun başarısız olduğu veya hiç çalıştırılmadığı anlamına gelmez."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Çalıştırma bağlamı",
-          "33741dd973": "Çalıştırmalara dön"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "Dakika",
@@ -17671,10 +17664,8 @@
           "5ad314118e": "Oturum"
         },
         "AutomationsPage": {
-          "c3a28c9793": "Çalıştırmaları görüntülemek için bir otomasyon seçin.",
           "295698292f": "Yeniden çalıştır",
           "0e110a3469": "Çalıştırmalar",
-          "bb1b2cd31e": "Genel bakış",
           "25060635c6": "Yeni ekle",
           "d207ab4c25": "Bir şablondan başla",
           "15e0bfb13b": "Sil",
@@ -17714,8 +17705,6 @@
           "8500baacb4": "harici kaynak",
           "36f71740a7": "Seçilen çalışma alanı",
           "cd8397cc32": "Her çalıştırmada yeni çalışma alanı",
-          "pendingAutomationMissing": "Otomasyon artık kullanılamıyor.",
-          "pendingAutomationRunMissing": "Çalıştırma geçmişi artık kullanılamıyor.",
           "paused": "Duraklatıldı",
           "missingWorkspace": "Eksik çalışma alanı",
           "usageUnavailable": "Kullanım bilgisi yok",
@@ -17724,7 +17713,6 @@
           "latestSavedOutput": "En son kaydedilen çıktı",
           "fullOutputUnavailable": "Çıktının tamamı yüklenemedi.",
           "retryFullOutput": "Yeniden dene",
-          "backToList": "Tüm otomasyonlar",
           "tableName": "Ad",
           "tableProject": "Proje",
           "tableHost": "Sunucu",
@@ -18002,8 +17990,7 @@
           "historyUnavailable_other": "{{count}} otomasyon için çalıştırma geçmişi kullanılamıyor. Sayımlara yalnızca kullanılabilir geçmiş dahildir."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Otomasyonlar gezinme yolu",
-          "runDetails": "Çalıştırma ayrıntıları"
+          "ariaLabel": "Otomasyonlar gezinme yolu"
         },
         "extraAgentArgs": {
           "advanced": "Gelişmiş",
@@ -18062,8 +18049,7 @@
           "noWorkspaceLaunched": "Çalışma alanı başlatılmadı"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "Başlatılmadı",
-          "namedWorkspaceGone": "{{name}} (artık kullanılamıyor)"
+          "notLaunched": "Başlatılmadı"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",

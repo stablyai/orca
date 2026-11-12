@@ -17163,8 +17163,7 @@
           "historyUnavailable_other": "{{count}} 个自动化的运行历史不可用。统计仅包含可用的历史记录"
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "自动化面包屑导航",
-          "runDetails": "运行详情"
+          "ariaLabel": "自动化面包屑导航"
         },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "cron",
@@ -17194,8 +17193,6 @@
           "18763ded26": "日程",
           "dbef8dc110": "此 SSH 自动化仅在 Orca 可以到达 SSH 远程主机时运行，如果重新连接需要交互式凭据或主机不可用，则运行将记录为已跳过",
           "1f6026358e": "删除自动化",
-          "d79452fb30": "恢复自动化",
-          "91a4155e95": "暂停自动化",
           "2fb1605beb": "立即运行",
           "221916d93c": "创建自动化来开始安排代理工作",
           "b09b2384fd": "已暂停",
@@ -17267,7 +17264,6 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "还没有运行",
-          "9974a2b429": "状态",
           "13988187b3": "Token",
           "86a248187e": "花费",
           "149c0b49c7": "工作区",
@@ -17275,10 +17271,6 @@
           "53fc5f07ab": "运行历史",
           "a00e38d1a3": "不适用",
           "historyUnavailable": "无法从此主机获取运行历史，这并不表示自动化运行失败或从未运行"
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "运行上下文",
-          "33741dd973": "返回执行"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "分钟",
@@ -17304,10 +17296,8 @@
           "5ad314118e": "会话"
         },
         "AutomationsPage": {
-          "c3a28c9793": "选择一个自动化来查看运行",
           "295698292f": "重新运行",
           "0e110a3469": "执行",
-          "bb1b2cd31e": "概述",
           "25060635c6": "添加",
           "d207ab4c25": "从模板开始",
           "15e0bfb13b": "删除",
@@ -17347,8 +17337,6 @@
           "8500baacb4": "外部来源",
           "36f71740a7": "选定的工作区",
           "cd8397cc32": "每次运行新工作区",
-          "pendingAutomationMissing": "自动化已不可用",
-          "pendingAutomationRunMissing": "运行历史已不可用",
           "paused": "已暂停",
           "missingWorkspace": "缺少工作区",
           "usageUnavailable": "用量不可用",
@@ -17357,7 +17345,6 @@
           "latestSavedOutput": "最近保存的输出",
           "fullOutputUnavailable": "无法加载完整输出。",
           "retryFullOutput": "重试",
-          "backToList": "全部自动化",
           "tableName": "名称",
           "tableProject": "项目",
           "tableHost": "主机",
@@ -17663,8 +17650,7 @@
           "noWorkspaceLaunched": "未启动工作区"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "未启动",
-          "namedWorkspaceGone": "{{name}}（已不可用）"
+          "notLaunched": "未启动"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",

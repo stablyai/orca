@@ -16875,8 +16875,7 @@
           "historyUnavailable_other": "{{count}} 件のオートメーションで実行履歴を利用できません。集計には利用可能な履歴のみが含まれます。"
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "自動化のパンくずリスト",
-          "runDetails": "実行の詳細"
+          "ariaLabel": "自動化のパンくずリスト"
         },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "クロン式",
@@ -16906,8 +16905,6 @@
           "18763ded26": "スケジュール",
           "dbef8dc110": "この SSH 自動化は、Orca が SSH ホストにアクセスできる間のみ実行されます。再接続に対話型認証情報が必要な場合、またはホストが利用できない場合、実行はスキップされたとして記録されます。",
           "1f6026358e": "オートメーションの削除",
-          "d79452fb30": "自動化を再開する",
-          "91a4155e95": "自動化を一時停止する",
           "2fb1605beb": "今すぐ実行",
           "221916d93c": "自動化を作成して、Agent の作業のスケジュール設定を開始します。",
           "b09b2384fd": "一時停止中",
@@ -16979,7 +16976,6 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "まだ実行はありません。",
-          "9974a2b429": "状態",
           "13988187b3": "トークン",
           "86a248187e": "費用",
           "149c0b49c7": "ワークスペース",
@@ -16987,10 +16983,6 @@
           "53fc5f07ab": "実行履歴",
           "a00e38d1a3": "該当なし",
           "historyUnavailable": "このホストからは実行履歴を利用できません。これは、自動化が失敗したり、実行されなかったりすることを意味するものではありません。"
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "実行コンテキスト",
-          "33741dd973": "実行一覧に戻る"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "分",
@@ -17016,10 +17008,8 @@
           "5ad314118e": "セッション"
         },
         "AutomationsPage": {
-          "c3a28c9793": "実行を表示するオートメーションを選択します。",
           "295698292f": "再実行",
           "0e110a3469": "実行履歴",
-          "bb1b2cd31e": "概要",
           "25060635c6": "新規追加",
           "d207ab4c25": "テンプレートから始める",
           "15e0bfb13b": "削除",
@@ -17059,8 +17049,6 @@
           "8500baacb4": "外部ソース",
           "36f71740a7": "選択したワークスペース",
           "cd8397cc32": "実行ごとに新規ワークスペース",
-          "pendingAutomationMissing": "自動化は利用できなくなりました。",
-          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。",
           "paused": "一時停止中",
           "missingWorkspace": "ワークスペースがありません",
           "usageUnavailable": "使用量を利用できません",
@@ -17069,7 +17057,6 @@
           "latestSavedOutput": "最新の保存済み出力",
           "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
           "retryFullOutput": "再試行",
-          "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
           "tableHost": "ホスト",
@@ -17375,8 +17362,7 @@
           "noWorkspaceLaunched": "ワークスペースは起動されていません"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "未起動",
-          "namedWorkspaceGone": "{{name}}（利用できなくなりました）"
+          "notLaunched": "未起動"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} トークン · {{cost}}",

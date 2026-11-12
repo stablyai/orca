@@ -18508,8 +18508,6 @@
           "18763ded26": "Schedule",
           "dbef8dc110": "This SSH automation runs only while Orca can reach the SSH host. If reconnect needs interactive credentials or the host is unavailable, the run is recorded as skipped.",
           "1f6026358e": "Delete automation",
-          "d79452fb30": "Resume automation",
-          "91a4155e95": "Pause automation",
           "2fb1605beb": "Run Now",
           "221916d93c": "Create an automation to start scheduling agent work.",
           "b09b2384fd": "Paused",
@@ -18596,7 +18594,6 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "No runs yet.",
-          "9974a2b429": "Status",
           "13988187b3": "Tokens",
           "86a248187e": "Spend",
           "149c0b49c7": "Workspace",
@@ -18604,10 +18601,6 @@
           "53fc5f07ab": "Run history",
           "a00e38d1a3": "n/a",
           "historyUnavailable": "Run history is unavailable from this host. This does not mean the automation failed or has no runs."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "Run context",
-          "33741dd973": "Back to runs"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "Minute",
@@ -18633,10 +18626,8 @@
           "5ad314118e": "Session"
         },
         "AutomationsPage": {
-          "c3a28c9793": "Select an automation to view runs.",
           "295698292f": "Rerun",
           "0e110a3469": "Runs",
-          "bb1b2cd31e": "Overview",
           "25060635c6": "Add new",
           "d207ab4c25": "Start from a template",
           "15e0bfb13b": "Delete",
@@ -18676,8 +18667,6 @@
           "8500baacb4": "external source",
           "36f71740a7": "Selected workspace",
           "cd8397cc32": "New workspace each run",
-          "pendingAutomationMissing": "Automation no longer available.",
-          "pendingAutomationRunMissing": "Run history no longer available.",
           "paused": "Paused",
           "missingWorkspace": "Missing workspace",
           "usageUnavailable": "Usage unavailable",
@@ -18686,7 +18675,6 @@
           "latestSavedOutput": "Latest saved output",
           "fullOutputUnavailable": "Couldn't load the full output.",
           "retryFullOutput": "Retry",
-          "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
           "tableHost": "Host",
@@ -18965,8 +18953,7 @@
           "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "Automations breadcrumb",
-          "runDetails": "Run details"
+          "ariaLabel": "Automations breadcrumb"
         },
         "extraAgentArgs": {
           "advanced": "Advanced",
@@ -19026,7 +19013,6 @@
         },
         "runWorkspaceDisplay": {
           "notLaunched": "Not launched",
-          "namedWorkspaceGone": "{{name}} (no longer available)",
           "removed": "Removed",
           "namedRemoved": "{{name}} was removed"
         },
