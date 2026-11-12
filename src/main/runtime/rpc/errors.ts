@@ -19,7 +19,7 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orches
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../shared/orchestration/orchestration-federation-error-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/computer-use-runtime-types'
-import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
+import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'

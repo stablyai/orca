@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { findSiblingGroupId } from '../../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { findSiblingGroupId } from '../../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { findStructuredLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { afterPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { requestNativeChatComposerFocus } from '../../composer/focus/native-chat-composer-focus-intent'

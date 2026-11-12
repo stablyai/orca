@@ -733,7 +733,6 @@
 1 test-timeout-needs-reason:tests/e2e/daemon-generation-legacy-close-safety.spec.ts
 2 test-timeout-needs-reason:tests/e2e/daemon-generation-reconnect-safety.spec.ts
 2 test-timeout-needs-reason:tests/e2e/default-tabs-mark-crash-relaunch.spec.ts
-1 test-timeout-needs-reason:tests/e2e/desktop-published-split-orientation-legacy-leaf.spec.ts
 2 test-timeout-needs-reason:tests/e2e/desktop-window-mobile-markdown.spec.ts
 1 test-timeout-needs-reason:tests/e2e/floating-tab-rename.spec.ts
 1 test-timeout-needs-reason:tests/e2e/golden-quit-relaunch-session.spec.ts
@@ -789,10 +788,6 @@
 1 test-timeout-needs-reason:tests/e2e/paired-client-hosted-profile-cookies.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-client-project-removal-stops-host-terminals.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts
-1 test-timeout-needs-reason:tests/e2e/paired-desktop-server-held-pane-reopen.spec.ts
-1 test-timeout-needs-reason:tests/e2e/paired-desktop-server-layout-frames.spec.ts
-1 test-timeout-needs-reason:tests/e2e/paired-desktop-server-layout-intents.spec.ts
-1 test-timeout-needs-reason:tests/e2e/paired-desktop-server-layout-writes.spec.ts
 2 test-timeout-needs-reason:tests/e2e/paired-host-usage-credentials.spec.ts
 7 test-timeout-needs-reason:tests/e2e/paired-instant-browser-tab.spec.ts
 1 test-timeout-needs-reason:tests/e2e/paired-mobile-desktop-mirror-files-git-review.spec.ts

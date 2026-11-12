@@ -7,7 +7,7 @@ import type {
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-startup-payload'
-import type { ClosedTerminalTabTombstonesByTabId } from '../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { PendingWorktreeCreation } from '../creation/pending-worktree-creation'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {

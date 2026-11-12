@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeTerminalOrphanAdoptionRequest } from '../../../../shared/runtime-terminal-contracts'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
-import { saveWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-save'
+import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
+import { saveWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectPersistedTerminalLeafIds } from '../surface/mobile-session-layout-projection'
 import {
   collectLayoutLeafIdsInOrder,
   removeLayoutLeaf
-} from '../../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { mergeTerminalOrphanGroupLayout } from './terminal-orphan-topology'
