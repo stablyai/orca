@@ -5,7 +5,17 @@ import type { LinkActionRequest } from '@/components/link-actions/link-action-re
 import { NativeChatLinkPeek } from './NativeChatLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 
-const previewContext = { githubRepo: null, webPreviews: { runtimeEnvironmentId: null } }
+const previewContext = {
+  githubRepo: null,
+  webPreviews: { runtimeEnvironmentId: null },
+  issueKeys: new Map<string, string>(),
+  linearConnected: false,
+  jiraSites: [],
+  trackerHostId: 'local' as const,
+  gitLabLookupRepo: null,
+  gitLabHosts: new Set<string>(),
+  referenceChips: 'full' as const
+}
 
 function LinkPreview() {
   const [request, setRequest] = useState<LinkActionRequest | null>(null)

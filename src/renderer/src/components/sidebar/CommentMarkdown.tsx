@@ -38,6 +38,10 @@ import {
   linkGitHubReferences,
   type GitHubRepoReference
 } from '../../../../shared/github/markdown/github-reference-links'
+import {
+  linkIssueKeyReferences,
+  type IssueKeyReferences
+} from '../../../../shared/work-items/issue-key-reference-links'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -56,6 +60,13 @@ function remarkNativeChatFileLinks(
   exists: FileLinkExists
 ): () => (tree: Parameters<typeof linkNativeChatFilePaths>[0]) => void {
   return () => (tree) => linkNativeChatFilePaths(tree, exists)
+}
+
+/** Remark plugin that links known `KEY-123` issue keys. */
+function remarkIssueKeyReferences(
+  references: IssueKeyReferences
+): () => (tree: Parameters<typeof linkIssueKeyReferences>[0]) => void {
+  return () => (tree) => linkIssueKeyReferences(tree, references)
 }
 
 export function remarkGitHubReferences(
@@ -100,6 +111,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
+  /** Links `KEY-123` for these issue-tracker keys. */
+  issueKeys?: IssueKeyReferences
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   /** Turns detected file paths into links, keeping only those this confirms exist. */
@@ -131,6 +144,7 @@ const CommentMarkdown = React.memo(
       className,
       variant = 'compact',
       githubRepo,
+      issueKeys,
       onLinkClick,
       allowFileUriLinks = false,
       fileLinkExists,
@@ -176,8 +190,11 @@ const CommentMarkdown = React.memo(
         : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
-      return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
+      const withGitHub = githubRepo
+        ? [...withExtension, remarkGitHubReferences(githubRepo)]
+        : withExtension
+      return issueKeys?.size ? [...withGitHub, remarkIssueKeyReferences(issueKeys)] : withGitHub
+    }, [extension, fileLinkExists, githubRepo, issueKeys, math, unknownHtmlAsText])
     const blocks = useMarkdownBlocks(
       content,
       growing,

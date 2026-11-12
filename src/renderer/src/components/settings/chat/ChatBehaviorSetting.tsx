@@ -12,6 +12,7 @@ import { Card, CardContent } from '../../ui/card'
 import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { NativeChatIdleStopSetting } from './NativeChatIdleStopSetting'
+import { NativeChatReferenceChipsSetting } from './NativeChatReferenceChipsSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import {
@@ -59,6 +60,7 @@ export function ChatBehaviorSetting({
     entries.scrollToLatestOnSend,
     entries.markNewMessages,
     entries.linkPreviews,
+    entries.referenceChips,
     entries.shellEnvironment
   ]
   if (!forceVisible && !matchesSettingsSearch(query, rows)) {
@@ -196,6 +198,19 @@ export function ChatBehaviorSetting({
                   'Toggle link previews'
                 )}
                 onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
+              />
+            </SearchableSetting>
+            <SearchableSetting
+              {...entries.referenceChips}
+              id={entries.referenceChips.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <NativeChatReferenceChipsSetting
+                settings={settings}
+                updateSettings={updateSettings}
+                title={entries.referenceChips.title}
+                description={entries.referenceChips.description}
               />
             </SearchableSetting>
             <SearchableSetting

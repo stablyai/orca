@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
 
 describe('createHoverPreviewCache', () => {
+  it('forgets every answer on clear', async () => {
+    const cache = createHoverPreviewCache<string>({ freshMs: 60_000, maxEntries: 100 })
+    await cache.load('ENG-1', async () => 'first account')
+    cache.clear()
+    expect(cache.read('ENG-1')).toBeNull()
+    expect(await cache.load('ENG-1', async () => 'second account')).toBe('second account')
+  })
+
   it('keeps the last answer through a reread that fails, and rereads past one started earlier', async () => {
     const cache = createHoverPreviewCache<string>({ freshMs: 60_000, maxEntries: 100 })
     await cache.load('pr', async () => 'closed')

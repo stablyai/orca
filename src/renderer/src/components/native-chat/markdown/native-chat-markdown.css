@@ -92,3 +92,40 @@
     }
   }
 }
+
+/* A link that only repeated an issue or PR ID shows as a chip: ID, then title once known. */
+.native-chat-markdown a:has(> .native-chat-ref-chip) {
+  text-decoration: none;
+}
+
+.native-chat-ref-chip {
+  display: inline-flex;
+  max-width: min(32em, 100%);
+  align-items: center;
+  gap: 0.3125rem;
+  vertical-align: bottom;
+  border: 1px solid var(--chat-inline-code-border);
+  border-radius: 9999px;
+  background: var(--chat-inline-code-surface);
+  padding: 0 0.5rem;
+  line-height: 1.6;
+  color: var(--chat-foreground-strong);
+  font-size: 0.9285714286em;
+  white-space: nowrap;
+}
+
+.native-chat-ref-chip:hover {
+  border-color: color-mix(in srgb, var(--chat-link) 45%, var(--chat-inline-code-border));
+}
+
+.native-chat-ref-chip-id {
+  flex-shrink: 0;
+  color: var(--chat-link);
+  font-weight: 600;
+}
+
+.native-chat-ref-chip-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

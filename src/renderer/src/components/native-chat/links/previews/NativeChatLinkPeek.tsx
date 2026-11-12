@@ -1,11 +1,17 @@
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { NativeChatGitHubPeekBody, resolveGitHubPeekLink } from './NativeChatGitHubLinkPeek'
+import { NativeChatGitHubPeekBody } from './NativeChatGitHubLinkPeek'
 import { NativeChatWebPeekBody } from './NativeChatWebLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import { previewableWebUrl } from './native-chat-web-link-preview'
+import { NativeChatLinearPeekBody } from './NativeChatLinearLinkPeek'
+import { linearLinkPreviewKey } from './native-chat-linear-link-preview'
+import { gitLabLinkPreviewKey, jiraLinkPreviewKey } from './native-chat-tracker-link-previews'
+import { NativeChatGitLabPeekBody, NativeChatJiraPeekBody } from './NativeChatTrackerLinkPeek'
+import { resolveNativeChatTrackerLink } from './native-chat-tracker-links'
 
-/** Hover or focus a link to preview it: PRs and issues on its repo's GitHub host, or what a web page says about itself. */
+/** Hover or focus a link to preview it: issues, PRs and MRs through Orca's own tracker connections,
+ *  or what a web page says about itself. Tracker pages need a sign-in, so scraping them shows nothing. */
 export function NativeChatLinkPeek({
   href,
   children
@@ -13,29 +19,44 @@ export function NativeChatLinkPeek({
   href: string | undefined
   children: ReactNode
 }): ReactNode {
-  const { githubRepo, webPreviews } = useContext(NativeChatLinkPeekContext)
+  const peek = useContext(NativeChatLinkPeekContext)
   const body = useMemo(() => {
-    const webUrl = webPreviews ? previewableWebUrl(href) : null
+    const webUrl = peek.webPreviews ? previewableWebUrl(href) : null
     const webBody = webUrl ? (
       <NativeChatWebPeekBody
         key={webUrl}
         url={webUrl}
-        runtimeEnvironmentId={webPreviews?.runtimeEnvironmentId ?? null}
+        runtimeEnvironmentId={peek.webPreviews?.runtimeEnvironmentId ?? null}
       />
     ) : null
-    const github = href ? resolveGitHubPeekLink(githubRepo, href) : null
-    if (githubRepo && github) {
-      return (
-        <NativeChatGitHubPeekBody
-          key={href}
-          repo={githubRepo.repo}
-          link={github.link}
-          otherRepoFallback={github.ownRepo ? undefined : webBody}
-        />
-      )
+    const tracker = resolveNativeChatTrackerLink(peek, href)
+    if (!tracker) {
+      return webBody
     }
-    return webBody
-  }, [githubRepo, href, webPreviews])
+    switch (tracker.kind) {
+      case 'linear':
+        return <NativeChatLinearPeekBody key={linearLinkPreviewKey(tracker)} link={tracker} />
+      case 'jira':
+        return <NativeChatJiraPeekBody key={jiraLinkPreviewKey(tracker)} link={tracker} />
+      case 'github':
+        return (
+          <NativeChatGitHubPeekBody
+            key={href}
+            repo={tracker.repo}
+            link={tracker.link}
+            otherRepoFallback={tracker.ownRepo ? undefined : webBody}
+          />
+        )
+      case 'gitlab':
+        return (
+          <NativeChatGitLabPeekBody
+            key={gitLabLinkPreviewKey(tracker.repo, tracker.link)}
+            repo={tracker.repo}
+            link={tracker.link}
+          />
+        )
+    }
+  }, [href, peek])
   if (!body) {
     return children
   }

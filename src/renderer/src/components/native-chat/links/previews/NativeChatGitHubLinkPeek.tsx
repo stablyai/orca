@@ -152,6 +152,10 @@ export function resolveGitHubPeekLink(
 ): { link: GitHubIssueOrPRLink; ownRepo: boolean } | null {
   const link = githubRepo ? parseGitHubIssueOrPRLink(href) : null
   return githubRepo && link && githubLinkOnRepoHost(githubRepo, link.slug)
-    ? { link, ownRepo: githubLinkBelongsToRepo(githubRepo, link.slug) }
+    ? // A borrowed repo answers for every github.com link, so none falls back to the web preview.
+      {
+        link,
+        ownRepo: githubRepo.borrowed === true || githubLinkBelongsToRepo(githubRepo, link.slug)
+      }
     : null
 }

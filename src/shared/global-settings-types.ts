@@ -221,6 +221,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
   nativeChatLinkPreviews?: boolean
+  /** Chat links that only repeat an issue or PR ID: chip with title, ID-only chip, or plain link. Absent means 'full'. */
+  nativeChatReferenceChips?: 'off' | 'compact' | 'full'
   /** A card under a chat turn that opened a pull request; absent means on. */
   nativeChatOpenedPullRequests?: boolean
   /** Structured Codex/Claude chats inherit the login-shell env; off limits it to nativeChatShellEnvironmentVariables plus PATH/locale. */
