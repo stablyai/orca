@@ -37,7 +37,7 @@ const { installCloudAgentCredentialGate } = await import('./cloud-agent-credenti
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 function session() {
-  const start = vi.fn(async () => 'pty-1')
+  const start = vi.fn(async (_startup?: unknown, _options?: unknown) => 'pty-1')
   const value = { startFreshSpawn: start, disposed: false, pendingSpawnKey: 'k', tabGeneration: 1 }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only these fields
   installCloudAgentCredentialGate(value as unknown as ConnectPanePtySession)
