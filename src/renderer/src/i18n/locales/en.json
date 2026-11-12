@@ -24764,7 +24764,8 @@
       "remove": "Remove",
       "removeTitle": "Remove managed account?",
       "removeDescription": "Stop agents using this profile first. Removal deletes its saved credentials and conversation data. Your system login stays unchanged.",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "useCli": "Use from the command line"
     },
     "hostSignIn": {
       "copied": "Copied",
