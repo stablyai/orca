@@ -1,4 +1,4 @@
-import { gitExecFileAsync } from '../git/runner'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewLocalGitOptions } from './hosted-review-git-options'

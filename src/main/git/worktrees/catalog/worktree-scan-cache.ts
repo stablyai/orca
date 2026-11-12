@@ -7,7 +7,7 @@ import {
 } from './worktree-listing'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
-import { resolveGitAdmissionTier } from '../../command-runner/git-operation-executor'
+import { resolveGitAdmissionTier } from '../../command-runner/admission/git-operation-executor'
 
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 

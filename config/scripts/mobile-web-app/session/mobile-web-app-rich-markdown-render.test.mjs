@@ -10,7 +10,7 @@ import { chromium, webkit } from 'playwright-core'
 import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
-  lucideBarrelPlugin
+  mobileWebRenderCheckPlugins
 } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import {
@@ -200,7 +200,7 @@ beforeAll(async () => {
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: { 'react-native': 'react-native-web' },
     // Match app plugin: barrel reexports LucideProvider absent from its context module.
-    plugins: [lucideBarrelPlugin],
+    plugins: mobileWebRenderCheckPlugins,
     // Prefer .web.jsx/.web.js or toolbar’s react-native-svg resolves Fabric and fails codegenNativeComponent.
     resolveExtensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js'],
     // Match app’s RN shims for JSX-in-.js, process.env and Metro global; missing global made isFabric throw before mount.

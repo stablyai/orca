@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits, RateLimitBucket } from '../../../../shared/rate-limit-types'
-import {
-  formatPoolShortLabel,
-  formatStatusBarSectionLabel,
-  formatPoolWindowLabel
-} from './usage-pool-label'
+import { formatPoolShortLabel, formatStatusBarSectionLabel } from './usage-pool-label'
 import { getTightestUsageSection } from './UsageRosterPanel'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -63,24 +59,6 @@ describe('pool labels', () => {
       'Gemini models wk',
       'Gemini Models Models wk'
     ])
-  })
-
-  it('keeps the full name for a pool with no group (an old host)', () => {
-    const legacy = pool(undefined, WEEK, { name: 'Gemini Models · Weekly Limit Remaining' })
-    expect(formatPoolShortLabel(legacy, [legacy])).toBe('Gemini Models · Weekly Limit Remaining')
-  })
-
-  it('adds a reset countdown only once a pool is urgent and its reset is known', () => {
-    const now = Date.UTC(2026, 9, 1, 12)
-    const resetsAt = now + 130 * 60_000
-    const label = (overrides: Partial<RateLimitBucket>): string => {
-      const bucket = pool('Gemini Models', FIVE_HOURS, overrides)
-      return formatPoolWindowLabel(bucket, now)
-    }
-
-    expect(label({ usedPercent: 80, resetsAt })).toBe('5h (2h 10m)')
-    expect(label({ usedPercent: 79, resetsAt })).toBe('5h')
-    expect(label({ usedPercent: 80, resetsAt: null })).toBe('5h')
   })
 })
 

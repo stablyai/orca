@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import type { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 import {
   Bot,
   Columns2,
@@ -21,7 +21,7 @@ import { mobileWorktreeForkAction } from './native-chat/mobile-native-chat-workt
 
 type Props = {
   controller: MobileSessionController
-  anchorRef: RefObject<View | null>
+  anchorRef: RefObject<HostInstance | null>
   /** A narrow sideways header also moves source control and New tab in here. */
   actionsCollapsed: boolean
 }

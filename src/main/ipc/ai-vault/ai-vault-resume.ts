@@ -14,6 +14,8 @@ import { copyStructuredChatConversation } from '../../ai-vault/structured-chat-c
 import { copyTerminalChatForkCut } from '../../ai-vault/terminal-chat-fork-cut'
 import { wakeNativeChatTranscriptDistro } from '../../native-chat/native-chat-open-wake'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { prepareAiVaultSessionHandoff } from './ai-vault-handoff'
+import type { AiVaultSessionHandoffArgs } from '../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 
 export type AiVaultResumeHandlerOptions = {
   ensureStructuredSessionOwnership?: () => Promise<void>
@@ -28,6 +30,9 @@ export function registerAiVaultResumeHandler(options: AiVaultResumeHandlerOption
   ipcMain.handle(
     'aiVault:prepareSessionResume',
     (_event, args: AiVaultPrepareSessionResumeRequest) => prepareAiVaultSessionResume(args, options)
+  )
+  ipcMain.handle('aiVault:prepareSessionHandoff', (_event, args: AiVaultSessionHandoffArgs) =>
+    prepareAiVaultSessionHandoff(args)
   )
 }
 

@@ -4,6 +4,13 @@
   "family": "session.tab-close",
   "namedDeltas": [],
   "values": {
+    "26d1891758e0": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close the tab. Try again."
+      }
+    },
     "3e15def58214": {
       "activeHandle": "terminal-1",
       "sessionTabs": [
@@ -84,7 +91,7 @@
             "close-terminal": "eb79a9b3682a"
           },
           "state": "3e15def58214",
-          "effects": []
+          "effects": ["26d1891758e0"]
         }
       }
     ]

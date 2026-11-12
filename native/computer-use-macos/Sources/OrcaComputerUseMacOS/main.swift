@@ -894,7 +894,11 @@ final class Provider {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
         }
         let verification: [String: Any]
-        switch coercion.compare(readback: rawAttributeValue(record.element, kAXValueAttribute as String)) {
+        let readback = settledValueReadback(record.element) { readback in
+            if case .mismatch = coercion.compare(readback: readback) { return false }
+            return true
+        }
+        switch coercion.compare(readback: readback) {
         case let .match(actualPreview):
             verification = verifiedAction(property: "value", expected: expected, actualPreview: actualPreview)
         case let .mismatch(actualPreview):
@@ -1749,6 +1753,19 @@ private func rawStringAttribute(_ element: AXUIElement, _ attribute: String) -> 
         return nil
     }
     return value as? String
+}
+
+/// Reads the value until `settled` accepts it: Chromium answers from a cache that trails a successful write by about 100 ms.
+private func settledValueReadback(_ element: AXUIElement, settled: (CFTypeRef) -> Bool) -> CFTypeRef? {
+    var readback: CFTypeRef?
+    // Why: settle counts only its sleeps, and one slow or failed AX read can take the full 3 s timeout.
+    let deadline = CFAbsoluteTimeGetCurrent() + 0.5
+    _ = PermissionTrustSettling.settle(timeoutMs: 500, intervalMs: 25) {
+        readback = rawAttributeValue(element, kAXValueAttribute as String)
+        guard let readback, CFAbsoluteTimeGetCurrent() < deadline else { return true }
+        return settled(readback)
+    }
+    return readback
 }
 
 private func rawAttributeValue(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
@@ -2937,7 +2954,9 @@ private enum Input {
 
 private enum TextInput {
     static func replaceSelection(_ element: AXUIElement, with text: String) throws -> [String: Any]? {
-        guard isSettable(element, kAXValueAttribute as String),
+        // Why: Chromium applies AX value writes without the input events pages listen to; a contenteditable gets none, so editors like Discord's never see the text.
+        guard !BackgroundInputTransport.isChromiumNode(element),
+              isSettable(element, kAXValueAttribute as String),
               let current = rawStringAttribute(element, kAXValueAttribute as String)
         else {
             return nil
@@ -2958,8 +2977,14 @@ private enum TextInput {
             return nil
         }
         setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
-        guard rawStringAttribute(element, kAXValueAttribute as String) == next else {
-            return nil
+        // Why: a cached, out-of-process AX tree can show the old value for a moment; any other value is final.
+        let readback = settledValueReadback(element) { next == current || ($0 as? String) != current } as? String
+        guard readback == next else {
+            // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
+            if readback == current {
+                return nil
+            }
+            return unverifiedAction(reason: "accessibility_action_unasserted", expected: text, actualPreview: readback.map { preview($0) })
         }
         return verifiedAction(
             property: "focusedText",

@@ -1,4 +1,4 @@
-import { BranchSwitchCollisionError } from '../../git/branch-switch-target'
+import { BranchSwitchCollisionError } from '../../git/worktrees/checkout/branch-switch-target'
 import { SparsePresetValidationError } from '../../../shared/worktree/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
@@ -19,7 +19,7 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orches
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../shared/orchestration/orchestration-federation-error-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/computer-use-runtime-types'
-import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
+import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
@@ -141,11 +141,15 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'recipient_ambiguous',
   'recipient_run_mismatch',
   'dispatch_inactive',
+  // Its start failed before an agent ran, so there is no output to read.
+  'worker_never_started',
   'worker_identity_changed',
   'cursor_invalid',
   'cursor_dispatch_mismatch',
   'source_changed',
   'transcript_required',
+  // A released worker's original transcript or chat is gone, or it never had one.
+  'archive_unavailable',
   ...ORCHESTRATION_FEDERATION_ERROR_CODES,
   'dispatch_capability_invalid',
   'agent_unconfigured',
@@ -163,9 +167,16 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'legacy_read_only',
   'orchestration_migration_required',
   'operation_unknown',
+  // A re-made pairing: work through the earlier one is not recovered, so the caller is told plainly.
+  'server_pairing_changed',
   'dispatch_preamble_undelivered',
   'question_not_found',
   'answer_conflict',
+  // A worker's permission prompt: only a person allows; Orca answers chat prompts only, while open.
+  'approval_requires_person',
+  'approval_not_open',
+  'approval_option_missing',
+  'approval_refused',
   'stale_delivery',
   'invalid_argument',
   // Preserve archive-hook failure so callers can retry, waive or skip it (#19334).

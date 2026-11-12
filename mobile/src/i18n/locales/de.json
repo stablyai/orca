@@ -2454,8 +2454,7 @@
     "tabStrip": {
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
-      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",
@@ -2498,6 +2497,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Anhängen fehlgeschlagen (erneuter Verbindungsaufbau)"
+    },
+    "useCloseActions": {
+      "closeFailed": "Der Tab konnte nicht geschlossen werden. Versuche es erneut.",
+      "closeFailedDesktopNotReady": "Der Tab konnte nicht geschlossen werden. Orca wird auf deinem Computer noch geladen. Versuche es gleich noch einmal."
     },
     "useContentCreateActions": {
       "browserCommandFailed": "Browser-Befehl fehlgeschlagen",

@@ -22,7 +22,7 @@ import type { EventProps } from '../../../../../shared/telemetry-event-classific
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { PtyDataMeta } from './delivery/pty-dispatcher'
 import type {

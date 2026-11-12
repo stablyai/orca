@@ -1,4 +1,4 @@
-import { BranchSwitchLandedWithWarningError } from '../../../../../git/branch-switch'
+import { BranchSwitchLandedWithWarningError } from '../../../../../git/worktrees/checkout/branch-switch'
 import { mapDispatcherError } from '../../../dispatcher-error-response'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'

@@ -13,7 +13,7 @@ vi.mock('node:os', async () => ({
   homedir: homedirMock
 }))
 
-vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
+vi.mock('../claude-accounts/profiles/routing/claude-profile-installed-router', () => ({
   claudeProfileHistoryDirs: () => []
 }))
 

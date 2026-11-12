@@ -648,6 +648,8 @@
           "detectedServers_other": "{{detected}} detected · {{count}} servers"
         },
         "OrchestrationPane": {
+          "coordinatorApprovalsKeywordApprove": "approve",
+          "coordinatorApprovalsKeywordPermission": "permission",
           "workerAutoReleaseKeywordClose": "close",
           "workerAutoReleaseKeywordRelease": "release"
         },
@@ -699,6 +701,14 @@
           "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
           "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
           "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
+        },
+        "RepositoryRemoveProjectSection": {
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkouts",
+          "hostCount_one": "{{count}} host",
+          "hostCount_other": "{{count}} hosts",
+          "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
+          "terminalWarning_other": "{{count}} open terminals in this project will be closed."
         },
         "Settings": {
           "084d8fac5b": "Privacy & Security",
@@ -1595,9 +1605,18 @@
       "approval": {
         "allow": "Allow",
         "deny": "Deny",
+        "folderTrust": {
+          "exit": "Exit",
+          "hint": "The agent asks before it can read, edit and run files in this folder.",
+          "title": "Trust this folder?",
+          "trust": "Trust folder"
+        },
         "plan": {
           "refineHint": "Refine plan closes the review so you can send what to change.",
           "reviewTitle": "Review proposed plan"
+        },
+        "startupMenu": {
+          "title": "{{value0}} is waiting for a choice in the terminal"
         },
         "title": "Allow {{value0}}?"
       },

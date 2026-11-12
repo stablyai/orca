@@ -120,7 +120,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.isolated-frames',
     ['plugin-isolated-frame', 'plugin-panel-containment'],
     [
-      'src\\/main\\/plugins\\/panels\\/plugin-frame-',
+      'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/|guest-isolation\\/|desktop-actions\\/)?plugin-frame-',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:frame-guest|panel-shell)',
       'src\\/preload\\/plugin-frame-guest',
       'src\\/main\\/window\\/(?:main-window-webview-security|attach-main-window-services|host-frame-permission-policy)',
@@ -152,7 +152,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${UI}declarative\\/`,
       'src\\/shared\\/plugins\\/declarative\\/plugin-declarative-(?:catalog|[a-z]+-props|prop-schemas|tree)',
       'resources\\/plugins\\/declarative\\/orca-components',
-      'src\\/main\\/plugins\\/panels\\/plugin-panel-image',
+      'src\\/main\\/plugins\\/panels\\/panel-lifetime\\/plugin-panel-image',
       'examples\\/plugins\\/components-gallery\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -162,7 +162,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.buildless-tsx',
     ['plugin-buildless-tsx'],
     [
-      'src\\/main\\/plugins\\/panels\\/plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
+      'src\\/main\\/plugins\\/panels\\/(?:frame-serving\\/)?plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
       'src\\/main\\/plugins\\/plugin-content-hash',
       'src\\/shared\\/plugins\\/frames\\/plugin-frame-source-modules',
       'src\\/cli\\/plugin-authoring\\/plugin-(?:type-files|components-template)',
@@ -178,7 +178,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/shared\\/plugins\\/declarative\\/(?:plugin-declarative-message|runtime\\/declarative-(?:atoms|memory-retention|error-location|panel-context|renderer))',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:declarative-host-document|frame-bridge)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/plugin-panels\\/(?:PluginPanel\\.tsx$|declarative\\/(?:PluginDeclarativePanel|use-plugin-declarative-(?:state|tree)|plugin-declarative-retained-memory))',
-      'src\\/main\\/plugins\\/(?:plugin-dev-|panels\\/plugin-frame-guest-sessions)',
+      'src\\/main\\/plugins\\/(?:plugin-dev-|panels\\/guest-isolation\\/plugin-frame-guest-sessions)',
       'resources\\/plugins\\/declarative\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
@@ -188,7 +188,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.panel-agents',
     ['plugin-panel-agents'],
     [
-      'src\\/main\\/plugins\\/(?:plugin-runtime-binding|plugin-agent-status-event|workers\\/plugin-workspace-projection)',
+      'src\\/main\\/plugins\\/(?:plugin-runtime-binding|plugin-agent-status-event|workers\\/host-api\\/plugin-workspace-projection)',
       'src\\/shared\\/plugins\\/events\\/plugin-events'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke|agent-hook-endpoint'
@@ -199,7 +199,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ['plugin-worker-panel'],
     [
       'src\\/main\\/plugins\\/panels\\/plugin-panel-bridge',
-      'src\\/main\\/plugins\\/(?:plugin-declared-settings|workers\\/plugin-(?:worker-orca-api|host-panel-method-bindings|worker-requests))',
+      'src\\/main\\/plugins\\/(?:plugin-declared-settings|workers\\/(?:plugin-worker-orca-api|host-api\\/plugin-host-panel-method-bindings|parent-process\\/plugin-worker-requests))',
       'src\\/main\\/ipc\\/plugin-(?:panel-push|settings)-ipc',
       'src\\/shared\\/plugins\\/(?:workers\\/plugin-panel-bridge-protocol|frames\\/plugin-panel-shell-facades|contributions\\/plugin-settings-)',
       'src\\/shared\\/plugins\\/declarative\\/runtime\\/declarative-(?:data-sdk|storage-sync)',

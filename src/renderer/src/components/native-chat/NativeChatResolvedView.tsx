@@ -380,7 +380,11 @@ export function NativeChatResolvedView({
             requiresTerminal={nativeChatAskRequiresTerminal(agent)}
             onAnswerInTerminal={onSwitchToTerminal}
             onDismiss={promptCardPresentation.dismiss}
-            onCollapse={promptCardPresentation.collapse}
+            onCollapse={
+              mountedPromptCard?.kind === 'approval' && mountedPromptCard.approval.startupDialog
+                ? undefined
+                : promptCardPresentation.collapse
+            }
             shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
             answerInputRef={questionAnswerInputRef}
           />

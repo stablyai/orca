@@ -10,6 +10,7 @@ import type { AppState } from '@/store/types'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-activation'
+import type { PaletteExtraSource } from '@/components/cmd-j/palette-extra-results'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeFolderWorkspace, makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
 
@@ -18,6 +19,11 @@ const { activateAndRevealWorkspace } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace }))
+
+const extraSources = vi.hoisted((): { current: readonly PaletteExtraSource[] } => ({ current: [] }))
+vi.mock('@/components/cmd-j/palette-extra-sources', () => ({
+  usePaletteExtraSources: () => extraSources.current
+}))
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
@@ -191,6 +197,7 @@ describe('WorktreeJumpPalette', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
+    extraSources.current = []
     activateAndRevealWorkspace.mockReset().mockReturnValue({ primaryTabId: null })
     activateWorkspaceTabPaletteResult.mockReset().mockReturnValue({ status: 'activated' })
     useAppStore.setState(initialAppState, true)
@@ -206,6 +213,51 @@ describe('WorktreeJumpPalette', () => {
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
   })
+
+  it.each([
+    [undefined, ['worktree', 'extra']],
+    ['first', ['extra', 'worktree']]
+  ] as const)(
+    'lists an extra source by its empty-query placement (%s) and keeps Enter on the workspace',
+    async (emptyQueryPlacement, order) => {
+      extraSources.current = [
+        {
+          id: 'notes',
+          sectionLabel: () => 'Notes',
+          emptyQueryCap: 3,
+          emptyQueryPlacement,
+          typedPlacement: 'after-workspaces',
+          leadsOnTie: false,
+          results: [
+            {
+              id: 'note-1',
+              title: 'Release note',
+              titleRanges: [],
+              rank: null,
+              qualityClass: null,
+              lastActiveAt: null,
+              order: 0,
+              line: 'Draft',
+              onSelect: () => {}
+            }
+          ]
+        }
+      ]
+      await renderPalette({
+        worktreesByRepo: { 'repo-1': [makeWorktree('wt-1', 'Checkout')] },
+        showSleepingWorkspaces: true
+      })
+      const rows = [...testContainer.querySelectorAll<HTMLElement>('[data-command-item]')].map(
+        (node) => node.dataset.commandItem
+      )
+      const worktreeId = encodePaletteIdentity(['worktree', '|wt-1'])
+      const extraId = encodePaletteIdentity(['extra', 'notes', 'note-1'])
+      expect(rows).toEqual(order.map((kind) => (kind === 'worktree' ? worktreeId : extraId)))
+      expect(
+        testContainer.querySelector('[data-command-dialog]')?.getAttribute('data-command-value')
+      ).toBe(worktreeId)
+    }
+  )
 
   it('excludes only the current host when folder ids collide', async () => {
     await renderPalette({

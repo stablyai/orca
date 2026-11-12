@@ -9,7 +9,7 @@ import {
   type MobileWorktreeForkMode
 } from './mobile-structured-chat-worktree-fork'
 import { useMobileWorktreeForkRequest } from './native-chat/mobile-native-chat-worktree-fork-requests'
-import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
+import { useNewWorktreeRuntimeCapabilities } from '../new-workspace/creation/worktree-create-capability'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import {
   useWorkspaceExecutionHost,

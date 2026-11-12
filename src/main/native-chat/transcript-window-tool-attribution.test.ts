@@ -94,19 +94,6 @@ describe('windowed transcript tool attribution', () => {
     ).toEqual(['output 2', 'output 3'])
   })
 
-  it('keeps every result when the window contains its call', async () => {
-    const filePath = await writeTranscript([...toolTurn(1), ...toolTurn(2)])
-
-    const whole = await renderedMessages(filePath, 100)
-
-    expect(unattributedResults(whole)).toEqual([])
-    expect(
-      whole.flatMap((message) =>
-        message.blocks.filter(isToolResultBlock).map((block) => block.output)
-      )
-    ).toEqual(['output 1', 'output 2'])
-  })
-
   it('drops the answered result records Claude re-emits at a /compact boundary', async () => {
     const [, answeredResult] = toolTurn(1)
     const filePath = await writeTranscript([

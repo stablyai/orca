@@ -1,5 +1,12 @@
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type HostInstance
+} from 'react-native'
 import {
   ExternalLink,
   FileText,
@@ -92,7 +99,7 @@ export function PrThreadRow({
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<View>(null)
+  const menuRef = useRef<HostInstance>(null)
   const root = getPRCommentGroupRoot(group)
   const replies = group.kind === 'thread' ? group.replies : []
   const lastReply = replies.at(-1)

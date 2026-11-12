@@ -236,7 +236,7 @@ describe('orchestration worker release recovery', () => {
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('releasing')
   })
 
-  it('preserves archived output when an unconfirmed release retry cannot find the terminal', async () => {
+  it('keeps the output reference when an unconfirmed release retry cannot find the terminal', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
     vi.mocked(runtime.closeTerminal).mockResolvedValueOnce({
@@ -256,15 +256,9 @@ describe('orchestration worker release recovery', () => {
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
     ).resolves.toMatchObject({ state: 'release_unknown' })
-    const read = (await call('orchestration.workerRead', { dispatch: dispatchId })) as {
-      archived?: boolean
-      status: { terminal: string }
-      terminal: { tail: string[] }
-    }
-    expect(read).toMatchObject({
-      archived: true,
-      status: { terminal: 'unknown', liveness: 'unverifiable' },
-      terminal: { tail: ['worker output line 1', 'worker output line 2'] }
+    // This worker reported no transcript, so there is no original to read.
+    await expect(call('orchestration.workerRead', { dispatch: dispatchId })).rejects.toMatchObject({
+      code: 'archive_unavailable'
     })
   })
 

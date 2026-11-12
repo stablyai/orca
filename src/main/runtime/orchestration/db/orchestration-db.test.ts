@@ -22,6 +22,12 @@ describe('OrchestrationDb', () => {
     return db
   }
 
+  it('caps the write-ahead log it keeps after a checkpoint at 8 MiB', () => {
+    expect(createDb().db.prepare('PRAGMA journal_size_limit').get()).toEqual({
+      journal_size_limit: 8_388_608
+    })
+  })
+
   describe('tasks', () => {
     it('completing a task frees its active dispatch context', () => {
       const d = createDb()
