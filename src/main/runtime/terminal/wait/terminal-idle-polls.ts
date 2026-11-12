@@ -4,6 +4,7 @@ import type {
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import { isQoderComposerReady } from './qoder-terminal-readiness'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult
@@ -153,14 +154,27 @@ export class RuntimeTerminalIdlePolls {
       if (verdict.kind === 'working' || entry.screenReadInFlight) {
         return
       }
-      const screenRead = this.readScreenBlockedReason(entry, ptyId)
+      const screenRead = this.readScreenWaitOutcome(entry, ptyId)
       // Why await only a real read: a pane with no screen model keeps its tick synchronous.
-      const screenBlockedReason = screenRead ? await screenRead : null
+      const screenOutcome = screenRead ? await screenRead : null
       if (!this.entries.has(entry)) {
         return
       }
-      if (screenBlockedReason) {
-        this.settle(entry, sample.blocked(screenBlockedReason))
+      if (screenOutcome?.blockedReason) {
+        this.settle(entry, sample.blocked(screenOutcome.blockedReason))
+        return
+      }
+      // A provider-preferred pane's evidence screen read is null while its painted grid still
+      // shows the Qoder composer; that grid is the same readiness evidence the live model holds (#40734).
+      const agent = this.deps.getPaneAgent(ptyId)
+      if (
+        verdict.kind === 'pending' &&
+        (agent === 'qoder' || agent === 'qoder-cn') &&
+        screenOutcome?.screen !== null &&
+        screenOutcome?.screen !== undefined &&
+        isQoderComposerReady(screenOutcome.screen)
+      ) {
+        this.settle(entry, sample.ready())
         return
       }
       if (verdict.kind === 'ready-weak') {
@@ -193,17 +207,23 @@ export class RuntimeTerminalIdlePolls {
 
   /** Why the screen too: a dialog that parks the cursor above its own options (Claude's
    *  workspace trust) loses those rows from the line tail; the rendered screen still has them. */
-  private readScreenBlockedReason(
+  private readScreenWaitOutcome(
     entry: IdlePollEntry,
     ptyId: string
-  ): Promise<RuntimeTerminalWaitBlockedReason | null> | null {
+  ): Promise<{
+    blockedReason: RuntimeTerminalWaitBlockedReason | null
+    screen: string | null
+  }> | null {
     const screenRead = this.deps.readVisibleScreen(ptyId)
     if (!screenRead) {
       return null
     }
     entry.screenReadInFlight = true
     return screenRead
-      .then((screen) => (screen ? detectTerminalWaitBlockedReason(screen) : null))
+      .then((screen) => ({
+        blockedReason: screen ? detectTerminalWaitBlockedReason(screen) : null,
+        screen
+      }))
       .finally(() => {
         entry.screenReadInFlight = false
       })

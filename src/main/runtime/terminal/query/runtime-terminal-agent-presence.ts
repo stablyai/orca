@@ -6,6 +6,7 @@ import {
 import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { isKnownReadyPromptPreview } from '../wait/terminal-wait-detection'
+import { isQoderComposerReady } from '../wait/qoder-terminal-readiness'
 import { buildTerminalWaitText } from '../wait/terminal-wait-tail-state'
 import type {
   RuntimeLeafRecord,
@@ -36,6 +37,8 @@ type RuntimeTerminalAgentPresenceDependencies = {
   getTabTitle(tabId: string): string | null
   getForegroundProcess(ptyId: string): Promise<string | null> | null
   confirmForegroundProcess(ptyId: string): Promise<string | null> | null
+  /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
+  readVisibleScreen?(ptyId: string): Promise<string | null> | null
   /** The stale-working timer's display-only clear of the PTY's own title, if one stands. */
   getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
 }
@@ -98,6 +101,15 @@ export class RuntimeTerminalAgentPresence {
       if (!isOpenCodeNativeTitle(markerTitle) && isKnownReadyPromptPreview(waitText)) {
         return true
       }
+      // Qoder has no anchor rules and its cursor-jump composer never reaches the raw tail;
+      // the painted grid proves the launch still runs (#40734).
+      if (
+        trackedPty !== null &&
+        (trackedPty.launchAgent === 'qoder' || trackedPty.launchAgent === 'qoder-cn') &&
+        (await this.qoderComposerPainted(trackedPty.ptyId))
+      ) {
+        return true
+      }
       if (leaf.lastAgentStatus !== null && paneTitle === null && tabTitle === null) {
         return true
       }
@@ -122,6 +134,12 @@ export class RuntimeTerminalAgentPresence {
     } catch {
       return false
     }
+  }
+
+  /** Qoder's composer is painted-grid evidence the title/process ladder cannot see (#40734). */
+  private async qoderComposerPainted(ptyId: string): Promise<boolean> {
+    const screen = await this.deps.readVisibleScreen?.(ptyId)
+    return screen !== null && screen !== undefined && isQoderComposerReady(screen)
   }
 
   private async isPtyRunning(
@@ -158,6 +176,13 @@ export class RuntimeTerminalAgentPresence {
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     if (!isOpenCodeNativeTitle(markerTitle) && isKnownReadyPromptPreview(waitText)) {
       return true
+    }
+    // Qoder has no anchor rules and its cursor-jump composer never reaches the raw tail;
+    // the painted grid proves the launch still runs (#40734).
+    if (pty.launchAgent === 'qoder' || pty.launchAgent === 'qoder-cn') {
+      if (await this.qoderComposerPainted(pty.ptyId)) {
+        return true
+      }
     }
     if (
       pty.lastAgentStatus !== null &&

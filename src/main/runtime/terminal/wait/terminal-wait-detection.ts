@@ -58,7 +58,7 @@ export function isKnownReadyPromptBody(
   hasOutputClock: boolean
 ): boolean {
   if (agent === 'qoder' || agent === 'qoder-cn') {
-    return isQoderComposerReady(readScreenLines())
+    return isQoderComposerReady(readScreenLines()?.join('\n') ?? null)
   }
   // With an output clock, this agent settles only after quiet.
   if (hasOutputClock && holdsReadyTextToQuiet(agent)) {

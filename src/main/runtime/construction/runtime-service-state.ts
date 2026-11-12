@@ -66,6 +66,12 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
     confirmForegroundProcess: (ptyId) =>
       this.ptyController?.confirmForegroundProcess?.(ptyId) ?? null,
+    // Qoder presence reads the painted viewport — the same headless-grid source the idle
+    // polls consult — because title/process evidence misses its cursor-jump composer (#40734).
+    readVisibleScreen: (ptyId) =>
+      this.readHeadlessVisibleTerminalState(ptyId).then(
+        (screen) => screen?.lines.join('\n') ?? null
+      ),
     getTitleDisplayClear: (ptyId) => this.getPtyTitleDisplayClear(ptyId)
   })
 
