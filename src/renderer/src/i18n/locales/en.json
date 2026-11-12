@@ -28238,7 +28238,9 @@
   "orcaCloud": {
     "agentHold": {
       "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
-      "expired": "{{agent}} sign-in expired"
+      "expired": "{{agent}} sign-in expired",
+      "notStarted": "{{agent}} hasn’t started. Open the workspace to start it.",
+      "notStartedRow": "{{agent}} hasn’t started"
     },
     "chatSignIn": {
       "renewAbove": "Your {{agent}} sign-in for Orca Cloud didn’t work. Renew it above, then send your message again."
@@ -28246,7 +28248,8 @@
     "chatHold": {
       "notSetUp": "Set up {{agent}} above to start",
       "expired": "Renew {{agent}} sign-in above to start",
-      "signIn": "Sign in to {{agent}} above to start"
+      "signIn": "Sign in to {{agent}} above to start",
+      "awaitingStart": "Start {{agent}} above to begin"
     },
     "continueOffer": {
       "title": "An agent was interrupted by the restart",
@@ -28890,6 +28893,11 @@
     "renewed": "{{agent}} sign-in renewed",
     "renewedResume": "Restart {{agent}} to pick up where you left off.",
     "renewedFresh": "Starts a new conversation.",
+    "awaitingCoveredTitle": "{{agent}} is set up",
+    "awaitingUnreadTitle": "{{agent}} hasn’t started",
+    "awaitingUnreadDetail": "Orca couldn’t check your sign-in after restarting. Start {{agent}} to try.",
+    "awaitingCoveredPromptDetail": "Orca restarted before {{agent}} started. Your first prompt is kept.",
+    "awaitingCoveredDetail": "Orca restarted before {{agent}} started.",
     "renewedChat": "Your next message uses it.",
     "renewedChatAnnounce": "{{agent}} sign-in renewed. Your next message uses it.",
     "restart": "Restart",

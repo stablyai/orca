@@ -22,8 +22,9 @@ import {
   holdCloudAgentLaunch,
   takeCloudAgentHoldStartedByPerson
 } from './cloud-agent-launch-hold'
+import { forgetHeldCloudLaunch, rememberHeldCloudLaunch } from './cloud-held-launch-memory'
 
-type CreateHostTerminal = (
+export type CreateHostTerminal = (
   args: CreateWebRuntimeSessionTerminalOnHostArgs
 ) => Promise<CreatedWebRuntimeSessionTerminal>
 
@@ -73,12 +74,49 @@ export async function createWithCloudAgentHold(
     return await create(args)
   }
   const tabId = toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(placeholder.hostTabId))
+  // V3-01: the hold is in memory; this record lets a restart put it back in the same placeholder.
+  if (args.environmentId) {
+    rememberHeldCloudLaunch({
+      environmentId: args.environmentId,
+      worktreeId: args.worktreeId,
+      tabId,
+      agent,
+      prompt: args.prompt?.trim() || null,
+      cwd: args.cwd?.trim() || null,
+      targetGroupId: args.targetGroupId ?? null,
+      createdAt: Date.now()
+    })
+  }
+  return (await settleHeldPlaceholder({ args, tabId, agent, create, decided: true })) ?? placeholder
+}
+
+/**
+ * Holds a launch in its placeholder tab until the strip releases it, then starts the agent in its
+ * own tab and closes the placeholder. Cancel leaves the shell (returns null). The record of the held
+ * placeholder is forgotten once the hold settles either way.
+ */
+export async function settleHeldPlaceholder({
+  args,
+  tabId,
+  agent,
+  create,
+  decided = false,
+  restored = false
+}: {
+  args: CreateWebRuntimeSessionTerminalOnHostArgs
+  tabId: string
+  agent: 'claude' | 'codex'
+  create: CreateHostTerminal
+  decided?: boolean
+  restored?: boolean
+}): Promise<CreatedWebRuntimeSessionTerminal | null> {
   const outcome = await holdCloudAgentLaunch({
     paneKey: cloudTabHoldKey(tabId),
     agent,
     prompt: args.prompt?.trim() || null,
-    decided: true
-  })
+    decided,
+    restored
+  }).finally(() => forgetHeldCloudLaunch(tabId))
   if (outcome === 'cancel') {
     // NOACCT-MISLABEL: the confirmation answers the person's own Cancel, while the shell is still
     // there. A hold that ended because its tab or workspace went away (deleted, archived, closed)
@@ -92,7 +130,7 @@ export async function createWithCloudAgentHold(
         )
       )
     }
-    return placeholder
+    return null
   }
   // Started by the person's click in the held pane: bring the agent's tab forward so they see their
   // queued prompt run. A Renew's auto-start (maybe on a background tab) never steals focus.

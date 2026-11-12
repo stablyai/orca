@@ -255,6 +255,9 @@ describe('the chat composer while a cloud launch is held', () => {
     expect(cloudChatHoldHint({ agent: 'claude', reason: 'notSetUp' }, null, t)).toBe(
       'Set up Claude above to start'
     )
+    expect(cloudChatHoldHint({ agent: 'claude', reason: 'awaitingStart' }, null, t)).toBe(
+      'Start Claude above to begin'
+    )
     expect(cloudChatHoldHint({ agent: 'claude', reason: 'accountExpired' }, null, t)).toBe(
       'Renew Claude sign-in above to start'
     )

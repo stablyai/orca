@@ -147,6 +147,11 @@ export const runningSignInExpired = card({
   id: 'card-expired',
   attention: { kind: 'agentExpired', agent: 'Claude', tabId: 'tab-1' }
 })
+/** V3-01: a launch put back after a restart that waits for Start: neutral, below the warnings. */
+export const runningNotStarted = card({
+  id: 'card-not-started',
+  attention: { kind: 'agentNotStarted', agent: 'Claude', tabId: 'tab-1' }
+})
 /** Details open: the bars, uptime and sandbox hours. */
 export const detailsOpen = card({ id: 'card-details', details: true })
 /** The sub-panel with the mirror off: the two switches and the .context status. */

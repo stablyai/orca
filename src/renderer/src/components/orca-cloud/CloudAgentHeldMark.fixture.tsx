@@ -6,13 +6,13 @@ import { setOrcaCloudAgentAccountsStateForTest } from '@/lib/orca-cloud/orca-clo
 import { CloudAgentHeldMark } from './CloudAgentHeldMark'
 
 // A cloud workspace row whose Claude waits on its pane's "Set up once" strip (N-03).
-function seed(): void {
+function seed(restored = false): void {
   setOrcaCloudAgentAccountsStateForTest({
     load: {
       kind: 'ready',
       status: {
         credentials: {
-          claude: { state: 'none' },
+          claude: { state: restored ? 'active' : 'none' },
           codex: { state: 'none' },
           providerEnabled: { claude: true, codex: true }
         },
@@ -29,6 +29,7 @@ function seed(): void {
   })
   void holdCloudAgentLaunch({
     decided: true,
+    restored,
     paneKey: 'tab:web-terminal-g',
     agent: 'claude',
     prompt: null
@@ -45,21 +46,29 @@ function Row(): React.JSX.Element {
   )
 }
 
-export const sidebarRowMark = defineFixture({
-  width: 340,
-  render: () => {
-    seed()
-    return (
-      <div className="h-[110px] p-3">
-        <Row />
-      </div>
-    )
-  },
-  interact: async (frame: HTMLElement) => {
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    const mark = frame.querySelector<HTMLElement>('[data-cloud-agent-held]')
-    mark?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }))
-    mark?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }))
-    await new Promise((resolve) => setTimeout(resolve, 900))
-  }
-})
+const markFixture = (restored: boolean) =>
+  defineFixture({
+    width: 340,
+    render: () => {
+      seed(restored)
+      return (
+        <div className="h-[110px] p-3">
+          <Row />
+        </div>
+      )
+    },
+    interact: async (frame: HTMLElement) => {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const mark = frame.querySelector<HTMLElement>('[data-cloud-agent-held]')
+      mark?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }))
+      mark?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 900))
+    }
+  })
+
+export const sidebarRowMark = markFixture(false)
+/**
+ * V3-01: a launch put back after a restart that only waits for Start: the muted play mark, never
+ * the amber key (the account here is covered: no "not set up").
+ */
+export const sidebarRowMarkNotStarted = markFixture(true)

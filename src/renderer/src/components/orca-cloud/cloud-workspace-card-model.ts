@@ -63,6 +63,8 @@ export function cloudCardUsageLine(
 export type CloudCardAttention =
   | { kind: 'agentNotSetUp'; agent: string; tabId: string }
   | { kind: 'agentExpired'; agent: string; tabId: string }
+  /** V3-01: a launch put back after a restart that waits for the person's Start (neutral). */
+  | { kind: 'agentNotStarted'; agent: string; tabId: string }
   /** GIT-SETUP: the teammates' git identities couldn't be installed; commits and pushes are off. */
   | { kind: 'gitSetupOff' }
   | { kind: 'secretsMissing'; count: number }
@@ -71,6 +73,8 @@ const URGENCY: Record<CloudCardAttention['kind'], number> = {
   // An agent that can't start blocks the work the workspace was made for.
   agentNotSetUp: 0,
   agentExpired: 1,
+  // Below an agent that can't start, above commits and pushes being off (design-squad).
+  agentNotStarted: 1.5,
   // Below an agent that can't start, above missing secrets (design-squad).
   gitSetupOff: 2,
   secretsMissing: 3
@@ -89,6 +93,13 @@ export function mostUrgentAttention(
   return best
 }
 
+/** The row's colours: a launch waiting for Start (V3-01) is neutral info, everything else a warning. */
+export function cloudCardAttentionTone(item: CloudCardAttention): { text: string; dot: string } {
+  return item.kind === 'agentNotStarted'
+    ? { text: 'text-foreground', dot: 'size-1.5 shrink-0 rounded-full bg-muted-foreground' }
+    : { text: 'text-status-warning-text', dot: 'size-1.5 shrink-0 rounded-full bg-status-warning' }
+}
+
 export function cloudCardAttentionLabel(item: CloudCardAttention, t: Translate): string {
   switch (item.kind) {
     case 'agentNotSetUp':
@@ -97,6 +108,10 @@ export function cloudCardAttentionLabel(item: CloudCardAttention, t: Translate):
       })
     case 'agentExpired':
       return t('orcaCloud.agentHold.expired', '{{agent}} sign-in expired', { agent: item.agent })
+    case 'agentNotStarted':
+      return t('orcaCloud.agentHold.notStartedRow', '{{agent}} hasn’t started', {
+        agent: item.agent
+      })
     case 'gitSetupOff':
       return t('orcaCloudWorkspace.card.gitSetupOff', 'Commits and pushes are off')
     case 'secretsMissing':
