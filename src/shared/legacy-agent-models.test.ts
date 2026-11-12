@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { legacyAgentModelIds } from './legacy-agent-models'
+import { classifyAgentModels } from './legacy-agent-models'
 
 type Row = { id: string; isDefault?: boolean; resolvedModel?: string }
-const legacy = (agent: string, models: Row[]) => [...legacyAgentModelIds(agent, models)]
+const legacy = (agent: string, models: Row[]) => [...classifyAgentModels(agent, models).legacy]
+const hidden = (agent: string, models: Row[]) => [...classifyAgentModels(agent, models).hidden]
 
-describe('legacyAgentModelIds', () => {
+describe('classifyAgentModels', () => {
   it('folds Codex models superseded in their family or by a newer major line', () => {
     const models: Row[] = [
       { id: 'gpt-6.1-sol' },
@@ -18,20 +19,25 @@ describe('legacyAgentModelIds', () => {
     expect(legacy('codex', models)).toEqual(['gpt-6-sol', 'gpt-5.6-sol'])
   })
 
-  it('folds Claude aliases whose versioned model is listed', () => {
+  it('hides Claude short names whose versioned model is listed and folds other covered names', () => {
     const live: Row[] = [
+      { id: 'claude-opus-5-5', resolvedModel: 'claude-opus-5-5' },
       { id: 'claude-fable-5', resolvedModel: 'claude-fable-5' },
       { id: 'fable', resolvedModel: 'claude-fable-5' },
-      { id: 'opusplan', resolvedModel: 'claude-opus-5-5' }
+      { id: 'opus', resolvedModel: 'claude-opus-5-5' },
+      { id: 'opusplan', resolvedModel: 'claude-opus-5-5' },
+      { id: 'sonnet', resolvedModel: 'claude-sonnet-5-5' }
     ]
-    expect(legacy('claude', live)).toEqual(['fable'])
+    expect(hidden('claude', live)).toEqual(['fable', 'opus'])
+    expect(legacy('claude', live)).toEqual(['opusplan'])
     const saved: Row[] = [
       { id: 'claude-opus-5-5[1m]' },
       { id: 'opus[1m]' },
       { id: 'opus' },
       { id: 'sonnet' }
     ]
-    expect(legacy('claude', saved)).toEqual(['opus[1m]'])
+    expect(hidden('claude', saved)).toEqual(['opus[1m]'])
+    expect(legacy('claude', saved)).toEqual([])
   })
 
   it('leaves other agents untouched', () => {
@@ -72,7 +78,7 @@ describe('legacyAgentModelIds', () => {
       { id: 'claude-opus-5-5', resolvedModel: 'claude-opus-5-5' },
       { id: 'opus', resolvedModel: 'claude-opus-5-5' }
     ]
-    expect(legacy('claude', rows)).toEqual(['opus'])
-    expect(legacy('codex', rows)).toEqual([])
+    expect(hidden('claude', rows)).toEqual(['opus'])
+    expect(hidden('codex', rows)).toEqual([])
   })
 })

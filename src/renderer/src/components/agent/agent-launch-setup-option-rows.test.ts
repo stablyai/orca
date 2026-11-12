@@ -29,4 +29,17 @@ describe('agentLaunchSetupModelRows', () => {
     expect(agentLaunchSetupModelRows(models, 'gpt-6-sol', '', true, false).start).toBe('gpt-6-sol')
     expect(agentLaunchSetupModelRows(models, 'gpt-6-sol', '', false, false).start).toBeUndefined()
   })
+
+  it('lists a hidden short name only while it is the current choice', () => {
+    const claude: AgentPickerModel[] = [
+      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', isDefault: true, efforts: [] },
+      { id: 'opus', label: 'Opus', isDefault: false, efforts: [], hidden: true }
+    ]
+    expect(
+      ids(agentLaunchSetupModelRows(claude, 'claude-opus-5-5', '', false, false).rows)
+    ).toEqual(['claude-opus-5-5'])
+    const onAlias = agentLaunchSetupModelRows(claude, 'opus', '', false, false)
+    expect(ids(onAlias.rows)).toEqual(['claude-opus-5-5', 'opus'])
+    expect(onAlias.start).toBe('opus')
+  })
 })

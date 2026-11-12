@@ -25,7 +25,7 @@ function compareVersions(left: readonly number[], right: readonly number[]): num
 
 // Superseded within its family (6-sol by 6.1-sol), or from an older major line than the newest listed.
 // Why one pass: native chat reclassifies on every streamed render.
-function supersededCodexModels(models: readonly ListedModel[]): (model: ListedModel) => boolean {
+function supersededCodexModels(models: readonly ListedModel[]): (model: ListedModel) => ModelClass {
   const parsed = new Map<string, VersionedModelId>()
   const newestInFamily = new Map<string, number[]>()
   const newestMajor = new Map<string, number>()
@@ -44,63 +44,79 @@ function supersededCodexModels(models: readonly ListedModel[]): (model: ListedMo
   }
   return ({ id }) => {
     const own = parsed.get(id)
-    return (
-      !!own &&
+    return own &&
       (compareVersions(newestInFamily.get(`${own.prefix}\0${own.family}`) ?? [], own.version) > 0 ||
         (newestMajor.get(own.prefix) ?? 0) > own.version[0])
-    )
+      ? 'legacy'
+      : null
   }
 }
 
 // Proven by the row naming the versioned model it runs, or, where a saved list or older host
-// dropped that, by a versioned row of the same family (opus beside claude-opus-5-5).
-function coveredClaudeAliases(models: readonly ListedModel[]): (model: ListedModel) => boolean {
+// dropped that, by a versioned row of the same family (opus beside claude-opus-5-5). Only a
+// family short name (opus, opus[1m]) is that model; other names (opusplan) only fold.
+function coveredClaudeAliases(models: readonly ListedModel[]): (model: ListedModel) => ModelClass {
   const selfResolved = new Set<string>()
   const versionedFamilies = new Set<string>()
   for (const row of models) {
     if (row.resolvedModel === row.id) {
       selfResolved.add(row.id)
     }
-    const versioned = CLAUDE_VERSIONED_ID.exec(row.id)
-    if (versioned) {
-      versionedFamilies.add(`${versioned[1]}${versioned[2] ?? ''}`)
+    const family = claudeVersionedFamily(row.id)
+    if (family) {
+      versionedFamilies.add(family)
     }
   }
   return (model) => {
+    const alias = CLAUDE_ALIAS_ID.exec(model.id)
+    const family = alias ? `${alias[1]}${alias[2] ?? ''}` : null
     const resolved = model.resolvedModel
     if (resolved && resolved !== model.id) {
-      return selfResolved.has(resolved)
+      if (!selfResolved.has(resolved)) {
+        return null
+      }
+      return family && claudeVersionedFamily(resolved) === family ? 'hidden' : 'legacy'
     }
-    const alias = CLAUDE_ALIAS_ID.exec(model.id)
-    return !!alias && versionedFamilies.has(`${alias[1]}${alias[2] ?? ''}`)
+    return family && versionedFamilies.has(family) ? 'hidden' : null
   }
 }
 
-const NO_LEGACY: ReadonlySet<string> = new Set()
-// Why weak and per list: native chat rebuilds its options on every streamed render; catalogs are replaced, never mutated.
-const classified = new WeakMap<readonly ListedModel[], Map<string, ReadonlySet<string>>>()
+function claudeVersionedFamily(id: string): string | null {
+  const versioned = CLAUDE_VERSIONED_ID.exec(id)
+  return versioned ? `${versioned[1]}${versioned[2] ?? ''}` : null
+}
 
-/** Rows every model picker folds under More models; the default and unrecognized ids stay listed. */
-export function legacyAgentModelIds(
+type ModelClass = 'legacy' | 'hidden' | null
+
+/** Rows pickers fold under More models, and rows they list only while one is the current choice. */
+export type AgentModelClasses = { legacy: ReadonlySet<string>; hidden: ReadonlySet<string> }
+
+const NONE: AgentModelClasses = { legacy: new Set(), hidden: new Set() }
+// Why weak and per list: native chat reclassifies on every streamed render; catalogs are replaced, never mutated.
+const classified = new WeakMap<readonly ListedModel[], Map<string, AgentModelClasses>>()
+
+/** The default and unrecognized ids are never folded or hidden. */
+export function classifyAgentModels(
   agent: string,
   models: readonly ListedModel[]
-): ReadonlySet<string> {
+): AgentModelClasses {
   if ((agent !== 'claude' && agent !== 'codex') || models.length === 0) {
-    return NO_LEGACY
+    return NONE
   }
-  const byAgent = classified.get(models) ?? new Map<string, ReadonlySet<string>>()
+  const byAgent = classified.get(models) ?? new Map<string, AgentModelClasses>()
   const cached = byAgent.get(agent)
   if (cached) {
     return cached
   }
-  const isLegacy = agent === 'claude' ? coveredClaudeAliases(models) : supersededCodexModels(models)
-  const legacy = new Set<string>()
+  const classOf = agent === 'claude' ? coveredClaudeAliases(models) : supersededCodexModels(models)
+  const classes = { legacy: new Set<string>(), hidden: new Set<string>() }
   for (const model of models) {
-    if (!model.isDefault && isLegacy(model)) {
-      legacy.add(model.id)
+    const modelClass = model.isDefault ? null : classOf(model)
+    if (modelClass) {
+      classes[modelClass].add(model.id)
     }
   }
-  byAgent.set(agent, legacy)
+  byAgent.set(agent, classes)
   classified.set(models, byAgent)
-  return legacy
+  return classes
 }
