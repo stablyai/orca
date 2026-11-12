@@ -24,10 +24,10 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     handle: string,
     paneKey: string | null,
     cause: TerminalExitCause,
-    lastOutput?: string
+    lastOutput?: () => string | undefined
   ): void
 
-  protected abstract readPtyLastOutput(ptyId: string | null | undefined): string | undefined
+  protected abstract ptyLastOutputReader(ptyId: string): () => string | undefined
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
@@ -92,8 +92,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     const exitCause: TerminalExitCause =
       stopRequested && !stopNeverConfirmed ? OPERATOR_CLOSE_EXIT_CAUSE : observedCause
     this.stopRequestedPtyIds.delete(ptyId)
-    // Read before the transcript prune below empties it: a worker gone without reporting is told with it.
-    const lastOutput = this.readPtyLastOutput(ptyId)
+    // Taken before the transcript prune below empties it: a worker gone without reporting is told with it.
+    const lastOutput = this.ptyLastOutputReader(ptyId)
     const preservesAbnormalSshSurface =
       this.isSshOwnedPtyId(ptyId) &&
       pty?.connectionId != null &&

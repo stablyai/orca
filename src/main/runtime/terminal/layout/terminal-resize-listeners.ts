@@ -29,6 +29,9 @@ import {
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
+type LastOutputReader = () => string | undefined
+type ExitStop = Pick<WorkerTurnStop, 'reason' | 'cause'> & { lastOutput?: LastOutputReader }
+
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
   subscribeToTerminalResize(
     ptyId: string,
@@ -59,7 +62,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     handle: string,
     paneKey: string | null,
     cause: TerminalExitCause,
-    lastOutput?: string
+    lastOutput?: LastOutputReader
   ): void {
     const errorContext = describeTerminalExitCause(cause)
     // A person closing the pane leaves the task unowned; any other end is the agent's exit.
@@ -77,17 +80,16 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     }
   }
 
-  /** The PTY's last lines, read while its record exists: an exit prunes it before any async read. */
-  protected readPtyLastOutput(ptyId: string | null | undefined): string | undefined {
-    return terminalLastOutput(ptyId ? this.ptysById.get(ptyId) : undefined)
+  /** The PTY's last lines from the tail its record holds now, read only when a worker's report needs
+   *  them: an exit prunes the record first, and most exits are not workers'. */
+  protected ptyLastOutputReader(ptyId: string): LastOutputReader {
+    const pty = this.ptysById.get(ptyId)
+    const tail = pty && { tailBuffer: pty.tailBuffer, tailPartialLine: pty.tailPartialLine }
+    return () => terminalLastOutput(tail)
   }
 
   /** A paired server's worker has no local Dispatch; any exit it did not report reaches the Run home through the stop relay. */
-  private reportRemoteWorkerExit(
-    handle: string,
-    paneKey: string,
-    stop: Pick<WorkerTurnStop, 'reason' | 'cause' | 'lastOutput'>
-  ): void {
+  private reportRemoteWorkerExit(handle: string, paneKey: string, stop: ExitStop): void {
     const db = this._orchestrationDb
     const attachment = db?.findActiveRemoteAttachmentForPane(paneKey)
     // The coordinator's own worker-stop closes the terminal before it settles the attachment.
@@ -107,7 +109,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     reportWorkerTurnStop(
       db,
       { kind: 'remote', attachment },
-      { from: handle, ...stop },
+      { from: handle, ...stop, lastOutput: stop.lastOutput?.() },
       this.workerTurnStopReportDeps
     )
   }
@@ -138,7 +140,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
             stop: {
               reason: 'lost',
               cause: `${reason}; its terminal is still open for inspection`,
-              lastOutput: this.readPtyLastOutput(ptyId)
+              lastOutput: this.ptyLastOutputReader(ptyId)
             }
           })
       )
@@ -155,7 +157,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       error: string
       options: Parameters<OrchestrationDb['failDispatch']>[2]
       processExited: boolean
-      stop: Pick<WorkerTurnStop, 'reason' | 'cause' | 'lastOutput'>
+      stop: ExitStop
     }
   ): boolean {
     const db = this._orchestrationDb
@@ -183,6 +185,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       {
         from: handle,
         ...failure.stop,
+        lastOutput: failure.stop.lastOutput?.(),
         ...(settled === 'failed' || settled === 'circuit_broken' ? { settled } : {})
       },
       this.workerTurnStopReportDeps
