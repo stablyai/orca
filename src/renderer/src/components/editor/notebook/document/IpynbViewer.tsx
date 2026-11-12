@@ -170,7 +170,7 @@ export default function IpynbViewer({
       onKeyDownCapture={handleNotebookKeyDownCapture}
       onBlur={flushOnFocusLeave}
     >
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-[color-mix(in_srgb,var(--background)_95%,var(--editor-surface))] px-4 py-2 text-xs text-muted-foreground">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
         <span>
           {t('auto.components.editor.IpynbViewer.cellCount', '{{count}} cells', {

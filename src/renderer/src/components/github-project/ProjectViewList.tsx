@@ -278,7 +278,7 @@ function ProjectHeaderRow({
   const t = useTranslate()
   return (
     <div
-      className="sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-[color-mix(in_srgb,var(--muted)_2.5%,var(--background))] px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+      className="sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur"
       style={{ gridTemplateColumns: gridTemplate }}
     >
       {fields.map((f, idx) => {
@@ -295,7 +295,7 @@ function ProjectHeaderRow({
               !frozen && 'relative',
               frozen &&
                 cn(
-                  'relative z-20 before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+                  'relative z-20 backdrop-blur before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
                   PROJECT_FROZEN_COLUMN_HEADER_SURFACE_CLASS
                 ),
               idx === 1 && 'border-r border-border/50'

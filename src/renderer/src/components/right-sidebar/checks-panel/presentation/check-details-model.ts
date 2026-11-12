@@ -69,5 +69,5 @@ export function getFailedChecksForDetails(checks: PRCheckDetail[]): PRCheckDetai
 export type CheckDetailsStickySurface = 'sidebar' | 'card'
 
 export function getCheckDetailsStickySurfaceClass(surface: CheckDetailsStickySurface): string {
-  return surface === 'card' ? 'bg-card' : 'bg-sidebar'
+  return surface === 'card' ? 'bg-card/95' : 'bg-sidebar/95'
 }

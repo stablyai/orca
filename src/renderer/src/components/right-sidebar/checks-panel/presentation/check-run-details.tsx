@@ -105,7 +105,7 @@ export function CheckRunDetails({
         // Keep the action reachable while scrolling long annotations and output.
         <div
           className={cn(
-            'sticky top-0 z-10 -ml-3 flex min-w-0 items-center gap-2 border-b border-border/60 py-1 pl-3',
+            'sticky top-0 z-10 -ml-3 flex min-w-0 items-center gap-2 border-b border-border/60 py-1 pl-3 backdrop-blur-sm',
             getCheckDetailsStickySurfaceClass(detailsStickySurface)
           )}
         >

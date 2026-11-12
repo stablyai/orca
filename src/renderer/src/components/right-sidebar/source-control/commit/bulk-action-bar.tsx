@@ -1,7 +1,6 @@
 import { Plus, Minus, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { useSourceControlScope } from '../panel/worktree-scope'
 
 export function BulkActionBar({
   selectedCount,
@@ -21,14 +20,8 @@ export function BulkActionBar({
   isExecuting: boolean
 }) {
   const t = useTranslate()
-  // Solid 95% background over the panel it pins to (card in a workspace scope, else the sidebar).
-  const barBackground = useSourceControlScope()
-    ? 'bg-[color-mix(in_srgb,var(--background)_95%,var(--card))]'
-    : 'bg-[color-mix(in_srgb,var(--background)_95%,var(--sidebar))]'
   return (
-    <div
-      className={`absolute bottom-0 left-0 right-0 p-2 ${barBackground} border-t border-border shadow-lg animate-in slide-in-from-bottom-2 z-10`}
-    >
+    <div className="absolute bottom-0 left-0 right-0 p-2 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg animate-in slide-in-from-bottom-2 z-10">
       <div className="flex items-center gap-2 justify-between bg-accent/30 p-1.5 pr-2 rounded-md border border-border/50">
         <div className="flex items-center gap-2 text-xs font-medium text-foreground ml-1">
           {isExecuting ? (
