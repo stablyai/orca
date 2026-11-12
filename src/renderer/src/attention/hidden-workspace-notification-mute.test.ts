@@ -154,4 +154,14 @@ describe('muted workspace attention', () => {
     expect(rows.find((row) => row.id === PLAIN_ID)?.isUnread).toBe(true)
     expect(store.getState().unreadTerminalTabs['tab-plain']).toBe('terminal-bell')
   })
+
+  it('never mutes a hidden project, with or without an active sidebar filter', () => {
+    store.setState({ repos: [{ ...TEST_REPO, hiddenAt: 1 }] })
+    expect(muted(PLAIN_ID)).toBe(false)
+    store.setState({ hideCliCreatedWorkspaces: false })
+    expect(muted(PLAIN_ID)).toBe(false)
+    // The filter itself still mutes what it hides.
+    store.setState({ hideCliCreatedWorkspaces: true })
+    expect(muted(CLI_ID)).toBe(true)
+  })
 })

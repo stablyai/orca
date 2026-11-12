@@ -3,6 +3,7 @@ import { indexPendingVmCheckouts, isPendingVmCheckout } from './pending-vm-check
 import { getEmptyProjectPlaceholderRepoIds } from './sidebar-list/empty-project-placeholder-repos'
 import type { Repo } from './repo-types'
 import type { Worktree } from './worktree/types'
+import { NO_HIDDEN_PROJECTS } from './hidden-projects'
 
 describe('pending VM checkouts', () => {
   it('matches only the primary checkout at the pending repo and path', () => {
@@ -49,7 +50,8 @@ describe('pending VM checkouts', () => {
       repos: [repo],
       worktreesByRepo: { vm: [vmCheckout] },
       visibleWorktrees: [],
-      filterRepoIds: []
+      filterRepoIds: [],
+      hiddenProjects: NO_HIDDEN_PROJECTS
     }
     expect(getEmptyProjectPlaceholderRepoIds(args)).toEqual(new Set(['vm']))
     expect(

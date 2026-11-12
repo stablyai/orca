@@ -176,6 +176,33 @@ describe('buildSidebarFeedRows keeps same-id workspaces on two hosts apart', () 
   })
 })
 
+describe('buildSidebarFeedRows leaves out hidden projects', () => {
+  // The same repo registered locally and on an SSH box; only the box's copy is hidden.
+  const repos = [
+    repo('r'),
+    repo('r', { connectionId: 'box', hiddenAt: 1 }),
+    repo('empty', { hiddenAt: 1 })
+  ]
+  const workspaces = buildWorkspaceRows({
+    worktrees: [
+      worktree('r::/w/same', { hostId: 'local', lastActivityAt: 100 }),
+      worktree('r::/w/same', { hostId: 'ssh:box', lastActivityAt: 300 })
+    ],
+    folderWorkspaces: [],
+    repos,
+    lineageById: {}
+  })
+
+  it('drops only the hidden host copy’s rows and the hidden project’s empty header', () => {
+    const built = buildSidebarFeedRows(
+      domains({ workspaces }),
+      catalog(repos),
+      view({ groupBy: 'repo' })
+    )
+    expect(outline(built.sectionRows)).toEqual(['# r@0', 'local|r::/w/same@0'])
+  })
+})
+
 describe('buildSidebarFeedRows nests each paired server’s own lineage', () => {
   const serverRows = (hostId: 'runtime:a' | 'runtime:b', recentAt: number) =>
     [

@@ -22,6 +22,13 @@ import { readServedProjectSections } from '../worktree/project-sections-operatio
 import type { LastVisitedWorktreeOnHost } from '../worktree/host-list-highlight'
 import type { WorktreeHostContextView } from '../worktree/workspace-list-types'
 import { NO_WORKTREE_HOST_CONTEXT } from '../worktree/worktree-host-context-labels'
+import {
+  indexHiddenProjects,
+  NO_HIDDEN_PROJECTS,
+  type HiddenProjects
+} from '../../../src/shared/hidden-projects'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { Repo } from '../../../src/shared/repo-types'
 
 const catalog = buildSidebarFeedCatalog(SERVED_SECTIONS, [], [])
 
@@ -232,16 +239,48 @@ describe('the phone list before the first feed read', () => {
   const preFeedVisiting = (
     search: string,
     rows: typeof cached,
-    lastVisited: LastVisitedWorktreeOnHost | null
+    lastVisited: LastVisitedWorktreeOnHost | null,
+    hiddenProjects: HiddenProjects = NO_HIDDEN_PROJECTS,
+    repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
   ) =>
     buildPreFeedSections({
       rows,
       hostContextOf: NO_WORKTREE_HOST_CONTEXT,
       view: phoneView(),
       search,
-      repoHostIdByRepoId: new Map(),
-      lastVisited
+      repoHostIdByRepoId,
+      lastVisited,
+      hiddenProjects
     })
+
+  const catalogRepo = (overrides: Partial<Repo>): Repo => ({
+    id: 'orca',
+    path: '/orca',
+    displayName: 'orca',
+    badgeColor: '',
+    addedAt: 0,
+    ...overrides
+  })
+  const listedIds = (sections: ReturnType<typeof preFeedVisiting>) =>
+    sections.flatMap((section) => section.data.map((row) => row.row.worktreeId))
+
+  it('leaves a hidden project out, as the feed’s rows do', () => {
+    const hidden = indexHiddenProjects([catalogRepo({ hiddenAt: 1 })], 'local')
+    expect(listedIds(preFeedVisiting('', cached, null, hidden))).toEqual([])
+  })
+
+  it('checks an unstamped row against the host copy the phone resolves it to', () => {
+    // The local copy is hidden; the phone maps this project's rows to the listed ssh:box copy.
+    const hidden = indexHiddenProjects(
+      [catalogRepo({ hiddenAt: 1 }), catalogRepo({ connectionId: 'box' })],
+      'local'
+    )
+    const onBox = new Map<string, ExecutionHostId>([['orca', 'ssh:box']])
+    expect(listedIds(preFeedVisiting('', cached, null, hidden, onBox))).toEqual([
+      'orca::/w/b',
+      'orca::/w/a'
+    ])
+  })
 
   it('highlights the row this phone opened, never the one the desktop marked active', () => {
     const rows = [{ ...cached[0]!, isActive: true }, cached[1]!]
