@@ -47,7 +47,7 @@ import { main } from './index'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
-import { agentLaunchHostFixture } from './agent-launch-test-fixtures'
+import { agentLaunchHostFixture } from './agents/agent-launch-test-fixtures'
 
 const WORKTREE_ID = 'repo-1::/tmp/repo'
 const ORIGINAL_EXIT_CODE = process.exitCode

@@ -1,7 +1,7 @@
 // Updates can close this connection mid-call; report the outcome from status after the runtime returns.
 import type { OrcadManagedRuntimeStatus } from '../../shared/orcad-managed-runtime'
 import type { HandlerContext } from '../dispatch'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 
 const STATUS_ATTEMPTS = 15

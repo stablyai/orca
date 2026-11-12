@@ -12,7 +12,7 @@ import type {
 } from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { formatScreenshot, formatSnapshot, saveBrowserScreenshot } from './browser-format'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

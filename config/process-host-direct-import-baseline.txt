@@ -2,7 +2,7 @@
 # Existing production source files importing child_process at runtime outside @orca/process-host.
 # Migration debt: this list may only shrink; new callers use the package public API.
 src/cli/handlers/core.ts
-src/cli/handlers/interactive-login-interruption.ts
+src/cli/accounts/interactive-login-interruption.ts
 src/cli/runtime/launch.ts
 src/main/agent-hooks/installation/locking/managed-hook-owner-identity.ts
 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts

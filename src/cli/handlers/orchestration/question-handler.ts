@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { getOptionalStringFlag } from '../../flags'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'

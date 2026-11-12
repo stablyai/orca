@@ -20,9 +20,9 @@ import {
   formatTerminalSetPaneTitle,
   formatTerminalShow,
   formatTerminalSplit,
-  formatTerminalWait,
-  printResult
-} from '../format'
+  formatTerminalWait
+} from '../terminal-format'
+import { printResult } from '../command-result-output'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { printOrchestrationResult } from './agent-view'
 import { remoteHost, WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
 import {

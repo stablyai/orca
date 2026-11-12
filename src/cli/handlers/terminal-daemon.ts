@@ -3,7 +3,7 @@ import {
   describePtyProcessCeiling,
   type PtyProcessCeilingState
 } from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError } from '../runtime-client'
 
 type SeveredDaemonStatus = {

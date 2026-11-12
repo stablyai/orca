@@ -11,7 +11,8 @@ import type { CommandHandler } from '../dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
-import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
+import { formatWorktreeList, formatWorktreePs, formatWorktreeShow } from '../workspace-format'
+import { printResult } from '../command-result-output'
 import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
@@ -30,7 +31,7 @@ import {
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
+import { parseCliAgent, readCliAgentLaunch } from '../agents/agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'

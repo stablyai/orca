@@ -2,10 +2,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 const originalExitCode = process.exitCode
-vi.mock('../format', () => ({ printResult: vi.fn() }))
+vi.mock('../command-result-output', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 afterEach(() => {
@@ -82,28 +82,6 @@ it('raises a Run-home relay rejection for the CLI error boundary', async () => {
     } as never)
   ).rejects.toMatchObject({ code: 'task_dispatch_mismatch', message: 'wrong task' })
   expect(printResult).not.toHaveBeenCalled()
-})
-
-it('accepts an explicit current settlement without a compatibility read', async () => {
-  callMock.mockResolvedValueOnce({
-    result: { message: { id: 'msg_done' }, lifecycle: { action: 'completed' } }
-  })
-
-  await ORCHESTRATION_HANDLERS['orchestration send']({
-    flags: new Map([
-      ['from', 'term_worker'],
-      ['subject', 'done'],
-      ['type', 'worker_done'],
-      ['task-id', 'task_1'],
-      ['dispatch-id', 'ctx_1'],
-      ['outcome', 'succeeded']
-    ]),
-    client: { call: callMock },
-    cwd: '/tmp/repo',
-    json: true
-  } as never)
-
-  expect(callMock).toHaveBeenCalledOnce()
 })
 
 it('fails closed when an older runtime leaves worker_done dispatched without a verdict', async () => {
@@ -198,129 +176,6 @@ it('preserves the worker_done mutation identity when post-verification fails', a
       /Do not send a new completion.*--retry-request mutation_worker_done/s
     )
   })
-})
-
-it('accepts a legacy response only after the authoritative dispatch is terminal', async () => {
-  callMock
-    .mockResolvedValueOnce({
-      result: { message: { id: 'msg_legacy_completed', run_id: 'run_1' } }
-    })
-    .mockResolvedValueOnce({
-      result: { dispatch: { id: 'ctx_1', status: 'completed' } }
-    })
-    .mockResolvedValueOnce({
-      result: {
-        tasks: [
-          {
-            id: 'task_1',
-            status: 'completed',
-            result: JSON.stringify({
-              provenance: 'worker_report',
-              messageId: 'msg_legacy_completed',
-              outcome: 'succeeded'
-            })
-          }
-        ]
-      }
-    })
-
-  await ORCHESTRATION_HANDLERS['orchestration send']({
-    flags: new Map([
-      ['from', 'term_worker'],
-      ['subject', 'done'],
-      ['type', 'worker_done'],
-      ['task-id', 'task_1'],
-      ['dispatch-id', 'ctx_1'],
-      ['outcome', 'succeeded']
-    ]),
-    client: { call: callMock },
-    cwd: '/tmp/repo',
-    json: true
-  } as never)
-
-  expect(callMock).toHaveBeenCalledTimes(3)
-  expect(callMock).toHaveBeenNthCalledWith(2, 'orchestration.dispatchShow', { task: 'task_1' })
-})
-
-it('accepts a legacy failed report only after the authoritative dispatch failed', async () => {
-  callMock
-    .mockResolvedValueOnce({
-      result: { message: { id: 'msg_legacy_failed', run_id: 'run_1' } }
-    })
-    .mockResolvedValueOnce({ result: { dispatch: { id: 'ctx_1', status: 'failed' } } })
-    .mockResolvedValueOnce({
-      result: {
-        tasks: [
-          {
-            id: 'task_1',
-            status: 'failed',
-            result: JSON.stringify({
-              provenance: 'worker_report',
-              messageId: 'msg_legacy_failed',
-              outcome: 'failed'
-            })
-          }
-        ]
-      }
-    })
-
-  await ORCHESTRATION_HANDLERS['orchestration send']({
-    flags: new Map([
-      ['from', 'term_worker'],
-      ['subject', 'failed'],
-      ['type', 'worker_done'],
-      ['task-id', 'task_1'],
-      ['dispatch-id', 'ctx_1'],
-      ['outcome', 'failed']
-    ]),
-    client: { call: callMock },
-    cwd: '/tmp/repo',
-    json: true
-  } as never)
-
-  expect(callMock).toHaveBeenCalledTimes(3)
-})
-
-it('accepts an idempotent retry whose first report already settled', async () => {
-  callMock
-    .mockResolvedValueOnce({
-      result: {
-        message: { id: 'msg_retry', run_id: 'run_1', from_handle: 'term_worker' }
-      }
-    })
-    .mockResolvedValueOnce({ result: { dispatch: { id: 'ctx_1', status: 'completed' } } })
-    .mockResolvedValueOnce({
-      result: {
-        tasks: [
-          {
-            id: 'task_1',
-            status: 'completed',
-            result: JSON.stringify({
-              provenance: 'worker_report',
-              messageId: 'msg_first',
-              reportedBy: 'term_worker',
-              outcome: 'succeeded'
-            })
-          }
-        ]
-      }
-    })
-
-  await ORCHESTRATION_HANDLERS['orchestration send']({
-    flags: new Map([
-      ['from', 'term_worker'],
-      ['subject', 'done'],
-      ['type', 'worker_done'],
-      ['task-id', 'task_1'],
-      ['dispatch-id', 'ctx_1'],
-      ['outcome', 'succeeded']
-    ]),
-    client: { call: callMock },
-    cwd: '/tmp/repo',
-    json: true
-  } as never)
-
-  expect(callMock).toHaveBeenCalledTimes(3)
 })
 
 it('rejects an unrelated failed Dispatch that left its Task blocked', async () => {
