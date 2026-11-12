@@ -102,10 +102,13 @@ export function AutomationDetailHealth({
   const lastRunRelative = formatAutomationRelativeTime(lastRun.at, now, t, intlLocale)
   const lastRunAbsolute = lastRun.at ? formatAutomationDateTime(lastRun.at, t, intlLocale) : null
   // Why: run pages and lists name a run by its scheduled slot; a late start says it started then.
+  // Only a run that actually started has a start time; a skipped run's record time is not one.
+  const latestStartedAt = latestRun ? (latestRun.dispatchedAt ?? latestRun.startedAt ?? null) : null
   const startedOffSchedule =
     latestRun !== undefined &&
-    lastRun.at !== null &&
-    Math.abs(lastRun.at - latestRun.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
+    latestStartedAt !== null &&
+    lastRun.at === latestStartedAt &&
+    Math.abs(latestStartedAt - latestRun.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
   const lastRunWhen =
     lastRunAbsolute && startedOffSchedule
       ? t('auto.components.automations.runIdentity.startedAt', 'Started {{time}}', {

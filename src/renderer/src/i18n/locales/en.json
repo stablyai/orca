@@ -19068,7 +19068,8 @@
           "runNumber": "Run #{{number}}",
           "runFailed": "Run failed.",
           "scheduledAt": "Scheduled {{time}}",
-          "startedAt": "Started {{time}}"
+          "startedAt": "Started {{time}}",
+          "noFailureReason": "This run did not start, and no reason was recorded."
         },
         "runTable": {
           "result": "Result"

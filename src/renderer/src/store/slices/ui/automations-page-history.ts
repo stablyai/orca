@@ -10,6 +10,15 @@ type HistoryState = {
   worktreeNavHistoryIndex: number
 }
 
+function isPreviousEntry(s: HistoryState, location: AutomationsPageLocation): boolean {
+  const previous = s.worktreeNavHistory[s.worktreeNavHistoryIndex - 1]
+  return (
+    typeof previous === 'object' &&
+    previous.kind === 'automations-page' &&
+    automationsPageLocationKey(previous.location) === automationsPageLocationKey(location)
+  )
+}
+
 function replaceCurrentEntry(s: HistoryState, entry: WorktreeNavHistoryEntry): HistoryState {
   const next = s.worktreeNavHistory.slice()
   next[s.worktreeNavHistoryIndex] = entry
@@ -34,15 +43,15 @@ export function appendAutomationsPageEntry(
     return replaceCurrentEntry(s, entry)
   }
   if (mode === 'replace' && typeof current === 'object' && current.kind === 'automations-page') {
+    // Why: landing on the page just before this entry would leave a Back step that goes nowhere;
+    // step back to it and keep this entry as Forward instead.
+    if (isPreviousEntry(s, location)) {
+      return { ...s, worktreeNavHistoryIndex: s.worktreeNavHistoryIndex - 1 }
+    }
     return replaceCurrentEntry(s, entry)
   }
   if (mode === 'return') {
-    const previous = s.worktreeNavHistory[s.worktreeNavHistoryIndex - 1]
-    if (
-      typeof previous === 'object' &&
-      previous.kind === 'automations-page' &&
-      automationsPageLocationKey(previous.location) === automationsPageLocationKey(location)
-    ) {
+    if (isPreviousEntry(s, location)) {
       const next = s.worktreeNavHistory.slice()
       next[s.worktreeNavHistoryIndex - 1] = entry
       return { worktreeNavHistory: next, worktreeNavHistoryIndex: s.worktreeNavHistoryIndex - 1 }

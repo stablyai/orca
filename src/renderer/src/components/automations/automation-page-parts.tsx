@@ -1,5 +1,4 @@
 import React from 'react'
-import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
@@ -64,21 +63,6 @@ export function formatAutomationDateTimeWithRelative(
   const absolute = formatAutomationDateTime(value, t, intlLocale)
   const relative = formatAutomationRelativeTime(value, now, t, intlLocale)
   return relative ? `${absolute} (${relative})` : absolute
-}
-
-export function getAutomationRunStatusVariant(
-  status: AutomationRun['status']
-): React.ComponentProps<typeof Badge>['variant'] {
-  if (status === 'dispatched' || status === 'completed') {
-    return 'secondary'
-  }
-  if (status.startsWith('skipped')) {
-    return 'outline'
-  }
-  if (status === 'dispatch_failed') {
-    return 'destructive'
-  }
-  return 'dot'
 }
 
 export function getAutomationRunStatusLabel(

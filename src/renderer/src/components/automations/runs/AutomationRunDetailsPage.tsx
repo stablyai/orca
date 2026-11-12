@@ -297,10 +297,16 @@ export function AutomationRunDetailsPage({
               </Button>
             ) : null}
           </div>
-        ) : failed && errorText ? (
+        ) : failed ? (
           <AutomationRunErrorNotice
             label={t('auto.components.automations.runIdentity.runFailed', 'Run failed.')}
-            error={errorText}
+            error={
+              errorText ??
+              t(
+                'auto.components.automations.runIdentity.noFailureReason',
+                'This run did not start, and no reason was recorded.'
+              )
+            }
             action={
               openFromBanner ? (
                 <Button type="button" variant="outline" size="xs" onClick={onOpenWorkspace}>

@@ -102,8 +102,10 @@ it('a replay whose run cannot be shown swaps that entry instead of cutting Forwa
   rerender({ location: detail })
 
   const state = useAppStore.getState()
-  expect(state.worktreeNavHistory).toEqual(['skills', entry(detail), entry(detail), entry(run2)])
-  expect(state.worktreeNavHistoryIndex).toBe(2)
+  // The fallback is the page just before the run, so the index steps back to it; the run
+  // stays as Forward and nothing is deleted.
+  expect(state.worktreeNavHistory).toEqual(['skills', entry(detail), entry(run1), entry(run2)])
+  expect(state.worktreeNavHistoryIndex).toBe(1)
 })
 
 function mountPage(): HTMLElement {
