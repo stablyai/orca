@@ -14,7 +14,7 @@ import {
   recordRemoteDispatchState
 } from '../../db/remote-owned/remote-dispatch-records'
 import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
-import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
+import { closeRemoteRunLink, openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from '../../../rpc/methods/orchestration/worker/worker-list-method'
 
 const SERVER: OrchestrationWorkerServer = {
@@ -93,6 +93,18 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
       runtime
     } as never)) as ListedWorkers
   }
+
+  it('lists a worker on a server removed since under the name the server had', async () => {
+    const record = remoteWorker('task_1', 'ctx_w1', 'env_gone')
+    closeRemoteRunLink(
+      db,
+      record.conversation_id,
+      "devB was removed from this Orca's paired servers."
+    )
+
+    const listed = await listWorkers({ run: run.id, paginate: true })
+    expect(listed.workers[0]?.server).toMatchObject({ name: 'devB' })
+  })
 
   it('lists remote workers on the first page beside local ones, named by their server, and nowhere else', async () => {
     remoteWorker('task_1', 'ctx_w1')

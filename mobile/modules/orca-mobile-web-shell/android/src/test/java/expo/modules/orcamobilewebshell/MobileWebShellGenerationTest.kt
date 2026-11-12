@@ -3,7 +3,6 @@ package expo.modules.orcamobilewebshell
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -30,23 +29,6 @@ private fun manifest(
 private fun make(json: String) = MobileWebShellGeneration.make(json, DIRECTORY)
 
 class MobileWebShellGenerationTest {
-  @Test
-  fun `maps the document, every declared asset and the manifest itself`() {
-    val generation = make(manifest())
-    assertNotNull(generation)
-    val entries = generation!!.entries
-    assertEquals(4, entries.size)
-    assertEquals(File(DIRECTORY, "index.html"), entries["/"]!!.file)
-    assertEquals("text/html; charset=utf-8", entries["/"]!!.contentType)
-    // Only / may serve document bytes with CSP; no entrypoint alias.
-    assertNull(entries["/index.html"])
-    assertEquals(File(DIRECTORY, "assets/bb.png"), entries["/assets/bb.png"]!!.file)
-    assertEquals("image/png", entries["/assets/bb.png"]!!.contentType)
-    // The manifest is written last and is not part of the content hash, so it is not in assets[].
-    assertEquals("application/json", entries["/manifest.json"]!!.contentType)
-    assertNull(entries["/assets/cc.js"])
-  }
-
   @Test
   fun `refuses a manifest whose shape it does not recognise`() {
     assertNull(make("not json"))

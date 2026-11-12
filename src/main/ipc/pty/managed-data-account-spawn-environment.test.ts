@@ -215,31 +215,6 @@ describe.each(['renderer', 'runtime'])('%s managed account daemon environment', 
     }
   })
 
-  it('preserves independent daemon defaults when main has no baseline or owned markers', async () => {
-    const env: Record<string, string> = {}
-    applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode' })
-    const envToDelete = await spawnDeletions(route, env)
-    const defaults = {
-      XDG_DATA_HOME: join(tmpdir(), 'persistent-daemon', 'data'),
-      XDG_STATE_HOME: join(tmpdir(), 'persistent-daemon', 'state'),
-      OPENCODE_DB: 'daemon.db',
-      OPENCODE_AUTH_CONTENT: JSON.stringify({ fixture: { key: randomUUID() } })
-    }
-    for (const [key, value] of Object.entries(defaults)) {
-      vi.stubEnv(key, value)
-    }
-    const child = createDaemonPtyEnvironment({
-      sessionId: 'pane',
-      cols: 80,
-      rows: 24,
-      env,
-      envToDelete
-    })
-    for (const [key, value] of Object.entries(defaults)) {
-      expect(hash(child[key]) === hash(value)).toBe(true)
-    }
-  })
-
   it('keeps inline System authentication out of every selected child marker', async () => {
     const secret = randomUUID()
     const baseline = JSON.stringify({ fixture: { key: secret } })

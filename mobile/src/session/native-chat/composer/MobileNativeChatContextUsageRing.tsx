@@ -1,4 +1,11 @@
-import { StyleSheet, Pressable, Text, View, type LayoutChangeEvent } from 'react-native'
+import {
+  StyleSheet,
+  Pressable,
+  Text,
+  View,
+  type HostInstance,
+  type LayoutChangeEvent
+} from 'react-native'
 import { memo, useCallback, useRef, useState } from 'react'
 import Svg, { Circle } from 'react-native-svg'
 import {
@@ -23,6 +30,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import type { MobileHostHandle } from '../../../platform/host-handle'
 
 const RING_SIZE = 16
 const RING_STROKE = 2
@@ -36,7 +44,7 @@ export function useMobileNativeChatContextRing(
   usage: NativeChatContextUsageSummary | null,
   obscured: boolean
 ) {
-  const ref = useRef<View>(null)
+  const ref = useRef<MobileHostHandle>(null)
   const [height, setHeight] = useState(0)
   const onLayout = useCallback(
     (event: LayoutChangeEvent) => setHeight(event.nativeEvent.layout.height),
@@ -65,7 +73,7 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
   obscured
 }: {
   usage: NativeChatContextUsageSummary
-  composerRef: React.RefObject<View | null>
+  composerRef: React.RefObject<HostInstance | null>
   composerHeight: number
   obscured: boolean
 }): React.JSX.Element {
@@ -102,14 +110,14 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
   const cardKeepsKeyboard = useKeyboardPersistingTaps('always')
   const { openerRef, layerRef } = card
   const attachOpener = useCallback(
-    (view: View | null) => {
+    (view: HostInstance | null) => {
       openerRef.current = view
       openerKeepsKeyboard(view)
     },
     [openerRef, openerKeepsKeyboard]
   )
   const attachLayer = useCallback(
-    (view: View | null) => {
+    (view: HostInstance | null) => {
       layerRef.current = view
       cardKeepsKeyboard(view)
     },

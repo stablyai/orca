@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
+import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-router'
 import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { resolveSessionFilePath } from '../../../native-chat/session-file-resolver'
 import { prepareClaudeLaunchAccount } from '../../claude-launch-account'

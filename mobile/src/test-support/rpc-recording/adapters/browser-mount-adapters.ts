@@ -1,4 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type * as BrowserRequest from '../../../browser/page-interaction/use-mobile-browser-request'
+import type * as BrowserCommands from '../../../browser/page-interaction/use-mobile-browser-commands'
 import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -14,12 +16,12 @@ export function browserMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'browser.page-commands': ({ client, effect }) => {
-      const useRequest = modules.load<typeof import('../../../browser/use-mobile-browser-request')>(
-        'mobile/src/browser/use-mobile-browser-request.ts'
+      const useRequest = modules.load<typeof BrowserRequest>(
+        'mobile/src/browser/page-interaction/use-mobile-browser-request.ts'
       ).useMobileBrowserRequest
-      const useCommands = modules.load<
-        typeof import('../../../browser/use-mobile-browser-commands')
-      >('mobile/src/browser/use-mobile-browser-commands.ts').useMobileBrowserCommands
+      const useCommands = modules.load<typeof BrowserCommands>(
+        'mobile/src/browser/page-interaction/use-mobile-browser-commands.ts'
+      ).useMobileBrowserCommands
       const busyRef = { current: false }
       let busy = false
       let error: string | null = null

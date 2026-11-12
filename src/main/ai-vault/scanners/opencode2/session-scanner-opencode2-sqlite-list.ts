@@ -57,6 +57,27 @@ function buildSessionListQuery(
           ${limited ? 'LIMIT ?' : ''}`
 }
 
+function readSessionRows(
+  db: SyncDatabase,
+  limit: number,
+  scopePaths: readonly string[] | undefined,
+  dbPath: string,
+  selectedSessionId?: string
+): SessionRow[] {
+  const selected = selectedSessionId !== undefined
+  const scoped = !selected && scopePaths !== undefined && scopePaths.length > 0
+  const limited = !selected && Number.isFinite(limit) && !scoped
+  const statement = db.prepare(buildSessionListQuery(db, limited, scoped, selected))
+  const parameters = selected ? [selectedSessionId] : limited ? [limit] : []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these metadata columns.
+  const rows = (
+    scoped ? statement.iterate(...parameters) : statement.all(...parameters)
+  ) as Iterable<SessionRow>
+  return scoped && scopePaths
+    ? scopedSessionRows(rows, scopePaths, limit, dbPath)
+    : Array.from(rows)
+}
+
 function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
   const mtimeMs =
     typeof row.time_updated === 'number' && row.time_updated > 0
@@ -100,7 +121,6 @@ export async function listOpenCode2SqliteSessions(args: {
   scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
-  const scoped = args.scopePaths !== undefined && args.scopePaths.length > 0
   for (const dbPath of args.dbPaths) {
     let db: SyncDatabase | null = null
     try {
@@ -108,19 +128,10 @@ export async function listOpenCode2SqliteSessions(args: {
       if (!canReadOpenCode2Sessions(db)) {
         continue
       }
-      const limited = Number.isFinite(args.limit) && !scoped
-      const statement = db.prepare(buildSessionListQuery(db, limited, scoped))
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these metadata columns.
-      const listed = (
-        limited ? statement.all(args.limit) : scoped ? statement.iterate() : statement.all()
-      ) as Iterable<SessionRow>
-      const rows =
-        scoped && args.scopePaths
-          ? scopedSessionRows(listed, args.scopePaths, args.limit, dbPath)
-          : listed
+      const rows = readSessionRows(db, args.limit, args.scopePaths, dbPath)
       const selected = selectedSqliteSessionId(args.selectedSessionId, 'opencode2', dbPath)
       const selectedRow = selected
-        ? db.prepare(buildSessionListQuery(db, false, false, true)).get(selected)
+        ? readSessionRows(db, 1, undefined, dbPath, selected)[0]
         : undefined
       if (
         selectedRow &&

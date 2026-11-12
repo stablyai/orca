@@ -52,17 +52,20 @@ function readSessionRows(
   db: SyncDatabase,
   limit: number,
   scopePaths: readonly string[] | undefined,
-  dbPath: string
+  dbPath: string,
+  selectedSessionId?: string
 ): SessionRow[] {
   if (!canReadOpenCodeSessions(db)) {
     return []
   }
-  const scoped = scopePaths !== undefined && scopePaths.length > 0
-  const limited = Number.isFinite(limit) && !scoped
-  const statement = db.prepare(buildSessionListQuery(db, limited, scoped))
+  const selected = selectedSessionId !== undefined
+  const scoped = !selected && scopePaths !== undefined && scopePaths.length > 0
+  const limited = !selected && Number.isFinite(limit) && !scoped
+  const statement = db.prepare(buildSessionListQuery(db, limited, scoped, selected))
+  const parameters = selected ? [selectedSessionId] : limited ? [limit] : []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query above selects exactly these columns.
   const rows = (
-    limited ? statement.all(limit) : scoped ? statement.iterate() : statement.all()
+    scoped ? statement.iterate(...parameters) : statement.all(...parameters)
   ) as Iterable<SessionRow>
   return scoped && scopePaths
     ? scopedSessionRows(rows, scopePaths, limit, dbPath)
@@ -128,8 +131,8 @@ export async function listOpenCodeSqliteSessions(args: {
         read: (db) => {
           const rows = readSessionRows(db, args.limit, args.scopePaths, dbPath)
           const selected = selectedSqliteSessionId(args.selectedSessionId, agent, dbPath)
-          if (selected && canReadOpenCodeSessions(db) && !rows.some((row) => row.id === selected)) {
-            const row = db.prepare(buildSessionListQuery(db, false, false, true)).get(selected)
+          if (selected && !rows.some((row) => row.id === selected)) {
+            const row = readSessionRows(db, 1, undefined, dbPath, selected)[0]
             if (
               row &&
               typeof row.id === 'string' &&
