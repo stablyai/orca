@@ -88,9 +88,9 @@ describe('catalog', () => {
       ;(file.plans[0] as { supportUrl?: string }).supportUrl = url
       return file
     }
-    expect(() => parseCatalogFile(withSupport('https://onorca.dev/support'))).not.toThrow()
-    expect(() => parseCatalogFile(withSupport('mailto:support@onorca.dev'))).not.toThrow()
-    for (const bad of ['javascript:alert(1)', 'http://onorca.dev/support', 'mailto:nobody']) {
+    expect(() => parseCatalogFile(withSupport('https://orca.dev/support'))).not.toThrow()
+    expect(() => parseCatalogFile(withSupport('mailto:support@orca.dev'))).not.toThrow()
+    for (const bad of ['javascript:alert(1)', 'http://orca.dev/support', 'mailto:nobody']) {
       expect(() => parseCatalogFile(withSupport(bad))).toThrow()
     }
   })

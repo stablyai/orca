@@ -9,6 +9,7 @@
       "sort": 10,
       "public": true,
       "currentVersion": 2,
+      "supportUrl": "https://orca.dev/enterprise",
       "stripe": {
         "seatLookupKeys": { "month": "orca_team_seat_monthly", "year": "orca_team_seat_annual" },
         "overageLookupKey": "orca_sandbox_overage_per_minute"
@@ -73,7 +74,7 @@
       "sort": 20,
       "public": true,
       "currentVersion": 1,
-      "contactUrl": "https://onorca.dev/contact-sales",
+      "contactUrl": "https://orca.dev/enterprise",
       "priceLabel": "Custom",
       "versions": [
         {

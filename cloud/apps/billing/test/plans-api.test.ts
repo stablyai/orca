@@ -50,9 +50,9 @@ describe('GET /v1/plans', () => {
       'idle_sleep',
       'overage_optional'
     ])
-    expect(team).toHaveProperty('supportUrl')
+    expect(team.supportUrl).toBe('https://orca.dev/enterprise')
     expect(team.features[0]).toEqual({ id: 'included_hours_per_seat', params: { hours: 60 }, text: '60 sandbox hours per seat each month, pooled across your team' })
-    expect(body.plans.find((plan: { id: string }) => plan.id === 'enterprise')).toMatchObject({ kind: 'contact_sales', contactUrl: 'https://onorca.dev/contact-sales' })
+    expect(body.plans.find((plan: { id: string }) => plan.id === 'enterprise')).toMatchObject({ kind: 'contact_sales', contactUrl: 'https://orca.dev/enterprise' })
     expect(body.plans.find((plan: { id: string }) => plan.id === 'trial')).toMatchObject({ kind: 'trial', entitlements: { sandbox_hours_lifetime: { value: 2, perSeat: false } } })
     expect(JSON.stringify(body)).not.toContain('price_')
   })
