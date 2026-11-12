@@ -70,6 +70,18 @@ describe("another Orca build's copy on the same host", () => {
     expect(await readFile(join(home.cursor, 'SKILL.md'), 'utf8')).toBe(NEWER_TEXT)
   })
 
+  it('automatically migrates a former-name agent copy to a recognized shared copy', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, NEWER_TEXT)
+    await autoUpdateAs(home, NEWER_SOURCE)
+    await writeCopy(join(home.home, '.claude', 'skills', 'former-test-skill'), OLD_TEXT)
+
+    await autoUpdateAs(home, { ...NEW_SOURCE, aliases: ['former-test-skill'] })
+
+    expect((await lstat(home.claude)).isSymbolicLink()).toBe(true)
+    expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(NEWER_TEXT)
+  })
+
   it('is not reported out of date or downgraded by an older build, until the user edits it', async () => {
     const home = await makeSkillHome()
     await writeCopy(home.shared, OLD_TEXT)

@@ -288,7 +288,13 @@ export async function autoUpdateBundledSkills(
       const safe = entry.ops.filter(isBundledSkillAutoUpdateOp)
       const required = new Set(safe.flatMap((op) => (op.requires ? [op.requires] : [])))
       const ops = entry.ops.filter(
-        (op) => safe.includes(op) || (op.kind === 'keep' && required.has(op.path))
+        (op) =>
+          safe.includes(op) ||
+          (required.has(op.path) &&
+            (op.kind === 'keep' ||
+              (op.kind === 'leave' &&
+                op.reason === 'other-build' &&
+                op.cleanup.every((item) => item.action === 'delete'))))
       )
       if (ops.length > 0 && !input.recordOnly) {
         const source = findBundledSkillSource(input.sources, entry.name)
