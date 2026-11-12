@@ -53,6 +53,13 @@ public enum ElementActionability {
         var scrollTried = false
         var settledFrame: CGRect?
         var last: PointerTarget<AX.Element> = .noFrame
+        // Why: one scroll at most, so a target that keeps failing cannot scroll the user's view around.
+        func scrollOnce() throws -> Bool {
+            guard !scrollTried else { return false }
+            scrollTried = true
+            scrolled = try ax.scrollToVisible(element)
+            return scrolled
+        }
         repeat {
             guard ax.isEnabled(element) != false else {
                 last = .notEnabled
@@ -71,13 +78,9 @@ public enum ElementActionability {
             let visible = frame.intersection(clip)
             // Why: an element bigger than its viewport cannot be brought fully into view, so it is clicked where it shows.
             let fits = frame.width <= clip.width && frame.height <= clip.height
-            if !scrollTried, visible.isEmpty || (fits && !visible.contains(CGPoint(x: frame.midX, y: frame.midY))) {
-                scrollTried = true
-                if try ax.scrollToVisible(element) {
-                    scrolled = true
-                    last = .outOfView(scrolled: true)
-                    continue
-                }
+            if visible.isEmpty || (fits && !visible.contains(CGPoint(x: frame.midX, y: frame.midY))), try scrollOnce() {
+                last = .outOfView(scrolled: true)
+                continue
             }
             guard !visible.isEmpty else {
                 last = .outOfView(scrolled: scrolled)
@@ -89,18 +92,12 @@ public enum ElementActionability {
                 return .ready(point)
             case let .ancestorOnly(point):
                 // Why: a scroller not exposed as AXScrollArea (a web overflow div) can hide the element behind its own container.
-                guard !scrollTried else { return .ready(point) }
-                scrollTried = true
-                scrolled = try ax.scrollToVisible(element)
-                guard scrolled else { return .ready(point) }
+                guard try scrollOnce() else { return .ready(point) }
                 last = .outOfView(scrolled: true)
             case let .covered(by: cover):
                 last = .covered(by: cover)
                 // Why: a table or sticky header inside the scroll area can cover a row that scrolling would clear.
-                if !scrollTried {
-                    scrollTried = true
-                    scrolled = try ax.scrollToVisible(element)
-                }
+                _ = try scrollOnce()
             }
         } while ax.waitBeforeRetry()
         return last
