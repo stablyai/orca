@@ -1,10 +1,13 @@
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
-import { afterEach, describe, expect, it } from 'vitest'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { Terminal } from '@xterm/headless'
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
 import { HistoryReader } from '../../../history/restoration/history-reader'
+import { HistoryFlight } from '../../../history/journal/terminal-history-read-admission'
+import { gateReconstruction } from '../../../history/journal/testing/terminal-history-read-fixture'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -15,6 +18,7 @@ let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>> | undefined
 const adapters: DaemonPtyAdapter[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   for (const adapter of adapters.splice(0)) {
     await adapter.disconnectOnly()
     adapter.dispose()
@@ -57,6 +61,38 @@ const surface = (terminalHandle: string) => ({
   leafId: '11111111-1111-4111-8111-111111111111',
   terminalHandle
 })
+
+// Real zsh 5.9 bytes: the prompt, `sleep 1` run with bracketed paste toggled, then the next prompt.
+const ZSH = readFileSync(
+  join(__dirname, '../../../../runtime/__fixtures__/zsh-prompt-runs-command.txt'),
+  'utf8'
+)
+const ZSH_COMMAND_END = ZSH.indexOf('\x1b[?2004l\r\r\n') + '\x1b[?2004l\r\r\n'.length
+const LINK = 'https://example.com/fidelity'
+
+async function render(ansi: string, cols: number, rows: number): Promise<Terminal> {
+  const terminal = new Terminal({ cols, rows, scrollback: 5000, allowProposedApi: true })
+  await new Promise<void>((resolve) => terminal.write(ansi, resolve))
+  return terminal
+}
+
+/** What a user sees: every row, wrapping, cursor, wide and styled cells, and paste mode. */
+function observe(terminal: Terminal) {
+  const buffer = terminal.buffer.active
+  const lines = Array.from({ length: buffer.length }, (_, row) => buffer.getLine(row)!)
+  const cell = (row: number, col: number) => lines[row]!.getCell(col)!
+  return {
+    size: [terminal.cols, terminal.rows],
+    rows: lines.map((line) => line.translateToString(true)),
+    wrapped: lines.flatMap((line, row) => (line.isWrapped ? [row] : [])),
+    cursor: [buffer.cursorX, buffer.baseY + buffer.cursorY],
+    wide: [cell(3, 5).getChars(), cell(3, 5).getWidth(), cell(3, 6).getWidth()],
+    secondWide: [cell(7, 6).getChars(), cell(7, 6).getWidth()],
+    style: [cell(4, 0).isBold() !== 0, cell(4, 0).isFgPalette(), cell(4, 0).getFgColor()],
+    plain: [cell(4, 9).isBold() !== 0, cell(4, 9).isFgDefault()],
+    bracketedPaste: terminal.modes.bracketedPasteMode
+  }
+}
 
 describe('host-owned attach replies', () => {
   // N1: a cached or joined adopted attach used to send its reply without the claim result.
@@ -173,4 +209,142 @@ describe('host-owned attach replies', () => {
     },
     120_000
   )
+
+  // The live terminal and the journal's reconstruction must agree through reflow both ways.
+  it('reconstructs the rows, cells, cursor, mode and link the live terminal shows', async () => {
+    const child = createMockSubprocess()
+    const { open } = await startHostHistory(() => child)
+    const sessionId = 'live-fidelity'
+    const owner = open()
+    const live = new Terminal({ cols: 80, rows: 24, scrollback: 5000, allowProposedApi: true })
+    let streamed = ''
+    let painted: Promise<void> = Promise.resolve()
+    owner.onData(({ data }) => {
+      streamed += data
+      painted = painted.then(() => new Promise<void>((resolve) => live.write(data, resolve)))
+    })
+    await owner.spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })
+    const emit = async (data: string): Promise<void> => {
+      const expected = streamed.length + data.length
+      child._simulateData(data)
+      await waitFor(() => streamed.length >= expected)
+      await painted
+    }
+    const resize = async (cols: number, rows: number): Promise<void> => {
+      owner.resize(sessionId, cols, rows)
+      await waitFor(() =>
+        vi.mocked(child.resize).mock.calls.some(([c, r]) => c === cols && r === rows)
+      )
+      live.resize(cols, rows)
+    }
+
+    await emit(ZSH.slice(0, ZSH_COMMAND_END))
+    await emit(
+      `LONG_A ${'a'.repeat(53)}\r\nLONG_B ${'b'.repeat(53)}\r\nWIDE 漢字テスト end\r\n` +
+        `\x1b[1;31mRED_BOLD\x1b[0m plain\r\n\x1b]8;;${LINK}\x1b\\LINK_TEXT\x1b]8;;\x1b\\ after\r\n`
+    )
+    // Narrowing wraps the long rows; widening joins them and the row written narrow.
+    await resize(40, 24)
+    await emit(`NARROW_${'n'.repeat(43)}\r\nWIDE2 端末\r\n`)
+    await resize(100, 30)
+    await emit(ZSH.slice(ZSH_COMMAND_END))
+
+    const window = await owner.getBufferSnapshot(sessionId, { scrollbackRows: 1000 })
+    const deep = await owner.getBufferSnapshot(sessionId)
+    const reattached = await open().spawn({ sessionId, cols: 100, rows: 30, cwd: '/tmp' })
+    const expected = {
+      size: [100, 30],
+      rows: [
+        '% sleep 1',
+        `LONG_A ${'a'.repeat(53)}`,
+        `LONG_B ${'b'.repeat(53)}`,
+        'WIDE 漢字テスト end',
+        'RED_BOLD plain',
+        'LINK_TEXT after',
+        `NARROW_${'n'.repeat(43)}`,
+        'WIDE2 端末',
+        // zsh writes the space after its prompt; only unwritten cells trim.
+        '% ',
+        ...Array<string>(21).fill('')
+      ],
+      wrapped: [],
+      cursor: [2, 8],
+      wide: ['漢', 2, 0],
+      secondWide: ['端', 2],
+      style: [true, true, 1],
+      plain: [false, true],
+      bracketedPaste: true
+    }
+    const views = {
+      live,
+      window: await render(`${window!.scrollbackAnsi}${window!.data}`, window!.cols, window!.rows),
+      deep: await render(`${deep!.scrollbackAnsi}${deep!.data}`, deep!.cols, deep!.rows),
+      reattached: await render(
+        reattached.snapshot!,
+        reattached.snapshotCols!,
+        reattached.snapshotRows!
+      )
+    }
+    for (const [name, view] of Object.entries(views)) {
+      expect({ name, ...observe(view) }).toEqual({ name, ...expected })
+    }
+    const link = [{ row: 5, startCol: 0, endCol: 9, uri: LINK }]
+    expect(window!.oscLinks).toEqual(link)
+    expect(deep!.oscLinks).toEqual(link)
+  }, 30_000)
+
+  // The joined image is for an older cut; the attach retries at the new one before detaching.
+  it('retries a joined attach whose live cut moved, with its old viewer kept until then', async () => {
+    const child = createMockSubprocess()
+    const { open } = await startHostHistory(() => child)
+    const sessionId = 'joined-retry'
+    const viewer = open()
+    let viewerData = ''
+    viewer.onData(({ data }) => (viewerData += data))
+    await viewer.spawn({ sessionId, cols: 80, rows: 24, cwd: '/tmp' })
+    child._simulateData('BASE_ROW\r\n')
+    const reconstruction = gateReconstruction(
+      harness!.server.host.historyJournals!.live(sessionId)!
+    )
+    const joins = vi.spyOn(HistoryFlight.prototype, 'join')
+    // A deep read leads the reconstruction and the reattach joins it at the same cut.
+    const leader = viewer.getBufferSnapshot(sessionId)
+    await waitFor(() => reconstruction.calls.mock.calls.length > 0)
+    const attacher = open()
+    let attachedData = ''
+    attacher.onData(({ data }) => (attachedData += data))
+    let settled = false
+    const attaching = attacher
+      .spawn({ sessionId, cols: 90, rows: 24, cwd: '/tmp' })
+      .finally(() => (settled = true))
+    await waitFor(() => joins.mock.calls.length > 1)
+
+    child._simulateData('DURING_ROW\r\n')
+    viewer.resize(sessionId, 90, 24)
+    await waitFor(() => vi.mocked(child.resize).mock.calls.some(([c, r]) => c === 90 && r === 24))
+    await waitFor(() => viewerData.includes('DURING_ROW'))
+    viewer.write(sessionId, 'typed-by-viewer')
+    await waitFor(() => child.write.mock.calls.some(([data]) => data === 'typed-by-viewer'))
+    // The stale image completes; the retry's own reconstruction is held while output continues.
+    reconstruction.open()
+    reconstruction.close()
+    await waitFor(() => reconstruction.calls.mock.calls.length > 1 || settled)
+    child._simulateData('RETRY_ROW\r\n')
+    reconstruction.open()
+    const attached = await attaching
+    await leader
+
+    expect([attached.snapshotCols, attached.snapshotRows]).toEqual([90, 24])
+    const screen = await render(attached.snapshot!, 90, 24)
+    const rows = observe(screen).rows
+    expect(rows.slice(0, 3)).toEqual(['BASE_ROW', 'DURING_ROW', ''])
+    await waitFor(() => attachedData.includes('RETRY_ROW'))
+    child._simulateData('AFTER_ROW\r\n')
+    await waitFor(() => attachedData.includes('AFTER_ROW'))
+    expect(attachedData).toBe('RETRY_ROW\r\nAFTER_ROW\r\n')
+    expect(viewerData).not.toContain('AFTER_ROW')
+    attacher.write(sessionId, 'typed-after-retry')
+    await waitFor(() => child.write.mock.calls.some(([data]) => data === 'typed-after-retry'))
+    expect(child.write.mock.calls.filter(([data]) => data === 'typed-after-retry')).toHaveLength(1)
+  }, 30_000)
 })
