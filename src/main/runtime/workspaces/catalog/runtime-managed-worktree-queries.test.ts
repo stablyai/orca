@@ -341,20 +341,41 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
         repo,
         'local:default',
         { kind: 'runtime', maxAgeMs: 30_000 },
-        { scan: async () => ({ kind: 'rows', worktrees: rows([repo.path]) }) }
+        {
+          scan: async () => ({ kind: 'rows', worktrees: rows([repo.path]) }),
+          // The observation carries the pre-scan hygiene claim a pruning listing consumes.
+          captureWitness: () =>
+            ({
+              authorizedRootsRevision: 0,
+              rootsRevision: 0,
+              hygieneDue: true,
+              expectation: { repo, metadata: [] },
+              release: () => {}
+            }) as never
+        }
       )
       const ownerRows = runtimeResultForObservation(observation!)
-      const scanRepo = vi.fn(async () => {
+      const scanRepo = vi.fn(async () => ownerRows)
+      // The route changes while the listing awaits its own metadata prune, after admission.
+      let helperSawCurrent: boolean | undefined
+      pruneMetadataMock.mockImplementationOnce(async (args: { isCallerCurrent: () => boolean }) => {
         live = false
-        return ownerRows
+        helperSawCurrent = args.isCallerCurrent()
+        return { scanGenerationCurrent: true, preservedMetadataCandidateIds: new Set() }
+      })
+      const store = gitStore({
+        pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(() => []),
+        getProfileStorageDirectory: () => '/profile',
+        captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(() => ({ repo, metadata: [] }))
       })
 
-      const result = await queries(gitStore(), { scanRepo }).listDetected(repo)
+      const result = await queries(store, { scanRepo }).listDetected(repo)
 
+      expect(pruneMetadataMock).toHaveBeenCalledTimes(1)
+      expect(helperSawCurrent).toBe(false)
       expect(result).toMatchObject({ authoritative: false, source: 'git' })
       expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path])
       expect(pruneLineageMock).not.toHaveBeenCalled()
-      expect(pruneMetadataMock).not.toHaveBeenCalled()
     } finally {
       setWorktreeCatalogRouteResolver(null)
       _resetWorktreeCatalogOwnerForTests()

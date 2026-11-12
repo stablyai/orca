@@ -122,6 +122,26 @@ describe('Store', () => {
     }
   })
 
+  it('admits a folder converted to Git as a local Git route as soon as the write lands', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/local/folder', kind: 'folder' }))
+    registerWorktreeCatalogRoutes(store as never)
+    try {
+      const routeFor = () => ({
+        repoPath: '/local/folder',
+        runtimeKey: resolveWorktreeScanRuntime(store as never, store.getRepos()[0]).runtimeKey
+      })
+      expect(isLiveWorktreeCatalogRoute('r1', 'local', routeFor())).toBe(false)
+
+      store.updateRepo({ id: 'r1' }, { kind: 'git', folderUpgradeGitRootPath: '/local/folder' })
+
+      expect(store.getRepos()[0]?.kind).toBe('git')
+      expect(isLiveWorktreeCatalogRoute('r1', 'local', routeFor())).toBe(true)
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+    }
+  })
+
   it('repo mutations preserve independent project host setup records', async () => {
     const independentProject = makeProject({
       id: 'cloud-project',
