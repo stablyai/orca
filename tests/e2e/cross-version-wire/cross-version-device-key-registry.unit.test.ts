@@ -5,7 +5,7 @@ import nacl from 'tweetnacl'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { encodeDeviceProofMessage } from '../../../src/shared/remote-runtime/pairing/device-key-proof'
 import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
-import { SimulatedMobileE2EEV2Peer } from '../../../src/main/runtime/mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
+import { SimulatedMobileE2EEV2Peer } from '../../../src/main/runtime/mobile-cloud-relay/testing/simulated-mobile-e2ee-v2-peer'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

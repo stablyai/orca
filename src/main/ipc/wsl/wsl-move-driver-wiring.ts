@@ -78,7 +78,7 @@ import { listRemoteOrcadRepositories } from '../../managed-server/migration/link
 import { stageRemoteOrcadMigrationBlobChunk } from '../../managed-server/migration/transfers/orcad-migration-chunk-client'
 import { listRemoteOrcadFolderCatalog } from '../../managed-server/migration/linking/orcad-server-folder-workspaces'
 import { makeTerminalScrollbackSnapshotRef } from '../../pty/scrollback/terminal-scrollback-snapshots'
-import { pauseWorkspacesForProjectMove } from '../../window/project-move-pause'
+import { pauseWorkspacesForProjectMove } from '../../window/renderer-relays/project-move-pause'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import { readWslGuestProcessTable } from '../../wsl/execution/wsl-guest-process-table'
 import { isWslDistroRegistered } from '../../wsl/discovery/wsl-distro-registry-id'

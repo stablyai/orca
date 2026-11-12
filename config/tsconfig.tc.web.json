@@ -90,11 +90,11 @@
     "../src/main/credentials/protected-secret-persistence.ts",
     "../src/main/startup/serve-launch/serve-desktop-activation.ts",
     "../src/main/startup/serve-launch/serve-mode-argv.ts",
-    "../src/main/startup/single-instance-lock.ts",
-    "../src/main/startup/startup-diagnostics.ts",
-    "../src/main/window/focus-existing-window.ts",
-    "../src/main/window/foreground-activation-policy.ts",
-    "../src/main/window/macos-app-activation.ts"
+    "../src/main/startup/profile-startup/single-instance-lock.ts",
+    "../src/main/startup/diagnostics/startup-diagnostics.ts",
+    "../src/main/window/activation/focus-existing-window.ts",
+    "../src/main/window/activation/foreground-activation-policy.ts",
+    "../src/main/window/activation/macos-app-activation.ts"
   ],
   "compilerOptions": {
     "paths": {

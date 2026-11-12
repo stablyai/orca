@@ -20,7 +20,8 @@ import { resolveRepoForExecutionHost } from '../repo-host-ownership'
 import { withNestedPreservedBranches } from '../../../workspaces/removal/nested-worktree-removal-plan'
 import {
   finishAcceptedWorktreeRemoval,
-  waitForPendingWorktreeRemoval
+  waitForPendingWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
@@ -83,18 +84,21 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
         areWorktreePathsEqual(item.path, worktreePath)
       )
       const executionArgs = expectedCheckout ? { ...args, expectedCheckout } : args
-      const accept = async (): Promise<RemoveWorktreeResult> =>
+      const accept = async (): Promise<RemoveWorktreeResult> => {
         // Another client may acquire removal while this request waits for acceptance.
-        waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)
-          ? { removing: true }
-          : executeWorktreeRemoval(
-              context,
-              executionArgs,
-              repo,
-              repoId,
-              worktreePath,
-              removalHostId
-            )
+        if (waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)) {
+          await waitForWorktreeRemovalAcceptance(args.worktreeId, removalHostId)
+          return { removing: true }
+        }
+        return executeWorktreeRemoval(
+          context,
+          executionArgs,
+          repo,
+          repoId,
+          worktreePath,
+          removalHostId
+        )
+      }
       // Read before the purge drops the row; listeners hear `removed` after it.
       const removedIdentity = worktreeHostIdentity(store, args.worktreeId, removalHostId)
       let accepted: RemoveWorktreeResult

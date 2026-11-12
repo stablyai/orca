@@ -5,7 +5,7 @@ import { isSameExtensionNavigation } from '../../../../shared/browser/extensions
 import {
   isBackgroundLaunch,
   showWindowWithoutStealingFocus
-} from '../../../window/foreground-activation-policy'
+} from '../../../window/activation/foreground-activation-policy'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { watchBrowserMainWindowReadiness } from '../../guest-lifecycle/browser-main-window-readiness'
 

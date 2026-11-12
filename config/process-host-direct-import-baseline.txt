@@ -50,7 +50,7 @@ src/main/macos-keychain/generic-password.ts
 src/main/power/macos-system-sleep-assertion.ts
 src/main/macos-permissions/macos-tcc-prompt-watch.ts
 src/main/memory/collector.ts
-src/main/native-chat/wsl-transcript-fs-process-spawn.ts
+src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 src/main/network/macos-system-resolver-health.ts
 src/main/network/macos-tailscale-dns-diagnostic.ts
 src/main/plugins/workers/parent-process/plugin-host-process.ts

@@ -2,7 +2,7 @@ import {
   ownOptionsInclude,
   resumeInvocationFromOptions,
   type StructuredAgentSessionHistory
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export const OPENCODE_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['opencode', 'opencode2'],

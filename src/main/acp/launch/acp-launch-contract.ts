@@ -10,7 +10,7 @@ import type { AcpVisualsSkillLoader } from './acp-visuals-skill'
 import type {
   StructuredAgentSessionHistory,
   StructuredAgentTranscriptImport
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'

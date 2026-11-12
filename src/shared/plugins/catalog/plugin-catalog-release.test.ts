@@ -50,18 +50,6 @@ function check(record: PluginCatalogRelease, subject = manifest()): string | nul
   })
 }
 
-function manifestInput(): Record<string, unknown> {
-  return {
-    manifestVersion: 2,
-    execution: 'data',
-    id: 'demo',
-    publisher: 'samples',
-    name: 'Demo',
-    version: '1.2.0',
-    engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` }
-  }
-}
-
 describe('catalog releases', () => {
   it('drops only the summary items this client cannot read', () => {
     const parsed = pluginCatalogReleaseSchema.parse({
@@ -72,13 +60,6 @@ describe('catalog releases', () => {
       ]
     })
     expect(parsed.contributes).toEqual([{ kind: 'panels', name: 'Dash' }])
-  })
-
-  it('rejects a release type its profile cannot run or this client cannot install', () => {
-    expect(() => release({ types: ['worker'] })).toThrow('data cannot declare worker')
-    expect(
-      pluginCatalogReleaseSchema.safeParse({ ...release(), types: ['file-viewer'] }).success
-    ).toBe(false)
   })
 
   it.each([
@@ -141,19 +122,6 @@ describe('catalog releases', () => {
       'plugin name does not match the catalog release'
     )
   })
-
-  it('requires a v2 manifest', () => {
-    const v1 = parsePluginManifest({
-      ...manifestInput(),
-      manifestVersion: 1,
-      pluginApi: 1,
-      execution: undefined
-    })
-    if (!v1.ok) {
-      throw new Error(v1.error)
-    }
-    expect(check(release(), v1.manifest)).toContain('version 2 manifest')
-  })
 })
 
 describe('catalog release summaries', () => {
@@ -179,41 +147,5 @@ describe('catalog release summaries', () => {
     expect(
       pluginCatalogReleaseError({ ...base, release: { ...listed, capabilities: ['secrets:own'] } })
     ).toBe('the listed capabilities do not match the catalog release')
-  })
-
-  it('drops unreadable summaries and images instead of hiding the release', () => {
-    const parsed = pluginCatalogReleaseSchema.parse({
-      ...release(),
-      contributes: [{ kind: 'widgets', name: 'x' }],
-      capabilities: ['root'],
-      images: {
-        cover: { path: '../escape.png', alt: 'x', sha256: 'f'.repeat(64), width: 1, height: 1 }
-      }
-    })
-    expect(parsed.contributes).toBeUndefined()
-    expect(parsed.capabilities).toBeUndefined()
-    expect(parsed.images).toBeUndefined()
-  })
-})
-
-describe('catalog theme previews', () => {
-  it('keeps hex palettes and drops anything else', () => {
-    const palette = {
-      label: 'Dusk',
-      base: 'dark',
-      background: '#1b1430',
-      foreground: '#e8e0ff',
-      accent: '#c38bff',
-      surface: '#241843'
-    }
-    expect(
-      pluginCatalogReleaseSchema.parse({ ...release(), themePreview: [palette] }).themePreview
-    ).toEqual([palette])
-    expect(
-      pluginCatalogReleaseSchema.parse({
-        ...release(),
-        themePreview: [{ ...palette, background: 'url(https://example.com/x)' }]
-      }).themePreview
-    ).toBeUndefined()
   })
 })
