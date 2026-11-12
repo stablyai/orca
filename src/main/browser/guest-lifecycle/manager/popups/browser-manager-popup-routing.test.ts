@@ -42,6 +42,8 @@ vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
 }))
 
 import { browserManager } from '../browser-manager'
+import { withAgentInputInjection } from '../../../cdp/input/agent-input-injection'
+import { runWithActiveRpcCaller } from '../../../../runtime/rpc/rpc-active-caller'
 import {
   MAX_PAGE_INITIATED_TABS_PER_WINDOW,
   PAGE_INITIATED_TAB_WINDOW_MS
@@ -163,6 +165,73 @@ describe('browserManager', () => {
       origin: 'https://docs.example.com',
       action: 'blocked'
     })
+  })
+
+  it("opens an agent's link behind the user's tab, and the user's own click in front", async () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      ...guestNavigationMethods(),
+      id: 145,
+      isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      setIgnoreMenuShortcuts: vi.fn(),
+      on: guestOnMock,
+      prependListener: vi.fn(),
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { id, isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    const handler: (details: {
+      url: string
+      frameName: string
+      features: string
+      disposition: string
+    }) => unknown = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+    const inputEventHandler = guestOnMock.mock.calls.find(([event]) => event === 'input-event')?.[1]
+    const openLink = (url: string): void => {
+      handler({ url, frameName: '', features: '', disposition: 'foreground-tab' })
+    }
+    const command = runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
+      browserManager.beginAgentCommand('browser-1')
+    )
+
+    await withAgentInputInjection(guest as never, async () => {
+      inputEventHandler({}, { type: 'mouseUp' })
+    })
+    openLink('https://docs.example.com/agent')
+    inputEventHandler({}, { type: 'mouseUp' })
+    openLink('https://docs.example.com/user')
+    command.end()
+
+    expect(
+      rendererSendMock.mock.calls.filter(([channel]) => channel === 'browser:open-link-in-orca-tab')
+    ).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://docs.example.com/agent', activate: false }
+      ],
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://docs.example.com/user' }
+      ]
+    ])
   })
 
   it('shares the page-initiated tab budget across the whole opener popup tree', () => {

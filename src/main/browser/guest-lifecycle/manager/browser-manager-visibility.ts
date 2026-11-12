@@ -61,10 +61,19 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (ownerTabId) {
-      const pageId =
-        this.tabIdByWebContentsId.get(guestWebContentsId) ?? browserPopupPageId(guestWebContentsId)
-      this.pageInputCredit.creditInput(ownerTabId, pageId)
+      this.pageInputCredit.creditInput(ownerTabId, this.pageIdForGuest(guestWebContentsId))
     }
+  }
+
+  /** An agent is driving the page this guest shows (a tab or a popup). */
+  isAgentUsingGuest(guestWebContentsId: number): boolean {
+    return this.isAgentUsingPage(this.pageIdForGuest(guestWebContentsId))
+  }
+
+  private pageIdForGuest(guestWebContentsId: number): string {
+    return (
+      this.tabIdByWebContentsId.get(guestWebContentsId) ?? browserPopupPageId(guestWebContentsId)
+    )
   }
 
   handOverAgentActivity(fromPageId: string, toPageId: string): void {
