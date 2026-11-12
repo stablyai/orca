@@ -140,10 +140,10 @@ export async function readGitReviewBranchSources(
             trackedBranchName = tracked
           }
           if (get('push.default') === 'upstream') {
-            if (!tracked) {
+            if (!merge) {
               throw new Error('Review upstream is unavailable')
             }
-            branchName = tracked
+            branchName = tracked ?? branch
           }
         } else if (
           get('push.default') === 'upstream' &&

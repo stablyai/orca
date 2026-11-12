@@ -57,6 +57,14 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
       branchName: 'feature',
       urls: ['https://gitlab.com/team/repo.git']
     })
+    await git(['config', 'branch.feature.merge', 'refs/heads/published'])
+    await git(['config', 'remote.origin.pushurl', 'https://gitlab.com/me/repo.git'])
+    expect((await snapshot()).get('feature')).toMatchObject({
+      remoteName: 'origin',
+      branchName: 'published',
+      urls: ['https://gitlab.com/me/repo.git']
+    })
+    await git(['config', '--unset', 'remote.origin.pushurl'])
     await git(['config', 'push.default', 'simple'])
     await git(['config', 'branch.feature.merge', 'refs/heads/main'])
     await git(['config', 'remote.pushDefault', 'fork'])
