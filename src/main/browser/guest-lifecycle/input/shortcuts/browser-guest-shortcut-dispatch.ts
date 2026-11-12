@@ -18,6 +18,8 @@ export type IsMobileEmulatorEnabled = () => boolean
 export type GuestShortcutInput = WindowShortcutInput & {
   isAutoRepeat?: boolean
   isComposing?: boolean
+  altGraph?: boolean
+  getModifierState?: (key: string) => boolean
 }
 
 export type GuestShortcutForwardContext = {
@@ -59,10 +61,14 @@ export function forwardGuestShortcutInput(
     action?.type === 'dictationKeyDown' &&
     !textInputOwnsComposition(input) &&
     shouldForwardDictationShortcut?.() === true
-  // Why: text-producing guest chords stay on the page; primary-modifier app chords retain guest precedence.
+  // Why: Ctrl+Alt can be AltGr on Windows/Linux; leave those chords with the page.
+  const mayBeAltGraph =
+    process.platform !== 'darwin' && hasModifier(input, 'control') && hasModifier(input, 'alt')
+  // Why: non-primary guest chords stay on the page; primary app chords retain guest precedence.
   const primaryModifier = process.platform === 'darwin' ? 'meta' : 'control'
   const primaryDoubleTap = process.platform === 'darwin' ? 'Cmd' : 'Ctrl'
   const matchesPlugins =
+    !mayBeAltGraph &&
     (hasModifier(input, primaryModifier) || input.doubleTapModifier === primaryDoubleTap) &&
     !textInputOwnsComposition(input) &&
     keybindingMatchesAction('view.plugins', input, process.platform, keybindings, {

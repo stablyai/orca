@@ -60,6 +60,49 @@ describe('Plugins shortcut from a browser guest', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('leaves an explicit AltGraph chord in the guest', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    if (!descriptor) {
+      throw new Error('Missing process.platform descriptor')
+    }
+    Object.defineProperty(process, 'platform', { ...descriptor, value: 'darwin' })
+    try {
+      const { context, event, send } = fixture()
+      context.getKeybindings = () => ({ 'view.plugins': ['Cmd+Alt+Q'] })
+      const input = { key: 'q', code: 'KeyQ', meta: true, alt: true }
+      expect(forwardGuestShortcutInput(context, event, { ...input, altGraph: true })).toBe(false)
+      expect(
+        forwardGuestShortcutInput(context, event, {
+          ...input,
+          getModifierState: (key) => key === 'AltGraph'
+        })
+      ).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(send).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', descriptor)
+    }
+  })
+
+  it('leaves Electron Ctrl+Alt input to the page on Windows', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    if (!descriptor) {
+      throw new Error('Missing process.platform descriptor')
+    }
+    Object.defineProperty(process, 'platform', { ...descriptor, value: 'win32' })
+    try {
+      const { context, event, send } = fixture()
+      context.getKeybindings = () => ({ 'view.plugins': ['Ctrl+Alt+Q'] })
+      const input = { key: 'q', code: 'KeyQ', control: true, alt: true }
+      expect(forwardGuestShortcutInput(context, event, { ...input, altGraph: true })).toBe(false)
+      expect(forwardGuestShortcutInput(context, event, input)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(send).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', descriptor)
+    }
+  })
+
   it('replays a configured modifier double tap', () => {
     const { context, event, send } = fixture()
     context.getKeybindings = () => ({ 'view.plugins': ['DoubleTap+Mod'] })
