@@ -46,6 +46,11 @@ export type CliAgentLaunch = {
   surface?: AgentLaunchSurface
 }
 
+export type CliAgentLaunchResult = AgentLaunchResult & {
+  operationId?: string
+  reporting: { automatic: false; guideCommand: string }
+}
+
 function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
   if (!flags.has('surface')) {
     return undefined
@@ -123,7 +128,7 @@ export async function callAgentLaunch(
   request: { target: CliAgentLaunchTarget; presentation?: 'focused' | 'background' },
   capabilities: readonly string[],
   rawArgs?: readonly string[]
-): Promise<RuntimeRpcSuccess<AgentLaunchResult & { operationId?: string }>> {
+): Promise<RuntimeRpcSuccess<CliAgentLaunchResult>> {
   const replaySupported = capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY)
   if (launch.operationId && !replaySupported) {
     throw new RuntimeClientError(
@@ -159,10 +164,17 @@ export async function callAgentLaunch(
     client.call<AgentLaunchResult>(operationId ? 'agent.launchReplay' : 'agent.launch', params),
     { operationId, replayed: launch.operationId !== undefined, rawArgs, params }
   )
-  return { ...result, result: { ...result.result, ...(operationId ? { operationId } : {}) } }
+  return {
+    ...result,
+    result: {
+      ...result.result,
+      ...(operationId ? { operationId } : {}),
+      reporting: { automatic: false, guideCommand: 'orca skills get orchestration' }
+    }
+  }
 }
 
-export function formatAgentLaunch(result: AgentLaunchResult & { operationId?: string }): string {
+export function formatAgentLaunch(result: CliAgentLaunchResult): string {
   const { outcome, receipt } = result
   return [
     `agent: ${outcome.kind === 'structured' ? 'chat session' : 'terminal'}`,
@@ -172,6 +184,7 @@ export function formatAgentLaunch(result: AgentLaunchResult & { operationId?: st
     ...(result.operationId ? [`operationId: ${result.operationId}`] : []),
     `why: ${receipt.detail}`,
     ...(result.prompt ? [`prompt: ${result.prompt.outcome}`] : []),
+    `reporting: independent launch; completion is not automatically reported to the caller. For report-back workers, run ${result.reporting.guideCommand}.`,
     ...(result.warning ? [`warning: ${result.warning}`] : [])
   ].join('\n')
 }

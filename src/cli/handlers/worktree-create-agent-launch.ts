@@ -4,7 +4,6 @@ import {
   folderSetupUnsupportedWarning,
   withFolderSetupSupportWarning
 } from './folder-setup-support-warning'
-import type { AgentLaunchResult } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY
@@ -16,6 +15,7 @@ import {
   hasLaunchModelFlags,
   getAgentLaunchCapabilities,
   type CliAgentLaunch,
+  type CliAgentLaunchResult,
   SURFACE_UNSUPPORTED_MESSAGE
 } from '../agent-launch-request'
 import { formatWorktreeShow, printResult } from '../format'
@@ -31,7 +31,7 @@ type WorktreeAgentLaunchResult = Pick<
 > & {
   /** Absent only when the host could not show the worktree it just created. */
   worktree?: RuntimeWorktreeRecord
-  launch: AgentLaunchResult
+  launch: CliAgentLaunchResult
 }
 
 export async function createWorktreeWithAgent(args: {
