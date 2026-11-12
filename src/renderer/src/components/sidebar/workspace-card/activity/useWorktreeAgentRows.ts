@@ -1,5 +1,6 @@
 import { useAppStateView } from '@/store/retained-views/app-state-view'
 import { useCallback, useSyncExternalStore } from 'react'
+import { useStore } from 'zustand'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
 
@@ -12,8 +13,8 @@ export function useAgentPresentation<T>(
   read: (projection: AgentStatusProjection) => T,
   active = true
 ): T {
-  const useViewStore = useAppStateView()
-  const projection = useViewStore((state) => state.agentStatusByPaneKey.projection)
+  const store = useAppStateView()
+  const projection = useStore(store, (state) => state.agentStatusByPaneKey.projection)
   const subscribe = useCallback(
     (listener: () => void) => projection.subscribe(channel, listener),
     [projection, channel]

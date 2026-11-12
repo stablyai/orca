@@ -1,12 +1,14 @@
 import { recordDraft, tabBucketDraft, type RecordDraft } from '@/store/keyed-record-transitions'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 
-export type PresentationRecordKey =
-  | 'ptyIdsByTabId'
-  | 'terminalLayoutsByTabId'
-  | 'runtimePaneTitlesByTabId'
-  | 'tabsByWorktree'
-  | 'unifiedTabsByWorktree'
+const SEAM_PRESENTATION_FIELDS = [
+  'ptyIdsByTabId',
+  'terminalLayoutsByTabId',
+  'runtimePaneTitlesByTabId',
+  'tabsByWorktree',
+  'unifiedTabsByWorktree'
+] as const
+export type PresentationRecordKey = (typeof SEAM_PRESENTATION_FIELDS)[number]
 type PresentationValue<K extends PresentationRecordKey> = NonNullable<
   WebSessionTabsSyncState[K]
 >[string]
@@ -96,13 +98,7 @@ export function publishPresentationRecords(
   if (!drafts) {
     return
   }
-  for (const key of [
-    'ptyIdsByTabId',
-    'terminalLayoutsByTabId',
-    'runtimePaneTitlesByTabId',
-    'tabsByWorktree',
-    'unifiedTabsByWorktree'
-  ] as const) {
+  for (const key of SEAM_PRESENTATION_FIELDS) {
     const draft = drafts[key]
     if (draft && batch.changedRecords.has(key)) {
       Object.assign(patch, { [key]: draft.finish() })

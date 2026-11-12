@@ -2,17 +2,19 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { acceptedAgentStatuses } from './accepted-agent-statuses'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 
+const NOW = 1_800_000_000_000
 const KEY = 'tab:11111111-1111-4111-8111-111111111111'
 afterEach(() => vi.restoreAllMocks())
 
 it('keeps sleeping capacity consistent across wake, aborted writes, capture and reset', () => {
+  vi.spyOn(Date, 'now').mockReturnValue(NOW)
   const store = createTestStore()
   const done = {
     paneKey: KEY,
     state: 'done' as const,
     prompt: 'Finished',
-    updatedAt: Date.now(),
-    stateStartedAt: Date.now(),
+    updatedAt: NOW,
+    stateStartedAt: NOW,
     stateHistory: [],
     paneSleep: { ptyId: 'ended' }
   }

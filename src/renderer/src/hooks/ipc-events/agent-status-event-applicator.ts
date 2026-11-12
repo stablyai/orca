@@ -48,7 +48,7 @@ export function createAgentStatusEventApplicator(
     enqueuePendingAgentStatus
   } = args
   const attributionDiagnostics = new AgentHookAttributionDiagnostics()
-  const applyAgentStatus = (
+  return (
     data: AgentStatusIpcPayload,
     options?: AgentStatusBridge.AgentStatusApplyOptions
   ): AgentStatusBridge.AgentStatusApplyResult => {
@@ -68,7 +68,6 @@ export function createAgentStatusEventApplicator(
       return 'dropped'
     }
     const programStatus = normalizeProgramStatusFacet(data.programStatus) ?? null
-    // Reuse first-match pane ownership without rescanning every worktree per event.
     const routingIndex = options?.batch?.routingIndex ?? createAgentStatusPaneRoutingIndex(store)
     let {
       exists,
@@ -304,6 +303,4 @@ export function createAgentStatusEventApplicator(
     }
     return 'applied'
   }
-
-  return applyAgentStatus
 }
