@@ -1,3 +1,4 @@
+import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
@@ -90,5 +91,16 @@ export function openBackgroundDeclinedTerminal(
     { activateCreatedTabs: false, createNewTerminalForStartup: true }
   )
   mountCreatedWorktreeStartupTabsInBackground(args.worktreeId)
+  const plan = args.request.startupPlan
+  if (tabId && !heldChatMessage && args.request.promptDelivery === 'submit-after-ready' && plan) {
+    if (startup.launchToken) {
+      plan.launchToken = startup.launchToken
+    }
+    void ensureAgentStartupInTerminal({
+      worktreeId: args.worktreeId,
+      primaryTabId: tabId,
+      startup: plan
+    })
+  }
   return { opened: tabId !== null }
 }
