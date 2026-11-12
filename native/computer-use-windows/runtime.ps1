@@ -1273,7 +1273,7 @@ function Set-OrcaElementValue($Element, [string]$Value) {
     $range = $Element.GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern)
     $culture = [Globalization.CultureInfo]::InvariantCulture
     $number = 0.0
-    if (-not [double]::TryParse($Value, [Globalization.NumberStyles]::Float, $culture, [ref]$number)) {
+    if (-not [double]::TryParse($Value, [Globalization.NumberStyles]::Float, $culture, [ref]$number) -or [double]::IsNaN($number)) {
         throw "value must be a number for this range control"
     }
     $minimum = [double]$range.Current.Minimum
