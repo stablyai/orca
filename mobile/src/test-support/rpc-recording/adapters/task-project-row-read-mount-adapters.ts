@@ -172,7 +172,7 @@ export function taskProjectRowReadMountAdapters(
   }
   const rowDetail: MountAdapter = (context) => {
     const useLoading = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-detail-loading')
+      typeof import('../../../tasks/project-board/use-mobile-tasks-project-detail-loading')
     >('use-mobile-tasks-project-detail-loading.tsx').useMobileTasksProjectDetailLoading
     return mountModelHook(modules, context, {
       useHook: (model) => useLoading(model),
@@ -217,7 +217,7 @@ export function taskProjectRowReadMountAdapters(
   }
   const rowMetadataLoad: MountAdapter = (context) => {
     const useLoading = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-metadata-loading')
+      typeof import('../../../tasks/project-board/use-mobile-tasks-project-metadata-loading')
     >('use-mobile-tasks-project-metadata-loading.tsx').useMobileTasksProjectMetadataLoading
     return mountModelHook(modules, context, {
       useHook: (model) => useLoading(model),

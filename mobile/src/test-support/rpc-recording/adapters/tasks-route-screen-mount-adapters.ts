@@ -21,7 +21,7 @@ export function tasksRouteScreenMountAdapters(
   return {
     'tasks.route-repo-list': ({ client, effect }) => {
       const useRoute = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-route-and-item-state')
+        typeof import('../../../tasks/screen-state/use-mobile-tasks-route-and-item-state')
       >(
         'mobile/src/tasks/use-mobile-tasks-route-and-item-state.tsx'
       ).useMobileTasksRouteAndItemState

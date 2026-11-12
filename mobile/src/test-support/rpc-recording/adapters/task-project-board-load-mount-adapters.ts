@@ -163,7 +163,7 @@ export function taskProjectBoardLoadMountAdapters(
   }
   const boardLoad: MountAdapter = (context) => {
     const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-loading-actions')
+      typeof import('../../../tasks/project-board/use-mobile-tasks-project-loading-actions')
     >('use-mobile-tasks-project-loading-actions.tsx').useMobileTasksProjectLoadingActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
@@ -224,7 +224,7 @@ export function taskProjectBoardLoadMountAdapters(
   }
   const repoSlugs: MountAdapter = (context) => {
     const useResolution = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-repository-resolution')
+      typeof import('../../../tasks/project-board/use-mobile-tasks-project-repository-resolution')
     >(
       'use-mobile-tasks-project-repository-resolution.tsx'
     ).useMobileTasksProjectRepositoryResolution

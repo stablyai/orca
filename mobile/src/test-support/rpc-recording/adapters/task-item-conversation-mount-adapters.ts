@@ -1,5 +1,5 @@
-import type * as GithubReplyMergeModule from '../../../tasks/use-mobile-tasks-github-reply-merge-actions'
-import type * as HostedCommentReviewModule from '../../../tasks/use-mobile-tasks-hosted-comment-review-actions'
+import type * as GithubReplyMergeModule from '../../../tasks/item-detail/use-mobile-tasks-github-reply-merge-actions'
+import type * as HostedCommentReviewModule from '../../../tasks/item-detail/use-mobile-tasks-hosted-comment-review-actions'
 import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'

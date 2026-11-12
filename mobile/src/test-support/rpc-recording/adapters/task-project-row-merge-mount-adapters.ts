@@ -203,7 +203,7 @@ export function taskProjectRowMergeMountAdapters(
   }
   const rowFilesMerge: MountAdapter = (context) => {
     const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-file-merge-actions')
+      typeof import('../../../tasks/project-board/use-mobile-tasks-project-file-merge-actions')
     >('use-mobile-tasks-project-file-merge-actions.tsx').useMobileTasksProjectFileMergeActions
     return mountModelHook(modules, context, {
       useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),

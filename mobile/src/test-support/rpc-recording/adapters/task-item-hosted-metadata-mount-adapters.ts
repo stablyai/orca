@@ -1,5 +1,5 @@
-import type * as WorkspaceAndProjectStateModule from '../../../tasks/use-mobile-tasks-workspace-and-project-state'
-import type * as HostedMetadataModule from '../../../tasks/use-mobile-tasks-hosted-metadata-actions'
+import type * as WorkspaceAndProjectStateModule from '../../../tasks/project-board/use-mobile-tasks-workspace-and-project-state'
+import type * as HostedMetadataModule from '../../../tasks/item-detail/use-mobile-tasks-hosted-metadata-actions'
 import { useLayoutEffect, useRef } from 'react'
 import {
   useCommittedOwnerProjection,
@@ -247,9 +247,9 @@ export function taskItemHostedMetadataMountAdapters(
       })
   }
   const linearItem: MountAdapter = (context) => {
-    const useActions = load<typeof import('../../../tasks/use-mobile-tasks-linear-item-actions')>(
-      'use-mobile-tasks-linear-item-actions.tsx'
-    ).useMobileTasksLinearItemActions
+    const useActions = load<
+      typeof import('../../../tasks/providers/linear/use-mobile-tasks-linear-item-actions')
+    >('use-mobile-tasks-linear-item-actions.tsx').useMobileTasksLinearItemActions
     const useWorkspace = load<typeof WorkspaceAndProjectStateModule>(
       'use-mobile-tasks-workspace-and-project-state.tsx'
     ).useMobileTasksWorkspaceAndProjectState

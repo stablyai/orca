@@ -162,7 +162,7 @@ export function taskProjectRowCommentMountAdapters(
   }
   const rowThreads: MountAdapter = (context) => {
     const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-thread-reply-actions')
+      typeof import('../../../tasks/project-board/use-mobile-tasks-project-thread-reply-actions')
     >('use-mobile-tasks-project-thread-reply-actions.tsx').useMobileTasksProjectThreadReplyActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
@@ -200,7 +200,9 @@ export function taskProjectRowCommentMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
         useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-project-workspace-comment-actions')>(
+          load<
+            typeof import('../../../tasks/project-board/use-mobile-tasks-project-workspace-comment-actions')
+          >(
             'use-mobile-tasks-project-workspace-comment-actions.tsx'
           ).useMobileTasksProjectWorkspaceCommentActions(model),
         fixture: {

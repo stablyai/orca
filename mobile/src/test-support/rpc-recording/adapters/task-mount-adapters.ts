@@ -11,7 +11,7 @@ export function taskMountAdapters(
   return {
     'project.update-metadata': (context) => {
       const useMetadata = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-project-metadata-actions')
+        typeof import('../../../tasks/project-board/use-mobile-tasks-project-metadata-actions')
       >(
         'mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx'
       ).useMobileTasksProjectMetadataActions
@@ -68,7 +68,7 @@ export function taskMountAdapters(
     },
     'linear.issue-detail': (context) => {
       const useDetail = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-item-detail-loading')
+        typeof import('../../../tasks/item-detail/use-mobile-tasks-item-detail-loading')
       >('mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx').useMobileTasksItemDetailLoading
       const model = observableModel(context, {
         actionItem: {
@@ -126,7 +126,7 @@ export function taskMountAdapters(
     },
     'settings.task-preferences': (context) => {
       const usePreferences = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-client-settings-actions')
+        typeof import('../../../tasks/screen-state/use-mobile-tasks-client-settings-actions')
       >(
         'mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx'
       ).useMobileTasksClientSettingsActions

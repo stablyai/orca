@@ -1,4 +1,4 @@
-import type * as GitlabGithubStatusModule from '../../../tasks/use-mobile-tasks-gitlab-github-status-actions'
+import type * as GitlabGithubStatusModule from '../../../tasks/item-detail/use-mobile-tasks-gitlab-github-status-actions'
 import type { ActionableTaskItem } from '../../../tasks/mobile-tasks-project-workspace-types'
 import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
@@ -182,7 +182,7 @@ export function taskItemChecksStatusMountAdapters(
   const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const checkFiles: MountAdapter = (context) => {
     const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-github-check-file-actions')
+      typeof import('../../../tasks/item-detail/use-mobile-tasks-github-check-file-actions')
     >('use-mobile-tasks-github-check-file-actions.tsx').useMobileTasksGithubCheckFileActions
     return mountModelHook(modules, context, {
       useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),

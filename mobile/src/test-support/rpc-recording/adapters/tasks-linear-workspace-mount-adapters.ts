@@ -3,7 +3,7 @@ import { performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { ConnectionPresentationModel } from '../../../tasks/use-mobile-tasks-connection-presentation'
+import type { ConnectionPresentationModel } from '../../../tasks/screen-state/use-mobile-tasks-connection-presentation'
 
 // Invoke the render helper’s actual onSelect without mounting BottomDrawer’s native gesture/timing drivers; the scenario declares its workspace.
 export function tasksLinearWorkspaceMountAdapters(
@@ -12,7 +12,7 @@ export function tasksLinearWorkspaceMountAdapters(
   return {
     'linear.select-workspace-picker': ({ client, effect }) => {
       const renderPicker = modules.load<
-        typeof import('../../../tasks/mobile-tasks-filter-pickers')
+        typeof import('../../../tasks/screen/mobile-tasks-filter-pickers')
       >('mobile/src/tasks/mobile-tasks-filter-pickers.tsx').renderMobileTasksLinearWorkspacePicker
       let selectedWorkspaceId: ConnectionPresentationModel['selectedLinearWorkspaceId'] =
         'workspace-a'

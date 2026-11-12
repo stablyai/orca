@@ -3,7 +3,7 @@ import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import { mountFixture } from '../recorder-fixture-shape'
-import type { RuntimeHydrationModel } from '../../../tasks/use-mobile-tasks-runtime-hydration'
+import type { RuntimeHydrationModel } from '../../../tasks/screen-state/use-mobile-tasks-runtime-hydration'
 
 const REPO_ID = 'repo-1'
 
@@ -63,9 +63,9 @@ export function taskListMountAdapters(
   const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
 
   const providerLoad: MountAdapter = (context) => {
-    const useActions = load<typeof import('../../../tasks/use-mobile-tasks-provider-load-actions')>(
-      'use-mobile-tasks-provider-load-actions.tsx'
-    ).useMobileTasksProviderLoadActions
+    const useActions = load<
+      typeof import('../../../tasks/task-list/use-mobile-tasks-provider-load-actions')
+    >('use-mobile-tasks-provider-load-actions.tsx').useMobileTasksProviderLoadActions
     return mountModelHook(context, {
       useHook: (model) => useActions<RuntimeHydrationModel>(model),
       fixture: {
@@ -111,7 +111,7 @@ export function taskListMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
         useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-task-list-loading')>(
+          load<typeof import('../../../tasks/task-list/use-mobile-tasks-task-list-loading')>(
             'use-mobile-tasks-task-list-loading.tsx'
           ).useMobileTasksTaskListLoading(model),
         fixture: {
@@ -173,7 +173,7 @@ export function taskListMountAdapters(
 
   const linearConnect: MountAdapter = (context) => {
     const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-task-pagination-actions')
+      typeof import('../../../tasks/task-list/use-mobile-tasks-task-pagination-actions')
     >('use-mobile-tasks-task-pagination-actions.tsx').useMobileTasksTaskPaginationActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
@@ -217,7 +217,7 @@ export function taskListMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
         useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-task-create-actions')>(
+          load<typeof import('../../../tasks/task-list/use-mobile-tasks-task-create-actions')>(
             'use-mobile-tasks-task-create-actions.tsx'
           ).useMobileTasksTaskCreateActions(model),
         fixture: {

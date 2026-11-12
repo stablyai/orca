@@ -3,7 +3,7 @@ import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
-import type * as TaskDetailLoading from '../../../tasks/use-mobile-tasks-item-detail-loading'
+import type * as TaskDetailLoading from '../../../tasks/item-detail/use-mobile-tasks-item-detail-loading'
 
 const REPO_ID = 'repo-1'
 

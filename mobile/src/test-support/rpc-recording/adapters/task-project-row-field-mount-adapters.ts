@@ -164,7 +164,7 @@ export function taskProjectRowFieldMountAdapters(
   }
   const rowFields: MountAdapter = (context) => {
     const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-metadata-actions')
+      typeof import('../../../tasks/project-board/use-mobile-tasks-project-metadata-actions')
     >('use-mobile-tasks-project-metadata-actions.tsx').useMobileTasksProjectMetadataActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
@@ -198,7 +198,7 @@ export function taskProjectRowFieldMountAdapters(
   }
   const rowReviewChecks: MountAdapter = (context) => {
     const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-review-check-actions')
+      typeof import('../../../tasks/project-board/use-mobile-tasks-project-review-check-actions')
     >('use-mobile-tasks-project-review-check-actions.tsx').useMobileTasksProjectReviewCheckActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),

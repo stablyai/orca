@@ -1,7 +1,7 @@
 import type * as UsePrBotAuthorOverridesModule from '../../../source-control/review/use-pr-bot-author-overrides'
 import type * as UseNewWorkspaceRuntimeContextModule from '../../../components/use-new-workspace-runtime-context'
 import type * as UseHostRepoMetadataModule from '../../../host-screen/use-host-repo-metadata'
-import type * as UseMobileTasksRuntimeHydrationModule from '../../../tasks/use-mobile-tasks-runtime-hydration'
+import type * as UseMobileTasksRuntimeHydrationModule from '../../../tasks/screen-state/use-mobile-tasks-runtime-hydration'
 import { notifyManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type * as HostListQueries from '../../../host-screen/host-list-queries'
 import type * as ResumeMetadata from '../../../agent-history/mobile-agent-history-resume-metadata'

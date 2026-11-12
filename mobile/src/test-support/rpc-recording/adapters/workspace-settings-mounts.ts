@@ -15,7 +15,7 @@ export function workspaceSettingsMounts(
   }): MountAdapter {
     return (context) => {
       const useCreate = modules.load<
-        typeof import('../../../tasks/use-mobile-tasks-workspace-create-actions')
+        typeof import('../../../tasks/workspace-creation/use-mobile-tasks-workspace-create-actions')
       >(
         'mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx'
       ).useMobileTasksWorkspaceCreateActions

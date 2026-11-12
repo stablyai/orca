@@ -329,70 +329,70 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "filePath": "mobile/src/new-workspace/source-selection/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "GitHub",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "filePath": "mobile/src/new-workspace/source-selection/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "GitLab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "filePath": "mobile/src/new-workspace/source-selection/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "Jira",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "filePath": "mobile/src/new-workspace/source-selection/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "Linear",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-create-drawers.tsx",
+    "filePath": "mobile/src/tasks/workspace-creation/mobile-tasks-create-drawers.tsx",
     "kind": "jsx-attribute:placeholder",
     "text": "lin_api_...",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "filePath": "mobile/src/tasks/task-list/mobile-tasks-options.tsx",
     "kind": "object-property:label",
     "text": "GitHub",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "filePath": "mobile/src/tasks/task-list/mobile-tasks-options.tsx",
     "kind": "object-property:label",
     "text": "GitLab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "filePath": "mobile/src/tasks/task-list/mobile-tasks-options.tsx",
     "kind": "object-property:label",
     "text": "Jira",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "filePath": "mobile/src/tasks/task-list/mobile-tasks-options.tsx",
     "kind": "object-property:label",
     "text": "Linear",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-workspace-trust-drawers.tsx",
+    "filePath": "mobile/src/tasks/workspace-creation/mobile-tasks-workspace-trust-drawers.tsx",
     "kind": "jsx-attribute:placeholder",
     "text": "src/renderer packages/ui",
     "dynamic": false,

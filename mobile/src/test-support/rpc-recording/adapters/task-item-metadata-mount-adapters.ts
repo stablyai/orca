@@ -145,7 +145,7 @@ export function taskItemMetadataMountAdapters(
   const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const itemMetadata: MountAdapter = (context) => {
     const useEffects = load<
-      typeof import('../../../tasks/use-mobile-tasks-item-detail-metadata-effects')
+      typeof import('../../../tasks/item-detail/use-mobile-tasks-item-detail-metadata-effects')
     >('use-mobile-tasks-item-detail-metadata-effects.tsx').useMobileTasksItemDetailMetadataEffects
     return mountModelHook(modules, context, {
       useHook: (model) => useEffects(model),
@@ -184,7 +184,7 @@ export function taskItemMetadataMountAdapters(
   }
   const linearTeamContext: MountAdapter = (context) => {
     const useEffects = load<
-      typeof import('../../../tasks/use-mobile-tasks-list-and-detail-effects')
+      typeof import('../../../tasks/task-list/use-mobile-tasks-list-and-detail-effects')
     >('use-mobile-tasks-list-and-detail-effects.tsx').useMobileTasksListAndDetailEffects
     return mountModelHook(modules, context, {
       useHook: (model) => useEffects(model),
