@@ -16,7 +16,7 @@ import {
   recordGhPrimaryRateLimit,
   registerGhRateLimitResetProbe,
   type GhRateLimitBucket
-} from '../git/gh-rate-limit-breaker'
+} from '../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 
 // GET /rate_limit is quota-exempt; caching avoids a subprocess per refresh.
 const RATE_LIMIT_CACHE_TTL_MS = 30_000

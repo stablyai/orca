@@ -1,7 +1,10 @@
 import type { GitBranchChangeEntry } from '../../../shared/git/diff/git-diff-compare-types'
 import { gitChangeListArgs, parseGitChangeList } from '../../../shared/git/diff/git-change-list'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree } from '../git-runtime-options'
+
+import {
+  type GitRuntimeOptions,
+  gitOptionsForWorktree
+} from '../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
 

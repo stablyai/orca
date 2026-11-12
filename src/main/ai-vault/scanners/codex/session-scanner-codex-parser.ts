@@ -1,4 +1,4 @@
-import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
 import {
   isZstdTranscriptPath,
@@ -18,7 +18,7 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
+} from '../../parsing/session-scanner-accumulator'
 import {
   consumeCodexCompletedMessage,
   consumeCodexLegacyEventMessage,
@@ -36,14 +36,10 @@ import {
   addCodexUsage,
   normalizeCodexUsage,
   subtractCodexUsage
-} from '../../session-scanner-token-values'
-import { asRecord } from '../../session-scanner-record-value'
-import {
-  extractGitBranch,
-  extractModel,
-  extractString,
-  parseJsonObject
-} from '../../session-scanner-values'
+} from '../../parsing/session-scanner-token-values'
+import { asRecord, extractGitBranch, extractModel } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
 import {

@@ -3,7 +3,7 @@ export * from './gitlab-test-harness'
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, vi, type Mock } from 'vitest'
 
-import type * as GitUsernameModule from '../../git/git-username'
+import type * as GitUsernameModule from '../../git/repositories/git-username'
 import './repo-creation.spec'
 import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
@@ -364,8 +364,10 @@ vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
-vi.mock('../../git/git-username', async () => {
-  const actual = await vi.importActual<typeof GitUsernameModule>('../../git/git-username')
+vi.mock('../../git/repositories/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>(
+    '../../git/repositories/git-username'
+  )
   return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
 })
 

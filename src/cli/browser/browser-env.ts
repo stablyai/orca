@@ -3,7 +3,7 @@ import type {
   BrowserViewportResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import {
   getOptionalStringFlag,
   getRequiredFiniteNumber,

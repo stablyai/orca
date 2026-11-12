@@ -1,6 +1,6 @@
 import { getOptionalStringFlag, getPresentStringFlag } from '../../flags'
 import { type RuntimeClient, RuntimeClientError } from '../../runtime-client'
-import { getTerminalHandle } from '../../selectors'
+import { getTerminalHandle } from '../../terminals/terminal-selector'
 import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
 import {
   injectedSessionAddress,

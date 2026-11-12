@@ -181,13 +181,11 @@ export type StructuredCodexRpcHarness = {
 export async function openStructuredCodexRpcHarness(
   clientCapabilities: readonly RuntimeCapability[] = DEFAULT_CLIENT_CAPABILITIES,
   /** What the transport stamps, as a paired device's authenticated socket does. */
-  transport: { clientId?: string; pairedDeviceId?: string } = {},
-  /** The local CLI names no client kind; an older host lacks newer methods. */
-  options: { localCli?: boolean; omitMethods?: readonly string[] } = {}
+  transport: { clientId?: string; pairedDeviceId?: string } = {}
 ): Promise<StructuredCodexRpcHarness> {
   const client = {
     clientId: 'device-a',
-    ...(options.localCli ? {} : { clientKind: 'runtime' as const }),
+    clientKind: 'runtime' as const,
     clientCapabilities,
     ...transport
   }
@@ -249,9 +247,7 @@ export async function openStructuredCodexRpcHarness(
   }
   const dispatcher = new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
-    methods: STRUCTURED_AGENT_SESSION_METHODS.filter(
-      (method) => !options.omitMethods?.includes(method.name)
-    )
+    methods: STRUCTURED_AGENT_SESSION_METHODS
   })
   const call: StructuredCodexRpcHarness['call'] = async (method, params) => {
     const replies: RpcResponse[] = []

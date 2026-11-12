@@ -18,18 +18,18 @@ import type {
   PublishedPane,
   PublishedTab,
   PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   applyWorkspaceLayoutRecordChange,
   diffPublishedLayouts,
   indexPublishedLayout,
   type IndexedLayoutRecords,
   type WorkspaceLayoutRecordChange
-} from '../../../../../shared/workspace-layout/workspace-layout-records'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-records'
 import type {
   WorkspaceLayoutChangeFrame,
   WorkspaceLayoutRecordsFrame
-} from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 /** Which tab ids a kind changes: a terminal's take the mirror's surface prefix, others keep theirs. */
 const TAB_ID_RULES: Record<TabContentType, 'terminal' | 'kept'> = {

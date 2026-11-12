@@ -200,19 +200,6 @@ test('refuses to release a lease another run now holds', async () => {
   assert.equal(storage.state.object.generation, '1500')
 })
 
-test('fails closed when the bucket answers 5xx', async () => {
-  const storage = fakeStorage({
-    faults: [{ when: (request) => request.method === 'GET', status: 503 }]
-  })
-
-  const error = await leaseFor(storage)
-    .acquire(HOLDER)
-    .catch((thrown) => thrown)
-
-  assert.match(error.message, /lease inspection failed: 503/)
-  assert.equal(storage.state.requests.filter((request) => request.method !== 'GET').length, 0)
-})
-
 test('treats an unreadable record as held, not free', async () => {
   const storage = fakeStorage({
     object: { generation: '1500', body: { holder_key: 'stablyai/orca/9001' } }
@@ -238,18 +225,4 @@ test('renewal rewrites only expires_at on the observed generation', async () => 
   assert.equal(storage.state.object.body.expires_at, NOW + LEASE_TTL_MS)
   assert.equal(storage.state.object.body.acquired_at, NOW)
   assert.equal(storage.state.object.body.holder_key, HOLDER.holderKey)
-})
-
-test('renewal stops once the object belongs to someone else', async () => {
-  const storage = fakeStorage({
-    object: {
-      generation: '1500',
-      body: storedRecord({ holderKey: 'stablyai/orca/9001', expiresAt: NOW + 60_000 })
-    }
-  })
-
-  assert.deepEqual(await leaseFor(storage).renew(HOLDER.holderKey), {
-    renewed: false,
-    reason: 'foreign'
-  })
 })

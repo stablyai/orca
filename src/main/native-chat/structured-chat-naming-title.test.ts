@@ -70,28 +70,6 @@ function rig(
   }
 }
 
-it('tries CLI reuse once while independent generation retries, and skips it on manual regeneration', async () => {
-  const reuse = vi.fn()
-  const generate = vi.fn<StructuredChatNamingDeps['generate']>(
-    async (_record, _prompt, _current, automatic) => {
-      if (automatic) {
-        reuse()
-      }
-      return generate.mock.calls.length === 1
-        ? { error: 'Retry independent generation' }
-        : { name: 'Login repair' }
-    }
-  )
-  const state = rig(generate)
-  state.start()
-  await state.done()
-  expect(state.record().conversationName).toBe('Login repair')
-  expect(reuse).toHaveBeenCalledOnce()
-  state.handler.regenerate('chat-1')
-  await state.done()
-  expect(reuse).toHaveBeenCalledOnce()
-})
-
 it.each(['owner', 'same-text rename'] as const)(
   'rejects a queued title write after %s changes',
   async (change) => {

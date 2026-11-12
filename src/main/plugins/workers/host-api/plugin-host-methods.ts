@@ -1,3 +1,4 @@
+import { ZodError } from 'zod'
 import { getBoundPluginHostMethod, type PluginHostServices } from './plugin-host-method-bindings'
 import { isQualifiedPluginKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 import { gatePluginHostCall as decidePluginHostCall } from '../../../../shared/plugins/capabilities/plugin-capability-gate'
@@ -9,7 +10,9 @@ import type {
 } from '../../../../shared/plugins/frames/plugin-protocol'
 import type { PluginAuditLog } from '../../plugin-audit-log'
 import {
+  PLUGIN_RUNTIME_FAILURE_CODES_SINCE,
   PluginHostCallError,
+  PluginRuntimeCallError,
   UNSCOPED_PLUGIN_HOST_CALL,
   type PluginHostCallScope
 } from './plugin-host-call-scope'
@@ -95,7 +98,12 @@ export async function executePluginHostCall(
   try {
     // The audit write awaited: approval may have been revoked meanwhile.
     scope.assertActive()
-    const validated = await prepared.execute({ pluginId: input.pluginId, services, scope })
+    const validated = await prepared.execute({
+      pluginId: input.pluginId,
+      surface: input.surface,
+      services,
+      scope
+    })
     if (!validated) {
       await auditMutation('error').catch(() => undefined)
       // Malformed host results must not leak unvalidated shapes through any plugin transport.
@@ -109,8 +117,25 @@ export async function executePluginHostCall(
     return { ok: true, value: validated.value }
   } catch (error) {
     await auditMutation('error').catch(() => undefined)
+    if (error instanceof ZodError) {
+      // A runtime answer Orca's own binding did not expect; its shape is internal.
+      scope.log?.(`${input.method}: unexpected runtime answer: ${error.message}`)
+      return {
+        ok: false,
+        code: 'action_failed',
+        error: `internal: malformed ${input.method} answer`
+      }
+    }
     if (error instanceof PluginHostCallError) {
-      const { code, message, retryAfterMs } = error
+      if (error.detail) {
+        scope.log?.(`${input.method}: ${error.detail}`)
+      }
+      const { message, retryAfterMs } = error
+      const code =
+        error instanceof PluginRuntimeCallError &&
+        bound.spec.since < PLUGIN_RUNTIME_FAILURE_CODES_SINCE
+          ? 'action_failed'
+          : error.code
       return {
         ok: false,
         code,
@@ -133,6 +158,9 @@ function summarizeParams(method: string, params: unknown): string {
       const text = typeof record.text === 'string' ? record.text : ''
       return `terminal=${String(record.terminalId)} bytes=${Buffer.byteLength(text, 'utf8')} enter=${record.enter === true}`
     }
+    case 'terminal.focus':
+    case 'terminal.close':
+      return `terminal=${String(record.terminalId)}`
     case 'notifications.show': {
       const title = typeof record.title === 'string' ? record.title : ''
       return `titleChars=${title.length}`

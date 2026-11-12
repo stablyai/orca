@@ -1,5 +1,5 @@
 import { selectBranchReview } from '../../source-control/branch-review-selection'
-import { extractExecError } from '../../git/exec-error'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { fetchAllGitLabPages } from '../requests/gitlab-paginated-list'
 import { isUnsupportedReviewListFilter } from '../requests/glab-error-classification'
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'

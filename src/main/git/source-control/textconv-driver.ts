@@ -2,8 +2,11 @@ import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
 } from '../../../shared/file-preview/file-preview-kind'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitReadOptionsForWorktree } from '../git-runtime-options'
+
+import {
+  type GitRuntimeOptions,
+  gitReadOptionsForWorktree
+} from '../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 
 /** Image/PDF diffs preview the stored bytes, so a diff driver must not replace them. */

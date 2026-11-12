@@ -4,12 +4,12 @@ const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalExitCode = process.exitCode
 
-vi.mock('../format', () => ({ printResult: vi.fn() }))
-vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
+vi.mock('../command-result-output', () => ({ printResult: vi.fn() }))
+vi.mock('../terminals/terminal-selector', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { okFixture } from '../test-fixtures'
 
 beforeEach(() => {

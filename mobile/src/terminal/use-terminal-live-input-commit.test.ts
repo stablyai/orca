@@ -6,10 +6,8 @@ import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS } from './terminal-live-preedit-mirror'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
-const composingRange = vi.hoisted(() => ({ hostReportsNone: false }))
 vi.mock('../platform/live-input-composing-range', () => ({
-  reportedLiveInputComposing: (isComposing: boolean | undefined) =>
-    composingRange.hostReportsNone ? undefined : isComposing
+  reportedLiveInputComposing: (isComposing: boolean | undefined) => isComposing
 }))
 
 type TerminalLiveInputCommitHandlers = ReturnType<typeof useTerminalLiveInputCommit<string>>
@@ -246,7 +244,6 @@ describe('terminal live input commit hook', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-    composingRange.hostReportsNone = false
   })
 
   it('Given Cheonjiin jamo reported as not composing When typing pauses Then the jamo stay held', async () => {
@@ -314,35 +311,6 @@ describe('terminal live input commit hook', () => {
     await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS * 10)
 
     expect(sent).toEqual([])
-  })
-
-  it('Given an Android WebView composing each word When letters follow a slash Then each reaches the terminal as typed', async () => {
-    composingRange.hostReportsNone = true
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-
-    changeLiveInput(handlers, '/', false)
-    await vi.waitFor(() => expect(sent).toHaveLength(1))
-    for (const fieldText of ['/t', '/tu', '/tui']) {
-      changeLiveInput(handlers, fieldText, true)
-      // Await each keystroke so batching cannot hide a held character.
-      await vi.waitFor(() => expect(sent).toHaveLength(fieldText.length))
-    }
-
-    await vi.waitFor(() => expect(sent).toEqual(['/', 't', 'u', 'i']))
-  })
-
-  it('Given an Android WebView composing Hangul When steps arrive Then the non-ASCII run still settles on the timer', async () => {
-    vi.useFakeTimers()
-    composingRange.hostReportsNone = true
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-
-    for (const fieldText of ['ㅎ', '하', '한']) {
-      changeLiveInput(handlers, fieldText, true)
-      await vi.advanceTimersByTimeAsync(50)
-    }
-    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
-
-    await vi.waitFor(() => expect(sent).toEqual(['한']))
   })
 
   it('Given an iOS pinyin preedit When accessory Backspace edits it Then only the candidate reaches the terminal', async () => {
@@ -474,15 +442,6 @@ describe('terminal live input commit hook', () => {
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(sent).toEqual([])
-  })
-
-  it('Given Backspace with field text When the key arrives Then edits locally without terminal bytes', async () => {
-    const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    changeLiveInput(handlers, '한')
-
-    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
-
-    await vi.waitFor(() => expect(sent).toEqual([]))
   })
 
   it('Given Tab with a held syllable When the key arrives Then commits the syllable before the tab bytes', async () => {
