@@ -17,10 +17,8 @@ import {
 } from '../ownership/folder-workspace-runtime-owner'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import {
-  ensureFolderWorkspaceInitialTerminal,
-  ensureWorktreeHasInitialTerminal
-} from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
+import { ensureFolderWorkspaceInitialTerminal } from '@/lib/workspace/activation/initial-surface/folder-workspace-initial-terminal'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/workspace/activation/worktree-nav-view-history-replay'
 import {

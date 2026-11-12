@@ -1,4 +1,3 @@
-export { ensureFolderWorkspaceInitialTerminal } from './folder-workspace-initial-terminal'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch

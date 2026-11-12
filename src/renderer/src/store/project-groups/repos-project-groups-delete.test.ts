@@ -63,12 +63,13 @@ describe('repos-project-groups-delete', () => {
 
   describe('project group deletion store routing', () => {
     it('uses the remote delete response shape before mutating local state', async () => {
-      runtimeEnvironmentCall.mockResolvedValue({
+      runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => ({
         id: 'rpc-delete-group',
         ok: true,
-        result: { deleted: false },
+        result:
+          args.method === 'folderWorkspace.list' ? { folderWorkspaces: [] } : { deleted: false },
         _meta: { runtimeId: 'runtime-remote' }
-      })
+      }))
       const serverGroup = { ...projectGroup, executionHostId: 'runtime:env-1' as const }
       const groupedRepo = { ...remoteRepo, projectGroupId: projectGroup.id }
       const store = createTestStore()
@@ -85,8 +86,10 @@ describe('repos-project-groups-delete', () => {
       expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'projectGroup.delete',
-        params: { groupId: projectGroup.id },
-        timeoutMs: 15_000
+        params: { groupId: projectGroup.id, archiveDecisions: {} },
+        timeoutMs: 180_000,
+        expectedEnvironmentPairingRevision: undefined,
+        expectedEnvironmentRuntimeId: undefined
       })
       expect(projectGroupsDelete).not.toHaveBeenCalled()
     })

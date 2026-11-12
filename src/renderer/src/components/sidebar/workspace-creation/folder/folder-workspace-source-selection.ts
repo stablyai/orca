@@ -1,10 +1,10 @@
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
-import { shouldApplyWorkspaceSourceAutoName } from '../../../../../../shared/new-workspace/workspace-source'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import {
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
-  getWorkspaceSourceProvider
+  getWorkspaceSourceProvider,
+  shouldApplyWorkspaceSourceAutoName
 } from '../../../../../../shared/new-workspace/workspace-source'
 import '../../../../../../shared/cross-platform-path'
 import '../../../../../../shared/execution-host'
