@@ -93,7 +93,7 @@ export function NativeChatComposerWorkspace({
             type="button"
             variant="ghost"
             size="xs"
-            className="h-5.5 min-w-0 flex-1 justify-start"
+            className="h-5.5 min-w-0 shrink justify-start"
             aria-label={t(
               'components.native-chat.composerWorkspace.copyIdentity',
               'Copy {{value0}}',
