@@ -190,24 +190,42 @@ export function useAiVaultHistoryWorktrees(visible: readonly Worktree[]): readon
   return useAppStore((state) => select(visible, state))
 }
 
+type RecordingHosts = ReadonlySet<ReturnType<typeof normalizeExecutionHostId>>
+
+function createAiVaultHistoryRecordCandidateSelector() {
+  let previousHosts: RecordingHosts | undefined
+  let select: ReturnType<typeof createAiVaultHistoryCandidateSelector> | undefined
+  return (worktrees: readonly Worktree[], state: Inputs, hosts: RecordingHosts) => {
+    if (
+      !select ||
+      (previousHosts !== hosts &&
+        (previousHosts?.size !== hosts.size ||
+          [...hosts].some((host) => !previousHosts?.has(host))))
+    ) {
+      const includes = (row: DetectedWorktree): boolean => {
+        const host = normalizeExecutionHostId(row.hostId)
+        return hosts.size > 0 && (!host || hosts.has(null) || hosts.has(host))
+      }
+      select = createAiVaultHistoryCandidateSelector(
+        (visible, inputs) => aiVaultHistoryRecordWorktrees(visible, inputs, includes),
+        (previous, next) =>
+          includes(previous) === includes(next) &&
+          (!includes(next) || sameDetectedRecordCandidate(previous, next))
+      )
+    }
+    previousHosts = hosts
+    return select(worktrees, state)
+  }
+}
+
 export function useAiVaultHistoryRecordWorktrees(
   worktrees: readonly Worktree[],
   sessions: readonly AiVaultSession[]
 ): readonly Worktree[] {
-  const select = useMemo(() => {
-    const hosts = new Set(
-      sessions.map((session) => normalizeExecutionHostId(session.executionHostId))
-    )
-    const includes = (row: DetectedWorktree): boolean => {
-      const host = normalizeExecutionHostId(row.hostId)
-      return hosts.size > 0 && (!host || hosts.has(null) || hosts.has(host))
-    }
-    return createAiVaultHistoryCandidateSelector(
-      (visible, state) => aiVaultHistoryRecordWorktrees(visible, state, includes),
-      (previous, next) =>
-        includes(previous) === includes(next) &&
-        (!includes(next) || sameDetectedRecordCandidate(previous, next))
-    )
-  }, [sessions])
-  return useAppStore((state) => select(worktrees, state))
+  const hosts = useMemo(
+    () => new Set(sessions.map((session) => normalizeExecutionHostId(session.executionHostId))),
+    [sessions]
+  )
+  const select = useMemo(() => createAiVaultHistoryRecordCandidateSelector(), [])
+  return useAppStore((state) => select(worktrees, state, hosts))
 }

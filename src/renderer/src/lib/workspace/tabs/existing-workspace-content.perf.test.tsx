@@ -198,7 +198,7 @@ it.each([
 
     const entries = Object.entries
     let unrelatedEnumeratedBuckets = 0
-    const enumeration = vi.spyOn(Object, 'entries').mockImplementation((object: object) => {
+    const enumeration = vi.spyOn(Object, 'entries').mockImplementation((object) => {
       const result = entries(object)
       if (isConsumerRead()) {
         for (const [workspaceId] of result) {

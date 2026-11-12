@@ -211,6 +211,7 @@ it.each([100, 1000])(
   'keeps closed-record matching current through stopped metadata and ignores attention/foreign writes among %i rows',
   (count) => {
     let candidateReads = 0
+    let foreignHostReads = 0
     let sessionReads = 0
     let renders = 0
     const records: AiVaultSession[] = Array.from({ length: count }, (_, index) => ({
@@ -224,7 +225,10 @@ it.each([100, 1000])(
       ...bare,
       isBare: false,
       id: `repo-1::/foreign/${index}`,
-      hostId: 'runtime:other' as const,
+      get hostId() {
+        foreignHostReads++
+        return 'runtime:other' as const
+      },
       get path() {
         candidateReads++
         return `/foreign/${index}`
@@ -301,6 +305,37 @@ it.each([100, 1000])(
     expect(candidateReads).toBe(0)
     expect(sessionReads).toBe(0)
     expect(renders).toBe(warmRenders)
+    const added = session('another-record', '/repo/checkout/src', 'Another record')
+    const acceptedRecords = [...records, added]
+    // This batch changes matching output, not which hosts' catalog rows can participate.
+    foreignHostReads = 0
+    mounted.rerender({ records: acceptedRecords })
+    expect(foreignHostReads).toBe(0)
+    expect(mounted.result.current.candidates).toBe(warm.candidates)
+    expect(mounted.result.current.map).not.toBe(warm.map)
+    expect(sessionReads).toBeGreaterThan(0)
+    expect(mounted.result.current.map.get(records[0].id)?.worktreeId).toBe(bareId)
+    expect(mounted.result.current.map.get(added.id)?.worktreeId).toBe(checkout.id)
+
+    const foreignRecord: AiVaultSession = {
+      ...session('foreign-record', '/foreign/1/src', 'Foreign record'),
+      executionHostId: 'runtime:other'
+    }
+    foreignHostReads = 0
+    mounted.rerender({ records: [...acceptedRecords, foreignRecord] })
+    expect(foreignHostReads).toBeGreaterThan(0)
+    expect(mounted.result.current.map.get(foreignRecord.id)?.worktreeId).toBe('repo-1::/foreign/1')
+    const expandedCandidates = mounted.result.current.candidates
+    mounted.rerender({ records: [foreignRecord, ...acceptedRecords] })
+    expect(mounted.result.current.candidates).toBe(expandedCandidates)
+    expect(mounted.result.current.map.get(foreignRecord.id)?.worktreeId).toBe('repo-1::/foreign/1')
+    foreignHostReads = 0
+    mounted.rerender({ records: acceptedRecords })
+    expect(foreignHostReads).toBeGreaterThan(0)
+    expect(mounted.result.current.candidates.some((row) => row.id === 'repo-1::/foreign/1')).toBe(
+      false
+    )
+    expect(mounted.result.current.map.get(added.id)?.worktreeId).toBe(checkout.id)
     const detected = selectDetectedWorktreesByRepo(useAppStore.getState())
     const listing = detected[repo.id]
     const changed = replaceDetectedWorktreeListing(detected, repo.id, {
@@ -316,8 +351,11 @@ it.each([100, 1000])(
           : row
       )
     })
+    const beforeMetadata = mounted.result.current
+    sessionReads = 0
     act(() => useAppStore.setState({ detectedWorktreesByRepo: changed }))
     expect(sessionReads).toBeGreaterThan(0)
+    expect(mounted.result.current.map).not.toBe(beforeMetadata.map)
     expect(mounted.result.current.map).not.toBe(warm.map)
     expect(mounted.result.current.map.get(records[0].id)).toMatchObject({
       worktreeId: bareId,
@@ -335,7 +373,6 @@ it.each([100, 1000])(
       }))
     )
     expect(mounted.result.current.map.get(records[0].id)?.worktreeId).toBeUndefined()
-    const added = session('another-record', '/repo/checkout/src', 'Another record')
     mounted.rerender({ records: [...records, added] })
     expect(mounted.result.current.map.get(added.id)?.worktreeId).toBe(checkout.id)
   }
