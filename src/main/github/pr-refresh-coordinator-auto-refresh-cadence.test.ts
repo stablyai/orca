@@ -135,4 +135,125 @@ describe('pr-refresh-coordinator auto-refresh cadence', () => {
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
   })
+
+  it('drops an error retry that was already queued when the cadence changes to off', async () => {
+    const { policy, coordinator } = await loadCoordinatorWithCadence('default')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'offline',
+      fetchedAt: Date.now()
+    }))
+    coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    policy.setPRAutoRefreshCadence('off')
+    coordinator.retimePRRefreshesForCadence()
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    // Selecting the workspace still reads at once.
+    coordinator.enqueuePRRefresh(makeCandidate(), 'active', 80)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('moves an already queued error retry to the stretched interval when the cadence changes to reduced', async () => {
+    const { policy, coordinator } = await loadCoordinatorWithCadence('default')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'offline',
+      fetchedAt: Date.now()
+    }))
+    coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    policy.setPRAutoRefreshCadence('reduced')
+    coordinator.retimePRRefreshesForCadence()
+    await vi.advanceTimersByTimeAsync(9 * 60_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000 + 1_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('moves an already queued error retry back to the default interval when the cadence returns to default', async () => {
+    const { policy, coordinator } = await loadCoordinatorWithCadence('minimal')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'upstream-error',
+      errorType: 'unknown',
+      message: 'offline',
+      fetchedAt: Date.now()
+    }))
+    coordinator.reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+    policy.setPRAutoRefreshCadence('default')
+    coordinator.retimePRRefreshesForCadence()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000 + 1_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
+
+  describe('foreground exposure under a stretched cadence', () => {
+    const openPR = {
+      cachedHasPR: true,
+      cachedPRState: 'open',
+      cachedChecksStatus: 'pending'
+    } as const
+
+    it('reads the selected PR at once when it comes to the foreground, then follows the stretched interval', async () => {
+      const { coordinator } = await loadCoordinatorWithCadence('reduced')
+      const fetchedAt = Date.now() - 30_000
+      const selected = makeCandidate({ ...openPR, isSelected: true, cachedFetchedAt: fetchedAt })
+      coordinator.reportVisiblePRRefreshCandidates([selected], 1, 1)
+      await vi.advanceTimersByTimeAsync(90_000)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(0)
+
+      // What the renderer sends for the selected workspace when it comes to the foreground: the
+      // data is two minutes old, past Default's minute but well inside Reduced's five.
+      coordinator.enqueuePRRefresh(selected, 'visible', 80, 1)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(5 * 60_000 - 2_000)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(3_000)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('reads a re-shown row whose data is older than the Default interval', async () => {
+      const { coordinator } = await loadCoordinatorWithCadence('reduced')
+      coordinator.reportVisiblePRRefreshCandidates(
+        [makeCandidate({ ...openPR, cachedFetchedAt: Date.now() - 3 * 60_000 })],
+        1,
+        1
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
+      // The timed read after it follows the stretched (10 min) interval.
+      await vi.advanceTimersByTimeAsync(9 * 60_000)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(60_000 + 1_000)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('leaves a re-shown row alone while its data is newer than the Default interval', async () => {
+      const { coordinator } = await loadCoordinatorWithCadence('reduced')
+      coordinator.reportVisiblePRRefreshCandidates(
+        [makeCandidate({ ...openPR, cachedFetchedAt: Date.now() - 60_000 })],
+        1,
+        1
+      )
+      await vi.advanceTimersByTimeAsync(8 * 60_000)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(0)
+      await vi.advanceTimersByTimeAsync(60_000 + 1_000)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    })
+  })
 })

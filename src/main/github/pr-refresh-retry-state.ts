@@ -10,7 +10,10 @@ import {
 import { refreshIntervalForCandidate } from './pr-refresh-candidate-policy'
 
 export class PRRefreshRetryState {
-  private readonly errorBackoff = new Map<string, { failures: number; retryAt: number }>()
+  private readonly errorBackoff = new Map<
+    string,
+    { failures: number; failedAt: number; retryAt: number }
+  >()
   private readonly manualRetryGates = new Map<string, number>()
 
   get errorBackoffCount(): number {
@@ -42,15 +45,37 @@ export class PRRefreshRetryState {
     cadence: PRAutoRefreshCadence = getPRAutoRefreshCadence()
   ): number {
     const failures = (this.errorBackoff.get(key)?.failures ?? 0) + 1
-    if (cadence === 'off') {
-      this.errorBackoff.set(key, { failures, retryAt: Number.POSITIVE_INFINITY })
-      return Number.POSITIVE_INFINITY
-    }
+    return this.planErrorRetry(key, candidate, failures, Date.now(), cadence)
+  }
+
+  /** The retry a failure already earned, planned again under the current cadence from the time
+   *  the read failed: a retry queued before the cadence changed must not keep the old timing.
+   *  null when no failure is recorded for the key. */
+  retimedVisibleErrorRetryAt(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    cadence: PRAutoRefreshCadence = getPRAutoRefreshCadence()
+  ): number | null {
+    const state = this.errorBackoff.get(key)
+    return state
+      ? this.planErrorRetry(key, candidate, state.failures, state.failedAt, cadence)
+      : null
+  }
+
+  private planErrorRetry(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    failures: number,
+    failedAt: number,
+    cadence: PRAutoRefreshCadence
+  ): number {
     const interval = refreshIntervalForCandidate(candidate, cadence)
     const retryAt =
-      Date.now() +
-      Math.max(lookupBackoffDelayMs(failures), Number.isFinite(interval) ? interval : 0)
-    this.errorBackoff.set(key, { failures, retryAt })
+      cadence === 'off'
+        ? Number.POSITIVE_INFINITY
+        : failedAt +
+          Math.max(lookupBackoffDelayMs(failures), Number.isFinite(interval) ? interval : 0)
+    this.errorBackoff.set(key, { failures, failedAt, retryAt })
     return retryAt
   }
 

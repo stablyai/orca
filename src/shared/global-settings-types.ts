@@ -1,4 +1,3 @@
-import type { PRAutoRefreshCadence } from './review-refresh-policy'
 import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
 import type { BrowserProfileScope } from './browser/profiles/browser-profile-scope'
@@ -244,8 +243,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   sourceControlGroupOrder: SourceControlGroupOrder
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
   sourceControlCompareAgainstUpstream: boolean
-  /** Timed PR/review/checks refresh cadence on this host; absent means 'default'. */
-  prAutoRefresh?: PRAutoRefreshCadence
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Hides the Tasks sidebar button (also removes it from keyboard navigation). */

@@ -93,3 +93,24 @@ describe('per-host PR auto-refresh cadence', () => {
     expect(prAutoRefreshCadenceRevision()).toBe(3)
   })
 })
+
+describe('foreground exposure freshness', () => {
+  afterEach(() => {
+    _resetPRAutoRefreshCadencesForTests()
+  })
+
+  it('compares a window return against the Default interval under a stretched cadence', async () => {
+    const { reviewForegroundFreshnessMs } = await import('./review-refresh-policy')
+    expect(reviewForegroundFreshnessMs({ selected: true }, 'default')).toBe(60_000)
+    expect(reviewForegroundFreshnessMs({ selected: true }, 'reduced')).toBe(60_000)
+    expect(reviewForegroundFreshnessMs({ selected: false }, 'minimal')).toBe(120_000)
+  })
+
+  it('keeps the cooldown where no timer runs at all', async () => {
+    const { reviewForegroundFreshnessMs } = await import('./review-refresh-policy')
+    expect(reviewForegroundFreshnessMs({ selected: true }, 'off')).toBe(10_000)
+    expect(
+      reviewForegroundFreshnessMs({ state: 'merged', checksStatus: 'success' }, 'reduced')
+    ).toBe(10_000)
+  })
+})

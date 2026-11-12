@@ -156,4 +156,25 @@ describe('PRAutoRefreshSetting for a paired host', () => {
     await mount('env-a')
     expect(selected()).toBe('Off')
   })
+
+  it('falls back to Default with a clear hint when the host is an older Orca without the setting', async () => {
+    // An older host's settings.get carries no prAutoRefresh key.
+    rpc.callRuntimeRpc.mockImplementation(async () => ({ settings: {} }))
+    await mount('env-a')
+    expect(selected()).toBe('Default')
+    expect(hint()).toBe(
+      'Boston build server runs an older Orca without this setting, so it refreshes at Default. Update Orca on that server to change it.'
+    )
+    for (const button of container.querySelectorAll('button[role="radio"]')) {
+      expect(button.getAttribute('aria-disabled')).toBe('true')
+    }
+    // Nothing is written to a host that would reject the key.
+    await act(async () => option('Off').click())
+    expect(rpc.callRuntimeRpc).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'settings.update',
+      expect.anything(),
+      expect.anything()
+    )
+  })
 })

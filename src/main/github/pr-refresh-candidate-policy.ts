@@ -1,5 +1,6 @@
 import { shouldAcceptMergedFallbackPR } from '../../shared/github/pr-branch-fallback-rule'
 import {
+  REVIEW_REFRESH_COOLDOWN_MS,
   reviewRefreshIntervalMs,
   type PRAutoRefreshCadence
 } from '../../shared/review-refresh-policy'
@@ -193,6 +194,27 @@ export function refreshIntervalForCandidate(
       cadence
     ) ?? Number.POSITIVE_INFINITY
   )
+}
+
+/** How old a candidate's data must be for a foreground exposure to read it now instead of waiting
+ *  for its timer, or null when the exposure earns no early read. A row shown again whose timer is
+ *  stopped ("off", settled) reads after the cooldown. Under a stretched cadence a row shown again,
+ *  or the selected PR on window return, reads once the Default interval has passed: "reduced" and
+ *  "minimal" slow the timers, not the user's return. */
+export function foregroundExposureAgeMs(
+  candidate: GitHubPRRefreshCandidate,
+  reason: GitHubPRRefreshReason,
+  priority: number,
+  reexposed: boolean
+): number | null {
+  const interval = refreshIntervalForCandidate(candidate)
+  if (!Number.isFinite(interval)) {
+    return reexposed ? REVIEW_REFRESH_COOLDOWN_MS : null
+  }
+  const foreground =
+    reexposed || (reason === 'visible' && candidate.isSelected === true && priority >= 80)
+  const defaultInterval = refreshIntervalForCandidate(candidate, 'default')
+  return foreground && defaultInterval < interval ? defaultInterval : null
 }
 
 function hasResolvedMergeStateStatus(status: string | null | undefined): boolean {

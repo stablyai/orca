@@ -175,4 +175,41 @@ describe('checks detail timer follows PR auto-refresh cadence changes while moun
     await focusWindow()
     expect(fetchChecks).toHaveBeenCalledTimes(1)
   })
+
+  it('reads at once when the window returns under reduced, then follows the stretched interval', async () => {
+    setPRAutoRefreshCadence('reduced')
+    const { fetchChecks } = mount()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(fetchChecks).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * 60_000)
+    })
+    expect(fetchChecks).toHaveBeenCalledTimes(1)
+    await focusWindow()
+    expect(fetchChecks).toHaveBeenCalledTimes(2)
+    // The return is the user looking: the host must not pace it.
+    expect(fetchChecks).toHaveBeenLastCalledWith({ force: false })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000 - 2_000)
+    })
+    expect(fetchChecks).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(fetchChecks).toHaveBeenCalledTimes(3)
+    expect(fetchChecks).toHaveBeenLastCalledWith({ force: false, background: true })
+  })
+
+  it('does not re-read on a return under reduced within the Default interval', async () => {
+    setPRAutoRefreshCadence('reduced')
+    const { fetchChecks } = mount()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000)
+    })
+    await focusWindow()
+    expect(fetchChecks).toHaveBeenCalledTimes(1)
+  })
 })

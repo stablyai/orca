@@ -74,3 +74,17 @@ export const remoteReading = defineFixture({
     <PRAutoRefreshControl cadence={null} onChange={() => {}} remoteHostName="Boston build server" />
   )
 })
+
+/** The paired server is an older Orca that has no such setting: shown as Default, not changeable,
+ *  with the reason in place of the cadence hint and no scope note. */
+export const remoteOlderHost = defineFixture({
+  width,
+  render: () => (
+    <PRAutoRefreshControl
+      cadence={null}
+      unsupported
+      onChange={() => {}}
+      remoteHostName="Boston build server"
+    />
+  )
+})

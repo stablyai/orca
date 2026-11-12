@@ -8918,6 +8918,7 @@
           "prAutoRefreshHintOff": "{{mode}}: no timed refresh. Orca still reads when you select a workspace, push, return to the window or refresh manually.",
           "prAutoRefreshHostNote": "Applies to {{host}} and every client connected to it.",
           "prAutoRefreshReading": "Reading the current setting from {{host}}…",
+          "prAutoRefreshUnsupportedHost": "{{host}} runs an older Orca without this setting, so it refreshes at Default. Update Orca on that server to change it.",
           "prAutoRefreshUnknownHost": "the selected server"
         },
         "HiddenExperimentalGroup": {

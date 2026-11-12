@@ -21,6 +21,7 @@ import {
 import {
   _resetHostPRAutoRefreshCadenceGenerationsForTests,
   forgetHostPRAutoRefreshCadence,
+  hostLacksPRAutoRefresh,
   rememberHostPRAutoRefreshCadence
 } from './remote-host-pr-auto-refresh-cadence'
 
@@ -188,5 +189,27 @@ describe('remote host PR auto-refresh cadence sync', () => {
     finish({ prAutoRefresh: 'minimal' })
     await read
     expect(getPRAutoRefreshCadenceForHost('env-7')).toBe('default')
+  })
+
+  it('marks a host that answers without the setting (an older Orca) as lacking it, scheduled as Default', async () => {
+    // An older host's settings.get has no prAutoRefresh key at all.
+    const answers: { prAutoRefresh?: string }[] = [{}, { prAutoRefresh: 'reduced' }]
+    const reader = vi.fn(async () => answers.shift() ?? {})
+    await readHostPRAutoRefreshCadence('env-old', reader)
+    expect(hostLacksPRAutoRefresh('env-old')).toBe(true)
+    expect(getPRAutoRefreshCadenceForHost('env-old')).toBe('default')
+
+    // The host was updated and answers with the setting on the next contact.
+    await readHostPRAutoRefreshCadence('env-old', reader)
+    expect(hostLacksPRAutoRefresh('env-old')).toBe(false)
+    expect(getPRAutoRefreshCadenceForHost('env-old')).toBe('reduced')
+  })
+
+  it('does not call a host that has not answered, or whose read failed, an older host', async () => {
+    expect(hostLacksPRAutoRefresh('env-new')).toBe(false)
+    await readHostPRAutoRefreshCadence('env-new', async () => {
+      throw new Error('offline')
+    })
+    expect(hostLacksPRAutoRefresh('env-new')).toBe(false)
   })
 })

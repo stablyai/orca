@@ -80,6 +80,14 @@ export function useChecksDetailTimer({
         cadence
       )
     }
+    // Under a stretched cadence the window coming back still reads checks older than Default's
+    // delay: "reduced" and "minimal" slow the timer, not the user's return.
+    const returnReadDue = (now: number): boolean => {
+      const cadence = ownerCadence()
+      const defaultDelay =
+        cadence === 'reduced' || cadence === 'minimal' ? policyDelay('default') : null
+      return defaultDelay !== null && now - lastAttemptAtRef.current >= defaultDelay
+    }
     const cleanup = installWindowVisibilityTimeoutPoller({
       run: async ({ trigger }) => {
         if (inFlightRef.current?.identity === requestIdentity) {
@@ -89,11 +97,12 @@ export function useChecksDetailTimer({
         const nextAttemptAt = nextAttemptAtRef.current
         if (
           now - lastAttemptAtRef.current < REVIEW_REFRESH_COOLDOWN_MS ||
-          (Number.isFinite(nextAttemptAt)
-            ? now < nextAttemptAt
-            : nextAttemptAt === Infinity &&
-              !forceNextFetchRef.current &&
-              now - lastAttemptAtRef.current < 60_000)
+          (!(trigger === 'visibility' && returnReadDue(now)) &&
+            (Number.isFinite(nextAttemptAt)
+              ? now < nextAttemptAt
+              : nextAttemptAt === Infinity &&
+                !forceNextFetchRef.current &&
+                now - lastAttemptAtRef.current < 60_000))
         ) {
           return
         }

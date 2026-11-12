@@ -9,6 +9,9 @@ export type VisibleHostedReviewRefreshTarget = {
   aliasRevisions?: ReadonlyMap<string, string>
   fetchedAt: number | null
   intervalMs: number | null
+  /** The interval under the Default cadence. When `intervalMs` is stretched beyond it, a window
+   *  return still reads data older than this: the cadence slows timers, not the user's return. */
+  foregroundIntervalMs?: number | null
   selected: boolean
   /** The owning host's auto-refresh cadence; "off" also stops timed retries after a failure. */
   cadence?: PRAutoRefreshCadence
@@ -265,6 +268,16 @@ export function createVisibleHostedReviewRefreshScheduler() {
           if (
             entry.target.intervalMs === null &&
             now - (entry.target.fetchedAt ?? -Infinity) >= 60_000
+          ) {
+            entry.discovery = true
+          }
+          const returnMs = entry.target.foregroundIntervalMs ?? null
+          if (
+            returnMs !== null &&
+            entry.target.intervalMs !== null &&
+            returnMs < entry.target.intervalMs &&
+            entry.retryAt === null &&
+            now - Math.max(entry.target.fetchedAt ?? -Infinity, entry.lastAttemptAt) >= returnMs
           ) {
             entry.discovery = true
           }

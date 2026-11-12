@@ -6,6 +6,7 @@ import type { AppState } from '../../types'
 import {
   forgetHostPRAutoRefreshCadence,
   hostPRAutoRefreshCadenceGeneration,
+  noteHostLacksPRAutoRefresh,
   rememberHostPRAutoRefreshCadence
 } from './remote-host-pr-auto-refresh-cadence'
 
@@ -40,7 +41,8 @@ const inFlight = new Map<string, HostRead>()
 /**
  * Ask the host for its setting. One read per host at a time; a request made while one is pending
  * (the host's `settingsChanged`, regained contact) marks it dirty: its answer is not remembered, and
- * one trailing read follows so the change is never lost. A failed read keeps the last known value.
+ * one trailing read follows so the change is never lost. A failed read keeps the last known value;
+ * an answer without the setting marks the host as an older Orca that lacks it.
  * An answer is also dropped when a newer authoritative value landed meanwhile (a write from the
  * Settings control, the host being forgotten), so a slow read never reverts it.
  */
@@ -62,7 +64,12 @@ function startHostRead(environmentId: string, reader: Reader): HostRead {
   read.settled = reader(environmentId)
     .then((settings) => {
       if (!read.dirty && hostPRAutoRefreshCadenceGeneration(environmentId) === generation) {
-        rememberHostPRAutoRefreshCadence(environmentId, settings.prAutoRefresh)
+        // A host that knows the setting always sends it; an answer without it is an older Orca.
+        if (settings.prAutoRefresh === undefined) {
+          noteHostLacksPRAutoRefresh(environmentId)
+        } else {
+          rememberHostPRAutoRefreshCadence(environmentId, settings.prAutoRefresh)
+        }
       }
     })
     .catch((error: unknown) => {

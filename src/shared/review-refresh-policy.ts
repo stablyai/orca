@@ -9,6 +9,12 @@ export const CLOSED_REVIEW_REFRESH_INTERVAL_MS = 15 * 60_000
 export const PR_AUTO_REFRESH_CADENCES = ['default', 'reduced', 'minimal', 'off'] as const
 export type PRAutoRefreshCadence = (typeof PR_AUTO_REFRESH_CADENCES)[number]
 
+/** The global-settings group this feature owns, composed into GlobalSettings. */
+export type PRAutoRefreshSettings = {
+  /** Timed PR/review/checks refresh cadence on this host; absent means 'default'. */
+  prAutoRefresh?: PRAutoRefreshCadence
+}
+
 const CADENCE_INTERVAL_FACTOR: Record<Exclude<PRAutoRefreshCadence, 'off'>, number> = {
   default: 1,
   reduced: 5,
@@ -152,4 +158,18 @@ export function reviewRefreshIntervalMs(
   cadence: PRAutoRefreshCadence = processCadence
 ): number | null {
   return scaleReviewRefreshInterval(defaultReviewRefreshIntervalMs(input), cadence)
+}
+
+/** How old data must be before a foreground exposure (the window coming back, a row shown again)
+ *  reads it again. A stretched cadence slows the timers, not the user's return, so this is the
+ *  Default interval in "reduced" and "minimal"; where no timer runs at all ("off", settled data)
+ *  only the cooldown applies, as before. */
+export function reviewForegroundFreshnessMs(
+  input: Parameters<typeof reviewRefreshIntervalMs>[0],
+  cadence: PRAutoRefreshCadence = processCadence
+): number {
+  if (scaleReviewRefreshInterval(defaultReviewRefreshIntervalMs(input), cadence) === null) {
+    return REVIEW_REFRESH_COOLDOWN_MS
+  }
+  return defaultReviewRefreshIntervalMs(input) ?? REVIEW_REFRESH_COOLDOWN_MS
 }

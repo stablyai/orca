@@ -9,9 +9,9 @@ import {
   bypassesFreshnessDelay,
   freshRetryAt,
   POST_PUSH_DELAY_MS,
+  foregroundExposureAgeMs,
   refreshKey,
   sameAliasRequestIdentity,
-  refreshIntervalForCandidate,
   shouldSkipFresh
 } from './pr-refresh-candidate-policy'
 
@@ -26,6 +26,8 @@ export type PRRefreshQueueEntry = {
   bypassBackgroundBudget?: boolean
   activeDelayNotified?: boolean
   followUp?: boolean
+  /** A timed retry of a failed visible read; re-planned when the auto-refresh cadence changes. */
+  errorRetry?: boolean
   windowId?: number
   /** A watch job: the PR's current head, or with `headSha` one earlier head's checks. */
   watch?: { prKey: string; headSha?: string }
@@ -176,12 +178,11 @@ export class PRRefreshQueue {
     const key = refreshKey(candidate)
     const existing = this.entries.get(key)
     const freshDueAt = shouldSkipFresh(candidate, reason) ? freshRetryAt(candidate) : null
-    const stopped = !Number.isFinite(refreshIntervalForCandidate(candidate))
+    const exposureAgeMs = foregroundExposureAgeMs(candidate, reason, priority, reexposed)
     const exposureDueAt =
-      reexposed &&
-      stopped &&
+      exposureAgeMs !== null &&
       candidate.cachedFetchedAt != null &&
-      Date.now() - candidate.cachedFetchedAt >= REVIEW_REFRESH_COOLDOWN_MS
+      Date.now() - candidate.cachedFetchedAt >= exposureAgeMs
         ? Date.now()
         : null
     const dueAt = Math.max(
@@ -209,7 +210,7 @@ export class PRRefreshQueue {
     setLiveAlias(existing.aliases, alias)
     if (
       reason === 'visible' &&
-      !shouldSkipFresh(candidate, reason) &&
+      (exposureDueAt !== null || !shouldSkipFresh(candidate, reason)) &&
       existing.reason === 'visible'
     ) {
       existing.dueAt = Math.min(existing.dueAt, dueAt)

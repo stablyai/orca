@@ -49,9 +49,7 @@ export class PRRefreshQueueDrainer {
   }
 
   schedule(delay = 0): void {
-    if (this.timer) {
-      clearTimeout(this.timer)
-    }
+    clearTimeout(this.timer ?? undefined)
     this.timer = setTimeout(() => {
       this.timer = null
       // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
@@ -90,6 +88,7 @@ export class PRRefreshQueueDrainer {
         priority,
         dueAt: retryAt,
         queuedAt: this.queue.nextOrder(),
+        errorRetry: true,
         windowId
       })
       this.schedule(retryAt - Date.now())

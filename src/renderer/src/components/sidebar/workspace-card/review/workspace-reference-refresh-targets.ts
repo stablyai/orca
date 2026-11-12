@@ -66,21 +66,20 @@ export function getWorkspaceReferenceRefreshTargets(
       }
       const entry = state.hostedReviewCache[key]
       const review = matchWorkspaceReferenceReview(item, entry?.data) ? entry?.data : null
+      const intervalInput = {
+        state: review?.state,
+        checksStatus: review?.status,
+        hasReview: review ? true : null,
+        selected
+      }
       targets.set(key, {
         key,
         revision: key,
         selected,
         fetchedAt: entry?.fetchedAt ?? null,
         cadence,
-        intervalMs: reviewRefreshIntervalMs(
-          {
-            state: review?.state,
-            checksStatus: review?.status,
-            hasReview: review ? true : null,
-            selected
-          },
-          cadence
-        ),
+        intervalMs: reviewRefreshIntervalMs(intervalInput, cadence),
+        foregroundIntervalMs: reviewRefreshIntervalMs(intervalInput, 'default'),
         refresh: (_force, signal) =>
           withTimeout(
             readWorkspaceReferenceDetails(

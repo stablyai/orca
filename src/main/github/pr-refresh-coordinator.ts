@@ -17,6 +17,7 @@ import {
   PRRefreshEventPublisher,
   type PRRefreshOutcomeObserver
 } from './pr-refresh-event-publisher'
+import { retimeQueuedErrorRetries } from './pr-refresh-error-retry-retiming'
 import { PRRefreshPacing } from './pr-refresh-pacing'
 import { PRRefreshQueue } from './pr-refresh-queue'
 import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
@@ -98,9 +99,11 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
   }
 }
 
-/** A cadence change moves queued visible follow-ups to the new interval; "off" drops them. */
+/** A cadence change moves queued visible follow-ups and error retries to the new interval; "off"
+ *  drops them. */
 export function retimePRRefreshesForCadence(): void {
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
+  retimeQueuedErrorRetries(queue, retry, (key, candidate) => visibility.candidate(key, candidate))
   drainer.schedule()
 }
 

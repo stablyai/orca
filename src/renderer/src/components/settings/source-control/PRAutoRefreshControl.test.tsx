@@ -104,4 +104,29 @@ describe('PRAutoRefreshControl', () => {
       expect(button.getAttribute('aria-disabled')).toBe('true')
     }
   })
+
+  it('shows an older host as Default, disabled, with the reason and no scope note', async () => {
+    const onChange = vi.fn()
+    await act(async () =>
+      root.render(
+        <PRAutoRefreshControl
+          cadence={null}
+          unsupported
+          onChange={onChange}
+          remoteHostName="Boston build server"
+        />
+      )
+    )
+    expect(text('pr-auto-refresh-hint')).toBe(
+      'Boston build server runs an older Orca without this setting, so it refreshes at Default. Update Orca on that server to change it.'
+    )
+    expect(text('pr-auto-refresh-host-note')).toBeNull()
+    const radios = Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="radio"]'))
+    expect(radios.find((b) => b.getAttribute('aria-checked') === 'true')?.textContent).toBe(
+      'Default'
+    )
+    for (const button of radios) {
+      expect(button.getAttribute('aria-disabled')).toBe('true')
+    }
+  })
 })

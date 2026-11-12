@@ -13,6 +13,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import {
   rememberHostPRAutoRefreshCadence,
+  useHostLacksPRAutoRefresh,
   useHostPRAutoRefreshCadence
 } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
@@ -30,10 +31,13 @@ function usePRAutoRefreshHostCadence(
   t: Translate
 ): {
   cadence: PRAutoRefreshCadence | null
+  /** The paired host is an older Orca without the setting: it polls at Default and cannot be set. */
+  unsupported: boolean
   update: (cadence: PRAutoRefreshCadence) => Promise<void>
 } {
   const environmentId = runtimeTargetEnvironmentId(target)
   const remote = useHostPRAutoRefreshCadence(environmentId)
+  const unsupported = useHostLacksPRAutoRefresh(environmentId)
 
   useEffect(() => {
     if (!environmentId) {
@@ -47,6 +51,7 @@ function usePRAutoRefreshHostCadence(
   if (!environmentId) {
     return {
       cadence: normalizePRAutoRefreshCadence(localSettings.prAutoRefresh),
+      unsupported: false,
       update: async (cadence) => {
         await updateLocalSettings({ prAutoRefresh: cadence })
       }
@@ -54,6 +59,7 @@ function usePRAutoRefreshHostCadence(
   }
   return {
     cadence: remote,
+    unsupported,
     update: async (cadence) => {
       try {
         const result = await callRuntimeRpc<{ settings: Partial<GlobalSettings> }>(
@@ -95,7 +101,7 @@ export function PRAutoRefreshSetting({
         t('auto.components.settings.GitPane.prAutoRefreshUnknownHost', 'the selected server'))
       : null
   )
-  const { cadence, update } = usePRAutoRefreshHostCadence(
+  const { cadence, unsupported, update } = usePRAutoRefreshHostCadence(
     hostScope.target,
     settings,
     updateSettings,
@@ -106,6 +112,7 @@ export function PRAutoRefreshSetting({
       cadence={cadence}
       onChange={(next) => void update(next)}
       remoteHostName={remoteHostName}
+      unsupported={unsupported}
       disabled={!hostScope.available}
     />
   )

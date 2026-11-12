@@ -22,6 +22,8 @@ export type PRAutoRefreshControlProps = {
   onChange: (cadence: PRAutoRefreshCadence) => void
   /** The paired host whose timers this changes; null when it is this device. */
   remoteHostName: string | null
+  /** The paired host is an older Orca without this setting: shown as Default and not changeable. */
+  unsupported?: boolean
   disabled?: boolean
 }
 
@@ -31,6 +33,7 @@ export function PRAutoRefreshControl({
   cadence,
   onChange,
   remoteHostName,
+  unsupported = false,
   disabled = false
 }: PRAutoRefreshControlProps): React.JSX.Element {
   const t = useTranslate()
@@ -38,9 +41,20 @@ export function PRAutoRefreshControl({
   const description = getPRAutoRefreshDescription(t)
   const hintId = useId()
   const hostNoteId = useId()
-  const unavailable = disabled || cadence === null
-  const hint =
-    cadence === null
+  const unavailable = disabled || unsupported || cadence === null
+  // An older host has nothing this setting applies to, so the scope note would mislead.
+  const hostNote = remoteHostName && !unsupported ? remoteHostName : null
+  const hint = unsupported
+    ? t(
+        'auto.components.settings.GitPane.prAutoRefreshUnsupportedHost',
+        '{{host}} runs an older Orca without this setting, so it refreshes at Default. Update Orca on that server to change it.',
+        {
+          host:
+            remoteHostName ??
+            t('auto.components.settings.GitPane.prAutoRefreshUnknownHost', 'the selected server')
+        }
+      )
+    : cadence === null
       ? remoteHostName
         ? t(
             'auto.components.settings.GitPane.prAutoRefreshReading',
@@ -65,12 +79,12 @@ export function PRAutoRefreshControl({
             <SettingsSegmentedControl<PRAutoRefreshCadence>
               value={cadence ?? 'default'}
               onChange={(next) => {
-                if (cadence !== null && next !== cadence) {
+                if (!unsupported && cadence !== null && next !== cadence) {
                   onChange(next)
                 }
               }}
               ariaLabel={title}
-              ariaDescribedBy={cn(hint && hintId, remoteHostName && hostNoteId) || undefined}
+              ariaDescribedBy={cn(hint && hintId, hostNote && hostNoteId) || undefined}
               size="sm"
               options={PR_AUTO_REFRESH_CADENCES.map((value) => ({
                 value,
@@ -88,13 +102,13 @@ export function PRAutoRefreshControl({
                 {hint}
               </p>
             ) : null}
-            {remoteHostName ? (
+            {hostNote ? (
               <p
                 id={hostNoteId}
                 className="select-text text-balance text-xs text-foreground/80"
                 data-testid="pr-auto-refresh-host-note"
               >
-                {getPRAutoRefreshHostNote(remoteHostName, t)}
+                {getPRAutoRefreshHostNote(hostNote, t)}
               </p>
             ) : null}
           </div>

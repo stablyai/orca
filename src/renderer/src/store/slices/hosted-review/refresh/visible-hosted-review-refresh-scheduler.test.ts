@@ -185,4 +185,47 @@ describe('visible hosted review scheduler', () => {
       expect(refresh).toHaveBeenCalledTimes(1)
     })
   })
+
+  describe('window return under a stretched cadence', () => {
+    function reducedRow(calls: boolean[]) {
+      return target({
+        fetchedAt: Date.now(),
+        intervalMs: 5 * 60_000,
+        foregroundIntervalMs: 60_000,
+        cadence: 'reduced',
+        selected: true,
+        refresh: vi.fn(async (_force?: boolean, _signal?: AbortSignal, foreground = false) => {
+          calls.push(foreground)
+          return true
+        })
+      })
+    }
+
+    it('reads at once as a foreground read, then waits the stretched interval', async () => {
+      const calls: boolean[] = []
+      const scheduler = setup([reducedRow(calls)])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(calls).toEqual([])
+      scheduler.setVisible(false)
+      await vi.advanceTimersByTimeAsync(2 * 60_000)
+      scheduler.setVisible(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(calls).toEqual([true])
+
+      await vi.advanceTimersByTimeAsync(5 * 60_000 - 1_000)
+      expect(calls).toEqual([true])
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(calls).toEqual([true, false])
+    })
+
+    it('does not read on a return sooner than the Default interval', async () => {
+      const calls: boolean[] = []
+      const scheduler = setup([reducedRow(calls)])
+      scheduler.setVisible(false)
+      await vi.advanceTimersByTimeAsync(30_000)
+      scheduler.setVisible(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(calls).toEqual([])
+    })
+  })
 })

@@ -9,8 +9,7 @@ import { shouldCoordinateVisibleGitHubReview } from '../store/slices/hosted-revi
 import { getPRRefreshRuntimeRepoTarget } from '../store/github/repositories/repository-routing'
 import {
   prAutoRefreshCadenceRevision,
-  reviewRefreshIntervalMs,
-  REVIEW_REFRESH_COOLDOWN_MS,
+  reviewForegroundFreshnessMs,
   subscribePRAutoRefreshCadence
 } from '../../../shared/review-refresh-policy'
 import {
@@ -149,13 +148,13 @@ export function refreshForegroundVisibleReview(state: AppState): void {
   ) {
     return
   }
-  const interval =
-    reviewRefreshIntervalMs({
-      state: candidate.cachedPRState,
-      checksStatus: candidate.cachedChecksStatus,
-      hasReview: candidate.cachedHasPR,
-      selected: true
-    }) ?? REVIEW_REFRESH_COOLDOWN_MS
+  // Window return is the user looking: a stretched cadence still reads data older than Default's.
+  const interval = reviewForegroundFreshnessMs({
+    state: candidate.cachedPRState,
+    checksStatus: candidate.cachedChecksStatus,
+    hasReview: candidate.cachedHasPR,
+    selected: true
+  })
   if (
     candidate.cachedFetchedAt == null ||
     Date.now() - candidate.cachedFetchedAt >= interval ||
