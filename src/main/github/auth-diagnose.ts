@@ -1,5 +1,5 @@
 // Environment tokens override keyring credentials and cannot be refreshed through gh auth refresh.
-import { ghExecFileAsync } from '../git/runner'
+import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import type { GhAuthDiagnostic, GhAuthAccount } from '../../shared/github/auth-types'
 
 // ProjectV2 and surrounding repository/organization queries require these scopes.

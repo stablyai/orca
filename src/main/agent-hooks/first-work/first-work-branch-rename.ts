@@ -12,16 +12,16 @@ import {
 import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/source-control/ai/generation/commit-message-host-key'
 import { computeBranchName, getConfiguredBranchPrefix } from '../../ipc/worktree-branch-name'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { resolveLocalGitUsername } from '../../git/git-username'
+import { resolveLocalGitUsername } from '../../git/repositories/git-username'
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { withCheckoutLock } from '../../git/branch-switch'
+import { withCheckoutLock } from '../../git/worktrees/checkout/branch-switch'
 import {
   probeBranchUpstream,
   renameCurrentBranch,
   resolveUniqueBranchName,
   type GitExec
-} from '../../git/branch-rename'
+} from '../../git/worktrees/checkout/branch-rename'
 import {
   generateBranchNameFromContext,
   resolveTextGenerationParams

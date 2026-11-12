@@ -42,6 +42,7 @@ vi.mock('../popups/presentation/popup-origin-bar-window', () => ({
 import { browserManager } from './browser-manager'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import {
+  guestNavigationMethods,
   rendererWebContentsId,
   resetBrowserManagerMocks,
   resetBrowserManagerState
@@ -84,6 +85,7 @@ describe('browserManager', () => {
   it.each<string>(['acquire'])('cleans capture ownership after renderer %s fails', (failure) => {
     vi.useFakeTimers()
     const guest = {
+      ...guestNavigationMethods(),
       id: 1711,
       isDestroyed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
@@ -141,6 +143,7 @@ describe('browserManager', () => {
   it('does not let a destroyed guest and renderer release a replacement page hold', () => {
     vi.useFakeTimers()
     const makeGuest = (id: number) => ({
+      ...guestNavigationMethods(),
       id,
       isDestroyed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),

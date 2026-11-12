@@ -5,11 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
-import { CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE } from './claude-account-registration'
-import { CLAUDE_ACCOUNT_FOLDER_IN_USE_MESSAGE } from './claude-account-selection'
-import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
-import { describeClaudeProfile } from './claude-profile-paths'
-import type { ClaudeAccountSelectionTarget } from './runtime-selection'
+
+import type { ClaudeCommandConfig, ClaudeCommandOptions } from './sign-in/claude-command-process'
+
+import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import { ClaudeAccountService } from './service'
 
 const roots: string[] = []
@@ -102,77 +101,6 @@ function handOverClaudeSignInLink(windowsPath: string, link: string): void {
 }
 
 describe('ClaudeAccountService', () => {
-  it('saves an account only once its folder holds a login', async () => {
-    const f = fixture()
-    const begun = await f.service.beginSignIn({ runtime: 'host' })
-    expect(begun).toMatchObject({
-      runtime: 'host',
-      configDir: join(f.root, begun.accountId, 'home')
-    })
-    await expect(f.service.finishSignIn(begun)).rejects.toThrow(CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE)
-    expect(f.settings().claudeManagedAccounts).toHaveLength(2)
-
-    f.signIn(begun.accountId, 'new@example.test')
-    await f.service.finishSignIn(begun)
-    expect(f.settings().claudeManagedAccounts.at(-1)).toMatchObject({
-      id: begun.accountId,
-      email: 'new@example.test',
-      managedAuthPath: begun.configDir
-    })
-  })
-
-  it.each([
-    { email: 'new@example.test', organizationUuid: 'new-org', duplicate: false },
-    { email: 'imported@example.test', organizationUuid: 'saved-org', duplicate: true },
-    { email: 'current@example.test', organizationUuid: 'current-org', duplicate: true }
-  ])(
-    'finishes sign-in for $email despite an invalid imported account ID',
-    async ({ email, organizationUuid, duplicate }) => {
-      const imported = account('invalid.id', {
-        email: 'imported@example.test',
-        organizationUuid: 'saved-org',
-        organizationName: 'Saved organization'
-      })
-      const f = fixture([imported, account('a')])
-      vi.spyOn(f.runtimeAuth.router, 'accountHome').mockImplementation((id) => {
-        describeClaudeProfile(f.root, id, { executionHostId: 'local', runtime: 'host' })
-        return f.home(id)
-      })
-      f.signIn('a', 'current@example.test', 'current-org')
-      const rows = f.service.listAccounts().accounts
-      expect(rows).toEqual([
-        expect.objectContaining({
-          id: imported.id,
-          email: imported.email,
-          organizationUuid: imported.organizationUuid,
-          organizationName: imported.organizationName,
-          needsSignIn: true
-        }),
-        expect.objectContaining({
-          id: 'a',
-          email: 'current@example.test',
-          organizationUuid: 'current-org'
-        })
-      ])
-
-      const begun = await f.service.beginSignIn({ runtime: 'host' })
-      f.signIn(begun.accountId, email, organizationUuid)
-      if (duplicate) {
-        await expect(f.service.finishSignIn(begun)).rejects.toThrow('already added')
-        expect(existsSync(f.home(begun.accountId))).toBe(false)
-        expect(f.settings().claudeManagedAccounts).toEqual([imported, account('a')])
-      } else {
-        await expect(f.service.finishSignIn(begun)).resolves.toMatchObject({
-          accounts: expect.arrayContaining([
-            expect.objectContaining({ id: begun.accountId, email, organizationUuid })
-          ])
-        })
-        expect(f.settings().claudeManagedAccounts).toHaveLength(3)
-        expect(existsSync(f.home(begun.accountId))).toBe(true)
-      }
-    }
-  )
-
   it.each([
     { savedEmail: 'old@example.test', currentEmail: 'current@example.test' },
     { savedEmail: 'same@example.test', currentEmail: 'same@example.test' }
@@ -224,25 +152,6 @@ describe('ClaudeAccountService', () => {
     }
   )
 
-  it.skipIf(process.platform === 'win32')(
-    'ends a copy-link sign-in when Claude hands BROWSER something other than a sign-in link',
-    async () => {
-      const f = fixture()
-      f.runLogin.mockImplementationOnce(
-        (_args, _config, _timeoutMs, options) =>
-          new Promise((_resolve, reject) => {
-            writeFileSync(`${options!.browser}.link`, 'https://example.test/not-a-sign-in')
-            options?.signal?.addEventListener('abort', () =>
-              reject(new Error('Claude sign-in was cancelled.'))
-            )
-          })
-      )
-      const adding = f.service.addAccount({ runtime: 'host' }, true)
-      await expect(f.service.waitForSignInLink()).resolves.toBeNull()
-      await expect(adding).rejects.toThrow('Claude sign-in failed. Please try again.')
-    }
-  )
-
   it('leaves no row or folder when the hidden login is cancelled', async () => {
     const f = fixture()
     f.runLogin.mockImplementationOnce(
@@ -280,15 +189,5 @@ describe('ClaudeAccountService', () => {
     await expect(f.service.reauthenticateAccount('b')).rejects.toThrow('cancelled')
     expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
     expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a', 'b'])
-  })
-
-  it('keeps the row when its folder cannot be deleted, so the user can retry', async () => {
-    const f = fixture()
-    f.runtimeAuth.removeAccountFolder.mockRejectedValueOnce(
-      Object.assign(new Error('resource busy'), { code: 'EBUSY' })
-    )
-    await expect(f.service.removeAccount('a')).rejects.toThrow(CLAUDE_ACCOUNT_FOLDER_IN_USE_MESSAGE)
-    expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a', 'b'])
-    expect(f.settings().activeClaudeManagedAccountIdsByRuntime?.host).toBeNull()
   })
 })

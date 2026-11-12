@@ -1,5 +1,5 @@
 import { useState, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { PencilRuler } from 'lucide-react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { MobileNativeChatSessionOptionsController } from '../input/use-mobile-native-chat-session-options'
@@ -10,7 +10,7 @@ export function MobileNativeChatComposerPlanChip({
   inputRef
 }: {
   options?: { controller: MobileNativeChatSessionOptionsController } | null
-  inputRef: RefObject<TextInput | null>
+  inputRef: RefObject<TextInputInstance | null>
 }): React.JSX.Element | null {
   const t = useMobileTranslation()
   const [pending, setPending] = useState(false)

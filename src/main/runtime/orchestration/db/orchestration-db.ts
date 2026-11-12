@@ -19,6 +19,7 @@ import { createPeerRunQueueTriggers } from './peer-runs/peer-run-queue-sql'
 import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
+import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -47,6 +48,7 @@ class OrchestrationDbCore {
     // Read before migrate, which drops the capture triggers it may need to rebuild around.
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
+    refreshOutstandingDeliveryTrigger(this.db)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
       ['federation_relay_items', ['answer_sender_report']]
@@ -71,6 +73,11 @@ class OrchestrationDbCore {
     backfillStructuredWorkerOrcaSessionIds(this.db)
     this.db.exec(`
       DROP INDEX IF EXISTS idx_dispatch_creator_account_work;
+      CREATE INDEX IF NOT EXISTS idx_dispatch_contexts_run ON dispatch_contexts(run_id);
+      CREATE INDEX IF NOT EXISTS idx_worker_dispatches_agent_terminal_handle
+        ON worker_dispatches(agent_terminal_handle) WHERE agent_terminal_handle IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_liveness
+        ON attempt_observation_facts(dispatch_id) WHERE facet = 'liveness';
       CREATE INDEX IF NOT EXISTS idx_dispatch_creator_mailbox_work
         ON dispatch_contexts(creator_dispatch_id, status);
       CREATE INDEX IF NOT EXISTS idx_runs_current_coordinator_handle ON runs(coordinator_handle);
@@ -80,6 +87,8 @@ class OrchestrationDbCore {
       CREATE INDEX IF NOT EXISTS idx_messages_native_direct_work
         ON messages(to_handle, type)
         WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';
+      CREATE INDEX IF NOT EXISTS idx_messages_stop_reports
+        ON messages(run_id) WHERE id LIKE 'msg\\_stop\\_%' ESCAPE '\\';
     `)
     reconcileSettledWorkerDispatches(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)

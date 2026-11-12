@@ -1,4 +1,4 @@
-import { createGhLogicalLifetime } from '../../../git/command-runner/gh-capture-lifetime'
+import { createGhLogicalLifetime } from '../../../git/command-runner/hosted-cli/gh-capture-lifetime'
 import { createCheckDetailsAbortError, waitForCheckDetailsResolution } from './check-details-abort'
 
 export function createCheckDetailsAdmissionLifetime(release: () => void): {
