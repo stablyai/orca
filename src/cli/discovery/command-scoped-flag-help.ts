@@ -19,6 +19,8 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     key: '--key <key>            Opaque key from reference list; repeat for several'
   },
   'computer get-app-state': {
+    'element-index':
+      '--element-index <n>   Read only this element and its descendants, including any the window snapshot cut off',
     query:
       '--query <text>        Show only elements whose line contains this text, with their ancestors'
   },

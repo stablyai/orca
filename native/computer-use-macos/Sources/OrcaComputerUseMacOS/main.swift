@@ -143,6 +143,12 @@ final class ElementRecord {
     }
 }
 
+/// A snapshot that read one element's subtree; its elements also keep the window's earlier ones.
+struct SnapshotScope {
+    let rootIndex: Int
+    let walkedIndexes: Set<Int>
+}
+
 struct Snapshot {
     let id: String
     let app: AppDescriptor
@@ -161,6 +167,7 @@ struct Snapshot {
     let nextFreshElementIndex: Int
     let truncated: Bool
     let maxDepthReached: Bool
+    let scope: SnapshotScope?
     /// On-screen windows of the app (menus and sheets included), so a new or closed window counts as a change.
     let appWindowIds: [CGWindowID]
 
@@ -187,6 +194,7 @@ struct Snapshot {
             nextFreshElementIndex: nextFreshElementIndex,
             truncated: truncated,
             maxDepthReached: maxDepthReached,
+            scope: scope,
             appWindowIds: appWindowIds
         )
     }
@@ -267,7 +275,7 @@ final class Provider {
             ? try? cachedSnapshot(params: params)
             : nil
         do {
-            let after = try observe(params: params)
+            let after = try observeKeepingScope(params: params)
             guard let before, after.showsSameState(as: before) else {
                 return renderActionResult(action: action, snapshot: after)
             }
@@ -296,10 +304,10 @@ final class Provider {
         let deadline = Date().addingTimeInterval(1)
         while Date() < deadline {
             Thread.sleep(forTimeInterval: 0.2)
-            let polled = try observe(params: quietParams)
+            let polled = try observeKeepingScope(params: quietParams)
             if !polled.showsSameState(as: before) {
                 if params["noScreenshot"]?.bool == true { return polled }
-                return try observe(params: settleParams)
+                return try observeKeepingScope(params: settleParams)
             }
         }
         return nil
@@ -315,12 +323,14 @@ final class Provider {
         }
         let namespace = snapshotNamespace(params)
         pruneSnapshotCache()
+        let subtree = try requestedSubtree(params: params, app: app)
         let snapshot = try buildSnapshot(
             app: app,
             includeScreenshot: params["noScreenshot"]?.bool != true,
-            windowId: windowId,
-            windowIndex: windowIndex,
+            windowId: subtree.map(\.base.windowId) ?? windowId,
+            windowIndex: subtree == nil ? windowIndex : nil,
             restoreWindow: params["restoreWindow"]?.bool == true,
+            subtree: subtree,
             previousSnapshot: { [snapshots] resolvedWindowId in
                 // Why: indexes carry over from this caller's own last view of exactly this window.
                 snapshots[namespacedSnapshotKey(namespace, snapshotCanonicalWindowIdKey(resolvedWindowId))]
@@ -337,6 +347,27 @@ final class Provider {
             windowIndex: windowIndex
         )
         return snapshot
+    }
+
+    /// Resolves `rootElementIndex` against this caller's last snapshot of the window, whose indexes it extends.
+    private func requestedSubtree(params: [String: JSONValue], app: AppDescriptor) throws -> (root: ElementRecord, base: Snapshot)? {
+        guard let rootIndex = try optionalInteger(params, "rootElementIndex") else { return nil }
+        guard let base = try cachedSnapshot(params: params), base.app.pid == app.pid else {
+            throw ProviderError.coded("element_not_found", "--element-index needs a get-app-state snapshot of this app/window first")
+        }
+        return (try element(base, rootIndex), base)
+    }
+
+    /// Re-reads the subtree the cached snapshot showed, so actions on its elements report that part of the window.
+    private func observeKeepingScope(params: [String: JSONValue]) throws -> Snapshot {
+        guard let rootIndex = (try? cachedSnapshot(params: params))?.scope?.rootIndex else {
+            return try observe(params: params)
+        }
+        do {
+            return try observe(params: params.merging(["rootElementIndex": .number(Double(rootIndex))]) { _, replacement in replacement })
+        } catch let error as ProviderError where error.code == "element_not_found" {
+            return try observe(params: params)
+        }
     }
 
     private func rememberSnapshot(
@@ -419,10 +450,16 @@ final class Provider {
     private func currentSnapshot(params: [String: JSONValue]) throws -> Snapshot {
         pruneSnapshotCache()
         let cached = try cachedSnapshot(params: params)
+        let requestedIndexes = try requestedElementIndexes(params)
+        var observeParams = params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement }
+        // Why: elements read with --element-index may lie past the whole-window node limit, so only their subtree can re-find them.
+        if let scope = cached?.scope, !requestedIndexes.isEmpty, requestedIndexes.allSatisfy(scope.walkedIndexes.contains) {
+            observeParams["rootElementIndex"] = .number(Double(scope.rootIndex))
+        }
         // Why: cached AX frames can be stale after a window move or resize, and
         // stale geometry can turn an intended action into a misclick.
-        let snapshot = try observe(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
-        try validateRequestedElements(cached: cached, current: snapshot, params: params)
+        let snapshot = try observe(params: observeParams)
+        try validateRequestedElements(cached: cached, current: snapshot, requestedIndexes: requestedIndexes)
         return snapshot
     }
 
@@ -473,11 +510,14 @@ final class Provider {
             (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[key])
     }
 
-    private func validateRequestedElements(cached: Snapshot?, current: Snapshot, params: [String: JSONValue]) throws {
-        let requestedIndexes = try ["elementIndex", "fromElementIndex", "toElementIndex"].compactMap { key -> Int? in
+    private func requestedElementIndexes(_ params: [String: JSONValue]) throws -> [Int] {
+        try ["elementIndex", "fromElementIndex", "toElementIndex"].compactMap { key -> Int? in
             guard params[key]?.number != nil else { return nil }
             return try optionalInteger(params, key)
         }
+    }
+
+    private func validateRequestedElements(cached: Snapshot?, current: Snapshot, requestedIndexes: [Int]) throws {
         guard !requestedIndexes.isEmpty else { return }
         guard let cached else {
             throw ProviderError.coded("element_not_found", "element indexes require a fresh get-app-state snapshot for this app/window")
@@ -658,6 +698,7 @@ final class Provider {
         windowId: CGWindowID?,
         windowIndex: Int?,
         restoreWindow: Bool,
+        subtree: (root: ElementRecord, base: Snapshot)?,
         previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
@@ -703,11 +744,26 @@ final class Provider {
             focused: focusedElement(appElement: appElement),
             compactBrowserTabs: app.isKnownBrowser
         )
-        renderer.render(window)
+        if let subtree {
+            guard let ancestors = ancestorChain(of: subtree.root.element, in: window) else {
+                throw ProviderError.coded("element_not_found", "element \(subtree.root.index) is no longer in this window; run get-app-state again and use a fresh element index")
+            }
+            renderer.render(subtree.root.element, ancestors: ancestors)
+        } else {
+            renderer.render(window)
+        }
         if renderer.appStoppedResponding {
             throw AccessibilityMessaging.appNotResponding(app.name)
         }
-        let indexes = renderer.carryOverIndexes(from: previousSnapshot(capture.windowId))
+        let previous = subtree?.base ?? previousSnapshot(capture.windowId)
+        let indexes = renderer.carryOverIndexes(from: previous)
+        var elements = renderer.records
+        var elementOrder = indexes.order
+        if let subtree {
+            // Why: elements outside the subtree keep resolving, so the agent can still act on what the whole-window read showed.
+            elements = subtree.base.elements.merging(renderer.records) { _, walked in walked }
+            elementOrder = subtree.base.elementOrder.filter { renderer.records[$0] == nil } + indexes.order
+        }
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
@@ -725,17 +781,18 @@ final class Provider {
             windowBounds: capture.bounds,
             windowId: capture.windowId,
             windowLayer: capture.layer,
-            treeText: renderTreeText(app: app, title: title, bounds: capture.bounds, lines: renderer.lines, focused: renderer.focusedSummary),
+            treeText: renderTreeText(app: app, title: title, rootIndex: subtree?.root.index, lines: renderer.lines, focused: renderer.focusedSummary),
             focusedElementId: renderer.focusedElementId,
             screenshot: screenshot,
             screenshotStatus: screenshotStatus,
             screenshotScale: screenshotScale(screenshot: screenshot, bounds: capture.bounds),
             screenshotEngine: capture.image?.engine,
-            elements: renderer.records,
-            elementOrder: indexes.order,
+            elements: elements,
+            elementOrder: elementOrder,
             nextFreshElementIndex: indexes.nextFreshIndex,
             truncated: renderer.truncated,
             maxDepthReached: renderer.maxDepthReached,
+            scope: subtree.map { SnapshotScope(rootIndex: $0.root.index, walkedIndexes: Set(indexes.order)) },
             appWindowIds: windowCandidates.map(\.windowId).sorted()
         )
     }
@@ -751,39 +808,43 @@ final class Provider {
                 "scale": payload.scale,
             ]
         }
-        return [
-            "snapshot": [
-                "id": snapshot.id,
-                "app": [
-                    "name": snapshot.app.name,
-                    "bundleId": jsonNullable(snapshot.app.bundleId),
-                    "pid": Int(snapshot.app.pid),
-                ],
-                "window": [
-                    "id": Int(snapshot.windowId),
-                    "title": snapshot.windowTitle,
-                    "x": Int(snapshot.windowBounds.origin.x.rounded()),
-                    "y": Int(snapshot.windowBounds.origin.y.rounded()),
-                    "width": Int(snapshot.windowBounds.width.rounded()),
-                    "height": Int(snapshot.windowBounds.height.rounded()),
-                    "isMinimized": false,
-                    "isOffscreen": false,
-                    "screenIndex": jsonNullable(screenIndex(for: snapshot.windowBounds)),
-                    "platform": [
-                        "layer": snapshot.windowLayer,
-                    ],
-                ],
-                "coordinateSpace": "window",
-                "treeText": snapshot.treeText,
-                "elementCount": snapshot.elements.count,
-                "focusedElementId": snapshot.focusedElementId as Any,
-                "truncation": [
-                    "truncated": snapshot.truncated,
-                    "maxNodes": TreeRenderer.maxNodes,
-                    "maxDepth": TreeRenderer.maxDepth,
-                    "maxDepthReached": snapshot.maxDepthReached,
+        var snapshotPayload: [String: Any] = [
+            "id": snapshot.id,
+            "app": [
+                "name": snapshot.app.name,
+                "bundleId": jsonNullable(snapshot.app.bundleId),
+                "pid": Int(snapshot.app.pid),
+            ],
+            "window": [
+                "id": Int(snapshot.windowId),
+                "title": snapshot.windowTitle,
+                "x": Int(snapshot.windowBounds.origin.x.rounded()),
+                "y": Int(snapshot.windowBounds.origin.y.rounded()),
+                "width": Int(snapshot.windowBounds.width.rounded()),
+                "height": Int(snapshot.windowBounds.height.rounded()),
+                "isMinimized": false,
+                "isOffscreen": false,
+                "screenIndex": jsonNullable(screenIndex(for: snapshot.windowBounds)),
+                "platform": [
+                    "layer": snapshot.windowLayer,
                 ],
             ],
+            "coordinateSpace": "window",
+            "treeText": snapshot.treeText,
+            "elementCount": snapshot.scope?.walkedIndexes.count ?? snapshot.elements.count,
+            "focusedElementId": snapshot.focusedElementId as Any,
+            "truncation": [
+                "truncated": snapshot.truncated,
+                "maxNodes": TreeRenderer.maxNodes,
+                "maxDepth": TreeRenderer.maxDepth,
+                "maxDepthReached": snapshot.maxDepthReached,
+            ],
+        ]
+        if let scope = snapshot.scope {
+            snapshotPayload["rootElementIndex"] = scope.rootIndex
+        }
+        return [
+            "snapshot": snapshotPayload,
             "screenshot": screenshot,
             "screenshotStatus": renderScreenshotStatus(snapshot.screenshotStatus, snapshot: snapshot),
         ]
@@ -1460,6 +1521,18 @@ private func pointerRecipient(
           )
     else { return .unavailable }
     return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
+}
+
+/// The element's parents from `window` down, or nil when it is no longer inside `window`.
+private func ancestorChain(of element: AXUIElement, in window: AXUIElement) -> [AXUIElement]? {
+    var chain: [AXUIElement] = []
+    var current = element
+    while !CFEqual(current, window) {
+        guard chain.count < 256, let parent = copyElement(current, kAXParentAttribute as String) else { return nil }
+        chain.append(parent)
+        current = parent
+    }
+    return chain.reversed()
 }
 
 private func containingWindow(_ element: AXUIElement) -> AXUIElement? {
@@ -2179,12 +2252,15 @@ private func mouseButton(_ raw: String?) throws -> MouseButtonSelection {
     }
 }
 
-private func renderTreeText(app: AppDescriptor, title: String, bounds: CGRect, lines: [String], focused: String?) -> String {
+private func renderTreeText(app: AppDescriptor, title: String, rootIndex: Int?, lines: [String], focused: String?) -> String {
     var output = [
         "App=\(app.bundleId ?? app.name.replacingOccurrences(of: " ", with: "_")) (pid \(app.pid))",
         "Window: \"\(sanitize(title))\", App: \(sanitize(app.name)).",
-        "",
     ]
+    if let rootIndex {
+        output.append("Showing element \(rootIndex) and its descendants.")
+    }
+    output.append("")
     output.append(contentsOf: lines)
     output.append("")
     output.append(focused.map { "The focused UI element is \($0)." } ?? "No UI element is currently focused.")
@@ -2231,15 +2307,6 @@ private final class TreeRenderer {
 
     func render(_ element: AXUIElement, depth: Int = 0, ancestors: [AXUIElement] = []) {
         guard !reader.appStoppedResponding else { return }
-        guard nextIndex < Self.maxNodes else {
-            truncated = true
-            return
-        }
-        guard depth < Self.maxDepth else {
-            truncated = true
-            maxDepthReached = true
-            return
-        }
         guard !ancestors.contains(where: { CFEqual($0, element) }) else { return }
 
         let role = reader.stringAttribute(element, kAXRoleAttribute as String) ?? "AXUnknown"
@@ -2290,9 +2357,7 @@ private final class TreeRenderer {
             webAreaDepth: webAreaDepth
         )
         if SnapshotRenderHeuristics.shouldElide(node) {
-            for child in children {
-                render(child, depth: depth, ancestors: ancestors + [element])
-            }
+            renderChildren(children, depth: depth, ancestors: ancestors + [element])
             return
         }
 
@@ -2315,9 +2380,8 @@ private final class TreeRenderer {
             return
         }
         if compactBrowserTabs, let tabStripCompaction = tabStripCompaction(parent: node, children: children) {
-            for (childIndex, child) in children.enumerated() where tabStripCompaction.retainedIndexes.contains(childIndex) {
-                render(child, depth: depth + 1, ancestors: ancestors + [element])
-            }
+            let retained = children.enumerated().filter { tabStripCompaction.retainedIndexes.contains($0.offset) }.map(\.element)
+            renderChildren(retained, depth: depth + 1, ancestors: ancestors + [element])
             lines.append(
                 String(repeating: "\t", count: depth + 1) +
                     "... \(tabStripCompaction.omittedCount) inactive browser tabs omitted"
@@ -2325,11 +2389,22 @@ private final class TreeRenderer {
             return
         }
         let childLineStart = lines.count
-        for child in children {
-            render(child, depth: depth + 1, ancestors: ancestors + [element])
-        }
+        renderChildren(children, depth: depth + 1, ancestors: ancestors + [element])
         if compactBrowserTabs {
             compactRenderedBrowserTabs(parent: node, startLine: childLineStart, depth: depth + 1)
+        }
+    }
+
+    /// Stops at the node or depth limit with a note of how many children were left, so the agent can read that subtree.
+    private func renderChildren(_ children: [AXUIElement], depth: Int, ancestors: [AXUIElement]) {
+        for (position, child) in children.enumerated() {
+            guard nextIndex < Self.maxNodes, depth < Self.maxDepth else {
+                truncated = true
+                maxDepthReached = maxDepthReached || depth >= Self.maxDepth
+                lines.append(String(repeating: "\t", count: depth) + "... \(children.count - position) more not shown (snapshot limit)")
+                return
+            }
+            render(child, depth: depth, ancestors: ancestors)
         }
     }
 

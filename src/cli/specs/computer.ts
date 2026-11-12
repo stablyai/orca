@@ -44,8 +44,8 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'get-app-state'],
     summary: 'Capture a compact accessibility snapshot of an app',
     usage:
-      'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot] [--json]',
-    allowedFlags: [...COMPUTER_OBSERVE_FLAGS, 'query', 'max-elements']
+      'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--element-index <n>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot] [--json]',
+    allowedFlags: [...COMPUTER_OBSERVE_FLAGS, 'element-index', 'query', 'max-elements']
   },
   {
     path: ['computer', 'wait'],

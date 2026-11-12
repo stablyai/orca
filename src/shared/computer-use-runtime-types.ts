@@ -52,6 +52,8 @@ export type ComputerSnapshotData = {
   treeText: string
   elementCount: number
   focusedElementId: number | null
+  // Present only when treeText is the subtree of this element, read with rootElementIndex.
+  rootElementIndex?: number
   // Present only when treeText is a diff against the previous snapshot of the same window.
   treeDiff?: {
     baseSnapshotId: string

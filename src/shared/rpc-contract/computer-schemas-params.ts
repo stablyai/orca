@@ -56,7 +56,10 @@ export function validateComputerTarget(
   validateWindowTarget(value, ctx)
 }
 
-export const ComputerObserveTarget = ComputerObserveTargetBase.superRefine(validateComputerTarget)
+export const ComputerObserveTarget = ComputerObserveTargetBase.extend({
+  // Reads one element's subtree. Older runtimes strip it, and their result has no rootElementIndex.
+  rootElementIndex: OptionalNonNegativeInt
+}).superRefine(validateComputerTarget)
 
 export const ListApps = z.object({}).strict()
 
