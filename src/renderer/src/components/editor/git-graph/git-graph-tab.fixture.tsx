@@ -69,7 +69,15 @@ const history: GitHistoryResult = {
       ...commit('f2', ['f1'], 'docs: align the release notes with the 2.0.0 listing', 20),
       references: [branch('chore/release-2.0.0'), remote('chore/release-2.0.0')]
     },
-    commit('f1', ['m1'], 'chore: bump the extension version to 2.0.0', 30),
+    {
+      ...commit('f1', ['m1'], 'chore: bump the extension version to 2.0.0', 30),
+      // Three long local branches on one commit must still leave room for the subject.
+      references: [
+        branch('feat/workspace-agent-session-markers'),
+        branch('fix/git-graph-narrow-pane-layout'),
+        branch('chore/bump-extension-version-2.0.0')
+      ]
+    },
     commit('m1', [], 'Initial commit', 90)
   ],
   currentRef: branch('main'),

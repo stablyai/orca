@@ -218,7 +218,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                             />
                           ) : null}
                           <button
-                            className="min-w-0 flex-1 truncate text-left"
+                            className="min-w-32 flex-1 truncate text-left"
                             title={item.message}
                             onClick={() => controller.select(item.id)}
                             onDoubleClick={() => void actions.openHistoryCommitDiff(item)}
