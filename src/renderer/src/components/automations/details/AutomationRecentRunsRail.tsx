@@ -110,7 +110,8 @@ export function AutomationRecentRunsRail({
             className="flex w-full items-center gap-1 border-t border-border/50 px-4 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50"
           >
             {t('auto.components.automations.recentRuns.allRuns', 'All {{count}} runs', {
-              count: runs.length
+              count: runs.length,
+              defaultValue_one: 'All {{count}} run'
             })}
             <ChevronRight aria-hidden="true" className="size-3.5" />
           </button>
