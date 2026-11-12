@@ -122,6 +122,7 @@ it('discards row-free authority changes before publishing an asynchronous observ
   const journal = await openJournal()
   const projections = new StructuredAgentSessionJournalProjections()
   let revision = 0
+  let contextId: string | null = null
   let attached = true
   const held: string[] = []
   const capture = () => {
@@ -144,7 +145,7 @@ it('discards row-free authority changes before publishing an asynchronous observ
       stopRevision: 0,
       stop: null
     }
-    return { authority, contextId: null }
+    return { authority, contextId }
   }
   const narrow = await projections.readWorkSql(journal, capture)
   expect(narrow?.result.kind).toBe('state')
@@ -206,9 +207,18 @@ it('discards row-free authority changes before publishing an asynchronous observ
   expect(projections.savedStop(journal, null)).toEqual({ value: null })
   held.push('later-owner')
   expect(current?.authority?.child?.heldSends).toEqual(['new-live-owner'])
+  const refreshedWork = await projections.readWorkSql(journal, capture)
+  expect(await projections.readWorkSql(journal, capture)).toEqual(refreshedWork)
+  expect(projections.savedStop(journal, null)).toBeUndefined()
   expect(await projections.readSql(journal, capture, () => {})).toMatchObject({
     authority: { child: { heldSends: ['later-owner', 'new-live-owner'] } }
   })
+  contextId = 'reopened-context'
+  const contextWork = await projections.readWorkSql(journal, capture)
+  expect(await projections.readWorkSql(journal, capture)).toEqual(contextWork)
+  expect(projections.currentSql(journal, capture())).toBeNull()
+  expect(projections.savedStop(journal, contextId)).toBeUndefined()
+  await projections.readSql(journal, capture, () => {})
   revision = 2
   const failed = Promise.withResolvers<Awaited<ReturnType<typeof read>>>()
   const failure = new Error('observer read failed')
@@ -223,4 +233,21 @@ it('discards row-free authority changes before publishing an asynchronous observ
     { status: 'rejected', reason: failure }
   ])
   expect(await projections.readSql(journal, capture, () => {})).toMatchObject({ workRevision: 2 })
+  revision = 3
+  const workEntered = Promise.withResolvers<void>()
+  const workRelease = Promise.withResolvers<void>()
+  const workRead = journal.reads.work.bind(journal.reads)
+  vi.spyOn(journal.reads, 'work').mockImplementationOnce(async (input) => {
+    const answer = await workRead(input)
+    workEntered.resolve()
+    await workRelease.promise
+    return answer
+  })
+  const pendingWork = projections.readWorkSql(journal, capture)
+  await workEntered.promise
+  const published = await projections.readSql(journal, capture, () => {})
+  workRelease.resolve()
+  await pendingWork
+  expect(projections.currentSql(journal, capture())).toBe(published)
+  expect(projections.savedStop(journal, contextId)).toEqual({ value: null })
 })

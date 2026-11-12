@@ -141,7 +141,7 @@ export class StructuredAgentSessionJournalProjections {
       ) {
         continue
       }
-      if (this.currentEntry(journal)?.kind !== 'full') {
+      if (!this.currentSql(journal, recaptured)) {
         this.byJournal.set(journal, {
           kind: 'work-only',
           answer: result,
