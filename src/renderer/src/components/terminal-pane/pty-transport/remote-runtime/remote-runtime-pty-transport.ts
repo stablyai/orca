@@ -1391,15 +1391,29 @@ export function createRemoteRuntimePtyTransport(
     timeoutMs = 15_000,
     editProof?: Omit<TerminalOptionEditDispatch, 'terminalOptionEdits'>
   ): Promise<TResult> {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method,
-      params,
-      timeoutMs,
-      expectedEnvironmentPairingRevision: currentPaneRevision(),
-      ...editProof
-    })
     try {
+      const pairingRevision = currentPaneRevision()
+      if (
+        editProof?.expectedEnvironmentRuntimeId !== undefined &&
+        (pairingRevision !== getRuntimeEnvironmentRevision(environmentId) ||
+          pairingRevision !==
+            resolveContinuedRuntimeEnvironmentRevision(
+              environmentId,
+              editProof.expectedEnvironmentPairingRevision
+            ))
+      ) {
+        throw runtimeEnvironmentPairingChangedError()
+      }
+      const response = await window.api.runtimeEnvironments.call({
+        selector: environmentId,
+        method,
+        params,
+        timeoutMs,
+        expectedEnvironmentPairingRevision: pairingRevision,
+        ...(editProof?.expectedEnvironmentRuntimeId !== undefined
+          ? { expectedEnvironmentRuntimeId: editProof.expectedEnvironmentRuntimeId }
+          : {})
+      })
       return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<TResult>)
     } catch (error) {
       // Why await: the caller's retry must read the new revision, not race the catalog re-read.
@@ -3761,16 +3775,22 @@ export function createRemoteRuntimePtyTransport(
       let freshCreateInputs: ReturnType<typeof pairedAgentLaunchInputs> | undefined
       const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
         const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
-        const freshInputs =
-          freshLaunch && launchAgentToSend
-            ? await (freshCreateInputs ??= (async () =>
-                pairedAgentLaunchInputs({
-                  ...freshLaunch,
-                  ...(await agentSessionCreateCapabilities(createEnvironmentId)),
-                  environmentId: createEnvironmentId,
-                  agent: launchAgentToSend
-                }))())
-            : undefined
+        if (freshLaunch && launchAgentToSend && !freshCreateInputs) {
+          const preparation: ReturnType<typeof pairedAgentLaunchInputs> = (async () =>
+            pairedAgentLaunchInputs({
+              ...freshLaunch,
+              ...(await agentSessionCreateCapabilities(createEnvironmentId)),
+              environmentId: createEnvironmentId,
+              agent: launchAgentToSend
+            }))().catch((error: unknown) => {
+            if (freshCreateInputs === preparation) {
+              freshCreateInputs = undefined
+            }
+            throw error
+          })
+          freshCreateInputs = preparation
+        }
+        const freshInputs = freshLaunch && launchAgentToSend ? await freshCreateInputs : undefined
         const prepared = freshInputs && 'preparedAgentCommand' in freshInputs
         if (prepared && freshLaunch?.recovery) {
           return legacyCreate(epoch)

@@ -7,6 +7,7 @@ import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pt
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import type { PtyTransport } from '../pty-transport-types'
+import { createCompatibleRuntimeStatusResponse } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -200,6 +201,73 @@ describe('remote runtime pane across a pairing rotation', () => {
       await import('@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh')
     setRuntimeEnvironmentCatalogRefresher(null)
   })
+
+  it.each(['host-B', 'host-A'])(
+    'keeps the original pane authority when %s is proved before first edit negotiation',
+    async (hostKey) => {
+      const { repair, publishCatalog } = await installRepairableMain()
+      const prepare = Promise.withResolvers<unknown>()
+      const preparing = Promise.withResolvers<void>()
+      const mainCall = runtimeCall.getMockImplementation()
+      let firstStatus = true
+      runtimeCall.mockImplementation(async (request: RevisionedRequest) => {
+        if (request.method !== 'status.get') {
+          return mainCall?.(request)
+        }
+        if (!firstStatus) {
+          preparing.resolve()
+          return prepare.promise
+        }
+        firstStatus = false
+        const status = createCompatibleRuntimeStatusResponse('runtime-A')
+        status.result.capabilities = status.result.capabilities?.filter(
+          (capability) => capability !== 'agent-session.keyboard.v1'
+        )
+        return status
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'fresh-tab',
+        leafId: 'pane:1',
+        launchAgent: 'antigravity',
+        terminalKittyKeyboardProtocol: true,
+        freshAgentLaunch: {
+          prompt: '',
+          promptDelivery: 'auto-submit',
+          terminalOptionEdits: { effort: null }
+        }
+      })
+      try {
+        const connected = transport.connect({ url: '', callbacks: {} })
+        await preparing.promise
+        repair(hostKey)
+        publishCatalog()
+        prepare.resolve(createCompatibleRuntimeStatusResponse('runtime-new'))
+        await connected
+        const creates = runtimeCall.mock.calls
+          .map(([request]) => request)
+          .filter((request) => request.method === 'terminal.createAgentSession')
+        if (hostKey === 'host-B') {
+          expect(creates).toEqual([])
+        } else {
+          expect(creates).toEqual([
+            expect.objectContaining({
+              expectedEnvironmentPairingRevision: 2,
+              expectedEnvironmentRuntimeId: 'runtime-new',
+              params: expect.objectContaining({ terminalOptionEdits: { effort: null } })
+            })
+          ])
+          expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
+        }
+        expect(
+          runtimeCall.mock.calls.some(([request]) => request.method === 'terminal.create')
+        ).toBe(false)
+      } finally {
+        transport.destroy?.()
+      }
+    }
+  )
 
   it('rebinds a pane to its still-live terminal on the new pairing and delivers typed keys', async () => {
     const { transport, onError, repair } = await restartServerUnderLivePane('tab-1')

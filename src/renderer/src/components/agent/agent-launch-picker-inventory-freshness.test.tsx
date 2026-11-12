@@ -33,6 +33,8 @@ import * as discovery from '../native-chat/session/options/catalog/native-chat-s
 import { createAntigravityTerminalModelDemand } from '../native-chat/session/options/terminal/antigravity-terminal-model-observation'
 import { useNativeChatSessionOptions } from '../native-chat/session/options/terminal/use-native-chat-session-options'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { useAgentPickerTerminalDiscoveryKey } from './agent-launch-picker-host-reads'
 import {
   publicRuntimeEnvironment,
   connectedRuntimeStatus
@@ -353,6 +355,111 @@ it('clears an open terminal catalog when only detected ownership changes and fen
     stop()
     demand.dispose()
   }
+})
+
+it('discovers an unstamped folder and follows group and repo ownership while open', async () => {
+  const folder = makeFolderWorkspace({ id: 'f1', projectGroupId: 'group-1' })
+  const group = {
+    id: 'group-1',
+    name: 'Group',
+    parentPath: null,
+    parentGroupId: null,
+    createdFrom: 'manual' as const,
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 0,
+    updatedAt: 0
+  }
+  useAppStore.setState({
+    settings: getDefaultSettings('/synthetic'),
+    repos: [],
+    projectGroups: [group],
+    folderWorkspaces: [folder],
+    worktreesByRepo: {}
+  })
+  const catalog = {
+    success: true,
+    catalogOrigin: 'probe',
+    models: [
+      { id: 'gemini-3.8-flash-low', label: 'Flash (Low)' },
+      { id: 'gemini-3.8-flash-high', label: 'Flash (High)' }
+    ]
+  }
+  const old = Promise.withResolvers<unknown>()
+  const read = vi
+    .fn()
+    .mockResolvedValueOnce(catalog)
+    .mockReturnValueOnce(old.promise)
+    .mockResolvedValue(catalog)
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { git: { discoverTerminalModels: read } }
+  })
+  const hook = renderHook(() => {
+    const key = useAgentPickerTerminalDiscoveryKey('local', { worktreeId: 'folder:f1' })
+    return useAgentLaunchPickerInventory(
+      'folder:f1',
+      {
+        state: 'settled',
+        rows: [{ agent: 'antigravity', kind: 'cli' }],
+        detection: { ...detection, detectedIds: ['antigravity'] },
+        pickerContext: {
+          workspace: { kind: 'folder', worktreeId: 'folder:f1' },
+          executionHostId: 'local',
+          settings: {},
+          key: key ?? 'unavailable'
+        }
+      },
+      true
+    )
+  })
+  await waitFor(() =>
+    expect(hook.result.current[0].terminalCatalog).toMatchObject({
+      models: [{ id: 'gemini-3.8-flash', efforts: [{ value: 'low' }, { value: 'high' }] }]
+    })
+  )
+  expect(read).toHaveBeenCalledWith({ agentId: 'antigravity', worktree: 'id:folder:f1' })
+  const launch = vi.fn().mockReturnValue(true)
+  render(
+    <TooltipProvider>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>Folder</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <AgentLaunchPickerMenu entries={hook.result.current} runLaunch={launch} />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Antigravity' }))
+  fireEvent.click(screen.getByRole('option', { name: 'Flash' }))
+  expect(screen.getByRole('radio', { name: 'High' })).toBeTruthy()
+  act(() => useAppStore.setState({ projectGroups: [{ ...group, connectionId: 'ssh-1' }] }))
+  await waitFor(() => expect(hook.result.current[0].terminalCatalogRead).not.toBe('settled'))
+  act(() => useAppStore.setState({ projectGroups: [group] }))
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+  act(() =>
+    useAppStore.setState({
+      repos: [{ ...TEST_REPO, projectGroupId: group.id, connectionId: 'ssh-1' }]
+    })
+  )
+  await waitFor(() => expect(hook.result.current[0].terminalCatalogRead).not.toBe('settled'))
+  act(() => useAppStore.setState({ repos: [] }))
+  await waitFor(() =>
+    expect(hook.result.current[0].terminalCatalog).toMatchObject({
+      models: [{ id: 'gemini-3.8-flash' }]
+    })
+  )
+  await act(async () =>
+    old.resolve({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [{ id: 'stale-folder', label: 'Stale' }]
+    })
+  )
+  expect(hook.result.current[0].terminalCatalog).toMatchObject({
+    models: [{ id: 'gemini-3.8-flash' }]
+  })
 })
 
 it('keeps two live tabs distinct by startup cwd and fences a replaced cwd answer', async () => {

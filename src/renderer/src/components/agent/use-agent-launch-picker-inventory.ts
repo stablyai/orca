@@ -15,9 +15,7 @@ import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
@@ -35,6 +33,7 @@ import {
   agentPickerCatalogSettingsKey,
   agentPickerTerminalDiscovery,
   agentPickerCliDiscoveryRuntime,
+  selectAgentPickerWorkspace,
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
@@ -113,18 +112,17 @@ export function useAgentLaunchPickerInventorySource(
   const workspaceId = worktreeId ?? context?.workspace.worktreeId
   const selector = workspaceId ? `id:${workspaceId}` : repo ? `path:${repo.path}` : undefined
   const state = store.getState()
-  const hostId = parseExecutionHostId(executionHostId)?.id
   const worktrees = selectWorktreesByRepo(state)
   const folders = selectFolderWorkspaces(state)
+  const { repos, projectGroups } = state
   const selectedWorkspace = useMemo(
     () =>
-      workspaceId &&
-      hostId &&
-      selectWorkspaceByHostTarget(
-        { worktreesByRepo: worktrees ?? {}, folderWorkspaces: folders ?? [] },
-        hostWorktreeTarget({ id: workspaceId, hostId })
+      selectAgentPickerWorkspace(
+        { worktreesByRepo: worktrees, folderWorkspaces: folders, repos, projectGroups },
+        workspaceId,
+        executionHostId
       ),
-    [workspaceId, hostId, worktrees, folders]
+    [workspaceId, executionHostId, worktrees, folders, repos, projectGroups]
   )
   const concreteWorkspace = !!selectedWorkspace
   const hostCapabilities =

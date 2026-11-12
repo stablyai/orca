@@ -6,6 +6,7 @@ import {
   REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
   REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS
 } from './recovery/remote-runtime-pty-recovery-limits'
+import { createCompatibleRuntimeStatusResponse } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -67,6 +68,58 @@ describe('recoverable connect failures on a remote runtime pane', () => {
 
   beforeEach(() => {
     resetRemoteRuntimeTransport()
+  })
+
+  it('re-prepares a fresh agent after a failed capability read through Reconnect', async () => {
+    const hostCall = runtimeCall.getMockImplementation()
+    let statusReads = 0
+    runtimeCall.mockImplementation(async (request: { method: string }) => {
+      if (request.method !== 'status.get') {
+        return hostCall?.(request)
+      }
+      statusReads++
+      if (statusReads === 2) {
+        throw Object.assign(new Error('Remote Orca runtime closed the connection.'), {
+          code: 'remote_runtime_unavailable'
+        })
+      }
+      const status = createCompatibleRuntimeStatusResponse('runtime-remote')
+      if (statusReads === 1) {
+        status.result.capabilities = status.result.capabilities?.filter(
+          (capability) => capability !== 'agent-session.keyboard.v1'
+        )
+      }
+      return status
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-fresh',
+      leafId: 'pane:1',
+      launchAgent: 'claude',
+      terminalKittyKeyboardProtocol: true,
+      freshAgentLaunch: { prompt: '', promptDelivery: 'auto-submit' }
+    })
+    try {
+      await transport.connect({ url: '', callbacks: {} })
+      expect(
+        runtimeCall.mock.calls.some(([request]) => request.method.startsWith('terminal.create'))
+      ).toBe(false)
+      expect(transport.retryRecovery?.()).toBe(true)
+      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1'))
+      expect(
+        runtimeCall.mock.calls.filter(
+          ([request]) => request.method === 'terminal.createAgentSession'
+        )
+      ).toEqual([
+        [expect.objectContaining({ params: expect.objectContaining({ agent: 'claude' }) })]
+      ])
+      expect(runtimeCall.mock.calls.some(([request]) => request.method === 'terminal.create')).toBe(
+        false
+      )
+    } finally {
+      transport.destroy?.()
+    }
   })
 
   it('leaves both revival paths armed once the recovery window is spent', async () => {

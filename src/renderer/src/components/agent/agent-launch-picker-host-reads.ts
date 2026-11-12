@@ -25,7 +25,12 @@ import { subscribeModelMenuInvalidation } from '@/runtime/native-chat/model-cata
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { isAgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import {
+  selectWorkspaceByHostTarget,
+  type WorkspaceRecordState
+} from '@/store/workspaces/selection/workspace-host-target'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
@@ -169,6 +174,17 @@ export function agentPickerCatalogSettingsKey(
   ]
 }
 
+export function selectAgentPickerWorkspace(
+  state: WorkspaceRecordState,
+  workspaceId: string | undefined,
+  executionHostId: string
+) {
+  const hostId = parseExecutionHostId(executionHostId)?.id
+  return workspaceId && hostId
+    ? selectWorkspaceByHostTarget(state, hostWorktreeTarget({ id: workspaceId, hostId }))
+    : undefined
+}
+
 export function useAgentPickerTerminalDiscoveryKey(
   executionHostId: string | null,
   { worktreeId: workspaceId, repoId }: { worktreeId?: string; repoId?: string },
@@ -180,7 +196,9 @@ export function useAgentPickerTerminalDiscoveryKey(
         ? createTerminalModelDiscoveryKeySelector((state) =>
             agentPickerTerminalDiscovery(state, {
               target: structuredAgentSessionTargetForHost(executionHostId),
-              concreteWorkspace: Boolean(workspaceId),
+              concreteWorkspace: Boolean(
+                selectAgentPickerWorkspace(state, workspaceId, executionHostId)
+              ),
               workspaceId,
               repo: repoId
                 ? state.repos.find(
