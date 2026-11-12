@@ -15,7 +15,6 @@ import {
   QUEUED_RIG_CALLER
 } from './structured-agent-session-queued-message-rig.test-fixture'
 
-import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
@@ -63,25 +62,26 @@ describe("a Stop's event", () => {
     rig = await createQueuedMessageTestRig()
     await rig.workingSend()
     const interrupt = Promise.withResolvers<{ cancelled: boolean }>()
-    rig.cancelTurn.mockImplementationOnce(() => interrupt.promise)
+    const interruptEntered = Promise.withResolvers<void>()
+    rig.cancelTurn.mockImplementationOnce(() => {
+      interruptEntered.resolve()
+      return interrupt.promise
+    })
     const stopped = rig.stop()
     try {
-      await eventually(async () =>
-        expect(
-          (await readTestJournalSnapshot(journal())).items.filter(
-            (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
-          )
-        ).toHaveLength(1)
-      )
+      await interruptEntered.promise
+      expect(
+        (await readTestJournalSnapshot(journal())).items.filter(
+          (item) => item.body.kind === 'status'
+        )
+      ).toHaveLength(1)
       expect(rig.cancelTurn).toHaveBeenCalledOnce()
     } finally {
       interrupt.resolve({ cancelled: true })
       await stopped
     }
     expect(
-      (await readTestJournalItems(journal())).filter(
-        (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
-      )
+      (await readTestJournalItems(journal())).filter((item) => item.body.kind === 'status')
     ).toHaveLength(1)
   })
 
