@@ -5,6 +5,24 @@ import { NativeChatMarkdown } from './NativeChatMarkdown'
 
 afterEach(cleanup)
 
+it('anchors indentation to authored lines across character references and inline formatting', () => {
+  const { container } = render(
+    <NativeChatMarkdown
+      variant="document"
+      preserveBulletIndentation
+      content={
+        '• Parent &#10; suffix\r\n    • Child\r\n\r\n• Parent &NewLine; suffix\r\n    • Child\r\n\r\n• Parent \\&#10; suffix\r\n    • Child\r\n\r\n• Parent\r\n    • **Bold**• inline\r\n        • Grandchild'
+      }
+    />
+  )
+  expect([...container.querySelectorAll('p')].map((paragraph) => paragraph.textContent)).toEqual([
+    '• Parent \nsuffix\n    • Child',
+    '• Parent \nsuffix\n    • Child',
+    '• Parent &#10; suffix\n    • Child',
+    '• Parent\n    • Bold• inline\n        • Grandchild'
+  ])
+})
+
 it('keeps separated literal bullet items out of code blocks without reclassifying code samples', () => {
   const { container } = render(
     <NativeChatMarkdown

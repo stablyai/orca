@@ -262,6 +262,9 @@ importers:
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
+      micromark-util-decode-string:
+        specifier: 2.0.1
+        version: 2.0.1
       mime-types:
         specifier: 3.0.2
         version: 3.0.2

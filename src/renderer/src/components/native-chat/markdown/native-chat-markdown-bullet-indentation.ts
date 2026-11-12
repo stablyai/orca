@@ -1,7 +1,7 @@
 import type { PhrasingContent, Root } from 'mdast'
 import type { Processor } from 'unified'
 import type { VFile } from 'vfile'
-import { visit } from 'unist-util-visit'
+import { decodeString } from 'micromark-util-decode-string'
 import { visitParents } from 'unist-util-visit-parents'
 
 type SourceLine = { text: string; offset: number }
@@ -34,7 +34,7 @@ function restoreSeparatedBulletItems(
     // Only a bullet-only continuation can reclaim an indented Markdown code block.
     const parsed = parse(lines.map(({ text }) => text.trimStart()).join('\n'))
     const startLine = node.position.start.line
-    visit(parsed, (child) => {
+    visitParents(parsed, (child) => {
       if (!child.position) {
         return
       }
@@ -62,27 +62,31 @@ export function remarkNativeChatBulletIndentation(
       text: match[1],
       offset: match.index
     }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Remark's configured parser returns mdast Root; Processor erases that type.
     restoreSeparatedBulletItems(tree, sourceLines, (value) => this.parse(value) as Root)
     visitParents(tree, 'text', (node, ancestors) => {
       const parent = ancestors.at(-1)
       if (ancestors.length !== 2 || parent?.type !== 'paragraph' || !node.position) {
         return
       }
-      const lines = node.value.split('\n')
+      const lines = node.value.split(/\r\n?|\n/)
       const { start, end } = node.position
-      if (
-        start.offset === undefined ||
-        end.offset === undefined ||
-        source.slice(start.offset, end.offset).split(/\r\n?|\n/).length !== lines.length
-      ) {
+      if (start.offset === undefined || end.offset === undefined) {
         return
       }
-      const indents = lines.map((line, index) =>
-        /^•[ \t]/.test(line)
-          ? /^( +)(?=•[ \t])/.exec(sourceLines[start.line - 1 + index]?.text ?? '')?.[1]
-          : undefined
-      )
-      if (!indents.some(Boolean)) {
+      const indents = source
+        .slice(start.offset, end.offset)
+        .split(/\r\n?|\n/)
+        .flatMap((line, index) => {
+          const indent = /^( +)(?=•[ \t])/.exec(
+            sourceLines[start.line - 1 + index]?.text ?? ''
+          )?.[1]
+          const atBullet = index > 0 || start.column === (indent?.length ?? 0) + 1
+          return decodeString(line)
+            .split(/\r\n?|\n/)
+            .map((_, decodedIndex) => (atBullet && decodedIndex === 0 ? indent : undefined))
+        })
+      if (indents.length !== lines.length || !indents.some(Boolean)) {
         return
       }
       const children: PhrasingContent[] = []
@@ -90,7 +94,7 @@ export function remarkNativeChatBulletIndentation(
         if (index > 0) {
           children.push({ type: 'text', value: '\n' })
         }
-        const indent = indents[index]
+        const indent = /^•[ \t]/.test(line) ? indents[index] : undefined
         if (indent) {
           // A span parsed after Markdown survives its hard-break whitespace trimming.
           children.push({
