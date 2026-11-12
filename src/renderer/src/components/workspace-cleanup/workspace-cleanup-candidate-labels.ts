@@ -39,11 +39,6 @@ export function getWorkspaceCleanupBlockerLabel(blocker: WorkspaceCleanupBlocker
         'auto.components.workspace.cleanup.candidateRow.dirtyEditorBufferBlocker',
         'Unsaved editor buffer'
       )
-    case 'volatile-local-context':
-      return translate(
-        'auto.components.workspace.cleanup.candidateRow.volatileLocalContextBlocker',
-        'Volatile local context'
-      )
     case 'recent-visible-context':
       return translate(
         'auto.components.workspace.cleanup.candidateRow.recentVisibleContextBlocker',

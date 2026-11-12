@@ -4366,6 +4366,8 @@
             "86ba852118": "{{value0}}, {{value1}} failed",
             "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
+            "mergedStatus": "Merged",
+            "unchangedStatus": "No new commits",
             "74f6c16279": "Back"
           },
           "backgroundRemoval": {
@@ -4402,7 +4404,6 @@
             "runningTerminalBlocker": "Running terminal process",
             "terminalLivenessUnknownBlocker": "Terminal liveness unknown",
             "dirtyEditorBufferBlocker": "Unsaved editor buffer",
-            "volatileLocalContextBlocker": "Volatile local context",
             "recentVisibleContextBlocker": "Recently visited tabs",
             "liveAgentBlocker": "Active agent",
             "sshDisconnectedBlocker": "Remote unavailable",
@@ -22306,14 +22307,14 @@
         "chooseAgent": "Choose agent",
         "closePane": "Close pane",
         "files": "Files",
-        "keyboardHint": "↑↓ Enter to open · → agents · / to search",
         "markdown": "Markdown",
         "mobileEmulator": "Mobile emulator",
         "new": "New",
         "newAgent": "New Agent",
         "newNamedAgent": "New {{agent}} agent",
         "noMatches": "No matches",
-        "searchPlaceholder": "Open agent, terminal, or file…",
+        "searchAgentsAndFiles": "Search agents and files",
+        "searchShort": "Search",
         "terminal": "Terminal"
       }
     },
