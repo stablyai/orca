@@ -10,6 +10,7 @@ type BlockedKeyCombo = {
 type PlatformKeyRules = {
   modifierAliases: Readonly<Record<string, string>>
   keyAliases: Readonly<Record<string, string>>
+  canonicalKey?: (key: string) => string
   // Most specific first so the error names what the combo would actually do.
   blocked: readonly BlockedKeyCombo[]
 }
@@ -67,13 +68,16 @@ const WINDOWS_RULES: PlatformKeyRules = {
   ]
 }
 
+const NUMERIC_KEYSYM = 'numeric keysym'
+
 const LINUX_RULES: PlatformKeyRules = {
   modifierAliases: {
     ctrl: 'ctrl',
     control: 'ctrl',
     cmdorctrl: 'ctrl',
     commandorcontrol: 'ctrl',
-    meta: 'super',
+    // xdotool sends Meta_L, which default XKB layouts put on the Alt modifier.
+    meta: 'alt',
     super: 'super',
     win: 'super',
     cmd: 'super',
@@ -83,13 +87,22 @@ const LINUX_RULES: PlatformKeyRules = {
     shift: 'shift'
   },
   keyAliases: SHARED_KEY_ALIASES,
+  // Xlib and GDK resolve 0x/U hex keysyms and drop an optional XF86 prefix; xdotool reads
+  // a multi-digit number as a raw keycode. Fold those first.
+  canonicalKey: (key) =>
+    /^(0x[0-9a-f]+|u[0-9a-f]+|\d{2,})$/.test(key) ? NUMERIC_KEYSYM : key.replace(/^xf86_?/, ''),
   blocked: [
     {
       modifiers: [],
-      keys: ['xf86poweroff', 'xf86logoff', 'xf86sleep', 'xf86suspend', 'xf86hibernate'],
+      keys: [NUMERIC_KEYSYM],
+      effect: 'send a numeric keysym or keycode that computer use cannot check'
+    },
+    {
+      modifiers: [],
+      keys: ['poweroff', 'powerdown', 'logoff', 'sleep', 'suspend', 'hibernate', 'standby'],
       effect: 'power off, suspend or log out of the session'
     },
-    { modifiers: [], keys: ['xf86screensaver'], effect: 'lock the screen' },
+    { modifiers: [], keys: ['screensaver'], effect: 'lock the screen' },
     {
       modifiers: ['ctrl', 'alt'],
       keys: ['delete'],
@@ -127,7 +140,8 @@ function findBlockedKeyCombo(key: string, platform: NodeJS.Platform): BlockedKey
     if (modifier) {
       modifiers.add(modifier)
     } else {
-      keyName = rules.keyAliases[normalized] ?? normalized
+      const aliased = rules.keyAliases[normalized] ?? normalized
+      keyName = rules.canonicalKey ? rules.canonicalKey(aliased) : aliased
     }
   }
   return (

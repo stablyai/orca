@@ -32,7 +32,14 @@ const BLOCKED: [NodeJS.Platform, 'hotkey' | 'pressKey', string][] = [
   ['linux', 'hotkey', 'ctrl+alt+Delete'],
   ['linux', 'hotkey', 'ctrl+alt+BackSpace'],
   ['linux', 'hotkey', 'Ctrl+Alt+F2'],
-  ['linux', 'pressKey', 'XF86PowerOff']
+  ['linux', 'hotkey', 'Meta+F4'],
+  ['linux', 'hotkey', 'Ctrl+0x71'],
+  ['linux', 'hotkey', 'Alt+0xffc1'],
+  ['linux', 'hotkey', 'Alt+70'],
+  ['linux', 'pressKey', 'XF86PowerOff'],
+  ['linux', 'pressKey', 'XF86_Sleep'],
+  ['linux', 'pressKey', 'ScreenSaver'],
+  ['linux', 'pressKey', '0x1008FF2A']
 ]
 
 const ALLOWED: [NodeJS.Platform, 'hotkey' | 'pressKey', string][] = [
@@ -44,6 +51,9 @@ const ALLOWED: [NodeJS.Platform, 'hotkey' | 'pressKey', string][] = [
   ['win32', 'hotkey', 'Ctrl+Alt+Delete'],
   ['linux', 'hotkey', 'Cmd+Q'],
   ['linux', 'hotkey', 'Ctrl+Delete'],
+  ['linux', 'hotkey', 'Meta+L'],
+  ['linux', 'hotkey', 'Ctrl+u'],
+  ['linux', 'hotkey', 'Ctrl+1'],
   ['linux', 'pressKey', 'Escape']
 ]
 
