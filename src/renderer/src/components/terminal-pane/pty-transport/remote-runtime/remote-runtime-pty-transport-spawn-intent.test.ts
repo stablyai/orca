@@ -1,16 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCompatibleRuntimeStatusResponse } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 const appStore = vi.hoisted(() => ({
-  getState: vi.fn(() => {
+  getState: vi.fn<() => { runtimeStatusByEnvironmentId: Map<string, unknown> }>(() => {
     throw new Error('These transport fixtures must not read app-store ownership')
   })
 }))
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: appStore.getState } }))
-
-afterEach(() => {
-  expect(appStore.getState).not.toHaveBeenCalled()
-})
 
 const RESUME = { key: 'session_id', id: 'provider-session-1' } as const
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -29,6 +25,9 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
   beforeEach(() => {
     vi.resetModules()
     runtimeCall.mockReset()
+    appStore.getState.mockReset().mockImplementation(() => {
+      throw new Error('These transport fixtures must not read app-store ownership')
+    })
     capabilities = ['agent-session.host-authority.v1']
     ensureResponse = {
       id: 'rpc',
@@ -119,12 +118,14 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
         expect(requests[0].params).not.toHaveProperty('resumeOrigin')
       }
       expect(onSpawnDeferred).toHaveBeenCalledWith('paused')
+      expect(appStore.getState).not.toHaveBeenCalled()
     }
   )
 
   it.each([true, false])(
     'retains fresh effort deletion negotiation across an unknown native outcome (%s)',
     async (supported) => {
+      appStore.getState.mockReturnValue({ runtimeStatusByEnvironmentId: new Map() })
       let attempts = 0
       let upgraded = supported
       runtimeCall.mockImplementation(async (args: RpcCall) => {

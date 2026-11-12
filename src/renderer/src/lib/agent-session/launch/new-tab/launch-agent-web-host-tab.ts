@@ -1,4 +1,7 @@
-import type { TerminalOptionEdits } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
+import type {
+  AgentLaunchChoices,
+  TerminalOptionEdits
+} from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { agentTabLaunchStore } from './launch-agent-execution-context'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
@@ -7,7 +10,6 @@ import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-la
 import { sourceControlActionAgentArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { readLaunchPermissionChoice } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { resolveHostAgentStartupShell } from '../../../../../../shared/windows-terminal-shell'
-import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'

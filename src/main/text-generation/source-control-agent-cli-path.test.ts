@@ -1,5 +1,5 @@
 import { discoverTerminalModels } from '../runtime/terminal/catalog/runtime-terminal-model-discovery'
-import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
+import { partialRuntimeStore } from '../runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import {
   chmodSync,
   mkdirSync,
@@ -95,7 +95,7 @@ describe.runIf(process.platform !== 'win32')('terminal discovery launch context'
     chmodSync(agy, 0o755)
     const result = await discoverTerminalModels(
       {
-        store: {
+        store: partialRuntimeStore({
           getSettings: () => ({
             agentCmdOverrides: { antigravity: agy },
             agentDefaultEnv: {
@@ -106,7 +106,7 @@ describe.runIf(process.platform !== 'win32')('terminal discovery launch context'
               }
             }
           })
-        } as unknown as RuntimeStore,
+        }),
         resolveTarget: async () => ({
           managedWorktree: null,
           scope: {

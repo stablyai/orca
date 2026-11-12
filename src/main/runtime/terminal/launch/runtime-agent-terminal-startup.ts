@@ -21,7 +21,6 @@ import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell
 } from './agent-launch-typed-line-shell'
-import { effectiveTerminalStartupCwd } from './agent-launch-scope-runtime'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telemetry'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
@@ -30,6 +29,7 @@ import {
   resolvePlainTerminalPtyOptions
 } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import {
+  effectiveTerminalStartupCwd,
   agentLaunchPlatformForScope,
   agentLaunchProjectRuntime,
   resolveAgentLaunchRuntime
