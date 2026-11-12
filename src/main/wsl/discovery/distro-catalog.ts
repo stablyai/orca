@@ -27,6 +27,12 @@ import {
   type RunningWslDistroReadOptions
 } from './wsl-running-distro-cache'
 import { clearWslHomeCache, getCachedWslHome, rememberWslHome } from './wsl-home-cache'
+import {
+  _setWslInstallationForTests,
+  peekWslInstallation,
+  readWslInstallation,
+  readWslInstallationSync
+} from './wsl-installation'
 
 // Measured on a slow PC: a cold systemd distro takes 4-11 s to answer its first exec, and killing
 // wsl.exe mid-boot leaves the distro failing every call with Wsl/Service/E_UNEXPECTED for 14+ s.
@@ -51,6 +57,16 @@ let wslDistroListEmptyStreak = 0
 let wslDistroProbeSequence = 0
 
 let wslDistroCacheSequence = 0
+
+// Why: a missing WSL install never becomes a distro list. Caching the absence stops the 5-minute wsl.exe retry.
+let wslInstallationAbsent = false
+
+function rememberWslInstallationAbsent(): string[] {
+  wslInstallationAbsent = true
+  wslDistroCache = []
+  wslDistroListRetryAfterMs = 0
+  return wslDistroCache
+}
 
 function armWslDistroListRetry(): void {
   const now = Date.now()
@@ -94,6 +110,10 @@ function shouldReuseCachedWslDistros(): boolean {
 }
 
 export function listWslDistros(): string[] {
+  if (wslInstallationAbsent) {
+    return wslDistroCache ?? []
+  }
+
   if (shouldReuseCachedWslDistros()) {
     return wslDistroCache ?? []
   }
@@ -105,6 +125,10 @@ export function listWslDistros(): string[] {
 
   if (Date.now() < wslDistroListRetryAfterMs) {
     return wslDistroCache ?? []
+  }
+
+  if (readWslInstallationSync() === 'absent') {
+    return rememberWslInstallationAbsent()
   }
 
   try {
@@ -124,6 +148,10 @@ export function listWslDistros(): string[] {
 }
 
 export async function listWslDistrosAsync(): Promise<string[]> {
+  if (wslInstallationAbsent) {
+    return wslDistroCache ?? []
+  }
+
   if (wslDistroCache !== null && wslDistroCache.length > 0) {
     return wslDistroCache
   }
@@ -147,10 +175,18 @@ export async function listWslDistrosAsync(): Promise<string[]> {
 
   // Catch before sharing the promise so all concurrent callers receive the same fallback.
   const probeSequence = ++wslDistroProbeSequence
-  const probe = runWslExe(['--list', '--quiet'])
-    .then(async (output) =>
-      cacheWslDistroList(await listedOrRegisteredWslDistros(parseWslDistros(output)), probeSequence)
-    )
+  const probe = readWslInstallation()
+    .then((installed) => {
+      if (installed === 'absent') {
+        return rememberWslInstallationAbsent()
+      }
+      return runWslExe(['--list', '--quiet']).then(async (output) =>
+        cacheWslDistroList(
+          await listedOrRegisteredWslDistros(parseWslDistros(output)),
+          probeSequence
+        )
+      )
+    })
     .catch(() => {
       armWslDistroListRetry()
       return wslDistroCache ?? []
@@ -169,6 +205,11 @@ export async function listRunningWslDistrosAsync(
   options: RunningWslDistroReadOptions = {}
 ): Promise<string[]> {
   if (process.platform !== 'win32') {
+    return []
+  }
+  // The running-list failure backoff also caps at 5 minutes and would keep launching the installer.
+  // A known install starts the wsl.exe probe before the first await so concurrent callers share it.
+  if (peekWslInstallation() !== 'present' && (await readWslInstallation()) === 'absent') {
     return []
   }
   return resolveRunningWslDistros(
@@ -279,6 +320,7 @@ function resetWslDistroListState(): void {
   wslDistroListEmptyStreak = 0
   wslDistroProbeSequence = 0
   wslDistroCacheSequence = 0
+  wslInstallationAbsent = false
   resetWslListOutputLost()
 }
 
@@ -302,4 +344,6 @@ export function _setWslCachesForTests(args: {
   if (args.distros) {
     cacheWslDistroList(args.distros, ++wslDistroProbeSequence)
   }
+  // A seeded catalog is an installed host. Don't let the service query consume a wsl.exe mock.
+  _setWslInstallationForTests('present')
 }
