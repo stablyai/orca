@@ -157,15 +157,10 @@ export function isBillingFailure(failure: VmBuildFailure | null): boolean {
 export function billingBlockKind(
   failure: VmBuildFailure | null
 ): 'plan' | 'hoursUsed' | 'spendCap' | 'payment' | null {
-  switch (failure?.kind) {
-    case 'plan':
-    case 'hoursUsed':
-    case 'spendCap':
-    case 'payment':
-      return failure.kind
-    default:
-      return null
-  }
+  const kind = failure?.kind
+  return kind === 'plan' || kind === 'hoursUsed' || kind === 'spendCap' || kind === 'payment'
+    ? kind
+    : null
 }
 
 /**
