@@ -170,7 +170,7 @@ describe('PluginManager', () => {
     expect(container.textContent).toContain('Couldn’t load the plugin catalog.')
   })
 
-  it('shows no plugin twice on the first screen at 1440 when nothing is newly added', async () => {
+  it('renders each plugin card once and no Featured row when nothing is newly added', async () => {
     const popular = ['themes', 'editors', 'icons', 'panels'].map((category, index) =>
       listing(`stablyai.popular-${index}`, { categories: [category] })
     )
@@ -186,8 +186,6 @@ describe('PluginManager', () => {
           Object.fromEntries(popular.map((item, index) => [item.pluginKey, 1000 - index]))
         )
     })
-    window.innerWidth = 1440
-
     const container = await render([])
     const keys = [...container.querySelectorAll('[data-plugin-key]')].map((card) =>
       card.getAttribute('data-plugin-key')

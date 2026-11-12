@@ -201,7 +201,12 @@ const fiveNew = (() => {
 function renderPage(pageEntries: readonly PluginListEntry[]): () => React.JSX.Element {
   const groups = [
     { id: 'official', title: 'Orca Official Plugins', detail: 'verified · stablyai' },
-    { id: 'community', title: 'Orca Community Plugins', detail: 'verified · stablyai' }
+    {
+      id: 'community',
+      title: 'Orca Community Plugins',
+      // Why unverified with the URL: community sources are not official, so the app names the repo.
+      detail: 'unverified · https://github.com/stablyai/orca-community-plugins.git'
+    }
   ]
   return () => (
     <div className="@container/plugin-catalog space-y-8 p-6">

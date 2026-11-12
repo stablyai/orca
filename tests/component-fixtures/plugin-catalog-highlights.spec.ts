@@ -56,3 +56,54 @@ test('cards past two rows stay in their catalog group', async ({ page }) => {
     page.getByRole('region', { name: 'Orca Community Plugins' }).locator(card)
   ).toBeVisible()
 })
+
+/** Two full rows at `columns`: a lone partial first row shows, a partial later row hides. */
+function expectedRows(count: number, columns: number): number[] {
+  if (count <= columns) {
+    return [count]
+  }
+  return Array.from({ length: Math.min(2, Math.floor(count / columns)) }, () => columns)
+}
+
+// Why container widths: the grid's breakpoints are container queries on the catalog's content box,
+// so each edge is set on that box, one pixel below and at the breakpoint.
+for (const [containerWidth, columns] of [
+  [459, 1],
+  [460, 2],
+  [719, 2],
+  [720, 3],
+  [1055, 3],
+  [1056, 4]
+] as const) {
+  test(`Newly added keeps two full rows for 1-9 cards at a ${containerWidth}px catalog`, async ({
+    page
+  }) => {
+    await openFixture(page, 'page1440', 1440)
+    const catalog = page.locator('.\\@container\\/plugin-catalog')
+    // Why size the catalog itself: the fixture host pins its own width, whatever the viewport.
+    const contentWidth = await catalog.evaluate((node, width) => {
+      const style = getComputedStyle(node)
+      const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+      if (!(node instanceof HTMLElement)) {
+        throw new Error('Catalog is not an HTML element')
+      }
+      node.style.boxSizing = 'border-box'
+      node.style.width = `${width + padding}px`
+      return node.clientWidth - padding
+    }, containerWidth)
+    expect(contentWidth).toBe(containerWidth)
+
+    // Why trim from the end: the hide rules are CSS over the list, so fewer children is fewer cards.
+    for (let count = 9; count >= 1; count -= 1) {
+      await page.getByRole('region', { name: 'Newly added' }).evaluate((section, keep) => {
+        const grid = section.querySelector('ul')
+        while (grid && grid.children.length > keep) {
+          grid.lastElementChild?.remove()
+        }
+      }, count)
+      const layout = await newlyAddedRows(page)
+      expect(layout.columns, `${count} cards`).toBe(columns)
+      expect(layout.rows, `${count} cards`).toEqual(expectedRows(count, columns))
+    }
+  })
+}
