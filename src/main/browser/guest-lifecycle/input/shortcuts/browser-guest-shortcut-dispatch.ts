@@ -22,6 +22,7 @@ export type GuestShortcutInput = WindowShortcutInput & {
 export type GuestShortcutForwardContext = {
   browserTabId: string
   resolveRenderer: ResolveRenderer
+  isLocalRenderer?: (renderer: Electron.WebContents) => boolean
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
@@ -42,6 +43,7 @@ export function forwardGuestShortcutInput(
   const {
     browserTabId,
     resolveRenderer,
+    isLocalRenderer,
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
@@ -56,6 +58,15 @@ export function forwardGuestShortcutInput(
     action?.type === 'dictationKeyDown' &&
     !textInputOwnsComposition(input) &&
     shouldForwardDictationShortcut?.() === true
+  const matchesPlugins =
+    !textInputOwnsComposition(input) &&
+    keybindingMatchesAction('view.plugins', input, process.platform, keybindings, {
+      context: 'app'
+    }) &&
+    (() => {
+      const renderer = resolveRenderer(browserTabId)
+      return renderer !== null && isLocalRenderer?.(renderer) === true
+    })()
   if (action?.type === 'zoom') {
     if (!page) {
       // Why: a plugin frame has no page zoom; Orca zooms what it would with focus outside a pane.
@@ -69,6 +80,7 @@ export function forwardGuestShortcutInput(
   if (input.isAutoRepeat) {
     if (
       forwardsDictation ||
+      matchesPlugins ||
       action?.type === 'deleteCurrentWorkspace' ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
@@ -218,6 +230,7 @@ export function forwardGuestShortcutInput(
     }
     renderer.send('ui:dictationKeyDown')
   } else if (
+    matchesPlugins ||
     matchesGuestTabShortcut(
       input,
       process.platform,
