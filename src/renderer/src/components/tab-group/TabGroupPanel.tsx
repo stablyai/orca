@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo } from 'react'
+import { Suspense, useCallback, useMemo, useRef } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store/index'
@@ -77,6 +77,7 @@ export default function TabGroupPanel({
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+  const quickCommandsSlotRef = useRef<HTMLDivElement>(null)
   const {
     activeTab,
     agentSessionItems,
@@ -315,7 +316,7 @@ export default function TabGroupPanel({
               >
                 {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
                     163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2. */}
-                <div className="contents @max-[163px]/tab-strip:hidden">
+                <div ref={quickCommandsSlotRef} className="contents @max-[163px]/tab-strip:hidden">
                   <TabBarQuickCommandsButton
                     worktreeId={worktreeId}
                     groupId={groupId}
@@ -327,6 +328,9 @@ export default function TabGroupPanel({
                     <TabGroupPaneActionsMenu
                       isFocused={isFocused}
                       onCloseGroup={commands.closeGroup}
+                      worktreeId={worktreeId}
+                      groupId={groupId}
+                      quickCommandsSlotRef={quickCommandsSlotRef}
                     />
                   </div>
                 ) : null}

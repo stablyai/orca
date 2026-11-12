@@ -76,50 +76,54 @@ async function draggableTabRun(page: Page, groupId: string): Promise<{ width: nu
   }, groupId)
 }
 
-/** Tab through a strip from its first tab; report each strip control (not a tab's own close button) that took focus and whether all of it is visible. */
+type FocusedControl = { label: string; fullyVisible: boolean } | 'in-tab' | null
+
+/** The strip control holding focus (null outside the strip, 'in-tab' for a tab's own controls) and whether all of it is visible. */
+async function focusedStripControl(page: Page, groupId: string): Promise<FocusedControl> {
+  return page.evaluate((id) => {
+    const el = document.activeElement
+    const stripEl = document.querySelector(`[data-tab-group-strip-id="${id}"]`)
+    if (!(el instanceof HTMLElement) || !stripEl?.contains(el)) {
+      return null
+    }
+    if (el.closest('[data-tab-id]')) {
+      return 'in-tab'
+    }
+    const r = el.getBoundingClientRect()
+    const y = r.top + r.height / 2
+    const shows = (x: number): boolean => {
+      const hit = document.elementFromPoint(x, y)
+      return Boolean(hit && (hit === el || el.contains(hit)))
+    }
+    return {
+      label: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? el.tagName,
+      fullyVisible: r.width > 0 && shows(r.left + 1) && shows(r.right - 1)
+    }
+  }, groupId)
+}
+
+/** Tab through a strip from its first tab; report each strip control (not a tab's own close button) that took focus. */
 async function tabThroughStrip(
   page: Page,
   groupId: string
 ): Promise<{ label: string; fullyVisible: boolean }[]> {
-  const strip = page.locator(`[data-tab-group-strip-id="${groupId}"]`)
-  const tab = strip.locator('[data-tab-id]').first()
-  // Why: focusing a group can hand focus to its terminal a beat later; walk only from a tab that still holds focus.
+  const tab = page.locator(`[data-tab-group-strip-id="${groupId}"] [data-tab-id]`).first()
+  // Why: focusing a group can hand focus to its terminal a beat later, so retry until Tab from the tab lands in the strip.
   await expect
     .poll(async () => {
       await tab.focus()
-      await page.waitForTimeout(100)
-      return tab.evaluate((el) => el === document.activeElement)
+      await page.keyboard.press('Tab')
+      return focusedStripControl(page, groupId)
     })
-    .toBe(true)
+    .not.toBeNull()
+  let focused = await focusedStripControl(page, groupId)
   const visited: { label: string; fullyVisible: boolean }[] = []
-  for (let i = 0; i < 8; i++) {
-    await page.keyboard.press('Tab')
-    const focused = await page.evaluate((id) => {
-      const el = document.activeElement as HTMLElement | null
-      const stripEl = document.querySelector(`[data-tab-group-strip-id="${id}"]`)
-      if (!el || !stripEl?.contains(el)) {
-        return null
-      }
-      if (el.closest('[data-tab-id]')) {
-        return 'in-tab'
-      }
-      const r = el.getBoundingClientRect()
-      const y = r.top + r.height / 2
-      const shows = (x: number): boolean => {
-        const hit = document.elementFromPoint(x, y)
-        return Boolean(hit && (hit === el || el.contains(hit)))
-      }
-      return {
-        label: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? el.tagName,
-        fullyVisible: r.width > 0 && shows(r.left + 1) && shows(r.right - 1)
-      }
-    }, groupId)
-    if (!focused) {
-      break
-    }
+  for (let i = 0; i < 8 && focused; i++) {
     if (focused !== 'in-tab') {
       visited.push(focused)
     }
+    await page.keyboard.press('Tab')
+    focused = await focusedStripControl(page, groupId)
   }
   return visited
 }
@@ -187,4 +191,35 @@ test('a narrow tab group keeps a grabbable tab and can be dragged into another g
   const leftStrip = orcaPage.locator(`[data-tab-group-strip-id="${layout.leftGroupId}"]`)
   await expect(leftStrip.locator('[data-tab-id]')).toHaveCount(2)
   await expect(rightStrip.locator('[data-tab-id]')).toHaveCount(0)
+})
+
+test('a strip too narrow for quick commands offers them in the pane actions menu', async ({
+  orcaPage
+}) => {
+  await orcaPage.setViewportSize({ width: 1280, height: 800 })
+  await waitForSessionReady(orcaPage)
+  const worktreeId = await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+
+  const layout = await buildThreeColumns(orcaPage, worktreeId)
+  const rightStrip = orcaPage.locator(`[data-tab-group-strip-id="${layout.rightGroupId}"]`)
+  const paneActions = rightStrip.getByRole('button', { name: 'Pane Actions' })
+  const quickCommandsItem = orcaPage.getByRole('menuitem', { name: 'Quick Commands' })
+
+  // Normal width shows the quick-command button, so the menu does not repeat it.
+  await expect(rightStrip.getByRole('button', { name: 'Add quick command' })).toBeVisible()
+  await paneActions.click()
+  await expect(orcaPage.getByRole('menuitem', { name: 'Close split pane' })).toBeVisible()
+  await expect(quickCommandsItem).toHaveCount(0)
+  await orcaPage.keyboard.press('Escape')
+
+  // Root 80/20, then 25/75 inside it: about 134px, too narrow for quick commands but not for the menu.
+  await orcaPage.evaluate((id) => {
+    const state = window.__store?.getState()
+    state?.setTabGroupSplitRatio(id, '', 0.8)
+    state?.setTabGroupSplitRatio(id, 'second', 0.25)
+  }, worktreeId)
+  await expect(rightStrip.getByRole('button', { name: 'Add quick command' })).toBeHidden()
+  await paneActions.click()
+  await expect(quickCommandsItem).toBeVisible()
 })
