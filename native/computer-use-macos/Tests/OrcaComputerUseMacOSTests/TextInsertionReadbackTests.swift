@@ -41,6 +41,21 @@ final class TextInsertionReadbackTests: XCTestCase {
         XCTAssertEqual(outcome, .landed)
     }
 
+    func testReadBlockedPastTheCapIsUndetermined() {
+        var clock = 0.0
+        var reads = ["h", "h"][...]
+        let outcome = TextInsertionReadback.settle(
+            expected: "hello",
+            now: { clock },
+            sleep: { clock += $0 },
+            read: {
+                if reads.count == 1 { clock = 2.2 }
+                return reads.popFirst()
+            }
+        )
+        XCTAssertEqual(outcome, .undetermined)
+    }
+
     func testContentEditableNoBreakSpacesLand() {
         XCTAssertEqual(settle(expected: "a  b ", reads: ["a \u{00A0}b\u{00A0}"], secondsPerRead: 0.025), .landed)
     }

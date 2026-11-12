@@ -58,12 +58,12 @@ public enum TextInsertionReadback {
         var quietDeadline = now() + quietSeconds
         while let current = readback, !sameText(current, expected) {
             let time = now()
-            guard time < quietDeadline else {
-                return .mismatch
-            }
-            // Why: a field still filling at the cap may yet land; calling it a mismatch invites typing the rest twice.
+            // Why: past the cap a field may still be filling or a read may have blocked through the quiet window; calling it a mismatch invites typing the rest twice.
             guard time < start + capSeconds else {
                 return .undetermined
+            }
+            guard time < quietDeadline else {
+                return .mismatch
             }
             sleep(intervalSeconds)
             readback = read()
