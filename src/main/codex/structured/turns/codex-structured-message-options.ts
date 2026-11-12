@@ -72,7 +72,9 @@ export function codexMessageInputOptions(
   }
   if (choices.serviceTier === undefined && choices.fastMode !== undefined) {
     const legacy = codexServiceTierOfFastMode(choices.fastMode, undefined)
-    const tier = inherited.serviceTier ?? applied.serviceTier
+    const inheritedTier = inherited.serviceTier
+    const tier =
+      inheritedTier === 'priority' || inheritedTier === 'fast' ? inheritedTier : applied.serviceTier
     next.serviceTier = legacy === 'fast' && (tier === 'priority' || tier === 'fast') ? tier : legacy
   }
   return next

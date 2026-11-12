@@ -142,6 +142,8 @@ export async function changeCodexThreadGoalWithSettings(
           for (const key of ['model', 'effort'] as const) {
             if (requested[key] !== undefined && requested[key] !== known[key]) {
               delete known[key]
+            }
+            if (requested[key] !== undefined && requested[key] !== knownInput[key]) {
               delete knownInput[key]
             }
           }

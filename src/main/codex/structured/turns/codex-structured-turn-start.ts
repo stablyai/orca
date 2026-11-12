@@ -127,10 +127,10 @@ export async function startCodexTurn(
     previousOptions = input.turnOptions ? new Map(host.options) : null
     if (input.turnOptions) {
       host.options.clear()
-      for (const [key, value] of Object.entries(inputChoices)) {
-        if (value !== undefined) {
-          host.options.set(key, value)
-        }
+      for (const [key, value] of Object.entries(
+        codexMessageInputOptions(inputChoices, {}, input.turnOptions)
+      )) {
+        host.options.set(key, value)
       }
     }
     requested = {
@@ -245,7 +245,7 @@ export async function startCodexTurn(
   host.appliedTurnOptions = { ...previousApplied, ...requested }
   host.appliedTurnInputOptions = codexMessageInputOptions(
     inputChoices,
-    { serviceTier: 'default', ...previousInput, ...requestControls },
+    { serviceTier: 'default', ...requestControls, ...previousInput },
     requested
   )
   return { turnId: readCodexTurnId(answer), via: 'start' }

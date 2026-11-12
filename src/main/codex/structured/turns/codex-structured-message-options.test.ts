@@ -16,6 +16,8 @@ import {
 import { codexTurnOptionsDiffer } from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 import { startCodexTurn } from './codex-structured-turn-start'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
+import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
+import { changeCodexThreadGoalWithSettings } from '../threads/codex-structured-thread-goal'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { USER_MESSAGE } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 
@@ -293,4 +295,84 @@ it('uses exact successful start controls when the first message omits model and 
     active: { effort: 'high' },
     next: { effort: 'low' }
   })
+})
+
+it('inherits retained sparse intent ahead of canonical execution controls', async () => {
+  const session = optionSession(vi.fn(async () => ({ turn: { id: 'sparse-turn' } })))
+  session.appliedTurnOptions = { model: 'gpt-canonical', effort: 'high' }
+  session.appliedTurnInputOptions = { model: 'gpt-alias', effort: 'low' }
+  const choices = { model: 'gpt-alias' }
+  await startCodexTurn(session, {
+    clientMessageId: 'sparse',
+    body: USER_MESSAGE,
+    executionOptions: choices,
+    turnOptions: await resolvedCodexMessageOptions(session, choices)
+  })
+  expect(
+    readCodexAppliedInputOptions(session, {
+      sessionId: 'session-1',
+      fence: 1,
+      acquisitionGeneration: 'generation-1',
+      next: { model: 'gpt-alias', effort: 'low' }
+    })
+  ).toMatchObject({
+    active: { model: 'gpt-alias', effort: 'low' },
+    next: { model: 'gpt-alias', effort: 'low' }
+  })
+})
+
+it('retains legacy fast intent as the successful native tier after a standard turn', async () => {
+  const session = optionSession(vi.fn(async () => ({ turn: { id: 'fast-turn' } })))
+  seedMessageDefaults(session)
+  session.appliedTurnInputOptions = { model: 'model-a', serviceTier: 'default' }
+  const choices = { model: 'model-a', fastMode: 'true' }
+  await startCodexTurn(session, {
+    clientMessageId: 'legacy-fast',
+    body: USER_MESSAGE,
+    executionOptions: choices,
+    turnOptions: await resolvedCodexMessageOptions(session, choices)
+  })
+  expect(Object.fromEntries(session.options)).toEqual({ model: 'model-a', serviceTier: 'priority' })
+  expect(
+    readCodexAppliedInputOptions(session, {
+      sessionId: 'session-1',
+      fence: 1,
+      acquisitionGeneration: 'generation-1',
+      next: { serviceTier: 'priority' }
+    })
+  ).toMatchObject({ active: { serviceTier: 'priority' }, next: { serviceTier: 'priority' } })
+})
+
+it('invalidates uncertain goal choices independently from shaped execution evidence', async () => {
+  const session = optionSession(
+    vi.fn(async () => {
+      throw new Error('lost after write')
+    })
+  )
+  session.appliedSettings = new CodexAppliedSettings()
+  session.appliedSettings.observe({ model: 'gpt-canonical', effort: 'high' })
+  session.appliedTurnOptions = { model: 'gpt-canonical', effort: 'high' }
+  session.appliedTurnInputOptions = { model: 'gpt-alias', effort: 'low', serviceTier: 'default' }
+  expect(
+    await changeCodexThreadGoalWithSettings(
+      session,
+      {
+        sessionId: 'session-1',
+        fence: 1,
+        change: { kind: 'set', objective: 'Ship it' },
+        replacesGoal: false,
+        executionOptions: { model: 'gpt-canonical', effort: 'low' }
+      },
+      1000,
+      () => true
+    )
+  ).toMatchObject({ ok: false })
+  expect(
+    readCodexAppliedInputOptions(session, {
+      sessionId: 'session-1',
+      fence: 1,
+      acquisitionGeneration: 'generation-1',
+      next: {}
+    })?.active
+  ).toEqual({ effort: 'low', serviceTier: 'default' })
 })
