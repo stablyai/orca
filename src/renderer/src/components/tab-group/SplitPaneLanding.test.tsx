@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
-import { fireEvent, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -136,6 +136,8 @@ describe('SplitPaneLanding placeholder', () => {
     render()
 
     expect(input().placeholder).toBe(placeholder)
+    // The accessible name never shortens with the placeholder.
+    expect(screen.getByRole('combobox', { name: 'Search agents and files' })).toBe(input())
   })
 })
 
@@ -189,11 +191,14 @@ describe('SplitPaneLanding keyboard', () => {
 
 describe('SplitPaneLanding late results', () => {
   it('highlights rows that arrive above an untouched highlight, so Enter opens them', () => {
-    mocks.data.files = ['src/codec.ts']
+    mocks.data.files = ['src/codea.ts', 'src/codeb.ts']
     render()
+    type('co')
     press('ArrowDown')
+    expect(highlighted()).toBe('file:src/codeb.ts')
+
     type('cod')
-    expect(highlighted()).toBe('file:src/codec.ts')
+    expect(highlighted()).toBe('file:src/codea.ts')
 
     act(() =>
       mocks.publish({

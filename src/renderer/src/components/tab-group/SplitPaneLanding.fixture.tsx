@@ -34,7 +34,9 @@ export const noMatches = defineFixture({
 
 export const narrow = defineFixture({ width: 260, render: () => <Pane /> })
 
-// Why: the frame and pane padding plus the scroll gutter take 64px, so these cards are 288px (short placeholder, shortcuts kept) and 320px (full placeholder).
+export const card260 = defineFixture({ width: 324, render: () => <Pane /> })
+
+// Why: the frame and pane padding plus the scroll gutter take 64px, so these cards are 288px (short placeholder, shortcuts kept) and 320px (full placeholder and shortcuts).
 export const medium = defineFixture({ width: 352, render: () => <Pane /> })
 
 export const mediumWide = defineFixture({ width: 384, render: () => <Pane /> })

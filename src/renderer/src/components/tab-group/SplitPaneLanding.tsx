@@ -145,6 +145,10 @@ export function SplitPaneLanding({
     (action): action is LandingAction => action !== null && landingQueryMatches(action.label, query)
   )
   const searching = query.trim() !== ''
+  const searchLabel = t(
+    'components.tabGroup.splitPaneLanding.searchAgentsAndFiles',
+    'Search agents and files'
+  )
 
   const changeSelected = (next: string): void => {
     // Why: cmdk falls back to the first row when the highlighted row unmounts; the user's pick is gone, so late rows lead again.
@@ -190,6 +194,7 @@ export function SplitPaneLanding({
         <div ref={measureCard} className="split-pane-landing @container w-full max-w-[380px]">
           <Command
             density="card"
+            label={searchLabel}
             shouldFilter={false}
             loop
             value={selected}
@@ -205,10 +210,7 @@ export function SplitPaneLanding({
               placeholder={
                 narrowCard
                   ? t('components.tabGroup.splitPaneLanding.searchShort', 'Search')
-                  : t(
-                      'components.tabGroup.splitPaneLanding.searchAgentsAndFiles',
-                      'Search agents and files'
-                    )
+                  : searchLabel
               }
             />
             <CommandList
@@ -284,7 +286,7 @@ export function SplitPaneLanding({
   )
 }
 
-/** Below this card width the focused full placeholder clips, so the field says just "Search". */
+/** Focused placeholders do not ellipsize in Chromium. */
 const NARROW_CARD_WIDTH = 300
 
 type LandingAction = {

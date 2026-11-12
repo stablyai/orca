@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent } from 'react'
 
-/** Same place as DropdownMenuShortcut, set tight so it reads as plain keys; dropped on a narrow card so labels keep the room. */
+/** Hide shortcuts on narrow cards so labels keep the room. */
 export function LandingItemShortcut({ label }: { label: string | null }): React.JSX.Element | null {
   if (!label) {
     return null
