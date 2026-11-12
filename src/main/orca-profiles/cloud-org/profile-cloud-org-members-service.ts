@@ -40,14 +40,14 @@ import {
   revokeDevOrcaCloudOrgInvite
 } from './profile-cloud-dev-org-members'
 
-type OrgCallResult<T> =
+export type OrgCallResult<T> =
   | { status: 'ok'; value: T }
   | { status: 'reconnect-required' }
   | { status: 'request-error'; error: OrcaCloudRequestError }
   | { status: 'failed'; error: string }
 
 // Only 401 should trigger session refresh; return business/permission failures as values.
-async function runOrgMemberCall<T>(
+export async function runOrgMemberCall<T>(
   config: OrcaCloudAuthConfig,
   active: ActiveOrcaProfileState,
   userDataPath: string,

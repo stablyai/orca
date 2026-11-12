@@ -5,6 +5,7 @@ import type { OrcaOrgMembersRoster } from '../../../../../shared/orca-profiles'
 import { sampleTeam } from '../plan-billing-fixtures'
 import { TeamDialogContent } from './TeamDialogHost'
 import { TeamPageView, type TeamPageViewProps } from './TeamPageView'
+import { TeamDeleteSection, type TeamDeleteCheck } from './TeamDeleteSection'
 
 // Fixtures render offline: a self-contained stand-in for a provider profile picture.
 const ADA_PICTURE =
@@ -255,6 +256,63 @@ export const ssoAndLeave = defineFixture({
           members: [roster.members[0]!, { ...roster.members[1]!, role: 'owner' }],
           pendingInvites: []
         }
+      }}
+    />
+  )
+})
+
+// TEAM-DELETE: Settings › Team (inline), owner. The danger zone sits after "Leave <team>".
+function DeletePage({ check }: { check: TeamDeleteCheck }): React.JSX.Element {
+  // Settings › Team renders the page inline, not in the dialog, so the whole page shows.
+  return (
+    <div className="max-w-2xl p-6">
+      <TeamPageView
+        {...base}
+        inline={{ onOpenPlanBilling: noop }}
+        dangerZone={
+          <TeamDeleteSection
+            teamName="Acme Engineering"
+            check={check}
+            onDelete={noop}
+            onBlockerAction={noop}
+          />
+        }
+      />
+    </div>
+  )
+}
+
+export const deleteTeamAllowed = defineFixture({
+  width,
+  render: () => <DeletePage check={{ state: 'ready', blockers: [] }} />
+})
+
+export const deleteTeamBlockedPlan = defineFixture({
+  width,
+  render: () => (
+    <DeletePage
+      check={{ state: 'ready', blockers: [{ code: 'subscription_active', status: 'active' }] }}
+    />
+  )
+})
+
+export const deleteTeamBlockedOneWorkspace = defineFixture({
+  width,
+  render: () => (
+    <DeletePage check={{ state: 'ready', blockers: [{ code: 'workspaces_exist', count: 1 }] }} />
+  )
+})
+
+export const deleteTeamBlockedBoth = defineFixture({
+  width,
+  render: () => (
+    <DeletePage
+      check={{
+        state: 'ready',
+        blockers: [
+          { code: 'subscription_active', status: 'trialing' },
+          { code: 'workspaces_exist', count: 3 }
+        ]
       }}
     />
   )

@@ -53,6 +53,8 @@ export type TeamPageViewProps = {
   onContactSales: (url: string) => void
   /** Settings → Team renders the page inline: seats and invoices stay on Plan & billing (linked). */
   inline?: { onOpenPlanBilling: () => void }
+  /** Owners in Settings › Team: "Delete <team>", after "Leave <team>" (TEAM-DELETE). */
+  dangerZone?: React.ReactNode
 }
 
 function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
@@ -204,7 +206,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             className="rounded-sm text-foreground underline underline-offset-2 hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={inline.onOpenPlanBilling}
           >
-            {t('auto.components.billing.title', 'Plan & billing')}
+            {t('settings.accountBilling.title2', 'Account & billing')}
           </button>
         </p>
       ) : entitlement ? (
@@ -354,10 +356,15 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                         'auto.components.billing.team.leaveBody2',
                         'You lose access to the team’s cloud workspaces and secrets. An owner or admin can invite you back.'
                       )
-                    : t(
-                        'auto.components.billing.team.leaveLastOwner',
-                        'You’re the only owner. Make someone else an owner first.'
-                      )}
+                    : props.dangerZone
+                      ? t(
+                          'auto.components.billing.team.leaveLastOwnerOrDelete',
+                          'You’re the only owner. Make someone else an owner first, or delete the team.'
+                        )
+                      : t(
+                          'auto.components.billing.team.leaveLastOwner',
+                          'You’re the only owner. Make someone else an owner first.'
+                        )}
                 </p>
               </div>
               <SettingsDisabledControlTooltip
@@ -383,6 +390,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
               </SettingsDisabledControlTooltip>
             </section>
           ) : null}
+          {props.dangerZone}
         </div>
       ) : null}
     </div>

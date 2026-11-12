@@ -22,6 +22,15 @@ import {
   removeOrcaProfileOrgMember,
   revokeOrcaProfileOrgInvite
 } from '../../orca-profiles/cloud-org/profile-cloud-org-members-service'
+import {
+  checkOrcaProfileOrgDelete,
+  deleteOrcaProfileOrg
+} from '../../orca-profiles/cloud-org/profile-cloud-org-delete-service'
+import {
+  ORCA_ORG_DELETE_CONFIRM_MAX_LENGTH,
+  type OrcaProfileOrgDeleteCheckResult,
+  type OrcaProfileOrgDeleteResult
+} from '../../../shared/orca-org-delete'
 
 function orgMembersScopedArgs(args: unknown): { orgId: string; record: Record<string, unknown> } {
   if (!args || typeof args !== 'object') {
@@ -91,7 +100,32 @@ function orgCreateNameFromUnknown(args: unknown): string {
   return name
 }
 
+/** The name exactly as typed (auth compares it case-sensitively), so it is never trimmed here. */
+function orgDeleteConfirmNameFromUnknown(value: unknown): string {
+  if (typeof value !== 'string' || !value || value.length > ORCA_ORG_DELETE_CONFIRM_MAX_LENGTH) {
+    throw new Error('invalid_orca_org_delete_confirm_name')
+  }
+  return value
+}
+
 export function registerOrcaProfileOrgMemberHandlers(): void {
+  ipcMain.handle(
+    'orcaProfiles:orgDeleteCheck',
+    async (_event, rawArgs: unknown): Promise<OrcaProfileOrgDeleteCheckResult> =>
+      checkOrcaProfileOrgDelete(getProfileUserDataPath(), orgMembersScopedArgs(rawArgs).orgId)
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:orgDelete',
+    async (_event, rawArgs: unknown): Promise<OrcaProfileOrgDeleteResult> => {
+      const { orgId, record } = orgMembersScopedArgs(rawArgs)
+      return deleteOrcaProfileOrg(getProfileUserDataPath(), {
+        orgId,
+        confirmName: orgDeleteConfirmNameFromUnknown(record.confirmName)
+      })
+    }
+  )
+
   ipcMain.handle(
     'orcaProfiles:orgInviteResend',
     async (_event, rawArgs: unknown): Promise<OrcaProfileOrgMemberMutationResult> =>

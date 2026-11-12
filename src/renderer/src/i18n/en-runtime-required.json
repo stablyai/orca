@@ -238,6 +238,10 @@
         "seatsMonthly_one": "{{count}} seat · Monthly",
         "seatsMonthly_other": "{{count}} seats · Monthly",
         "team": {
+          "delete": {
+            "blockedWorkspaces_one": "{{count}} cloud workspace still exists. Delete it first.",
+            "blockedWorkspaces_other": "{{count}} cloud workspaces still exist. Delete them first."
+          },
           "invitedCount_one": "{{count}} invited",
           "invitedCount_other": "{{count}} invited",
           "memberCount_one": "{{count}} member",
