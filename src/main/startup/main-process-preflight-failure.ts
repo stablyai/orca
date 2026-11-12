@@ -1,7 +1,7 @@
 import { app, dialog } from 'electron'
 import { prepareEarlyMainUiLanguage, translateMain } from '../i18n/main-i18n'
 import { formatProfileStateStartupFailure } from '../persistence/profile-state/startup/profile-state-startup-failure'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import { mainProcessState as state } from './main-process-state'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
 import { acquireDesktopProfileInstanceLock } from './profile-startup/desktop-profile-instance-lock'

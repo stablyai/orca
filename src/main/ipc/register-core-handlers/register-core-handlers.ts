@@ -78,11 +78,9 @@ import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
 import { registerZcodePlanCredentialsHandlers } from '../zcode-plan-credentials'
 import { registerGrokAccountHandlers } from '../grok-accounts'
 import { registerCursorAccountHandlers } from '../cursor-accounts'
-import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
-import {
-  registerClipboardHandlers,
-  setTrustedClipboardRendererWebContentsId
-} from '../../window/clipboard-ipc-handlers'
+import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
+import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
+import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'

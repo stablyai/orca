@@ -14,7 +14,7 @@ import {
 import { prepareEarlyMainUiLanguage, translateMain } from '../../i18n/main-i18n'
 import { acquireProfileStateMaintenance } from '../../persistence/profile-state/access/profile-state-access'
 import { rollbackProfileState } from '../../persistence/profile-state/recovery/profile-state-recovery-command'
-import { applyBackgroundActivationPolicy } from '../../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../../window/activation/foreground-activation-policy'
 import { acquireSingleInstanceLock } from './single-instance-lock'
 
 /** The process owning both locks performs recovery before Electron can initialize a runtime. */

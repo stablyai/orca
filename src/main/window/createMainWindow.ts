@@ -8,8 +8,8 @@ import { browserManager } from '../browser/guest-lifecycle/manager/browser-manag
 import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
 import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
-import { windowMaterialOptions } from './window-material-options'
-import { rememberWindowMaterial } from './window-material-suppression'
+import { windowMaterialOptions } from './presentation/window-material-options'
+import { rememberWindowMaterial } from './presentation/window-material-suppression'
 import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
@@ -17,17 +17,17 @@ import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profil
 import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
-import {
-  installMainWindowCloseLifecycle,
-  WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
-} from './main-window-close-lifecycle'
-import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
-import { mainWindowLoadErrorCode } from './main-window-load-error-code'
-import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
-import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
-import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
-import { installMainWindowActivityRelay } from './main-window-activity'
-import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
+import { installMainWindowCloseLifecycle } from './main-window/main-window-close-lifecycle'
+import type {
+  CreateMainWindowOptions,
+  MainWindowLoadObserver
+} from './main-window/main-window-contracts'
+import { mainWindowLoadErrorCode } from './renderer-recovery/main-window-load-error-code'
+import { installMainWindowFocusLifecycle } from './main-window/main-window-focus-lifecycle'
+import { installMainWindowShortcutRouting } from './main-window/main-window-shortcut-routing'
+import { installMainWindowStateLifecycle } from './main-window/main-window-state-lifecycle'
+import { installMainWindowActivityRelay } from './main-window/main-window-activity'
+import { stopHiddenWindowFramePumpOnShow } from './visibility/hidden-window-frame-pump'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   formatHiddenWindowFramePumpArgument,
@@ -41,13 +41,11 @@ import {
   TITLEBAR_CSS_CENTER,
   TRAFFIC_LIGHT_RADIUS,
   TRAFFIC_LIGHT_X
-} from './main-window-visual-lifecycle'
-import { installMainWindowWebviewSecurity } from './main-window-webview-security'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
+} from './main-window/main-window-visual-lifecycle'
+import { installMainWindowWebviewSecurity } from './security/main-window-webview-security'
+import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
-
-export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
   installRendererHangStackPolicy(

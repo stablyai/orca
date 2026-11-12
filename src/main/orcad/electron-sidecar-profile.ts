@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
 import { isProcessAlive } from '../../shared/serve-bundle-coordination'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { isDirectChild } from '../window/owned-temp-staging-root'
+import { isDirectChild } from '../filesystem/owned-temp-staging-root'
 import { readRuntimeMetadataAsync } from '../runtime/rpc/server/runtime-metadata'
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
 
