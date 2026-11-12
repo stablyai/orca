@@ -25,8 +25,10 @@ export function captureStructuredExecutionOptions(
           ...selection
         }
   // A missing Fast pick has a definite baseline on hosts that offer it.
+  // Cursor's fast flag lives on the model selector and defaults per model, so a missing pick must not force it off.
   if (
     candidate.fastMode === undefined &&
+    ctx.agent !== 'cursor' &&
     ctx.agents.definition(ctx.agent)?.restingOptions.acceptsKey('fastMode')
   ) {
     candidate.fastMode = 'false'
