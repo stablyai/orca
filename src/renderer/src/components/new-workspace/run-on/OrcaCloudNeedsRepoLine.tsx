@@ -5,16 +5,14 @@ import { ORCA_CLOUD_NEEDS_REPO_ID } from './cloud-start-view'
 
 /**
  * RR-c1 (Neil): Project's error after Create was pressed with Orca Cloud on a plain folder. Nothing
- * switches on its own; it says why Create stopped and offers the one way forward: choose a GitHub
- * repository (the Project picker opens at them), or add one when there are none.
+ * switches on its own; it says why Create stopped. With GitHub repositories to pick, the Project
+ * dropdown is the way forward, so no link (Neil: "it's quite obvious"); with none, it offers to add one.
  */
 export function OrcaCloudNeedsRepoLine({
   hasRepos,
-  onChooseRepository,
   onAddRepository
 }: {
   hasRepos: boolean
-  onChooseRepository: () => void
   onAddRepository: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -31,22 +29,17 @@ export function OrcaCloudNeedsRepoLine({
           'Orca Cloud needs a GitHub repository.'
         )}
       </p>
-      {/* statusAction pads its label by px-1; -mx-1 keeps the text flush with the line above. */}
-      <div className="-mx-1">
-        <Button
-          type="button"
-          variant="link"
-          size="statusAction"
-          onClick={hasRepos ? onChooseRepository : onAddRepository}
-        >
-          {/* Reads as a link at rest, not only on hover (design-squad). */}
-          <span className="underline underline-offset-4">
-            {hasRepos
-              ? t('components.newWorkspace.cloudOnly.chooseRepository', 'Choose repository')
-              : t('components.newWorkspace.cloudOnly.addRepository', 'Add a GitHub repository')}
-          </span>
-        </Button>
-      </div>
+      {hasRepos ? null : (
+        // statusAction pads its label by px-1; -mx-1 keeps the text flush with the line above.
+        <div className="-mx-1">
+          <Button type="button" variant="link" size="statusAction" onClick={onAddRepository}>
+            {/* Reads as a link at rest, not only on hover (design-squad). */}
+            <span className="underline underline-offset-4">
+              {t('components.newWorkspace.cloudOnly.addRepository', 'Add a GitHub repository')}
+            </span>
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
