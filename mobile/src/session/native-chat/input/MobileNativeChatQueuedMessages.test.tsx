@@ -454,6 +454,7 @@ describe('MobileNativeChatQueuedMessages', () => {
           : null
     })
     renderer = mounted
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only messageId is read; the editor composer is mocked, so the RPC client is never touched.
     const editor = { messageId: 'a' } as unknown as Props['editor']
     const cards = [card({ messageId: 'a' }), card({ messageId: 'b' }), card({ messageId: 'c' })]
     await act(async () => mounted.update(element({ cards, editor })))
