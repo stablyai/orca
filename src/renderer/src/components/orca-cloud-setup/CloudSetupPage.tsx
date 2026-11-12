@@ -17,6 +17,7 @@ import type {
 import { CloudSetupErrorNotice } from '@/components/new-workspace/cloud-setup/CloudSetupErrorNotice'
 import { currentStepCopy, doneStepCopy, stepLabel, type StepCopy } from './cloud-setup-page-copy'
 import type { CloudSetupFlow } from './use-cloud-setup-flow'
+import { CloudCapabilityOffActions } from './CloudCapabilityOffActions'
 
 export type CloudSetupPageProps = {
   flow: CloudSetupFlow
@@ -231,6 +232,8 @@ function StepActions({
           {t('cloudSetupPage.checkAgain', 'Check again')}
         </Button>
       )
+    case 'capability-off':
+      return <CloudCapabilityOffActions onTryAgain={flow.checkAgain} contactUrl={flow.contactUrl} />
     case 'github-waiting':
       return (
         <span className="flex items-center gap-2 text-sm text-muted-foreground" role="status">

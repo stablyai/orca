@@ -28982,7 +28982,14 @@
     "header": "Setting up Orca Cloud",
     "headerFor": "Setting up Orca Cloud for {{name}}",
     "resumeDraft": "Open draft",
-    "cancelSignIn": "Cancel"
+    "cancelSignIn": "Cancel",
+    "capability": {
+      "tryAgain": "Try again",
+      "contact": "Contact us",
+      "title": "Orca Cloud isn’t turned on for your team yet",
+      "lead": "Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes, or contact us and we’ll turn it on.",
+      "leadNoContact": "Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes."
+    }
   },
   "orcaCloudSignInSheet": {
     "title": "Agents in Orca Cloud",

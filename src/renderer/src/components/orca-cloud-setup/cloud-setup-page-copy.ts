@@ -34,7 +34,7 @@ function trialHours(step: CloudSetupStep): string | null {
 }
 
 export function currentStepCopy(
-  flow: Pick<CloudSetupPageModel, 'current' | 'action'>,
+  flow: Pick<CloudSetupPageModel, 'current' | 'action'> & { contactUrl?: string | null },
   t: Translate
 ): StepCopy {
   const step = flow.current
@@ -139,6 +139,20 @@ export function currentStepCopy(
         title: t('cloudSetupPage.repository.title', 'Orca Cloud needs a GitHub repository'),
         lead: detail,
         note: step?.note ?? null
+      }
+    case 'capability-off':
+      return {
+        title: t('cloudSetupPage.capability.title', 'Orca Cloud isn’t turned on for your team yet'),
+        // Only offer "contact us" when [Contact us] is shown (a catalog contact URL exists).
+        lead: flow.contactUrl
+          ? t(
+              'cloudSetupPage.capability.lead',
+              'Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes, or contact us and we’ll turn it on.'
+            )
+          : t(
+              'cloudSetupPage.capability.leadNoContact',
+              'Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes.'
+            )
       }
     case 'ask-owner':
       return {
