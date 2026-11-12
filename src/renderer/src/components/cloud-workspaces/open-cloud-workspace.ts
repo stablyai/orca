@@ -127,6 +127,26 @@ async function forgetPairing(
   }
 }
 
+/** Wakes a sleeping workspace before connecting to it; the failed outcome when it was refused. */
+async function wakeIfAsleep(workspace: CloudWorkspace): Promise<OpenOutcome | null> {
+  if (workspace.status !== 'suspended' && workspace.status !== 'suspending') {
+    return null
+  }
+  const woke = await window.api.cloudWorkspaces.wake(workspace.id)
+  if (woke.ok) {
+    return null
+  }
+  const owner = {
+    self: workspace.access === 'owner',
+    name: workspace.memberNames?.[workspace.ownerUserId] ?? null
+  }
+  return {
+    ok: false,
+    message: describeError(woke.error, woke.reason, translate, owner),
+    unknownServerError: isUnknownServerFailure(woke.error, woke.status)
+  }
+}
+
 async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<OpenOutcome> {
   const api = window.api.cloudWorkspaces
   const binding = (await api.environmentBindings())[workspace.id]
@@ -134,6 +154,12 @@ async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<O
     const environments = await window.api.runtimeEnvironments.list()
     const saved = environments.some((e) => e.id === binding.environmentId)
     if (saved) {
+      // PAIRED-WAKE: an existing pairing connects straight to the VM, which a sleeping one can't
+      // answer; wake it first (billing refusals read like a teammate's grant refusal below).
+      const refused = await wakeIfAsleep(workspace)
+      if (refused) {
+        return refused
+      }
       try {
         return await connectAndReveal(binding.environmentId, name)
       } catch (error) {

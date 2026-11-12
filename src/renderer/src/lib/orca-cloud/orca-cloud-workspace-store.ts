@@ -282,8 +282,10 @@ export function noteCloudWakeProgress(reported: CloudWakeProgressEvent): void {
     started && event.phase !== 'waking' && started.startedAt === event.startedAt
       ? { ...event, source: started.source }
       : event
+  // A paired workspace's wake never makes it an owned id (owned-only flows key on `ids`).
+  const known = snapshot.ids.has(event.workspaceId) || event.workspaceId in snapshot.paired
   updateCloudWorkspaceSnapshot((s) => ({
-    ids: s.ids.has(event.workspaceId) ? s.ids : new Set([...s.ids, event.workspaceId]),
+    ids: known ? s.ids : new Set([...s.ids, event.workspaceId]),
     wake: { ...s.wake, [event.workspaceId]: next }
   }))
   // Typing into the workspace while it wakes is held and delivered to the woken terminal.

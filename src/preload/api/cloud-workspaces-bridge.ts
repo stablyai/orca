@@ -13,6 +13,7 @@ export const cloudWorkspacesApi = {
   listGrants: (id) => ipcRenderer.invoke('cloudWorkspaces:listGrants', { id }),
   revokeGrant: (id, grantId) => ipcRenderer.invoke('cloudWorkspaces:revokeGrant', { id, grantId }),
   sleep: (id) => ipcRenderer.invoke('cloudWorkspaces:sleep', { id }),
+  wake: (id) => ipcRenderer.invoke('cloudWorkspaces:wake', { id }),
   destroy: (id) => ipcRenderer.invoke('cloudWorkspaces:destroy', { id }),
   localWorkspaces: () => ipcRenderer.invoke('cloudWorkspaces:localWorkspaces'),
   noteSent: (id) => ipcRenderer.invoke('cloudWorkspaces:noteSent', { id }),

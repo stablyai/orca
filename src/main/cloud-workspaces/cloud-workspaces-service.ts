@@ -236,6 +236,8 @@ export function createCloudWorkspacesService(deps: {
     localWorkspaces: () => localWorkspaces(),
     noteSent: (id: string) => wrap(() => client.noteSent(id)),
     sleep: (id: string) => wrap(() => client.sleep(id)),
+    /** PAIRED-WAKE: wake a workspace this desktop paired with (no local VM record to resume). */
+    wake: (id: string) => wrap(async () => void (await client.wake(id))),
     destroy: (id: string) => wrap(() => client.destroy(id)),
 
     /**

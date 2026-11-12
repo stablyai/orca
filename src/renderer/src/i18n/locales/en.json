@@ -2470,6 +2470,9 @@
         "workspaceActions": {
           "unavailable": "Orca Cloud is unavailable.",
           "archiveSleepFailed": "It’s still running. Your files are safe."
+        },
+        "pairedWake": {
+          "notPaired": "This workspace is no longer linked to this computer. Open it again from Cloud workspaces on Home."
         }
       },
       "cli": {
