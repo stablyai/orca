@@ -554,6 +554,7 @@
 /* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
    App themes replace the surface, secondary and muted colors with readable hex (notice-surface-tokens.ts). */
 :root {
+  --notice-muted: var(--muted);
   --notice-muted-foreground: var(--muted-foreground);
   --notice-secondary-edge: transparent;
   --notice-surface: var(--popover);
@@ -578,6 +579,7 @@
   --card: var(--notice-surface);
   --foreground: var(--popover-foreground);
   --card-foreground: var(--popover-foreground);
+  --muted: var(--notice-muted);
   --muted-foreground: var(--notice-muted-foreground);
   --secondary: var(--notice-secondary);
   --secondary-foreground: var(--popover-foreground);

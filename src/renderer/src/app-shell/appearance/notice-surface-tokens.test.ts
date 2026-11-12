@@ -7,6 +7,7 @@ const DARK_BUILT_INS = {
   '--foreground': '#f0f0f0',
   '--popover': '#171717',
   '--popover-foreground': '#f0f0f0',
+  '--muted': '#262626',
   '--muted-foreground': '#acacac'
 }
 const probe = (value: string): Rgba | null => (value.startsWith('#') ? hexToRgb(value) : null)
@@ -24,15 +25,42 @@ function wcagContrast(firstHex: string, secondHex: string): number {
   return (high + 0.05) / (low + 0.05)
 }
 
+/** `over` with `top` painted at `alpha`, as the browser blends a bg-muted/N panel. */
+function composite(topHex: string, overHex: string, alpha: number): string {
+  return `#${[1, 3, 5]
+    .map((start) => {
+      const top = Number.parseInt(topHex.slice(start, start + 2), 16)
+      const under = Number.parseInt(overHex.slice(start, start + 2), 16)
+      return Math.round(top * alpha + under * (1 - alpha))
+        .toString(16)
+        .padStart(2, '0')
+    })
+    .join('')}`
+}
+
 /** The emitted tokens are the painted colors, so their contrast is what the user sees. */
 function expectReadable(themeTokens: Record<string, string>): void {
-  const text = { ...DARK_BUILT_INS, ...themeTokens }['--popover-foreground']
-  const notice = noticeSurfaceTokens(themeTokens, 'dark', DARK_BUILT_INS, probe)
-  expect(wcagContrast(notice['--notice-surface'], text)).toBeGreaterThanOrEqual(4.5)
+  const palette: Record<string, string> = { ...DARK_BUILT_INS, ...themeTokens }
+  const text = palette['--popover-foreground']
+  const notice: Record<string, string> = noticeSurfaceTokens(
+    themeTokens,
+    'dark',
+    DARK_BUILT_INS,
+    probe
+  )
+  const surface = notice['--notice-surface']
+  const muted = notice['--notice-muted-foreground']
+  expect(wcagContrast(surface, text)).toBeGreaterThanOrEqual(4.5)
   expect(wcagContrast(notice['--notice-secondary'], text)).toBeGreaterThanOrEqual(4.5)
-  expect(
-    wcagContrast(notice['--notice-surface'], notice['--notice-muted-foreground'])
-  ).toBeGreaterThanOrEqual(4.5)
+  expect(wcagContrast(surface, muted)).toBeGreaterThanOrEqual(4.5)
+  // UpdateErrorCardContent's bg-muted/30, /40 and /50 panels hold muted and body text. Without a
+  // --notice-muted token, main.css paints them from the palette's --muted.
+  const mutedPanel = notice['--notice-muted'] ?? palette['--muted']
+  for (const alpha of [0.3, 0.4, 0.5]) {
+    const panel = composite(mutedPanel, surface, alpha)
+    expect(wcagContrast(panel, muted)).toBeGreaterThanOrEqual(4.5)
+    expect(wcagContrast(panel, text)).toBeGreaterThanOrEqual(4.5)
+  }
 }
 
 describe('noticeSurfaceTokens', () => {
@@ -41,12 +69,14 @@ describe('noticeSurfaceTokens', () => {
       '--notice-surface': '#262626',
       '--notice-secondary': '#3a3a3a',
       '--notice-secondary-edge': 'transparent',
+      '--notice-muted': '#3a3a3a',
       '--notice-muted-foreground': '#acacac'
     })
   })
 
   // Popovers the theme validator accepts that once painted notice text under 4.5:1: #5a5a5a
-  // through Chromium's color-mix rounding, #383838 through hex rounding, the rest unlifted.
+  // through Chromium's color-mix rounding, #383838 through hex rounding, white-on-dark-base
+  // through dark muted panels, the rest unlifted.
   it.each<Record<string, string>>([
     { '--popover': '#5a5a5a' },
     { '--popover': '#383838' },

@@ -12,6 +12,7 @@ export const NOTICE_SURFACE_TOKEN = '--notice-surface'
 export const NOTICE_SECONDARY_TOKEN = '--notice-secondary'
 export const NOTICE_MUTED_FOREGROUND_TOKEN = '--notice-muted-foreground'
 export const NOTICE_SECONDARY_EDGE_TOKEN = '--notice-secondary-edge'
+export const NOTICE_MUTED_TOKEN = '--notice-muted'
 // Keep in sync with the built-in notice mixes in main.css.
 const NOTICE_LIFT = { light: 0, dark: 7 } as const
 const NOTICE_SECONDARY_MIX = { light: 6, dark: 10 } as const
@@ -47,7 +48,8 @@ function deepestReadableMix(tint: Rgba, base: Rgba, text: Rgba, deepest: number)
  * Toasts and corner cards lift the popover toward the foreground and paint popover and muted
  * text on it, but a theme's popover pair is only checked unlifted. So the lift and secondary
  * fill shrink until popover text stays readable, and muted text moves toward popover text until
- * it does too. Emitted as final hex colors: CSS paints exactly the colors measured here.
+ * it does too, on the surface and on muted panels. Emitted as final hex colors: CSS paints
+ * exactly the colors measured here.
  */
 export function noticeSurfaceTokensFor(
   colors: { foreground: Rgba; popover: Rgba; popoverForeground: Rgba; mutedForeground: Rgba },
@@ -60,8 +62,12 @@ export function noticeSurfaceTokensFor(
   const text = painted(popoverForeground)
   const surface = deepestReadableMix(foreground, popover, text, NOTICE_LIFT[base])
   const secondary = deepestReadableMix(foreground, surface, text, NOTICE_SECONDARY_MIX[base])
+  // Muted panels (bg-muted/N) paint between the surface and the secondary fill, so muted text
+  // must read on both ends.
+  const mutedReads = (color: Rgba): boolean =>
+    readable(surface, color) && readable(secondary, color)
   let muted = painted(mutedForeground)
-  for (let towardText = 1; towardText <= 100 && !readable(surface, muted); towardText++) {
+  for (let towardText = 1; towardText <= 100 && !mutedReads(muted); towardText++) {
     muted = painted(mix(popoverForeground, mutedForeground, towardText))
   }
   const surfaceHex = rgbaToHex(surface)
@@ -72,6 +78,9 @@ export function noticeSurfaceTokensFor(
     // Why: with no fill left, secondary buttons need an edge to still read as buttons.
     [NOTICE_SECONDARY_EDGE_TOKEN]:
       secondaryHex === surfaceHex ? 'var(--notice-border)' : 'transparent',
+    // Why: built-in palettes set --muted equal to --secondary; keeping that here keeps muted panels
+    // on the notice surface's polarity when a theme's popover and app polarity differ.
+    [NOTICE_MUTED_TOKEN]: secondaryHex,
     [NOTICE_MUTED_FOREGROUND_TOKEN]: rgbaToHex(muted)
   }
 }
