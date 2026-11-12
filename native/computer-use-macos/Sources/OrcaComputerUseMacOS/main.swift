@@ -2977,7 +2977,7 @@ private enum TextInput {
             return nil
         }
         setSelectedTextRange(element, CFRange(location: startOffset + text.utf16.count, length: 0))
-        // Why: a stale Chromium cache only ever shows the old value, so any other value is final.
+        // Why: a cached, out-of-process AX tree can show the old value for a moment; any other value is final.
         let readback = settledValueReadback(element) { next == current || ($0 as? String) != current } as? String
         guard readback == next else {
             // Why: typing the text as keys after a write that landed enters it twice, so only an unchanged field falls back.
