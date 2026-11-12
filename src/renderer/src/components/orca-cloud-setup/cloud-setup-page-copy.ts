@@ -140,6 +140,14 @@ export function currentStepCopy(
         lead: detail,
         note: step?.note ?? null
       }
+    case 'capability-off':
+      return {
+        title: t('cloudSetupPage.capability.title', 'Orca Cloud isn’t turned on for your team yet'),
+        lead: t(
+          'cloudSetupPage.capability.lead',
+          'Your team has a plan, but Orca Cloud isn’t turned on for it yet. Try again in a few minutes, or contact us and we’ll turn it on.'
+        )
+      }
     case 'ask-owner':
       return {
         title: t('cloudSetupPage.owner.title', 'An owner or admin needs to fix this'),

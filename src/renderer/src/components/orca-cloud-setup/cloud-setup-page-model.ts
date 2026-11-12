@@ -22,6 +22,8 @@ export type CloudSetupPageAction =
   | 'needs-repository'
   /** A member can't fix billing; an owner or admin has to. */
   | 'ask-owner'
+  /** The team has a plan, but Orca Cloud isn't turned on for it yet: try again or contact us. */
+  | 'capability-off'
   /** Still reading account, plan or repository state. */
   | 'checking'
   /** Every step is done: the prompt starts. */
@@ -48,6 +50,10 @@ export function actionForStep(
     case 'plan':
       if (step.state === 'pending') {
         return 'sign-in'
+      }
+      // Owner and member alike: neither can buy their way past it.
+      if (step.need === 'capability') {
+        return 'capability-off'
       }
       if (step.canFix === false) {
         return 'ask-owner'

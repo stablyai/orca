@@ -14,10 +14,12 @@ export function setupActionFor(
     const pick = getOrcaCloudPick({ state: 'signed-out' })
     return pick.kind === 'act' ? pick.run : null
   }
-  const effective: OrcaCloudRunTargetAccess =
-    availability === 'needs-capability' && access.state !== 'no-plan'
-      ? { state: 'no-plan', lapsed: false, canManageBilling: true }
-      : access
+  if (availability === 'needs-capability' && access.state !== 'no-plan') {
+    // The team has a plan; only turning Orca Cloud on for it helps. Checkout would refuse
+    // (already_subscribed) and loop (CAP-GATE-DESKTOP).
+    return null
+  }
+  const effective: OrcaCloudRunTargetAccess = access
   const pick = getOrcaCloudPick(effective)
   return pick.kind === 'act' ? pick.run : null
 }

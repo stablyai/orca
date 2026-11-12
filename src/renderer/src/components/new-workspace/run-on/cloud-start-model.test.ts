@@ -11,6 +11,8 @@ import {
   cloudSetupRequired,
   sessionNeedsFrom
 } from '../../orca-cloud-setup/cloud-setup-page-model'
+import { setupActionFor } from './cloud-start-actions'
+import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 
 describe('Orca Cloud availability', () => {
   it('keeps Orca Cloud visible but disabled when it cannot be reached (X2)', () => {
@@ -287,5 +289,29 @@ describe('withReachableGitHub', () => {
   it('leaves the rows alone while the repository is still unreachable', () => {
     const steps = [...session]
     expect(withReachableGitHub(steps, false)).toBe(steps)
+  })
+})
+
+describe('CAP-GATE-DESKTOP: a plan but no Orca Cloud capability', () => {
+  const accesses: [string, OrcaCloudRunTargetAccess][] = [
+    ['entitled', { state: 'entitled', remainingSeconds: 3600 }],
+    ['unknown billing', { state: 'unknown' }]
+  ]
+  it.each(accesses)('%s: "isn’t turned on yet", never checkout', (_label, access) => {
+    const steps = deriveCloudSetupSteps({ availability: 'needs-capability', access })
+    expect(steps.find((step) => step.id === 'plan')).toMatchObject({
+      state: 'needed',
+      need: 'capability'
+    })
+    expect(cloudSetupPageModel(steps).action).toBe('capability-off')
+    expect(setupActionFor(steps, access, 'needs-capability')).toBeNull()
+  })
+
+  it('a team with no plan keeps its usual path (never "isn’t turned on")', () => {
+    const steps = deriveCloudSetupSteps({
+      availability: 'needs-capability',
+      access: { state: 'no-plan', lapsed: false, canManageBilling: true, trialOfferSeconds: 3600 }
+    })
+    expect(cloudSetupPageModel(steps).action).toBe('start-trial')
   })
 })
