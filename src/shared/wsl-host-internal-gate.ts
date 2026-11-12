@@ -7,7 +7,16 @@ export function isWslHostsInternalGateOpen(
   env: Readonly<Record<string, string | undefined>>
 ): boolean {
   const value = env[WSL_HOSTS_INTERNAL_GATE_ENV]
-  return value === undefined || !GATE_OFF_VALUES.has(value.trim().toLowerCase())
+  if (value === undefined) {
+    return true
+  }
+  // cmd.exe's `set NAME="0"` keeps the quotes in the value.
+  const word = value
+    .trim()
+    .replace(/^(["'])(.*)\1$/, '$2')
+    .trim()
+    .toLowerCase()
+  return !GATE_OFF_VALUES.has(word)
 }
 
 /**

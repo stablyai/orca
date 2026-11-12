@@ -6,12 +6,18 @@ describe('WSL hosts internal gate', () => {
     expect(isWslHostsInternalGateOpen({})).toBe(true)
   })
 
-  it.each(['0', 'false', 'off', 'no', 'FALSE', ' Off ', 'No\n'])('is closed for %j', (value) => {
-    expect(isWslHostsInternalGateOpen({ [WSL_HOSTS_INTERNAL_GATE_ENV]: value })).toBe(false)
-  })
+  it.each(['0', 'false', 'off', 'no', 'FALSE', ' Off ', 'No\n', '"0"', "'off'", ' "False" '])(
+    'is closed for %j',
+    (value) => {
+      expect(isWslHostsInternalGateOpen({ [WSL_HOSTS_INTERNAL_GATE_ENV]: value })).toBe(false)
+    }
+  )
 
   // Empty reads like unset; anything else that isn't an off word keeps today's internal "on".
-  it.each(['1', 'true', 'on', 'yes', '', '  ', 'disabled'])('is open for %j', (value) => {
-    expect(isWslHostsInternalGateOpen({ [WSL_HOSTS_INTERNAL_GATE_ENV]: value })).toBe(true)
-  })
+  it.each(['1', 'true', 'on', 'yes', '', '  ', 'disabled', '""', '"0'])(
+    'is open for %j',
+    (value) => {
+      expect(isWslHostsInternalGateOpen({ [WSL_HOSTS_INTERNAL_GATE_ENV]: value })).toBe(true)
+    }
+  )
 })
