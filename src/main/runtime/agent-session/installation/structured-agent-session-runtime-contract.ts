@@ -78,10 +78,14 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Host-owned phone delivery and reconciliation from the current journal projection. */
   attentionDelivery?: StructuredAttentionMobileDelivery
   /** Every live turn completion and pending prompt, with the host's status at that edge. */
-  onTurnAttention?: (
-    event: AgentSessionTurnCompletionEvent,
-    readStatus: (sessionId: string) => AgentSessionStatusSummary | undefined
-  ) => void
+  createTurnAttention?: () => {
+    onTurnAttention: (
+      event: AgentSessionTurnCompletionEvent,
+      readStatus: (sessionId: string) => AgentSessionStatusSummary | undefined
+    ) => void
+    start: () => void
+    stop: () => void
+  }
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver

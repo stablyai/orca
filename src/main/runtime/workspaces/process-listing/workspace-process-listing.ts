@@ -304,7 +304,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
-      onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
+      createTurnAttention: () =>
+        chatWorkerTurnStopReporter({
+          ...this.workerTurnStopReportDeps,
+          openExistingDb: () => this.getExistingOrchestrationDb()
+        }),
       // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
