@@ -11,7 +11,10 @@ import { printResult } from '../command-result-output'
 import { formatPortsScan } from './ports-format'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import { normalizeWorktreeSelectorForCaller, resolveCurrentWorktreeSelector } from '../selectors'
+import {
+  normalizeWorktreeSelectorForCaller,
+  resolveCurrentWorktreeSelector
+} from '../workspace-selection/workspace-selector'
 
 type PortsTarget = { selector: string; worktreePath: string | null }
 

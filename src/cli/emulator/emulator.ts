@@ -2,14 +2,14 @@ import type { CommandHandler } from '../dispatch'
 import { formatLogcat } from './emulator-logcat-format'
 import { parseEmulatorPermissionRequest } from './emulator-permissions-args'
 import { printResult } from '../command-result-output'
-import { resolveRepoPathArgument } from '../repo-path-arguments'
+import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredFiniteNumber,
   getRequiredStringFlag
 } from '../flags'
-import { getEmulatorCommandTarget } from '../selectors'
+import { getEmulatorCommandTarget } from './emulator-command-target'
 import { RuntimeClientError } from '../runtime/types'
 import { EMULATOR_ATTACH_RPC_TIMEOUT_MS } from '../../shared/emulator-attach-timeouts'
 

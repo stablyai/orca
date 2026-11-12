@@ -6,7 +6,7 @@ const callMock = vi.hoisted(() => vi.fn())
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./command-result-output', () => ({ printResult: vi.fn() }))
-vi.mock('./selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
+vi.mock('./terminals/terminal-selector', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
 import { findCommandSpec } from './args'

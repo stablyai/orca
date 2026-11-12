@@ -4,7 +4,7 @@ import {
   stripAutomationOwnerConflictCode
 } from '../shared/automations/ownership/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automations/automation-owner-conflict-recovery'
-import { worktreeSelectorRecovery } from './worktree-selector-recovery'
+import { worktreeSelectorRecovery } from './workspaces/worktree-selector-recovery'
 import { ambiguousWorkspaceChoices, selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'

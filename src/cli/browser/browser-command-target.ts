@@ -3,12 +3,12 @@ import type { RuntimeStatus } from '../../shared/runtime-types'
 import { getOptionalStringFlag, getPresentStringFlag } from '../flags'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError } from '../runtime/types'
-import { assertLocalCwdWorktreeSelector } from '../local-environment-selector'
+import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
 import {
   getBrowserWorktreeSelector,
   normalizeWorktreeSelectorForCaller,
   resolveCurrentWorktreeSelector
-} from '../selectors'
+} from '../workspace-selection/workspace-selector'
 
 type BrowserCliTarget = {
   worktree?: string

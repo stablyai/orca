@@ -5,7 +5,7 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { getPresentStringFlag } from '../flags'
 import { printResult } from '../command-result-output'
-import { resolveRepoPathArgument } from '../repo-path-arguments'
+import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
 
 export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
   'extension list': async ({ flags, client, json }) => {

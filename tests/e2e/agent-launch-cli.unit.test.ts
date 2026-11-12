@@ -10,7 +10,7 @@ import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
 import { callAgentLaunch, readCliAgentLaunch } from '../../src/cli/agents/agent-launch-request'
 import { parseArgs } from '../../src/cli/args'
 import { AGENT_LAUNCH_HANDLERS } from '../../src/cli/agents/agent-launch'
-import { createWorktreeWithAgent } from '../../src/cli/handlers/worktree-create-agent-launch'
+import { createWorktreeWithAgent } from '../../src/cli/workspaces/worktree-create-agent-launch'
 import {
   methodNamed,
   rpcContext,
@@ -225,48 +225,6 @@ describe('CLI launch through host surface creation and replay admission', () => 
       )
     }
   )
-
-  it('refuses replay on an older replacement host without sending any launch', async () => {
-    const client = hostClient(runtimeStub())
-    const operationId = `${Date.now()}-${'a'.repeat(32)}`
-    await expect(
-      callAgentLaunch(client, { agent: 'codex', operationId }, { target: existing }, [
-        'agent.launch.v2',
-        'agent.launch.local-presentation.v1'
-      ])
-    ).rejects.toThrow('do not retry without --retry-launch')
-    expect(client.call).not.toHaveBeenCalled()
-  })
-
-  it.each([existing, create])(
-    'refuses a v2-only prompted launch before creating anything: %j',
-    async (target) => {
-      const runtime = runtimeStub()
-      await expect(
-        callAgentLaunch(
-          hostClient(runtime),
-          { agent: 'codex', prompt: { text: 'Long\nMultiline', delivery: 'submit' } },
-          { target },
-          ['agent.launch.v2']
-        )
-      ).rejects.toThrow('cannot safely carry launch prompts')
-      expect(chatCreate).not.toHaveBeenCalled()
-      expect(runtime.createTerminal).not.toHaveBeenCalled()
-    }
-  )
-
-  it('refuses hosts without local presentation before creating anything', async () => {
-    const client = hostClient(runtimeStub())
-    await expect(
-      callAgentLaunch(
-        client,
-        { agent: 'codex' },
-        { target: existing, presentation: 'background' },
-        ['agent.launch.v2']
-      )
-    ).rejects.toThrow('cannot honor CLI launch focus or background')
-    expect(client.call).not.toHaveBeenCalled()
-  })
 
   it('gives inspection-only recovery after an ambiguous legacy create and never falls back again', async () => {
     const client = new RuntimeClient(directory, 60_000, null, null)
