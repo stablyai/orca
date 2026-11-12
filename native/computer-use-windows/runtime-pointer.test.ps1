@@ -51,6 +51,10 @@ public static class OrcaDesktopWin32 {
         }
         return Foreground;
     }
+    public static uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId) {
+        processId = hwnd == new IntPtr(101) ? 4242u : 1u;
+        return 1;
+    }
     public static bool SetCursorPos(int x, int y) {
         Calls.Add("move:" + x + "," + y);
         return true;
@@ -74,7 +78,7 @@ $functions = @(
     "Get-OrcaRequiredNumber", "Get-OrcaPositiveInteger", "Get-OrcaPositiveNumber",
     "Get-OrcaScreenPoint", "Get-OrcaElementScreenPoint", "Get-OrcaModifierVirtualKey",
     "Get-OrcaClickModifierVirtualKeys", "Send-OrcaMouseClick", "Send-OrcaDrag", "Invoke-OrcaOperation",
-    "Assert-OrcaInputAllowed"
+    "Assert-OrcaInputAllowed", "Test-OrcaTargetTookForeground"
 )
 foreach ($definition in $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($definition.Name -in $functions) { . ([scriptblock]::Create($definition.Extent.Text)) }
@@ -147,4 +151,10 @@ foreach ($case in @(
     if ($message -notlike "target_elevated:*") { throw "$($case.tool) elevated target expected target_elevated, received '$message'" }
     Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "$($case.tool) elevated target sends no activation or input"
 }
+# Why: WPF activates its own window for most patterns; the result must say so rather than claim background.
+[OrcaDesktopWin32]::Reset($false)
+function Invoke-OrcaPrimaryAction($Element) { [OrcaDesktopWin32]::Foreground = [IntPtr]101; $true }
+$result = Invoke-OrcaOperation ([pscustomobject]@{ tool = "click"; app = "Fixture"; element = [pscustomobject]@{ index = 1 } })
+Assert-TestEqual $result.action.path "accessibility" "self-activating pattern click path"
+Assert-TestEqual $result.action.delivery "foreground" "self-activating pattern click delivery"
 Write-Output "windows-pointer-tests-ok"

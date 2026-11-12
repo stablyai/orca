@@ -39,24 +39,27 @@ async function elementIndex(app: string, line: RegExp): Promise<number> {
   return index
 }
 
-// Runs a UI Automation action, waits for its effect, and proves the fixture window was never activated.
-async function runBackgroundAction(
+// Runs a UI Automation action, waits for its effect, and checks action.delivery against whether the window was activated.
+async function runPatternAction(
   args: string[],
   effect: (state: WindowsSemanticFixtureState) => boolean,
   label: string
-): Promise<ComputerActionResult> {
+): Promise<{ result: ComputerActionResult; activated: boolean }> {
   const { waitForState } = requireFixture()
   const before = await waitForState((state) => !state.active, 'fixture window inactive')
   const result = parseJsonOutput<{ result: ComputerActionResult }>(
     (await runOrcaCli(['computer', ...args, '--no-screenshot', '--json'])).stdout
   ).result
-  expect(result.action).toMatchObject({ path: 'accessibility', delivery: 'background' })
+  expect(result.action?.path).toBe('accessibility')
   const after = await waitForState(effect, label)
-  expect(after.activations, after.events.join('\n')).toBe(before.activations)
-  return result
+  const activated = after.activations > before.activations
+  expect(result.action?.delivery, after.events.join('\n')).toBe(
+    activated ? 'foreground' : 'background'
+  )
+  return { result, activated }
 }
 
-describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows background UI Automation', () => {
+describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows UI Automation actions', () => {
   beforeAll(async () => {
     await ensureOrcaRuntimeLaunched()
     fixture = await launchWindowsSemanticFixture()
@@ -68,22 +71,22 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows background UI Aut
     await stopOrcaRuntime()
   })
 
-  test('scroll pages a list through ScrollPattern without activating the window', async () => {
+  test('scroll pages a list through ScrollPattern and reports whether the window came forward', async () => {
     const { app } = requireFixture()
     const item = await elementIndex(app, /^\s*(\d+)\s+list item Semantic item 0(?:,|$)/m)
 
-    await runBackgroundAction(
+    await runPatternAction(
       ['scroll', '--app', app, '--element-index', String(item), '--direction', 'down'],
       (state) => state.listOffset > 0,
       'list scrolled down'
     )
   })
 
-  test('ScrollToVisible brings an off-screen list item into view', async () => {
+  test('ScrollToVisible brings an off-screen list item into view in the background', async () => {
     const { app } = requireFixture()
     const item = await elementIndex(app, /^\s*(\d+)\s+list item Semantic item 150(?:,|$)/m)
 
-    await runBackgroundAction(
+    const { activated } = await runPatternAction(
       [
         'perform-secondary-action',
         '--app',
@@ -96,6 +99,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows background UI Aut
       (state) => state.listOffset <= 150 && 150 < state.listOffset + state.listViewport,
       'item 150 in the list viewport'
     )
+    expect(activated).toBe(false)
   })
 
   test('Expand and Collapse drive a tree item through ExpandCollapsePattern', async () => {
@@ -104,7 +108,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows background UI Aut
       app,
       /^\s*(\d+)\s+tree view item Semantic branch,.*Secondary Actions:.*\bExpand\b/m
     )
-    await runBackgroundAction(
+    await runPatternAction(
       [
         'perform-secondary-action',
         '--app',
@@ -122,7 +126,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows background UI Aut
       app,
       /^\s*(\d+)\s+tree view item Semantic branch,.*Secondary Actions:.*\bCollapse\b/m
     )
-    await runBackgroundAction(
+    await runPatternAction(
       [
         'perform-secondary-action',
         '--app',
@@ -141,7 +145,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows background UI Aut
     const { app } = requireFixture()
     const slider = await elementIndex(app, /^\s*(\d+)\s+slider Semantic level(?:,|$)/m)
 
-    const result = await runBackgroundAction(
+    const { result } = await runPatternAction(
       ['set-value', '--app', app, '--element-index', String(slider), '--value', '42'],
       (state) => state.level === 42,
       'slider at 42'

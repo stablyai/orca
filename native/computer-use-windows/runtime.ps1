@@ -105,6 +105,9 @@ public static class OrcaDesktopWin32 {
     public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
+    [DllImport("user32.dll")]
     public static extern bool SetCursorPos(int x, int y);
 
     [DllImport("user32.dll")]
@@ -559,6 +562,14 @@ function Restore-OrcaWindow($Process) {
         [void][OrcaDesktopWin32]::ShowWindow([IntPtr]$Process.MainWindowHandle, 9)
     }
     [void][OrcaDesktopWin32]::SetForegroundWindow([IntPtr]$Process.MainWindowHandle)
+}
+
+function Test-OrcaTargetTookForeground([IntPtr]$Before, $Process) {
+    $after = [OrcaDesktopWin32]::GetForegroundWindow()
+    if ($after -eq $Before) { return $false }
+    $owner = [uint32]0
+    [void][OrcaDesktopWin32]::GetWindowThreadProcessId($after, [ref]$owner)
+    $owner -eq $Process.Id
 }
 
 function Test-OrcaWindowFocused([IntPtr]$WindowHandle) {
@@ -1626,6 +1637,8 @@ function Invoke-OrcaOperation($Operation) {
     if ($Operation.tool -in @("type_text", "press_key", "hotkey", "paste_text")) {
         Assert-OrcaKeyboardFocus $handle $Operation
     }
+    # Why: pattern paths need an element; reading the foreground only then keeps coordinate input untouched.
+    $foregroundBefore = if ($null -ne $element) { [OrcaDesktopWin32]::GetForegroundWindow() } else { [IntPtr]::Zero }
     $action = $null
 
     switch ($Operation.tool) {
@@ -1732,8 +1745,11 @@ function Invoke-OrcaOperation($Operation) {
             throw "unsupported tool: $($Operation.tool)"
         }
     }
-    # Why: only UI Automation patterns leave the user's foreground window alone; every other path raises the target.
-    $delivery = if ($action.path -eq "accessibility" -and -not [bool]$Operation.restoreWindow) { "background" } else { "foreground" }
+    # Why: input paths raise the target; WPF also activates its own window for most patterns, so those are measured.
+    $delivery = "foreground"
+    if ($action.path -eq "accessibility" -and -not [bool]$Operation.restoreWindow -and -not (Test-OrcaTargetTookForeground $foregroundBefore $process)) {
+        $delivery = "background"
+    }
     $action | Add-Member -NotePropertyName delivery -NotePropertyValue $delivery
 
     try {

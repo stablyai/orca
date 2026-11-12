@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$StatePath,
-    [Parameter(Mandatory = $true)][string]$Title
+    [Parameter(Mandatory = $true)][string]$Title,
+    [Parameter(Mandatory = $true)][string]$HolderTitle
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,9 @@ using System.Text;
 public static class OrcaFixtureForeground {
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string className, string title);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
+    public static bool Give(string title) { return SetForegroundWindow(FindWindow(null, title)); }
     public static string Title() {
         var text = new StringBuilder(256);
         GetWindowText(GetForegroundWindow(), text, text.Capacity);
@@ -41,14 +45,7 @@ public static class OrcaFixtureForeground {
 </Window>
 "@
 
-# Why: whenever the controls window is activated, the holder takes activation back, so each action starts inactive.
-[xml]$holderXaml = @"
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="$Title holder" Width="200" Height="120" ShowActivated="False" WindowStartupLocation="Manual" Left="480" Top="40" />
-"@
-
 $window = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
-$holder = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $holderXaml))
 $items = $window.FindName("Items")
 $branch = $window.FindName("Branch")
 $level = $window.FindName("Level")
@@ -69,12 +66,17 @@ function Save-FixtureState {
     } catch {}
 }
 
+# Why: hand activation back to the holder process later, so each action starts behind another app and Orca still sees what it caused.
+$handBack = New-Object Windows.Threading.DispatcherTimer
+$handBack.Interval = [TimeSpan]::FromSeconds(2)
+$handBack.Add_Tick({ $handBack.Stop(); Add-FixtureEvent "hand back $([OrcaFixtureForeground]::Give($HolderTitle))"; Save-FixtureState })
 $window.Add_Activated({
     $state.activations++
     $state.active = $true
     Add-FixtureEvent "activated"
     Save-FixtureState
-    [void]$window.Dispatcher.BeginInvoke([Action]{ [void]$holder.Activate() })
+    $handBack.Stop()
+    $handBack.Start()
 })
 $window.Add_Deactivated({ $state.active = $false; Add-FixtureEvent "deactivated"; Save-FixtureState })
 $items.AddHandler([Windows.Controls.ScrollViewer]::ScrollChangedEvent, [Windows.Controls.ScrollChangedEventHandler]{
@@ -87,13 +89,7 @@ $items.AddHandler([Windows.Controls.ScrollViewer]::ScrollChangedEvent, [Windows.
 $branch.Add_Expanded({ $state.branchExpanded = $true; Add-FixtureEvent "expanded"; Save-FixtureState })
 $branch.Add_Collapsed({ $state.branchExpanded = $false; Add-FixtureEvent "collapsed"; Save-FixtureState })
 $level.Add_ValueChanged({ $state.level = $level.Value; Add-FixtureEvent "level $($level.Value)"; Save-FixtureState })
-$window.Add_ContentRendered({
-    # Why: an owned holder never becomes the process's MainWindowHandle, so pid targeting still finds the controls window.
-    $holder.Owner = $window
-    $holder.Show()
-    $state.ready = $true
-    Save-FixtureState
-})
+$window.Add_ContentRendered({ $state.ready = $true; Save-FixtureState })
 
 # Why: ShowDialog always activates; Application.Run shows the window with ShowActivated honored.
 [void](New-Object Windows.Application).Run($window)

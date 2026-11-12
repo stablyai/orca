@@ -37,6 +37,19 @@ export async function launchWindowsSemanticFixture(): Promise<WindowsSemanticFix
   const tempDir = await mkdtemp(join(tmpdir(), 'orca-computer-windows-semantic-'))
   const statePath = join(tempDir, 'state.json')
   const title = `Orca Semantic Controls ${Date.now()}`
+  const holderTitle = `${title} holder`
+  // Why: a window in another process takes activation back, as the user's own app would hold it.
+  const holder: ChildProcess = spawn(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-STA',
+      '-Command',
+      `Add-Type -AssemblyName System.Windows.Forms; $form = New-Object Windows.Forms.Form; $form.Text = '${holderTitle}'; [Windows.Forms.Application]::Run($form)`
+    ],
+    { stdio: 'ignore' }
+  )
   // Why: no windowsHide; Node's hidden startup flag would also hide the fixture's first WPF window.
   const child: ChildProcess = spawn(
     'powershell.exe',
@@ -51,7 +64,9 @@ export async function launchWindowsSemanticFixture(): Promise<WindowsSemanticFix
       '-StatePath',
       statePath,
       '-Title',
-      title
+      title,
+      '-HolderTitle',
+      holderTitle
     ],
     { stdio: 'ignore' }
   )
@@ -81,10 +96,12 @@ export async function launchWindowsSemanticFixture(): Promise<WindowsSemanticFix
     )
   }
   const close = async (): Promise<void> => {
-    try {
-      await execFileAsync('taskkill.exe', ['/PID', String(pid), '/T', '/F'])
-    } catch {
-      // The fixture may already have exited.
+    for (const owned of [pid, holder.pid]) {
+      try {
+        await execFileAsync('taskkill.exe', ['/PID', String(owned), '/T', '/F'])
+      } catch {
+        // The fixture or holder may already have exited.
+      }
     }
     await rm(tempDir, { force: true, recursive: true })
   }
