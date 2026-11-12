@@ -7,6 +7,7 @@ import type { HostedVmMetrics } from '../../../../shared/hosted-sandbox/hosted-s
 import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { CloudSyncView } from '../../../../shared/cloud-sync/cloud-sync-contract'
 import { cloudStateDetail } from './cloud-state-copy'
+import type { CloudAgentRowSignIn } from '@/lib/orca-cloud/cloud-agent-row-sign-in'
 
 /** "Sleeps in 15 min if idle" while running; "As of 2:31 PM" asleep; else the state's own line. */
 export function cloudCardStateDetail(
@@ -140,4 +141,37 @@ export function cloudCardPrimary(state: CloudDotState, restarting: boolean): Clo
     case 'unknown':
       return null
   }
+}
+
+/**
+ * Of a workspace's agent panes, the sign-in state the card should name: "isn't set up" before
+ * "sign-in expired" (the same order as the attention row), the first such pane within each.
+ */
+export function pickWorkspaceAgentSignIn<P>(
+  panes: readonly P[],
+  signInFor: (pane: P) => CloudAgentRowSignIn | null
+): { pane: P; signIn: CloudAgentRowSignIn } | null {
+  let expired: { pane: P; signIn: CloudAgentRowSignIn } | null = null
+  for (const pane of panes) {
+    const signIn = signInFor(pane)
+    if (signIn === 'needsSignIn') {
+      return { pane, signIn }
+    }
+    if (signIn === 'expired' && !expired) {
+      expired = { pane, signIn }
+    }
+  }
+  return expired
+}
+
+/** The attention item for a picked sign-in state. */
+export function signInAttention(
+  picked: { signIn: CloudAgentRowSignIn; tabId: string; agentName: string } | null
+): CloudCardAttention | null {
+  if (!picked) {
+    return null
+  }
+  return picked.signIn === 'expired'
+    ? { kind: 'agentExpired', agent: picked.agentName, tabId: picked.tabId }
+    : { kind: 'agentNotSetUp', agent: picked.agentName, tabId: picked.tabId }
 }

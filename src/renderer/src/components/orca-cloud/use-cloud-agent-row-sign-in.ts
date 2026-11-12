@@ -31,6 +31,7 @@ import {
   type HostAgentSignInAgent
 } from '../../../../shared/host-agent-sign-in-status'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { pickWorkspaceAgentSignIn } from './cloud-workspace-card-model'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 const subscribeNothing = (): (() => void) => () => {}
@@ -166,19 +167,14 @@ export function useWorkspaceAgentSignIn(
     return null
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: built just above from WorkspaceAgentPane values
-  for (const pane of JSON.parse(panesKey) as WorkspaceAgentPane[]) {
-    const signIn = cloudAgentRowSignIn(
-      pane.agent,
-      accounts,
-      hostAgentSignInEntry(report, pane.agent),
-      {
-        turnEndedAt: pane.turnEndedAt,
-        activeSince: cloudAgentAccountActiveSince(pane.agent)
-      }
-    )
-    if (signIn) {
-      return { agent: pane.agent, signIn, tabId: pane.tabId }
-    }
-  }
-  return null
+  const panes = JSON.parse(panesKey) as WorkspaceAgentPane[]
+  const picked = pickWorkspaceAgentSignIn(panes, (pane) =>
+    cloudAgentRowSignIn(pane.agent, accounts, hostAgentSignInEntry(report, pane.agent), {
+      turnEndedAt: pane.turnEndedAt,
+      activeSince: cloudAgentAccountActiveSince(pane.agent)
+    })
+  )
+  return picked
+    ? { agent: picked.pane.agent, signIn: picked.signIn, tabId: picked.pane.tabId }
+    : null
 }

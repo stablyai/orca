@@ -6,7 +6,10 @@ import {
   cloudCardPrimary,
   cloudCardStateDetail,
   cloudCardUsageLine,
-  mostUrgentAttention
+  cloudCardAttentionLabel,
+  mostUrgentAttention,
+  pickWorkspaceAgentSignIn,
+  signInAttention
 } from './cloud-workspace-card-model'
 
 const t = translate
@@ -67,5 +70,49 @@ describe('calm cloud workspace card', () => {
     expect(cloudCardPrimary('unresponsive', false)).toBe('restart')
     expect(cloudCardPrimary('running', true)).toBe('restart')
     expect(cloudCardPrimary('waking', false)).toBeNull()
+  })
+})
+
+describe('card attention for a running agent’s lapsed sign-in (n15)', () => {
+  type Pane = { tabId: string; signIn: 'needsSignIn' | 'expired' | null }
+  const row = (panes: Pane[]): string | null => {
+    const picked = pickWorkspaceAgentSignIn(panes, (pane) => pane.signIn)
+    const item = mostUrgentAttention([
+      signInAttention(
+        picked ? { signIn: picked.signIn, tabId: picked.pane.tabId, agentName: 'Claude' } : null
+      )
+    ])
+    return item ? cloudCardAttentionLabel(item, t) : null
+  }
+
+  it('a Claude pane that needs sign-in shows "isn’t set up"', () => {
+    expect(row([{ tabId: 'a', signIn: 'needsSignIn' }])).toBe('Claude isn’t set up for Orca Cloud')
+  })
+
+  it('a Claude pane whose sign-in expired shows "sign-in expired"', () => {
+    expect(row([{ tabId: 'a', signIn: 'expired' }])).toBe('Claude sign-in expired')
+  })
+
+  it('both: only the higher priority, whichever pane comes first', () => {
+    expect(
+      row([
+        { tabId: 'a', signIn: 'expired' },
+        { tabId: 'b', signIn: 'needsSignIn' }
+      ])
+    ).toBe('Claude isn’t set up for Orca Cloud')
+    const picked = pickWorkspaceAgentSignIn(
+      [
+        { tabId: 'a', signIn: 'expired' as const },
+        { tabId: 'b', signIn: 'needsSignIn' as const }
+      ],
+      (pane) => pane.signIn
+    )
+    // The row leads to the pane that needs it.
+    expect(picked?.pane.tabId).toBe('b')
+  })
+
+  it('none: no row', () => {
+    expect(row([{ tabId: 'a', signIn: null }])).toBeNull()
+    expect(row([])).toBeNull()
   })
 })
