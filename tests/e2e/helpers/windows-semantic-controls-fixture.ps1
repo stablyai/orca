@@ -27,13 +27,20 @@ Add-Type -AssemblyName PresentationFramework
 </Window>
 "@
 
+# Why: whenever the controls window is activated, the holder takes activation back, so each action starts inactive.
+[xml]$holderXaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        Title="$Title holder" Width="200" Height="120" ShowActivated="False" WindowStartupLocation="Manual" Left="480" Top="40" />
+"@
+
 $window = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
+$holder = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $holderXaml))
 $items = $window.FindName("Items")
 $branch = $window.FindName("Branch")
 $level = $window.FindName("Level")
 for ($i = 0; $i -lt 200; $i++) { [void]$items.Items.Add("Semantic item $i") }
 
-$state = [ordered]@{ ready = $false; activations = 0; listOffset = 0.0; listViewport = 0.0; branchExpanded = $false; level = 10.0 }
+$state = [ordered]@{ ready = $false; activations = 0; active = $false; listOffset = 0.0; listViewport = 0.0; branchExpanded = $false; level = 10.0 }
 function Save-FixtureState {
     # Why: an exception in a WPF event handler would end the fixture; a reader holding the file only delays one write.
     try {
@@ -43,7 +50,13 @@ function Save-FixtureState {
     } catch {}
 }
 
-$window.Add_Activated({ $state.activations++; Save-FixtureState })
+$window.Add_Activated({
+    $state.activations++
+    $state.active = $true
+    Save-FixtureState
+    [void]$window.Dispatcher.BeginInvoke([Action]{ [void]$holder.Activate() })
+})
+$window.Add_Deactivated({ $state.active = $false; Save-FixtureState })
 $items.AddHandler([Windows.Controls.ScrollViewer]::ScrollChangedEvent, [Windows.Controls.ScrollChangedEventHandler]{
     param($source, $change)
     $state.listOffset = $change.VerticalOffset
@@ -53,7 +66,13 @@ $items.AddHandler([Windows.Controls.ScrollViewer]::ScrollChangedEvent, [Windows.
 $branch.Add_Expanded({ $state.branchExpanded = $true; Save-FixtureState })
 $branch.Add_Collapsed({ $state.branchExpanded = $false; Save-FixtureState })
 $level.Add_ValueChanged({ $state.level = $level.Value; Save-FixtureState })
-$window.Add_ContentRendered({ $state.ready = $true; Save-FixtureState })
+$window.Add_ContentRendered({
+    # Why: an owned holder never becomes the process's MainWindowHandle, so pid targeting still finds the controls window.
+    $holder.Owner = $window
+    $holder.Show()
+    $state.ready = $true
+    Save-FixtureState
+})
 
 # Why: ShowDialog always activates; Application.Run shows the window with ShowActivated honored.
 [void](New-Object Windows.Application).Run($window)

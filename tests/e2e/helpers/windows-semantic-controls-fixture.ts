@@ -12,6 +12,7 @@ const fixtureScript = join(process.cwd(), 'tests/e2e/helpers/windows-semantic-co
 const WindowsSemanticFixtureStateSchema = z.object({
   ready: z.boolean(),
   activations: z.number(),
+  active: z.boolean(),
   listOffset: z.number(),
   listViewport: z.number(),
   branchExpanded: z.boolean(),
