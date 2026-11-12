@@ -3,6 +3,7 @@ import { isValidAutomationSchedule } from '../../automations/scheduling/automati
 import {
   PLUGIN_HOST_ID_MAX_LENGTH,
   PLUGIN_HOST_TEXT_MAX_LENGTH,
+  isPluginPlainLine,
   pluginAgentSchema,
   pluginLabelNameSchema,
   pluginWorkspaceIdSchema
@@ -55,7 +56,8 @@ const automationRow = z.object({
   workspaceId: z.string().max(ID_MAX).nullable(),
   /** `new-per-run`: each run creates a workspace in the project. */
   workspaceMode: z.enum(['existing', 'new-per-run']),
-  schedule: z.string().max(PLUGIN_AUTOMATION_SCHEDULE_MAX),
+  /** Whole, as Orca runs it; null for a stored schedule longer than any Orca accepts now. */
+  schedule: z.string().max(PLUGIN_AUTOMATION_SCHEDULE_MAX).nullable(),
   timezone: z.string().max(64),
   enabled: z.boolean(),
   /** Milliseconds since the epoch; null when it will not run (paused). */
@@ -78,22 +80,37 @@ const automationCreateParams = z
     agent: pluginAgentSchema,
     /** Each run creates a workspace in this project (`project.list` id); give this or `workspaceId`. */
     projectId: z.string().min(1).max(ID_MAX).optional(),
+    /** With `projectId`: the host, as `project.list` gives it; needed only when two hosts have it. */
+    hostId: z.string().min(1).max(ID_MAX).optional(),
     /** Each run uses this workspace (`workspace.list` id), which also names its host. */
     workspaceId: pluginWorkspaceIdSchema.optional(),
     schedule,
     timezone: timezone.optional(),
     /** Default true. */
-    enabled: z.boolean().optional()
+    enabled: z.boolean().optional(),
+    /** Makes a retry safe: a second create with the same key from this plugin answers the first
+     *  automation instead of making another. Keys are this plugin's own. */
+    creationKey: z
+      .string()
+      .min(1)
+      .max(128)
+      .refine(isPluginPlainLine, 'creationKey must be plain text')
+      .optional()
   })
   .refine(
     (params) => (params.projectId === undefined) !== (params.workspaceId === undefined),
     'give exactly one of projectId and workspaceId'
   )
+  .refine((params) => params.hostId === undefined || params.projectId !== undefined, {
+    message: 'hostId goes with projectId',
+    path: ['hostId']
+  })
 const automationCreateResult = z.object({ automationId })
 
-/** Absent when Orca asked the person: `cancelled`, they said no; `consent-unavailable`, nobody
- *  could be asked (Orca's window is hidden, or headless). */
-const refusal = z.enum(['cancelled', 'consent-unavailable']).optional()
+/** Why nothing changed: `cancelled`, the person said no; `consent-unavailable`, nobody could be
+ *  asked (Orca's window is hidden, or headless); `changed`, the automation changed while they
+ *  were asked, so their answer was about something else. Absent when it changed. */
+const refusal = z.enum(['cancelled', 'consent-unavailable', 'changed']).optional()
 const automationUpdateParams = z
   .strictObject({
     automationId,
@@ -113,7 +130,7 @@ const automationDeleteParams = z.strictObject({ automationId })
 const automationDeleteResult = z.object({ deleted: z.boolean(), reason: refusal })
 
 const CONFIRMS =
-  'Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, nothing changes and `reason` says why.'
+  'Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, or it changes while they are asked, nothing changes and `reason` says why.'
 
 export const PLUGIN_AUTOMATION_API = {
   'automation.list': spec({

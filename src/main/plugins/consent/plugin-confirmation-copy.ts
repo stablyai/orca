@@ -1,7 +1,10 @@
 // @protected-copy: a plugin language pack must not reword what the person is asked to allow.
 import { translateMain } from '../../i18n/main-i18n'
 import type { PluginActionConfirmationRequest } from './plugin-action-confirmation'
-import type { PluginConfirmationSubject } from './plugin-confirmation-subject'
+import type {
+  PluginConfirmationAutomation,
+  PluginConfirmationSubject
+} from './plugin-confirmation-subject'
 
 const NAME_MAX = 120
 const PROMPT_EXCERPT_MAX = 400
@@ -12,12 +15,35 @@ function excerpt(text: string, max: number): string {
   return line.length > max ? `${line.slice(0, max - 1)}…` : line
 }
 
+/** The line that says which automation this is: its short id, where and when it runs. */
+function automationIdentity(automation: PluginConfirmationAutomation): string {
+  const values = {
+    id: automation.id.slice(0, 8),
+    project:
+      automation.project ??
+      translateMain('plugins.actionConfirmation.unknownProject', 'an unknown project'),
+    schedule: excerpt(automation.schedule, NAME_MAX)
+  }
+  return automation.workspace === null
+    ? translateMain(
+        'plugins.actionConfirmation.automationNewWorkspaces',
+        'Automation {{id}}: a new workspace of {{project}} each run, on {{schedule}}.',
+        values
+      )
+    : translateMain(
+        'plugins.actionConfirmation.automationInWorkspace',
+        'Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}.',
+        { ...values, workspace: excerpt(automation.workspace, NAME_MAX) }
+      )
+}
+
 /** The question Orca shows for a plugin's request. */
 export function pluginConfirmationCopy(
   pluginName: string,
   subject: PluginConfirmationSubject
 ): PluginActionConfirmationRequest {
-  const values = { plugin: pluginName, automation: excerpt(subject.name, NAME_MAX) }
+  const values = { plugin: pluginName, automation: excerpt(subject.automation.name, NAME_MAX) }
+  const identity = automationIdentity(subject.automation)
   if (subject.kind === 'automation.delete') {
     return {
       message: translateMain(
@@ -25,10 +51,13 @@ export function pluginConfirmationCopy(
         '{{plugin}} wants to delete the automation “{{automation}}”',
         values
       ),
-      detail: translateMain(
-        'plugins.actionConfirmation.deleteAutomationDetail',
-        'The plugin did not create it. Its schedule stops and it is removed from Automations.'
-      ),
+      detail: [
+        identity,
+        translateMain(
+          'plugins.actionConfirmation.deleteAutomationDetail',
+          'The plugin did not create it. Its schedule stops and it is removed from Automations.'
+        )
+      ].join('\n\n'),
       confirmLabel: translateMain('plugins.actionConfirmation.delete', 'Delete')
     }
   }
@@ -39,6 +68,7 @@ export function pluginConfirmationCopy(
       values
     ),
     detail: [
+      identity,
       subject.elevated
         ? translateMain(
             'plugins.actionConfirmation.changeElevatedAutomationDetail',

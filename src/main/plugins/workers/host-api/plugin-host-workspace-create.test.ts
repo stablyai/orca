@@ -4,6 +4,8 @@ import { WorktreeCreateSetupChoiceRefusedError } from '../../../runtime/workspac
 import { PluginRuntimeRpcError } from '../../plugin-runtime-rpc'
 import { callPluginHost, pluginHostTestServices } from './__mocks__/plugin-host-services-fixture'
 import { isPluginOpenedTerminal } from './plugin-opened-terminals'
+import { executePluginHostCall } from './plugin-host-methods'
+import { pluginHostCallRevoked } from './plugin-host-call-scope'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginAgentStatusRow } from './plugin-workspace-projection'
 
@@ -245,6 +247,8 @@ describe('agent.resume', () => {
     expect(await resume('codex', ensured('adopted', 'term_old'))).toMatchObject({
       value: { terminalId: 'term_old', started: false }
     })
+    // A terminal the plugin did not start is not one it may close.
+    expect(isPluginOpenedTerminal('samples.demo', 'term_old')).toBe(false)
     const rpc = ensured('created')
     expect(await resume('pi', rpc)).toMatchObject({ ok: false, code: 'invalid_params' })
     expect(rpc).not.toHaveBeenCalled()
@@ -274,5 +278,35 @@ describe('agents.list sessionId', () => {
     expect(outcome.ok && outcome.value).toMatchObject({
       agents: [{ sessionId: 's-1' }, { sessionId: null }]
     })
+  })
+})
+
+describe('terminals a plugin starts after losing approval', () => {
+  it('are not recorded as its own', async () => {
+    let revoked = false
+    const rpc = runtime({
+      'terminal.ensureAgentSession': () => {
+        revoked = true
+        return { terminal: { handle: 'term_late' }, disposition: 'created' }
+      }
+    })
+    const outcome = await executePluginHostCall({
+      pluginId: 'samples.demo',
+      method: 'agent.resume',
+      params: { workspaceId: 'identity:k', agent: 'claude', sessionId: 's-1' },
+      surface: 'worker',
+      grantedCapabilities: ['agent:launch'],
+      services: pluginHostTestServices(rpc),
+      audit: { record: vi.fn().mockResolvedValue(undefined) },
+      scope: {
+        assertActive: () => {
+          if (revoked) {
+            throw pluginHostCallRevoked()
+          }
+        }
+      }
+    })
+    expect(outcome).toMatchObject({ ok: false, code: 'consent_required' })
+    expect(isPluginOpenedTerminal('samples.demo', 'term_late')).toBe(false)
   })
 })

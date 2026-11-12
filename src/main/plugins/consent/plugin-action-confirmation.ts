@@ -26,9 +26,11 @@ export function canConfirmInWindow(window: BrowserWindow | null): window is Brow
  */
 export async function confirmPluginAction(
   window: BrowserWindow | null,
-  request: PluginActionConfirmationRequest
+  request: PluginActionConfirmationRequest,
+  /** Closes the question, unanswered, once whoever asked it is gone. */
+  signal?: AbortSignal
 ): Promise<{ answer: PluginActionConfirmation; remember: boolean }> {
-  if (!canConfirmInWindow(window)) {
+  if (!canConfirmInWindow(window) || signal?.aborted) {
     return { answer: 'unavailable', remember: false }
   }
   const { response, checkboxChecked } = await dialog.showMessageBox(window, {
@@ -42,8 +44,13 @@ export async function confirmPluginAction(
     noLink: true,
     message: request.message,
     ...(request.detail ? { detail: request.detail } : {}),
-    ...(request.checkboxLabel ? { checkboxLabel: request.checkboxLabel } : {})
+    ...(request.checkboxLabel ? { checkboxLabel: request.checkboxLabel } : {}),
+    ...(signal ? { signal } : {})
   })
+  if (signal?.aborted) {
+    // Closed because the caller went away: nobody answered, so this is no refusal.
+    return { answer: 'unavailable', remember: false }
+  }
   return response === 0
     ? { answer: 'allowed', remember: checkboxChecked }
     : { answer: 'cancelled', remember: false }

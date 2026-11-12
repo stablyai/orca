@@ -129,7 +129,7 @@ export type RpcContext = {
   // Host-assigned transport identity; absent means the caller could not be established.
   caller?: RpcCallerIdentity
   // Set only by the in-process plugin host: the plugin a call acts for, kept as provenance.
-  plugin?: { key: string; name: string }
+  plugin?: { key: string; name: string; assertActive?: () => void }
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
   // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.

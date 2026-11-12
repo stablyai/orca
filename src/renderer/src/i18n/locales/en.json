@@ -18514,7 +18514,7 @@
           "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
           "createdBy": "Created by",
           "createdByPluginTitle": "Plugin {{plugin}}",
-          "createdByEndedTitle": "Plugin {{plugin}}, since removed or disabled; it can no longer change this automation without asking"
+          "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -25205,7 +25205,10 @@
       "changeAutomationDetail": "The plugin did not create it. It would change: {{fields}}.",
       "change": "Change",
       "changeElevatedAutomationDetail": "It runs its agent with extra settings you chose (arguments, a permission mode or a precheck command). It would change: {{fields}}.",
-      "newPrompt": "New prompt: “{{prompt}}”"
+      "newPrompt": "New prompt: “{{prompt}}”",
+      "unknownProject": "an unknown project",
+      "automationNewWorkspaces": "Automation {{id}}: a new workspace of {{project}} each run, on {{schedule}}.",
+      "automationInWorkspace": "Automation {{id}}: in {{project}} / {{workspace}}, on {{schedule}}."
     }
   },
   "checks": {

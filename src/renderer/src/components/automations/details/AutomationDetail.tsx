@@ -234,24 +234,28 @@ export function AutomationDetail({
             key: 'createdBy',
             label: t('auto.components.automations.AutomationDetail.createdBy', 'Created by'),
             value: (
-              <span className="flex min-w-0 items-baseline gap-1.5">
-                <span className="truncate">{automation.createdBy.name}</span>
-                <span className="truncate font-mono text-xs text-muted-foreground">
-                  {automation.createdBy.pluginKey}
+              <span className="flex min-w-0 flex-col">
+                <span className="flex min-w-0 items-baseline gap-1.5">
+                  <span className="truncate">{automation.createdBy.name}</span>
+                  <span className="truncate font-mono text-xs text-muted-foreground">
+                    {automation.createdBy.pluginKey}
+                  </span>
                 </span>
+                {automation.createdBy.endedAt ? (
+                  <span className="text-xs text-muted-foreground">
+                    {t(
+                      'auto.components.automations.AutomationDetail.createdByEnded',
+                      'Plugin removed or disabled; it must ask before changing this automation'
+                    )}
+                  </span>
+                ) : null}
               </span>
             ),
-            title: automation.createdBy.endedAt
-              ? t(
-                  'auto.components.automations.AutomationDetail.createdByEndedTitle',
-                  'Plugin {{plugin}}, since removed or disabled; it can no longer change this automation without asking',
-                  { plugin: automation.createdBy.pluginKey }
-                )
-              : t(
-                  'auto.components.automations.AutomationDetail.createdByPluginTitle',
-                  'Plugin {{plugin}}',
-                  { plugin: automation.createdBy.pluginKey }
-                )
+            title: t(
+              'auto.components.automations.AutomationDetail.createdByPluginTitle',
+              'Plugin {{plugin}}',
+              { plugin: automation.createdBy.pluginKey }
+            )
           }
         ]
       : []),

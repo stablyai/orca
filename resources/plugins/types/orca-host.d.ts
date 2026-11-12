@@ -247,25 +247,25 @@ declare module 'orca/host' {
     /** Lists the automations this Orca schedules, at most 200, with each one's prompt cut to 4096 characters. Since host API 1.8. */
     "automation.list": {
       params: Record<string, never> | undefined
-      result: { automations: { id: string; name: string; agent: string; prompt: string; promptTruncated: boolean; projectId: string | null; hostId: string | null; workspaceId: string | null; workspaceMode: "existing" | "new-per-run"; schedule: string; timezone: string; enabled: boolean; nextRunAt: number | null; lastRunAt: number | null; createdByThisPlugin: boolean }[]; truncated: boolean }
+      result: { automations: { id: string; name: string; agent: string; prompt: string; promptTruncated: boolean; projectId: string | null; hostId: string | null; workspaceId: string | null; workspaceMode: "existing" | "new-per-run"; schedule: string | null; timezone: string; enabled: boolean; nextRunAt: number | null; lastRunAt: number | null; createdByThisPlugin: boolean }[]; truncated: boolean }
       surfaces: "worker"
     }
     /** Creates an automation that starts `agent` with `prompt` on `schedule`, even when the plugin is not running, with the person's settings for that agent; Orca's Automations page shows it as created by the plugin. Since host API 1.8. */
     "automation.create": {
-      params: { name: string; prompt: string; agent: string; projectId?: string; workspaceId?: string; schedule: string; timezone?: string; enabled?: boolean }
+      params: { name: string; prompt: string; agent: string; projectId?: string; hostId?: string; workspaceId?: string; schedule: string; timezone?: string; enabled?: boolean; creationKey?: string }
       result: { automationId: string }
       surfaces: "worker"
     }
-    /** Changes an automation's name, prompt, schedule, time zone or whether it is enabled. Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, nothing changes and `reason` says why. Orca also asks before a new prompt or schedule, or resuming, for any automation whose runs use extra agent settings the person chose. Since host API 1.8. */
+    /** Changes an automation's name, prompt, schedule, time zone or whether it is enabled. Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, or it changes while they are asked, nothing changes and `reason` says why. Orca also asks before a new prompt or schedule, or resuming, for any automation whose runs use extra agent settings the person chose. Since host API 1.8. */
     "automation.update": {
       params: { automationId: string; name?: string; prompt?: string; schedule?: string; timezone?: string; enabled?: boolean }
-      result: { updated: boolean; reason?: "cancelled" | "consent-unavailable" }
+      result: { updated: boolean; reason?: "cancelled" | "consent-unavailable" | "changed" }
       surfaces: "worker"
     }
-    /** Deletes an automation. Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, nothing changes and `reason` says why. Since host API 1.8. */
+    /** Deletes an automation. Orca first asks the person about an automation this plugin did not create (or created before it was removed or disabled); if they decline or cannot be asked, or it changes while they are asked, nothing changes and `reason` says why. Since host API 1.8. */
     "automation.delete": {
       params: { automationId: string }
-      result: { deleted: boolean; reason?: "cancelled" | "consent-unavailable" }
+      result: { deleted: boolean; reason?: "cancelled" | "consent-unavailable" | "changed" }
       surfaces: "worker"
     }
     /** The font family, size, weight, line height, ligatures, word wrap and minimap Orca's file editor uses now, editor zoom included. `editor.typography.changed` reports each change after. Since host API 1.6. */

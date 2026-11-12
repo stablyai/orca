@@ -101,9 +101,11 @@ export function installPluginDesktopFrameServices(
       }
       return askOnce(pluginId, async () => {
         admit(window, pluginId)
+        // A worker that exits or cancels the call closes its question, freeing the plugin's turn.
         const { answer } = await confirmPluginAction(
           window,
-          pluginConfirmationCopy(scope.pluginName ?? pluginId, subject)
+          pluginConfirmationCopy(scope.pluginName ?? pluginId, subject),
+          scope.signal
         )
         // The question may have stayed open while the plugin was disabled or removed.
         scope.assertActive()

@@ -111,3 +111,23 @@ export const createdByPlugin = defineFixture({
       }
     })
 })
+
+export const createdByEndedPlugin = defineFixture({
+  width: 1000,
+  render: () =>
+    renderDetail({
+      automation: {
+        ...automation,
+        name: 'Nightly dependency check',
+        prompt: 'Check for outdated dependencies and open a PR with safe upgrades.',
+        precheck: null,
+        enabled: false,
+        createdBy: {
+          kind: 'plugin',
+          pluginKey: 'acme.deps',
+          name: 'Dependency Watch',
+          endedAt: Date.UTC(2026, 10, 9, 12, 0)
+        }
+      }
+    })
+})

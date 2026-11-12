@@ -123,6 +123,8 @@ export const PLUGIN_WORKSPACE_CREATE_HANDLERS = {
           : refusal
       })
     )
+    // The plugin may have lost approval while the agent started.
+    ctx.scope.assertActive()
     recordPluginOpenedTerminal(ctx.pluginId, launched.outcome.handle)
     const { worktree } = worktreeShowAnswer.parse(
       await call('worktree.show', { worktree: `id:${launched.worktreeId}` })

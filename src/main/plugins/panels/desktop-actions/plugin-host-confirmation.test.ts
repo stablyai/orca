@@ -27,7 +27,16 @@ function fakeWindow(id: number, shown: { visible: boolean; focused: boolean }) {
 }
 
 const scope = { assertActive: vi.fn(), pluginName: 'Demo' }
-const subject = { kind: 'automation.delete' as const, name: 'Nightly' }
+const subject = {
+  kind: 'automation.delete' as const,
+  automation: {
+    id: 'a1',
+    name: 'Nightly',
+    project: 'App',
+    workspace: null,
+    schedule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0'
+  }
+}
 
 describe('host confirmations for workers', () => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only these window members.
@@ -79,5 +88,21 @@ describe('host confirmations for workers', () => {
       Promise.resolve()
     )
     expect(answers).toEqual(['allowed', 'allowed', 'allowed', 'rate_limited'])
+  })
+
+  it("close a question whose worker went away, so the plugin's next one is not refused", async () => {
+    const worker = new AbortController()
+    showMessageBox.mockImplementationOnce(
+      (_window: unknown, options: { signal: AbortSignal }) =>
+        new Promise((resolve) =>
+          options.signal.addEventListener('abort', () => resolve({ response: 1 }))
+        )
+    )
+    const pending = services.confirm('acme.four', subject, { ...scope, signal: worker.signal })
+    worker.abort()
+    // Nobody answered: no refusal, and no wait before the next question.
+    await expect(pending).resolves.toBe('unavailable')
+    showMessageBox.mockResolvedValueOnce({ response: 0 })
+    await expect(services.confirm('acme.four', subject, scope)).resolves.toBe('allowed')
   })
 })

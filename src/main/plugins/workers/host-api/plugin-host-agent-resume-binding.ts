@@ -68,8 +68,14 @@ export const PLUGIN_AGENT_RESUME_HANDLERS = {
           presentation: 'background'
         })
       )
-      recordPluginOpenedTerminal(ctx.pluginId, answer.terminal.handle)
-      return { terminalId: answer.terminal.handle, started: answer.disposition === 'created' }
+      const started = answer.disposition === 'created'
+      // A terminal that already ran the session is not the plugin's to close; one it started is,
+      // unless the plugin lost approval while it started.
+      if (started) {
+        ctx.scope.assertActive()
+        recordPluginOpenedTerminal(ctx.pluginId, answer.terminal.handle)
+      }
+      return { terminalId: answer.terminal.handle, started }
     }
   )
 } satisfies Record<string, BoundPluginHostMethod>

@@ -16,6 +16,7 @@ const AUTOMATION = {
   timezone: 'UTC',
   enabled: true,
   nextRunAt: 10,
+  updatedAt: 3,
   precheck: { command: 'secret-check', timeoutSeconds: 30 },
   extraAgentArgs: '--dangerously-skip-permissions'
 }
@@ -33,16 +34,38 @@ const ENDED = {
 }
 const BY_ID: Record<string, unknown> = { a2: OWN, a3: OWN_ELEVATED, a4: ENDED }
 
-function runtime() {
+function runtime(overrides: Record<string, unknown> = {}, shows: unknown[] = []) {
   const answers: Record<string, unknown> = {
-    'repo.list': { repos: [{ id: 'r1', executionHostId: 'local' }] },
+    'repo.list': {
+      repos: [
+        { id: 'r1', displayName: 'App', executionHostId: 'local' },
+        { id: 'twin', displayName: 'Twin', executionHostId: 'local' },
+        { id: 'twin', displayName: 'Twin', connectionId: 'box' }
+      ]
+    },
+    'projectHostSetup.list': {
+      setups: [
+        {
+          id: 's-box',
+          projectId: 'p-twin',
+          hostId: 'ssh:box',
+          repoId: 'twin',
+          path: '/srv/twin',
+          setupState: 'ready'
+        }
+      ]
+    },
     'automation.list': { automations: [AUTOMATION, OWN, ENDED] },
     'worktree.list': { worktrees: [{ id: 'r1::/src/r1', identity: { key: 'wt2:local:i1' } }] },
     'automation.create': { automation: { id: 'new' } },
     'automation.update': { automation: AUTOMATION },
-    'automation.delete': { removed: true, id: 'a1' }
+    'automation.delete': { removed: true, id: 'a1' },
+    ...overrides
   }
   return vi.fn<PluginRuntimeRpc>(async (method, params) => {
+    if (method === 'automation.show' && shows.length > 0) {
+      return { automation: shows.shift() }
+    }
     if (method === 'automation.show') {
       const id = typeof params === 'object' && params !== null && 'id' in params ? params.id : ''
       return { automation: BY_ID[String(id)] ?? AUTOMATION }
@@ -169,7 +192,17 @@ describe('automation.update and automation.delete', () => {
     )
     expect(confirm).toHaveBeenCalledWith(
       'samples.demo',
-      { kind: 'automation.delete', name: 'Nightly sweep' },
+      {
+        kind: 'automation.delete',
+        // Names repeat: the question says which one, where and when it runs.
+        automation: {
+          id: 'a1',
+          name: 'Nightly sweep',
+          project: 'App',
+          workspace: 'r1',
+          schedule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0'
+        }
+      },
       expect.anything()
     )
     expect(methods(cancelled)).not.toContain('automation.delete')
@@ -199,7 +232,7 @@ describe('automation.update and automation.delete', () => {
       'samples.demo',
       {
         kind: 'automation.update',
-        name: 'Nightly sweep',
+        automation: expect.objectContaining({ id: 'a3', name: 'Nightly sweep' }),
         fields: ['prompt'],
         elevated: true,
         prompt: 'Do more'
@@ -228,6 +261,85 @@ describe('automation.update and automation.delete', () => {
     expect(await call('automation.delete', { automationId: 'a4' }, rpc, { confirm })).toEqual({
       ok: true,
       value: { deleted: false, reason: 'cancelled' }
+    })
+  })
+
+  it("show the new prompt for another's automation too", async () => {
+    const confirm = vi.fn().mockResolvedValue('allowed')
+    await call('automation.update', { automationId: 'a1', prompt: 'Delete the repo' }, runtime(), {
+      confirm
+    })
+    expect(confirm).toHaveBeenCalledWith(
+      'samples.demo',
+      expect.objectContaining({ prompt: 'Delete the repo' }),
+      expect.anything()
+    )
+  })
+
+  it('change nothing when the automation changed while the person was asked', async () => {
+    const rpc = runtime({}, [AUTOMATION, { ...AUTOMATION, name: 'Repurposed', updatedAt: 4 }])
+    const confirm = vi.fn().mockResolvedValue('allowed')
+    expect(await call('automation.delete', { automationId: 'a1' }, rpc, { confirm })).toEqual({
+      ok: true,
+      value: { deleted: false, reason: 'changed' }
+    })
+    expect(methods(rpc)).not.toContain('automation.delete')
+  })
+})
+
+describe('automation.create targets', () => {
+  const base = { name: 'x', prompt: 'y', agent: 'claude', schedule: '0 9 * * *' }
+  const sent = (rpc: ReturnType<typeof runtime>) =>
+    rpc.mock.calls.find(([method]) => method === 'automation.create')?.[1]
+
+  it("runs on the host hostId names, through that host's project setup", async () => {
+    expect(await call('automation.create', { ...base, projectId: 'twin' }, runtime())).toEqual({
+      ok: false,
+      code: 'action_failed',
+      error: 'two hosts have this project; pass the hostId project.list gives'
+    })
+    const rpc = runtime()
+    await call('automation.create', { ...base, projectId: 'twin', hostId: 'ssh:box' }, rpc)
+    expect(sent(rpc)).toMatchObject({
+      repo: 'id:twin',
+      workspaceMode: 'new_per_run',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'p-twin',
+        hostId: 'ssh:box',
+        projectHostSetupId: 's-box',
+        repoId: 'twin',
+        path: '/srv/twin'
+      }
+    })
+    expect(
+      await call('automation.create', { ...base, projectId: 'twin', hostId: 'local' }, runtime())
+    ).toMatchObject({ ok: false, error: 'this project is not set up on that host' })
+  })
+
+  it("keeps a plugin's creation keys its own", async () => {
+    const rpc = runtime()
+    await call('automation.create', { ...base, projectId: 'r1', creationKey: 'nightly' }, rpc)
+    expect(sent(rpc)).toMatchObject({ creationKey: 'plugin:samples.demo:nightly' })
+  })
+})
+
+describe('automation.list bounds', () => {
+  it('never cuts a schedule or fails the list on an id too long to show', async () => {
+    const odd = {
+      ...AUTOMATION,
+      id: 'a9',
+      rrule: '0 '.repeat(1500),
+      workspaceId: `r1::/${'deep/'.repeat(300)}`
+    }
+    const outcome = await call(
+      'automation.list',
+      {},
+      runtime({ 'automation.list': { automations: [odd] }, 'worktree.list': { worktrees: [] } })
+    )
+    expect(outcome).toMatchObject({
+      ok: true,
+      value: { automations: [{ id: 'a9', schedule: null, workspaceId: null }] }
     })
   })
 })

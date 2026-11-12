@@ -56,7 +56,10 @@ export const AUTOMATION_METHODS = [
         // Provenance comes from the in-process caller only; params cannot claim it.
         plugin
           ? { ...params, createdBy: { kind: 'plugin', pluginKey: plugin.key, name: plugin.name } }
-          : params
+          : params,
+        undefined,
+        // A plugin disabled while the target resolved must not leave an automation it owns.
+        plugin?.assertActive
       )
     })
   }),
