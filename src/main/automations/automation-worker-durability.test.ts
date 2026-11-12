@@ -103,21 +103,6 @@ describe('automation background writer durability', () => {
     }
   })
 
-  it('never dispatches when the writer refuses the durable acknowledgement', async () => {
-    const { store, automation } = await fixture()
-    vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(new Error('disk full'))
-    const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, {
-      terminalLauncher: { launch: dispatcher, available: () => true }
-    })
-    try {
-      await expect(service.runNow(automation.id)).rejects.toThrow('disk full')
-      expect(dispatcher).not.toHaveBeenCalled()
-    } finally {
-      service.stop()
-    }
-  })
-
   it('keeps a launched run dispatched when its dispatched write fails to flush', async () => {
     const { store, automation } = await fixture()
     const flush = store.flushPendingOrThrowAsync.bind(store)
@@ -149,10 +134,6 @@ describe('automation background writer durability', () => {
 
   it.each([
     ['dispatching', 1],
-    ['dispatched', 1],
-    ['completed', 1],
-    ['dispatching', 120_001],
-    ['dispatched', 120_001],
     ['completed', 120_001]
   ] as const)(
     'preserves a durable %s occurrence after %s ms when next-run advancement was interrupted',

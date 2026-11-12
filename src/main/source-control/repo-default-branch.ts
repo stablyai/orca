@@ -4,7 +4,7 @@ import {
   type GitExec
 } from '../../shared/git/refs/git-default-base-ref'
 
-import { gitExecFileAsync } from '../git/runner'
+import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { hostedReviewRepoScope, scopeGeneration } from './hosted-review-scope-generations'
 import type { HostedReviewLocalGitOptions } from './hosted-review-git-options'

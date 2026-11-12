@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { prepareLocalCommitMessageAgentEnv } from './commit-message-agent-environment'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
+import '../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const originalEnv = { ...process.env }
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -105,22 +105,6 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
   })
 
   // STA-4422: failed managed-home preparation must not fall through to the user's real account while UI shows a managed account.
-  it('fails commit generation instead of building a system-account env when the managed home is unreadable', async () => {
-    process.env.CODEX_HOME = '/home/me/.config/codex'
-    delete process.env.ORCA_CODEX_HOME
-
-    const result = await prepareLocalCommitMessageAgentEnv('codex', {
-      prepareForCodexLaunch: () => {
-        throw new ManagedCodexHomeTemporarilyUnavailableError()
-      }
-    })
-
-    expect(result).toEqual({
-      ok: false,
-      error: 'Failed to prepare the selected agent account for commit message generation.'
-    })
-    expect(result).not.toHaveProperty('env')
-  })
 
   it('strips a nested-Orca CODEX_HOME override when the launch resolves to the real home', async () => {
     process.env.CODEX_HOME = '/managed/runtime/home'

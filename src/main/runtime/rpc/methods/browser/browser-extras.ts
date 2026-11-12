@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { assertRpcClipboardTextWriteWithinLimit } from '../../rpc-clipboard-text-validation'
+import { assertRpcClipboardTextWriteWithinLimit } from '../../clipboard/rpc-clipboard-text-validation'
 import {
   BrowserTarget,
   ExpectUrlBrowserTarget

@@ -1,4 +1,4 @@
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { parseGlabApiResponse, type GlabApiResponse } from './glab-api-response'
 
 const MAX_CONCURRENT = 4

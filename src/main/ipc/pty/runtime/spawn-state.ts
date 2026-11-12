@@ -11,13 +11,13 @@ import type {
   PtySpawnResult
 } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
+import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
-import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -31,7 +31,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../../../shared/agent-session/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
-import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { TerminalWorkspaceLaunchScope } from '../../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 

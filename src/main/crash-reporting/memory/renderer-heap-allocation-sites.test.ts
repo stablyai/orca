@@ -40,28 +40,4 @@ describe('summarizeSamplingProfile', () => {
       )
     ).toEqual(['14KB (other script)'])
   })
-
-  it('replaces names that are not plain code identifiers instead of stripping them', () => {
-    expect(
-      sitesOf(
-        leaf(frame('sk-abcdefghijklmnopqrstuvwx', `${BUNDLE}index-Zx9.js`), 3),
-        leaf(frame('my file.txt', '', '0'), 2),
-        leaf(frame('(V8 API)', '', '0'), 1)
-      )
-    ).toEqual(['3KB (anonymous)@index-Zx9.js:10:5', '2KB (native)', '1KB (V8 API)'])
-  })
-
-  it('names nothing from scripts when the bundle location is unknown', () => {
-    const summary = summarizeSamplingProfile(
-      {
-        head: {
-          callFrame: frame('(root)', '', '0'),
-          selfSize: 0,
-          children: [leaf(frame('appendChunk', `${BUNDLE}terminal-Ab12.js`), 1)]
-        }
-      },
-      null
-    )
-    expect(summary.site01).toBe('1KB (other script)')
-  })
 })

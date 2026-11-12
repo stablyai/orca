@@ -65,7 +65,7 @@ vi.mock('../gitlab/requests/glab-request-admission', () => ({
   release: vi.fn()
 }))
 
-vi.mock('../git/command-runner/glab-exec-file', () => ({
+vi.mock('../git/command-runner/hosted-cli/glab-exec-file', () => ({
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 
@@ -73,21 +73,19 @@ vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
   glabRepoExecOptions: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/command-runner/git-process-env', async (importOriginal) => ({
+vi.mock('../git/command-runner/git-environment/git-process-env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitOptionalLocksDisabledEnv: vi.fn(() => ({}))
 }))
 
 vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../git/repo', () => ({}))
-
 vi.mock('../../shared/git/refs/git-default-base-ref', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock
 }))
 
-vi.mock('../git/exact-ref-probe', () => ({
+vi.mock('../git/refs/resolution/exact-ref-probe', () => ({
   probeAnyExactRef: probeAnyExactRefMock
 }))
 

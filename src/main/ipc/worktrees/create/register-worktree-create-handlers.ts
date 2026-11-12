@@ -32,6 +32,7 @@ import { beginWorkspaceCreateTelemetry } from '../../../workspaces/creation/work
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
+import { createdWorktreeLifecycleIdentity } from '../../../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -107,7 +108,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             kind: 'created',
             worktreeId: result.worktree.id,
             path: result.worktree.path,
-            branch: result.worktree.branch
+            branch: result.worktree.branch,
+            ...createdWorktreeLifecycleIdentity(result.worktree)
           })
 
           // Stamp after the create notification bumps generation so the reply names its resulting catalog.
@@ -165,7 +167,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           kind: 'created',
           worktreeId: result.worktree.id,
           path: result.worktree.path,
-          branch: result.worktree.branch
+          branch: result.worktree.branch,
+          ...createdWorktreeLifecycleIdentity(result.worktree)
         })
         return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })

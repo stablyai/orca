@@ -48,7 +48,7 @@ on:
       - 'src/cli/**'
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
-      - 'src/main/runtime/rpc/errors.ts'
+      - 'src/main/runtime/rpc/responses/rpc-response.ts'
       - 'src/main/runtime/rpc/methods/computer/computer*.ts'
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
@@ -97,11 +97,8 @@ jobs:
           src/main/computer/macos-native/macos-native-provider-client.test.ts
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
           src/main/computer/desktop-script/actions/desktop-script-provider-actions.test.ts
-          src/main/computer/desktop-script/desktop-script-provider-cache-lifecycle.test.ts
-          src/main/computer/desktop-script/actions/desktop-script-provider-action-errors.test.ts
-          src/cli/format.test.ts
-          src/cli/handlers/computer-action-validation.test.ts
-          src/cli/handlers/computer-state-formatting.test.ts
+          src/cli/output/command-result-output.test.ts
+          src/cli/computer/computer-state-formatting.test.ts
           src/cli/index.test.ts
           src/cli/runtime/envelope-schema.test.ts
           src/shared/remote-runtime/remote-runtime-client.test.ts

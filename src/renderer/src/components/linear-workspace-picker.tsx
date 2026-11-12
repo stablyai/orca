@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { WorkItemScopePicker } from './work-item-scope-picker'
@@ -6,12 +7,16 @@ export function LinearWorkspacePicker({
   workspaces,
   value,
   onChange,
-  disabled
+  disabled,
+  size,
+  returnFocusRef
 }: {
   workspaces: readonly LinearWorkspace[]
   value: string | null | undefined
   onChange: (workspaceId: string) => void
   disabled?: boolean
+  size?: 'default' | 'xs'
+  returnFocusRef?: React.RefObject<HTMLElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   const selected = workspaces.find((workspace) => workspace.id === value)
@@ -36,6 +41,8 @@ export function LinearWorkspacePicker({
       searchPlaceholder={t('components.linearWorkspacePicker.search', 'Search Linear workspaces')}
       emptyLabel={t('components.linearWorkspacePicker.empty', 'No workspaces found.')}
       disabled={disabled}
+      size={size}
+      returnFocusRef={returnFocusRef}
     />
   )
 }
