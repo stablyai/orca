@@ -17,6 +17,7 @@ import { agentConfigDigest, type AgentConfigDigestEntry } from '../agent-config-
 import { agentConfigRoot, type AgentConfigHomes } from '../agent-config-roots'
 import { readItemFile } from './agent-config-item-file'
 import { readMemory } from './local-agent-memory-read'
+import { readClaudeSettings } from './local-claude-settings-read'
 
 export type LocalAgentConfigItem = {
   scope: AgentConfigItemScope
@@ -259,6 +260,10 @@ export async function readLocalAgentConfig(
     }
     if (AGENT_CONFIG_MEMORY_NAME[kind]) {
       items.push(...(await readMemory(root, kind)))
+      continue
+    }
+    if (kind === 'claude-settings') {
+      items.push(...(await readClaudeSettings(root)))
       continue
     }
     items.push(...(await (isSkillKind(kind) ? readSkills : readCommands)(root, kind, 'user')))

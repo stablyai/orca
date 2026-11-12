@@ -20,6 +20,9 @@ export function cloudSkillsDisplayName(row: Pick<AgentConfigSyncRow, 'kind' | 'n
   if (AGENT_CONFIG_MEMORY_NAME[row.kind]) {
     return `${row.name}.md`
   }
+  if (row.kind === 'claude-settings') {
+    return 'settings.json'
+  }
   return row.name
 }
 
@@ -35,6 +38,8 @@ function baseKindLabel(row: AgentConfigSyncRow, t: Translate): string {
     case 'claude-memory':
     case 'codex-memory':
       return t('cloudSkillsSync.kind.memory', '{{agent}} memory', { agent })
+    case 'claude-settings':
+      return t('cloudSkillsSync.kind.settings', 'Claude settings')
     case 'claude-command':
       return t('cloudSkillsSync.kind.command', '{{agent}} command', { agent })
     case 'claude-skill':
@@ -49,4 +54,22 @@ export function cloudSkillsKindLabel(row: AgentConfigSyncRow, t: Translate = tra
   return row.scope === 'project'
     ? t('cloudSkillsSync.kind.project', '{{kind}}, this project', { kind })
     : kind
+}
+
+/** settings.json says what it carries, and what it left behind. */
+export function cloudSkillsSettingsNote(row: AgentConfigSyncRow, t: Translate = translate): string {
+  return row.localRefs
+    ? t(
+        'cloudSkillsSync.row.settingsLocalRefs',
+        'Permissions, model and output style only. {{count}} rules mention paths on this computer and stay here. Changes made in a workspace stay there.',
+        {
+          count: row.localRefs,
+          defaultValue_one:
+            'Permissions, model and output style only. 1 rule mentions a path on this computer and stays here. Changes made in a workspace stay there.'
+        }
+      )
+    : t(
+        'cloudSkillsSync.row.settingsScope',
+        'Permissions, model and output style only. Env, hooks and helper commands never sync. Changes made in a workspace stay there.'
+      )
 }

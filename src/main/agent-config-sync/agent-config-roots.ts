@@ -50,6 +50,7 @@ export function agentConfigRoot(
       case 'claude-output-style':
       case 'claude-memory':
       case 'codex-memory':
+      case 'claude-settings':
         return null
     }
   }
@@ -73,6 +74,9 @@ export function agentConfigRoot(
       return homes.claudeDir
     case 'codex-memory':
       return homes.codexDir
+    // settings.json is merged key by key on the host, never copied as a file.
+    case 'claude-settings':
+      return homes.claudeDir
   }
 }
 

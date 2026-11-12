@@ -59,7 +59,7 @@ afterEach(() => {
 })
 
 /** `olderHost`: a sandbox whose Orca predates `kinds` (strict params reject the unknown field). */
-function create(olderHost = false) {
+function create(olderHost: boolean | 'part1' = false) {
   const hostDeps = { homes: host, projectPath: null, ledgerDir: join(dir, 'vm-userdata') }
   const sync = createCloudAgentConfigSync({
     userDataPath: join(dir, 'mac-userdata'),
@@ -68,8 +68,14 @@ function create(olderHost = false) {
       readLocalAgentConfig({ homes: local, repoPath, trackedPaths: async () => new Set() }),
     call: async (_environmentId, method, params) => {
       if (method === AGENT_CONFIG_SYNC_PLAN_METHOD) {
-        if (olderHost && typeof params === 'object' && params !== null && 'kinds' in params) {
+        const kinds =
+          typeof params === 'object' && params !== null && 'kinds' in params ? params.kinds : null
+        if (olderHost === true && kinds) {
           throw Object.assign(new Error('Unrecognized key: "kinds"'), { code: 'invalid_argument' })
+        }
+        // A sandbox on the SK1 part 1 image: knows subagents and memory, not settings.
+        if (olderHost === 'part1' && Array.isArray(kinds) && kinds.includes('claude-settings')) {
+          throw Object.assign(new Error('Invalid enum value'), { code: 'invalid_argument' })
         }
         return planHostAgentConfigSync(AgentConfigSyncPlanParams.parse(params), hostDeps)
       }
@@ -159,6 +165,55 @@ describe('subagents, output styles and memory', () => {
     const syncer = readFileSync(join(dir, 'mac-userdata', 'mcp-sync-syncer-id'), 'utf8').trim()
     const plan = await planHostAgentConfigSync({ syncer, items: [] }, hostDeps)
     expect(plan.removed).toBe(0)
+    expect(existsSync(join(host.claudeDir, 'agents', 'reviewer.md'))).toBe(true)
+  })
+
+  it('merges allowlisted settings into the sandbox settings.json when turned on, and takes them back', async () => {
+    put(
+      join(local.claudeDir, 'settings.json'),
+      JSON.stringify({
+        model: 'opus',
+        env: { SECRET: 'x' },
+        hooks: { Stop: [] },
+        permissions: { allow: ['Bash(npm test:*)', 'Edit(/Users/me/**)'] }
+      })
+    )
+    put(
+      join(host.claudeDir, 'settings.json'),
+      JSON.stringify({ theme: 'dark', permissions: { allow: ['Bash(ls)'] } })
+    )
+    const sync = create()
+    sync.setPreferences({ autoSync: true })
+    const off = await sync.sync('env-1', 'manual')
+    expect(outcomes(off)['user:claude-settings:settings']).toBe('turned-off')
+
+    sync.setItemIncluded('user:claude-settings:settings', true)
+    await sync.sync('env-1', 'manual')
+    expect(JSON.parse(readFileSync(join(host.claudeDir, 'settings.json'), 'utf8'))).toEqual({
+      theme: 'dark',
+      model: 'opus',
+      permissions: { allow: ['Bash(ls)', 'Bash(npm test:*)'] }
+    })
+
+    sync.setItemIncluded('user:claude-settings:settings', false)
+    await sync.sync('env-1', 'manual')
+    expect(JSON.parse(readFileSync(join(host.claudeDir, 'settings.json'), 'utf8'))).toEqual({
+      theme: 'dark',
+      permissions: { allow: ['Bash(ls)'] }
+    })
+  })
+
+  it('steps down one protocol generation for a sandbox that knows subagents but not settings', async () => {
+    put(join(local.claudeDir, 'agents', 'reviewer.md'), 'Review code.')
+    put(join(local.claudeDir, 'settings.json'), JSON.stringify({ model: 'opus' }))
+    const sync = create('part1')
+    sync.setPreferences({ autoSync: true })
+    sync.setItemIncluded('user:claude-settings:settings', true)
+    const status = await sync.sync('env-1', 'manual')
+    expect(outcomes(status)).toEqual({
+      'user:claude-agent:reviewer': 'added',
+      'user:claude-settings:settings': 'host-outdated'
+    })
     expect(existsSync(join(host.claudeDir, 'agents', 'reviewer.md'))).toBe(true)
   })
 })

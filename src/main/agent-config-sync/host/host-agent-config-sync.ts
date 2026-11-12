@@ -20,6 +20,7 @@ import {
 } from '../../../shared/agent-config-sync/agent-config-sync-contract'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { excludeFromGit, ledgerPath, readLedger, writeLedger } from './host-agent-config-ledger'
+import { applyClaudeSettings, parseSettingsPayload } from './host-claude-settings'
 import { agentConfigDigest, type AgentConfigDigestEntry } from '../agent-config-digest'
 import { agentConfigItemPath, agentConfigRoot, type AgentConfigHomes } from '../agent-config-roots'
 
@@ -118,6 +119,11 @@ export async function planHostAgentConfigSync(
   for (const item of params.items) {
     const key = agentConfigItemKey(item.scope, item.kind, item.name)
     wanted.add(key)
+    if (item.kind === 'claude-settings') {
+      // Merged key by key at put time; the sandbox's own values win there.
+      items[key] = ledger.items[key] === item.digest ? 'unchanged' : 'needed'
+      continue
+    }
     const dest = destinationOf(item, deps)
     if (!dest) {
       items[key] = 'no-project'
@@ -147,6 +153,15 @@ export async function planHostAgentConfigSync(
     }
     delete ledger.items[key]
     const id = parseKey(key)
+    if (id?.kind === 'claude-settings') {
+      // Turned off: take back only the keys and rules this computer added.
+      const undone = await applyClaudeSettings(
+        {},
+        { homes: deps.homes, ledgerDir: deps.ledgerDir, syncer: params.syncer }
+      )
+      removed += undone === 'removed' ? 1 : 0
+      continue
+    }
     const dest = id ? destinationOf(id, deps) : null
     // Only an untouched copy goes; an edited one stays as the user's.
     if (id && dest && (await digestOnDisk(dest, id.kind)) === digest) {
@@ -238,6 +253,23 @@ export async function putHostAgentConfig(
     const files = id ? decodeFiles(item) : null
     if (!id || !files) {
       items[key] = 'invalid'
+      continue
+    }
+    if (id.kind === 'claude-settings') {
+      const payload = parseSettingsPayload(files[0].bytes)
+      if (!payload) {
+        items[key] = 'invalid'
+        continue
+      }
+      const outcome = await applyClaudeSettings(payload, {
+        homes: deps.homes,
+        ledgerDir: deps.ledgerDir,
+        syncer: params.syncer
+      }).catch(() => 'failed' as const)
+      if (outcome !== 'kept-host' && outcome !== 'failed') {
+        ledger.items[key] = item.digest
+      }
+      items[key] = outcome === 'unchanged' || outcome === 'removed' ? 'updated' : outcome
       continue
     }
     const dest = destinationOf(id, deps)

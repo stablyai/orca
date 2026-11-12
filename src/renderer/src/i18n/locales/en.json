@@ -29046,7 +29046,8 @@
       "project": "{{kind}}, this project",
       "agent": "Claude subagent",
       "outputStyle": "Claude output style",
-      "memory": "{{agent}} memory"
+      "memory": "{{agent}} memory",
+      "settings": "Claude settings"
     },
     "summary": {
       "none": "None found in Claude or Codex on this computer",
@@ -29080,7 +29081,11 @@
       "localRefs_one": "Imports 1 file from elsewhere on this computer; it isn’t copied",
       "localRefs_other": "Imports {{count}} files from elsewhere on this computer; those aren’t copied",
       "memoryOff": "Your personal instructions stay on this computer until you turn this on",
-      "hostOutdated": "This workspace was created before this could sync. A new workspace gets it."
+      "hostOutdated": "This workspace was created before this could sync. A new workspace gets it.",
+      "settingsLocalRefs_one": "Permissions, model and output style only. 1 rule mentions a path on this computer and stays here. Changes made in a workspace stay there.",
+      "settingsLocalRefs_other": "Permissions, model and output style only. {{count}} rules mention paths on this computer and stay here. Changes made in a workspace stay there.",
+      "settingsScope": "Permissions, model and output style only. Env, hooks and helper commands never sync. Changes made in a workspace stay there.",
+      "settingsOff": "Permissions and model settings stay on this computer until you turn this on"
     },
     "state": {
       "synced": "Synced",

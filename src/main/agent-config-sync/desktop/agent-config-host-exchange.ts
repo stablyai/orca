@@ -1,8 +1,7 @@
 import {
-  AGENT_CONFIG_LEGACY_KINDS,
+  AGENT_CONFIG_KIND_GENERATIONS,
   AGENT_CONFIG_SYNC_PLAN_METHOD,
   AGENT_CONFIG_SYNC_PUT_METHOD,
-  AgentConfigItemKind,
   AgentConfigSyncPlanResult,
   AgentConfigSyncPutResult
 } from '../../../shared/agent-config-sync/agent-config-sync-contract'
@@ -33,38 +32,40 @@ function errorCodeOf(error: unknown): string {
 const refsOf = (items: readonly DesiredAgentConfigItem[]) =>
   items.map(({ scope, kind, name, digest }) => ({ scope, kind, name, digest }))
 
-/** Plan, then put what the host lacks. A sandbox whose Orca rejects the `kinds` field (it
- * predates subagents, output styles and memory) gets the original kinds only, as before. */
+/** Plan, then put what the host lacks. An older sandbox gets the newest set of kinds it accepts;
+ * the rest show as needing a newer workspace. */
 export async function exchangeAgentConfig(
   call: AgentConfigHostCall,
   environmentId: string,
   syncer: string,
   desired: readonly DesiredAgentConfigItem[]
 ): Promise<AgentConfigExchange> {
-  let sentItems = desired
-  let plan: AgentConfigSyncPlanResult
-  try {
-    plan = AgentConfigSyncPlanResult.parse(
-      await call(
-        environmentId,
-        AGENT_CONFIG_SYNC_PLAN_METHOD,
-        { syncer, items: refsOf(desired), kinds: [...AgentConfigItemKind.options] },
-        PLAN_TIMEOUT_MS
+  let sentItems: readonly DesiredAgentConfigItem[] = desired
+  let plan: AgentConfigSyncPlanResult | null = null
+  for (const [index, kinds] of AGENT_CONFIG_KIND_GENERATIONS.entries()) {
+    const legacy = index === AGENT_CONFIG_KIND_GENERATIONS.length - 1
+    sentItems = desired.filter((item) => kinds.includes(item.kind))
+    try {
+      plan = AgentConfigSyncPlanResult.parse(
+        await call(
+          environmentId,
+          AGENT_CONFIG_SYNC_PLAN_METHOD,
+          // The oldest sandboxes reject the `kinds` field itself.
+          legacy
+            ? { syncer, items: refsOf(sentItems) }
+            : { syncer, items: refsOf(sentItems), kinds: [...kinds] },
+          PLAN_TIMEOUT_MS
+        )
       )
-    )
-  } catch (error) {
-    if (errorCodeOf(error) !== 'invalid_argument') {
-      throw error
+      break
+    } catch (error) {
+      if (legacy || errorCodeOf(error) !== 'invalid_argument') {
+        throw error
+      }
     }
-    sentItems = desired.filter((item) => AGENT_CONFIG_LEGACY_KINDS.has(item.kind))
-    plan = AgentConfigSyncPlanResult.parse(
-      await call(
-        environmentId,
-        AGENT_CONFIG_SYNC_PLAN_METHOD,
-        { syncer, items: refsOf(sentItems) },
-        PLAN_TIMEOUT_MS
-      )
-    )
+  }
+  if (!plan) {
+    throw new Error('No sync protocol the sandbox accepts.')
   }
   const needed = sentItems.filter((item) => plan.items[item.key] === 'needed')
   const put: AgentConfigSyncPutResult['items'] = {}
