@@ -42,6 +42,9 @@ import {
 import {
   HostedGithubRepoAccessResponseSchema,
   HostedGithubRepositoriesResponseSchema,
+  HostedGithubUserConnectResponseSchema,
+  HostedGithubUserResponseSchema,
+  type HostedGithubUser,
   type HostedGithubRepoAccessResponse,
   type HostedGithubRepositoriesResponse
 } from '../../shared/hosted-sandbox/hosted-github-wire'
@@ -111,6 +114,12 @@ export type HostedSandboxControlPlaneClient = {
     signal?: AbortSignal,
     target?: HostedGithubConnectTarget
   ): Promise<HostedGithubConnectResponse>
+  /** Whether the signed-in person connected their own GitHub (commit and push attribution). */
+  githubUser(signal?: AbortSignal): Promise<HostedGithubUser>
+  /** Starts the person's GitHub OAuth; the browser finishes it at `authorizeUrl`. */
+  connectGitHubUser(signal?: AbortSignal): Promise<{ authorizeUrl: string }>
+  /** Forgets the person's GitHub identity; cloud commits use Orca Cloud's name again. */
+  disconnectGitHubUser(signal?: AbortSignal): Promise<HostedGithubUser>
   /** Whether Orca Cloud can clone this https GitHub repository for the account. */
   githubRepoAccess(
     query: { repo: string; setupSessionId?: string; repoId?: number; ownerId?: number },
@@ -276,6 +285,18 @@ export function createHostedSandboxControlPlaneClient(
     connectGitHub: (signal, target) =>
       call('POST', 'v1/github/connect', HostedGithubConnectResponseSchema, {
         ...(target ? { body: target } : {}),
+        kind: 'control',
+        signal
+      }),
+    githubUser: (signal) =>
+      call('GET', 'v1/github/user', HostedGithubUserResponseSchema, { kind: 'control', signal }),
+    connectGitHubUser: (signal) =>
+      call('POST', 'v1/github/user/connect', HostedGithubUserConnectResponseSchema, {
+        kind: 'control',
+        signal
+      }),
+    disconnectGitHubUser: (signal) =>
+      call('DELETE', 'v1/github/user', HostedGithubUserResponseSchema, {
         kind: 'control',
         signal
       }),

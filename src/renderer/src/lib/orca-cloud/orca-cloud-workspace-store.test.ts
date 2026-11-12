@@ -40,6 +40,9 @@ function stubApi(overrides: Partial<OrcaCloudWorkspaceApi> = {}): OrcaCloudWorks
     listCloudWorkspaceIds: vi.fn(async () => ['a', 'b']),
     getConfig: vi.fn(async () => null),
     connectGitHub: vi.fn(async () => ok(null)),
+    getGitHubUser: vi.fn(async () => ok({ connected: false as const })),
+    connectGitHubUser: vi.fn(async () => ok(null)),
+    disconnectGitHubUser: vi.fn(async () => ok({ connected: false as const })),
     getRepoAccess: vi.fn(async () =>
       ok({ access: 'granted' as const, owner: 'a', repo: 'https://github.com/a/b' })
     ),

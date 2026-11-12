@@ -13171,7 +13171,22 @@
           "keywordSignIn": "sign in",
           "keywordSignOut": "sign out",
           "keywordRelay": "relay",
-          "keywordCloud": "cloud"
+          "keywordCloud": "cloud",
+          "github": {
+            "disconnectTitle": "Disconnect GitHub?",
+            "disconnectBody": "Commits in cloud workspaces will use Orca Cloud's name again.",
+            "disconnectConfirm": "Disconnect",
+            "disconnectCancel": "Cancel",
+            "pending": "Finish in your browser",
+            "cancel": "Cancel",
+            "connectedAs": "Connected as @{{login}}",
+            "disconnect": "Disconnect",
+            "error": "Couldn't connect GitHub.",
+            "tryAgain": "Try again",
+            "description": "Connect your GitHub so commits and pushes in cloud workspaces show your name. Until then they use Orca Cloud's.",
+            "connect": "Connect GitHub",
+            "title": "GitHub"
+          }
         },
         "automations": {
           "showButtonDescription": "Show the Automations shortcut in the sidebar.",

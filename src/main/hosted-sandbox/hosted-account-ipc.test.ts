@@ -26,7 +26,8 @@ function register(installUrl: string, config = vi.fn(async () => ({ idleSleepMin
       connectGitHub: async () => ({ installUrl, authorizeUrl: installUrl }),
       githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
       githubRepositories: async () => ({ repositories: [], nextCursor: null }),
-      create: unusedCreate
+      create: unusedCreate,
+      ...githubUser
     },
     { repoIds: async () => null }
   )
@@ -34,6 +35,11 @@ function register(installUrl: string, config = vi.fn(async () => ({ idleSleepMin
 }
 
 const REPO = 'https://github.com/acme/web'
+const githubUser = {
+  githubUser: async () => ({ connected: false as const }),
+  connectGitHubUser: async () => ({ authorizeUrl: 'https://github.com/login/oauth/authorize' }),
+  disconnectGitHubUser: async () => ({ connected: false as const })
+}
 const unusedCreate = async (): Promise<never> => {
   throw new Error('not called')
 }
@@ -57,7 +63,8 @@ it('starts a sandbox that clones a GitHub-only repository (D4), and refuses anyt
       connectGitHub: async () => ({ installUrl: REPO, authorizeUrl: REPO }),
       githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
       githubRepositories: async () => ({ repositories: [], nextCursor: null }),
-      create
+      create,
+      ...githubUser
     },
     { repoIds: async () => null }
   )
@@ -96,7 +103,8 @@ it('asks again with the repo and owner ids when access is missing, so GitHub pre
       connectGitHub,
       githubRepoAccess,
       githubRepositories: async () => ({ repositories: [], nextCursor: null }),
-      create: unusedCreate
+      create: unusedCreate,
+      ...githubUser
     },
     { repoIds: async () => ({ repoId: 7, ownerId: 50 }) }
   )
