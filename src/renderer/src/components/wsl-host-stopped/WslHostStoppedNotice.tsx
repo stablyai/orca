@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
@@ -55,7 +56,7 @@ export function WslHostStoppedNotice({
       />
       {connecting ? (
         <span className="flex items-center gap-1.5" data-wsl-host-connecting="">
-          <Loader2 className="size-3.5 animate-spin" />
+          <LoadingSpinner className="size-4" />
           {t('components.native-chat.hostOutage.connecting', 'Connecting to {{distro}}…', {
             distro
           })}

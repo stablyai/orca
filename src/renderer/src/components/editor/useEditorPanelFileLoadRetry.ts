@@ -104,7 +104,9 @@ export function useEditorPanelFileLoadRetry({
   const wslHostState = useAppStateValue((state) =>
     wslEnvironmentId ? state.wslHostStatuses[wslEnvironmentId]?.state : undefined
   )
-  const wslHost = wslHostRetryConnection(wslEnvironmentId, wslHostState)
+  // An SSH target keeps its own signal; only a workspace with none reads its WSL host.
+  const wslHost =
+    hostConnection.phase === 'local' ? wslHostRetryConnection(wslEnvironmentId, wslHostState) : null
   const hostTargetId = wslHost?.targetId ?? hostConnection.targetId
   const hostConnecting = wslHost?.connecting ?? hostConnection.phase === 'connecting'
   const connectedHostEpoch = wslHost ? wslHost.connectedEpoch : hostConnection.connectedEpoch
