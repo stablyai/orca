@@ -46,4 +46,21 @@ describe('gentle-shell hook route', () => {
       server.stop()
     }
   })
+
+  it('waits for input while a gentle-shell dialog is open, like Pi', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    const stateAfter = async (payload: Record<string, unknown>) => {
+      await postHookEvent(server, buildBody(payload), '/hook/gentle-shell')
+      return server.getStatusSnapshot()[0]?.state
+    }
+    try {
+      await stateAfter({ hook_event_name: 'before_agent_start', prompt: 'ask me' })
+
+      expect(await stateAfter({ hook_event_name: 'ui_prompt_start' })).toBe('waiting')
+      expect(await stateAfter({ hook_event_name: 'ui_prompt_end', is_idle: false })).toBe('working')
+    } finally {
+      server.stop()
+    }
+  })
 })
