@@ -1,4 +1,5 @@
 import { LandingCloudCard } from './landing/LandingCloudCard'
+import { LandingCloudSignInCard, useSignedOutOfOrcaCloud } from './landing/LandingCloudSignInCard'
 import {
   CloudWorkspacesHome,
   useCloudWorkspacesPresent
@@ -225,6 +226,10 @@ export default function Landing(): React.JSX.Element {
   const cloudListPresent = useCloudWorkspacesPresent()
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
+  const signedOutOfCloud = useSignedOutOfOrcaCloud()
+  const reconnectRequired = useAppStore(
+    (s) => s.orcaProfileAuthStatus?.state === 'reconnect-required'
+  )
 
   const createActionLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo))
@@ -298,7 +303,12 @@ export default function Landing(): React.JSX.Element {
               onCreate={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             />
 
-            {hasProjects ? <LandingCloudCard cloudWorkspacesPresent={cloudListPresent} /> : null}
+            {/* V3-08: signed out, the team's cloud workspaces can't be listed; say so where they'd be. */}
+            {hasProjects && signedOutOfCloud && !cloudListPresent ? (
+              <LandingCloudSignInCard reconnect={reconnectRequired} />
+            ) : hasProjects ? (
+              <LandingCloudCard cloudWorkspacesPresent={cloudListPresent} />
+            ) : null}
 
             {!cloudListPresent && <LandingShortcutList shortcuts={shortcuts} />}
           </div>

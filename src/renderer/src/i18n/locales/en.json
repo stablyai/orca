@@ -24311,6 +24311,13 @@
         "planBody": "Agents keep running while your laptop sleeps.",
         "trialBody": "Agents keep running while your laptop sleeps. No card needed.",
         "try": "Try Orca Cloud"
+      },
+      "cloudSignIn": {
+        "title": "Cloud workspaces",
+        "body": "Sign in to see your team’s cloud workspaces.",
+        "again": "Sign in again",
+        "action": "Sign in",
+        "bodyAgain": "Your sign-in ended. Sign in again to see your team’s cloud workspaces."
       }
     },
     "cloudWorkspaces": {

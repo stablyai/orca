@@ -65,6 +65,13 @@ export function cloudWorkspacesAvailable(): Promise<boolean> {
   return availability
 }
 
+/** Fixtures only: forget the cached answer so the next probe reads the stubbed bridge. */
+export function resetCloudWorkspacesAvailabilityForFixtures(): void {
+  availability = null
+  availableValue = null
+  availabilityListeners.forEach((listener) => listener())
+}
+
 /** null until the first availability answer arrives. */
 export function useCloudWorkspacesAvailable(): boolean | null {
   return useSyncExternalStore(
