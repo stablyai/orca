@@ -13,6 +13,7 @@ const STATUS_BAR_USAGE_PROVIDERS: ReadonlySet<string> = new Set<StatusBarUsagePr
   'antigravity',
   'cursor',
   'zcode',
+  'kiro',
   'muse'
 ])
 

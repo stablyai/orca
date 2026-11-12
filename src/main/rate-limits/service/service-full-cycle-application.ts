@@ -2,9 +2,11 @@ import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-prepa
 import { isZcodeUsageCredentialCurrent } from '../providers/zcode/zcode-usage-credentials'
 import {
   settleSiblingProviderResult,
+  settleSiblingProviderFetch,
   type SettledProviderResult
 } from './service-sibling-provider-result'
 import { disabledUsageSnapshot } from './disabled-usage-snapshot'
+import { fetchKiroRateLimits } from '../providers/kiro/kiro-fetcher'
 import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
 import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
@@ -26,10 +28,28 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     signal: AbortSignal,
     options?: { force?: boolean }
   ): Promise<void> {
+    if (signal.aborted) {
+      return
+    }
+    const kiroBeforeFetch = this.state.kiro
+    const kiroEnabled = this.kiroUsageEnabledResolver?.() ?? true
+    const kiroFetching = kiroEnabled
+      ? this.withFetchingStatus(kiroBeforeFetch, 'kiro')
+      : (kiroBeforeFetch ?? disabledUsageSnapshot('kiro'))
+    this.updateState({ ...this.state, kiro: kiroFetching })
+    const kiroResultPromise = settleSiblingProviderFetch(
+      kiroEnabled ? fetchKiroRateLimits({ signal }) : Promise.resolve(kiroFetching)
+    ).then((settled) => {
+      if (!signal.aborted) {
+        const kiro = settleSiblingProviderResult('kiro', settled)
+        this.trackActiveFailureStreak('kiro', kiro)
+        this.updateState({ ...this.state, kiro: this.applyStalePolicy(kiro, kiroBeforeFetch) })
+      }
+    })
     const museBeforeFetch = this.state.muse
     const museResultPromise = this.startMuseUsageFetch(signal)
     const prepared = await this.prepareFetchAllCycle(signal, options)
-    if (!prepared) {
+    if (!prepared || signal.aborted) {
       return
     }
     const {
@@ -63,9 +83,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeResultPromise,
       antigravityResultPromise
     } = prepared
-    if (signal.aborted) {
-      return
-    }
 
     const claude =
       claudeResult.status === 'fulfilled'
@@ -275,6 +292,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           ? antigravity
           : this.applyStalePolicy(antigravity, previousState.antigravity)
     })
+
+    await kiroResultPromise
 
     // Published separately so a slow Muse CLI never delays the sibling batch above.
     const museSettled = await museResultPromise

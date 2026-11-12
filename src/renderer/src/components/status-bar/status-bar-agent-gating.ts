@@ -10,6 +10,7 @@ const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
   'antigravity',
   'grok',
   'zcode',
+  'kiro',
   'muse'
 ])
 

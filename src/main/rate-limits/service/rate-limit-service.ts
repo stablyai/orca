@@ -20,6 +20,7 @@ import type {
   MiniMaxRateLimitConfig,
   AntigravityUsageEnabledResolver,
   MuseUsageEnabledResolver,
+  KiroUsageEnabledResolver,
   ZcodePlanRateLimitConfig,
   GeminiCliOAuthEnabledResolver,
   InactiveCodexAccountInfo
@@ -93,6 +94,10 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
 
   setAntigravityAccountUsageRecorder(recorder: AntigravityAccountUsageRecorder): void {
     this.antigravityAccountUsageRecorder = recorder
+  }
+
+  setKiroUsageEnabledResolver(resolver: KiroUsageEnabledResolver): void {
+    this.kiroUsageEnabledResolver = resolver
   }
 
   setMuseUsageEnabledResolver(resolver: MuseUsageEnabledResolver): void {

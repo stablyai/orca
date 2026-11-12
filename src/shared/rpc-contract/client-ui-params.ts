@@ -72,6 +72,7 @@ export const StatusBarItem = z.enum([
   'cursor',
   'zcode',
   'muse',
+  'kiro',
   'ssh',
   'resource-usage',
   'ports'
@@ -200,6 +201,7 @@ export const UiUpdateFields = z
     _cursorStatusBarDefaultAdded: z.boolean().optional(),
     _zcodeStatusBarDefaultAdded: z.boolean().optional(),
     _museStatusBarDefaultAdded: z.boolean().optional(),
+    _kiroStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
@@ -218,6 +220,7 @@ export const UiUpdateFields = z
             antigravity: z.string().optional(),
             cursor: z.string().optional(),
             zcode: z.string().optional(),
+            kiro: z.string().optional(),
             muse: z.string().optional()
           })
           .optional()
