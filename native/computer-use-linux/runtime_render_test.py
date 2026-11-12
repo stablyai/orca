@@ -332,6 +332,7 @@ class KWinScreenshotTest(unittest.TestCase):
         self.assertEqual(self.pixbuf_calls, [])
 
 
+@unittest.skipIf(sys.platform == "win32", "the Linux bridge reads portal files with POSIX flags")
 class PortalFileTest(unittest.TestCase):
     def setUp(self):
         self.directory = Path(tempfile.mkdtemp())

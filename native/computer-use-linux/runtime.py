@@ -652,7 +652,7 @@ KWIN_LAYOUT_SCRIPT = """(function (target) {
                 caption: window.caption,
                 captionNormal: window.captionNormal === undefined ? null : window.captionNormal,
                 stackingOrder: window.stackingOrder,
-                shown: !window.minimized && !window.hidden && !window.deleted
+                shown: !window.minimized && !window.hidden && !window.deleted && !window.shade
                     && onCurrentDesktop(window) && onCurrentActivity(window),
                 ownedPopup: window.popupWindow === true || window.transient === true,
                 client: window.clientGeometry === undefined ? null : rect(window.clientGeometry),
@@ -958,14 +958,16 @@ def take_portal_file(uri, not_before):
     with os.fdopen(descriptor, "rb") as handle:
         info = os.fstat(descriptor)
         # Why: the portal saves into the user's folders; only a file it just wrote for this call is ours to read and delete.
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mtime < not_before - 1
-                or not 0 < info.st_size <= MAX_WAYLAND_PNG_BYTES):
-            raise ValueError("the desktop portal's screenshot file is not a new image file of this user")
-        data = handle.read(MAX_WAYLAND_PNG_BYTES + 1)
-    current = attempt(lambda: os.stat(path, follow_symlinks=False))
-    if current is not None and (current.st_dev, current.st_ino) == (info.st_dev, info.st_ino):
-        attempt(lambda: os.unlink(path))
-    return data
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mtime < not_before - 1:
+            raise ValueError("the desktop portal's screenshot file is not a new file of this user")
+        try:
+            if not 0 < info.st_size <= MAX_WAYLAND_PNG_BYTES:
+                raise ValueError("the desktop portal's screenshot exceeds the size limit")
+            return handle.read(MAX_WAYLAND_PNG_BYTES + 1)
+        finally:
+            current = attempt(lambda: os.stat(path, follow_symlinks=False))
+            if current is not None and (current.st_dev, current.st_ino) == (info.st_dev, info.st_ino):
+                attempt(lambda: os.unlink(path))
 
 
 def portal_screenshot_png(bus):
@@ -992,7 +994,8 @@ def portal_screenshot_png(bus):
         if not pump_until(mine, PORTAL_ANSWER_SECONDS):
             attempt(lambda: bus_call(bus, PORTAL_SERVICE, handle, "org.freedesktop.portal.Request", "Close"))
             raise ValueError("the desktop portal did not answer; if the desktop is asking whether apps may take "
-                             "screenshots, answer that prompt, then retry")
+                             "screenshots, wait for the person to answer that prompt before retrying (allowing it may "
+                             "leave one screenshot in their Pictures folder)")
         response, results = mine()
     finally:
         bus.signal_unsubscribe(subscription)
