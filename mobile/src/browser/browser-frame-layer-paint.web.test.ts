@@ -3,11 +3,11 @@ import { createRequire } from 'node:module'
 import { act, createElement, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it } from 'vitest'
-import type { Image } from 'react-native'
+import type { ImageInstance } from 'react-native'
 import { updateBrowserImageSource as updateBrowserImageSourceOnWeb } from './browser-frame-layer-paint.web'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the point of the test is that a DOM node is what the native signature receives on RN Web, which is exactly the mismatch these siblings exist for.
-const asImageRef = (node: HTMLElement) => node as unknown as Image
+const asImageRef = (node: HTMLElement) => node as unknown as ImageInstance
 
 // Find rendered frame element by its background and verify write lands there.
 describe('against a real react-native-web Image', () => {

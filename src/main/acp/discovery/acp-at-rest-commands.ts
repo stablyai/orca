@@ -129,7 +129,6 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
                 ...STRUCTURED_CHILD_ENV_TO_DELETE,
                 ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS,
                 ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV,
-                'ORCA_TERMINAL_HANDLE',
                 NATIVE_CHAT_SCRATCH_DIR_ENV,
                 LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
               ]

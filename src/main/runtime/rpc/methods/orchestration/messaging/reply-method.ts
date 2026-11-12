@@ -12,7 +12,7 @@ import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import { resolveReplyRecipient } from './recipient-routing'
 import { replyAccess } from './reply-access'
-import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/legacy-remote'
+import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/reply-remote'
 import { replyOverPeerMail } from './peer-mail-reply'
 import { withAnswerNext } from '../receipt-next'
 import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
@@ -29,6 +29,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   access: {
     kind: 'writes',
     caller: 'from',
+    server: 'on',
     targets: { id: 'message', run: 'run' },
     rule: replyAccess
   },

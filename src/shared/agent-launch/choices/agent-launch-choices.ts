@@ -25,10 +25,30 @@ export function terminalAgentChoices(
 
 export type AgentLaunchChoices = Partial<Record<TuiAgent, AgentModelOptionChoices>>
 export type AgentChoiceCliForm =
-  | { kind: 'value'; names: readonly string[]; lift: 'separate-and-long-equals' | 'never' }
+  | {
+      kind: 'value'
+      names: readonly string[]
+      lift: 'separate-and-long-equals' | 'never'
+      /** Values outside the choice's grammar stay literal arguments instead of becoming choices. */
+      recognizes?: (value: string) => boolean
+    }
   | { kind: 'config'; names: readonly string[]; key: string; lift: 'codex-bare-string' | 'never' }
   | { kind: 'settings'; names: readonly string[]; key: string; lift: 'merged-json' }
   | { kind: 'recipe'; words: readonly string[]; value: AgentPermissionChoice }
+
+/** One choice flag found in free-form agent arguments. */
+export type ChoiceOccurrence = {
+  key: string
+  value: string
+  valueType?: 'string' | 'boolean'
+  source?: boolean
+  words: string[]
+  start: number
+  end: number
+  lift: boolean
+  owned: boolean
+  replacement?: string
+}
 
 export function normalizeAgentModelOptionChoices(
   value: unknown

@@ -5,7 +5,11 @@ import type { NativeChatMessage } from '../../../../../shared/native-chat/native
 import { projectStructuredItemsToNativeChat } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { boundWorkerTranscriptTail } from '../transcripts/worker-transcript-payload'
-import { readRetiredLineageJournalPage } from './structured-worker-journal-page'
+import {
+  readRetiredLineageJournalPage,
+  readStructuredLineageJournalPage,
+  type StructuredLineageJournalPage
+} from './structured-worker-journal-page'
 
 // Same durable bound the terminal archive uses; a session journal can grow without limit.
 const STRUCTURED_ARCHIVE_MAX_BYTES = 262_144
@@ -29,6 +33,17 @@ export function boundStructuredJournalTail(items: readonly AgentJournalRenderIte
     projectStructuredItemsToNativeChat(items),
     STRUCTURED_ARCHIVE_MAX_BYTES
   )
+}
+
+/** Page a lineage back until the archive's byte bound fills, not just the newest history page. */
+export function readStructuredLineageArchiveJournal(
+  lineage: readonly string[]
+): Promise<StructuredLineageJournalPage | null> {
+  return readStructuredLineageJournalPage(lineage, archiveBoundFilled)
+}
+
+function archiveBoundFilled(items: readonly AgentJournalRenderItem[]): boolean {
+  return boundStructuredJournalTail(items).limited
 }
 
 export function buildStructuredJournalArchive(input: {
@@ -64,7 +79,10 @@ export async function captureRetiredLineageArchive(input: {
   processIncarnation: string
   lineage: readonly string[]
 }): Promise<WorkerStructuredJournalArchive> {
-  const { page, unreadable } = await readRetiredLineageJournalPage(input.lineage)
+  const { page, unreadable } = await readRetiredLineageJournalPage(
+    input.lineage,
+    archiveBoundFilled
+  )
   const archive = buildStructuredJournalArchive({
     agent: input.agent,
     processIncarnation: input.processIncarnation,

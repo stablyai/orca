@@ -31,7 +31,7 @@ export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoad
 
 const styles = themedStyleSheet(() => ({
   page: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,

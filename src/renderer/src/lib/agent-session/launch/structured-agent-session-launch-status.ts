@@ -2,10 +2,10 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { structuredLaunchesHoldingIdentity } from './structured-agent-session-launch-holders'
 import {
   structuredLaunchIdentity,
-  structuredLaunchStates,
-  structuredAgentSessionLaunchHasRetainedInput,
   type StructuredAgentLaunchStatus
 } from './structured-agent-session-launch-registry'
+import { structuredLaunchStates } from './structured-agent-session-launch-state-store'
+import { structuredAgentSessionLaunchHasRetainedInput } from './structured-agent-session-launch-input'
 
 /** Whether a chat for this pair is being created here: its own first create, or an adoption. */
 export function getStructuredAgentLaunchStatus(

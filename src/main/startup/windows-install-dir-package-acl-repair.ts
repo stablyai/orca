@@ -4,7 +4,7 @@ import {
   sanitizeCrashReportString,
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import {
   installDirPackageGrants,
   RESTRICTED_APP_PACKAGES_SID,

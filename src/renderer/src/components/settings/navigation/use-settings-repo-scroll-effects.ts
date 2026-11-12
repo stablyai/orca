@@ -1,7 +1,6 @@
 import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect, useRef, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
@@ -102,18 +101,6 @@ export function useSettingsRepoScrollEffects(
         .filter((repo) => !retryOnly || retryOnly.has(getRepoHostIdentity(repo)))
         .map(async (repo) => {
           const repoHostIdentity = getRepoHostIdentity(repo)
-          if (isFolderRepo(repo)) {
-            setRepoHooksMap((previous) => {
-              if (previous[repoHostIdentity]) {
-                return previous
-              }
-              return {
-                ...previous,
-                [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
-              }
-            })
-            return
-          }
           try {
             const hostId = getRepoExecutionHostId(repo)
             // Showing Settings is no act on the repo's WSL distro (E9).

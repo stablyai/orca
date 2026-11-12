@@ -1,3 +1,4 @@
+import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
 
 export type BrowserReloadTrigger = 'button' | 'reload' | 'hard-reload'
@@ -44,9 +45,9 @@ export function reloadBrowserPageWebview(
   }
   try {
     if (ignoreCache) {
-      webview.reloadIgnoringCache()
+      issueBrowserGuestNavigation(webview, () => webview.reloadIgnoringCache())
     } else {
-      webview.reload()
+      issueBrowserGuestNavigation(webview, () => webview.reload())
     }
   } catch {
     try {

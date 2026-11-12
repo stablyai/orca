@@ -6,9 +6,9 @@ import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
-import { searchTerminalQuickCommands } from '@/lib/terminal-quick-command-search'
+import { searchTerminalQuickCommands } from '@/lib/terminal/quick-commands/terminal-quick-command-search'
 import { useAppStore } from '../../../store/index'
-import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal-quick-command-host-prompt-limit'
+import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Button } from '../../ui/button'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { getSettingOwnershipSummary } from '../page/setting-ownership'

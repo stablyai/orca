@@ -39,6 +39,28 @@ export function checkCreatedWorktreeSetupTrust(
   return matches ? undefined : { contentHash, scriptContent }
 }
 
+/**
+ * Older clients send no approval hash. A folder's shared setup never ran before folder setup
+ * existed, so it needs an approval or an explicit run rather than starting unseen.
+ */
+export function folderSharedSetupLacksApproval(
+  repo: Repo,
+  createdYamlHooks: OrcaHooks | null,
+  decision: SetupDecision | undefined,
+  approved: ApprovedSetupHashes
+): boolean {
+  if (approved.approvedSetupHash !== undefined || approved.approvedSetupHashes !== undefined) {
+    return false
+  }
+  if (decision === 'run') {
+    return false
+  }
+  const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
+    hasLocalScript: Boolean(repo.hookSettings?.scripts.setup?.trim())
+  })
+  return policy !== 'local-only' && Boolean(getSetupTrustContent(createdYamlHooks))
+}
+
 function wouldRunSetup(repo: Repo, decision: SetupDecision | undefined): boolean {
   try {
     return shouldRunSetupForCreate(repo, decision)

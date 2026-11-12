@@ -3,8 +3,6 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-// Why not in getBrowserPaneSearchEntries: that catalog is static, and this section exists only
-// while the experimental setting is on.
 export const getBrowserExtensionsSearchEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate('settings.browser.extensions.title', 'Extensions'),
   description: translate(
