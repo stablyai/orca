@@ -4,7 +4,7 @@ import {
   type AgentLaunchResult
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
-import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
+import { rpcCallerOperationKey } from '../runtime/rpc/callers/rpc-caller-identity'
 import { AUTOMATION_AGENT_CALLER, automationRunOperationId } from './automation-run-operation'
 
 export type AutomationRunReceipt =

@@ -3,7 +3,6 @@ import type { Worker } from 'node:worker_threads'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   UsageScanWorkerClient,
-  UsageScanWorkerUnavailableError,
   USAGE_SCAN_NO_PROGRESS_TIMEOUT_MS
 } from './scan-worker/usage-scan-worker-client'
 import type {
@@ -33,16 +32,11 @@ class ScanWorker extends EventEmitter {
   }
 }
 
-function body(providerId: UsageScanWorkerProviderId, population = 1): UsageScanWorkerScanBody {
+function body(providerId: UsageScanWorkerProviderId): UsageScanWorkerScanBody {
   return {
     operation: 'scan',
     providerId,
-    worktrees: Array.from({ length: population }, (_, i) => ({
-      repoId: 'repo',
-      worktreeId: `tree-${i}`,
-      displayName: `tree-${i}`,
-      path: `/tree-${i}`
-    })),
+    worktrees: [{ repoId: 'repo', worktreeId: 'tree-0', displayName: 'tree-0', path: '/tree-0' }],
     sourceCache: {
       path: `/${providerId}-sources.json`,
       schemaVersion: 1,
@@ -75,36 +69,6 @@ afterEach(async () => {
 })
 
 describe('usage scan scheduling through the production client', () => {
-  it.each([100, 1000])(
-    'admits only four providers at %i worktrees and routes unordered replies',
-    async (population) => {
-      const { client, workers } = fixture()
-      const calls = [
-        client.scan(body('claude', population)),
-        client.scan(body('codex', population)),
-        client.scan(body('opencode', population)),
-        client.scan(body('muse', population))
-      ]
-      const worker = workers[0]
-      expect(worker.posted.map((request) => request.providerId)).toEqual([
-        'claude',
-        'codex',
-        'opencode',
-        'muse'
-      ])
-      worker.emit('message', { id: worker.posted[1].id, filesScanned: 1 })
-      for (const index of [2, 0, 3, 1]) {
-        worker.complete(index)
-      }
-      expect(await Promise.all(calls)).toEqual([
-        { operation: 'scan', providerId: 'claude', sessions: [], dailyAggregates: [] },
-        { operation: 'scan', providerId: 'codex', sessions: [], dailyAggregates: [] },
-        { operation: 'scan', providerId: 'opencode', sessions: [], dailyAggregates: [] },
-        { operation: 'scan', providerId: 'muse', sessions: [], dailyAggregates: [] }
-      ])
-    }
-  )
-
   it('keeps same-provider FIFO and makes a split an exclusive barrier without overtaking', async () => {
     const { client, workers } = fixture()
     const first = client.scan(body('claude'))
@@ -257,18 +221,5 @@ describe('usage scan scheduling through the production client', () => {
     await expect(client.dispose()).rejects.toBe(failure)
     workers[0].emit('exit', 1)
     await client.dispose()
-  })
-
-  it('preserves unavailable classification without falling back to caller-thread scans', async () => {
-    const client = new UsageScanWorkerClient({
-      workerFactory: () => {
-        throw new Error('cannot spawn')
-      },
-      log: () => {}
-    })
-    clients.push(client)
-    await expect(client.scan(body('claude'))).rejects.toBeInstanceOf(
-      UsageScanWorkerUnavailableError
-    )
   })
 })

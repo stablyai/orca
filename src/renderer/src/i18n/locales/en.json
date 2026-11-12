@@ -4366,6 +4366,8 @@
             "86ba852118": "{{value0}}, {{value1}} failed",
             "deleteButtonCount": "Delete {{value0}}",
             "archivedStatus": "Archived",
+            "mergedStatus": "Merged",
+            "unchangedStatus": "No new commits",
             "74f6c16279": "Back"
           },
           "backgroundRemoval": {
@@ -4402,7 +4404,6 @@
             "runningTerminalBlocker": "Running terminal process",
             "terminalLivenessUnknownBlocker": "Terminal liveness unknown",
             "dirtyEditorBufferBlocker": "Unsaved editor buffer",
-            "volatileLocalContextBlocker": "Volatile local context",
             "recentVisibleContextBlocker": "Recently visited tabs",
             "liveAgentBlocker": "Active agent",
             "sshDisconnectedBlocker": "Remote unavailable",
@@ -9146,6 +9147,10 @@
           "workerAutoReleaseDescription": "Closes a worker's terminal or chat 2 minutes after it finishes, unless you choose Keep open. If it starts working again, the 2 minutes start over when it finishes.",
           "workerAutoReleaseKeywordClose": "close",
           "workerAutoReleaseKeywordRelease": "release",
+          "coordinatorApprovalsTitle": "Let coordinators approve worker permission prompts",
+          "coordinatorApprovalsDescription": "A coordinator agent can allow a worker's permission prompt, with a reason. You still see Allow and Deny, and the first answer wins. Applies to workers running on this computer.",
+          "coordinatorApprovalsKeywordApprove": "approve",
+          "coordinatorApprovalsKeywordPermission": "permission",
           "7bc082f4de": "Copy install command",
           "8a94078d05": "Agent orchestration"
         },
@@ -14253,6 +14258,21 @@
             "buckets": "Gemini model buckets",
             "optional": "dropped when a placeholder inside is empty"
           }
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "VM recipes decide whether their environments and files are deleted.",
+          "filesNote": "Files stay on disk, so you can add it again later.",
+          "hostCount_one": "{{count}} host",
+          "hostCount_other": "{{count}} hosts",
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkouts",
+          "removeButton": "Remove…",
+          "dialogTitle": "Remove {{name}}?",
+          "terminalWarning_one": "{{count}} open terminal in this project will be closed.",
+          "terminalWarning_other": "{{count}} open terminals in this project will be closed.",
+          "cancel": "Cancel",
+          "confirm": "Remove",
+          "unknownHost": "Unknown host"
         }
       },
       "right": {
@@ -19977,6 +19997,14 @@
         },
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
+        },
+        "PluginCatalogHighlights": {
+          "justNow": "just now",
+          "added": "Added {{value0}}",
+          "featured": "Featured",
+          "featuredDetail": "most installed, one per category",
+          "newlyAdded": "Newly added",
+          "newlyAddedDetail": "across your catalogs"
         }
       },
       "agent-workspace-trust-decision": {
@@ -20969,18 +20997,19 @@
         "worker": "Worker · {{name}}",
         "openWorker": "Open worker",
         "answerFailed": "{{name}}: {{detail}}",
+        "answerNotApplied": "{{name}}: the answer did not reach this prompt",
+        "answerWorkerEnded": "{{name}} has ended, so this prompt is closed",
         "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
-        "strip_one": "{{count}} approval",
-        "strip_other": "{{count}} approvals",
-        "show": "Show",
         "allowedByYou": "Allowed by you",
         "deniedByYou": "Denied by you",
         "deniedByCoordinator": "Denied by coordinator",
+        "allowedByCoordinator": "Allowed by coordinator: {{reason}}",
         "allowedInTerminal": "Allowed in the worker's terminal",
         "deniedInTerminal": "Denied in the worker's terminal",
         "answeredInChat": "Answered in the worker's chat",
-        "noLongerOpen": "No longer open",
+        "closedUnnamed": "Closed without a recorded answer",
         "autoDenied": "Auto-denied by Claude after 2:00",
+        "workerEnded": "No longer open · worker ended",
         "answerInTerminal": "Answer it in the worker's terminal"
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",
@@ -21056,6 +21085,8 @@
         "goToAgent": "Go to agent",
         "messageFromCoordinator": "Message from coordinator",
         "startedWorker": "Started worker",
+        "reopenedWorker": "Reopened worker",
+        "sentFollowUpToWorker": "Sent follow-up to worker",
         "handedOffToAgent": "Handed off to agent",
         "startedAgent": "Started agent",
         "taskFromCoordinator": "Task from coordinator",
@@ -21169,6 +21200,7 @@
         "reconnect": "Reconnect",
         "stopped": "{{distro}} is stopped",
         "start": "Start",
+        "connecting": "Connecting to {{distro}}…",
         "startFailed": "Couldn’t start {{distro}}. Check it in Settings → Remote Orca Servers.",
         "unverifiable": "Orca couldn't check whether {{distro}} is running",
         "startToSend": "Start {{distro}} to send.",
@@ -21717,7 +21749,10 @@
             "dirty": "Dirty",
             "unpushed": "Unpushed",
             "unknown": "Unknown"
-          }
+          },
+          "ignoredFilesBlocker": "Ignored local files",
+          "ignoredFilesNamed": "Ignored files: {{value0}}",
+          "ignoredFilesUnchecked": "Ignored files not fully checked"
         },
         "confirm": {
           "deletingTitle_one": "Deleting {{count}} workspace",
@@ -21751,7 +21786,13 @@
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again."
-        }
+        },
+        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked"
+      },
+      "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
+        "namesAndMore": "{{names}} and more"
       }
     },
     "agentSessionContinuation": {
@@ -22283,14 +22324,14 @@
         "chooseAgent": "Choose agent",
         "closePane": "Close pane",
         "files": "Files",
-        "keyboardHint": "↑↓ Enter to open · → agents · / to search",
         "markdown": "Markdown",
         "mobileEmulator": "Mobile emulator",
         "new": "New",
         "newAgent": "New Agent",
         "newNamedAgent": "New {{agent}} agent",
         "noMatches": "No matches",
-        "searchPlaceholder": "Open agent, terminal, or file…",
+        "searchAgentsAndFiles": "Search agents and files",
+        "searchShort": "Search",
         "terminal": "Terminal"
       }
     },
@@ -24732,13 +24773,12 @@
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",
     "noModels": "No models match your search.",
-    "legacyModels": "Legacy models",
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
     "chatChoicesNote": "{{agent}} model or effort choices without a CLI flag apply to chats.",
     "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
-    "legacyModelCount": "{{total}} models",
+    "moreModelsWithCount": "More models ({{total}})",
     "use": "Use",
     "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",

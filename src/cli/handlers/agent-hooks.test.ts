@@ -216,4 +216,53 @@ describe('agent hooks CLI handler', () => {
       readBack.db.close()
     }
   })
+
+  it.each([
+    { label: 'offline', reachable: false, enabled: true, appliedBy: 'offline' },
+    { label: 'connected', reachable: true, enabled: false, appliedBy: 'runtime' }
+  ] as const)(
+    'reports $label hook status against the SQLite file that holds the setting',
+    async ({ reachable, enabled, appliedBy }) => {
+      const profileId = 'sqlite-status'
+      writeActiveProfileIndex(userDataPath, profileId)
+      const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
+      mkdirSync(join(userDataPath, 'profiles', profileId), { recursive: true })
+      const opened = openProfileStateDatabase(databaseFile, profileId)
+      try {
+        importProfileStateJson(
+          opened.db,
+          JSON.stringify({ settings: { agentStatusHooksEnabled: true } })
+        )
+      } finally {
+        opened.db.close()
+      }
+      getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+      if (reachable) {
+        getCliStatusMock.mockResolvedValueOnce({
+          id: 'test-status',
+          ok: true,
+          result: {
+            app: { running: true, pid: null },
+            runtime: { state: 'ready', reachable: true, runtimeId: null },
+            graph: { state: 'ready' }
+          },
+          _meta: { runtimeId: 'test' }
+        })
+        // The running app has turned hooks off but not yet written it to disk.
+        callMock.mockResolvedValueOnce({
+          id: 'settings',
+          ok: true,
+          result: { settings: { agentStatusHooksEnabled: false } },
+          _meta: { runtimeId: 'runtime-1' }
+        })
+      }
+
+      await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+
+      const payload: unknown = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))
+      expect(payload).toMatchObject({
+        result: { enabled, appliedBy, settingsPath: databaseFile }
+      })
+    }
+  )
 })

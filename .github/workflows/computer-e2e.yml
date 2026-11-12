@@ -48,7 +48,7 @@ on:
       - 'src/cli/**'
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
-      - 'src/main/runtime/rpc/errors.ts'
+      - 'src/main/runtime/rpc/responses/rpc-response.ts'
       - 'src/main/runtime/rpc/methods/computer/computer*.ts'
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'

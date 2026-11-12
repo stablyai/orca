@@ -8,7 +8,7 @@ import type {
   PtySpawnResult
 } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
-import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
+import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'

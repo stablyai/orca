@@ -2,10 +2,13 @@ import { readFile, stat } from 'node:fs/promises'
 import { isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import { isMissingGitBlobPath } from '../../../shared/git/diff/git-blob-absence'
 import { readGitCommandFailureStderr } from '../../../shared/git/commands/git-command-failure-text'
-import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitReadOptionsForWorktree } from '../git-runtime-options'
+
+import {
+  type GitRuntimeOptions,
+  gitReadOptionsForWorktree
+} from '../command-runner/git-runtime-options'
 import { gitExecFileAsyncBuffer } from '../command-runner/git-exec-file'
-import { isMaxBufferOverflowError } from '../max-buffer-overflow'
+import { isMaxBufferOverflowError } from '../command-runner/process-capture/max-buffer-overflow'
 import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
 import { literalPathspec } from './git-pathspec'
 import { hasTextconvDriver, isImageOrPdfPreviewPath } from './textconv-driver'

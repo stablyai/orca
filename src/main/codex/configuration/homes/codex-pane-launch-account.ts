@@ -4,7 +4,7 @@ import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget
-} from '../../../codex-accounts/runtime-selection'
+} from '../../../codex-accounts/account-management/runtime-selection'
 import {
   getCodexSelectionLaneKey,
   type CodexAccountSelectionTarget

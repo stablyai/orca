@@ -3,7 +3,7 @@ import type {
   TerminalPaneSplitDirection
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 
 /** Materialize host-published layouts for web/mobile and desktop remote-runtime tabs; local desktop splits create panes directly. */
 export function isHostAuthoritativeLayout(args: {

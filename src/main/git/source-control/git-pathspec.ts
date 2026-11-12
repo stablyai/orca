@@ -4,8 +4,8 @@ import {
 } from '../../../shared/windows-command-line-budget'
 import { resolveGitCommandWithoutProbe } from '../command-runner/host-routing/git-command-resolution'
 import { wslDistroForCommand } from '../../../shared/wsl-paths'
-import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../wsl-windows-checkout-git-config'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../command-runner/host-routing/wsl-windows-checkout-git-config'
+import type { GitRuntimeOptions } from '../command-runner/git-runtime-options'
 
 /** Ceiling on argv entries per invocation; under WSL the byte budget bites first. */
 const BULK_CHUNK_SIZE = 100
