@@ -61,7 +61,7 @@ afterEach(() => vi.unstubAllEnvs())
 
 describe('WSL move driver IPC', () => {
   it('is unreachable with the internal WSL hosts gate closed: nothing is built or run', async () => {
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     const refused = { outcome: 'refused', code: 'wsl_move_unavailable' }
     expect(await invoke('wslMove:preview', { distro: 'Ubuntu' })).toEqual(refused)
     expect(await invoke('wslMove:start', { distro: 'Ubuntu' })).toEqual(refused)
