@@ -47,6 +47,8 @@ export async function mergedReviewHeadIsEquivalent(args: {
       ...gitOptionsForWorktree(args.repoPath, args.localGitOptions),
       timeout: 10_000
     }
+    // Missing review objects may arrive on the next fetch; do not retain that inconclusive result.
+    await gitExecFileAsync(['cat-file', '-e', `${reviewHead}^{commit}`], gitOptions)
     const baseTips: string[] = []
     for (const remote of BASE_REMOTES) {
       try {

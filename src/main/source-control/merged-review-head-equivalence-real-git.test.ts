@@ -1,5 +1,5 @@
 import { runProcessSync } from '@orca/process-host'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -92,6 +92,22 @@ describe('merged review head equivalence (real Git)', () => {
     await expect(prove(reviewHead, rebasedHead)).resolves.toBe(true)
     git('update-ref', 'refs/remotes/origin/main', 'main^')
     await expect(prove(reviewHead, rebasedHead)).resolves.toBe(false)
+  })
+
+  it('retries after a missing review commit becomes available', async () => {
+    const { reviewHead, rebasedHead } = rebasedReview('feature.txt')
+    const objectPath = join(
+      repoPath,
+      '.git',
+      'objects',
+      reviewHead.slice(0, 2),
+      reviewHead.slice(2)
+    )
+    const object = readFileSync(objectPath)
+    rmSync(objectPath)
+    await expect(prove(reviewHead, rebasedHead)).resolves.toBe(false)
+    writeFileSync(objectPath, object)
+    await expect(prove(reviewHead, rebasedHead)).resolves.toBe(true)
   })
 
   it('refuses a rebased head that carries extra work', async () => {
