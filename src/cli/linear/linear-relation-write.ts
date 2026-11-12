@@ -3,9 +3,9 @@ import type {
   LinearIssueRelationWriteRequest,
   LinearIssueRelationWriteResult
 } from '../../shared/linear/issue-relation-write'
-import type { CommandHandler } from '../dispatch'
-import { getRequiredStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getRequiredStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import { formatLinearRelationWrite } from './linear-format'
 import { buildWriteTargetRequest } from './linear-request-builders'
 import { RuntimeClientError } from '../runtime/types'

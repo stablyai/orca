@@ -1,7 +1,7 @@
 import { join } from 'node:path'
-import type { CommandHandler } from '../dispatch'
-import { printResult } from '../command-result-output'
-import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
+import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { RuntimeClientError } from '../runtime/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
@@ -30,7 +30,7 @@ async function getSettingsPath(): Promise<string> {
 }
 
 async function getProfileStateLocation(): Promise<ProfileStateOfflineLocation | undefined> {
-  const { getActiveProfileStateLocation } = await import('../profile-state-location.js')
+  const { getActiveProfileStateLocation } = await import('../profiles/profile-state-location.js')
   return getActiveProfileStateLocation()
 }
 

@@ -2,9 +2,9 @@ import type {
   BrowserExtensionSummaryListResult,
   BrowserExtensionReloadResult
 } from '../../shared/browser/extensions/browser-extension-types'
-import type { CommandHandler } from '../dispatch'
-import { getPresentStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getPresentStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
 
 export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {

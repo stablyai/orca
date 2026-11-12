@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/types'
 import { parseOrcaYaml } from '../../shared/orca-yaml'
 import {

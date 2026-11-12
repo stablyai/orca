@@ -11,7 +11,7 @@ import { escapeTomlBasicString } from '../../configuration/toml/config-toml-synt
 import { existsSync } from 'node:fs'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import { codexExecutionLaunch } from './codex-execution-controls'
-import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
 import { identityFor } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 

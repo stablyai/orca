@@ -143,7 +143,9 @@ function applyTerminalChatColors(
     '--chat-inline-code-border-mix': light ? '9%' : '8%',
     '--chat-composer-mix': light ? '0%' : '4%',
     '--chat-composer-base': light ? 'var(--chat-canvas)' : 'transparent',
-    '--chat-composer-border-mix': light ? '11%' : '9%'
+    '--chat-composer-border-mix': light ? '11%' : '9%',
+    '--question-card-border-mix': light ? '14%' : '16%',
+    '--question-option-border-mix': light ? '16%' : '12%'
   })
 }
 

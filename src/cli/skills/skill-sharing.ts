@@ -10,9 +10,9 @@ import {
 import { normalizeSkillBundleName } from '../../shared/skill-bundle-name'
 import type { SkillCloudOperation } from '../../shared/skill-cloud-contract'
 import type { SkillDiscoveryResult } from '../../shared/skills'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { getRepeatedStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { getRepeatedStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 

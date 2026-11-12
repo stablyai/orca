@@ -22,7 +22,7 @@ import { codexProviderHandleLink } from '../acquisition/codex-structured-owner-i
 import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { catchUpCodexThread } from '../threads/codex-structured-thread-catch-up'
 import { withCodexVisualsThreadConfig } from '../launch/codex-structured-visuals'
-import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/native-chat-visuals-delivery'
+import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   restoredCodexSessionOptions,
   reportedCodexSessionOptions

@@ -1,5 +1,5 @@
-import type { HandlerContext } from '../dispatch'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import type { HandlerContext } from '../dispatch/dispatch'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 /** The caller's exact command with `--approve <fingerprint>`, so nothing else changes on re-run. */
 export function approvalRerunCommand(rawArgs: readonly string[], fingerprint: string): string {

@@ -9,7 +9,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspac
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../../shared/project-groups'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../../pty/scrollback/terminal-scrollback-snapshots'
-import { logStartupMilestone } from '../../../startup/startup-diagnostics'
+import { logStartupMilestone } from '../../../startup/diagnostics/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot

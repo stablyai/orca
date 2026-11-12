@@ -1,4 +1,4 @@
-import { readCommandBody } from '../command-body-input'
+import { readCommandBody } from '../arguments/command-body-input'
 import type {
   LinearIssueInclude,
   LinearIssueListRequest,
@@ -17,7 +17,7 @@ import {
   getOptionalStringFlag,
   getRepeatedStringFlag,
   getRequiredStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 
 const LINEAR_PRIORITY_VALUES = new Map([

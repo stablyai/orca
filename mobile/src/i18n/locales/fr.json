@@ -360,8 +360,7 @@
       "pausedState": "En pause",
       "queuedState": "En file d'attente",
       "resume": "Reprendre",
-      "resumeSending": "Reprendre l'envoi des messages en file d'attente",
-      "title": "Messages en file d'attente"
+      "resumeSending": "Reprendre l'envoi des messages en file d'attente"
     },
     "offlineQueue": {
       "failed": "Échec de l'envoi — touchez Envoyer pour réessayer",
@@ -2390,13 +2389,10 @@
       "loadFailed": "Impossible de charger la pull request"
     },
     "queuedCardText": {
-      "showLess": "Afficher moins",
       "showLessHint": "Affiche une version abrégée du message",
-      "showMore": "Afficher plus",
       "showMoreHint": "Affiche le message entier"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Supprimer ce message en attente",
       "images_many": "{{count}} images",
       "images_one": "{{count}} image",
       "images_other": "{{count}} images",
@@ -2404,7 +2400,6 @@
       "send": "Envoyer",
       "sendAgainHint": "Renvoyer ce message",
       "sendHint": "Envoyer ce message",
-      "showLessHint": "Affiche une version abrégée du message",
       "steer": "Envoyer maintenant",
       "steerHint": "Envoyer sans interrompre le modèle"
     },

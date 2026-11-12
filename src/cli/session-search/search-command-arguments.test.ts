@@ -4,8 +4,8 @@ import {
   parseArgs,
   validateCommandAndFlags,
   type ParsedArgs
-} from '../args'
-import { specPaths } from '../command-spec'
+} from '../arguments/args'
+import { specPaths } from '../discovery/command-spec'
 import { parseSearchCommand } from './search-command-arguments'
 import { COMMAND_SPECS } from '../specs/index'
 

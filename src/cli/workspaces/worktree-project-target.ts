@@ -4,7 +4,7 @@ import { hostFilterMatchesHostId, resolveHostFlagTarget } from '../hosts/executi
 import { findProjectSetups, setupHostId } from '../projects/project-selector'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/types'
-import { getPresentStringFlag } from '../flags'
+import { getPresentStringFlag } from '../arguments/flags'
 import { getFolderWorkspaceMissingRepoError } from '../workspace-selection/caller-folder-workspace'
 
 export type ProjectCreateTarget = {

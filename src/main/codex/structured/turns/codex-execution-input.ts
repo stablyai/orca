@@ -10,10 +10,10 @@ import { persistCodexExecutionReceipt } from '../session-lifecycle/codex-executi
 export function refuseCodexExecutionInput(
   stage: 'controls' | 'state' | 'evidence' | 'capacity' | 'source' | 'freshness' = 'controls'
 ): never {
+  console.warn('[codex.execution] bounded input refused', { stage })
   throw new StructuredAgentSessionInputNotAdmitted({
     state: 'rejected',
-    ...codexDispatchRejection(agentSessionFailureFact('hostFault', { neverReachedAgent: true })),
-    reason: `Orca refused bounded Codex input during ${stage}.`
+    ...codexDispatchRejection(agentSessionFailureFact('hostFault', { neverReachedAgent: true }))
   })
 }
 

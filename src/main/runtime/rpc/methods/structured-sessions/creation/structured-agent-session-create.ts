@@ -39,7 +39,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   captureStructuredAgentCliSource,
   type StructuredAgentCliSourceEvidence
-} from '../../../../../native-chat/structured-agent-cli-source'
+} from '../../../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'

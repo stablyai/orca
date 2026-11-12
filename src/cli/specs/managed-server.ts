@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { LOCAL_COMMAND_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
 const SELECTOR_NOTE =
   '--environment names a managed Orca server this machine deployed over SSH (see `orca environment list`); it is a selector here, not a routing flag.'

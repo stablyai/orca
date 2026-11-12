@@ -1,5 +1,5 @@
 import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { okFixture } from '../test-fixtures'
+import { okFixture } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 export function agentLaunchHostFixture() {
   return okFixture('req_status', { capabilities: [...AGENT_LAUNCH_RUNTIME_CAPABILITIES] })

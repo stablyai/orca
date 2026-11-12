@@ -27,5 +27,5 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/recovery/profile-state-recovery-command',
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
-  'startup/http1-compatibility-marker'
+  'startup/network-compatibility/http1-compatibility-marker'
 ] as const

@@ -1,6 +1,6 @@
-import { writeCliScreenshotTempFile } from '../cli-screenshot-temp-file'
-import { formatBase64PayloadByteCount } from '../base64-payload-byte-count'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import { writeCliScreenshotTempFile } from '../screenshots/cli-screenshot-temp-file'
+import { formatBase64PayloadByteCount } from '../screenshots/base64-payload-byte-count'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import type {
   ComputerActionMetadata,
   ComputerActionResult,

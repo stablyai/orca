@@ -1,4 +1,4 @@
-import type { CommandHandler } from '../../dispatch'
+import type { CommandHandler } from '../../dispatch/dispatch'
 import { createPluginFromTemplate, PluginCreateError } from './plugin-create'
 import {
   inspectPluginFolder,

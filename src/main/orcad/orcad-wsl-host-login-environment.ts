@@ -1,7 +1,7 @@
 // WSL exec skips shell setup; hydrate login-shell credentials/proxies before git and daemon startup.
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
-import { PROBE_MARKER_ENV_VAR } from '../startup/hydrate-shell-path'
-import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import { PROBE_MARKER_ENV_VAR } from '../startup/shell-environment/hydrate-shell-path'
+import { resolveLoginShellEnvironment } from '../startup/shell-environment/login-shell-environment'
 
 // Allowlist excludes GUI askpass (which could block) and PATH (which has separate drive filtering).
 const WSL_HOST_LOGIN_ENV_NAMES: readonly string[] = [

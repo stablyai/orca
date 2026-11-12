@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
-import type { GitHubPRFile } from '../../../../../shared/github/pull-request-types'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
 
 export function PRFilesCombinedDiffToolbar({
   files,
