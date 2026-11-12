@@ -91,7 +91,7 @@
 6 src/main/runtime/orchestration/db/reset/removed-orchestration-work-store.ts
 4 src/main/runtime/orchestration/db/runs/run-coordinator-mail-routing.ts
 12 src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew.ts
-14 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
+15 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
 4 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
 4 src/main/sqlite/node-sqlite-statement.ts
