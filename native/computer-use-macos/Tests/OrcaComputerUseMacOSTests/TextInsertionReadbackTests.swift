@@ -15,12 +15,30 @@ final class TextInsertionReadbackTests: XCTestCase {
         XCTAssertNil(TextInsertionReadback.expectedValue(current: "abc", selection: nil, inserting: "d"))
         XCTAssertNil(TextInsertionReadback.expectedValue(current: "abc", selection: 2..<4, inserting: "d"))
         XCTAssertNil(TextInsertionReadback.expectedValue(current: "a😀", selection: 2..<2, inserting: "d"))
+        XCTAssertNil(TextInsertionReadback.expectedValue(current: "", selection: 0..<0, inserting: "send\n"))
+        XCTAssertNil(TextInsertionReadback.expectedValue(current: "", selection: 0..<0, inserting: "a\tb"))
+        XCTAssertNil(TextInsertionReadback.expectedValue(current: "hello", selection: 0..<5, inserting: "hello"))
     }
 
     func testFieldStillFillingPastTheQuietWindowLands() {
         // One character every 0.4 s: each read is past the first 0.5 s window, but each change restarts it.
         let reads = ["", "h", "he", "hel", "hell", "hello"]
         XCTAssertEqual(settle(expected: "hello", reads: reads, secondsPerRead: 0.4), .landed)
+    }
+
+    func testSlowFirstReadStillGetsAQuietWindow() {
+        var clock = 0.0
+        var reads = ["h", "hello"][...]
+        let outcome = TextInsertionReadback.settle(
+            expected: "hello",
+            now: { clock },
+            sleep: { clock += $0 },
+            read: {
+                if reads.count == 2 { clock += 0.6 }
+                return reads.popFirst()
+            }
+        )
+        XCTAssertEqual(outcome, .landed)
     }
 
     func testContentEditableNoBreakSpacesLand() {
@@ -31,8 +49,13 @@ final class TextInsertionReadbackTests: XCTestCase {
         XCTAssertEqual(settle(expected: "hello", reads: Array(repeating: "", count: 100), secondsPerRead: 0.025), .mismatch)
     }
 
-    func testFieldThatStopsAnsweringIsUnreadable() {
-        XCTAssertEqual(settle(expected: "hello", reads: ["", "h"], secondsPerRead: 0.025), .unreadable)
+    func testFieldThatStopsAnsweringIsUndetermined() {
+        XCTAssertEqual(settle(expected: "hello", reads: ["", "h"], secondsPerRead: 0.025), .undetermined)
+    }
+
+    func testFieldStillFillingAtTheCapIsUndetermined() {
+        let reads = (0..<100).map { String(repeating: "a", count: $0) }
+        XCTAssertEqual(settle(expected: String(repeating: "a", count: 200), reads: reads, secondsPerRead: 0.1), .undetermined)
     }
 
     private func settle(expected: String, reads: [String], secondsPerRead: Double) -> TextInsertionReadback.Outcome {

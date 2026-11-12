@@ -5,13 +5,18 @@ public enum TextInsertionReadback {
     public enum Outcome: Equatable {
         case landed
         case mismatch
-        case unreadable
+        /// The field stopped answering, or was still changing when the wait ran out.
+        case undetermined
     }
 
     /// The value a field should hold once `text` replaces its selection. `selection` is in UTF-16 offsets, as
-    /// AXSelectedTextRange reports it. Nil means the result can't be predicted: a non-empty field with no
-    /// selection, or a range outside the value or inside a character.
+    /// AXSelectedTextRange reports it. Nil means a readback can't prove the result: a non-empty field with no
+    /// selection, a range outside the value or inside a character, text with control characters (Return or Tab
+    /// can submit, end editing or move focus instead of being stored), or a value the field already holds.
     public static func expectedValue(current: String, selection: Range<Int>?, inserting text: String) -> String? {
+        guard !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+            return nil
+        }
         let units = Array(current.utf16)
         let range: Range<Int>
         if let selection {
@@ -32,7 +37,8 @@ public enum TextInsertionReadback {
         guard Array(before.utf16) == prefix, Array(after.utf16) == suffix else {
             return nil
         }
-        return before + text + after
+        let expected = before + text + after
+        return sameText(expected, current) ? nil : expected
     }
 
     /// Reads the field until it holds `expected`. Keys reach it through the app's event queue, so it can still be
@@ -47,12 +53,17 @@ public enum TextInsertionReadback {
         read: () -> String?
     ) -> Outcome {
         let start = now()
-        var quietDeadline = start + quietSeconds
         var readback = read()
+        // Why: an AX read can block for seconds; the quiet window counts from the answer, not the ask.
+        var quietDeadline = now() + quietSeconds
         while let current = readback, !sameText(current, expected) {
             let time = now()
-            guard time < quietDeadline, time < start + capSeconds else {
+            guard time < quietDeadline else {
                 return .mismatch
+            }
+            // Why: a field still filling at the cap may yet land; calling it a mismatch invites typing the rest twice.
+            guard time < start + capSeconds else {
+                return .undetermined
             }
             sleep(intervalSeconds)
             readback = read()
@@ -60,7 +71,7 @@ public enum TextInsertionReadback {
                 quietDeadline = now() + quietSeconds
             }
         }
-        return readback == nil ? .unreadable : .landed
+        return readback == nil ? .undetermined : .landed
     }
 
     // Why: Chromium contenteditables store typed trailing or repeated spaces as no-break spaces.

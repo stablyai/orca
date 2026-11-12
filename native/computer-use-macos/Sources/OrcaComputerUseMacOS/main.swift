@@ -3228,7 +3228,7 @@ private enum TextInput {
         let element: AXUIElement
         let expected: String
 
-        /// Nil when the field can't prove the result: none focused, a secure field, or no readable value and selection.
+        /// Nil when the field can't prove the result: none focused, a secure field, no readable value and selection, or text a readback can't confirm.
         init?(into element: AXUIElement?, text: String) {
             guard let element,
                   !AXSnapshotReader().isSecureTextElement(element),
@@ -3246,7 +3246,7 @@ private enum TextInput {
             self.expected = expected
         }
 
-        /// Nil when the field can no longer be read.
+        /// Nil when the readback can't tell: the field stopped answering or was still changing at the cap.
         func verification() -> [String: Any]? {
             let outcome = TextInsertionReadback.settle(expected: expected) {
                 rawStringAttribute(element, kAXValueAttribute as String)
@@ -3257,7 +3257,7 @@ private enum TextInput {
             case .mismatch:
                 // Why: the field may hold part of the text, so the result never shows what it reads.
                 return unverifiedAction(reason: "text_mismatch")
-            case .unreadable:
+            case .undetermined:
                 return nil
             }
         }
