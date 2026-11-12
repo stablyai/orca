@@ -127,6 +127,7 @@ export function useMobileDictationAudioChunks(capture: DictationCapture, run: Mo
       // Like desktop: stop as the user would, so what the host kept is transcribed and inserted.
       stopAtAudioLimit: () => {
         if (run.status.current === 'recording') {
+          run.cutShort.current = true
           run.onAudioLimitReached.current?.()
           void run.finish.current(dictationSessionErrorMessage('no-speech'))
         }

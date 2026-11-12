@@ -43,6 +43,8 @@ export type MobileDictationRun = {
   readonly enabled: RefObject<boolean>
   readonly generation: RefObject<number>
   readonly stopWhenStarted: RefObject<boolean>
+  // Capture ended without the user's stop (cloud limit, interruption, failure while recording); its words stay a draft.
+  readonly cutShort: RefObject<boolean>
   readonly audioPhase: RefObject<MobileDictationAudioPhase>
   readonly pendingChunks: RefObject<Set<Promise<void>>>
   readonly pendingAudioBudget: RefObject<MobileDictationPendingAudioBudget>
@@ -94,7 +96,7 @@ export function settleMobileDictation(
   run.pendingAudioBudget.current.reset()
   run.applyStatus('idle')
   if (text) {
-    run.onTranscript.current(text, { partial: false })
+    run.onTranscript.current(text, { partial: run.cutShort.current })
   } else {
     run.reportError(new Error(emptyTranscriptMessage))
   }
@@ -230,6 +232,7 @@ export async function startMobileDictation(
   const generation = run.generation.current + 1
   run.generation.current = generation
   run.stopWhenStarted.current = false
+  run.cutShort.current = false
   run.applyStatus('starting')
   const isCurrentGeneration = () => run.generation.current === generation
   // Without a phone recognizer, start exactly as before: no extra turn before the mic opens.

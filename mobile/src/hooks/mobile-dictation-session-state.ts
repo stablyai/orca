@@ -18,7 +18,7 @@ export type MobileDictationTranscriptHandler = (text: string, heard: { partial: 
 export type UseMobileDictationOptions = {
   client: RpcClient | null
   enabled: boolean
-  // partial: a failure handed over only the words heard so far.
+  // partial: the dictation ended without the user's stop (a failure's words so far, the cloud limit, an interruption).
   onTranscript: MobileDictationTranscriptHandler
   // kept: the recording is kept for Retry, so the failure shows in place rather than as a toast.
   onError?: (error: Error, outcome: { kept: boolean }) => void

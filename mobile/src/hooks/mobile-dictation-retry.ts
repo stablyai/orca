@@ -20,6 +20,10 @@ export function failActiveMobileDictation(
     return
   }
   run.activeId.current = null
+  // Retry then replays a capture the user never stopped, so its words stay a draft too.
+  if (run.status.current === 'recording') {
+    run.cutShort.current = true
+  }
   const retryable = mobileDictationFailureRetryable(run.recording.current, run.engine.current)
   run.closeDictationAudio()
   void releaseMobileDictationEngine(run, run.client.current, dictationId)

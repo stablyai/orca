@@ -64,12 +64,15 @@ function dictation(): UseMobileDictationResult {
   return current
 }
 
-function mount(rpc: FakeRpcClient, transcripts: string[]): void {
+function mount(rpc: FakeRpcClient, transcripts: string[], partials: boolean[] = []): void {
   function Probe(): null {
     held.dictation = useMobileDictation({
       client: rpc,
       enabled: true,
-      onTranscript: (text) => transcripts.push(text)
+      onTranscript: (text, heard) => {
+        transcripts.push(text)
+        partials.push(heard.partial)
+      }
     })
     return null
   }
@@ -108,6 +111,24 @@ describe('leaving the app while dictating', () => {
     })
     expect(transcripts).toEqual(['what was heard'])
     expect(dictation().status).toBe('idle')
+  })
+
+  it("marks the words of a dictation it cut short, unlike one the user stopped, so they can't send on their own", async () => {
+    const rpc = createFakeRpcClient()
+    const partials: boolean[] = []
+    mount(rpc, [], partials)
+    for (const end of [() => void dictation().stop(), () => leave('background')]) {
+      await act(async () => {
+        const started = dictation().start()
+        await pump(rpc)
+        await started
+      })
+      await act(async () => {
+        end()
+        await pump(rpc)
+      })
+    }
+    expect(partials).toEqual([false, true])
   })
 
   it('keeps what the open mic heard while the computer is still starting', async () => {
