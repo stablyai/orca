@@ -20,11 +20,16 @@ const CLAUDE_CAPABILITY_PROBE = '\x1b[?u\x1b]11;?\x1b\\\x1b[c'
 // Claude's composer under the shell's bare title: palette reports on, paste mode on, `❯`+NBSP.
 const CLAUDE_COMPOSER_BARE_TITLE = '\x1b[?2031h\x1b[?2004h╭──────╮\r\n│ ❯  │\r\n╰──────╯\x1b[?25h'
 
-async function startClaudePane(writes?: { data: string; at: number }[]) {
+async function startClaudePane(
+  writes?: { data: string; at: number }[],
+  identity: 'launched' | 'title-only' = 'launched'
+) {
+  // Title-only: no launch authority and a foreground probe that still sees the shell, as for an
+  // adopted pane or a `claude` run through a command Orca does not recognize (STA-14925).
   const { runtime, handle } = await createTranscriptPane({
     paneTitle: 'Terminal',
-    foregroundProcess: 'claude',
-    launchAgent: 'claude',
+    foregroundProcess: identity === 'launched' ? 'claude' : 'zsh',
+    ...(identity === 'launched' ? { launchAgent: 'claude' as const } : {}),
     data: ''
   })
   if (writes) {
@@ -77,6 +82,21 @@ describe('tui-idle on a slow-starting Claude', () => {
     expect(settled).not.toHaveBeenCalled()
 
     // Claude mounts its composer but the title stays the shell's bare name (title disabled).
+    write(CLAUDE_COMPOSER_BARE_TITLE)
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    await expect(wait).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('does not settle a title-only Claude pane on text a later preexec hook printed (STA-14925)', async () => {
+    const { runtime, handle, write } = await startClaudePane(undefined, 'title-only')
+    write(SHELL_RUNS_CLAUDE + LATER_PREEXEC_HOOK_PRINTS)
+    const settled = vi.fn()
+    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })
+    wait.then(settled, () => {})
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 5)
+    expect(settled).not.toHaveBeenCalled()
+
     write(CLAUDE_COMPOSER_BARE_TITLE)
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
     await expect(wait).resolves.toMatchObject({ satisfied: true })

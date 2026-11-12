@@ -15,6 +15,8 @@ import {
 } from '../../agent-state-rules/agent-state-rules-engine'
 import type { TuiIdleHookTurn } from './tui-idle-hook-lane'
 import { hasTerminalAgentPainted } from '../input/terminal-command-paint'
+import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type {
   FirstPartyAgentStatus,
   TuiIdleEvaluationInput,
@@ -116,6 +118,19 @@ function lazyWaitText(readWaitText: () => string): () => string {
   return () => (waitText ??= readWaitText())
 }
 
+/** The agent whose paint corroborates a name-only idle: launch authority first, else the title's
+ *  name, the same fallback `nameOnlyIdleNeedsCorroboration` uses. Why: an adopted pane, or a Claude
+ *  run through a command Orca does not recognize, is identified by its title alone; without this the
+ *  title required corroboration while the paint check fell back to any visible byte, so a printing
+ *  preexec hook could still settle it before the composer existed (STA-14925). */
+function paintAgent(agent: TuiAgent | null, title: string | null | undefined): TuiAgent | null {
+  if (agent) {
+    return agent
+  }
+  const fromTitle = title ? resolveTerminalTitlePolicyAgentType(title) : null
+  return isTuiAgent(fromTitle) ? fromTitle : null
+}
+
 export function ptyTuiIdleEvidence(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
@@ -143,6 +158,6 @@ export function ptyTuiIdleEvidence(
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),
     quiescenceMs: source.quiescenceMs,
     // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
-    readCommandPainted: () => hasTerminalAgentPainted(pty, agent)
+    readCommandPainted: () => hasTerminalAgentPainted(pty, paintAgent(agent, record.lastOscTitle))
   }
 }
