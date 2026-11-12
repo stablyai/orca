@@ -1,4 +1,4 @@
-import { subscribeToTerminalInputData } from '../../input/terminal-user-input-signal'
+import { subscribeToTerminalPtyInputData } from '../../input/terminal-pty-input-data'
 import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../../input/ime/terminal-ime-composition-route'
 import { useAppStore } from '@/store/index'
@@ -155,7 +155,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   // Bind once so provenance survives deferred input without allocating per-keystroke closures.
   const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
   const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
-  session.onDataDisposable = subscribeToTerminalInputData(
+  session.onDataDisposable = subscribeToTerminalPtyInputData(
     session.pane.terminal,
     (data, wasUserInput) => {
       const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
