@@ -170,6 +170,8 @@ export type Env = {
   PUBLIC_API_URL?: string
   /** Comma list of extra egress hosts every VM may reach (dev: this Worker's workers.dev host). */
   EGRESS_EXTRA_HOSTS?: string
+  /** Workspace sandbox egress preset: `open` (default, any host) or `limited` (fail-closed allowlist). */
+  SANDBOX_EGRESS_PRESET?: string
   /** GitHub App webhook secret (secret): verifies X-Hub-Signature-256 on /v1/github/webhook. */
   GITHUB_WEBHOOK_SECRET?: string
   /**

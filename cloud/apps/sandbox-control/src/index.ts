@@ -143,6 +143,7 @@ import {
   runningSandboxesForDefault
 } from './agent-sources'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
+import { parseEgressPreset } from './network-policy'
 import { cachedProviderEnv } from './session-env'
 import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { Keyring } from './secrets-crypto'
@@ -891,6 +892,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       pool: poolConfigFromEnv(env),
       shareLinkSecret: shareSecret(env),
       extraEgressHosts: extraEgressHostsFor(env),
+      egressPreset: parseEgressPreset(env.SANDBOX_EGRESS_PRESET),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1

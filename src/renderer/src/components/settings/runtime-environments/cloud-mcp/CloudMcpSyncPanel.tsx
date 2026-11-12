@@ -258,7 +258,7 @@ export function CloudMcpSyncPanel({
           <span>
             {t(
               'cloudMcpSync.egressNote',
-              'Orca opens the sandbox’s network to each remote server’s host. Other hosts stay blocked.'
+              'The sandbox can always reach each remote server’s host.'
             )}
           </span>
         </p>

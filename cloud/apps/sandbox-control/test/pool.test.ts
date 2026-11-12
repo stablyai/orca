@@ -79,7 +79,8 @@ describe('warm pool', () => {
     const ready = HostedSandboxReadyResponseSchema.parse(res.body)
     expect(ready.sandbox.id).toBe(pooledId)
     const box = h.vercel.boxes.get(`orca-test-${pooledId}`)!
-    expect(Object.keys(box.policy.allow)).toContain('registry.npmjs.org')
+    // The caller's (open) policy replaces the pooled VM's deny-all.
+    expect(box.policy.allow['*']).toEqual([])
     expect(h.vercel.commands.some((c) => c.command === START_COMMAND && c.sessionId === box.sessionId)).toBe(true)
     // Lease runs 30 min from the claim; the 24 h deadline still counts from the real boot.
     expect(ready.sandbox.session!.leaseExpiresAt).toBe(h.now() + 30 * MIN)

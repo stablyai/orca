@@ -101,13 +101,18 @@ basics, `gh`, pinned agent CLIs (Claude Code, Codex, OpenCode, Gemini), git cred
 any auth homes** (clone-safe, risk #1) → snapshot with `expiration: 0` → delete build sandbox → print manifest
 (`snapshotId`, versions, sha256) for `GOLDEN_SNAPSHOT_ID`. Snapshot → orcad ready measured at 3.3–4.3s.
 
-## Network policy (fail closed)
+## Network policy
 
-Compiled per sandbox by `compileNetworkPolicy()`:
-- Allowlist record form, **no `"*"` entry** (unlisted domains don't resolve). Default list: package registries
+Compiled per sandbox by `compileNetworkPolicy()` (workspace sandboxes: `egressPolicy()` in lifecycle.ts):
+- **Default preset `open`** (E3, 2026-11-12, Neil: "Keep us open"): record form with `"*": []`, so any host is
+  reachable, as in Codespaces, Devin or Cursor. Only hosts with credential rules are listed next to it. Verified
+  live: under `"*"`, a listed host's claim and trailing 403 rules still apply. Vercel already blocks the metadata
+  endpoint (169.254.169.254 refuses connections; the VM's DNS resolver is 169.254.0.1, so never deny 169.254/16).
+- **Preset `limited`** (`SANDBOX_EGRESS_PRESET=limited`, operator-wide for now; a per-workspace choice can come
+  later): the allowlist, **no `"*"` entry** (unlisted domains don't resolve). Default list: package registries
   (npm, pypi, crates, go proxy, rubygems), github.com + codeload + objects, agent APIs (Anthropic, OpenAI/ChatGPT,
-  Google), and Orca endpoints. Workspaces can opt into `"open"` (adds `"*": []`), never silently.
-- Credential hosts get `[...inject rules, {response: 403 orca-egress-denied}]`: a request without our placeholder is
+  Google), and Orca endpoints, plus declared MCP and custom provider hosts.
+- Under both presets, credential hosts get `[...inject rules, {response: 403 orca-egress-denied}]`: a request without our placeholder is
   refused, so the real token can't be paired with an attacker-chosen request shape.
 - GitHub: VM sets `http.https://github.com/.extraheader = Authorization: Basic b64(x-access-token:<placeholder>)` so
   every git request carries the placeholder (git otherwise sends an unauthenticated probe first, which the trailing

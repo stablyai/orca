@@ -28085,7 +28085,7 @@
     "appliesEverywhere": "Applies to every cloud workspace",
     "autoSync": "Sync on connect",
     "autoSyncHint": "Applies to every cloud workspace. Servers added inside the sandbox are left alone.",
-    "egressNote": "Orca opens the sandbox’s network to each remote server’s host. Other hosts stay blocked.",
+    "egressNote": "The sandbox can always reach each remote server’s host.",
     "error": {
       "failed": "The last sync didn’t finish. Servers already in the sandbox still work.",
       "hostOutdated": "This sandbox’s Orca is too old for MCP servers. Create a new workspace to use them.",
