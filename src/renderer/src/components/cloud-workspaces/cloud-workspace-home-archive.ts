@@ -18,6 +18,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
 import type { RowActions } from './CloudWorkspaceRowMenu'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
+import { localWorktreeIdWithRow } from './cloud-local-row'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 
 export type HomeArchiveDeps = {
@@ -32,10 +33,7 @@ export type HomeArchiveDeps = {
 }
 
 const defaultDeps = (): HomeArchiveDeps => ({
-  localWorktreeId: async (sandboxId) =>
-    (await window.api.cloudWorkspaces.localWorkspaces()).find(
-      (local) => local.sandboxId === sandboxId && local.worktreeId
-    )?.worktreeId ?? null,
+  localWorktreeId: localWorktreeIdWithRow,
   patchArchived: async (sandboxId, archived) => {
     const result = await window.api.cloudWorkspaces.patch(sandboxId, { archived })
     if (result.ok) {
