@@ -7,6 +7,7 @@ import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
 import { getPublishedHostDescriptor } from '../../hosts/platform-probe/host-descriptor'
 import { existsSync } from 'node:fs'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import { CrewChanges } from '../../orchestration/crew/crew-changes'
 import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
 import { subscribeWorkerApprovals } from '../../orchestration/crew/worker-approval-stream'
 import { readCrewApprovals } from '../../orchestration/crew/crew-query'
@@ -17,10 +18,20 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
   private unwatchCrewDb: (() => void) | undefined
+  // Not a field initializer: a base constructor can bind the database before this class's fields run.
+  declare private orchestrationDbChangesSlot: CrewChanges | undefined
+  /** The orchestration database's own changes (Runs, Dispatches, mail), without terminal identity's. */
+  private get orchestrationDbChanges(): CrewChanges {
+    return (this.orchestrationDbChangesSlot ??= new CrewChanges())
+  }
 
   protected bindCrewChanges(db: OrchestrationDb): void {
     this.unwatchCrewDb?.()
-    this.unwatchCrewDb = db.crewChanges.subscribe(this.crewChanges.notify)
+    this.unwatchCrewDb = db.crewChanges.subscribe((facets) => {
+      this.orchestrationDbChanges.notify(facets)
+      this.crewChanges.notify(facets)
+    })
+    this.orchestrationDbChanges.notify()
     this.crewChanges.notify()
   }
 
@@ -72,10 +83,11 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
         },
         approvals: (mailboxes) => {
           const db = this._orchestrationDb
-          return db ? readCrewApprovals(db, mailboxes, Date.now()) : []
+          return db ? readCrewApprovals(db, mailboxes) : []
         },
         workers: () => this.crewReadModel.read(party).sections.managing,
-        watch: this.crewChanges.subscribe
+        // Terminal identity notices (every agent status or title change) say nothing about approvals.
+        watch: this.orchestrationDbChanges.subscribe
       },
       emit
     )

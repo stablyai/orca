@@ -186,9 +186,13 @@ const allowed = {
 
 /** The coordinator chat as the pane lays it out: transcript with receipts, then the pinned stack,
  *  the chat's own prompt, and the composer. */
-function pane(stack: readonly NativeChatWorkerApproval[], ownPrompt = false): React.JSX.Element {
+function pane(
+  stack: readonly NativeChatWorkerApproval[],
+  ownPrompt = false,
+  height = 'h-[760px]'
+): React.JSX.Element {
   return (
-    <div className="native-chat-appearance flex h-[760px] flex-col bg-chat-pane pb-3">
+    <div className={`native-chat-appearance flex ${height} flex-col bg-chat-pane pb-3`}>
       <NativeChatMessageList
         session={transcript}
         isWorking={false}
@@ -228,6 +232,21 @@ export const twoOpen = defineFixture({ width: 760, render: () => pane([openBash,
 export const openWithOwnPrompt = defineFixture({
   width: 760,
   render: () => pane([openBash], true)
+})
+
+// A short split pane: the stack gives way first, so the chat's own prompt keeps its buttons.
+export const twoOpenWithOwnPromptShort = defineFixture({
+  width: 760,
+  render: () => pane([openBash, openDocs], true, 'h-[520px]')
+})
+
+// The click's outcome where the card was, for the moment before it moves into the transcript.
+export const settling = defineFixture({
+  width: 760,
+  render: () =>
+    pane([
+      closed('settled', { by: 'person', decision: 'allow', reason: null, reasonDelivered: false })
+    ])
 })
 
 export const receiptInPlace = defineFixture({ width: 760, render: () => pane([]) })

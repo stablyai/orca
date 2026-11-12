@@ -3,7 +3,7 @@ import { fixture } from './crew-read-model.test-fixture'
 import { buildCrewSnapshot } from './crew-party-snapshot'
 import { approvalReportId } from '../workers/approvals/worker-approval-report'
 
-it("puts each approval's newest report on its worker's row, drops stale receipts, and ignores rows Orca did not write", () => {
+it("puts each approval's newest report on its worker's row, keeps old receipts, and ignores rows Orca did not write", () => {
   const { db, deps, run, assign } = fixture()
   const dispatch = assign('term_worker')
   const send = (approvalId: string, state: 'open' | 'answered', own = true) =>
@@ -43,7 +43,9 @@ it("puts each approval's newest report on its worker's row, drops stale receipts
   send('apr_open', 'answered', false)
 
   const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
+  // Receipts are the chat's history: one closed hours ago stays.
   expect(row.approvals?.map(({ approval }) => [approval.approvalId, approval.state])).toEqual([
+    ['apr_old', 'answered'],
     ['apr_answered', 'answered'],
     ['apr_open', 'open']
   ])
@@ -81,7 +83,10 @@ it('keeps showing an open approval behind more closed ones than the row bound', 
     .run('apr_still_open')
 
   const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
-  expect(row.approvals?.map(({ approval }) => approval.approvalId)).toEqual(['apr_still_open'])
+  const ids = row.approvals?.map(({ approval }) => approval.approvalId)
+  expect(ids).toHaveLength(100)
+  expect(ids?.[0]).toBe('apr_still_open')
+  expect(ids?.at(-1)).toBe('apr_149')
 })
 
 it('closes an open approval once its Dispatch stops running, at the time it ended', () => {
@@ -118,4 +123,32 @@ it('closes an open approval once its Dispatch stops running, at the time it ende
     })
   ])
   expect(row.approvals?.[0].approval.expiresAt).toBeUndefined()
+})
+
+it('reads a close no one named, after its Dispatch ended, as the worker ending', () => {
+  const { db, deps, run, assign } = fixture()
+  const dispatch = assign('term_worker')
+  db.insertMessage({
+    id: approvalReportId(dispatch.id, 'apr_unnamed', 'closed'),
+    from: 'term_worker',
+    to: `run:${run.id}`,
+    subject: 'apr_unnamed',
+    type: 'status',
+    runId: run.id,
+    payload: JSON.stringify({
+      approval: {
+        v: 1,
+        approvalId: 'apr_unnamed',
+        state: 'answered',
+        worker: { handle: 'term_worker', dispatchId: dispatch.id, taskId: dispatch.task_id },
+        summary: { title: 'Allow Bash?', detail: null, reason: null },
+        allowedActions: [],
+        outcome: { by: 'unknown', decision: null, reason: null, reasonDelivered: false }
+      }
+    })
+  })
+  db.completeDispatch(dispatch.id)
+
+  const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
+  expect(row.approvals?.map(({ approval }) => approval.outcome?.by)).toEqual(['worker-ended'])
 })

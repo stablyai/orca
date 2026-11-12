@@ -222,9 +222,9 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
     const input = mailbox(aliases)
     return (input.questions ??= db ? readCrewQuestions(db, aliases) : [])
   }
-  const approvals = (aliases: string[], now: number) => {
+  const approvals = (aliases: string[]) => {
     const input = mailbox(aliases)
-    return (input.approvals ??= db ? readCrewApprovals(db, aliases, now) : [])
+    return (input.approvals ??= db ? readCrewApprovals(db, aliases) : [])
   }
   const invalidateTraffic = (addresses?: ReadonlySet<string>) => {
     for (const [key, input] of mail) {

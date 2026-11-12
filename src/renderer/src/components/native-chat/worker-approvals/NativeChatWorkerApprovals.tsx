@@ -17,7 +17,8 @@ import {
 } from './worker-approval-card-model'
 import {
   closeNativeChatWorkerApproval,
-  useNativeChatWorkerApprovals,
+  useNativeChatPinnedWorkerApprovals,
+  useNativeChatWorkerApprovalReceipts,
   type NativeChatWorkerApproval
 } from './native-chat-worker-approval-feed'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -59,8 +60,8 @@ export function NativeChatWorkerApprovalReceipt({
   )
 }
 
-/** Workers' open prompts, pinned above the composer, oldest first; a card here never takes focus
- *  or cancels the chat's turn. Several scroll within a bounded height. */
+/** Workers' prompts pinned above the composer, oldest first: open ones as cards, and ones just
+ *  closed as their receipt. A card here never takes focus or cancels the chat's turn. */
 export function NativeChatWorkerApprovalStack({
   approvals,
   target,
@@ -93,33 +94,38 @@ export function NativeChatWorkerApprovalStack({
       })
         // A landed answer needs no toast: the card turns into its receipt.
         .catch((error: unknown) => {
-          const closed = closedBeforeAnswer(error)
-          if (!closed) {
-            // Not applied and still open: the card is answerable again.
-            onClosed?.(approvalId, null)
+          const code = error instanceof RuntimeRpcCallError ? error.code : null
+          if (code === 'dispatch_inactive') {
+            // Its worker ended: nothing is left to answer, and the card says so now.
+            onClosed?.(approvalId, WORKER_ENDED)
+            toast.info(
+              t(
+                'components.native-chat.approval.answerWorkerEnded',
+                '{{name}} has ended, so this prompt is closed',
+                { name }
+              )
+            )
+            return
+          }
+          // Not applied: the host's list decides. A prompt that closed meanwhile turns into its
+          // receipt from that; one still open is answerable again.
+          onClosed?.(approvalId, null)
+          if (code === 'approval_not_open') {
+            toast.info(
+              t(
+                'components.native-chat.approval.answerNotApplied',
+                '{{name}}: the answer did not reach this prompt',
+                { name }
+              )
+            )
+          } else {
             toast.error(
               t('components.native-chat.approval.answerFailed', '{{name}}: {{detail}}', {
                 name,
                 detail: error instanceof Error ? error.message : String(error)
               })
             )
-            return
           }
-          // Closed before this answer: the card turns into its receipt now, and the toast says why.
-          onClosed?.(approvalId, closed)
-          toast.info(
-            closed.by === 'worker-ended'
-              ? t(
-                  'components.native-chat.approval.answerWorkerEnded',
-                  '{{name}} has ended, so this prompt is closed',
-                  { name }
-                )
-              : t(
-                  'components.native-chat.approval.answerAlreadyClosed',
-                  '{{name}}: this prompt had already closed',
-                  { name }
-                )
-          )
         })
         .finally(() =>
           setSubmitting((current) => {
@@ -131,16 +137,28 @@ export function NativeChatWorkerApprovalStack({
     },
     [onClosed, t, target]
   )
-  if (open.length === 0) {
+  if (approvals.length === 0) {
     return null
   }
   return (
+    // Bounded by the pane, and the first to give way, so the chat's own prompt card keeps its room.
     <div
-      className="scrollbar-sleek max-h-[40vh] shrink-0 overflow-y-auto"
+      className="scrollbar-sleek max-h-[40%] min-h-0 shrink-[4] overflow-y-auto"
       data-native-chat-worker-approvals=""
     >
-      {open.map((entry) => {
+      {approvals.map((entry) => {
         const { approval } = entry
+        if (approval.state !== 'open') {
+          // Settling, or only the worker's terminal can answer it: the outcome stays where the card was.
+          return (
+            <div
+              key={approval.approvalId}
+              className="mx-auto w-full max-w-(--chat-content-max-width) pt-2"
+            >
+              <NativeChatWorkerApprovalReceipt entry={entry} />
+            </div>
+          )
+        }
         const left = workerApprovalTimeLeft(approval.expiresAt, now)
         return (
           <div key={approval.approvalId} data-native-chat-worker-approval={approval.approvalId}>
@@ -191,24 +209,18 @@ export function NativeChatPartyWorkerApprovalStack({
   )
   return (
     <NativeChatWorkerApprovalStack
-      approvals={useNativeChatWorkerApprovals(party)}
+      approvals={useNativeChatPinnedWorkerApprovals(party)}
       onClosed={onClosed}
       {...stack}
     />
   )
 }
 
-/** How a prompt closed when an answer finds it gone: its worker ended, or something else closed it. */
-function closedBeforeAnswer(error: unknown): WorkerApprovalOutcome | null {
-  const code = error instanceof RuntimeRpcCallError ? error.code : null
-  return code === 'dispatch_inactive' || code === 'approval_not_open'
-    ? {
-        by: code === 'dispatch_inactive' ? 'worker-ended' : 'unknown',
-        decision: null,
-        reason: null,
-        reasonDelivered: false
-      }
-    : null
+const WORKER_ENDED: WorkerApprovalOutcome = {
+  by: 'worker-ended',
+  decision: null,
+  reason: null,
+  reasonDelivered: false
 }
 
 /** A per-second clock, only while some countdown is shown. */
@@ -235,8 +247,8 @@ export function nativeChatWorkerApprovalParty(pane: {
     : null
 }
 
-/** A coordinator chat's answered worker prompts, each in its transcript at the time the worker
- *  asked. Holds the approvals itself, so only the transcript redraws when they change. */
+/** A coordinator chat's closed worker prompts, each in its transcript at the time the worker
+ *  asked. Holds them itself, so only the transcript redraws, and only when a receipt changes. */
 export function NativeChatWorkerApprovalTimeline({
   party,
   children
@@ -244,21 +256,15 @@ export function NativeChatWorkerApprovalTimeline({
   party: string | null
   children: (timedRows: readonly NativeChatTimedRow[]) => React.ReactNode
 }): React.ReactNode {
-  const approvals = useNativeChatWorkerApprovals(party)
+  const receipts = useNativeChatWorkerApprovalReceipts(party)
   const timedRows = useMemo(
     () =>
-      approvals.flatMap((entry) =>
-        entry.approval.state === 'open'
-          ? []
-          : [
-              {
-                key: `worker-approval:${entry.approval.approvalId}`,
-                at: Date.parse(entry.askedAt ?? entry.at),
-                node: <NativeChatWorkerApprovalReceipt entry={entry} />
-              }
-            ]
-      ),
-    [approvals]
+      receipts.map((entry) => ({
+        key: `worker-approval:${entry.approval.approvalId}`,
+        at: Date.parse(entry.askedAt ?? entry.at),
+        node: <NativeChatWorkerApprovalReceipt entry={entry} />
+      })),
+    [receipts]
   )
   return children(timedRows)
 }

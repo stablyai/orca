@@ -17,7 +17,13 @@ type Feed = {
   received: readonly NativeChatWorkerApproval[]
   /** Prompts answered or found closed here, shown closed until the host's list closes them too. */
   closedHere: Map<string, { outcome: WorkerApprovalOutcome; at: string }>
-  entries: readonly NativeChatWorkerApproval[]
+  /** Prompts that closed while shown, kept pinned until then (epoch ms) so the outcome lands in view. */
+  settling: Map<string, number>
+  settleTimer?: ReturnType<typeof setTimeout>
+  /** Above the composer: open prompts, ones only the worker's terminal can answer, and settling ones. */
+  pinned: readonly NativeChatWorkerApproval[]
+  /** In the transcript, at the time each was asked. */
+  receipts: readonly NativeChatWorkerApproval[]
   listeners: Set<() => void>
   dispose: () => void
 }
@@ -25,16 +31,39 @@ type Feed = {
 const EMPTY: readonly NativeChatWorkerApproval[] = []
 // Why 5 s: a dropped local stream is rare; retry without hammering a host that refuses it.
 const RETRY_MS = 5_000
+// Why 4 s: long enough to read the outcome where the card was, short enough not to crowd the composer.
+const SETTLE_MS = 4_000
 const feeds = new Map<string, Feed>()
 
+const signature = (entries: readonly NativeChatWorkerApproval[]): string =>
+  entries
+    .map(({ approval, at }) =>
+      [
+        approval.approvalId,
+        approval.state,
+        approval.outcome?.by,
+        approval.outcome?.decision,
+        at
+      ].join('\u0000')
+    )
+    .join('\u0001')
+const keep = (
+  previous: readonly NativeChatWorkerApproval[],
+  next: NativeChatWorkerApproval[]
+): readonly NativeChatWorkerApproval[] =>
+  signature(previous) === signature(next) ? previous : next.length ? next : EMPTY
+
 function publish(feed: Feed): void {
+  const wasOpen = new Set(
+    feed.pinned.flatMap(({ approval }) => (approval.state === 'open' ? [approval.approvalId] : []))
+  )
   for (const [approvalId] of feed.closedHere) {
     const entry = feed.received.find(({ approval }) => approval.approvalId === approvalId)
     if (entry?.approval.state !== 'open') {
       feed.closedHere.delete(approvalId)
     }
   }
-  feed.entries = feed.closedHere.size
+  const entries = feed.closedHere.size
     ? feed.received.map((entry) => {
         const closed = feed.closedHere.get(entry.approval.approvalId)
         return closed
@@ -42,6 +71,30 @@ function publish(feed: Feed): void {
           : entry
       })
     : feed.received
+  const now = Date.now()
+  for (const { approval } of entries) {
+    if (approval.state !== 'open' && wasOpen.has(approval.approvalId)) {
+      feed.settling.set(approval.approvalId, now + SETTLE_MS)
+    }
+  }
+  for (const [approvalId, until] of feed.settling) {
+    if (until <= now || !entries.some(({ approval }) => approval.approvalId === approvalId)) {
+      feed.settling.delete(approvalId)
+    }
+  }
+  const pinned = (entry: NativeChatWorkerApproval): boolean =>
+    entry.approval.state === 'open' ||
+    entry.approval.outcome?.by === 'terminal-only' ||
+    feed.settling.has(entry.approval.approvalId)
+  feed.pinned = keep(feed.pinned, entries.filter(pinned))
+  feed.receipts = keep(
+    feed.receipts,
+    entries.filter((entry) => !pinned(entry))
+  )
+  clearTimeout(feed.settleTimer)
+  if (feed.settling.size) {
+    feed.settleTimer = setTimeout(() => publish(feed), Math.min(...feed.settling.values()) - now)
+  }
   feed.listeners.forEach((notify) => notify())
 }
 
@@ -71,7 +124,9 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
     const held: Feed = {
       received: EMPTY,
       closedHere: new Map(),
-      entries: EMPTY,
+      settling: new Map(),
+      pinned: EMPTY,
+      receipts: EMPTY,
       listeners: new Set(),
       dispose: () => {}
     }
@@ -134,6 +189,7 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
     }
     held.dispose = () => {
       generation += 1
+      clearTimeout(held.settleTimer)
       clearTimeout(retry)
       close?.()
     }
@@ -153,20 +209,15 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
   }
 }
 
-/** A chat coordinator's workers' approvals, oldest first, until each lapses; none for no party. */
-export function useNativeChatWorkerApprovals(
+/** A chat coordinator's workers' approvals for the pinned area, oldest first; an open one leaves
+ *  once its countdown lapses with no closing report. None for no party. */
+export function useNativeChatPinnedWorkerApprovals(
   party: string | null
 ): readonly NativeChatWorkerApproval[] {
-  const subscribe = useCallback(
-    (listener: () => void) => (party ? observeWorkerApprovals(party, listener) : () => {}),
-    [party]
-  )
-  const all = useSyncExternalStore(subscribe, () =>
-    party ? (feeds.get(party)?.entries ?? EMPTY) : EMPTY
-  )
+  const pinned = useFeedPart(party, 'pinned')
   const [now, setNow] = useState(Date.now)
   const nextLapse = Math.min(
-    ...all.map(({ approval }) => workerApprovalLapsesAt(approval)).filter((at) => at > now)
+    ...pinned.map(({ approval }) => workerApprovalLapsesAt(approval)).filter((at) => at > now)
   )
   useEffect(() => {
     if (!Number.isFinite(nextLapse)) {
@@ -176,7 +227,27 @@ export function useNativeChatWorkerApprovals(
     return () => clearTimeout(timer)
   }, [nextLapse])
   return useMemo(
-    () => all.filter(({ approval }) => workerApprovalLapsesAt(approval) > now),
-    [all, now]
+    () => pinned.filter(({ approval }) => workerApprovalLapsesAt(approval) > now),
+    [pinned, now]
+  )
+}
+
+/** A chat coordinator's closed worker approvals for its transcript; the same array until one changes. */
+export function useNativeChatWorkerApprovalReceipts(
+  party: string | null
+): readonly NativeChatWorkerApproval[] {
+  return useFeedPart(party, 'receipts')
+}
+
+function useFeedPart(
+  party: string | null,
+  part: 'pinned' | 'receipts'
+): readonly NativeChatWorkerApproval[] {
+  const subscribe = useCallback(
+    (listener: () => void) => (party ? observeWorkerApprovals(party, listener) : () => {}),
+    [party]
+  )
+  return useSyncExternalStore(subscribe, () =>
+    party ? (feeds.get(party)?.[part] ?? EMPTY) : EMPTY
   )
 }

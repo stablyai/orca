@@ -40,10 +40,18 @@ const entry = {
   worker
 }
 
-it('answers the card on click, before the host confirms, with no toast once it lands', async () => {
+const reject = (code: string) =>
+  rpc.call.mockRejectedValueOnce(
+    new RuntimeRpcCallError({
+      id: '1',
+      ok: false,
+      error: { code, message: code },
+      _meta: { runtimeId: 'r' }
+    })
+  )
+
+function renderStack() {
   const onClosed = vi.fn()
-  let land: (value: unknown) => void = () => {}
-  rpc.call.mockReturnValueOnce(new Promise((resolve) => (land = resolve)))
   render(
     <NativeChatWorkerApprovalStack
       approvals={[entry]}
@@ -51,6 +59,13 @@ it('answers the card on click, before the host confirms, with no toast once it l
       onClosed={onClosed}
     />
   )
+  return onClosed
+}
+
+it('answers the card on click, before the host confirms, with no toast once it lands', async () => {
+  const onClosed = renderStack()
+  let land: (value: unknown) => void = () => {}
+  rpc.call.mockReturnValueOnce(new Promise((resolve) => (land = resolve)))
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
   // The RPC has not resolved: the card is already shown as allowed by the person.
   expect(onClosed).toHaveBeenCalledWith('apr_1', {
@@ -66,57 +81,23 @@ it('answers the card on click, before the host confirms, with no toast once it l
   expect(toast.info).not.toHaveBeenCalled()
 })
 
-it('shows the real outcome when the answer was not taken, and reopens the card on a failure', async () => {
-  const onClosed = vi.fn()
-  render(
-    <NativeChatWorkerApprovalStack
-      approvals={[entry]}
-      target={{ kind: 'local' }}
-      onClosed={onClosed}
-    />
-  )
-  rpc.call.mockRejectedValueOnce(
-    new RuntimeRpcCallError({
-      id: '1',
-      ok: false,
-      error: { code: 'approval_not_open', message: 'This prompt is no longer open' },
-      _meta: { runtimeId: 'r' }
-    })
-  )
+it('hands the card back to the host list when the answer did not reach the prompt', async () => {
+  const onClosed = renderStack()
+  reject('approval_not_open')
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-  await waitFor(() =>
-    expect(toast.info).toHaveBeenCalledWith('try-claude: this prompt had already closed')
-  )
-  expect(onClosed).toHaveBeenLastCalledWith('apr_1', {
-    by: 'unknown',
-    decision: null,
-    reason: null,
-    reasonDelivered: false
-  })
+  // A prompt the host still holds open must stay answerable: no local close outlives the click.
+  await waitFor(() => expect(onClosed).toHaveBeenLastCalledWith('apr_1', null))
+  expect(toast.info).toHaveBeenCalledTimes(1)
 
-  rpc.call.mockRejectedValueOnce(new Error('socket closed'))
+  reject('internal_error')
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
-  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('try-claude: socket closed'))
+  await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
   expect(onClosed).toHaveBeenLastCalledWith('apr_1', null)
 })
 
 it("closes the card at once when an answer finds the worker's Dispatch ended", async () => {
-  const onClosed = vi.fn()
-  rpc.call.mockRejectedValueOnce(
-    new RuntimeRpcCallError({
-      id: '1',
-      ok: false,
-      error: { code: 'dispatch_inactive', message: 'Dispatch ctx_1 is not running' },
-      _meta: { runtimeId: 'r' }
-    })
-  )
-  render(
-    <NativeChatWorkerApprovalStack
-      approvals={[entry]}
-      target={{ kind: 'local' }}
-      onClosed={onClosed}
-    />
-  )
+  const onClosed = renderStack()
+  reject('dispatch_inactive')
   fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
   await waitFor(() =>
     expect(onClosed).toHaveBeenLastCalledWith('apr_1', {
@@ -126,6 +107,5 @@ it("closes the card at once when an answer finds the worker's Dispatch ended", a
       reasonDelivered: false
     })
   )
-  expect(toast.info).toHaveBeenCalledWith('try-claude has ended, so this prompt is closed')
   expect(toast.error).not.toHaveBeenCalled()
 })

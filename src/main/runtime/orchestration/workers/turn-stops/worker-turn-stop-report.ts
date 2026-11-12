@@ -318,6 +318,12 @@ export function reportWorkerApprovalClosed(
   refines = false
 ): void {
   const { approval } = closed
+  const status = db.getDispatchContextById(dispatch.id)?.status
+  // Unanswered, and its worker already ended: the card reads that on its own, and the coordinator
+  // was told the worker ended; a second notice adds nothing.
+  if (!approval.outcome?.decision && status !== 'pending' && status !== 'dispatched') {
+    return
+  }
   escalateWorkerFailure(
     db,
     dispatch,
@@ -332,12 +338,7 @@ export function reportWorkerApprovalClosed(
         subject: approval.outcome?.decision ? 'Worker approval answered' : 'Worker approval closed',
         body: describeApprovalClosed(approval)
       }),
-      payload: {
-        taskId: dispatch.task_id,
-        dispatchId: dispatch.id,
-        handle: closed.from,
-        approval
-      },
+      payload: { taskId: dispatch.task_id, dispatchId: dispatch.id, handle: closed.from, approval },
       // Only a person at the worker's terminal can answer it now: that needs the coordinator to act.
       ...(approval.outcome?.by === 'terminal-only' ? {} : { notice: true as const })
     },

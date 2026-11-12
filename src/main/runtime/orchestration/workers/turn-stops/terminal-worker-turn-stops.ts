@@ -83,7 +83,7 @@ export class TerminalWorkerTurnStops {
         ? await this.deps.takeOpenApproval(
             stop.paneKey,
             before.target.dispatch.id,
-            // The report below follows synchronously, so this is the answer it will see.
+            // Read at the end of the dialog wait; a resume after it is caught by the re-read below.
             () => this.stillStopped(stop) !== null
           )
         : null

@@ -20961,7 +20961,7 @@
         "worker": "Worker · {{name}}",
         "openWorker": "Open worker",
         "answerFailed": "{{name}}: {{detail}}",
-        "answerAlreadyClosed": "{{name}}: this prompt had already closed",
+        "answerNotApplied": "{{name}}: the answer did not reach this prompt",
         "answerWorkerEnded": "{{name}} has ended, so this prompt is closed",
         "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
         "allowedByYou": "Allowed by you",
