@@ -225,12 +225,9 @@ export function descriptorRowElements(
     />
   )
   const terms = query?.toLowerCase().split(/\s+/).filter(Boolean) ?? []
-  if (query !== undefined) {
+  if (query !== undefined && terms.length > 0) {
     return choices
       .filter((choice) => {
-        if (choice.searchOnly && terms.length === 0) {
-          return false
-        }
         return (
           nativeChatModelSearchScore(choice.value, query, [
             nativeChatSessionChoiceLabel(choice, say, descriptor.id),
@@ -240,11 +237,12 @@ export function descriptorRowElements(
       })
       .map(choiceRow)
   }
-  const more = moreChoices ? choices.filter((choice) => choice.searchOnly) : []
+  const more = moreChoices ? choices.filter((choice) => choice.legacy) : []
   return [
-    ...choices.filter((choice) => !choice.searchOnly).map(choiceRow),
+    ...choices.filter((choice) => !choice.legacy).map(choiceRow),
     ...(more.length > 0 && moreChoices
       ? [
+          ...(moreChoices.shown ? more.map(choiceRow) : []),
           <ListRow
             key="more-choices"
             title={
@@ -253,8 +251,7 @@ export function descriptorRowElements(
                 : t('chat.sessionOptionRows.moreModels', 'More models')
             }
             onPress={moreChoices.onToggle}
-          />,
-          ...(moreChoices.shown ? more.map(choiceRow) : [])
+          />
         ]
       : [])
   ]

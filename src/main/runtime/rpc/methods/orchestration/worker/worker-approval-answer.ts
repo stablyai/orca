@@ -108,7 +108,7 @@ export async function answerWorkerApproval(
           by: access.answeredBy,
           decision: params.decision,
           reason: access.reason,
-          reasonDelivered: true
+          reasonDelivered: params.decision === 'deny'
         })
       },
       { notify }
@@ -125,7 +125,8 @@ export async function answerWorkerApproval(
     sessionId: custody.sessionId,
     approvalId: params.prompt,
     dispatchId: dispatch.id,
-    decision: params.decision
+    decision: params.decision,
+    byAgent: access.answeredBy === 'coordinator'
   })
   if (!answered.ok) {
     // Answered in the worker's own chat, or gone: say so now, not at the worker's next turn edge.

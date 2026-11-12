@@ -15,6 +15,7 @@ import { descriptorRowElements, SessionOptionCaption } from './MobileNativeChatS
 export function MobileNativeChatModelList(props: {
   descriptor: SessionOptionDescriptor
   disabled: boolean
+  moreChoices: { shown: boolean; onToggle: () => void }
   onSetOption: (value: SessionOptionValue) => void
   onInvokeAction: () => void
 }): React.JSX.Element {

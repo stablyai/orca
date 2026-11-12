@@ -1,7 +1,11 @@
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
 import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
-import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
+import type {
+  Project,
+  ProjectHostSetup,
+  ProjectUpdateArgs
+} from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
@@ -16,7 +20,7 @@ import { SparsePresetSettingsSection } from './worktrees/SparsePresetSettingsSec
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
+import { RepositoryRemoveProjectSection } from './RepositoryRemoveProjectSection'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
@@ -50,6 +54,7 @@ type RepositoryPaneRepoUpdate = Omit<
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
+const EMPTY_REMOVAL_SETUPS: ProjectHostSetup[] = []
 
 type RepositoryPaneProps = {
   repo: Repo
@@ -62,12 +67,14 @@ type RepositoryPaneProps = {
     updates: RepositoryPaneRepoUpdate,
     options?: { hostId?: ExecutionHostId }
   ) => void | Promise<boolean>
-  removeProject: (repoId: string) => void
+  removeProject: () => void
   project?: Project | null
   selectedProjectSetupId?: string
   settingsSelectionKey?: string
   settingsEntryRepoIds?: ReadonlySet<string>
   removalScope?: SettingsProjectRemovalScope
+  /** Every checkout the remove action takes out of Orca. */
+  removalSetups?: readonly ProjectHostSetup[]
   isLocalWindowsProject?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -93,6 +100,7 @@ export function RepositoryPane({
   settingsSelectionKey,
   settingsEntryRepoIds,
   removalScope = 'project',
+  removalSetups = EMPTY_REMOVAL_SETUPS,
   isLocalWindowsProject = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
@@ -185,7 +193,8 @@ export function RepositoryPane({
     sharedPaths: symlinkEntries,
     sourceControlAi: sourceControlAiEntries,
     hostSetups: hostSetupEntries,
-    projectRuntime: projectRuntimeEntries
+    projectRuntime: projectRuntimeEntries,
+    removeProject: removeProjectEntry
   } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
@@ -230,14 +239,6 @@ export function RepositoryPane({
               </span>
             ) : null}
           </>
-        }
-        action={
-          <RepositoryRemoveProjectButton
-            repo={repo}
-            removalScope={removalScope}
-            forceVisible={forceFullPaneForRepoMatch}
-            removeProject={removeProject}
-          />
         }
       >
         <SearchableSetting
@@ -384,6 +385,18 @@ export function RepositoryPane({
     ) : null,
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
       <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
+    ) : null,
+    // Last on the page: removal is rare and should not sit above everyday settings.
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [removeProjectEntry]) ? (
+      <RepositoryRemoveProjectSection
+        key="remove-project"
+        repo={repo}
+        setups={removalSetups}
+        removalScope={removalScope}
+        searchEntry={removeProjectEntry}
+        forceVisible={forceFullPaneForRepoMatch}
+        removeProject={removeProject}
+      />
     ) : null
   ].filter(Boolean)
 

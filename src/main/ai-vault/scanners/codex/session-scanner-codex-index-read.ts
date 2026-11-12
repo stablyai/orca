@@ -4,9 +4,10 @@ import {
   openTranscriptReadStream,
   readTranscriptSlice
 } from '../../../native-chat/wsl-transcript-fs-access'
-import { consumeCompleteJsonlLines } from '../../session-scanner-jsonl-reader'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { consumeCompleteJsonlLines } from '../../parsing/session-scanner-jsonl-reader'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 export type CodexIndexRead = {
   titles: Map<string, string>

@@ -99,8 +99,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
     setTimer: unrefTimer,
     readScreen: (handle) => this.readTerminal(handle, { screen: true, limit: 15 }),
-    takeOpenApproval: (paneKey, dispatchId, reporting) =>
-      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId, reporting)
+    takeOpenApproval: (paneKey, dispatchId) =>
+      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId),
+    markApprovalReported: (approvalId) => this.terminalWorkerApprovals.markReported(approvalId)
   })
 
   private readonly externalConversations = installExternalConversations(this.store, this)

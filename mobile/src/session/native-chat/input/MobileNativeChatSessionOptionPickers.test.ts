@@ -186,7 +186,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
                 value: 'opus-latest',
                 label: 'Opus latest',
                 description: 'Complex work',
-                searchOnly: true
+                legacy: true
               }
             ]
           }

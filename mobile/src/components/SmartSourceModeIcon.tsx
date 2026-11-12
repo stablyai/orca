@@ -1,5 +1,5 @@
 import { CaseSensitive, GitBranch, Sparkles } from 'lucide-react-native'
-import type { SmartModeIcon } from '../tasks/mobile-smart-source-modes'
+import type { SmartModeIcon } from '../new-workspace/source-selection/mobile-smart-source-modes'
 import { TaskProviderLogo } from './TaskProviderLogo'
 
 // Provider modes use brand SVGs; neutral modes use lucide glyphs.

@@ -7,7 +7,10 @@ const WORKER_ONLY_CAPABILITIES: ReadonlySet<string> = new Set<PluginCapabilityKi
   'terminal:read',
   'workspace:write',
   'agent:launch',
-  'appearance:write'
+  'appearance:write',
+  'workspace:create',
+  'automation:read',
+  'automation:write'
 ])
 
 /** Whether a plugin of this profile can ever exercise the capability, so consent may name it. */

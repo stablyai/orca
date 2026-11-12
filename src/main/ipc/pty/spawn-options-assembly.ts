@@ -12,7 +12,7 @@ import { PI_PROCESS_OWNER_ENV_KEYS } from '../../pty/shell-startup/pi-process-ow
 import { planCodexNoDaemonLaunch } from '../../pty/shell-startup/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../providers/pty-provider-contract'
-import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
+import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
 import { getStartupTerminalIngressIntent } from '../terminal-startup-color-query-replies'
 import { CODEX_HOME_ENV_KEYS } from './host-env/codex-home'
 import {

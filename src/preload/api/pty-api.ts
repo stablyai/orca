@@ -17,7 +17,7 @@ import type { TerminalInputKind } from '../../shared/terminal/input/terminal-inp
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../shared/workspace-layout/terminal-leaf-move'
+} from '../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type {
   PtyListedSession,
@@ -34,7 +34,7 @@ import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetr
 import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { AgentPaneLaunchRequest } from '../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'

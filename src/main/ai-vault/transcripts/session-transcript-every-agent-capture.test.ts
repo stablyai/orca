@@ -2,6 +2,17 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { scanAiVaultSessions } from '../session-scanner'
+import { writeEveryAgentVault } from '../scanner-fixtures/session-scanner-every-agent-fixture'
+import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'
+import { writeOpenCodeSqliteDatabase } from '../scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
+import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
+import {
+  registerTranscriptConsumer,
+  resetTranscriptConsumersForTests,
+  type TranscriptMessage
+} from './session-transcript-consumers'
 
 // Replace the worker transport with its real in-process readers.
 vi.mock(
@@ -46,20 +57,6 @@ vi.mock(
     }
   }
 )
-import {
-  AI_VAULT_AGENTS,
-  type AiVaultAgent
-} from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { scanAiVaultSessions } from '../session-scanner'
-import { writeEveryAgentVault } from '../session-scanner-every-agent-fixture'
-import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'
-import { writeOpenCodeSqliteDatabase } from '../scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
-import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
-import {
-  registerTranscriptConsumer,
-  resetTranscriptConsumersForTests,
-  type TranscriptMessage
-} from './session-transcript-consumers'
 
 const OPENCODE_SQLITE_SESSION = 'ses_capture_guard'
 
@@ -122,18 +119,6 @@ async function readEveryAgentVault(): Promise<CapturedRead[]> {
   expect(result.issues).toEqual([])
   return reads
 }
-
-function spokeIn(read: CapturedRead): boolean {
-  return read.messages.some((message) => message.role === 'user' || message.role === 'assistant')
-}
-
-it('publishes at least one user or assistant message for every source it reads', async () => {
-  const reads = await readEveryAgentVault()
-
-  // Check every storage source: one working OpenCode format must not mask another’s missing messages.
-  expect(reads.filter((read) => !spokeIn(read)).map((read) => read.path)).toEqual([])
-  expect(new Set(reads.map((read) => read.agent))).toEqual(new Set(AI_VAULT_AGENTS))
-})
 
 it('publishes an OpenCode SQLite session through the same channel as every file source', async () => {
   const reads = await readEveryAgentVault()

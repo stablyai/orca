@@ -1,7 +1,7 @@
 import type { RuntimeMobileSessionClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
 import { pickNextActiveTabAfterClose } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
-import { findSiblingGroupId } from '../../../../shared/workspace-layout/tab-group-layout-tree'
+import { findSiblingGroupId } from '../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 
 export type ClientSessionTabSelection = {
   activeTabId: string | null

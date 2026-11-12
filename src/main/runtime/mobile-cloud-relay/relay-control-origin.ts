@@ -1,5 +1,5 @@
 import type { RelayControlOriginOptions } from './relay-control-origin-options'
-import { CloudRelayTransport } from '../rpc/relay-transport'
+import { CloudRelayTransport } from '../rpc/transports/relay-transport'
 import { RelayControlClient } from './relay-control-client'
 import { RELAY_HOST_ATTACH_DEADLINE_MS } from './relay-control-protocol'
 import type {

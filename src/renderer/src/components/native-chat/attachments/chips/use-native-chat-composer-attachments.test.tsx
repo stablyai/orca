@@ -170,6 +170,15 @@ describe('useNativeChatComposerAttachments', () => {
     }
   })
 
+  it('attaches a dropped BMP as a file reference, since agents take only PNG, JPEG, GIF and WebP inline', async () => {
+    const probe = await renderProbe('pty-bmp')
+    act(() => probe.latest().attachResolvedPaths(['/repo/diagram.bmp', '/repo/shot.png']))
+
+    expect(probe.latest().imageAttachments).toMatchObject([{ path: '/repo/shot.png' }])
+    expect(probe.draft()).toContain('@/repo/diagram.bmp')
+    act(() => probe.root.unmount())
+  })
+
   it('takes the chip of an image still on its way out of the prompt when the composer is disabled', async () => {
     const probe = await renderProbe('structured-1', true)
     act(() => {
