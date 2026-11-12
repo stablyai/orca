@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { Gesture } from 'react-native-gesture-handler'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import type { LegacyComposedGesture } from 'react-native-gesture-handler'
 import { quantizeFontScale } from './mobile-native-chat-message-text'
 
@@ -38,4 +38,19 @@ export function useMobileNativeChatPinchGesture(scopeKey: string): {
   )
 
   return { fontScale, pinchGesture }
+}
+
+// Gesture handler 3 on web defaults the detector's view to touch-action: none, which froze the transcript's touch scrolling in phone web pages.
+export function MobileNativeChatPinchZoom({
+  gesture,
+  children
+}: {
+  gesture: LegacyComposedGesture
+  children: ReactNode
+}) {
+  return (
+    <GestureDetector gesture={gesture} touchAction="auto">
+      {children}
+    </GestureDetector>
+  )
 }
