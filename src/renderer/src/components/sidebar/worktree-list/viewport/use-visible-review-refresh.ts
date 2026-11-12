@@ -37,16 +37,11 @@ export function installVisibleReviewCardScrollListener(
 }
 
 export function visibleReviewCardIds(args: {
-  enabled: boolean
   renderRows: RenderRow[]
   virtualItems: readonly VirtualItem[]
   viewportTop: number
   viewportHeight: number
-  isOnScreen?: (id: string) => boolean
 }): string[] {
-  if (!args.enabled) {
-    return []
-  }
   const bottom = args.viewportTop + args.viewportHeight
   return args.virtualItems
     .filter((item) => item.start < bottom && item.end > args.viewportTop)
@@ -62,7 +57,6 @@ export function visibleReviewCardIds(args: {
         Boolean(row.worktree.branch)
     )
     .map((row) => row.worktree.id)
-    .filter((id) => args.isOnScreen?.(id) ?? true)
 }
 
 export function useVisiblePrRefreshReporting(args: {
@@ -90,7 +84,6 @@ export function useVisiblePrRefreshReporting(args: {
         return
       }
       const candidates = visibleReviewCardIds({
-        enabled,
         renderRows: args.renderRows,
         virtualItems: args.virtualItems,
         viewportTop: scroll.scrollTop,
