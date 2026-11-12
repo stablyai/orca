@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import type {
@@ -28,14 +29,14 @@ export function isWorkerApprovalDecision(value: string): value is WorkerApproval
   return value === 'allow' || value === 'deny'
 }
 
+// A tool call's input as the agent wrote it: its shell command, when it has one.
+const ToolCommandInput = z.object({ command: z.string().optional(), cmd: z.string().optional() })
+
 /** The whole command when the detail is a tool call's input; any other detail as it is. */
 function approvalDetailCommand(detail: string | null): string | null {
-  const input = detail === null ? null : normalizeToolInput(detail)
-  const command =
-    input && typeof input === 'object' && !Array.isArray(input)
-      ? (Reflect.get(input, 'command') ?? Reflect.get(input, 'cmd'))
-      : null
-  return typeof command === 'string' && command.trim() ? command : detail
+  const parsed = ToolCommandInput.safeParse(detail === null ? null : normalizeToolInput(detail))
+  const command = parsed.success ? (parsed.data.command ?? parsed.data.cmd) : undefined
+  return command?.trim() ? command : detail
 }
 
 /** A closed approval as the answered-prompt row reads it. */
