@@ -77,12 +77,13 @@ function cacheWslDistroList(rawDistros: string[], probeSequence: number): string
   if (userDistros.length === 0 && wslDistroCache !== null && wslDistroCache.length > 0) {
     return wslDistroCache
   }
-  if (userDistros.length > 0) {
-    dropStaleWslAvailabilityFailure()
-  }
   wslDistroCacheSequence = probeSequence
   const changed = wslDistroCache?.join('\0') !== userDistros.join('\0')
   wslDistroCache = userDistros
+  // After the list is written, so route reconciliation never sees half-updated discovery.
+  if (userDistros.length > 0) {
+    dropStaleWslAvailabilityFailure()
+  }
   if (changed) {
     notifyWslDiscoveryChanged()
   }

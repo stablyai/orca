@@ -3,7 +3,10 @@ import type { Repo } from '../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { bumpWorktreeScanGeneration } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { setWorktreeCatalogRouteResolver } from './repo-worktree-catalog-route'
+import { markWorktreeRouteInputsChanged } from './local-worktree-scan-generation'
+import { notifyWslDiscoveryChanged } from '../../wsl/discovery/wsl-discovery-change'
 import {
+  _getWorktreeCatalogOwnerSizeForTests,
   _resetWorktreeCatalogOwnerForTests,
   retireObsoleteWorktreeCatalogs,
   invalidateWorktreeCatalogForRepo,
@@ -179,6 +182,28 @@ describe('repo worktree catalog owner', () => {
       superseded: true
     })
     expect(plan.calls).toBe(1)
+  })
+
+  it('retires an idle owner when a route input or WSL discovery answer changes, with no reader', async () => {
+    let live: { repoPath: string; runtimeKey: string } | null = {
+      repoPath: '/repos/app',
+      runtimeKey: 'local:default'
+    }
+    setWorktreeCatalogRouteResolver(() => live)
+    const plan = scanner([rows('/repos/app')])
+    await readWorktreeCatalog(repo, 'local:default', runtime, plan)
+    expect(_getWorktreeCatalogOwnerSizeForTests()).toBe(1)
+
+    live = { repoPath: '/repos/app', runtimeKey: 'local:wsl:Ubuntu' }
+    notifyWslDiscoveryChanged()
+    expect(_getWorktreeCatalogOwnerSizeForTests()).toBe(0)
+
+    live = { repoPath: '/repos/app', runtimeKey: 'local:default' }
+    await readWorktreeCatalog(repo, 'local:default', runtime, plan)
+    live = null
+    markWorktreeRouteInputsChanged()
+    await Promise.resolve()
+    expect(_getWorktreeCatalogOwnerSizeForTests()).toBe(0)
   })
 
   it('keeps a scan that outlived its repo path out of the live catalog', async () => {

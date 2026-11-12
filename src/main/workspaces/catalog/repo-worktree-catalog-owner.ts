@@ -313,3 +313,7 @@ export function _resetWorktreeCatalogOwnerForTests(): void {
     retireEntry(key, entry)
   }
 }
+
+export function _getWorktreeCatalogOwnerSizeForTests(): number {
+  return entries.size
+}

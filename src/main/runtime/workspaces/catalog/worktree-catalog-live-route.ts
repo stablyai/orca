@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import {
   setWorktreeCatalogRouteResolver,
@@ -22,7 +22,8 @@ function buildRoutes(store: RuntimeStore): Map<string, WorktreeCatalogRoute> {
   const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(store as never, repos)
   const routes = new Map<string, WorktreeCatalogRoute>()
   for (const repo of repos) {
-    if (isFolderRepo(repo)) {
+    // Only this host's repos run local Git; remote-owned registrations answer from their own host.
+    if (isFolderRepo(repo) || getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
       continue
     }
     const { projectRuntime, runtimeKey, sshConnectionId } = resolveWorktreeScanRuntime(

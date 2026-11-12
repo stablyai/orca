@@ -14,6 +14,11 @@ export function getWslDiscoveryRevision(): number {
 export function notifyWslDiscoveryChanged(): void {
   revision += 1
   for (const listener of listeners) {
-    listener()
+    try {
+      listener()
+    } catch (error) {
+      // A listener failure must not break the discovery write that notified it.
+      console.warn('[wsl] discovery change listener failed:', error)
+    }
   }
 }
