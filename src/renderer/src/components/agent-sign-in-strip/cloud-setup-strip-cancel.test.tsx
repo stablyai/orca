@@ -13,7 +13,7 @@ import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/o
 const t: Translate = (_key, fallback, options) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(options?.[name] ?? ''))
 
-function actions(): CloudStripActions & { cancel: ReturnType<typeof vi.fn> } {
+function actions() {
   return {
     primary: vi.fn(),
     submitCode: vi.fn(),
@@ -22,7 +22,7 @@ function actions(): CloudStripActions & { cancel: ReturnType<typeof vi.fn> } {
     pasteCode: vi.fn(),
     useApiKey: vi.fn(),
     cancel: vi.fn()
-  }
+  } satisfies CloudStripActions
 }
 
 const strip = (setup: OrcaCloudAgentSetup, a: CloudStripActions) => (
