@@ -23,6 +23,8 @@ import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-gi
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
+import { useWorktreeGitOwnerTarget } from './worktree-git-owner-target'
+import { useGitStatusTurnCompletion } from './use-git-status-turn-completion'
 import {
   admissionTierForGitStatusRefreshReason,
   createGitStatusRefreshPacing,
@@ -228,7 +230,8 @@ export function useWorktreeGitStatusObservation(
         slowTaskBackoff: SLOW_GIT_POLL_BACKOFF,
         pacing,
         // Agents editing files behind another app must not drive (remote) git status every 3s.
-        cadenceScale: windowPollSlowdown
+        cadenceScale: windowPollSlowdown,
+        activityCadenceScale: () => (windowPollSlowdown() === 1 ? 1 : 20)
       }
     )
     statusSchedulerRef.current = scheduler
@@ -249,6 +252,15 @@ export function useWorktreeGitStatusObservation(
   )
 
   useRefreshOnHostContact(activeExecutionHostId, statusSchedulerRef, canApplyScheduledStatusRef)
+
+  const ownerTarget = useWorktreeGitOwnerTarget(activeWorktreeId, activeExecutionHostId)
+  useGitStatusTurnCompletion(
+    ownerTarget,
+    activeExecutionHostId,
+    activeWorktreeId,
+    canFetchActiveWorktreeGitStatus,
+    statusSchedulerRef
+  )
 
   const previousConsumerVisibilityRef = useRef({
     worktreeId: activeWorktreeId,
