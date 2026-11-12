@@ -120,3 +120,28 @@ export function cloudRestartFreshModel(
     announcement: `${title} ${detail}`
   }
 }
+
+/**
+ * CHAT-BANNERS B2: a structured chat needs no restart after a renewal. Its next message goes out with
+ * the renewed sign-in (the proxy swaps it in per request), so "renewed" only confirms and dismisses.
+ */
+export function cloudChatRunningStripModel(
+  strip: CloudRunningStrip,
+  t: Translate
+): CloudStripModel {
+  const model = cloudRunningStripModel(strip, t)
+  if (strip.phase !== 'renewed') {
+    return model
+  }
+  const agent = HOST_AGENT_SIGN_IN_AGENT_NAME[strip.agent]
+  return {
+    ...model,
+    detail: t('agentSignInStrip.renewedChat', 'Your next message uses it.'),
+    primary: null,
+    announcement: t(
+      'agentSignInStrip.renewedChatAnnounce',
+      '{{agent}} sign-in renewed. Your next message uses it.',
+      { agent }
+    )
+  }
+}

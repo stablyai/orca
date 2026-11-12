@@ -74,6 +74,7 @@ export function cloudRunningStrip(args: {
         AgentStatusEntry,
         'agentType' | 'state' | 'turnEndedAt' | 'mainAgent' | 'interrupted'
       > & {
+        stateStartedAt?: number
         providerSession?: unknown
       })
     | null
@@ -90,6 +91,11 @@ export function cloudRunningStrip(args: {
    * module's memory) re-decides; the React Compiler memoizes this call on its inputs.
    */
   revision: number
+  /**
+   * A structured chat's status never records turnEndedAt: its "done since" (stateStartedAt) dates
+   * the clean turn end instead (CHAT-BANNERS B2).
+   */
+  turnEndedFallback?: boolean
 }): CloudRunningStrip | null {
   const { paneKey, entry, accounts } = args
   const remembered = signedOut.get(paneKey)
@@ -120,7 +126,8 @@ export function cloudRunningStrip(args: {
       if (
         entry &&
         entry.state === 'done' &&
-        (entry.turnEndedAt ?? 0) > renewedAt &&
+        (entry.turnEndedAt ?? (args.turnEndedFallback ? entry.stateStartedAt : undefined) ?? 0) >
+          renewedAt &&
         !agentTurnEndedUncleanly(entry)
       ) {
         signedOut.delete(paneKey)
@@ -220,7 +227,7 @@ function subscribeRuntimes(listener: () => void): () => void {
   runtimesListeners.add(listener)
   if (runtimesListeners.size === 1) {
     stopRuntimesWatch =
-      window.api.ephemeralVm?.onRuntimesChanged?.(() => {
+      window.api?.ephemeralVm?.onRuntimesChanged?.(() => {
         runtimesRevision += 1
         for (const each of runtimesListeners) {
           each()

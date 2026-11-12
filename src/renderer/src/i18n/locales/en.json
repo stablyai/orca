@@ -28233,6 +28233,9 @@
       "notSetUp": "{{agent}} isn’t set up for Orca Cloud",
       "expired": "{{agent}} sign-in expired"
     },
+    "chatSignIn": {
+      "renewAbove": "Your {{agent}} sign-in for Orca Cloud didn’t work. Renew it above, then send your message again."
+    },
     "chatHold": {
       "notSetUp": "Set up {{agent}} above to start",
       "expired": "Renew {{agent}} sign-in above to start",
@@ -28880,6 +28883,8 @@
     "renewed": "{{agent}} sign-in renewed",
     "renewedResume": "Restart {{agent}} to pick up where you left off.",
     "renewedFresh": "Starts a new conversation.",
+    "renewedChat": "Your next message uses it.",
+    "renewedChatAnnounce": "{{agent}} sign-in renewed. Your next message uses it.",
     "restart": "Restart",
     "dismiss": "Dismiss",
     "renewedAnnounce": "{{agent}} sign-in renewed. Restart {{agent}} to use it.",

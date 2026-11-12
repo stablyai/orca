@@ -8,6 +8,7 @@ import { NativeChatVisualOwnerProvider } from './media/visuals/native-chat-visua
 import { NativeChatFileLinkExistenceProvider } from './links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageOwnerProvider } from './media/images/native-chat-markdown-image-owner'
 import { CloudChatBannerSlot } from '../agent-sign-in-strip/CloudChatBannerSlot'
+import { CloudChatHostProvider } from '../agent-sign-in-strip/cloud-chat-sign-in-notice'
 
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (
@@ -25,7 +26,9 @@ export default function NativeChatView(props: NativeChatViewProps): React.JSX.El
               isVisible={props.isVisible}
               sessionId={props.sessionId}
             >
-              <NativeChatStructuredSession {...props} />
+              <CloudChatHostProvider target={props.target}>
+                <NativeChatStructuredSession {...props} />
+              </CloudChatHostProvider>
             </NativeChatMarkdownImageOwnerProvider>
           </NativeChatFileLinkExistenceProvider>
         </NativeChatVisualOwnerProvider>
