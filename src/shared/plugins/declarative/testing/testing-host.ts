@@ -6,6 +6,7 @@ import {
   type PluginHostMethodName
 } from '../../workers/plugin-host-api'
 import { PLUGIN_HOST_API_MAJOR } from '../../workers/plugin-host-api-major'
+import { missingPluginParamCapability } from '../../capabilities/plugin-capability-gate'
 
 import { hostError } from './testing-host-error'
 import { resolvePluginEditorTypography } from '../../workers/plugin-host-api-editor-typography'
@@ -145,6 +146,13 @@ export function createMockHost(
     const parsedParams = spec.params.safeParse(params)
     if (!parsedParams.success) {
       return refuse('invalid_params', parsedParams.error.issues[0]?.message ?? 'invalid params')
+    }
+    const missing = missingPluginParamCapability(spec, parsedParams.data, [...capabilities])
+    if (missing) {
+      return refuse(
+        'capability_denied',
+        `${method} with ${missing.param} needs the ${missing.capability} capability`
+      )
     }
     return parsedParams.data
   }

@@ -18509,7 +18509,9 @@
           "missedRunGrace": "Missed-run grace",
           "execution": "Execution",
           "notRunYet": "Not run yet",
-          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported"
+          "usageDetail": "{{tokens}} tokens · {{known}}/{{total}} runs reported",
+          "createdBy": "Created by",
+          "createdByPluginTitle": "Plugin {{plugin}}"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -25190,6 +25192,9 @@
       "cancel": "Cancel",
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
+    },
+    "actionConfirmation": {
+      "cancel": "Cancel"
     }
   },
   "checks": {

@@ -51,8 +51,13 @@ export const AUTOMATION_METHODS = [
     name: 'automation.create',
     permission: 'workspace',
     params: AutomationCreate,
-    handler: async (params, { runtime }) => ({
-      automation: await runtime.createAutomation(params)
+    handler: async (params, { runtime, plugin }) => ({
+      automation: await runtime.createAutomation(
+        // Provenance comes from the in-process caller only; params cannot claim it.
+        plugin
+          ? { ...params, createdBy: { kind: 'plugin', pluginKey: plugin.key, name: plugin.name } }
+          : params
+      )
     })
   }),
   defineMethod({

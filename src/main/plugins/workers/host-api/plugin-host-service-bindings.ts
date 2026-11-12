@@ -74,6 +74,7 @@ export function bindPluginHostServices(input: {
     appearance: input.appearance ?? null,
     editorTypography: input.editorTypography ?? null,
     desktop: input.desktop ?? null,
+    confirm: input.desktop?.confirm ?? null,
     panels: input.panels ?? null,
     statusBar: input.statusBar
       ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)

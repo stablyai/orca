@@ -126,7 +126,8 @@ export class RuntimeAutomationController {
         rrule: input.rrule,
         dtstart: input.dtstart,
         enabled: input.enabled,
-        missedRunGraceMinutes: input.missedRunGraceMinutes
+        missedRunGraceMinutes: input.missedRunGraceMinutes,
+        createdBy: input.createdBy
       },
       { destination: destination ?? input.destination, resolvedRepo: target.repo ?? undefined }
     )

@@ -30,6 +30,10 @@ import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 import { PluginHostCallError } from './plugin-host-call-scope'
+import type {
+  PluginActionConfirmation,
+  PluginActionConfirmationRequest
+} from '../../consent/plugin-action-confirmation'
 
 export type PluginWorktreeContext = {
   worktreeId: string
@@ -39,8 +43,13 @@ export type PluginWorktreeContext = {
   displayName: string
 }
 
-/** Desktop-only sinks for frame methods; absent in headless serve. */
+/** Desktop-only sinks for frame methods and host confirmations; absent in headless serve. */
 export type PluginDesktopFrameServices = {
+  /** Asks the person in the calling frame's window, else Orca's focused or first window. */
+  confirm(
+    request: PluginActionConfirmationRequest,
+    scope: PluginHostCallScope
+  ): Promise<PluginActionConfirmation>
   openExternal(
     pluginId: string,
     url: string,
@@ -98,6 +107,14 @@ export type PluginHostServices = {
   runtimeRpc?: PluginRuntimeRpc | null
   /** Orca's window, for actions only it can take; absent in headless serve. */
   renderer?: PluginHostRendererActions | null
+  /** Asks the person before the plugin acts; absent where nobody can be asked (headless serve).
+   *  Re-checks the plugin's approval once the person answers. */
+  confirm?:
+    | ((
+        request: PluginActionConfirmationRequest,
+        scope: PluginHostCallScope
+      ) => Promise<PluginActionConfirmation>)
+    | null
   settings: {
     getAll(pluginId: string): Record<string, PluginJsonValue>
     set(

@@ -21,6 +21,8 @@ export type PluginHostMethodSpec<
   scope: 'active-workspace' | 'any-workspace' | 'explicit-terminal' | 'plugin-private' | 'desktop'
   /** Null: no capability; consent and the surface still gate the call. */
   capability: PluginCapabilityKind | null
+  /** A second capability a call needs when it passes the named param. */
+  paramCapabilities?: Readonly<Record<string, PluginCapabilityKind>>
   /** Runs only on transient user activation in the calling frame, checked by the frame host. */
   userActivation?: true
   /** Mutations are audit-logged with actor `plugin:<id>`. */

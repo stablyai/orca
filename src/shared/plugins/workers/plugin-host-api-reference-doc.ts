@@ -9,7 +9,8 @@ import {
   PLUGIN_HOST_API,
   PLUGIN_HOST_API_MINOR,
   PLUGIN_HOST_METHOD_NAMES,
-  PLUGIN_STABLE_HOST_METHOD_NAMES
+  PLUGIN_STABLE_HOST_METHOD_NAMES,
+  type PluginHostMethodSpec
 } from './plugin-host-api'
 import { REFERENCE_TYPE_TEXT, zodTypeText } from './plugin-schema-type-text'
 
@@ -42,6 +43,15 @@ export const PLUGIN_HOST_ERROR_CODE_MEANINGS: Record<PluginErrorCode, string> = 
 
 const version = (minor: number): string => `${PLUGIN_HOST_API_MAJOR}.${minor}`
 
+/** `workspace:create` (+`agent:launch` for `agent`): a passed param can need a second capability. */
+function capabilityCell(spec: PluginHostMethodSpec): string {
+  const base = spec.capability === null ? 'none' : `\`${spec.capability}\``
+  const extra = Object.entries(spec.paramCapabilities ?? {}).map(
+    ([param, kind]) => ` (+\`${kind}\` for \`${param}\`)`
+  )
+  return `${base}${extra.join('')}`
+}
+
 /** Author reference for the host API, rendered from the typed spec table. */
 export function renderPluginHostApiReference(): string {
   const specs = PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) => ({
@@ -66,7 +76,7 @@ export function renderPluginHostApiReference(): string {
     '| --- | --- | --- | --- | --- | --- |',
     ...specs.map(
       (spec) =>
-        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${spec.capability === null ? 'none' : `\`${spec.capability}\``} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
+        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${capabilityCell(spec)} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
     )
   ]
   for (const spec of specs) {
@@ -94,7 +104,7 @@ export function renderPluginHostApiReference(): string {
         '',
         `### \`${name}\``,
         '',
-        `${spec.summary} Capability: ${spec.capability === null ? 'none' : `\`${spec.capability}\``}; surfaces: ${spec.surfaces.join(', ')}.`,
+        `${spec.summary} Capability: ${capabilityCell(spec)}; surfaces: ${spec.surfaces.join(', ')}.`,
         '',
         '```ts',
         signature(spec.params, spec.result),

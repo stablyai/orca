@@ -1,5 +1,8 @@
 import { getPluginHostMethodSpec } from '../workers/plugin-host-api'
-import { pluginHostMethodOffered } from '../workers/plugin-host-method-spec'
+import {
+  pluginHostMethodOffered,
+  type PluginHostMethodSpec
+} from '../workers/plugin-host-method-spec'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 import type { PluginSurface } from '../frames/plugin-protocol'
 
@@ -68,4 +71,22 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
     }
   }
   return { granted: true }
+}
+
+/** The capability a passed param needs that the plugin lacks, or null; checked on parsed params. */
+export function missingPluginParamCapability(
+  spec: Pick<PluginHostMethodSpec, 'paramCapabilities'>,
+  params: unknown,
+  grantedCapabilities: readonly string[]
+): { param: string; capability: PluginCapabilityKind } | null {
+  if (!spec.paramCapabilities || typeof params !== 'object' || params === null) {
+    return null
+  }
+  for (const [param, capability] of Object.entries(spec.paramCapabilities)) {
+    const passed = Object.getOwnPropertyDescriptor(params, param)?.value !== undefined
+    if (passed && !grantedCapabilities.includes(capability)) {
+      return { param, capability }
+    }
+  }
+  return null
 }

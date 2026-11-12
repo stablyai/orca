@@ -31,6 +31,7 @@ export function pluginRuntimeRpc(
       {
         // Why the CLI's identity: a mod's action is automation, as an agent's `orca` call is.
         caller: { kind: 'local-cli' },
+        ...(options.plugin ? { plugin: options.plugin } : {}),
         ...(options.signal ? { signal: options.signal } : {}),
         beforeInvoke: () => {
           try {

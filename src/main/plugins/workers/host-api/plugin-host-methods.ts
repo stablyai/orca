@@ -1,7 +1,10 @@
 import { ZodError } from 'zod'
 import { getBoundPluginHostMethod, type PluginHostServices } from './plugin-host-method-bindings'
 import { isQualifiedPluginKey } from '../../../../shared/plugins/manifest/plugin-manifest'
-import { gatePluginHostCall as decidePluginHostCall } from '../../../../shared/plugins/capabilities/plugin-capability-gate'
+import {
+  gatePluginHostCall as decidePluginHostCall,
+  missingPluginParamCapability
+} from '../../../../shared/plugins/capabilities/plugin-capability-gate'
 import type { PluginCapabilityKind } from '../../../../shared/plugins/capabilities/plugin-capabilities'
 import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
 import type {
@@ -65,6 +68,18 @@ export async function executePluginHostCall(
   const prepared = bound.prepare(input.params)
   if (!prepared.ok) {
     return { ok: false, code: 'invalid_params', error: prepared.issue }
+  }
+  const missing = missingPluginParamCapability(
+    bound.spec,
+    prepared.params,
+    input.grantedCapabilities ?? []
+  )
+  if (missing) {
+    return {
+      ok: false,
+      code: 'capability_denied',
+      error: `${missing.param} needs the "${missing.capability}" capability`
+    }
   }
   const services = input.services
   if (!services) {

@@ -12,6 +12,7 @@ import {
 } from '../../workers/host-api/plugin-host-call-scope'
 import { markPluginSavedFileAsDownloaded } from './plugin-save-as-download-mark'
 import { confirmPluginExternalOpen } from './plugin-external-open-consent'
+import { confirmPluginAction } from '../../consent/plugin-action-confirmation'
 import type { Store } from '../../../persistence/loading-store/store'
 import { translateMain } from '../../../i18n/main-i18n'
 import { blockedPluginSaveAsExtension } from '../../../../shared/plugins/frames/plugin-save-as-extensions'
@@ -44,6 +45,16 @@ function callingWindow(scope: PluginHostCallScope): BrowserWindow {
     throw new PluginHostCallError('unavailable', 'the window that made this call is gone')
   }
   return window
+}
+
+/** Where a host confirmation shows: the calling frame's window; for workers, Orca's focused
+ *  main window, else its first. */
+function confirmationWindow(scope: PluginHostCallScope): BrowserWindow | null {
+  if (scope.callerWebContentsId !== undefined) {
+    return callingWindow(scope)
+  }
+  const windows = [...hostWindows].filter((window) => !window.isDestroyed())
+  return windows.find((window) => window.isFocused()) ?? windows[0] ?? null
 }
 
 function admit(window: BrowserWindow, pluginId: string): void {
@@ -80,6 +91,12 @@ export function installPluginDesktopFrameServices(
     return
   }
   services = {
+    async confirm(request, scope) {
+      const { answer } = await confirmPluginAction(confirmationWindow(scope), request)
+      // The question may have stayed open while the plugin was disabled or removed.
+      scope.assertActive()
+      return answer
+    },
     async openExternal(pluginId, url, scope) {
       // Re-checked here: the shared schema already refused other schemes, but this is the sink.
       if (!isPluginExternalUrl(url)) {

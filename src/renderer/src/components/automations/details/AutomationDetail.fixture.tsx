@@ -97,3 +97,17 @@ export const paused = defineFixture({
       automation: { ...automation, enabled: false, prompt: 'Run the nightly sweep.' }
     })
 })
+
+export const createdByPlugin = defineFixture({
+  width: 1000,
+  render: () =>
+    renderDetail({
+      automation: {
+        ...automation,
+        name: 'Nightly dependency check',
+        prompt: 'Check for outdated dependencies and open a PR with safe upgrades.',
+        precheck: null,
+        createdBy: { kind: 'plugin', pluginKey: 'acme.deps', name: 'Dependency Watch' }
+      }
+    })
+})

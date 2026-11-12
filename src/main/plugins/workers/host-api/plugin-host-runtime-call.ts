@@ -5,11 +5,16 @@ import { PluginHostCallError, PluginRuntimeCallError } from './plugin-host-call-
 import type { PluginHostRendererActions } from '../../view/plugin-host-renderer-actions'
 
 /** The runtime RPC the `orca` CLI calls, run in process; rejects with the runtime's error.
- *  `beforeEffect` runs right before the runtime acts, after its own waits; a throw refuses it. */
+ *  `beforeEffect` runs right before the runtime acts, after its own waits; a throw refuses it.
+ *  `plugin` names who the call acts for, which the runtime records where it keeps provenance. */
 export type PluginRuntimeRpc = (
   method: string,
   params: unknown,
-  options?: { signal?: AbortSignal; beforeEffect?: () => void }
+  options?: {
+    signal?: AbortSignal
+    beforeEffect?: () => void
+    plugin?: { key: string; name: string }
+  }
 ) => Promise<unknown>
 
 type Failure = [PluginErrorCode, string]
@@ -86,7 +91,8 @@ export function pluginHostEffect(
   ctx.scope.assertActive()
   return pluginHostRpc(ctx.services)(method, params, {
     ...(ctx.scope.signal ? { signal: ctx.scope.signal } : {}),
-    beforeEffect: () => ctx.scope.assertActive()
+    beforeEffect: () => ctx.scope.assertActive(),
+    plugin: { key: ctx.pluginId, name: ctx.scope.pluginName ?? ctx.pluginId }
   })
 }
 

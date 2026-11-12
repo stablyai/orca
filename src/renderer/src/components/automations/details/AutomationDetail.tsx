@@ -228,6 +228,20 @@ export function AutomationDetail({
           }
         ]
       : []),
+    ...(automation.createdBy
+      ? [
+          {
+            key: 'createdBy',
+            label: t('auto.components.automations.AutomationDetail.createdBy', 'Created by'),
+            value: automation.createdBy.name,
+            title: t(
+              'auto.components.automations.AutomationDetail.createdByPluginTitle',
+              'Plugin {{plugin}}',
+              { plugin: automation.createdBy.pluginKey }
+            )
+          }
+        ]
+      : []),
     ...(automation.extraAgentArgs
       ? [
           {

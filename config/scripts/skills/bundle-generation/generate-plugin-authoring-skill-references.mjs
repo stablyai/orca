@@ -214,6 +214,9 @@ function renderHostApi(sources, { frame, worker }) {
     const spec = hostApi.PLUGIN_HOST_API[name]
     const facts = [
       spec.capability ? `capability ${code(spec.capability)}` : 'no capability',
+      ...Object.entries(spec.paramCapabilities ?? {}).map(
+        ([param, kind]) => `${code(param)} also needs ${code(kind)}`
+      ),
       spec.surfaces.join(', '),
       `since ${hostVersion(sources, spec.since)}`,
       ...(spec.deprecatedSince === undefined
