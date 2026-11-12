@@ -6,10 +6,10 @@ import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
 vi.mock('react-native', () => ({ Text: 'Text', View: 'View' }))
 vi.mock('lucide-react-native', () => ({ GitBranch: 'Icon', Sparkles: 'Icon' }))
 vi.mock('../theme/mobile-theme', () => ({ colors: {}, radii: {}, spacing: {} }))
-vi.mock('../theme/themed-styles', () => ({ themedStyleSheet: (make) => make() }))
+vi.mock('../theme/themed-styles', () => ({ themedStyleSheet: (make: () => unknown) => make() }))
 vi.mock('../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => 'dark' }))
 vi.mock('../i18n/use-mobile-translation', () => ({
-  useMobileTranslation: () => (_key, fallback) => fallback
+  useMobileTranslation: () => (_key: string, fallback: string) => fallback
 }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: () => null }))
 vi.mock('./list/ListGroup', () => ({ ListRow: 'ListRow' }))
