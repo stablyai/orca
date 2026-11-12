@@ -1,8 +1,7 @@
 import type * as pdfjsLib from 'pdfjs-dist'
 import {
-  EventBus,
+  type EventBus,
   PDFFindController,
-  PDFLinkService,
   PDFViewer as PdfJsViewer
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import {
@@ -12,53 +11,21 @@ import {
 } from './pdf-scale-preference'
 import {
   pdfViewPositionCache,
-  setWithLRU,
-  type PdfViewPosition
+  setWithLRU
 } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import {
   buildPdfScrollDestination,
   clampPdfViewPosition,
-  createPdfViewPositionRecorder,
-  readPdfViewPosition
+  createPdfViewPositionRecorder
 } from './pdf-view-position'
-import { createPdfLinkHistory, type PdfLinkHistory } from './pdf-link-history'
+import {
+  attachPdfLinkHistory,
+  createLinkFocusTrackingEventBus,
+  HistoryAwarePdfLinkService,
+  type PdfViewerLinkHistory
+} from './pdf-link-navigation'
 
 const PAGE_WIDTH_REFIT_SETTLE_MS = 150
-
-type PdfLinkHistoryDirection = 'back' | 'forward'
-
-export type PdfViewerLinkHistory = Pick<PdfLinkHistory, 'getState' | 'subscribe'> & {
-  navigate: (direction: PdfLinkHistoryDirection) => void
-}
-
-/** Reports in-document link jumps before pdf.js scrolls, and routes the PDF's GoBack/GoForward actions. */
-class HistoryAwarePdfLinkService extends PDFLinkService {
-  onBeforeJump: () => void = () => {}
-  onHistoryAction: (direction: PdfLinkHistoryDirection) => void = () => {}
-
-  override goToDestination(dest: Parameters<PDFLinkService['goToDestination']>[0]): Promise<void> {
-    this.onBeforeJump()
-    return super.goToDestination(dest)
-  }
-
-  override goToPage(val: number | string): void {
-    this.onBeforeJump()
-    super.goToPage(val)
-  }
-
-  override setHash(hash: string): void {
-    this.onBeforeJump()
-    super.setHash(hash)
-  }
-
-  override executeNamedAction(action: string): void {
-    if (action === 'GoBack' || action === 'GoForward') {
-      this.onHistoryAction(action === 'GoBack' ? 'back' : 'forward')
-      return
-    }
-    super.executeNamedAction(action)
-  }
-}
 
 const USER_SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
 
@@ -99,11 +66,8 @@ export function createPdfViewerSession({
   dispose: () => void
 } {
   let cancelled = false
-  const eventBus = new EventBus()
-
+  const { eventBus, cancelPendingLinkTargetFocus } = createLinkFocusTrackingEventBus()
   const linkService = new HistoryAwarePdfLinkService({ eventBus })
-  const linkHistory = createPdfLinkHistory()
-  let lastPosition: PdfViewPosition | null = null
 
   const findController = new PDFFindController({ linkService, eventBus })
 
@@ -154,7 +118,7 @@ export function createPdfViewerSession({
     : null
 
   const handleUpdateViewArea = (evt: { location?: unknown }): void => {
-    lastPosition = readPdfViewPosition(evt?.location) ?? lastPosition
+    linkNavigation.recordViewArea(evt?.location)
     recorder?.record(evt?.location)
   }
 
@@ -167,27 +131,13 @@ export function createPdfViewerSession({
     recorder?.arm()
   }
 
-  linkService.onBeforeJump = (): void => {
-    if (lastPosition) {
-      linkHistory.recordJump(lastPosition)
-    }
-    // Why: a keyboard-activated link moves the reader without pointer input on the container.
-    markUserMoved()
-  }
-  const navigateLinkHistory = (direction: PdfLinkHistoryDirection): void => {
-    if (cancelled) {
-      return
-    }
-    const target =
-      direction === 'back' ? linkHistory.goBack(lastPosition) : linkHistory.goForward(lastPosition)
-    const clamped = target ? clampPdfViewPosition(target, viewer.pagesCount) : null
-    if (!clamped) {
-      return
-    }
-    markUserMoved()
-    viewer.scrollPageIntoView(buildPdfScrollDestination(clamped))
-  }
-  linkService.onHistoryAction = navigateLinkHistory
+  const linkNavigation = attachPdfLinkHistory({
+    viewer,
+    linkService,
+    cancelPendingLinkTargetFocus,
+    isActive: () => !cancelled,
+    onReaderMoved: markUserMoved
+  })
 
   const handlePagesInit = (): void => {
     // Why: pdf.js drops a preset scale set before its page views exist, leaving the PDF at 100%.
@@ -290,6 +240,7 @@ export function createPdfViewerSession({
       clearTimeout(refitTimer)
     }
     recorder?.dispose()
+    cancelPendingLinkTargetFocus()
     eventBus.off('pagesinit', handlePagesInit)
     eventBus.off('pagesloaded', handlePagesLoaded)
     eventBus.off('updateviewarea', handleUpdateViewArea)
@@ -319,11 +270,7 @@ export function createPdfViewerSession({
     viewer,
     eventBus,
     findController,
-    linkHistory: {
-      navigate: navigateLinkHistory,
-      getState: linkHistory.getState,
-      subscribe: linkHistory.subscribe
-    },
+    linkHistory: linkNavigation.linkHistory,
     dispose
   }
 }

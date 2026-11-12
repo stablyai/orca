@@ -3,8 +3,7 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { pdfViewerOwnsFind } from './use-pdf-viewer-find-shortcut'
-
-type PdfLinkHistoryDirection = 'back' | 'forward'
+import type { PdfLinkHistoryDirection } from './pdf-link-navigation'
 
 // Mouse side buttons, mapped the same way as in remote browser pages.
 const MOUSE_BACK_BUTTON = 3

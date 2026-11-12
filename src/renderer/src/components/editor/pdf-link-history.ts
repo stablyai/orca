@@ -13,8 +13,11 @@ export type PdfLinkHistory = {
   subscribe: (listener: () => void) => () => void
 }
 
-function samePosition(a: PdfViewPosition | undefined, b: PdfViewPosition): boolean {
-  return !!a && a.pageNumber === b.pageNumber && a.top === b.top && a.left === b.left
+export function samePdfViewPosition(
+  a: PdfViewPosition | null | undefined,
+  b: PdfViewPosition | null | undefined
+): boolean {
+  return !!a && !!b && a.pageNumber === b.pageNumber && a.top === b.top && a.left === b.left
 }
 
 /** Browser-style back/forward over one PDF's in-document link jumps; memory only. */
@@ -49,8 +52,8 @@ export function createPdfLinkHistory(maxEntries = MAX_PDF_LINK_HISTORY_ENTRIES):
 
   return {
     recordJump: (from) => {
-      // Why: pdf.js routes some links through two link-service calls for one click.
-      if (!samePosition(back.at(-1), from)) {
+      // Why: a `#nameddest=` hash reaches the history hook again through goToDestination.
+      if (!samePdfViewPosition(back.at(-1), from)) {
         back.push(from)
         if (back.length > maxEntries) {
           back.shift()

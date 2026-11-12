@@ -25,7 +25,8 @@ import type { PdfLinkHistoryState } from './pdf-link-history'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { useTranslate } from '@/i18n/use-translate'
 import { createPdfDocumentLoader, type PdfDocumentLoader } from './pdf-document-loader'
-import { createPdfViewerSession, type PdfViewerLinkHistory } from './pdf-viewer-session'
+import { createPdfViewerSession } from './pdf-viewer-session'
+import type { PdfLinkHistoryDirection, PdfViewerLinkHistory } from './pdf-link-navigation'
 import {
   applyPdfScalePreference,
   stepPdfScalePreference,
@@ -213,7 +214,7 @@ function PdfDocumentViewer({
   const openFind = useCallback(() => setFindOpen(true), [])
   usePdfViewerFindShortcut({ rootRef, ownsCommands: isCommandOwner, keybindings, openFind })
 
-  const navigateLinkHistory = useCallback((direction: 'back' | 'forward') => {
+  const navigateLinkHistory = useCallback((direction: PdfLinkHistoryDirection) => {
     linkHistoryRef.current?.navigate(direction)
   }, [])
   usePdfLinkHistoryInput({
