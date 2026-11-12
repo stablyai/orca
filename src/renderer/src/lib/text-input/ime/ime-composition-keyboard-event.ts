@@ -113,9 +113,10 @@ export function useImeEnterGestureOwnership(): {
         stateRef.current.composing = false
         if (HANGUL_ONLY.test(committedText)) {
           stateRef.current.pendingEnter = null
-        } else if (compositionWasActive && !stateRef.current.pendingEnter) {
-          // IBus can finish composition before its only unmarked confirming Enter.
-          stateRef.current.pendingEnter = {}
+        } else if (compositionWasActive) {
+          // IBus can finish composition before its only unmarked confirming Enter, and a marked
+          // commit key may never send the keyup that would otherwise expire its carry.
+          stateRef.current.pendingEnter ??= {}
           expirePendingEnter()
         }
       },
