@@ -202,7 +202,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
 
   isWorkspaceNotificationMuted(workspaceId: string): boolean {
     const store = this.store
-    const resolvedWorktrees = this.resolvedWorktrees.peek()?.worktrees ?? null
+    // Agent transitions invalidate the cache just before their push; a cleared cache would fail open.
+    const resolvedWorktrees = this.resolvedWorktrees.peekLastKnown()?.worktrees ?? null
     return !!store && isWorkspaceNotificationMuted({ store, resolvedWorktrees }, workspaceId)
   }
 
