@@ -33,7 +33,6 @@ export async function createLiveProfileStateStore(
       store: new Store({
         dataFile: options.dataFile,
         storageAuthority: options.storageAuthority,
-        initializeHomeWorkspace: options.initializeHomeWorkspace,
         profileStateAuthority: authority,
         initialAuthorityState: {
           ...initialAuthorityState,

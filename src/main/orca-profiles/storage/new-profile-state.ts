@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { createInitialHomeWorkspaceState } from '../../persistence/loading-store/profile-loading/initial-home-workspace'
 import { LoadedCohortMigrationOperations } from '../../persistence/loading-store/profile-loading/loaded-cohort-migrations'
 import { acquireProfileStateRuntimeAdmission } from '../../persistence/profile-state/access/profile-state-access'
 import '../../persistence/profile-state/database/profile-state-database'
@@ -47,14 +46,13 @@ export function initializeNewOrcaProfileState(
         : cohorts.migrateTelemetry(defaults, false),
       false
     )
-    const initialState = createInitialHomeWorkspaceState(initial)
     const migrated = migrateProfileStateToSqlite({
       dataFile,
       databaseFile,
       profileId,
       expectedLegacyJson: undefined,
       serializedState: JSON.stringify({
-        ...initialState,
+        ...initial,
         chatUiLaunchTipAudience: cohorts.captureChatUiLaunchTipAudience(undefined)
       })
     })

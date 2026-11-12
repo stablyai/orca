@@ -11,7 +11,6 @@ export type ProfileStateStoreFactoryOptions = {
   databaseFile: string
   profileId: string
   storageAuthority?: AutomationStorageAuthority
-  initializeHomeWorkspace?: boolean
 }
 
 export class ProfileStateStoreFactoryError extends Error {
@@ -40,7 +39,6 @@ export function createProfileStateStore(
       store: new Store({
         dataFile: options.dataFile,
         storageAuthority: options.storageAuthority,
-        initializeHomeWorkspace: options.initializeHomeWorkspace,
         profileStateAuthority: initialState.authority,
         initialAuthorityState: initialState
       })
