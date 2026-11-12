@@ -122,7 +122,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         activeWorkspaceExecutionHostId: preview
           ? getWorktreeExecutionHostId(preview.worktree, preview.repo)
           : focused
-            ? getWorktreeExecutionHostId(focused)
+            ? getWorktreeExecutionHostId(focused, undefined)
             : activeWorkspaceExecutionHostId,
         lastActiveWorkspace: lastActiveWorkspaceRef.current,
         navHistory: worktreeNavHistory,

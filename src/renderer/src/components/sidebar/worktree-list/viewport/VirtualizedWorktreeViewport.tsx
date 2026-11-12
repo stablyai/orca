@@ -386,7 +386,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         aria-activedescendant={getActiveDescendantOptionId({
           activeWorktreeId: props.focusedWorktree?.id ?? rowProps.activeWorktreeId,
           activeWorkspaceExecutionHostId: props.focusedWorktree
-            ? getWorktreeExecutionHostId(props.focusedWorktree)
+            ? getWorktreeExecutionHostId(props.focusedWorktree, undefined)
             : rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
