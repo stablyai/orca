@@ -6,7 +6,7 @@ import {
   getHostedReviewCreationEligibilityMock
 } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import '../../git/repo-default-base-ref'
+import '../../git/refs/resolution/repo-default-base-ref'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { TEST_REPO_ID, TEST_REPO_PATH, store } from './orca-runtime-test-fixtures.spec'
 

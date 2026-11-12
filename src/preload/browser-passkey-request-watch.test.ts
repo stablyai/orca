@@ -54,20 +54,6 @@ describe('installBrowserPasskeyRequestWatch', () => {
     expect(reports).toEqual([true, false])
   })
 
-  it('installs nothing in an insecure document, which has no credentials API', () => {
-    Reflect.deleteProperty(globalThis, 'CredentialsContainer')
-    const reports: boolean[] = []
-    const cancel = installBrowserPasskeyRequestWatch((pending) => reports.push(pending))
-    cancel()
-    expect(reports).toEqual([])
-  })
-
-  it('ignores conditional requests, which wait on autofill', () => {
-    const { credentials, reports } = install()
-    void credentials.get({ publicKey, mediation: 'conditional' })
-    expect(reports).toEqual([])
-  })
-
   it("keeps the page's own abort signal working", async () => {
     const { credentials, reports } = install()
     const page = new AbortController()

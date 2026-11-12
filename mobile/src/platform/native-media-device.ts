@@ -2,6 +2,7 @@ import * as Clipboard from 'expo-clipboard'
 import * as DocumentPicker from 'expo-document-picker'
 import { Directory, File as FsFile, Paths } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
+import { agentReadableLibraryImageOptions } from '../files/attachments/mobile-image-source-picker'
 import type { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
 import type { NativeMediaDeps } from './native-media'
 
@@ -63,10 +64,7 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
         base64: false,
         allowsMultipleSelection: multiple,
         ...(multiple ? { selectionLimit: limit, orderedSelection: true } : {}),
-        quality: 1,
-        // iOS otherwise hands back HEIC as-is, which agents can't read; Compatible gives JPEG.
-        preferredAssetRepresentationMode:
-          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible
+        ...agentReadableLibraryImageOptions()
       }),
     // DocumentPicker has no selection cap; enforce remaining room again before staging and minting.
     launchFiles: ({ multiple }) =>

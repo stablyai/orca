@@ -1,12 +1,13 @@
-import { normalizePRCheckHeadSha } from '../../../../shared/github/pr-check-head'
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { githubRepositoryWebHost, type GitHubApiRepository } from '../../github-api-repository'
+import { normalizePRCheckHeadSha } from '../../../../shared/github/checks/pr-check-head'
+import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
+import { githubRepositoryWebHost } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,
   mapCommitStatusRESTStatus,
   mapCommitStatusRESTConclusion
-} from '../../mappers'
+} from '../../api/github-read-response'
 import type {
   GraphQLPRChecksResponse,
   GraphQLCheckRunContext,

@@ -31,6 +31,7 @@ vi.mock('expo-clipboard', () => ({
   getImageAsync: () => Promise.resolve({ data: 'data:image/png;base64,AQID' })
 }))
 vi.mock('expo-document-picker', () => ({}))
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-image-picker', () => ({}))
 vi.mock('expo-file-system', () => ({
   File: class {

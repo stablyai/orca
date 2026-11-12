@@ -124,4 +124,43 @@ describe('Store', () => {
     expect(updated.notifications.enabled).toBe(false)
     expect(updated.notifications.customSoundPath).toBe('/sounds/custom.wav')
   })
+
+  it('repairs workspace cleanup rules when loading and when writing', async () => {
+    writeDataFile({
+      settings: {
+        workspaceCleanupPolicy: { merged: { enabled: true }, unchanged: { afterDays: -4 } }
+      },
+      repos: [
+        { ...makeRepo({ id: 'r1' }), workspaceCleanupPolicy: { mode: 'off', extra: 1 } },
+        { ...makeRepo({ id: 'r2', path: '/repo2' }), workspaceCleanupPolicy: { mode: 'sometimes' } }
+      ]
+    })
+    const store = await createStore()
+    const offRules = {
+      merged: { enabled: false },
+      unchanged: { enabled: false, afterDays: 1 },
+      inactive: { enabled: false, afterDays: 30, action: 'archive' },
+      automationRuns: { enabled: false },
+      orchestrationWorkers: { enabled: false },
+      keepWhen: 'any-local-files'
+    }
+    expect(store.getSettings().workspaceCleanupPolicy).toEqual({
+      ...offRules,
+      merged: { enabled: true }
+    })
+    expect(store.getRepo('r1')?.workspaceCleanupPolicy).toEqual({ mode: 'off' })
+    expect(store.getRepo('r2')).not.toHaveProperty('workspaceCleanupPolicy')
+
+    store.updateSettings({
+      // @ts-expect-error -- Malformed writes can arrive from untyped writers.
+      workspaceCleanupPolicy: { inactive: { enabled: true, action: 'delete', afterDays: 'soon' } }
+    })
+    expect(store.getSettings().workspaceCleanupPolicy).toEqual({
+      ...offRules,
+      inactive: { enabled: true, afterDays: 30, action: 'delete' }
+    })
+
+    store.updateRepo({ id: 'r1' }, { workspaceCleanupPolicy: null })
+    expect(store.getRepo('r1')).not.toHaveProperty('workspaceCleanupPolicy')
+  })
 })

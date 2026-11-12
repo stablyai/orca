@@ -1,6 +1,6 @@
 import { mergeCommandEnvironment } from '../../../shared/command-environment'
 import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
-import { cleanGeneratedCommitMessage } from '../../../shared/source-control/ai/generation/commit-message-agent-output'
+import { cleanAgentAnswer } from '../../text-generation/source-control-agent-failure'
 import { wslDistroForCommand } from '../../../shared/wsl-paths'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { OpenCodeTextTaskError, runOwnedOpenCodeTextTask } from './opencode-owned-text-task'
@@ -82,7 +82,7 @@ export async function runOpenCodeTextTask(input: {
           stop: killSourceControlAgentProcess,
           shouldExecute: input.shouldExecute
         })
-    const cleaned = cleanGeneratedCommitMessage(rawOutput)
+    const cleaned = cleanAgentAnswer(rawOutput, input.operation)
     if (!cleaned) {
       throw new OpenCodeTextTaskError('session')
     }

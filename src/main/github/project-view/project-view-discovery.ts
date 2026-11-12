@@ -1,11 +1,12 @@
-import type { ListAccessibleProjectsArgs } from '../../../shared/github/project-request-types'
-import type { ListAccessibleProjectsResult } from '../../../shared/github/project-result-types'
+import type { ListAccessibleProjectsArgs } from '../../../shared/github/projects/project-request-types'
+import type { ListAccessibleProjectsResult } from '../../../shared/github/projects/project-result-types'
 import type {
   GitHubProjectOwnerType,
   GitHubProjectSummary
-} from '../../../shared/github/project-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
-import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
+} from '../../../shared/github/projects/project-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
 import { driftError } from './project-error-classification'
 import { rememberOwnerType } from './project-view-cache'
 

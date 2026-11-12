@@ -2,10 +2,11 @@ import type {
   GitHubWorkItem,
   GitLabWorkItem,
   GitLabTodo,
-  LinearIssue,
   SetupDecision
 } from './mobile-tasks-provider-detail-types'
-import type { WorkspaceAgentChoice, SparsePreset } from './mobile-tasks-dependencies'
+import type { LinearMobileIssue as LinearIssue } from './providers/linear/linear-mobile-issue-read'
+import type { WorkspaceAgentChoice } from '../new-workspace/creation/workspace-agent-selection'
+import type { SparsePreset } from '../../../src/shared/worktree/create-types'
 import type { GitHubProjectRow } from './mobile-tasks-view-state-types'
 import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 

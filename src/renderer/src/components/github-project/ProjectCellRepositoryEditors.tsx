@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GitHubProjectRow } from '../../../../shared/github/project-types'
+import type { GitHubProjectRow } from '../../../../shared/github/projects/project-types'
 import { EmptyProjectCell, ProjectLabelChip, ProjectUserChip } from './ProjectCellValueEditors'
 
 type RepositoryEditorProps = {

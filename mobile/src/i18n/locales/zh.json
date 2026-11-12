@@ -356,8 +356,7 @@
       "pausedState": "已暂停",
       "queuedState": "已排队",
       "resume": "继续",
-      "resumeSending": "继续发送排队的消息",
-      "title": "排队的消息"
+      "resumeSending": "继续发送排队的消息"
     },
     "offlineQueue": {
       "failed": "无法发送 — 点按“发送”重试",
@@ -2323,20 +2322,16 @@
       "loadFailed": "无法加载 PR"
     },
     "queuedCardText": {
-      "showLess": "收起",
       "showLessHint": "收起消息的部分内容",
-      "showMore": "显示更多",
       "showMoreHint": "显示完整消息"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "删除队列中的这条消息",
       "images_one": "{{count}} 张图片",
       "images_other": "{{count}} 张图片",
       "moreActions": "更多操作",
       "send": "发送",
       "sendAgainHint": "再次发送此消息",
       "sendHint": "发送此消息",
-      "showLessHint": "收起消息的部分内容",
       "steer": "立即发送",
       "steerHint": "提交且不中断模型"
     },
@@ -2456,8 +2451,7 @@
     "tabStrip": {
       "checkingCapabilities": "正在检查桌面支持的功能，请稍后重试",
       "newTab": "新标签页",
-      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用",
-      "tabStatus": "{{title}}，{{status}}"
+      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清空终端",
@@ -2500,6 +2494,10 @@
     },
     "useAttachmentInputLeaseGate": {
       "reconnecting": "添加附件失败（重新连接中）"
+    },
+    "useCloseActions": {
+      "closeFailed": "无法关闭标签页。请重试。",
+      "closeFailedDesktopNotReady": "无法关闭标签页。电脑上的 Orca 仍在加载，请稍后重试。"
     },
     "useContentCreateActions": {
       "browserCommandFailed": "浏览器命令执行失败",
