@@ -5,15 +5,20 @@ import {
   type GitBranchCleanupExecOptions
 } from '../../../../shared/git/branches/git-branch-cleanup'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/git-capability-state'
+import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/host-routing/git-capability-state'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { createLocalGitObjectQuarantine } from '../../local-git-object-quarantine'
+import { createLocalGitObjectQuarantine } from '../../objects/local-git-object-quarantine'
 import { isBranchReservedByWorktreeOperation } from '../../../../shared/git/worktrees/git-worktree-admin'
 import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import { isBranchCheckedOutInWorktreeError } from '../../../../shared/git/branches/git-branch-delete-refusal'
-import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from '../worktree-operation-options'
-import { gitExecOptions, normalizeLocalBranchRef } from '../worktree-operation-options'
+
+import {
+  type GitWorktreeExecOptions,
+  type RemoveWorktreeOptions,
+  gitExecOptions,
+  normalizeLocalBranchRef
+} from '../worktree-operation-options'
 
 export async function deleteBranchAfterWorktreeRemoval(
   repoPath: string,

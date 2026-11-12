@@ -2897,8 +2897,7 @@
     "tabStrip": {
       "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes",
       "newTab": "Nova aba",
-      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpar Terminal",
@@ -3220,8 +3219,6 @@
     },
     "presentation": {
       "loadingTabs": "Carregando guias",
-      "oneTab": "1 guia",
-      "tabCount": "{{tabCount}} guias",
       "tapToRetry": "{{status}} — toque para tentar novamente"
     },
     "documentReaders": {

@@ -3,7 +3,7 @@ import type { ClaudePermissionHookChannel } from '../../../../agent-hooks/server
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
-import type { ClaudeToolResult } from './claude-tool-result-close'
+import type { ClaudeToolRecord } from './claude-tool-result-close'
 import type {
   WorkerApprovalOutcome,
   WorkerApprovalPayload
@@ -20,11 +20,11 @@ export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'no
   processIncarnation: (handle: string) => string | null
   /** The pane's screen once it has applied every PTY chunk; null while it lags or is unreadable. */
   readScreen: (paneKey: string) => readonly string[] | null
-  /** The tool_result Claude's transcript records for this tool call, once written. */
-  readToolResult: (call: {
+  /** The hook decision and tool_result Claude's transcript records for this tool call, once written. */
+  readToolRecord: (call: {
     transcriptPath: string
     toolUseId: string
-  }) => Promise<ClaudeToolResult | null>
+  }) => Promise<ClaudeToolRecord | null>
   now: () => number
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
 }
@@ -45,7 +45,7 @@ export type TerminalWorkerApprovalHold = {
   dialogSeen: boolean
   /** Its card already closed; the tool's result may still name how, without waking anyone. */
   refinable: boolean
-  /** Its PostToolUse arrived while an answer was in flight: the tool ran. */
+  /** Its PostToolUse or PostToolUseFailure arrived while an answer was in flight: the tool ran. */
   ranSeen: boolean
   expiresAt?: string
   /** The coordinator was told about it, so it is owed one closing line. */

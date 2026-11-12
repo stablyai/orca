@@ -6,10 +6,10 @@ import {
   getRepoSearchRefsProbeLimit,
   isRepoSearchRefsRequestLimit
 } from '../../../shared/repo-search-limits'
-import { getBaseRefDefault } from '../../git/repo-default-base-ref'
-import { getRemoteCount } from '../../git/repo'
-import { searchRemoteRefPage } from '../../git/repo-remote-ref-search'
-import { searchBaseRefDetails } from '../../git/repo-base-ref-search'
+import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../git/refs/resolution/repo-default-base-ref'
+import { getRemoteCount } from '../../git/remotes/repo-remote-queries'
+import { searchRemoteRefPage } from '../../git/refs/resolution/repo-remote-ref-search'
+import { searchBaseRefDetails } from '../../git/refs/resolution/repo-base-ref-search'
 import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 

@@ -76,8 +76,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   // Lazy: the database can open, and arm relays, while the runtime is still constructing.
   declare private peerMailRelay: PeerMailRelay | undefined
 
-  override ensureOrchestrationFederationRelay(runId?: string): void {
-    super.ensureOrchestrationFederationRelay(runId)
+  override ensureOrchestrationFederationRelay(
+    runId?: string,
+    options?: { keepAwake?: boolean }
+  ): void {
+    super.ensureOrchestrationFederationRelay(runId, options)
     this.peerMailRelay ??= new PeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
     this.peerMailRelay.ensure()
   }

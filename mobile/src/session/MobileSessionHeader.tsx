@@ -7,7 +7,7 @@ import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
 import { MobileSourceControlButton } from './MobileSourceControlButton'
-import { MobileSessionTabStrip } from './tabs/MobileSessionTabStrip'
+import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
 import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { styles } from './mobile-session-styles'
@@ -61,11 +61,11 @@ export function MobileSessionHeader({
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
   const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
-  // Bar buttons otherwise leave less than two readable tabs on a narrow header.
+  // Bar buttons otherwise leave the tab bar too narrow to read on a narrow header.
   const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
   const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed
   const tabStrip = hasTabs ? (
-    <MobileSessionTabStrip
+    <MobileSessionTabBar
       controller={controller}
       inTopBar={tabsInTopBar}
       actionsCollapsed={actionsCollapsed}

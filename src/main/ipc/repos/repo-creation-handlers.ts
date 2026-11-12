@@ -1,5 +1,4 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -11,10 +10,13 @@ import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../share
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
-import { probeGitAvailability } from '../../git/git-availability'
-import { gitExecFileAsync } from '../../git/runner'
-import { inspectGitRepoForRegistrationAsync } from '../../git/repo'
-import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../../git/repo-clone-path'
+import { probeGitAvailability } from '../../git/command-runner/host-routing/git-availability'
+import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+import {
+  getClonePathComparisonKey,
+  getSavedProjectPathKeys
+} from '../../git/repositories/cloning/repo-clone-path'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
