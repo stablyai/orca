@@ -9,6 +9,7 @@ import { agentName } from '@/components/settings/agent-accounts/orca-cloud-accou
 import { useTranslate } from '@/i18n/use-translate'
 import { openCloudSecretsAsk } from '../cloud-secrets-ask/CloudSecretsMissingNotice'
 import { useWorktreeCloudAgentHold } from './CloudAgentHeldMark'
+import { useWorkspaceAgentSignIn } from './use-cloud-agent-row-sign-in'
 import { mostUrgentAttention, type CloudCardAttention } from './cloud-workspace-card-model'
 
 let detailsOpen = false
@@ -36,12 +37,21 @@ export function useCloudCardAttention(workspaceId: string): CloudCardAttention |
   const t = useTranslate()
   const hold = useWorktreeCloudAgentHold(workspaceId)
   const secrets = useCloudSecretsMissing(workspaceId)
+  // A running agent whose sign-in lapsed (the row's "Sign-in expired" / "Needs sign-in").
+  const signIn = useWorkspaceAgentSignIn(workspaceId)
   return mostUrgentAttention([
     hold
       ? {
           kind: hold.reason === 'accountExpired' ? 'agentExpired' : 'agentNotSetUp',
           agent: agentName(hold.agent, t),
           tabId: cloudAgentHoldTabId(hold.paneKey)
+        }
+      : null,
+    signIn
+      ? {
+          kind: signIn.signIn === 'expired' ? 'agentExpired' : 'agentNotSetUp',
+          agent: agentName(signIn.agent, t),
+          tabId: signIn.tabId
         }
       : null,
     secrets && secrets.names.length > 0

@@ -142,6 +142,11 @@ export const runningAttention = card({
   id: 'card-attention',
   attention: { kind: 'agentNotSetUp', agent: 'Claude', tabId: 'tab-1' }
 })
+/** A running agent's sign-in expired: the row's "Sign-in expired", here with the way to Renew. */
+export const runningSignInExpired = card({
+  id: 'card-expired',
+  attention: { kind: 'agentExpired', agent: 'Claude', tabId: 'tab-1' }
+})
 /** Details open: the bars, uptime and sandbox hours. */
 export const detailsOpen = card({ id: 'card-details', details: true })
 /** The sub-panel with the mirror off: the two switches and the .context status. */

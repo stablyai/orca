@@ -26,12 +26,19 @@ import {
   subscribeHostAgentSignInReports
 } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
 import { cloudAgentAccountActiveSince } from '@/lib/orca-cloud/cloud-agent-account-active-since'
-import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
+import {
+  HOST_AGENT_SIGN_IN_AGENT_NAME,
+  type HostAgentSignInAgent
+} from '../../../../shared/host-agent-sign-in-status'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 const subscribeNothing = (): (() => void) => () => {}
 
-function orcaCloudEnvironmentIdForWorktree(state: AppState, worktreeId: string): string | null {
+export function orcaCloudEnvironmentIdForWorktree(
+  state: AppState,
+  worktreeId: string
+): string | null {
   const worktree = findWorktreeById(state, worktreeId)
   if (!worktree) {
     return null
@@ -116,4 +123,62 @@ export function useCloudAgentRowStatus(
     agentName: HOST_AGENT_SIGN_IN_AGENT_NAME[signInAgent],
     tooltip: sendTargetStatus ? null : cloudAgentRowSignInTooltip(signIn, t)
   }
+}
+
+type WorkspaceAgentPane = { agent: HostAgentSignInAgent; tabId: string; turnEndedAt?: number }
+
+/**
+ * The calm card's sign-in attention: the first Claude/Codex pane in this cloud workspace whose
+ * agent the row would mark "Needs sign-in" or "Sign-in expired" (same rule as the row), with the
+ * tab that holds its strip.
+ */
+export function useWorkspaceAgentSignIn(
+  workspaceId: string
+): { agent: HostAgentSignInAgent; signIn: CloudAgentRowSignIn; tabId: string } | null {
+  const environmentId = useAppStore((s) => orcaCloudEnvironmentIdForWorktree(s, workspaceId))
+  // A string key: the selector runs on every store change and must return a stable value.
+  const panesKey = useAppStore((s) => {
+    if (!environmentId) {
+      return ''
+    }
+    const tabIds = new Set((s.tabsByWorktree[workspaceId] ?? []).map((tab) => tab.id))
+    const panes: WorkspaceAgentPane[] = []
+    for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
+      const tabId = parsePaneKey(paneKey)?.tabId
+      const agent = entry ? cloudRowSignInAgent(entry.agentType ?? '') : null
+      if (tabId && agent && tabIds.has(tabId)) {
+        panes.push({ agent, tabId, turnEndedAt: entry?.turnEndedAt })
+      }
+    }
+    return JSON.stringify(panes)
+  })
+  const accounts = useSyncExternalStore(
+    environmentId ? subscribeOrcaCloudAgentAccounts : subscribeNothing,
+    readOrcaCloudAgentAccounts,
+    readOrcaCloudAgentAccounts
+  )
+  const report = useSyncExternalStore(
+    environmentId ? subscribeHostAgentSignInReports : subscribeNothing,
+    () => (environmentId ? readHostAgentSignInReport(environmentId) : null),
+    () => null
+  )
+  if (!environmentId || !panesKey) {
+    return null
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: built just above from WorkspaceAgentPane values
+  for (const pane of JSON.parse(panesKey) as WorkspaceAgentPane[]) {
+    const signIn = cloudAgentRowSignIn(
+      pane.agent,
+      accounts,
+      hostAgentSignInEntry(report, pane.agent),
+      {
+        turnEndedAt: pane.turnEndedAt,
+        activeSince: cloudAgentAccountActiveSince(pane.agent)
+      }
+    )
+    if (signIn) {
+      return { agent: pane.agent, signIn, tabId: pane.tabId }
+    }
+  }
+  return null
 }
