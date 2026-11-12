@@ -93,7 +93,15 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (applied) {
       this.producerProgress.retireOwner(applied)
       if (origin === 'hook' && !restated && incoming.hookEventName && !incoming.isReplay) {
-        this.producerProgress.observe(incoming, now)
+        this.producerProgress.observe(
+          {
+            ...incoming,
+            agentPresence: applied.agentPresence,
+            providerSession: applied.providerSession,
+            payload: { ...incoming.payload, agentType: applied.payload.agentType }
+          },
+          now
+        )
       }
     }
     // Claude can still block the prompt after this hook, and its idle may already have landed.

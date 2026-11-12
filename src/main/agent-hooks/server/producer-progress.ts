@@ -84,7 +84,10 @@ export class ProducerProgressStore {
     row.lastProducerEventAt = now
     const key = JSON.stringify([event.toolAgentId ?? '', event.toolUseId ?? ''])
     if (event.hookEventName === 'PreToolUse' && event.toolUseId) {
-      row.tools.set(key, { name: event.payload.toolName ?? 'a tool', startedAt: now })
+      row.tools.set(
+        key,
+        row.tools.get(key) ?? { name: event.payload.toolName ?? 'a tool', startedAt: now }
+      )
     } else if (
       event.hookEventName === 'PostToolUse' ||
       event.hookEventName === 'PostToolUseFailure'
