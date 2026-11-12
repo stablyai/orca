@@ -27,6 +27,8 @@ export function useNativeChatToolRunDetailRoom({
       total += height
     }
     let written = -1
+    let saved: ReadonlyMap<string, number> = new Map(heights)
+    let savedIsCurrent = true
     const write = (): void => {
       const scroller = scrollerRef.current
       if (scroller && total !== written) {
@@ -36,6 +38,10 @@ export function useNativeChatToolRunDetailRoom({
       }
     }
     const set = (key: string, height: number): void => {
+      if ((heights.get(key) ?? 0) === height) {
+        return
+      }
+      savedIsCurrent = false
       total += height - (heights.get(key) ?? 0)
       if (height > 0) {
         heights.set(key, height)
@@ -56,7 +62,14 @@ export function useNativeChatToolRunDetailRoom({
         }
         write()
       },
-      snapshot: (): ReadonlyMap<string, number> => new Map(heights)
+      // Copied only after a height changed: the reader's scrolling saves the same map again.
+      snapshot: (): ReadonlyMap<string, number> => {
+        if (!savedIsCurrent) {
+          saved = new Map(heights)
+          savedIsCurrent = true
+        }
+        return saved
+      }
     }
   })
   // Rows that left the run give back their room; the first pass also applies a returning run's room.

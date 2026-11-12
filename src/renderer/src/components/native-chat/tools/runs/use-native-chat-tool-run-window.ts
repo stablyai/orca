@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { elementScroll, measureElement, useVirtualizer } from '@tanstack/react-virtual'
 import { VIRTUALIZED_LIST_OVERSCAN } from '@/components/virtualized-list'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
@@ -68,18 +68,30 @@ export function useNativeChatToolRunWindow({
   const measurements = virtualizer.measurementsCache
   // Nothing measurable (a hidden pane): keep what was drawn rather than unmounting the window.
   const lastDrawnRef = useRef<readonly number[]>([])
-  const indexes = drawsEveryRow
-    ? rows.map((_, index) => index)
+  // Every row drawn: the same array while only the scroll position moves, so the rows are not rebuilt.
+  const everyRow = useMemo<readonly NativeChatToolRunDrawnRow[] | null>(
+    () =>
+      drawsEveryRow
+        ? Array.from({ length: rows.length }, (_, index) => ({ index, start: 0, end: 0 }))
+        : null,
+    [drawsEveryRow, rows.length]
+  )
+  const indexes = everyRow
+    ? null
     : virtualItems.length > 0
       ? virtualItems.map((item) => item.index)
       : lastDrawnRef.current.filter((index) => index < rows.length)
   useLayoutEffect(() => {
-    lastDrawnRef.current = indexes
+    if (indexes) {
+      lastDrawnRef.current = indexes
+    }
   })
-  const drawn: NativeChatToolRunDrawnRow[] = indexes.map((index) => ({
-    index,
-    start: measurements[index]?.start ?? 0,
-    end: measurements[index]?.end ?? 0
-  }))
+  const drawn: readonly NativeChatToolRunDrawnRow[] =
+    everyRow ??
+    (indexes ?? []).map((index) => ({
+      index,
+      start: measurements[index]?.start ?? 0,
+      end: measurements[index]?.end ?? 0
+    }))
   return { virtualizer, measureRow: virtualizer.measureElement, totalSize, drawn }
 }

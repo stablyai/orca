@@ -98,25 +98,44 @@ export function useNativeChatToolRunPins({
     rows.length
   ])
 
-  // Only a visible windowed run tracks selection: a hidden one cannot be copied from, and one drawing every row needs no span.
-  const tracksSelection = isVisible && !drawsEveryRow
+  // A hidden run cannot be copied from; a visible one tracks selection even while drawing every row,
+  // so the span is already known when it goes back to its window.
+  const tracksSelection = isVisible
+  // One array per row count: the virtualizer keeps its items while the same array comes back, so
+  // scrolling a run that draws every row rebuilds nothing.
+  const everyIndex = useMemo(
+    () => Array.from({ length: rows.length }, (_, index) => index),
+    [rows.length]
+  )
+  // A selection's rows plus the pins, reused while the window stays inside the selection.
+  const span = tracksSelection ? selectionSpan : null
+  const spanned = useMemo(() => {
+    if (!span) {
+      return null
+    }
+    const indexes = new Set(pinned)
+    for (let index = span[0]; index <= Math.min(span[1], rows.length - 1); index++) {
+      indexes.add(index)
+    }
+    return Array.from(indexes).sort((a, b) => a - b)
+  }, [pinned, rows.length, span])
   const rangeExtractor = useCallback(
     (range: WindowRange) => {
       if (drawsEveryRow) {
-        return Array.from({ length: range.count }, (_, index) => index)
+        return everyIndex
+      }
+      const first = Math.max(0, range.startIndex - range.overscan)
+      const last = Math.min(range.count - 1, range.endIndex + range.overscan)
+      if (spanned && span && span[0] <= first && last <= span[1]) {
+        return spanned
       }
       const indexes = nativeChatTranscriptRange(range, pinned)
-      if (!selectionSpan || !tracksSelection) {
+      if (!spanned) {
         return indexes
       }
-      const spanned = new Set(indexes)
-      const last = Math.min(selectionSpan[1], range.count - 1)
-      for (let index = selectionSpan[0]; index <= last; index++) {
-        spanned.add(index)
-      }
-      return Array.from(spanned).sort((a, b) => a - b)
+      return Array.from(new Set([...indexes, ...spanned])).sort((a, b) => a - b)
     },
-    [drawsEveryRow, pinned, selectionSpan, tracksSelection]
+    [drawsEveryRow, everyIndex, pinned, span, spanned]
   )
 
   // An end outside the run (or on a spacer) reaches the run's matching edge.
@@ -145,6 +164,8 @@ export function useNativeChatToolRunPins({
         current && current[0] === start && current[1] === end ? current : [start, end]
       )
     }
+    // Re-derive on (re)registration: the selection may have changed while this run was hidden.
+    onSelectionChange()
     document.addEventListener('selectionchange', onSelectionChange)
     return () => document.removeEventListener('selectionchange', onSelectionChange)
   }, [scrollerRef, tracksSelection])

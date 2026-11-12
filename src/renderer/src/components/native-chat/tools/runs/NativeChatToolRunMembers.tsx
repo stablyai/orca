@@ -13,6 +13,7 @@ import { cn } from '@/lib/class-names'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import {
   useVirtualizedScrollAnchor,
+  VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
@@ -28,7 +29,10 @@ import {
 import { NativeChatToolRunWindowContext } from './native-chat-tool-run-window-context'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 import { ROW_KEY_ATTRIBUTE, useNativeChatToolRunPins } from './use-native-chat-tool-run-pins'
-import { useNativeChatToolRunWindow } from './use-native-chat-tool-run-window'
+import {
+  useNativeChatToolRunWindow,
+  type NativeChatToolRunDrawnRow
+} from './use-native-chat-tool-run-window'
 import { useNativeChatToolRunDetailRoom } from './use-native-chat-tool-run-detail-room'
 
 /** Scroll inside the run, then return its box for transcript alignment; member offsets omit internal scroll. */
@@ -38,6 +42,8 @@ export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement 
     return member
   }
   scroller.scrollTop += member.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+  // The revealed card is now the reader's place: a pending restore or follow must not move it again.
+  scroller.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
   return scroller
 }
 
@@ -54,6 +60,40 @@ const WindowRow = memo(function WindowRow({
   renderRow: (row: NativeChatToolRunRow) => React.ReactNode
 }): React.ReactNode {
   return renderRow(row)
+})
+
+/** The drawn rows; unchanged in draw-every-row mode while the reader scrolls, so that mode costs nothing per move. */
+const WindowRows = memo(function WindowRows({
+  drawn,
+  rows,
+  renderRow,
+  measureRow
+}: {
+  drawn: readonly NativeChatToolRunDrawnRow[]
+  rows: readonly NativeChatToolRunRow[]
+  renderRow: (row: NativeChatToolRunRow) => React.ReactNode
+  measureRow: (node: HTMLDivElement | null) => void
+}): React.ReactNode {
+  const children: React.ReactNode[] = []
+  let previousEnd = 0
+  for (const { index, start, end } of drawn) {
+    const row = rows[index]
+    if (!row) {
+      continue
+    }
+    children.push(
+      <Fragment key={row.key}>
+        {start > previousEnd + 0.5 ? (
+          <div aria-hidden style={{ height: start - previousEnd }} />
+        ) : null}
+        <div ref={measureRow} data-index={index} data-native-chat-tool-run-row={row.key}>
+          <WindowRow row={row} renderRow={renderRow} />
+        </div>
+      </Fragment>
+    )
+    previousEnd = Math.max(previousEnd, end)
+  }
+  return children
 })
 
 /** An opened run's rows in a bounded scroll box that draws only what the reader can reach, so a long run costs a window, not its length. */
@@ -121,6 +161,8 @@ export function NativeChatToolRunMembers({
   })
   // Follow transaction: armed by new work while the reader is at the end; done once the tail has really been measured.
   const followRef = useRef<{ observedTail: boolean } | null>(null)
+  // A real tail measurement wakes the follow pass even when it changed no size.
+  const [tailObservations, setTailObservations] = useState(0)
   const onMeasure = useCallback(
     (element: HTMLDivElement) => {
       const key = element.getAttribute(ROW_KEY_ATTRIBUTE)
@@ -128,8 +170,10 @@ export function NativeChatToolRunMembers({
         return
       }
       detailRoom.record(key, element)
-      if (followRef.current && key === lastRowKeyRef.current) {
-        followRef.current.observedTail = true
+      const follow = followRef.current
+      if (follow && !follow.observedTail && key === lastRowKeyRef.current) {
+        follow.observedTail = true
+        setTailObservations((count) => count + 1)
       }
     },
     [detailRoom]
@@ -144,8 +188,8 @@ export function NativeChatToolRunMembers({
     onMeasure
   })
 
-  // A following reader belongs to the end, not to a row.
-  const shouldSkipRestore = useCallback(() => followsEndRef.current, [])
+  // A following reader belongs to the end, not to a row; a hidden pane has no rows to land on.
+  const shouldSkipRestore = useCallback(() => followsEndRef.current || !isVisibleRef.current, [])
   useVirtualizedScrollAnchor({
     anchorRef,
     getItemElementKey: rowElementKey,
@@ -172,31 +216,52 @@ export function NativeChatToolRunMembers({
     }
   }, [marks])
 
-  // Before paint: new work starts a follow only if the reader was at the end before it; each pass
-  // re-pins, and one frame without tail growth after the tail's real measurement ends it.
+  // A hidden pane resets its box: the row anchor alone (not its old pixel offset) brings the reader
+  // back on show, and a following reader goes back to the end.
+  const wasVisibleRef = useRef(isVisible)
+  useLayoutEffect(() => {
+    if (wasVisibleRef.current === isVisible) {
+      return
+    }
+    wasVisibleRef.current = isVisible
+    const anchor = anchorRef.current
+    if (!isVisible && anchor) {
+      anchorRef.current = {
+        key: anchor.key,
+        offset: anchor.offset,
+        fallbackKeys: anchor.fallbackKeys
+      }
+    } else if (isVisible && followsEndRef.current) {
+      followRef.current = { observedTail: false }
+    }
+  }, [isVisible])
+
+  // Before paint: new work starts a follow only if the reader was at the end before it. Each visible
+  // pass re-pins; once the tail is really measured (now, on a later measurement, or when a hidden pane
+  // shows again), one frame without tail growth ends it.
   const followKeyRef = useRef<number | null>(null)
   useLayoutEffect(() => {
     if (followKeyRef.current !== followKey) {
       followKeyRef.current = followKey
       if (followsEndRef.current) {
         followRef.current = { observedTail: false }
-        const tail = lastRowKeyRef.current
-        const tailElement = Array.from(
-          scrollerRef.current?.querySelectorAll<HTMLDivElement>(`[${ROW_KEY_ATTRIBUTE}]`) ?? []
-        ).findLast((element) => element.getAttribute(ROW_KEY_ATTRIBUTE) === tail)
-        if (tailElement) {
-          // The default measurement returns a cached size without a resize; read the tail itself.
-          const height = tailElement.getBoundingClientRect().height
-          if (height > 0) {
-            virtualizer.resizeItem(Number(tailElement.dataset.index), height)
-          }
-          followRef.current.observedTail = true
-        }
       }
     }
     const follow = followRef.current
-    if (!follow) {
+    if (!follow || !isVisible) {
       return
+    }
+    if (!follow.observedTail) {
+      const tail = lastRowKeyRef.current
+      const tailElement = Array.from(
+        scrollerRef.current?.querySelectorAll<HTMLDivElement>(`[${ROW_KEY_ATTRIBUTE}]`) ?? []
+      ).findLast((element) => element.getAttribute(ROW_KEY_ATTRIBUTE) === tail)
+      // The default measurement returns a cached size without a resize; read the tail itself.
+      const height = tailElement?.getBoundingClientRect().height ?? 0
+      if (tailElement && height > 0) {
+        virtualizer.resizeItem(Number(tailElement.dataset.index), height)
+        follow.observedTail = true
+      }
     }
     pinToEnd()
     if (!follow.observedTail) {
@@ -208,15 +273,21 @@ export function NativeChatToolRunMembers({
       }
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [followKey, pinToEnd, totalSize, virtualizer])
+  }, [followKey, isVisible, pinToEnd, tailObservations, totalSize, virtualizer])
 
-  // A reveal owns the box until the reader moves; it never follows.
+  // A reveal (each request, through the card's own write) takes the box from any follow.
   useLayoutEffect(() => {
-    if (revealRowKey !== undefined) {
+    const scroller = scrollerRef.current
+    if (!scroller) {
+      return
+    }
+    const onRevealed = (): void => {
       followRef.current = null
       followsEndRef.current = false
     }
-  }, [revealRowKey])
+    scroller.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, onRevealed)
+    return () => scroller.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, onRevealed)
+  }, [])
 
   const remember = useCallback(() => {
     const scroller = scrollerRef.current
@@ -294,26 +365,8 @@ export function NativeChatToolRunMembers({
     [retainInteractedRow]
   )
 
-  const children: React.ReactNode[] = []
-  let previousEnd = 0
-  for (const { index, start, end } of drawn) {
-    const row = rows[index]
-    if (!row) {
-      continue
-    }
-    children.push(
-      <Fragment key={row.key}>
-        {start > previousEnd + 0.5 ? (
-          <div aria-hidden style={{ height: start - previousEnd }} />
-        ) : null}
-        <div ref={measureRow} data-index={index} data-native-chat-tool-run-row={row.key}>
-          <WindowRow row={row} renderRow={renderRow} />
-        </div>
-      </Fragment>
-    )
-    previousEnd = Math.max(previousEnd, end)
-  }
-  const trailing = drawsEveryRow ? 0 : totalSize - previousEnd
+  const drawnEnd = drawn.reduce((end, row) => Math.max(end, row.end), 0)
+  const trailing = drawsEveryRow ? 0 : totalSize - drawnEnd
 
   return (
     <div
@@ -336,7 +389,7 @@ export function NativeChatToolRunMembers({
         onFocusCapture={pins.onFocusCapture}
         onBlurCapture={pins.onBlurCapture}
       >
-        {children}
+        <WindowRows drawn={drawn} rows={rows} renderRow={renderRow} measureRow={measureRow} />
         {trailing > 0.5 ? <div aria-hidden style={{ height: trailing }} /> : null}
       </div>
     </div>
