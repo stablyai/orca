@@ -5,7 +5,7 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { composeWorktreeId } from '../../../../shared/worktree/id'
-import type { PullRequestChange } from '../../../github/pull-request-changed-events'
+import type { PullRequestChange } from '../../../github/pull-requests/refresh/pull-request-changed-events'
 import { OrcaRuntimeWithGetStatus } from '../../hosts/runtime-status'
 
 export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetStatus {

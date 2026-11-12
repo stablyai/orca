@@ -14,7 +14,7 @@ import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import {
   normalizeGhAccountBinding,
   type GhAccountBinding
-} from '../../../shared/github/account-binding'
+} from '../../../shared/github/accounts/account-binding'
 
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {

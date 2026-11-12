@@ -34,7 +34,7 @@ on:
       - 'src/main/runtime/agent-session/agent-session-unsaved-*.ts'
       # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
       - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
-      - 'src/main/github/issue-field-options.ts'
+      - 'src/main/github/issues/issue-field-options.ts'
       - 'config/tsconfig.test.mobile-host-declarations.json'
       - 'config/tsconfig.node.json'
       - 'src/types/build-constants.d.ts'
@@ -174,7 +174,7 @@ on:
       - 'src/main/runtime/agent-session/agent-session-unsaved-*.ts'
       # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
       - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
-      - 'src/main/github/issue-field-options.ts'
+      - 'src/main/github/issues/issue-field-options.ts'
       - 'config/tsconfig.test.mobile-host-declarations.json'
       - 'config/tsconfig.node.json'
       - 'src/types/build-constants.d.ts'

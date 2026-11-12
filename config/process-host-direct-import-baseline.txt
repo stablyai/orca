@@ -36,7 +36,7 @@ src/main/git/command-runner/process-capture/spawn-command-capture.ts
 src/main/git/command-runner/process-capture/spawned-command-tree-kill.ts
 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts
 src/main/git/command-runner/host-routing/wsl-git-read-environment.ts
-src/main/github/gh-utils.ts
+src/main/github/execution/github-legacy-command.ts
 src/main/workspace-hooks/hooks.ts
 src/main/ipc/developer-permissions.ts
 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-launch.ts

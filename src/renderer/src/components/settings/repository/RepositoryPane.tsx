@@ -1,4 +1,4 @@
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
 import type {

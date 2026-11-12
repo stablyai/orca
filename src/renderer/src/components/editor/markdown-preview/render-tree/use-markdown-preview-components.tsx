@@ -24,7 +24,7 @@ import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-v
 import { useLocalImageSrc } from '../../document-images/useLocalImageSrc'
 import { documentResourceAccess } from '@/lib/files/access/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
-import { readGitHubCalloutKind } from '../../../../../../shared/github/github-callouts'
+import { readGitHubCalloutKind } from '../../../../../../shared/github/markdown/github-callouts'
 import { translate } from '@/i18n/i18n'
 
 function hasMermaidCodeClass(value: unknown): boolean {

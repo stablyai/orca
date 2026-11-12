@@ -4,7 +4,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 type TaskPageGitHubIssueCreationInput = Pick<

@@ -18,7 +18,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
   // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
-  'src/main/github/rate-limit.test.ts',
+  'src/main/github/api/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',

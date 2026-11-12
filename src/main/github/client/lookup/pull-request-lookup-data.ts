@@ -1,24 +1,28 @@
 import { readCurrentReviewHead } from '../../../source-control/review-current-head'
 import { shouldHideMergedImplicitReview } from '../../../source-control/branch-review-selection'
 import type {
-  GitHubOwnerRepo,
+  GitHubRepositoryIdentity as GitHubOwnerRepo,
+  GitHubRepositoryIdentity as OwnerRepo
+} from '../../../../shared/github/repositories/repository-identity'
+import type {
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
   PRMergeableState,
   PRReviewDecision
-} from '../../../../shared/github/pull-request-types'
-import { gitExecFileAsync, type OwnerRepo } from '../../gh-utils'
+} from '../../../../shared/github/pull-requests/pull-request-types'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
+
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
-import { mapPRState } from '../../mappers'
-import type { MergedPRCommitMembership } from '../../merged-pr-commit-membership'
+import { mapPRState } from '../../api/github-read-response'
+import type { MergedReviewCommitMembership as MergedPRCommitMembership } from '../../../source-control/merged-review-membership-memo'
 import {
   normalizePRMergeable,
   normalizeReviewDecision,
   isAutoMergeEnabled
 } from './../map/work-item-field-coercion'
 import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
-import { githubRepositoryWebHost } from '../../github-repository-host'
+import { githubRepositoryWebHost } from '../../repositories/github-repository-host'
 export type PullRequestLookupData = {
   number: number
   title: string

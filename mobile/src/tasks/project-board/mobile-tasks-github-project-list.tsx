@@ -1,4 +1,4 @@
-import { projectContentField } from '../../../../src/shared/github/project-content-field'
+import { projectContentField } from '../../../../src/shared/github/projects/project-content-field'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { translate } from '../../i18n/mobile-i18n'
 import { View, Text, Pressable, FlatList } from 'react-native'
