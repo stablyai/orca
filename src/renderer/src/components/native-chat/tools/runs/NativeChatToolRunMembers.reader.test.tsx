@@ -168,16 +168,18 @@ function Transcript({
   mounted = true,
   live = false,
   visible = true,
+  find = false,
   revealedDiff
 }: {
   blocks: NativeChatBlock[]
   mounted?: boolean
   live?: boolean
   visible?: boolean
+  find?: boolean
   revealedDiff?: NativeChatDiffReveal
 }) {
   const disclosures = useNativeChatDisclosures()
-  const windowFacts = useMemo(() => ({ isVisible: visible, findActive: false }), [visible])
+  const windowFacts = useMemo(() => ({ isVisible: visible, findActive: find }), [visible, find])
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
       <NativeChatToolRunWindowContext.Provider value={windowFacts}>
@@ -432,6 +434,25 @@ describe('NativeChatToolRun opened-run reader', () => {
     const landed = box.scrollTop
     await growRow(container, 'call:call-259', 300)
     expect(box.scrollTop).toBe(landed)
+  })
+
+  it('returns to where the reader scrolled with Find open after the pane hides and shows', async () => {
+    const { container, rerender } = render(<Transcript blocks={calls(1_000)} />)
+    await settle()
+    rerender(<Transcript blocks={calls(1_000)} find />)
+    await settle()
+    await scrollBox(container, 9_013)
+    const before = topRow(container)
+    expect(before.key).toBe('call:call-225')
+
+    // A hidden box loses its offset; only the remembered row brings the reader back.
+    pane.hidden = true
+    rerender(<Transcript blocks={calls(1_000)} find visible={false} />)
+    membersBox(container).scrollTop = 0
+    pane.hidden = false
+    rerender(<Transcript blocks={calls(1_000)} find />)
+    await settle()
+    expect(topRow(container)).toEqual(before)
   })
 
   it('does not keep a selection span drawn after it ended while the pane was hidden', async () => {

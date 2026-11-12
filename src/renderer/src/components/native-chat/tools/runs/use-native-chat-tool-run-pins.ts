@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
 import { nativeChatTranscriptRange } from '../../viewport/virtualization/native-chat-pinned-rows'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 
@@ -198,5 +199,7 @@ export function useNativeChatToolRunPins({
     [scrollerRef]
   )
 
-  return { rangeExtractor, retainInteractedRow, onFocusCapture, onBlurCapture }
+  // A selection wider than a window keeps that many rows drawn while the reader scrolls.
+  const spansSelection = span !== null && span[1] - span[0] >= VIRTUALIZED_LIST_MIN_ROWS
+  return { rangeExtractor, spansSelection, retainInteractedRow, onFocusCapture, onBlurCapture }
 }

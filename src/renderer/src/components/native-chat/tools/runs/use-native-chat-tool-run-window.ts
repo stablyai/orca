@@ -1,5 +1,10 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { elementScroll, measureElement, useVirtualizer } from '@tanstack/react-virtual'
+import {
+  elementScroll,
+  measureElement,
+  useVirtualizer,
+  type Virtualizer
+} from '@tanstack/react-virtual'
 import { VIRTUALIZED_LIST_OVERSCAN } from '@/components/virtualized-list'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
@@ -8,6 +13,7 @@ import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 const ROW_ESTIMATE_PX = 26
 const estimateRowSize = (): number => ROW_ESTIMATE_PX
 
+export type NativeChatToolRunVirtualizer = Virtualizer<HTMLDivElement, HTMLDivElement>
 export type NativeChatToolRunDrawnRow = { index: number; start: number; end: number }
 
 /** The run's virtualizer, kept in its own hook: it reads a mutable library instance every render,

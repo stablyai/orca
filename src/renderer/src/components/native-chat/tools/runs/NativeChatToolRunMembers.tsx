@@ -28,6 +28,7 @@ import {
 } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatToolRunWindowContext } from './native-chat-tool-run-window-context'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
+import type { NativeChatToolRunVirtualizer } from './use-native-chat-tool-run-window'
 import { ROW_KEY_ATTRIBUTE, useNativeChatToolRunPins } from './use-native-chat-tool-run-pins'
 import {
   useNativeChatToolRunWindow,
@@ -45,6 +46,21 @@ export function revealNativeChatToolRunMember(member: HTMLElement): HTMLElement 
   // The revealed card is now the reader's place: a pending restore or follow must not move it again.
   scroller.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
   return scroller
+}
+
+/** The reader's row from the window's own offsets, for when scrolling did not record it: reads no drawn row. */
+function anchorAtScrollOffset(
+  virtualizer: NativeChatToolRunVirtualizer,
+  rows: readonly NativeChatToolRunRow[]
+): VirtualizedScrollAnchor {
+  const scrollTop = virtualizer.scrollOffset ?? 0
+  const item = virtualizer.getVirtualItemForOffset(scrollTop)
+  const row = item && rows[item.index]
+  if (!item || !row) {
+    return null
+  }
+  const fallbackKeys = rows.slice(item.index + 1, item.index + 11).map((next) => next.key)
+  return { key: row.key, offset: Math.max(0, scrollTop - item.start), fallbackKeys, scrollTop }
 }
 
 const rowElementKey = (element: HTMLDivElement): string | null =>
@@ -200,6 +216,20 @@ export function NativeChatToolRunMembers({
     onMeasure
   })
 
+  // Recording scans the drawn rows, so it waits while every row or a wide selection is drawn.
+  const recordsOnScroll = !drawsEveryRow && !pins.spansSelection
+  // Set while nothing records the reader's moves: a later restore must start from where they are now.
+  const anchorStaleRef = useRef(false)
+  useLayoutEffect(() => {
+    if (!recordsOnScroll) {
+      anchorStaleRef.current = true
+    } else if (anchorStaleRef.current && isVisibleRef.current) {
+      anchorStaleRef.current = false
+      anchorRef.current = anchorAtScrollOffset(virtualizer, rows)
+      scrollOffsetRef.current = virtualizer.scrollOffset ?? 0
+    }
+  }, [recordsOnScroll, rows, virtualizer])
+
   // A following reader belongs to the end, not to a row; a hidden pane has no rows to land on.
   const shouldSkipRestore = useCallback(() => followsEndRef.current || !isVisibleRef.current, [])
   useVirtualizedScrollAnchor({
@@ -213,8 +243,7 @@ export function NativeChatToolRunMembers({
     scrollElementRef: scrollerRef,
     scrollOffsetRef,
     shouldSkipRestore,
-    // Drawing every row, a scroll would scan all of them for an anchor; leaving records it once on cleanup.
-    recordAnchorOnScroll: !drawsEveryRow,
+    recordAnchorOnScroll: recordsOnScroll,
     // Restore only when rows arrive or the pane shows again: measurement churn is the virtualizer's
     // own, and a reveal or the reader's scrolling must not be pulled back to an older row.
     restoreSignal: `${rows.length}:${isVisible}`,
@@ -238,17 +267,21 @@ export function NativeChatToolRunMembers({
       return
     }
     wasVisibleRef.current = isVisible
-    const anchor = anchorRef.current
-    if (!isVisible && anchor) {
-      anchorRef.current = {
-        key: anchor.key,
-        offset: anchor.offset,
-        fallbackKeys: anchor.fallbackKeys
+    if (!isVisible) {
+      const anchor = anchorStaleRef.current
+        ? anchorAtScrollOffset(virtualizer, rows)
+        : anchorRef.current
+      if (anchor) {
+        anchorRef.current = {
+          key: anchor.key,
+          offset: anchor.offset,
+          fallbackKeys: anchor.fallbackKeys
+        }
       }
-    } else if (isVisible && followsEndRef.current) {
+    } else if (followsEndRef.current) {
       followRef.current = { observedTail: false }
     }
-  }, [isVisible])
+  }, [isVisible, rows, virtualizer])
 
   // Before paint: new work starts a follow only if the reader was at the end before it. Each visible
   // pass re-pins; once the tail is really measured (now, on a later measurement, or when a hidden pane
