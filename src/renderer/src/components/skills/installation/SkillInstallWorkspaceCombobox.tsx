@@ -1,5 +1,4 @@
 import React, { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer, defaultRangeExtractor, type Range } from '@tanstack/react-virtual'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList, CommandOption } from '@/components/ui/command'
@@ -13,6 +12,7 @@ import {
   getWindowedCommandNavigation,
   useCommandInputActiveDescendant
 } from '@/lib/list-interaction/windowed-command-navigation'
+import { useWindowedCommandVirtualizer } from '@/lib/list-interaction/use-windowed-command-virtualizer'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'
 
 // Why: `py-2` around a 20px text line; fixed so rows never need measuring.
@@ -94,38 +94,23 @@ function SkillInstallWorkspaceChoiceList({
         : (choiceKeys[0] ?? null)
   const activeIndex = activeKey === null ? -1 : (indexByKey.get(activeKey) ?? -1)
 
-  const rangeExtractor = useCallback(
-    (range: Range) => {
-      const indexes = defaultRangeExtractor(range)
-      // Keep the active option mounted so aria-activedescendant always names a real element.
-      if (activeIndex >= 0 && !indexes.includes(activeIndex)) {
-        indexes.push(activeIndex)
-        indexes.sort((a, b) => a - b)
-      }
-      return indexes
-    },
-    [activeIndex]
-  )
-  const virtualizer = useVirtualizer({
+  const virtualizer = useWindowedCommandVirtualizer({
     count: filteredChoices.length,
-    getScrollElement: () => listRef.current,
+    scrollElement: () => listRef.current,
     estimateSize: () => CHOICE_OPTION_HEIGHT,
-    overscan: CHOICE_OPTION_OVERSCAN,
     getItemKey: (index) => choiceKeys[index] ?? index,
-    rangeExtractor,
-    initialRect: { width: 0, height: CHOICE_LIST_MAX_HEIGHT },
-    // Match the list's `scroll-pt-4 scroll-pb-4` so keyboard reveal keeps the same edge gap.
-    scrollPaddingStart: 16,
-    scrollPaddingEnd: 16
+    activeIndex,
+    overscan: CHOICE_OPTION_OVERSCAN,
+    initialRect: { width: 0, height: CHOICE_LIST_MAX_HEIGHT }
   })
 
-  // Content mounts per open; reveal the choice it opened on.
+  // Content mounts per open; reveal the choice it opened on once.
+  const [openedOnIndex] = useState(activeIndex)
   useLayoutEffect(() => {
-    if (activeIndex > 0) {
-      virtualizer.scrollToIndex(activeIndex, { align: 'auto' })
+    if (openedOnIndex > 0) {
+      virtualizer.scrollToIndex(openedOnIndex, { align: 'auto' })
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- reveal only once, when the list opens.
-  }, [])
+  }, [openedOnIndex, virtualizer])
 
   const setInputRef = useCallback(
     (node: HTMLInputElement | null) => {
@@ -210,7 +195,8 @@ function SkillInstallWorkspaceChoiceList({
                     selected={key === activeKey}
                     onHighlight={() => onHighlightChange({ kind: 'choice', key })}
                     onSelect={() => onSelect(choice.id)}
-                    className="absolute left-0 top-0 w-full min-w-0 !p-0 cursor-pointer"
+                    density="flush"
+                    className="absolute left-0 top-0 w-full min-w-0 cursor-pointer"
                     style={{
                       height: virtualRow.size,
                       transform: `translateY(${virtualRow.start}px)`

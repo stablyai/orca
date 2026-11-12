@@ -1,5 +1,4 @@
 import React from 'react'
-import { useVirtualizer, defaultRangeExtractor, type Range } from '@tanstack/react-virtual'
 import { defaultFilter } from 'cmdk'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,6 +10,7 @@ import {
   getWindowedCommandNavigation,
   useCommandInputActiveDescendant
 } from '@/lib/list-interaction/windowed-command-navigation'
+import { useWindowedCommandVirtualizer } from '@/lib/list-interaction/use-windowed-command-virtualizer'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -58,29 +58,14 @@ function WorkspaceComboboxList({
     highlightedId !== null && indexById.has(highlightedId) ? highlightedId : (itemIds[0] ?? null)
   const activeIndex = activeId === null ? -1 : (indexById.get(activeId) ?? -1)
 
-  const rangeExtractor = React.useCallback(
-    (range: Range) => {
-      const indexes = defaultRangeExtractor(range)
-      // Keep the active option mounted so aria-activedescendant always names a real element.
-      if (activeIndex >= 0 && !indexes.includes(activeIndex)) {
-        indexes.push(activeIndex)
-        indexes.sort((a, b) => a - b)
-      }
-      return indexes
-    },
-    [activeIndex]
-  )
-  const virtualizer = useVirtualizer({
+  const virtualizer = useWindowedCommandVirtualizer({
     count: filtered.length,
-    getScrollElement: () => listRef.current,
+    scrollElement: () => listRef.current,
     estimateSize: () => WORKSPACE_OPTION_HEIGHT,
-    overscan: WORKSPACE_OPTION_OVERSCAN,
     getItemKey: (index) => itemIds[index] ?? index,
-    rangeExtractor,
-    initialRect: { width: 0, height: WORKSPACE_LIST_MAX_HEIGHT },
-    // Match the list's `scroll-pt-4 scroll-pb-4` so keyboard reveal keeps the same edge gap.
-    scrollPaddingStart: 16,
-    scrollPaddingEnd: 16
+    activeIndex,
+    overscan: WORKSPACE_OPTION_OVERSCAN,
+    initialRect: { width: 0, height: WORKSPACE_LIST_MAX_HEIGHT }
   })
 
   const setInputRef = React.useCallback(

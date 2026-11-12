@@ -1,5 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   measureVirtualizedListScrollMargin,
   observeVirtualizedListScrollMargin,
@@ -8,6 +7,7 @@ import {
 } from '@/components/virtualized-list'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { getWindowedCommandNavigation } from '@/lib/list-interaction/windowed-command-navigation'
+import { useWindowedCommandVirtualizer } from '@/lib/list-interaction/use-windowed-command-virtualizer'
 import type { PaletteListEntry } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import {
@@ -18,8 +18,6 @@ import {
 // Why: headings are one 11px line plus mt-3/mb-1; result rows are two lines inside py-3.
 const HEADER_ESTIMATED_HEIGHT = 32
 const ROW_ESTIMATED_HEIGHT = 56
-// Matches the list's `scroll-pt-4 scroll-pb-4` so keyboard reveal keeps the same edge gap.
-const REVEAL_SCROLL_PADDING = 16
 
 export type WorktreeJumpPaletteRevealRef = React.MutableRefObject<(itemId: string) => void>
 
@@ -82,19 +80,6 @@ export function WorktreeJumpPaletteResultList({
   )
   const activeIndex = entryIndexByKey.get(commandSelectedItemId) ?? -1
 
-  const rangeExtractor = useCallback(
-    (range: Range) => {
-      const indexes = defaultRangeExtractor(range)
-      // Keep the active option mounted so aria-activedescendant always names a real element.
-      if (activeIndex >= 0 && !indexes.includes(activeIndex)) {
-        indexes.push(activeIndex)
-        indexes.sort((a, b) => a - b)
-      }
-      return indexes
-    },
-    [activeIndex]
-  )
-
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!windowed || !container || !scrollElement) {
@@ -108,19 +93,17 @@ export function WorktreeJumpPaletteResultList({
     return observeVirtualizedListScrollMargin(container, scrollElement, updateMargin)
   }, [scrollElement, windowed])
 
-  const virtualizer = useVirtualizer({
+  const virtualizer = useWindowedCommandVirtualizer({
     count: listEntries.length,
     enabled: windowed && scrollElement !== null,
-    getScrollElement: () => scrollElement,
+    scrollElement: () => scrollElement,
     estimateSize: (index) => estimateEntryHeight(listEntries[index]),
+    getItemKey: (index) => listEntryRenderKeys[index] ?? listEntries[index]?.id ?? index,
+    activeIndex,
     overscan: VIRTUALIZED_LIST_OVERSCAN,
-    rangeExtractor,
     scrollMargin,
-    scrollPaddingStart: REVEAL_SCROLL_PADDING,
-    scrollPaddingEnd: REVEAL_SCROLL_PADDING,
     // Crossing the threshold (See more) attaches mid-scroll; keep the current position.
-    initialOffset: () => scrollElement?.scrollTop ?? 0,
-    getItemKey: (index) => listEntryRenderKeys[index] ?? listEntries[index]?.id ?? index
+    initialOffset: () => scrollElement?.scrollTop ?? 0
   })
 
   const { getOptionId } = controller
