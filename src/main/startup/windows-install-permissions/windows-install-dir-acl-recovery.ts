@@ -1,3 +1,4 @@
+// @protected-copy
 import { dirname } from 'node:path'
 import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
 import { translateMain } from '../../i18n/main-i18n'
