@@ -286,3 +286,63 @@ describe('Delete from Home of a workspace this desktop runs (REG-8)', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('Delete from Home with a runtime record but no sidebar row (REG-8b)', () => {
+  beforeEach(() => {
+    mocks.state.openModal.mockClear()
+    vi.mocked(toast.error).mockClear()
+    vi.mocked(toast.info).mockClear()
+  })
+
+  it('after a re-sign-in (record, no row): confirm, then the control plane deletes it', async () => {
+    const { deleteFromHome } =
+      await import('@/components/cloud-workspaces/cloud-workspace-home-archive')
+    const { workspace } =
+      await import('@/components/cloud-workspaces/cloud-workspaces.test-fixture')
+    // Main still has this desktop's runtime record; this window has no row for it.
+    setWorktrees([])
+    vi.stubGlobal('window', {
+      api: {
+        cloudWorkspaces: {
+          localWorkspaces: async () => [
+            { sandboxId: 'sbx_1', worktreeId: 'wt-gone', runtimeEnvironmentId: 'env-cloud' }
+          ]
+        }
+      }
+    })
+    const w = workspace({ id: 'sbx_1' })
+    const confirmDelete = vi.fn()
+    await deleteFromHome(w, confirmDelete)
+    // Not the sidebar funnel (which would toast "Workspace list changed" and delete nothing).
+    expect(mocks.state.openModal).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(confirmDelete).toHaveBeenCalledWith({ kind: 'delete', workspace: w })
+    vi.unstubAllGlobals()
+  })
+
+  it('with the row present it is still this desktop’s own delete dialog', async () => {
+    const { deleteFromHome } =
+      await import('@/components/cloud-workspaces/cloud-workspace-home-archive')
+    const { workspace } =
+      await import('@/components/cloud-workspaces/cloud-workspaces.test-fixture')
+    setWorktrees([{ id: 'wt-here', hostId: 'runtime:env-cloud' }])
+    vi.stubGlobal('window', {
+      api: {
+        cloudWorkspaces: {
+          localWorkspaces: async () => [
+            { sandboxId: 'sbx_2', worktreeId: 'wt-here', runtimeEnvironmentId: 'env-cloud' }
+          ]
+        }
+      }
+    })
+    const confirmDelete = vi.fn()
+    await deleteFromHome(workspace({ id: 'sbx_2' }), confirmDelete)
+    expect(confirmDelete).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'delete-worktree',
+      expect.objectContaining({ worktreeId: 'wt-here' })
+    )
+    vi.unstubAllGlobals()
+  })
+})

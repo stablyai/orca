@@ -1,6 +1,7 @@
 // Opening a cloud workspace from the team list or a link. The owner already has it locally (the
 // hosted runtime they created); anyone else pairs this device through a per-device E2EE grant and
 // the workspace's server joins the sidebar like any remote Orca server.
+import { hasLocalSidebarRow } from './cloud-local-row'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -196,7 +197,8 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
       const local = (await window.api.cloudWorkspaces.localWorkspaces()).find(
         (l) => l.sandboxId === workspace.id
       )
-      if (local?.worktreeId) {
+      // Only with this window's row: a record alone (after a re-sign-in) would reveal nothing (REG-8b).
+      if (local && hasLocalSidebarRow(local)) {
         activateAndRevealWorktree(
           local.worktreeId,
           local.runtimeEnvironmentId
