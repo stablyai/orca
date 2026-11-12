@@ -7,22 +7,37 @@
  *   - serve:   runHostedPRRead + getPRForBranchOutcome, real renderer scheduler module.
  * Replaced: the `gh` and `git` subprocess boundaries (recorders with canned answers).
  *
- * "after" scenarios prototype the D2 proposal without touching production files:
- *   - B (host backoff map, completion-based running predicate, rich signature) via a partial
- *     mock of pr-refresh-candidate-policy (desktop) and a host paced store (serve).
- *   - C (non-blocking admission gate on host cache misses) in `hostRpcAfter`.
- *   - D (header-fed rate-limit snapshot: probe only when cold or after reset) via a wrapper
- *     around getRateLimit.
- *   - idle "active-only" (no focused window for IDLE_AFTER_MS pauses non-selected rows).
- *   - client contract: real scheduler source plus one patch (honour target.nextRefreshAt).
+ * D3 is AUTOMATIC ONLY: there is no cadence setting anywhere in this file. "before" scenarios
+ * are the code as checked out; "after" scenarios prototype the D3 proposal next to it:
+ *   - B (policy-d3.ts: unchanged-result backoff to fixed caps 30/60 min, completion-based
+ *     activity classes incl. complete-empty = settled, rich signature) via a partial mock of
+ *     pr-refresh-candidate-policy (desktop) and a host store (serve).
+ *   - C (gate-d3.ts: non-blocking admission gate with reserved lanes) in `createHostAfter`,
+ *     with the 10 s reply deadline, the per-client interactive limit and ungated legacy clients.
+ *   - D (rate-limit snapshot reused until its reset) via a wrapper around getRateLimit. This is
+ *     a MODEL of the probe count only; the per-resource rule has its own probe file.
+ *   - E (no focused window for 5 min pauses non-selected rows).
+ *   - client contract: real scheduler source plus the d3 patch set (scheduler-patches.ts) and
+ *     the hint store.
  *
  * Env: EXP_SCENARIO desktop-before|desktop-after|serve-before|serve-after|serve-after-oldclient
  *      EXP_HOST ghes|dotcom, EXP_N, EXP_CLIENTS, EXP_HOURS, EXP_WORKLOAD settled|mixed,
- *      EXP_FOCUS focused|unfocused|hidden|return, EXP_IDLE pause|none, EXP_JITTER (0..0.2),
- *      EXP_EVENTS 0|1 (external CI start/finish events for the detection sweep),
- *      EXP_STAGGER_S, EXP_DISJOINT (serve: last client sees 5 rows nobody else sees), EXP_OUT
+ *      EXP_FOCUS focused|unfocused|hidden|return, EXP_IDLE pause|none, EXP_JITTER (0..0.25),
+ *      EXP_EVENTS 0|1 (external CI start/finish events), EXP_EVENT_TARGETS, EXP_SEED,
+ *      EXP_STAGGER_S, EXP_DISJOINT (serve: last client sees 5 rows nobody else sees),
+ *      EXP_NOCI 1|0 (default 1: some PRs have no CI at all; 0 = the D2 world),
+ *      EXP_GATE d3|d2 (serve-after: which admission gate; d2 = the frozen D2 gate, "before"),
+ *      EXP_SELECTED_IDS n (serve: clients 1..n each select a different PR with running CI),
+ *      EXP_SELECTED_RUNNING 1 (serve: with one selected identity, make it a PR with running CI
+ *        instead of the settled row 0),
+ *      EXP_CHECKS 1 (serve: every client also runs a Checks-panel timed read of its selected PR),
+ *      EXP_SLOW_EVERY k + EXP_SLOW_MS (every k-th PR read upstream takes that long),
+ *      EXP_DISCONNECT_MIN m (serve: client 1 disappears at minute m without saying so),
+ *      EXP_ALL_GONE_MIN m (serve: every client disappears at minute m),
+ *      EXP_FG_EVERY_S s (serve: every client sends a foreground read of its selected PR every s),
+ *      EXP_OUT
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { it, vi } from 'vitest'
 import type {
@@ -37,7 +52,6 @@ const cfg = vi.hoisted(() => ({
   clients: Number(process.env.EXP_CLIENTS ?? 1),
   hours: Number(process.env.EXP_HOURS ?? 1),
   workload: process.env.EXP_WORKLOAD ?? 'settled',
-  cadence: (process.env.EXP_CADENCE ?? 'default') as 'default' | 'reduced' | 'minimal' | 'off',
   focus: process.env.EXP_FOCUS ?? 'focused',
   idle: process.env.EXP_IDLE ?? 'pause',
   jitter: Number(process.env.EXP_JITTER ?? 0),
@@ -45,7 +59,17 @@ const cfg = vi.hoisted(() => ({
   staggerS: Number(process.env.EXP_STAGGER_S ?? 25),
   disjoint: process.env.EXP_DISJOINT === '1',
   seed: Number(process.env.EXP_SEED ?? 1),
-  eventTargets: Number(process.env.EXP_EVENT_TARGETS ?? 7)
+  eventTargets: Number(process.env.EXP_EVENT_TARGETS ?? 7),
+  noci: process.env.EXP_NOCI !== '0',
+  gate: (process.env.EXP_GATE ?? 'd3') as 'd2' | 'd3',
+  selectedIds: Number(process.env.EXP_SELECTED_IDS ?? 1),
+  selectedRunning: process.env.EXP_SELECTED_RUNNING === '1',
+  checks: process.env.EXP_CHECKS === '1',
+  slowEvery: Number(process.env.EXP_SLOW_EVERY ?? 0),
+  slowMs: Number(process.env.EXP_SLOW_MS ?? 25_000),
+  disconnectMin: process.env.EXP_DISCONNECT_MIN ? Number(process.env.EXP_DISCONNECT_MIN) : null,
+  allGoneMin: process.env.EXP_ALL_GONE_MIN ? Number(process.env.EXP_ALL_GONE_MIN) : null,
+  fgEveryS: Number(process.env.EXP_FG_EVERY_S ?? 0)
 }))
 
 const IDLE_AFTER_MS = 5 * 60_000
@@ -54,8 +78,9 @@ type PRWorld = {
   head: string
   state: 'OPEN' | 'MERGED'
   branch: string
-  // per-check state; "running" keeps `build` in progress, "failed-running" adds a failed check.
-  checks: 'done' | 'running' | 'failed-running'
+  // per-check state; "running" keeps `build` in progress, "failed-running" adds a failed check,
+  // "none" is a repository with no CI: a complete, empty rollup (D2-3).
+  checks: 'done' | 'running' | 'failed-running' | 'none'
 }
 
 const rec = vi.hoisted(() => {
@@ -66,166 +91,9 @@ const rec = vi.hoisted(() => {
     unknownGh: new Set<string>(),
     prs: new Map<number, PRWorld>(),
     branchToPR: new Map<string, number>(),
+    prReads: 0,
     t0: 0
   }
-})
-
-/** D2 policy prototype shared by the desktop mock and the serve host. */
-const d2 = vi.hoisted(() => {
-  type Meta = {
-    signature: string
-    unchanged: number
-    runningSince: number | null
-    unknownMergeSince: number | null
-    hasPR: boolean
-    state: string | null
-    running: boolean
-    unknownMerge: boolean
-  }
-  const backoff = new Map<string, Meta>()
-  const focus = { focused: true, blurredAt: 0 as number, visible: true }
-
-  function hash(text: string): number {
-    let h = 2166136261
-    for (let i = 0; i < text.length; i++) {
-      h ^= text.charCodeAt(i)
-      h = Math.imul(h, 16777619)
-    }
-    return (h >>> 0) / 0xffffffff
-  }
-
-  function describe(outcome: {
-    kind: string
-    pr?: Record<string, unknown>
-  }): Omit<Meta, 'unchanged' | 'runningSince' | 'unknownMergeSince'> {
-    if (outcome.kind !== 'found' || !outcome.pr) {
-      return {
-        signature: outcome.kind,
-        hasPR: false,
-        state: null,
-        running: false,
-        unknownMerge: false
-      }
-    }
-    const p = outcome.pr as {
-      number: number
-      state: string
-      headSha?: string
-      checksStatus?: string
-      checksSummary?: { pending?: number; passed?: number; failed?: number; total?: number }
-      checksFinal?: boolean
-      checksReadComplete?: boolean
-      failingCheckNames?: string[]
-      mergeable?: string
-      mergeStateStatus?: string | null
-      reviewDecision?: string | null
-      updatedAt?: string
-    }
-    const open = p.state === 'open' || p.state === 'draft'
-    // Completion decides "running", never the failure-first aggregate status (D1-A3).
-    const running =
-      (open || p.state === 'merged') &&
-      (p.checksFinal === false ||
-        (p.checksSummary?.pending ?? 0) > 0 ||
-        p.checksReadComplete === false)
-    const unknownMerge =
-      open &&
-      p.mergeable === 'UNKNOWN' &&
-      !['CLEAN', 'BEHIND', 'BLOCKED'].includes(p.mergeStateStatus ?? '')
-    return {
-      signature: JSON.stringify([
-        p.number,
-        p.state,
-        p.headSha,
-        p.checksStatus,
-        p.checksSummary ?? null,
-        p.checksFinal ?? null,
-        p.checksReadComplete ?? null,
-        [...(p.failingCheckNames ?? [])].sort(),
-        p.mergeable,
-        p.mergeStateStatus ?? null,
-        p.reviewDecision ?? null,
-        p.updatedAt
-      ]),
-      hasPR: true,
-      state: p.state,
-      running,
-      unknownMerge
-    }
-  }
-
-  function note(key: string, outcome: { kind: string; pr?: Record<string, unknown> }): Meta {
-    const d = describe(outcome)
-    const prev = backoff.get(key)
-    const same = prev !== undefined && prev.signature === d.signature
-    const now = Date.now()
-    const meta: Meta = {
-      ...d,
-      unchanged: same ? prev.unchanged + 1 : 0,
-      runningSince: d.running ? (same ? (prev.runningSince ?? now) : now) : null,
-      unknownMergeSince: d.unknownMerge ? (prev?.unknownMergeSince ?? now) : null
-    }
-    backoff.set(key, meta)
-    return meta
-  }
-
-  /** Interval before the next timed upstream read. Jitter only shortens, so caps stay caps. */
-  function interval(key: string, selected: boolean, anchor: number, jitter: number): number {
-    const raw = intervalAtDefault(key, selected, anchor, jitter)
-    if (cfg.cadence === 'off') {
-      return Number.POSITIVE_INFINITY
-    }
-    return raw
-  }
-
-  // Cadence composition: every base is multiplied by the cadence factor F; a backoff cap is
-  // min(defaultCap * F, ceiling) and never below the cadence's own base.
-  const F = { default: 1, reduced: 5, minimal: 10, off: 1 }[cfg.cadence]
-  const CEIL_SELECTED = 30 * 60_000
-  const CEIL_VISIBLE = 60 * 60_000
-
-  function intervalAtDefault(key: string, selected: boolean, anchor: number, jitter: number): number {
-    const m = backoff.get(key)
-    const j = (ms: number): number =>
-      jitter > 0 ? Math.round(ms * (1 - jitter * hash(`${key}|${anchor}`))) : ms
-    if (!m) {
-      return (selected ? 60_000 : 120_000) * F
-    }
-    const now = Date.now()
-    const double = (base: number, cap: number): number => {
-      const ceiling = selected ? CEIL_SELECTED : CEIL_VISIBLE
-      return Math.max(base * F, Math.min(cap * F, ceiling, base * F * 2 ** Math.min(m.unchanged, 6)))
-    }
-    if (!m.hasPR) {
-      return j(selected ? double(60_000, 5 * 60_000) : 15 * 60_000 * F)
-    }
-    if (m.state === 'merged') {
-      return m.running ? 60_000 * F : Number.POSITIVE_INFINITY
-    }
-    if (m.state === 'closed') {
-      return j(15 * 60_000 * F)
-    }
-    const unknownHolds = m.unknownMergeSince !== null && now - m.unknownMergeSince < 10 * 60_000
-    if (m.running || unknownHolds) {
-      if (selected) {
-        return 60_000 * F
-      }
-      // Non-selected: a per-check picture frozen for 30 min is a stuck check; let it decay.
-      const frozenFor = m.runningSince === null ? 0 : now - m.runningSince
-      if (!m.running || frozenFor < 30 * 60_000) {
-        return 120_000 * F
-      }
-      const steps = Math.floor((frozenFor - 30 * 60_000) / (10 * 60_000)) + 1
-      return j(Math.max(120_000 * F, Math.min(15 * 60_000 * F, CEIL_VISIBLE, 120_000 * F * 2 ** Math.min(steps, 3))))
-    }
-    return j(selected ? double(60_000, 5 * 60_000) : double(120_000, 15 * 60_000))
-  }
-
-  function idle(): boolean {
-    return !focus.focused && Date.now() - focus.blurredAt >= 5 * 60_000
-  }
-
-  return { backoff, focus, note, interval, idle, describe }
 })
 
 function ghKind(argv: string[]): string {
@@ -262,6 +130,7 @@ function flag(argv: string[], name: string): string | undefined {
 const WEB_HOST = cfg.host === 'ghes' ? 'ghe.example.com' : 'github.com'
 
 function checkNodes(checks: PRWorld['checks']) {
+  if (checks === 'none') return []
   const nodes: Record<string, unknown>[] = [
     {
       __typename: 'CheckRun',
@@ -306,7 +175,7 @@ function commits(pr: PRWorld) {
             }
           },
           checkSuites: {
-            nodes: [{ databaseId: 11, conclusion: pr.checks === 'done' ? 'SUCCESS' : null }],
+            nodes: pr.checks === 'none' ? [] : [{ databaseId: 11, conclusion: pr.checks === 'done' ? 'SUCCESS' : null }],
             pageInfo: { hasNextPage: false, endCursor: null }
           }
         }
@@ -378,7 +247,13 @@ async function fakeGh(argv: string[], options: { host?: string; env?: Record<str
   const kind = ghKind(argv)
   const host = kind === 'api:rate_limit' ? (options.host ?? 'github.com') : WEB_HOST
   rec.gh.push({ t: Date.now() - rec.t0, kind, host })
-  await new Promise((r) => setTimeout(r, 400)) // one gh call takes ~0.4 s of simulated time
+  // One gh call takes ~0.4 s of simulated time. EXP_SLOW_EVERY makes every k-th PR read slow.
+  let took = 400
+  if (kind === 'graphql:sidebar' || kind === 'pr:view') {
+    rec.prReads += 1
+    if (cfg.slowEvery > 0 && rec.prReads % cfg.slowEvery === 0) took = cfg.slowMs
+  }
+  await new Promise((r) => setTimeout(r, took))
   switch (kind) {
     case 'api:rate_limit': {
       const reset = Math.floor(Date.now() / 1000 / 3600) * 3600 + 3600
@@ -511,20 +386,6 @@ vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => {
   }
 })
 
-// #40541's setting, modelled the way its scaleReviewRefreshInterval works: every timed interval
-// is multiplied by the cadence factor; Off has no timed interval.
-vi.mock('../../../shared/review-refresh-policy', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../shared/review-refresh-policy')>()
-  const factor = { default: 1, reduced: 5, minimal: 10, off: 1 }[cfg.cadence]
-  return {
-    ...actual,
-    reviewRefreshIntervalMs: (input: Parameters<typeof actual.reviewRefreshIntervalMs>[0]) => {
-      const base = actual.reviewRefreshIntervalMs(input)
-      return base === null || cfg.cadence === 'off' ? null : base * factor
-    }
-  }
-})
-
 vi.mock('../pr-refresh-renderer-port', () => ({
   prRefreshRenderers: () => ({ isRendererOpen: () => true, sendToTrustedUI: () => {} }),
   setPRRefreshRendererPort: () => {}
@@ -537,6 +398,7 @@ vi.mock('../pr-refresh-candidate-policy', async (importOriginal) => {
   if (cfg.scenario !== 'desktop-after') {
     return actual
   }
+  const d2 = await import('./policy-d3')
   const interval = (c: GitHubPRRefreshCandidate): number => {
     if (cfg.idle === 'pause' && d2.idle() && c.isSelected !== true) {
       return Number.POSITIVE_INFINITY
@@ -589,8 +451,11 @@ vi.mock('../rate-limit', async (importOriginal) => {
 
 import { reportVisiblePRRefreshCandidates, runHostedPRRead, addPRRefreshOutcomeObserver } from '../pr-refresh-coordinator'
 import { getPRForBranchOutcome } from '../client/lookup/pr-for-branch-outcome'
-import { reviewRefreshIntervalMs } from '../../../shared/review-refresh-policy'
+import { reviewRefreshIntervalMs, REVIEW_REFRESH_COOLDOWN_MS } from '../../../shared/review-refresh-policy'
 import { createVisibleHostedReviewRefreshScheduler } from '../../../renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
+import * as d2 from './policy-d3'
+import { createGateD2, createGateD3, summarizeGate, rollingPeak, type Gate } from './gate-d3'
+import { createHintStore, schedulerFactory, type SchedulerFactory } from './scheduler-patches'
 
 const OUT = process.env.EXP_OUT ?? `/tmp/d2-${cfg.scenario}.json`
 const SECONDS = Math.round(cfg.hours * 3600)
@@ -616,7 +481,16 @@ function seedWorld(): GitHubPRRefreshCandidate[] {
         head,
         branch,
         state: linked && i % 5 === 3 ? 'MERGED' : 'OPEN',
-        checks: cfg.workload === 'mixed' && linked && i % 5 === 2 ? (i % 10 === 2 ? 'failed-running' : 'running') : 'done'
+        // No-CI rows (EXP_NOCI): one open PR in ten (i % 10 === 6) and every second merged PR
+        // (i % 10 === 8) have a complete, empty rollup.
+        checks:
+          cfg.workload === 'mixed' && linked && i % 5 === 2
+            ? i % 10 === 2
+              ? 'failed-running'
+              : 'running'
+            : cfg.noci && linked && (i % 10 === 6 || i % 10 === 8)
+              ? 'none'
+              : 'done'
       })
       rec.branchToPR.set(branch, number)
     }
@@ -684,13 +558,16 @@ function scheduleEvents(candidates: GitHubPRRefreshCandidate[]): void {
 
 // ---------- serve: host RPC ----------
 type Deferred = { kind: 'deferred'; nextRefreshAt: number }
-type Reply = (PRRefreshOutcome & { nextRefreshAt?: number }) | Deferred
+// nextRefreshAt: number = earliest useful timed read; null = the host says "no timed read".
+type Reply = (PRRefreshOutcome & { nextRefreshAt?: number | null }) | Deferred
 type RpcRequest = {
   c: GitHubPRRefreshCandidate
   clientId: number
   selected?: boolean
   foreground?: boolean
   capable: boolean
+  /** Checks-panel read of the same PR: its own read identity, selected lane. */
+  checks?: boolean
 }
 
 function upstreamRead(c: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {
@@ -712,132 +589,73 @@ function upstreamRead(c: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {
   )
 }
 
-const gateStats = {
-  admits: { interactive: 0, selected: 0, visible: 0, coldOldClient: 0 },
+/** MODELLED Checks-panel read: one `graphql:checks` spawn, answer built from the fixture world.
+ *  The production `github.prChecks` path is not exercised. */
+async function upstreamChecksRead(c: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {
+  const number = c.linkedPRNumber!
+  await fakeGh(['api', 'graphql', '-f', 'query=query { commits(last: 1) }', '-F', `number=${number}`])
+  const pr = rec.prs.get(number)!
+  const pending = pr.checks === 'running' || pr.checks === 'failed-running' ? 1 : 0
+  const total = pr.checks === 'none' ? 0 : pr.checks === 'failed-running' ? 3 : 2
+  return {
+    kind: 'found',
+    fetchedAt: Date.now(),
+    pr: {
+      number,
+      state: pr.state === 'MERGED' ? 'merged' : 'open',
+      headSha: pr.head,
+      checksStatus: pending ? 'pending' : 'success',
+      checksSummary: { pending, total, passed: total - pending, failed: 0 },
+      checksFinal: total > 0 && pending === 0,
+      checksReadComplete: true
+    }
+  } as unknown as PRRefreshOutcome
+}
+
+const rpcStats = {
   hits: 0,
   staleServed: 0,
   deferredCold: 0,
+  replyDeadlineHits: 0,
+  interactiveOverflow: 0,
+  legacyHits: 0,
+  legacyReads: 0,
   upstreamStarts: [] as number[],
-  queueAgeMsByClient: {} as Record<string, number[]>,
+  rpcMs: [] as number[],
   maxRpcMs: 0
 }
 
-/** C: non-blocking admission gate. No queue and no stored demand: a refused caller gets a hint
- *  and comes back; a claim only remembers who was refused first, and it expires. */
-function createGate() {
-  const WINDOW = 5 * 60_000
-  const MAX = 20
-  const SPACING = 10_000
-  const SELECTED_RESERVE = 4
-  const GRACE = 15_000
-  const starts: number[] = []
-  let lastVisibleStart = -Infinity
-  // One claim per refused identity (not per client): who is most overdue, and when its caller
-  // was told to come back. It holds no request and expires on its own.
-  const claims = new Map<string, { dueSince: number; first: number; retryAt: number; until: number }>()
-  const prune = (now: number): void => {
-    while (starts.length > 0 && now - starts[0] >= WINDOW) starts.shift()
-    for (const [k, v] of claims) if (v.until < now) claims.delete(k)
-  }
-  return (
-    clientId: number,
-    key: string,
-    lane: 'interactive' | 'selected' | 'visible',
-    dueSince: number,
-    honoursHints: boolean
-  ) => {
-    const now = Date.now()
-    prune(now)
-    const admit = () => {
-      const claim = claims.get(key)
-      ;(gateStats.queueAgeMsByClient[clientId] ??= []).push(claim ? now - claim.first : 0)
-      claims.delete(key)
-      if (lane !== 'interactive') starts.push(now)
-      if (lane === 'visible') lastVisibleStart = now
-      gateStats.admits[lane] += 1
-      return { admit: true as const }
-    }
-    if (lane === 'interactive') return admit()
-    const windowFreeAt = starts.length >= MAX ? starts[0] + WINDOW : now
-    if (lane === 'selected') {
-      return windowFreeAt > now ? { admit: false as const, retryAt: windowFreeAt } : admit()
-    }
-    const visibleMax = MAX - SELECTED_RESERVE
-    const visibleWindowFreeAt = starts.length >= visibleMax ? starts[starts.length - visibleMax] + WINDOW : now
-    const freeAt = Math.max(now, visibleWindowFreeAt, lastVisibleStart + SPACING)
-    const mine = claims.get(key)?.dueSince ?? dueSince
-    let ahead = 0
-    let aheadHere = 0
-    for (const [k, v] of claims) {
-      if (k === key || v.dueSince > mine || (v.dueSince === mine && k > key)) continue
-      ahead += 1
-      // Only a claimant that was told to be back by now can make this caller wait.
-      if (v.retryAt <= now) aheadHere += 1
-    }
-    if (freeAt <= now && aheadHere === 0) return admit()
-    const retryAt = Math.max(now + SPACING, freeAt + ahead * SPACING)
-    const existing = claims.get(key)
-    claims.set(key, {
-      dueSince: mine,
-      first: existing?.first ?? now,
-      // A legacy client ignores the hint; its claim only records how overdue the row is.
-      retryAt: honoursHints ? retryAt : Number.POSITIVE_INFINITY,
-      until: honoursHints ? retryAt + GRACE : now + 16 * 60_000
-    })
-    return { admit: false as const, retryAt }
-  }
-}
+const REPLY_DEADLINE_MS = 10_000
+const INTERACTIVE_MAX = 3
+const INTERACTIVE_WINDOW_MS = 30_000
 
 function createHostAfter() {
-  const gate = createGate()
+  // C: non-blocking admission gate (gate-d3.ts). EXP_GATE=d2 runs the frozen D2 gate instead.
+  const gate: Gate = cfg.gate === 'd2' ? createGateD2() : createGateD3()
   // Full read identity as the key; every slot is independent (no single-slot eviction).
   const store = new Map<string, { outcome: PRRefreshOutcome; fetchedAt: number }>()
   const inFlight = new Map<string, Promise<PRRefreshOutcome>>()
-  return async (req: RpcRequest): Promise<Reply> => {
+  const interactive = new Map<number, number[]>()
+  const hintOf = (key: string, selected: boolean, fetchedAt: number): number | null => {
+    const iv = d2.interval(key, selected, fetchedAt, cfg.jitter)
+    return Number.isFinite(iv) ? fetchedAt + iv : null
+  }
+  const rpc = async (req: RpcRequest): Promise<Reply> => {
     const started = Date.now()
     const done = <T,>(reply: T): T => {
-      gateStats.maxRpcMs = Math.max(gateStats.maxRpcMs, Date.now() - started)
+      const ms = Date.now() - started
+      rpcStats.rpcMs.push(ms)
+      rpcStats.maxRpcMs = Math.max(rpcStats.maxRpcMs, ms)
       return reply
     }
     const { c } = req
-    const key = JSON.stringify([c.repoPath, c.branch, c.linkedPRNumber ?? null, c.fallbackPRNumber ?? null, false, c.currentHeadOid ?? null])
+    const key = JSON.stringify([req.checks ? 'checks' : 'pr', c.repoPath, c.branch, c.linkedPRNumber ?? null, c.fallbackPRNumber ?? null, false, c.currentHeadOid ?? null])
     const selected = req.selected === true
     const entry = store.get(key)
     const timed = req.foreground !== true
-    if (timed && entry && !req.capable) {
-      // Legacy client (no `selected` field): #40541's reuse window only, never longer than the
-      // client's own interval, so its fetchedAt-must-advance rule keeps seeing new answers.
-      const pr = entry.outcome.kind === 'found' ? entry.outcome.pr : null
-      const ttl = reviewRefreshIntervalMs({ state: pr?.state ?? null, checksStatus: pr?.checksStatus ?? null, hasReview: pr !== null, selected: true })
-      if (ttl === null || Date.now() - entry.fetchedAt < ttl) {
-        gateStats.hits += 1
-        return done(entry.outcome)
-      }
-    } else if (timed && entry) {
-      const nextAt = entry.fetchedAt + d2.interval(key, selected, entry.fetchedAt, cfg.jitter)
-      if (Date.now() < nextAt) {
-        gateStats.hits += 1
-        return done({ ...entry.outcome, nextRefreshAt: nextAt })
-      }
-    }
-    let read = inFlight.get(key)
-    if (!read) {
-      const dueSince = entry ? entry.fetchedAt + d2.interval(key, selected, entry.fetchedAt, cfg.jitter) : started
-      const admission = gate(req.clientId, key, timed ? (selected ? 'selected' : 'visible') : 'interactive', dueSince, req.capable)
-      if (!admission.admit) {
-        if (entry) {
-          gateStats.staleServed += 1
-          return done(req.capable ? { ...entry.outcome, nextRefreshAt: admission.retryAt } : entry.outcome)
-        }
-        if (req.capable) {
-          gateStats.deferredCold += 1
-          return done({ kind: 'deferred', nextRefreshAt: admission.retryAt })
-        }
-        // An old client cannot parse `deferred`; its cold miss reads once, outside the budget.
-        gateStats.admits.coldOldClient += 1
-      }
-      gateStats.upstreamStarts.push(Date.now() - rec.t0)
-      read = upstreamRead(c).then((outcome) => {
+    const startRead = (): Promise<PRRefreshOutcome> => {
+      rpcStats.upstreamStarts.push(Date.now() - rec.t0)
+      const read = (req.checks ? upstreamChecksRead(c) : upstreamRead(c)).then((outcome) => {
         inFlight.delete(key)
         if (outcome.kind !== 'upstream-error') {
           const existing = store.get(key)
@@ -845,46 +663,86 @@ function createHostAfter() {
             d2.note(key, outcome as never)
             store.set(key, { outcome, fetchedAt: outcome.fetchedAt })
           }
-          if (c.linkedPRNumber != null) noteObservation('host', c.linkedPRNumber, outcome)
+          if (c.linkedPRNumber != null && !req.checks) noteObservation('host', c.linkedPRNumber, outcome)
         }
         return outcome
       })
       inFlight.set(key, read)
+      return read
     }
-    const outcome = await read
-    if (outcome.kind === 'upstream-error' || !req.capable) return done(outcome)
-    return done({ ...outcome, nextRefreshAt: outcome.fetchedAt + d2.interval(key, selected, outcome.fetchedAt, cfg.jitter) })
+
+    if (!req.capable) {
+      // Legacy client (no `selected` field): not gated, no backoff, no hints. A stored answer is
+      // reused only inside the shortest interval such a client can be polling at, so its
+      // fetchedAt-must-advance rule keeps seeing new answers.
+      const pr = entry?.outcome.kind === 'found' ? entry.outcome.pr : null
+      const ttl = entry ? reviewRefreshIntervalMs({ state: pr?.state ?? null, checksStatus: pr?.checksStatus ?? null, hasReview: pr !== null, selected: true }) : 0
+      if (timed && entry && (ttl === null || Date.now() - entry.fetchedAt < ttl)) {
+        rpcStats.legacyHits += 1
+        return done(entry.outcome)
+      }
+      if (!inFlight.has(key)) rpcStats.legacyReads += 1
+      return done(await (inFlight.get(key) ?? startRead()))
+    }
+
+    if (timed && entry) {
+      const iv = d2.interval(key, selected, entry.fetchedAt, cfg.jitter)
+      if (Date.now() < entry.fetchedAt + iv) {
+        rpcStats.hits += 1
+        return done({ ...entry.outcome, nextRefreshAt: Number.isFinite(iv) ? entry.fetchedAt + iv : null })
+      }
+    }
+    let read = inFlight.get(key)
+    if (!read) {
+      let lane: 'interactive' | 'selected' | 'visible' = timed ? (selected ? 'selected' : 'visible') : 'interactive'
+      if (lane === 'interactive') {
+        // 3 interactive reads per 30 s per client; the next one falls into the selected lane.
+        const recent = (interactive.get(req.clientId) ?? []).filter((t) => started - t < INTERACTIVE_WINDOW_MS)
+        if (recent.length >= INTERACTIVE_MAX) {
+          lane = 'selected'
+          rpcStats.interactiveOverflow += 1
+        } else {
+          recent.push(started)
+        }
+        interactive.set(req.clientId, recent)
+      }
+      const dueSince = entry ? Math.min(started, hintOf(key, selected, entry.fetchedAt) ?? started) : started
+      const admission = gate.request(req.clientId, key, lane, dueSince, true)
+      if (!admission.admit) {
+        if (entry) {
+          rpcStats.staleServed += 1
+          return done({ ...entry.outcome, nextRefreshAt: admission.retryAt })
+        }
+        rpcStats.deferredCold += 1
+        return done({ kind: 'deferred', nextRefreshAt: admission.retryAt })
+      }
+      read = startRead()
+    }
+    // Reply deadline: the initiator and every joiner wait at most 10 s. The read itself goes on
+    // and is stored when it settles; the slot it used is not refunded.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const late = Symbol('late')
+    const raced = await Promise.race([
+      read,
+      new Promise<typeof late>((resolve) => {
+        timer = setTimeout(() => resolve(late), REPLY_DEADLINE_MS)
+      })
+    ])
+    clearTimeout(timer)
+    if (raced === late) {
+      rpcStats.replyDeadlineHits += 1
+      const retryAt = Date.now() + REVIEW_REFRESH_COOLDOWN_MS
+      return done(entry ? { ...entry.outcome, nextRefreshAt: retryAt } : { kind: 'deferred', nextRefreshAt: retryAt })
+    }
+    const outcome = raced
+    if (outcome.kind === 'upstream-error') return done(outcome)
+    return done({ ...outcome, nextRefreshAt: hintOf(key, selected, outcome.fetchedAt) })
   }
+  return { gate, rpc }
 }
 
 // ---------- serve: clients ----------
-const clientStats = { refreshCalls: 0, failures: 0 }
-
-type SchedulerFactory = typeof createVisibleHostedReviewRefreshScheduler
-
-/** The real scheduler source with the single D2 change: a host `nextRefreshAt` replaces the
- *  client's own interval as the next timed attempt. Written next to this file and imported. */
-async function patchedSchedulerFactory(): Promise<SchedulerFactory> {
-  const src = path.resolve(
-    __dirname,
-    '../../../renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler.ts'
-  )
-  let text = readFileSync(src, 'utf8')
-  const a = "  selected: boolean\n  refresh:"
-  const b = '    if (entry.target.intervalMs === null) {\n      return Infinity\n    }\n    const anchor'
-  if (!text.includes(a) || !text.includes(b)) throw new Error('scheduler patch anchors moved')
-  text = text
-    .replace(a, '  selected: boolean\n  nextRefreshAt?: number | null\n  refresh:')
-    .replace(
-      b,
-      '    if (entry.target.nextRefreshAt != null && entry.target.nextRefreshAt > entry.lastAttemptAt) {\n      return Math.max(cooldown, entry.target.nextRefreshAt)\n    }\n' + b
-    )
-    .replace("'../../../../../../shared/review-refresh-policy'", "'../../../../shared/review-refresh-policy'")
-  const out = path.resolve(__dirname, '.generated/scheduler-d2.ts')
-  mkdirSync(path.dirname(out), { recursive: true })
-  writeFileSync(out, text)
-  return (await import(/* @vite-ignore */ out)).createVisibleHostedReviewRefreshScheduler
-}
+const clientStats = { refreshCalls: 0, failures: 0, checksCalls: 0, foregroundCalls: 0, hintsDroppedAsLate: 0 }
 
 function startClient(args: {
   id: number
@@ -892,20 +750,27 @@ function startClient(args: {
   rpc: (req: RpcRequest) => Promise<Reply>
   factory: SchedulerFactory
   capable: boolean
+  checks: boolean
 }): { stop: () => void; setSelectedOnly: (v: boolean) => void; setVisible: (v: boolean) => void; foreground: () => void } {
   const scheduler = args.factory()
   const cache = new Map<string, { fetchedAt: number; outcome: PRRefreshOutcome }>()
-  const hint = new Map<string, number>()
+  // D2-1: hints are bound to an epoch and to the data they were issued against.
+  const hints = createHintStore()
   let selectedOnly = false
-  const apply = (c: GitHubPRRefreshCandidate, reply: Reply): boolean => {
+  let stopped = false
+  const apply = (c: GitHubPRRefreshCandidate, reply: Reply, startedInEpoch: string): boolean => {
     if (reply.kind === 'upstream-error') return false
-    if (reply.nextRefreshAt !== undefined) hint.set(c.cacheKey, reply.nextRefreshAt)
-    if (reply.kind === 'deferred') return true
-    const before = cache.get(c.cacheKey)?.fetchedAt
-    // Same rule as setGitHubPRResultCaches: an outcome that is not newer is a no-op.
-    if (before === undefined || reply.fetchedAt > before) {
-      cache.set(c.cacheKey, { fetchedAt: reply.fetchedAt, outcome: reply })
-      if (c.linkedPRNumber != null) noteObservation(`c${args.id}`, c.linkedPRNumber, reply)
+    if (reply.kind !== 'deferred') {
+      const before = cache.get(c.cacheKey)?.fetchedAt
+      // Same rule as setGitHubPRResultCaches: an outcome that is not newer is a no-op.
+      if (before === undefined || reply.fetchedAt > before) {
+        cache.set(c.cacheKey, { fetchedAt: reply.fetchedAt, outcome: reply })
+        if (c.linkedPRNumber != null) noteObservation(`c${args.id}`, c.linkedPRNumber, reply)
+      }
+    }
+    if (args.capable && reply.nextRefreshAt !== undefined) {
+      const kept = hints.note(c.cacheKey, reply.nextRefreshAt, startedInEpoch, cache.get(c.cacheKey)?.fetchedAt ?? null)
+      if (!kept) clientStats.hintsDroppedAsLate += 1
     }
     return true
   }
@@ -915,66 +780,92 @@ function startClient(args: {
       .map((c) => {
         const entry = cache.get(c.cacheKey)
         const pr = entry?.outcome.kind === 'found' ? entry.outcome.pr : null
+        const selected = c.isSelected === true
+        const hint = args.capable ? hints.get(c.cacheKey, entry?.fetchedAt ?? null) : undefined
+        const intervalMs = args.capable
+          ? hint === null
+            ? null
+            : d2.localInterval(entry?.outcome as never, selected)
+          : reviewRefreshIntervalMs({
+              state: pr?.state ?? null,
+              checksStatus: pr?.checksStatus ?? null,
+              hasReview: entry ? entry.outcome.kind === 'found' : null,
+              selected
+            })
         return {
           key: c.cacheKey,
           revision: c.currentHeadOid ?? '',
           fetchedAt: entry?.fetchedAt ?? null,
-          intervalMs: reviewRefreshIntervalMs({
-            state: pr?.state ?? null,
-            checksStatus: pr?.checksStatus ?? null,
-            hasReview: entry ? entry.outcome.kind === 'found' : null,
-            selected: c.isSelected === true
-          }),
-          ...(args.capable ? { nextRefreshAt: hint.get(c.cacheKey) ?? null } : {}),
-          selected: c.isSelected === true,
+          intervalMs,
+          ...(args.capable ? { nextRefreshAt: typeof hint === 'number' ? hint : null } : {}),
+          selected,
           refresh: async () => {
             clientStats.refreshCalls += 1
             const before = cache.get(c.cacheKey)?.fetchedAt
+            const epoch = hints.epoch(c.cacheKey)
             const reply = await args.rpc({
               c,
               clientId: args.id,
               capable: args.capable,
-              ...(args.capable ? { selected: c.isSelected === true } : {})
+              ...(args.capable ? { selected } : {})
             })
-            const accepted = apply(c, reply)
+            if (stopped) return true
+            const accepted = apply(c, reply, epoch)
             const after = cache.get(c.cacheKey)?.fetchedAt
             // Old client: production predicate (fetchedAt must advance). New client: a host
             // answer that is not an error is a success.
             const ok = args.capable ? accepted : after !== undefined && (before === undefined || after > before)
             if (!ok) clientStats.failures += 1
-            scheduler.update(targets())
+            scheduler.update(targets() as never)
             return ok
           }
         }
       })
-  scheduler.update(targets())
+  scheduler.update(targets() as never)
   scheduler.setVisible(true)
-  return {
-    stop: () => scheduler.dispose(),
-    setSelectedOnly: (v) => {
-      selectedOnly = v
-      scheduler.update(targets())
-    },
-    setVisible: (v) => scheduler.setVisible(v),
-    foreground: () => {
-      for (const c of args.candidates.filter((x) => x.isSelected === true)) {
-        void args.rpc({ c, clientId: args.id, capable: args.capable, selected: true, foreground: true }).then((r) => {
-          apply(c, r)
-          scheduler.update(targets())
-        })
-      }
+
+  // MODELLED Checks panel: a timed read of the selected PR's checks, paced by the host hint.
+  let checksTimer: ReturnType<typeof setTimeout> | undefined
+  const checksTarget = args.candidates.find((c) => c.isSelected === true && c.linkedPRNumber != null)
+  const checksTick = async (): Promise<void> => {
+    if (stopped || !checksTarget) return
+    clientStats.checksCalls += 1
+    const reply = await args.rpc({ c: checksTarget, clientId: args.id, capable: true, selected: true, checks: true })
+    if (stopped) return
+    const next = reply.kind === 'upstream-error' ? Date.now() + 60_000 : (reply.nextRefreshAt ?? null)
+    if (next !== null) checksTimer = setTimeout(checksTick, Math.max(REVIEW_REFRESH_COOLDOWN_MS, next - Date.now()))
+  }
+  if (args.checks && args.capable) void checksTick()
+
+  const foreground = (): void => {
+    for (const c of args.candidates.filter((x) => x.isSelected === true)) {
+      clientStats.foregroundCalls += 1
+      const epoch = hints.epoch(c.cacheKey)
+      void args.rpc({ c, clientId: args.id, capable: args.capable, selected: true, foreground: true }).then((r) => {
+        if (stopped) return
+        apply(c, r, epoch)
+        scheduler.update(targets() as never)
+      })
     }
   }
-}
-
-function rollingPeak(times: number[], windowMs: number): number {
-  let peak = 0
-  let lo = 0
-  for (let hi = 0; hi < times.length; hi++) {
-    while (times[hi] - times[lo] >= windowMs) lo++
-    peak = Math.max(peak, hi - lo + 1)
+  const fgTimer = cfg.fgEveryS > 0 ? setInterval(foreground, cfg.fgEveryS * 1000) : undefined
+  return {
+    // A client that goes away says nothing to the host: no cancel RPC exists.
+    stop: () => {
+      stopped = true
+      clearTimeout(checksTimer)
+      clearInterval(fgTimer)
+      scheduler.dispose()
+    },
+    setSelectedOnly: (v) => {
+      selectedOnly = v
+      // Pause enter/leave retires every hint; a reply already in flight cannot reinstall one.
+      hints.invalidateAll()
+      scheduler.update(targets() as never)
+    },
+    setVisible: (v) => scheduler.setVisible(v),
+    foreground
   }
-  return peak
 }
 
 function pct(values: number[], p: number): number | null {
@@ -984,7 +875,7 @@ function pct(values: number[], p: number): number | null {
 }
 
 it(
-  `d2 ${cfg.scenario} cadence=${cfg.cadence} host=${cfg.host} N=${cfg.n} clients=${cfg.clients} ${cfg.workload} ${cfg.focus} ${cfg.hours}h`,
+  `d3 ${cfg.scenario} gate=${cfg.gate} host=${cfg.host} N=${cfg.n} clients=${cfg.clients} ${cfg.workload} ${cfg.focus} ${cfg.hours}h`,
   async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
     vi.setSystemTime(new Date('2026-11-11T10:00:07Z'))
@@ -993,6 +884,7 @@ it(
     const candidates = seedWorld()
     scheduleEvents(candidates)
     const stops: (() => void)[] = []
+    let host: ReturnType<typeof createHostAfter> | null = null
     const desktop = cfg.scenario.startsWith('desktop')
 
     if (desktop) {
@@ -1025,31 +917,24 @@ it(
     } else {
       const after = cfg.scenario !== 'serve-before'
       const capable = cfg.scenario === 'serve-after'
-      const host = after ? createHostAfter() : null
-      // #40541's paced host cache (modelled from its diff): only when the cadence is not Default,
-      // one slot per branch, reused until the selected interval for the cadence has passed.
-      const paced40541 = new Map<string, PRRefreshOutcome>()
+      host = after ? createHostAfter() : null
       const rpc = async (req: RpcRequest): Promise<Reply> => {
-        if (host) return host(req)
-        const slot = `${req.c.repoPath}::${req.c.branch}`
-        const cachedOutcome = cfg.cadence === 'default' ? undefined : paced40541.get(slot)
-        if (cachedOutcome) {
-          const pr = cachedOutcome.kind === 'found' ? cachedOutcome.pr : null
-          const ttl = reviewRefreshIntervalMs({ state: pr?.state ?? null, checksStatus: pr?.checksStatus ?? null, hasReview: pr !== null, selected: true })
-          if (ttl === null || Date.now() - cachedOutcome.fetchedAt < ttl) {
-            gateStats.hits += 1
-            return cachedOutcome
-          }
-        }
+        if (host) return host.rpc(req)
+        // Before: no host store and no gate. Every client read is an upstream read.
         const started = Date.now()
         const outcome = await upstreamRead(req.c)
-        gateStats.maxRpcMs = Math.max(gateStats.maxRpcMs, Date.now() - started)
-        gateStats.upstreamStarts.push(started - rec.t0)
+        rpcStats.rpcMs.push(Date.now() - started)
+        rpcStats.maxRpcMs = Math.max(rpcStats.maxRpcMs, Date.now() - started)
+        rpcStats.upstreamStarts.push(started - rec.t0)
         if (req.c.linkedPRNumber != null) noteObservation('host', req.c.linkedPRNumber, outcome)
-        if (outcome.kind !== 'upstream-error') paced40541.set(slot, outcome)
         return outcome
       }
-      const factory = capable ? await patchedSchedulerFactory() : createVisibleHostedReviewRefreshScheduler
+      const factory: SchedulerFactory = capable ? await schedulerFactory('d3') : createVisibleHostedReviewRefreshScheduler
+      // EXP_SELECTED_IDS > 1: client k selects the k-th PR with running CI (mixed workload),
+      // so there are that many distinct selected read identities. Otherwise everyone selects row 0.
+      const runningRows = candidates.map((c, i) => (c.linkedPRNumber != null && i % 5 === 2 ? i : -1)).filter((i) => i >= 0)
+      const selectedIndex = (k: number): number =>
+        cfg.selectedIds > 1 || cfg.selectedRunning ? (runningRows[(k - 1) % Math.min(cfg.selectedIds, runningRows.length)] ?? 0) : 0
       for (let k = 1; k <= cfg.clients; k++) {
         const own =
           cfg.disjoint && k === cfg.clients
@@ -1072,12 +957,14 @@ it(
                   cachedFetchedAt: null
                 }
               })
-            : candidates
+            : candidates.map((c, i) => ({ ...c, isSelected: i === selectedIndex(k) }))
         setTimeout(() => {
-          const client = startClient({ id: k, candidates: own, rpc, factory, capable })
+          const client = startClient({ id: k, candidates: own, rpc, factory, capable, checks: cfg.checks && after })
           stops.push(client.stop)
           if (cfg.focus === 'hidden') client.setVisible(false)
           if (cfg.focus === 'unfocused' && after) setTimeout(() => client.setSelectedOnly(true), IDLE_AFTER_MS)
+          if (cfg.disconnectMin !== null && k === 1) setTimeout(client.stop, cfg.disconnectMin * 60_000 - (k - 1) * cfg.staggerS * 1000)
+          if (cfg.allGoneMin !== null) setTimeout(client.stop, cfg.allGoneMin * 60_000 - (k - 1) * cfg.staggerS * 1000)
         }, (k - 1) * cfg.staggerS * 1000)
       }
     }
@@ -1142,23 +1029,52 @@ it(
       git: { total: rec.git.length },
       serve: desktop
         ? null
-        : {
-            upstreamStarts: gateStats.upstreamStarts.length,
-            maxStartsPer5min: rollingPeak(gateStats.upstreamStarts, 5 * 60_000),
-            admits: gateStats.admits,
-            cacheHits: gateStats.hits,
-            lastGoodServedOverBudget: gateStats.staleServed,
-            deferredCold: gateStats.deferredCold,
-            maxRpcSimulatedMs: gateStats.maxRpcMs,
-            queueAgeSecondsByClient: Object.fromEntries(
-              Object.entries(gateStats.queueAgeMsByClient).map(([k, v]) => [
-                k,
-                { admits: v.length, p50: Math.round((pct(v, 50) ?? 0) / 1000), max: Math.round(Math.max(0, ...v) / 1000) }
-              ])
-            ),
-            clientRefreshCalls: clientStats.refreshCalls,
-            clientFailures: clientStats.failures
-          },
+        : (() => {
+            const pctS = (v: number[], p: number): number => Math.round((pct(v, p) ?? 0) / 1000)
+            const events = host?.gate.events ?? []
+            const starts = events.filter((e) => e.kind === 'start')
+            const admits: Record<string, number> = {}
+            const waitedByClient: Record<string, number[]> = {}
+            for (const e of starts) {
+              admits[e.lane] = (admits[e.lane] ?? 0) + 1
+              if (e.kind === 'start') (waitedByClient[e.client] ??= []).push(e.waitedMs)
+            }
+            // Service of each selected read identity: how far apart its upstream starts were.
+            const selectedKeys = new Set(starts.filter((e) => e.lane === 'selected-own' || e.lane === 'selected-borrowed').map((e) => e.key))
+            const selectedIdentities = [...selectedKeys].map((key) => {
+              const ts = starts.filter((e) => e.key === key).map((e) => e.t - rec.t0)
+              const gaps = ts.slice(1).map((t, i) => t - ts[i])
+              const parsed = JSON.parse(key) as unknown[]
+              return { identity: `${parsed[0]}:${parsed[2]}`, starts: ts.length, medianGapS: pctS(gaps, 50), maxGapS: Math.round(Math.max(0, ...gaps) / 1000) }
+            })
+            const goneAt = cfg.allGoneMin === null ? null : cfg.allGoneMin * 60_000 + 60_000
+            return {
+              gate: host ? cfg.gate : 'none',
+              upstreamStarts: rpcStats.upstreamStarts.length,
+              maxStartsPer5min: rollingPeak(rpcStats.upstreamStarts, 5 * 60_000),
+              maxStartsPer60s: rollingPeak(rpcStats.upstreamStarts, 60_000),
+              admits,
+              lanes: host ? summarizeGate(host.gate, rec.t0, Date.now()) : null,
+              selectedIdentities,
+              cacheHits: rpcStats.hits,
+              lastGoodServedOverBudget: rpcStats.staleServed,
+              deferredCold: rpcStats.deferredCold,
+              replyDeadlineHits: rpcStats.replyDeadlineHits,
+              interactiveOverflow: rpcStats.interactiveOverflow,
+              legacy: { hits: rpcStats.legacyHits, upstreamReads: rpcStats.legacyReads },
+              maxRpcSimulatedMs: rpcStats.maxRpcMs,
+              rpcSimulatedMs: { p50: pct(rpcStats.rpcMs, 50), p99: pct(rpcStats.rpcMs, 99), over10s: rpcStats.rpcMs.filter((ms) => ms > REPLY_DEADLINE_MS + 50).length },
+              queueAgeSecondsByClient: Object.fromEntries(
+                Object.entries(waitedByClient).map(([k, v]) => [k, { admits: v.length, p50: pctS(v, 50), max: Math.round(Math.max(0, ...v) / 1000) }])
+              ),
+              clientRefreshCalls: clientStats.refreshCalls,
+              clientFailures: clientStats.failures,
+              checksCalls: clientStats.checksCalls,
+              foregroundCalls: clientStats.foregroundCalls,
+              hintsDroppedAsLate: clientStats.hintsDroppedAsLate,
+              upstreamStartsAfterAllClientsGone: goneAt === null ? null : rpcStats.upstreamStarts.filter((t) => t >= goneAt).length
+            }
+          })(),
       detection: cfg.events
         ? {
             events: detections.length,
