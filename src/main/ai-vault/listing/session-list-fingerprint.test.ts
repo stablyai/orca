@@ -10,13 +10,21 @@ const scan = (overrides: Partial<AiVaultListResult>): AiVaultListResult => ({
 })
 
 describe('conditionalAiVaultListResult', () => {
-  it('answers unchanged when only the scan id, time or issues differ', () => {
-    const first = conditionalAiVaultListResult(scan({ scanId: 'a' }), null)
+  it('answers unchanged when only the scan id, time or issue wording differ', () => {
     const issue = { agent: 'claude' as const, path: '/p', message: 'unreadable' }
+    const first = conditionalAiVaultListResult(scan({ scanId: 'a', issues: [issue] }), null)
     const second = conditionalAiVaultListResult(
-      scan({ scanId: 'b', scannedAt: 'later', issues: [issue] }),
+      scan({ scanId: 'b', scannedAt: 'later', issues: [{ ...issue, message: 'EACCES at 12:01' }] }),
       first.fingerprint
     )
     expect(second).toMatchObject({ unchanged: true, sessions: [] })
+  })
+
+  it('answers changed when an issue appears or clears', () => {
+    const first = conditionalAiVaultListResult(scan({}), null)
+    const issue = { agent: 'claude' as const, path: '/p', message: 'unreadable' }
+    expect(
+      conditionalAiVaultListResult(scan({ issues: [issue] }), first.fingerprint)
+    ).not.toHaveProperty('unchanged')
   })
 })

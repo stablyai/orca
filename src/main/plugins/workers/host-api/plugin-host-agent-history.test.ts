@@ -8,6 +8,7 @@ import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-
 import { PluginRuntimeRpcError } from '../../plugin-runtime-rpc'
 import { callPluginHost, pluginHostTestServices } from './__mocks__/plugin-host-services-fixture'
 import { PLUGIN_HISTORY_TTL_MS } from './plugin-agent-history'
+import { bindPluginHostServices } from './plugin-host-service-bindings'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 import type { PluginAgentStatusRow } from './plugin-workspace-projection'
@@ -285,7 +286,12 @@ describe('agent.listSessions', () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-history-')))
     try {
       mkdirSync(join(root, 'real'))
-      symlinkSync(join(root, 'real'), join(root, 'link'))
+      // A junction on Windows, which needs no symlink privilege.
+      symlinkSync(
+        join(root, 'real'),
+        join(root, 'link'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
       const link = join(root, 'link')
       const rpc = runtime({
         'worktree.list': {
@@ -300,6 +306,39 @@ describe('agent.listSessions', () => {
           issues: [],
           scannedAt: 'x'
         }
+      })
+      const outcome = await listSessions(rpc)
+      expect(outcome.ok && outcome.value).toMatchObject({
+        sessions: [{ workspaceId: `r1::${link}` }]
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('ranks a symlinked workspace by its resolved folder', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-history-')))
+    try {
+      const deep = join(root, 'project', 'deep', 'worktree')
+      mkdirSync(deep, { recursive: true })
+      const link = join(root, 'l')
+      symlinkSync(deep, link, process.platform === 'win32' ? 'junction' : 'dir')
+      const project = join(root, 'project')
+      const rpc = runtime({
+        'worktree.list': {
+          worktrees: [
+            {
+              id: `r1::${project}`,
+              repoId: 'r1',
+              displayName: 'p',
+              path: project,
+              hostId: 'local'
+            },
+            { id: `r1::${link}`, repoId: 'r1', displayName: 'l', path: link, hostId: 'local' }
+          ]
+        },
+        'folderWorkspace.list': { folderWorkspaces: [] },
+        'aiVault.listSessions': { sessions: [vaultRow({ cwd: deep })], issues: [], scannedAt: 'x' }
       })
       const outcome = await listSessions(rpc)
       expect(outcome.ok && outcome.value).toMatchObject({
@@ -556,6 +595,22 @@ describe('agent.resume of a past session', () => {
     }
   })
 
+  it('prepares a session whose only status row carries its id, as a past one', async () => {
+    const rpc = pastRuntime()
+    await resume(rpc, 'claude', [
+      {
+        paneKey: 't:l',
+        worktreeId: WORKTREES.worktrees[1].id,
+        state: 'done',
+        stateStartedAt: 1,
+        agentType: 'claude',
+        providerSessionOnly: true,
+        providerSession: { id: 's-1' }
+      }
+    ])
+    expect(paramsOf(rpc, 'aiVault.prepareSessionResume')).toMatchObject({ sessionId: 's-1' })
+  })
+
   it('leaves a live session and an SSH workspace out of history', async () => {
     const live = pastRuntime()
     await resume(live, 'claude', [
@@ -622,5 +677,37 @@ describe('agents.list task', () => {
       })
     })
     expect(listAgentTaskTitles).not.toHaveBeenCalled()
+  })
+})
+
+describe('agents.list task title failures', () => {
+  it('keep the agent rows, with no task', async () => {
+    const services = bindPluginHostServices({
+      pluginsDataDir: '/nonexistent',
+      delegate: {
+        resolveActiveWorktreeContext: async () => ({
+          worktreeId: 'r1::/w',
+          path: '/w',
+          branch: '',
+          displayName: 'w'
+        }),
+        listTerminals: async () => ({ terminals: [] }),
+        sendTerminal: async () => ({ accepted: true }),
+        dispatchPluginNotification: async () => ({ delivered: true }),
+        listAgentStatuses: () => [
+          { paneKey: 't:a', worktreeId: 'r1::/w', state: 'working', stateStartedAt: 1 }
+        ],
+        listAgentTaskTitles: () => {
+          throw new Error('database is locked')
+        }
+      }
+    })
+    const outcome = await callPluginHost({
+      method: 'agents.list',
+      params: {},
+      granted: ['agent:read'],
+      services
+    })
+    expect(outcome.ok && outcome.value).toMatchObject({ agents: [{ task: null }] })
   })
 })

@@ -112,7 +112,14 @@ export function bindPluginHostServices(input: {
       }))
     },
     listAgentStatuses: () => delegate.listAgentStatuses?.() ?? [],
-    listAgentTaskTitles: () => delegate.listAgentTaskTitles?.() ?? new Map(),
+    listAgentTaskTitles: () => {
+      try {
+        return delegate.listAgentTaskTitles?.() ?? new Map()
+      } catch {
+        // Task titles are optional; an orchestration read failure must not lose the agent rows.
+        return new Map()
+      }
+    },
     sendTerminalText: async (terminalId, action) => {
       const result = await delegate.sendTerminal(terminalId, action, { inputKind: 'driving' })
       return { accepted: result.accepted }

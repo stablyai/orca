@@ -243,7 +243,7 @@ async function workspaceScopePaths(path: string): Promise<readonly string[]> {
 
 /**
  * The workspace each session ran in: the deepest of this computer's workspaces holding its
- * folder, so a worktree nested in its project's folder claims its own sessions; between two of
+ * folder (by its resolved path behind a symlink), so a worktree nested in its project's folder claims its own sessions; between two of
  * equal depth, a project's workspace before a project-group folder of the same path. SSH and
  * runtime hosts' workspaces never match: a same-named folder there is another machine's.
  */
@@ -257,12 +257,16 @@ export async function pluginHistoryWorkspaceMatcher(
   const local = workspaces.filter(isLocalHistoryWorkspace)
   const candidates = (
     await Promise.all(
-      local.map(async (row) => ({
-        id: row.id,
-        depth: normalizeRuntimePathForComparison(row.path).length,
-        folder: parseWorkspaceKey(row.id)?.type === 'folder',
-        inScope: createAiVaultScopeCwdMatcher(await workspaceScopePaths(row.path))
-      }))
+      local.map(async (row) => {
+        const paths = await workspaceScopePaths(row.path)
+        return {
+          id: row.id,
+          // Behind a symlink, its resolved folder counts: that is the spelling sessions record.
+          depth: Math.max(...paths.map((path) => normalizeRuntimePathForComparison(path).length)),
+          folder: parseWorkspaceKey(row.id)?.type === 'folder',
+          inScope: createAiVaultScopeCwdMatcher(paths)
+        }
+      })
     )
   ).toSorted((a, b) => b.depth - a.depth || Number(a.folder) - Number(b.folder))
   return (session) => {

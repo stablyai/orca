@@ -68,4 +68,22 @@ describe('AI Vault session list cache', () => {
     expect(back.sessions.map((session) => session.title)).toEqual(['new'])
     expect(scanAiVaultSessionsInBackground).toHaveBeenCalledTimes(2)
   })
+
+  it('does not cache a scan that began before a forced refresh finished', async () => {
+    const row = (title: string) => ({ id: title, title, cwd: '/src/r1', filePath: `/t/${title}` })
+    const slow = Promise.withResolvers<unknown>()
+    scanAiVaultSessionsInBackground.mockReturnValueOnce(slow.promise)
+    const project = { scopePaths: ['/src/r1'], scopeOnly: true }
+    const stale = listAiVaultSessions(project)
+    scanAiVaultSessionsInBackground.mockResolvedValueOnce({
+      sessions: [row('new')],
+      issues: [],
+      scannedAt: 's2'
+    })
+    await listAiVaultSessions({ scopePaths: ['/src/r1'], force: true })
+    slow.resolve({ sessions: [row('old')], issues: [], scannedAt: 's1' })
+    await stale
+    const back = await listAiVaultSessions(project)
+    expect(back.sessions.map((session) => session.title)).toEqual(['new'])
+  })
 })

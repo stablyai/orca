@@ -9,12 +9,12 @@ export function conditionalAiVaultListResult(
   if (afterFingerprint === undefined) {
     return result
   }
-  // Why only the sessions: the scan id, time and issue wording change on every scan, so hashing
-  // them would answer an unchanged history as changed. A reused body keeps its earlier issues.
+  // Why not the scan id, time or issue wording: they change on every scan, so hashing them would
+  // answer an unchanged history as changed. Which issues there are (kind, agent, path) still
+  // counts, so a new or cleared error reaches clients that reuse an unchanged body.
+  const issues = result.issues.map(({ kind, agent, path }) => [kind ?? 'error', agent, path])
   const fingerprint = createHash('sha256')
-    .update(
-      JSON.stringify({ ...result, scannedAt: undefined, scanId: undefined, issues: undefined })
-    )
+    .update(JSON.stringify({ ...result, scannedAt: undefined, scanId: undefined, issues }))
     .digest('hex')
   return !force && afterFingerprint === fingerprint
     ? { sessions: [], issues: [], scannedAt: result.scannedAt, fingerprint, unchanged: true }

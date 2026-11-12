@@ -31,6 +31,8 @@ function liveRow(
 ): PluginAgentStatusRow | undefined {
   return rows.find(
     (candidate) =>
+      // A session-only row is no live pane: the session is past, and is prepared as one.
+      candidate.providerSessionOnly !== true &&
       candidate.agentType === match.agent &&
       candidate.providerSession?.id === match.sessionId &&
       candidate.worktreeId === match.worktreeId &&
