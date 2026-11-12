@@ -27,9 +27,14 @@ const ADVISORY = {
 }
 
 const SESSION_ID = 'orca-session-1'
-const IDENTITY = { sessionId: SESSION_ID } as Parameters<
-  ReturnType<typeof createClaudeStructuredLaunchResolver>
->[0]['identity']
+const IDENTITY: Parameters<ReturnType<typeof createClaudeStructuredLaunchResolver>>[0]['identity'] =
+  {
+    sessionId: SESSION_ID,
+    workspaceId: 'workspace-1',
+    hostId: LOCAL_EXECUTION_HOST_ID,
+    agent: 'claude',
+    providerHandle: null
+  }
 
 function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
   return agentSessionRecordFixture({
