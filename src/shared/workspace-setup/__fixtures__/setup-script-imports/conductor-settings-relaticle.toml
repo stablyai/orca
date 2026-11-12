@@ -1,0 +1,35 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+# Gitignored files each new worktree needs (.env, Passport keys) are copied via
+# .worktreeinclude at the repo root. Everything else (Herd site, .env
+# rewrites, per-workspace testing DB, dependencies, build) lives in the
+# scripts, shared with Paseo and Polyscope.
+
+[scripts]
+setup = "bash bin/setup-workspace.sh"
+archive = "bash bin/archive-workspace.sh"
+# Workspaces are fully isolated (own Herd hostname, own testing DB, own Redis
+# prefixes; shared dev Postgres by design), so several can run at once.
+run_mode = "concurrent"
+
+# Scripts key off the folder basename, not CONDUCTOR_WORKSPACE_NAME: Conductor
+# renames workspaces after setup, and the folder is the name that never moves.
+[scripts.run.preview]
+command = 'open "https://$(basename "$PWD").test"'
+default = true
+icon = "globe"
+available_in = ["local"]
+
+# Chat (and any queued work) needs a worker owned by THIS workspace. Nothing
+# starts one automatically, and without it sent messages queue forever. The
+# script wraps Horizon in watchexec so an edited job or prompt is picked up
+# instead of running from the worker's boot-time memory.
+[scripts.run.horizon]
+command = "bash bin/workspace-queue.sh"
+icon = "layers"
+available_in = ["local"]
+
+[scripts.run.vite]
+command = "pnpm run dev"
+icon = "zap"
+available_in = ["local"]
