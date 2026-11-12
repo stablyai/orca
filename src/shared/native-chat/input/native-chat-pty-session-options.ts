@@ -15,13 +15,16 @@ import {
   setTrackedSessionOption
 } from './native-chat-session-option-state'
 import {
-  acquireNativeChatSessionOptionLease,
   readNativeChatSessionOptionSeed,
   type NativeChatSessionOptionLease,
   type NativeChatSessionOptionOwner,
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from './native-chat-session-option-cache'
+import {
+  acquireNativeChatSessionOptionOwnerLease,
+  settleNativeChatSessionOptionLease
+} from './native-chat-session-option-owner'
 import { createSessionOptionAppliers } from './native-chat-session-option-apply'
 import {
   buildNativeChatSessionOptionSnapshot,
@@ -35,6 +38,7 @@ export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
   reportSessionOptions(values: Record<string, SessionOptionValue>): void
   replaceModels(models: CatalogModel[]): void
+  reconcileOwner(): void
   /** The context window the host's model listing states for `modelId`, or null. */
   contextWindowTokens(modelId: string): number | null
 }
@@ -124,23 +128,28 @@ export function createNativeChatPtySessionOptions(
   let operationLease: NativeChatSessionOptionLease | null = null
   let hasSubscribed = false
   const acquire = (): NativeChatSessionOptionLease | null =>
-    args.owner
-      ? acquireNativeChatSessionOptionLease(args.scopeKey, args.owner, args.fallbackScopeKey)
-      : null
+    acquireNativeChatSessionOptionOwnerLease(args.scopeKey, args.owner, args.fallbackScopeKey)
+  const reconcileOwner = (): void => {
+    if (mountedLease || listeners.size === 0) {
+      return
+    }
+    mountedLease = acquire()
+    if (!mountedLease) {
+      return
+    }
+    record = mountedLease.record
+    unsubscribeOwner = mountedLease.subscribe(publish)
+    if (args.reportedValues) {
+      mountedLease.transact(() =>
+        applyNativeChatReportedSessionOptions(record, args.reportedValues!)
+      )
+    }
+    publish()
+  }
   const canCommit = (): boolean =>
     !args.owner || (operationLease ?? mountedLease)?.isCurrent() === true
-  const settle = <T>(mutate: () => T): T | undefined => {
-    if (!args.owner) {
-      return mutate()
-    }
-    const held = operationLease
-    let result: T | undefined
-    held?.settle(() => {
-      result = mutate()
-      return true
-    })
-    return result
-  }
+  const settle = <T>(mutate: () => T): T | undefined =>
+    args.owner ? settleNativeChatSessionOptionLease(operationLease, mutate) : mutate()
   const transact = (mutate: () => boolean): void => {
     if (!args.owner) {
       if (mutate()) {
@@ -247,22 +256,11 @@ export function createNativeChatPtySessionOptions(
     getSnapshot: () => snapshot,
     setOption: appliers.setOption,
     invokeAction: appliers.invokeAction,
+    reconcileOwner,
     subscribe: (listener) => {
       hasSubscribed = true
       listeners.add(listener)
-      if (!mountedLease) {
-        mountedLease = acquire()
-        if (mountedLease) {
-          record = mountedLease.record
-          unsubscribeOwner = mountedLease.subscribe(publish)
-          if (args.reportedValues) {
-            mountedLease.transact(() =>
-              applyNativeChatReportedSessionOptions(record, args.reportedValues!)
-            )
-          }
-          publish()
-        }
-      }
+      reconcileOwner()
       return () => {
         listeners.delete(listener)
         if (listeners.size === 0) {

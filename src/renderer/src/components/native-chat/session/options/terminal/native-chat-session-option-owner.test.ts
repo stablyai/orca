@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { createElement } from 'react'
+import { createElement, useLayoutEffect } from 'react'
 import { act, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
@@ -9,6 +9,12 @@ import type { Worktree } from '../../../../../../../shared/worktree/types'
 import { createGlobalSettingsFixture } from '../../../../../../../shared/global-settings-test-fixture'
 import { makeTab } from '../../../../../store/terminals/terminal-tab.test-fixture'
 import { useNativeChatSessionOptionOwner } from './native-chat-session-option-owner'
+import { createNativeChatPtySessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-pty-session-options'
+import { createNativeChatSessionOptionOwner } from '../../../../../../../shared/native-chat/input/native-chat-session-option-owner'
+import {
+  acquireNativeChatSessionOptionLease,
+  clearNativeChatSessionOptionCacheForTests
+} from '../../../../../../../shared/native-chat/input/native-chat-session-option-cache'
 
 // The sidebar's separate catalog index is outside the owner-index measurement.
 vi.mock('@/store/slices/ui/settled-sort-epoch', () => ({ installSettledSortEpoch: vi.fn() }))
@@ -48,7 +54,10 @@ function worktree(index: number): Worktree {
 }
 
 describe('terminal option owner catalog invalidation', () => {
-  afterEach(() => useAppStore.setState(initialState, true))
+  afterEach(() => {
+    useAppStore.setState(initialState, true)
+    clearNativeChatSessionOptionCacheForTests()
+  })
 
   it.each([10, 100])(
     'shares catalog indexing across %i mounted panes and updates only the changed owner',
@@ -68,14 +77,47 @@ describe('terminal option owner catalog invalidation', () => {
       })
       const renders = Array.from({ length: count }, () => 0)
       const connections: (string | null | undefined)[] = []
+      const sessions: (string | undefined)[] = []
+      const bindingReads = Array.from({ length: count }, () => 0)
       function Probe({ index }: { index: number }): null {
         renders[index]++
-        const owner = useNativeChatSessionOptionOwner({
+        const { owner } = useNativeChatSessionOptionOwner({
           agent: 'grok',
           terminalTabId: `tab-${index}`,
           targetPtyId: `pty-${index}`
         })
-        connections[index] = owner?.binding.connectionId
+        useLayoutEffect(() => {
+          connections[index] = owner?.currentBinding()?.connectionId
+          sessions[index] = owner?.getSnapshot().providerSession?.id
+        })
+        useLayoutEffect(() => {
+          if (!owner) {
+            return
+          }
+          const attach = owner.attach
+          const observed = vi.spyOn(owner, 'attach').mockImplementation((source) =>
+            attach({
+              ...source,
+              getBindingSnapshot: () => {
+                bindingReads[index]++
+                return source.getBindingSnapshot()
+              }
+            })
+          )
+          const surface = createNativeChatPtySessionOptions({
+            agent: 'grok',
+            owner,
+            scopeKey: `pty-${index}`,
+            mode: 'live',
+            modelLabel: 'Model',
+            dispatchCommand: () => undefined
+          })!
+          const release = surface.subscribe(() => {})
+          return () => {
+            release()
+            observed.mockRestore()
+          }
+        }, [owner, index])
         return null
       }
       const mounted = render(
@@ -145,6 +187,30 @@ describe('terminal option owner catalog invalidation', () => {
       expect(renders[0]).toBeGreaterThan(0)
       expect(connections[0]).toBe('ssh-owner')
       expect(renders.slice(1)).toEqual(Array.from({ length: count - 1 }, () => 0))
+
+      renders.fill(0)
+      bindingReads.fill(0)
+      const known = {
+        agent: 'grok',
+        connectionId: 'ssh-owner',
+        worktreeId: rows[0].id,
+        ptyId: 'pty-0',
+        providerSession: { key: 'session_id' as const, id: 'A' }
+      }
+      const source = createNativeChatSessionOptionOwner(known, () => known)
+      act(() => acquireNativeChatSessionOptionLease('pty-0', source)?.release())
+      expect(sessions[0]).toBe('A')
+      expect(renders[0]).toBeGreaterThan(0)
+      expect(renders.slice(1)).toEqual(Array.from({ length: count - 1 }, () => 0))
+      expect(bindingReads[0]).toBeGreaterThan(0)
+      // One source notification and up to two commit reads; unrelated entries are never read.
+      expect(bindingReads[0]).toBeLessThanOrEqual(3)
+      expect(bindingReads.slice(1)).toEqual(Array.from({ length: count - 1 }, () => 0))
+      renders.fill(0)
+      bindingReads.fill(0)
+      act(() => acquireNativeChatSessionOptionLease('pty-0', source)?.release())
+      expect(renders).toEqual(Array.from({ length: count }, () => 0))
+      expect(bindingReads).toEqual(Array.from({ length: count }, () => 0))
       mounted.unmount()
     }
   )

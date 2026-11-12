@@ -7,8 +7,14 @@ import {
   type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
 import { setBoundedScopeCacheEntry } from '../native-chat-scope-cache'
+import type {
+  NativeChatSessionOptionOwner,
+  NativeChatSessionOptionBindingSource
+} from './native-chat-session-option-owner'
+export type { NativeChatSessionOptionOwner } from './native-chat-session-option-owner'
 import {
   enrichNativeChatSessionOptionBinding,
+  nativeChatSessionOptionBindingObservationsEqual,
   sameNativeChatSessionOptionBinding,
   type NativeChatSessionOptionBinding
 } from './native-chat-session-option-binding'
@@ -18,12 +24,9 @@ type Entry = {
   binding: NativeChatSessionOptionBinding
   leases: number
   listeners: Set<() => void>
+  bindingListeners: Set<() => void>
 }
-export type NativeChatSessionOptionOwner = {
-  binding: NativeChatSessionOptionBinding
-  readCurrentBinding: () => NativeChatSessionOptionBinding | null
-}
-export type NativeChatSessionOptionLease = {
+export type NativeChatSessionOptionLease = NativeChatSessionOptionBindingSource & {
   record: NativeChatSessionOptionRecord
   isCurrent: () => boolean
   transact: (mutate: (record: NativeChatSessionOptionRecord) => boolean) => boolean
@@ -37,20 +40,31 @@ const inactiveBindings = new WeakMap<
   NativeChatSessionOptionBinding
 >()
 
-function currentBinding(
-  owner: NativeChatSessionOptionOwner
-): NativeChatSessionOptionBinding | null {
-  const current = owner.readCurrentBinding()
-  if (!current || !sameNativeChatSessionOptionBinding(owner.binding, current)) {
-    return null
+function publishBinding(entry: Entry, binding: NativeChatSessionOptionBinding): void {
+  if (nativeChatSessionOptionBindingObservationsEqual(entry.binding, binding)) {
+    return
   }
-  owner.binding = enrichNativeChatSessionOptionBinding(owner.binding, current)
-  return current
+  entry.binding = binding
+  for (const listener of entry.bindingListeners) {
+    listener()
+  }
+}
+
+export function readNativeChatSessionOptionSeedBinding(
+  scopeKey: string,
+  candidate: NativeChatSessionOptionBinding
+): NativeChatSessionOptionBinding {
+  const active = activeEntries.get(scopeKey)
+  const record = active?.record ?? sessionOptionCache.get(scopeKey)
+  const binding = active?.binding ?? (record ? inactiveBindings.get(record) : undefined)
+  return binding && sameNativeChatSessionOptionBinding(binding, candidate)
+    ? enrichNativeChatSessionOptionBinding(binding, candidate)
+    : candidate
 }
 
 export function readNativeChatSessionOptionSeed(
   scopeKey: string,
-  owner: NativeChatSessionOptionOwner,
+  owner: Pick<NativeChatSessionOptionOwner, 'binding'>,
   fallbackScopeKey?: string
 ): NativeChatSessionOptionRecord {
   const active = activeEntries.get(scopeKey)
@@ -79,21 +93,20 @@ export function acquireNativeChatSessionOptionLease(
   owner: NativeChatSessionOptionOwner,
   fallbackScopeKey?: string
 ): NativeChatSessionOptionLease | null {
-  const current = currentBinding(owner)
+  const current = owner.currentBinding()
   if (!current) {
     return null
   }
   let entry = activeEntries.get(scopeKey)
   if (entry && !sameNativeChatSessionOptionBinding(entry.binding, current)) {
     activeEntries.delete(scopeKey)
+    for (const listener of entry.bindingListeners) {
+      listener()
+    }
     entry = undefined
   }
   if (!entry) {
-    const seed = readNativeChatSessionOptionSeed(
-      scopeKey,
-      { ...owner, binding: enrichNativeChatSessionOptionBinding(owner.binding, current) },
-      fallbackScopeKey
-    )
+    const seed = readNativeChatSessionOptionSeed(scopeKey, { binding: current }, fallbackScopeKey)
     entry = {
       record: cloneNativeChatSessionOptionRecord(seed),
       binding: enrichNativeChatSessionOptionBinding(
@@ -104,26 +117,28 @@ export function acquireNativeChatSessionOptionLease(
         current
       ),
       leases: 0,
-      listeners: new Set()
+      listeners: new Set(),
+      bindingListeners: new Set()
     }
     activeEntries.set(scopeKey, entry)
     sessionOptionCache.delete(scopeKey)
   } else {
-    entry.binding = enrichNativeChatSessionOptionBinding(entry.binding, current)
+    publishBinding(entry, enrichNativeChatSessionOptionBinding(entry.binding, current))
   }
-  owner.binding = enrichNativeChatSessionOptionBinding(entry.binding, owner.binding)
+  owner.captureBinding(entry.binding)
   const held = entry
   held.leases++
   let released = false
+  const isHeld = (): boolean => !released && activeEntries.get(scopeKey) === held
   const isCurrent = (): boolean => {
-    if (released || activeEntries.get(scopeKey) !== held) {
+    if (!isHeld() || !owner.captureBinding(held.binding)) {
       return false
     }
-    const next = currentBinding(owner)
+    const next = owner.currentBinding()
     if (!next || !sameNativeChatSessionOptionBinding(held.binding, next)) {
       return false
     }
-    held.binding = enrichNativeChatSessionOptionBinding(held.binding, next)
+    publishBinding(held, enrichNativeChatSessionOptionBinding(held.binding, next))
     return true
   }
   const settle = (mutate: (record: NativeChatSessionOptionRecord) => boolean): boolean => {
@@ -137,6 +152,12 @@ export function acquireNativeChatSessionOptionLease(
   }
   return {
     record: held.record,
+    getBindingSnapshot: () => held.binding,
+    isHeld,
+    subscribeBinding: (listener) => {
+      held.bindingListeners.add(listener)
+      return () => held.bindingListeners.delete(listener)
+    },
     isCurrent,
     transact: (mutate) => isCurrent() && settle(mutate),
     settle,

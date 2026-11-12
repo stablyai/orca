@@ -14,6 +14,23 @@ export type NativeChatSessionOptionBinding = {
   providerSession?: AgentProviderSessionMetadata
 }
 
+export function nativeChatSessionOptionBindingObservationsEqual(
+  left: NativeChatSessionOptionBinding,
+  right: NativeChatSessionOptionBinding
+): boolean {
+  return (
+    left.agent === right.agent &&
+    left.connectionId === right.connectionId &&
+    left.worktreeId === right.worktreeId &&
+    left.terminalHandle === right.terminalHandle &&
+    left.ptyId === right.ptyId &&
+    left.incarnationId === right.incarnationId &&
+    left.providerSession?.key === right.providerSession?.key &&
+    left.providerSession?.id === right.providerSession?.id &&
+    left.providerSession?.transcriptPath === right.providerSession?.transcriptPath
+  )
+}
+
 /** Missing legacy metadata can enrich an owner, but cannot erase known identity. */
 export function sameNativeChatSessionOptionBinding(
   left: NativeChatSessionOptionBinding,

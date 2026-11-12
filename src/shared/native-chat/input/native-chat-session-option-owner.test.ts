@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { createNativeChatSessionOptionOwner } from './native-chat-session-option-owner'
 import {
   clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
@@ -49,7 +50,7 @@ describe('live session option ownership', () => {
 
   it('returns an accepted original action without reviving it through any late writer', async () => {
     let current: NativeChatSessionOptionBinding | null = binding('A')
-    const ownerA = { binding: current, readCurrentBinding: () => current }
+    const ownerA = createNativeChatSessionOptionOwner(current, () => current)
     let accept!: () => void
     const dispatched = vi.fn(
       () =>
@@ -65,7 +66,10 @@ describe('live session option ownership', () => {
     await Promise.resolve()
     expect(dispatched).toHaveBeenCalledOnce()
     current = binding('B')
-    const b = surface('pty', { binding: current, readCurrentBinding: () => current })
+    const b = surface(
+      'pty',
+      createNativeChatSessionOptionOwner(current, () => current)
+    )
     const changedB = vi.fn()
     const releaseB = b.subscribe(changedB)
     b.reportSessionOptions({ model: 'haiku' })
@@ -96,10 +100,7 @@ describe('live session option ownership', () => {
       ...binding('A'),
       providerSession: undefined
     }
-    const original: NativeChatSessionOptionOwner = {
-      binding: current,
-      readCurrentBinding: () => current
-    }
+    const original = createNativeChatSessionOptionOwner(current, () => current)
     let accept!: () => void
     const a = surface(
       'pty',
@@ -118,7 +119,10 @@ describe('live session option ownership', () => {
     release()
     for (let i = 0; i < 160; i++) {
       const identity = { ...binding(String(i)), ptyId: String(i) }
-      const other = surface(String(i), { binding: identity, readCurrentBinding: () => identity })
+      const other = surface(
+        String(i),
+        createNativeChatSessionOptionOwner(identity, () => identity)
+      )
       const close = other.subscribe(() => {})
       other.reportSessionOptions({ model: 'haiku' })
       close()
@@ -126,7 +130,10 @@ describe('live session option ownership', () => {
     accept()
     await result
     expect(readNativeChatSessionOptionCache('pty')?.model?.value).toBe('opus')
-    const remount = surface('pty', { binding: binding('A'), readCurrentBinding: () => current })
+    const remount = surface(
+      'pty',
+      createNativeChatSessionOptionOwner(binding('A'), () => current)
+    )
     const close = remount.subscribe(() => {})
     expect(remount.getSnapshot()[0].kind).toMatchObject({ currentValue: 'opus' })
     current = binding('B')
@@ -146,7 +153,11 @@ describe('live session option ownership', () => {
           accept = resolve
         })
     )
-    const a = surface('pty', { binding: current, readCurrentBinding: () => current }, dispatched)
+    const a = surface(
+      'pty',
+      createNativeChatSessionOptionOwner(current, () => current),
+      dispatched
+    )
     const release = a.subscribe(() => {})
     a.reportSessionOptions({ model: 'sonnet' })
     const accepted = a.setOption('model', 'opus')
@@ -179,10 +190,7 @@ describe('live session option ownership', () => {
       const persist = vi.fn()
       const target = surface(
         'pty',
-        {
-          binding: identity,
-          readCurrentBinding: () => (oldRouteLive ? identity : null)
-        },
+        createNativeChatSessionOptionOwner(identity, () => (oldRouteLive ? identity : null)),
         () =>
           new Promise<void>((resolve) => {
             accept = resolve
@@ -200,7 +208,10 @@ describe('live session option ownership', () => {
       let reopened: ReturnType<typeof surface> | undefined
       let closeReopened: (() => void) | undefined
       const reopen = () => {
-        reopened = surface('pty', { binding: identity, readCurrentBinding: () => identity })
+        reopened = surface(
+          'pty',
+          createNativeChatSessionOptionOwner(identity, () => identity)
+        )
         closeReopened = reopened.subscribe(() => {})
       }
       if (reopenBeforeAcceptance) {
@@ -224,7 +235,7 @@ describe('live session option ownership', () => {
     let accept!: () => void
     const target = surface(
       'pty',
-      { binding: current, readCurrentBinding: () => current },
+      createNativeChatSessionOptionOwner(current, () => current),
       () =>
         new Promise<void>((resolve) => {
           accept = resolve
@@ -241,7 +252,10 @@ describe('live session option ownership', () => {
     await picked
     expect(notify).not.toHaveBeenCalled()
     close()
-    const successor = surface('pty', { binding: current, readCurrentBinding: () => current })
+    const successor = surface(
+      'pty',
+      createNativeChatSessionOptionOwner(current, () => current)
+    )
     const closeSuccessor = successor.subscribe(() => {})
     expect(successor.getSnapshot()[0].kind).not.toMatchObject({ currentValue: 'opus' })
     closeSuccessor()
@@ -253,7 +267,7 @@ describe('live session option ownership', () => {
     let accept!: () => void
     const target = surface(
       'pty',
-      { binding: identity, readCurrentBinding: () => identity },
+      createNativeChatSessionOptionOwner(identity, () => identity),
       () =>
         new Promise<void>((resolve) => {
           accept = resolve
@@ -285,7 +299,7 @@ describe('live session option ownership', () => {
     )
     const target = surface(
       'pty',
-      { binding: current, readCurrentBinding: () => current },
+      createNativeChatSessionOptionOwner(current, () => current),
       dispatched
     )
     const close = target.subscribe(() => {})
@@ -296,7 +310,10 @@ describe('live session option ownership', () => {
     await Promise.resolve()
     expect(dispatched).toHaveBeenCalledOnce()
     current = { ...current, connectionId: 'ssh:another-host' }
-    const successor = surface('pty', { binding: current, readCurrentBinding: () => current })
+    const successor = surface(
+      'pty',
+      createNativeChatSessionOptionOwner(current, () => current)
+    )
     const closeSuccessor = successor.subscribe(() => {})
     successor.reportSessionOptions({ model: 'haiku' })
     accept()
@@ -311,7 +328,10 @@ describe('live session option ownership', () => {
     const owners = Array.from({ length: count }, (_, i) => {
       const identity = { ...binding(String(i)), ptyId: String(i) }
       const readCurrentBinding = vi.fn(() => identity)
-      const target = surface(String(i), { binding: identity, readCurrentBinding })
+      const target = surface(
+        String(i),
+        createNativeChatSessionOptionOwner(identity, readCurrentBinding)
+      )
       const notify = vi.fn()
       const release = target.subscribe(notify)
       notify.mockClear()

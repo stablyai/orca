@@ -121,7 +121,7 @@ it('keeps a new old-host Send behind its visible window after a disjoint reconne
   let id = ''
   act(() => {
     id = mounted.result.current.record('repeat', undefined, false, 'claude')
-    mounted.result.current.useSourceEvidence(id, false)
+    mounted.result.current.setSourceEvidence(id, false)
   })
   expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([id])
   const unrelated = { ...userRow('other'), id: 'unrelated', timestamp: 4100 }
@@ -312,7 +312,7 @@ it.each([true, false])(
     let id = ''
     act(() => {
       id = mounted.result.current.record('repeat', undefined, false, 'opencode')
-      mounted.result.current.useSourceEvidence(id, source)
+      mounted.result.current.setSourceEvidence(id, source)
     })
     const old = [
       { ...sourceRow('repeat', 'old-user'), timestamp: 500 },
@@ -342,9 +342,9 @@ it('assigns identical legacy occurrences at the real capability fallback and nev
   act(() => {
     one = first.result.current.record('repeat', undefined, false, 'opencode')
     two = first.result.current.record('repeat', undefined, false, 'opencode')
-    first.result.current.useSourceEvidence(one, false)
-    first.result.current.useSourceEvidence(two, false)
-    first.result.current.useSourceEvidence(two, false)
+    first.result.current.setSourceEvidence(one, false)
+    first.result.current.setSourceEvidence(two, false)
+    first.result.current.setSourceEvidence(two, false)
   })
   const messages = [sourceRow('repeat', 'x'), { ...boundary, id: 'answer' }]
   first.rerender({ messages })
@@ -367,15 +367,15 @@ it('transfers spent ownership to a reachable fallback glue witness, then retires
     two = ''
   act(() => {
     source = first.result.current.record('first second', undefined, false, 'opencode')
-    first.result.current.useSourceEvidence(source, true)
+    first.result.current.setSourceEvidence(source, true)
     one = first.result.current.record('first', undefined, false, 'opencode')
     two = first.result.current.record('second', undefined, false, 'opencode')
   })
   const x = sourceRow('first second', 'x')
   first.rerender({ messages: [x] })
   act(() => {
-    first.result.current.useSourceEvidence(one, false)
-    first.result.current.useSourceEvidence(two, false)
+    first.result.current.setSourceEvidence(one, false)
+    first.result.current.setSourceEvidence(two, false)
   })
   const messages = [x, { ...boundary, id: 'answer' }]
   first.rerender({ messages })
@@ -408,7 +408,7 @@ it('releases dead fallback group dependencies and does not accumulate receipts b
   for (let index = 0; index < 20; index++) {
     act(() => {
       const id = mounted.result.current.record(`later-${index}`, undefined, false, 'opencode')
-      mounted.result.current.useSourceEvidence(id, true)
+      mounted.result.current.setSourceEvidence(id, true)
     })
     mounted.rerender({
       messages: [sourceRow(`later-${index}`, `u${index}`), { ...boundary, id: `a${index}` }]
@@ -433,8 +433,8 @@ it('keeps a committed source lock through a late real fallback and prevents lega
   const x = sourceRow('first second', 'x')
   mounted.rerender({ messages: [x] })
   act(() => {
-    mounted.result.current.useSourceEvidence(owner, false)
-    mounted.result.current.useSourceEvidence(continuation, false)
+    mounted.result.current.setSourceEvidence(owner, false)
+    mounted.result.current.setSourceEvidence(continuation, false)
   })
   mounted.rerender({ messages: [x, { ...boundary, id: 'answer' }] })
   expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([continuation])
@@ -502,12 +502,12 @@ it.each(['repeat', 'repeat '])(
       replacement = ''
     act(() => {
       rejected = mounted.result.current.record(failedText, undefined, false, 'opencode')
-      mounted.result.current.useSourceEvidence(rejected, false)
+      mounted.result.current.setSourceEvidence(rejected, false)
       mounted.result.current.reject(rejected)
     })
     act(() => {
       replacement = mounted.result.current.record('repeat', undefined, false, 'opencode')
-      mounted.result.current.useSourceEvidence(replacement, false)
+      mounted.result.current.setSourceEvidence(replacement, false)
     })
     expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([replacement])
     mounted.rerender({ messages: [sourceRow('repeat', 'new'), { ...boundary, id: 'answer' }] })

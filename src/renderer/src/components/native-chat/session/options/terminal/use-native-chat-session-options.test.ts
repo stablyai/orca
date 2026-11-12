@@ -1,11 +1,20 @@
 // @vitest-environment happy-dom
 
-import { createElement, useSyncExternalStore } from 'react'
-import { act, render, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  createElement,
+  StrictMode,
+  Suspense,
+  startTransition,
+  useLayoutEffect,
+  useSyncExternalStore
+} from 'react'
+import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
 
 import { clearNativeChatSessionOptionCacheForTests } from '../../../../../../../shared/native-chat/input/native-chat-session-option-cache'
+import { createNativeChatSessionOptionOwner } from '../../../../../../../shared/native-chat/input/native-chat-session-option-owner'
+import { createNativeChatPtySessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-pty-session-options'
 import { clearNativeChatModelEnrichmentForTests } from '../catalog/native-chat-session-option-enrichment'
 
 const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
@@ -91,6 +100,7 @@ function modelDescriptor(snapshot: { id: string; kind: unknown }[]): {
 }
 
 describe('useNativeChatSessionOptions model reporting', () => {
+  afterEach(cleanup)
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
     clearNativeChatSessionOptionCacheForTests()
@@ -202,16 +212,19 @@ describe('useNativeChatSessionOptions model reporting', () => {
       storeState.agentStatusByPaneKey[paneKey] = { agentType: agent, model: 'grok-4.7' }
       const dispatchCommand = vi.fn()
       const readTerminalScreen = () => CLAUDE_SCREEN
-      const { result, unmount } = renderHook(() =>
-        useNativeChatSessionOptions({
-          agent,
-          terminalTabId: 'tab-1',
-          targetPtyId: 'pty-1',
-          paneKey,
-          dispatchCommand,
-          readTerminalScreen
-        })
+      const { result, unmount } = renderHook(
+        () =>
+          useNativeChatSessionOptions({
+            agent,
+            terminalTabId: 'tab-1',
+            targetPtyId: 'pty-1',
+            paneKey,
+            dispatchCommand,
+            readTerminalScreen
+          }),
+        { wrapper: StrictMode }
       )
+      const originalSurface = result.current.surface
       await act(async () => {
         await Promise.resolve()
       })
@@ -230,6 +243,18 @@ describe('useNativeChatSessionOptions model reporting', () => {
         }
       })
       expect(modelDescriptor(result.current.snapshot).currentValue).toBe(pick)
+      expect(result.current.surface).toBe(originalSurface)
+      act(() => {
+        storeState.agentStatusByPaneKey[paneKey] = {
+          ...storeState.agentStatusByPaneKey[paneKey],
+          providerSession: undefined
+        }
+        for (const listener of storeListeners) {
+          listener()
+        }
+      })
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe(pick)
+      expect(result.current.surface).toBe(originalSurface)
       act(() => {
         storeState.agentStatusByPaneKey[paneKey] = {
           ...storeState.agentStatusByPaneKey[paneKey],
@@ -301,32 +326,144 @@ describe('useNativeChatSessionOptions model reporting', () => {
     }
   )
 
-  it('keeps the actual target usable when discovery is unavailable and ownership later resolves', async () => {
-    discoveryUnavailable = true
-    currentConnectionId = undefined
-    storeState.tabsByWorktree = {}
+  it.each(['tab', 'leaf'])(
+    'keeps the actual target usable when discovery is unavailable and %s ownership later resolves',
+    async (target) => {
+      discoveryUnavailable = true
+      currentConnectionId = undefined
+      if (target === 'tab') {
+        storeState.tabsByWorktree = {}
+      }
+      const paneKey = target === 'leaf' ? 'tab-1:00000000-0000-4000-8000-000000000001' : undefined
+      const dispatchCommand = vi.fn()
+      const { result, rerender, unmount } = renderHook(() =>
+        useNativeChatSessionOptions({
+          agent: 'grok',
+          terminalTabId: 'tab-1',
+          targetPtyId: 'pty-1',
+          paneKey,
+          dispatchCommand
+        })
+      )
+      act(() => {
+        storeState.tabsByWorktree = { 'worktree-1': [{ id: 'tab-1', ptyId: 'pty-1' }] }
+        if (paneKey) {
+          storeState.terminalLayoutsByTabId['tab-1'] = {
+            ptyIdsByLeafId: { [paneKey.split(':')[1]]: 'pty-1' }
+          }
+        }
+        for (const listener of storeListeners) {
+          listener()
+        }
+      })
+      await act(async () => {
+        await result.current.surface!.setOption('model', 'grok-4.7-fast')
+      })
+      currentConnectionId = null
+      rerender()
+      await act(async () => {
+        await result.current.surface!.setOption('model', 'grok-4.7')
+      })
+      expect(dispatchCommand).toHaveBeenCalledTimes(2)
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('grok-4.7')
+      unmount()
+    }
+  )
+
+  it('fences admission with a known seed committed while canonical metadata is missing', async () => {
+    discoverModels.mockResolvedValue(null)
+    const paneKey = 'tab-1:00000000-0000-4000-8000-000000000001'
+    storeState.terminalLayoutsByTabId['tab-1'] = {
+      ptyIdsByLeafId: { [paneKey.split(':')[1]]: 'pty-1' }
+    }
+    storeState.agentStatusByPaneKey[paneKey] = { agentType: 'grok' }
     const dispatchCommand = vi.fn()
-    const { result, rerender, unmount } = renderHook(() =>
+    const { result, unmount } = renderHook(() =>
       useNativeChatSessionOptions({
         agent: 'grok',
         terminalTabId: 'tab-1',
         targetPtyId: 'pty-1',
+        paneKey,
         dispatchCommand
       })
     )
-    storeState.tabsByWorktree = { 'worktree-1': [{ id: 'tab-1', ptyId: 'pty-1' }] }
-    rerender()
+    const original = result.current.surface!
+    const known = {
+      agent: 'grok',
+      connectionId: null,
+      worktreeId: 'worktree-1',
+      ptyId: 'pty-1',
+      providerSession: { key: 'session_id' as const, id: 'A' }
+    }
+    const other = createNativeChatPtySessionOptions({
+      agent: 'grok',
+      owner: createNativeChatSessionOptionOwner(known, () => known),
+      scopeKey: 'pty-1',
+      mode: 'live',
+      modelLabel: 'Model',
+      dispatchCommand: vi.fn()
+    })!
+    let release = (): void => {}
+    await act(async () => {
+      release = other.subscribe(() => {})
+      expect(result.current.surface).toBe(original)
+      storeState.agentStatusByPaneKey[paneKey] = {
+        agentType: 'grok',
+        providerSession: { key: 'session_id', id: 'B' }
+      }
+      await expect(original.setOption('model', 'grok-4.7-fast')).rejects.toThrow()
+    })
+    expect(dispatchCommand).not.toHaveBeenCalled()
+    act(() => {
+      for (const listener of storeListeners) {
+        listener()
+      }
+    })
+    expect(result.current.surface).not.toBe(original)
     await act(async () => {
       await result.current.surface!.setOption('model', 'grok-4.7-fast')
     })
-    currentConnectionId = null
-    rerender()
-    await act(async () => {
-      await result.current.surface!.setOption('model', 'grok-4.7')
-    })
-    expect(dispatchCommand).toHaveBeenCalledTimes(2)
-    expect(modelDescriptor(result.current.snapshot).currentValue).toBe('grok-4.7')
+    expect(dispatchCommand).toHaveBeenCalledOnce()
+    release()
     unmount()
+  })
+
+  it('keeps the committed session usable after a replacement render is discarded', async () => {
+    discoverModels.mockResolvedValue(null)
+    const dispatchCommand = vi.fn()
+    let committed: ReturnType<typeof useNativeChatSessionOptions> | undefined
+    const suspended = new Promise<never>(() => {})
+    function Probe({ replace }: { replace: boolean }): null {
+      const options = useNativeChatSessionOptions({
+        agent: replace ? 'claude' : 'grok',
+        terminalTabId: 'tab-1',
+        targetPtyId: 'pty-1',
+        dispatchCommand
+      })
+      useLayoutEffect(() => {
+        committed = options
+      })
+      if (replace) {
+        throw suspended
+      }
+      return null
+    }
+    const view = (replace: boolean) =>
+      createElement(Suspense, { fallback: null }, createElement(Probe, { replace }))
+    const mounted = render(view(false))
+    const original = committed!.surface!
+    await act(async () => {
+      await original.setOption('model', 'grok-4.7-fast')
+    })
+    act(() => startTransition(() => mounted.rerender(view(true))))
+    expect(committed!.surface).toBe(original)
+    expect(modelDescriptor(original.getSnapshot()).currentValue).toBe('grok-4.7-fast')
+    await act(async () => {
+      await original.setOption('model', 'grok-4.7')
+    })
+    expect(modelDescriptor(original.getSnapshot()).currentValue).toBe('grok-4.7')
+    expect(dispatchCommand).toHaveBeenCalledTimes(2)
+    mounted.unmount()
   })
 
   it.each([10, 100])('does not render unaffected model consumers among %i panes', async (count) => {

@@ -141,7 +141,7 @@ describe('RemoteRuntimeRequestConnection', () => {
       })
       return child
     })
-    const server = await createServer((method) =>
+    const server = await createServer(async (method) =>
       method === 'git.remoteFileUrl'
         ? getRemoteFileUrl('/repo', 'a.ts', 10, 20, routing)
         : { method }

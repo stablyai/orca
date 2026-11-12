@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useNativeChatSessionOptionOwner } from './native-chat-session-option-owner'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
@@ -66,7 +66,12 @@ export function useNativeChatSessionOptions(args: {
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
   )
-  const owner = useNativeChatSessionOptionOwner({ agent, terminalTabId, targetPtyId, paneKey })
+  const { owner, targetAvailable } = useNativeChatSessionOptionOwner({
+    agent,
+    terminalTabId,
+    targetPtyId,
+    paneKey
+  })
   const surface = useMemo(() => {
     // Chat attaches after startup is queued, so a draft picker could no longer change its command.
     if (!targetPtyId) {
@@ -224,5 +229,10 @@ export function useNativeChatSessionOptions(args: {
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
   )
+  useLayoutEffect(() => {
+    if (targetAvailable) {
+      surface?.reconcileOwner()
+    }
+  }, [surface, targetAvailable])
   return { surface, snapshot }
 }
