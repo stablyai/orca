@@ -19997,6 +19997,14 @@
         },
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
+        },
+        "PluginCatalogHighlights": {
+          "justNow": "just now",
+          "added": "Added {{value0}}",
+          "featured": "Featured",
+          "featuredDetail": "most installed, one per category",
+          "newlyAdded": "Newly added",
+          "newlyAddedDetail": "across your catalogs"
         }
       },
       "agent-workspace-trust-decision": {
