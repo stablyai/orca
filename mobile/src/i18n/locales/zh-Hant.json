@@ -2494,6 +2494,10 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "加入附件失敗（重新連線中）"
     },
+    "useCloseActions": {
+      "closeFailed": "無法關閉分頁。請再試一次。",
+      "closeFailedDesktopNotReady": "無法關閉分頁。電腦上的 Orca 仍在載入中，請稍後再試。"
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "瀏覽器命令執行失敗",
       "browserCreateFailed": "建立瀏覽器失敗",
