@@ -129,7 +129,8 @@ export async function installOnJournal(
       stopTurnAttention = installed.subscribeTurnCompletions({
         id: 'host-turn-attention',
         includePrompts: true,
-        emit: (event) => onTurnAttention(event, installed.readStatusSummary)
+        emit: (event) => onTurnAttention(event, installed.readStatusSummary),
+        onForget: turnAttention.forget
       })
     }
     installAgentSessionAttachments({

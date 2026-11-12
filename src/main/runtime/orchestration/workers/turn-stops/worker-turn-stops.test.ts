@@ -234,6 +234,7 @@ describe('chat worker turn stops', () => {
           status,
           lastAssistantMessage: 'Done.'
         })),
+      close: () => report.forget(CHAT_SESSION),
       runTimers: () => {
         for (const run of timers.splice(0)) {
           run()
@@ -241,6 +242,16 @@ describe('chat worker turn stops', () => {
       }
     }
   }
+
+  it('still reports the stop pending when its chat closed', () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const chat = chatWithTimers(ctx)
+
+    chat.finish('turn-1')
+    chat.close()
+    chat.runTimers()
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+  })
 
   it('still reports a follow-up whose own turn ended before its start settled', () => {
     const ctx = setup()

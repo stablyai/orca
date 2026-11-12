@@ -29,6 +29,8 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   includePrompts?: boolean
   /** In-process reconciliation on restore and prompt removal. */
   onState?: (state: StructuredAttentionState) => void
+  /** The session closed on this host; a reopen starts with no edges behind it. */
+  onForget?: (sessionId: string) => void
 }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
@@ -88,6 +90,13 @@ export class StructuredAgentSessionTurnCompletionFeed {
   /** Reattachments baseline silently instead of announcing old work. */
   forget(sessionId: string): void {
     this.baselines.delete(sessionId)
+    for (const subscriber of this.subscribers.values()) {
+      try {
+        subscriber.onForget?.(sessionId)
+      } catch {
+        // A subscriber's bookkeeping cannot stop the close.
+      }
+    }
   }
 
   /** When prompt and clean completion coincide, keep prompt identity; send completion only to legacy clients.

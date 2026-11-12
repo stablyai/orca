@@ -85,6 +85,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
     ) => void
     start: () => void
     stop: () => void
+    /** The chat closed on this host. */
+    forget?: (sessionId: string) => void
   }
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */

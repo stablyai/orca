@@ -62,6 +62,8 @@ export function chatWorkerTurnStopReporter(
   watchJournal?: ChatJournalWatch,
   now: () => number = Date.now
 ) {
+  // One counter for all chats, so a reopened chat's first edge can't match a stop pending from before its close.
+  let lastEdge = 0
   const generations = new Map<string, number>()
   // A turn begins after its session's previous turn completed; a prompt arrives mid-turn and bounds nothing.
   const previousCompletionAt = new Map<string, number>()
@@ -110,7 +112,7 @@ export function chatWorkerTurnStopReporter(
         return
       }
       // Any later edge, even one not reported (a failed or cancelled turn), supersedes a pending stop.
-      const generation = (generations.get(sessionId) ?? 0) + 1
+      const generation = ++lastEdge
       generations.set(sessionId, generation)
       const turnStartedAt = previousCompletionAt.get(sessionId)
       if (event.type === 'completion') {
@@ -134,8 +136,10 @@ export function chatWorkerTurnStopReporter(
           const current = deps.getDb()
           const status = readStatus(stop.sessionId)
           // A newer edge supersedes this one, and a queued follow-up already started the next turn.
+          // A close forgets the chat's edges but not a stop still pending from it.
+          const latest = generations.get(stop.sessionId)
           if (
-            generations.get(stop.sessionId) !== generation ||
+            (latest !== undefined && latest !== generation) ||
             !current ||
             status?.status === 'working'
           ) {
@@ -215,6 +219,10 @@ export function chatWorkerTurnStopReporter(
   }
   return {
     onTurnAttention,
+    forget: (sessionId: string) => {
+      generations.delete(sessionId)
+      previousCompletionAt.delete(sessionId)
+    },
     start: () =>
       schedule(() => {
         void Promise.resolve()
