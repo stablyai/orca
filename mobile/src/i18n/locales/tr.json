@@ -2454,8 +2454,7 @@
     "tabStrip": {
       "checkingCapabilities": "Masaüstü özellikleri kontrol ediliyor — birazdan tekrar deneyin",
       "newTab": "Yeni sekme",
-      "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminali Temizle",
