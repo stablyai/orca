@@ -8,7 +8,7 @@
 //   DELETE /v1/github/user
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
-import { GitHubConnectError, authorizeUrl, signState, type GitHubConnectConfig } from './github-connect'
+import { GitHubConnectError, authorizeUrl, signState, tokenRequest, type GitHubConnectConfig, type TokenSet } from './github-connect'
 import type { Keyring, SealedSecret } from './secrets-crypto'
 
 const STATE_TTL_MS = 10 * 60_000
@@ -29,7 +29,7 @@ export type GitHubUserTokenRow = {
   updated_at: number
 }
 
-export type TokenSet = { access: string; refresh: string | null; accessExpiresAt: number | null; refreshExpiresAt: number | null }
+export type { TokenSet }
 
 const binding = (row: { account_id: string; user_id: string }) => ({
   scope: 'github_user',
@@ -56,33 +56,7 @@ export function userAuthorizeUrl(config: GitHubConnectConfig, origin: string, st
   return authorizeUrl(config, origin, state)
 }
 
-const TokenResponse = z.looseObject({
-  access_token: z.string().min(1),
-  refresh_token: z.string().min(1).optional(),
-  expires_in: z.number().int().positive().optional(),
-  refresh_token_expires_in: z.number().int().positive().optional()
-})
 const UserBody = z.looseObject({ id: z.number().int(), login: z.string(), name: z.string().nullable().optional() })
-
-async function tokenRequest(config: GitHubConnectConfig, body: Record<string, string>, now: number): Promise<TokenSet> {
-  const doFetch = config.fetch ?? fetch
-  const response = await doFetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: { accept: 'application/json', 'content-type': 'application/json', 'user-agent': 'orca-sandbox-control' },
-    body: JSON.stringify({ client_id: config.clientId, client_secret: config.clientSecret, ...body }),
-    redirect: 'manual'
-  })
-  const parsed = TokenResponse.safeParse(await response.json().catch(() => null))
-  if (!response.ok || !parsed.success) {
-    throw new GitHubConnectError('oauth_exchange_failed')
-  }
-  return {
-    access: parsed.data.access_token,
-    refresh: parsed.data.refresh_token ?? null,
-    accessExpiresAt: parsed.data.expires_in ? now + parsed.data.expires_in * 1000 : null,
-    refreshExpiresAt: parsed.data.refresh_token_expires_in ? now + parsed.data.refresh_token_expires_in * 1000 : null
-  }
-}
 
 export async function storeUserToken(db: D1Database, keyring: Keyring, row: { account_id: string; user_id: string }, user: z.infer<typeof UserBody>, tokens: TokenSet, now: number) {
   const sealed = await keyring.seal(binding(row), JSON.stringify(tokens))

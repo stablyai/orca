@@ -95,7 +95,8 @@ import {
   installUrl,
   isInstallationBound,
   listAccountInstallations,
-  type GitHubConnectConfig
+  type GitHubConnectConfig,
+  type OAuthIdentity
 } from './github-connect'
 import { GuardrailError, consumeCreateToken, guardrailsFromEnv } from './guardrails'
 import { handleOperator, isOperator } from './operator'
@@ -2148,6 +2149,25 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   }
 }
 
+/**
+ * Binding the App through OAuth proves who the binder is on GitHub, and GitHub already handed us
+ * their user token: keep it as their commit identity (git-as-sender), as if they had connected it
+ * separately. Best effort: the bind stands even when this is skipped or fails. Never logs tokens.
+ */
+async function storeIdentityOnBind(env: Env, state: { a: string; u: string }, identity: OAuthIdentity, now: number): Promise<void> {
+  const keyring = keyringFor(env)
+  if (!keyring) {
+    console.log(JSON.stringify({ event: 'github_user_stored_on_bind', stored: 0, skipped: 'no_keyring' }))
+    return
+  }
+  try {
+    await storeUserToken(env.SANDBOX_DB, await keyring, { account_id: state.a, user_id: state.u }, identity.user, identity.tokens, now)
+    console.log(JSON.stringify({ event: 'github_user_stored_on_bind', stored: 1 }))
+  } catch (error) {
+    console.log(JSON.stringify({ event: 'github_user_stored_on_bind', stored: 0, failed: error instanceof Error ? error.name : 'unknown' }))
+  }
+}
+
 async function githubReturn(env: Env, deps: Deps, url: URL): Promise<Response> {
   const connect = githubConnect(env, deps)
   if (!connect) {
@@ -2174,6 +2194,9 @@ async function githubReturn(env: Env, deps: Deps, url: URL): Promise<Response> {
           ? 'This link was already used. Start again from Orca.'
           : 'GitHub is installed, but this page was not opened from Orca. Start from Orca to connect it to your account.'
       )
+    }
+    if (result.identity) {
+      await storeIdentityOnBind(env, result.state, result.identity, (deps.now ?? Date.now)())
     }
     const esc = (value: string) => value.replace(/[^A-Za-z0-9_.-]/g, '')
     const requested = 'requested' in result

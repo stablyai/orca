@@ -213,7 +213,39 @@ async function consumeState(db: D1Database, state: ConnectState, now: number): P
 
 // ---- GitHub user-to-server verification ----
 
-const UserBody = z.looseObject({ id: z.number().int(), login: z.string() })
+const UserBody = z.looseObject({ id: z.number().int(), login: z.string(), name: z.string().nullable().optional() })
+export type GitHubUser = z.infer<typeof UserBody>
+
+/** A GitHub App user-to-server token set. Expiring user tokens carry a refresh token and both expiries. */
+export type TokenSet = { access: string; refresh: string | null; accessExpiresAt: number | null; refreshExpiresAt: number | null }
+
+const TokenResponse = z.looseObject({
+  access_token: z.string().min(1),
+  refresh_token: z.string().min(1).optional(),
+  expires_in: z.number().int().positive().optional(),
+  refresh_token_expires_in: z.number().int().positive().optional()
+})
+
+/** POSTs to GitHub's OAuth token endpoint: a `code` exchange (single-use) or a refresh. */
+export async function tokenRequest(config: GitHubConnectConfig, body: Record<string, string>, now: number): Promise<TokenSet> {
+  const doFetch = config.fetch ?? fetch
+  const response = await doFetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { accept: 'application/json', 'content-type': 'application/json', 'user-agent': 'orca-sandbox-control' },
+    body: JSON.stringify({ client_id: config.clientId, client_secret: config.clientSecret, ...body }),
+    redirect: 'manual'
+  })
+  const parsed = TokenResponse.safeParse(await response.json().catch(() => null))
+  if (!response.ok || !parsed.success) {
+    throw new GitHubConnectError('oauth_exchange_failed')
+  }
+  return {
+    access: parsed.data.access_token,
+    refresh: parsed.data.refresh_token ?? null,
+    accessExpiresAt: parsed.data.expires_in ? now + parsed.data.expires_in * 1000 : null,
+    refreshExpiresAt: parsed.data.refresh_token_expires_in ? now + parsed.data.refresh_token_expires_in * 1000 : null
+  }
+}
 const UserInstallations = z.looseObject({
   installations: z.array(
     z.looseObject({
@@ -227,29 +259,23 @@ const Membership = z.looseObject({ state: z.string(), role: z.string() })
 export type VerifiedInstallation = GitHubInstallation & { githubUserId: number }
 
 /**
- * Exchanges the OAuth code and returns the installations this GitHub user may bind: ones on their
- * own account, or on an org where they are an active admin. `only` narrows to one installation id.
+ * Exchanges the OAuth code (once: GitHub codes are single-use) and returns the installations this
+ * GitHub user may bind: ones on their own account, or on an org where they are an active admin.
+ * `only` narrows to one installation id. The user's token set comes back too, so the caller can keep
+ * it as that member's commit identity.
  */
 export async function verifiedInstallations(
   config: GitHubConnectConfig,
   code: string,
+  now: number,
   only?: number
-): Promise<{ githubUser: { id: number; login: string }; allowed: VerifiedInstallation[]; denied: number[] }> {
+): Promise<{ githubUser: GitHubUser; tokens: TokenSet; allowed: VerifiedInstallation[]; denied: number[] }> {
   const doFetch = config.fetch ?? fetch
-  const exchanged = await doFetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: { accept: 'application/json', 'content-type': 'application/json', 'user-agent': 'orca-sandbox-control' },
-    body: JSON.stringify({ client_id: config.clientId, client_secret: config.clientSecret, code }),
-    redirect: 'manual'
-  })
-  const token = z.looseObject({ access_token: z.string().min(1) }).safeParse(await exchanged.json().catch(() => null))
-  if (!exchanged.ok || !token.success) {
-    throw new GitHubConnectError('oauth_exchange_failed')
-  }
+  const tokens = await tokenRequest(config, { code }, now)
   const userApi = async (path: string) =>
     doFetch(`https://api.github.com${path}`, {
       headers: {
-        authorization: `Bearer ${token.data.access_token}`,
+        authorization: `Bearer ${tokens.access}`,
         accept: 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28',
         'user-agent': 'orca-sandbox-control'
@@ -288,7 +314,7 @@ export async function verifiedInstallations(
   if (only !== undefined && candidates.length === 0) {
     denied.push(only)
   }
-  return { githubUser: user.data, allowed, denied }
+  return { githubUser: user.data, tokens, allowed, denied }
 }
 
 export class GitHubConnectError extends Error {
@@ -447,6 +473,9 @@ export async function boundAccounts(db: D1Database, installationId: number): Pro
   return results.map((row) => row.account_id)
 }
 
+/** The OAuth-proven GitHub user behind a bind or install request, with their user-to-server token. */
+export type OAuthIdentity = { user: GitHubUser; tokens: TokenSet }
+
 /**
  * Setup URL (after install) and OAuth callback. Without a code we send the browser through OAuth so
  * GitHub proves who the installer is; the installation id is carried inside a re-signed state.
@@ -458,8 +487,15 @@ export async function handleGitHubReturn(
   now: number
 ): Promise<
   | { redirect: string }
-  | { bound: string[]; boundIds: { githubOwnerId: number; githubUserId: number }[]; denied: number; state: ConnectState }
-  | { requested: { owner: string }; state: ConnectState }
+  | {
+      bound: string[]
+      boundIds: { githubOwnerId: number; githubUserId: number }[]
+      denied: number
+      state: ConnectState
+      /** OAuth binds only: the binder's GitHub user and token, to keep as their commit identity. */
+      identity?: OAuthIdentity
+    }
+  | { requested: { owner: string }; state: ConnectState; identity?: OAuthIdentity }
   | { error: string }
   | { userConnect: { a: string; u: string }; code: string }
 > {
@@ -521,7 +557,8 @@ export async function handleGitHubReturn(
     // A member connecting their own GitHub identity: the caller stores the user token.
     return { userConnect: { a: state.a, u: state.u }, code }
   }
-  const result = await verifiedInstallations(config, code, installationId)
+  const result = await verifiedInstallations(config, code, now, installationId)
+  const identity: OAuthIdentity = { user: result.githubUser, tokens: result.tokens }
   if (requested && !installationId) {
     // Nothing is installed yet: remember who asked (OAuth-proven) so the owner's approval binds it.
     const owner = state.r?.split('/')[0]
@@ -541,7 +578,7 @@ export async function handleGitHubReturn(
       now
     )
     console.log(JSON.stringify({ event: 'github_install_requested' }))
-    return { requested: { owner }, state }
+    return { requested: { owner }, state, identity }
   }
   for (const installation of result.allowed) {
     await bindInstallation(
@@ -565,6 +602,8 @@ export async function handleGitHubReturn(
     // Numeric GitHub ids for billing's trial abuse keys (per GitHub owner and per GitHub user).
     boundIds: result.allowed.map((i) => ({ githubOwnerId: i.account.id, githubUserId: i.githubUserId })),
     denied: result.denied.length,
-    state
+    state,
+    // Zero allowed installations: nothing was proven worth keeping, so no identity either.
+    ...(result.allowed.length > 0 ? { identity } : {})
   }
 }
