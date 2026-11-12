@@ -7,6 +7,7 @@ import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { basename } from '@/lib/path'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
+import { TabColorDot } from './TabColorDot'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -287,12 +288,7 @@ export default function SortableTab({
       ) : (
         <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
       )}
-      {tab.color && !isEditing && (
-        <span
-          className="mr-1.5 size-2 rounded-full shrink-0"
-          style={{ backgroundColor: tab.color }}
-        />
-      )}
+      {!isEditing && <TabColorDot color={tab.color} className="mr-1.5" />}
       {isExpanded && !isEditing && (
         <button
           className={`mr-1 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
