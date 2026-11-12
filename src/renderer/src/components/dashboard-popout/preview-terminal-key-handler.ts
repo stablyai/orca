@@ -14,7 +14,10 @@ import {
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/clipboard/terminal-clipboard-selection-text'
-import { isAppOwnedCopyChord } from '@/components/terminal-pane/input/keyboard/xterm-bypass-policy'
+import {
+  isAppOwnedCopyChord,
+  isMacNativeMenuChord
+} from '@/components/terminal-pane/input/keyboard/xterm-bypass-policy'
 
 /** Compose IME, clipboard and pane policy in xterm’s single custom handler; defer macOS Cmd+V to its menu accelerator to avoid double paste. Dispose Option-location listeners on teardown. */
 export function installPreviewTerminalKeyHandler(args: {
@@ -29,6 +32,8 @@ export function installPreviewTerminalKeyHandler(args: {
   const { terminal } = args
   const platform = getShortcutPlatform()
   const consumedClipboardKeys = new Set<string>()
+  const isNativeMenuChord = (event: KeyboardEvent): boolean =>
+    platform === 'darwin' && isMacNativeMenuChord(event)
   const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
   const consumeEvent = (event: KeyboardEvent): false => {
     event.preventDefault()
@@ -96,7 +101,7 @@ export function installPreviewTerminalKeyHandler(args: {
         }
         return consumeEvent(event)
       }
-      return true
+      return !isNativeMenuChord(event)
     }
     nativeOnlyShortcutTracker.prepareKeyDown(event)
     const keybindings = useAppStore.getState().keybindings
@@ -154,7 +159,8 @@ export function installPreviewTerminalKeyHandler(args: {
       optionKeyLocations: optionKeyLocations.get()
     })
     if (!action) {
-      return true
+      // After the resolver: it is this surface's only shortcut layer, so user bindings win.
+      return !isNativeMenuChord(event)
     }
     switch (action.type) {
       case 'sendInput':
