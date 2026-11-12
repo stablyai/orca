@@ -1,3 +1,7 @@
+import type {
+  AgentJournalApprovalMatchedAskRule,
+  AgentJournalApprovalSubject
+} from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
@@ -174,30 +178,13 @@ export type AgentJournalQuestion = {
   freeTextInput?: AgentJournalFreeTextInput
 }
 
-export type AgentJournalApprovalMatchedAskRule = {
-  source: string
-  toolName: string
-  ruleContent?: string
-}
-
-export type AgentJournalPlanApprovalSubject = {
-  kind: 'plan'
-  text: string
-  filePath?: string
-}
-
-declare const agentJournalUnknownKind: unique symbol
-/** A kind tag this build does not know. Branded, so it never stands in for a known tag. */
-export type AgentJournalUnknownKind = string & { readonly [agentJournalUnknownKind]: true }
-
-/** A subject of a kind a newer Orca wrote: carried as it was, with whatever fields it holds, and
- *  never drawn or approved here. */
-export type AgentJournalUnknownApprovalSubject = { readonly kind: AgentJournalUnknownKind }
-
-/** Open, as the journal schema reads it: narrow with `isPlanApprovalSubject` before reading it. */
-export type AgentJournalApprovalSubject =
-  | AgentJournalPlanApprovalSubject
-  | AgentJournalUnknownApprovalSubject
+export type {
+  AgentJournalApprovalMatchedAskRule,
+  AgentJournalApprovalSubject,
+  AgentJournalPlanApprovalSubject,
+  AgentJournalUnknownApprovalSubject,
+  AgentJournalUnknownKind
+} from './agent-session-journal-approval-subject'
 
 export type AgentJournalApprovalItem = {
   kind: 'approval'
@@ -208,6 +195,7 @@ export type AgentJournalApprovalItem = {
   blockedPath?: string
   matchedAskRule?: AgentJournalApprovalMatchedAskRule
   subject?: AgentJournalApprovalSubject
+  personOnly?: true
   detail: string | null
   options: AgentJournalPromptOption[]
   resolution: AgentJournalResolution

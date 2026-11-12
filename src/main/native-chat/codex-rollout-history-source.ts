@@ -1,5 +1,5 @@
 import { basename, dirname, join } from 'node:path'
-import { forEachSessionFile } from '../ai-vault/session-scanner-discovery'
+import { forEachSessionFile } from '../ai-vault/discovery/session-scanner-discovery'
 import { admitTranscriptPath } from './transcript-path-admission'
 
 export function codexPhysicalRolloutId(path: string): string | null {

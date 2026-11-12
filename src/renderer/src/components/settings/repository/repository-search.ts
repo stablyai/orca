@@ -291,9 +291,9 @@ export function getRepositoryPaneSearchMetadata(
   if (worktrees) {
     identity.push(...worktrees.identity)
   }
-  identity.push(parts.removeProject)
   return {
     identity,
+    removeProject: parts.removeProject,
     projectRuntime: parts.projectRuntime ? [parts.projectRuntime] : [],
     sparsePresets: worktrees?.sparsePresets ?? [],
     sharedPaths: worktrees?.sharedPaths ?? [],

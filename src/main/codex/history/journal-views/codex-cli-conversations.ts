@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { configuredAdditionalCodexHomePaths } from '../../../ai-vault/cached-session-list'
+import { configuredAdditionalCodexHomePaths } from '../../../ai-vault/discovery/ai-vault-scan-roots'
 import { resolveSessionFilePath } from '../../../native-chat/session-file-resolver'
 import {
   directoryTranscriptImport,

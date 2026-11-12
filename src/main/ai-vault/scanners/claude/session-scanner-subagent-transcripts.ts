@@ -1,4 +1,7 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 
