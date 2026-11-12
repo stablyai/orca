@@ -31,7 +31,9 @@ const { structuredSessionMailTarget } =
   await import('../../mailbox/routing/structured-session-mail-target')
 const { structuredSessionMailReach } =
   await import('../../mailbox/routing/structured-session-mail-address')
-const { stopStructuredWorker, readStructuredWorkerJournal, captureStructuredWorkerArchive } =
+const { captureWorkerOutputReference } =
+  await import('../../workers/archives/worker-output-archive')
+const { stopStructuredWorker, readStructuredWorkerJournal } =
   await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-lifecycle')
 await import('../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session')
 await import('../../../rpc/methods/orchestration/worker/worker-observation')
@@ -367,19 +369,15 @@ describe.each(['live', 'at-rest'] as const)(
       expect(lines.indexOf('POST-CLEAR')).toBeGreaterThan(lines.indexOf('PRE-CLEAR'))
     })
 
-    it('freezes the whole conversation into the release archive', async () => {
-      const archive = await captureStructuredWorkerArchive(registerWorker(), 'claude')
-      const frozen = texts(archive.messages)
-      expect(frozen.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
-      expect(frozen.indexOf('POST-CLEAR')).toBeGreaterThan(frozen.indexOf('PRE-CLEAR'))
-    })
-
-    it("retains the worker when the successor's journal cannot be read", async () => {
-      unreadable.add(SUCCESSOR)
-      await expect(
-        captureStructuredWorkerArchive(registerWorker(), 'claude')
-      ).rejects.toMatchObject({ code: 'archive_failed' })
-      expect(historyAsked).toEqual([SUCCESSOR])
+    it('reads the whole conversation from its chat once released, keeping no copy', async () => {
+      const dispatchId = startWorkerDispatch(db, registerWorker())
+      await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
+      const read = await rpcRuntime(db).call('orchestration.workerRead', { dispatch: dispatchId })
+      expect(read).toMatchObject({ source: 'transcript', archived: true })
+      const history = JSON.stringify(read)
+      expect(history.indexOf('PRE-CLEAR')).toBeGreaterThan(-1)
+      expect(history.indexOf('POST-CLEAR')).toBeGreaterThan(history.indexOf('PRE-CLEAR'))
+      expect(db.getWorkerTerminalArchive(dispatchId)?.content).not.toContain('CLEAR')
     })
 
     it('stops the worker by closing the successor, and can then release it', async () => {
@@ -551,31 +549,27 @@ describe('worker-stop on a structured worker that reads exited without any /clea
   })
 })
 
-describe.each([
-  { clears: 1, warning: /latest session .* could not be preserved; earlier sessions were/ },
-  { clears: 2, warning: /latest 2 sessions .* could not be preserved; earlier sessions were/ }
-])('a retired lineage of $clears clear(s) whose later sessions cannot be read', (lineage) => {
-  beforeEach(() => {
-    // The user closed the cleared chat, and every journal after the first is gone.
-    const later = lineage.clears === 1 ? [SUCCESSOR] : [SUCCESSOR, SECOND]
-    const newest = later.at(-1) ?? SUCCESSOR
-    const chain = lineage.clears === 1 ? [] : [clearedRecord(SUCCESSOR, SECOND)]
-    installSessions([clearedRecord(MINTED, SUCCESSOR), ...chain, foundedRecord(newest)], [])
-    later.forEach((sessionId) => unreadable.add(sessionId))
-  })
+describe.each([{ clears: 1 }, { clears: 2 }])(
+  'a retired lineage of $clears clear(s) whose later sessions cannot be read',
+  (lineage) => {
+    beforeEach(() => {
+      // The user closed the cleared chat, and every journal after the first is gone.
+      const later = lineage.clears === 1 ? [SUCCESSOR] : [SUCCESSOR, SECOND]
+      const newest = later.at(-1) ?? SUCCESSOR
+      const chain = lineage.clears === 1 ? [] : [clearedRecord(SUCCESSOR, SECOND)]
+      installSessions([clearedRecord(MINTED, SUCCESSOR), ...chain, foundedRecord(newest)], [])
+      later.forEach((sessionId) => unreadable.add(sessionId))
+    })
 
-  it('archives the readable earliest session and says how many later ones were lost', async () => {
-    const archive = await captureStructuredWorkerArchive(registerWorker(), 'claude')
-    expect(texts(archive.messages)).toContain('PRE-CLEAR')
-    expect(archive.warnings.join(' ')).toMatch(lineage.warning)
-  })
-
-  it('commits that archive when the worker is released', async () => {
-    const dispatchId = startWorkerDispatch(db, registerWorker())
-    await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
-    expect(db.getWorkerTerminalArchive(dispatchId)?.content).toContain('PRE-CLEAR')
-  })
-})
+    it('releases, then says the output is no longer available instead of reading nothing', async () => {
+      const dispatchId = startWorkerDispatch(db, registerWorker())
+      await expect(releaseSucceeded(dispatchId)).resolves.toMatchObject({ state: 'released' })
+      await expect(
+        rpcRuntime(db).call('orchestration.workerRead', { dispatch: dispatchId })
+      ).rejects.toMatchObject({ code: 'archive_unavailable' })
+    })
+  }
+)
 
 describe('the worker-read cursor across a /clear', () => {
   it('stays valid: what the caller already read did not change, the successor follows it', async () => {
@@ -635,9 +629,14 @@ describe('a worker cleared twice', () => {
 describe('a running session that cannot be verified is refused, never declared exited', () => {
   async function expectRefused(identity: ReturnType<typeof registerWorker>, code: string) {
     await expect(readJournal(identity)).rejects.toMatchObject({ code })
-    await expect(captureStructuredWorkerArchive(identity, 'claude')).rejects.toMatchObject({
-      code
-    })
+    expect(() =>
+      captureWorkerOutputReference({
+        runtime: { getExactWorkerProviderSession: () => null },
+        terminalHandle: identity.handle,
+        attachedAtMs: 0,
+        structuredWorker: identity
+      })
+    ).toThrow(expect.objectContaining({ code }))
     await expect(
       readStructuredWorkerTerminal({ handle: identity.handle, db: null })
     ).rejects.toMatchObject({ code })

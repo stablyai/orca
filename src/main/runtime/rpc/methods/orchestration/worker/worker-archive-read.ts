@@ -3,194 +3,158 @@ import type {
   OrchestrationWorkerReadSource
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { PtyLivenessVerdict } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import { readWorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type {
-  WorkerTerminalArchiveRow,
-  WorkerTerminalResourceRow
-} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import type {
-  WorkerTerminalTailArchive,
-  WorkerTranscriptSnapshotArchive
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { structuredWorkerAgent } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import {
+  readWorkerOutputReference,
+  type WorkerOutputReference
 } from '../../../../orchestration/workers/archives/worker-output-archive'
-import { clampWorkerTranscriptLimit } from '../../../../orchestration/workers/transcripts/worker-transcript-payload'
 import {
   createWorkerOutputSourceIdentity,
-  decodeWorkerOutputCursor,
-  encodeWorkerOutputCursor
+  decodeWorkerOutputCursor
 } from '../../../../orchestration/workers/transcripts/worker-output-cursor'
-import type { WorkerStructuredJournalArchive } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
-import { readArchivedStructuredJournal } from '../structured-workers/orchestration-structured-worker-lifecycle'
+import { readWorkerTranscript } from '../../../../orchestration/workers/transcripts/worker-transcript-read'
+import {
+  readStructuredWorkerJournal,
+  resolveStructuredWorkerForDispatch
+} from '../structured-workers/orchestration-structured-worker-lifecycle'
+import { sourceChanged, workerTranscriptReadResult } from './worker-output'
 
-const ARCHIVED_TERMINAL_PAGE_LINES = 2_000
-
-// Serve frozen transcript/redacted-tail output after PTY exit; preserve Dispatch-scoped, source-pinned cursors.
-export async function readArchivedWorkerOutput(args: {
+type ReleasedWorkerReadArgs = {
   db: OrchestrationDb
   dispatchId: string
   workerState: string
-  resource: Pick<WorkerTerminalResourceRow, 'id' | 'terminal_handle' | 'release_state'>
+  resource: Pick<WorkerTerminalResourceRow, 'id' | 'terminal_handle' | 'release_state'> &
+    Partial<Pick<WorkerTerminalResourceRow, 'resume_session'>>
   source?: OrchestrationWorkerReadSource
   cursor?: string | number
   limit?: number
-  /** Process evidence is separate from the fact that output was archived. */
+  /** Process evidence is separate from the fact that the worker was released. */
   liveness?: PtyLivenessVerdict['status']
-}): Promise<OrchestrationWorkerReadResult> {
+}
+
+/** A released worker's output, read from its original transcript or chat history as it is now. */
+export async function readArchivedWorkerOutput(
+  args: ReleasedWorkerReadArgs
+): Promise<OrchestrationWorkerReadResult> {
   const archive = args.db.getWorkerTerminalArchive(args.dispatchId)
   if (!archive) {
-    throw new OrchestrationError(
-      'archive_unavailable',
-      `Dispatch ${args.dispatchId} was released without a preserved output archive.`
+    throw outputUnavailable(
+      args.dispatchId,
+      'it was released without a record of where its output lives'
     )
   }
-  if (archive.kind === 'structured_journal') {
-    if (args.source === 'terminal') {
-      throw new OrchestrationError(
-        'archive_unavailable',
-        `Dispatch ${args.dispatchId} preserved transcript output only; terminal output was released.`
-      )
+  const reference = readWorkerOutputReference(archive)
+  if (archive.kind === 'terminal_tail') {
+    throw outputUnavailable(
+      args.dispatchId,
+      `it had no transcript to read (${reference.fallbackReason ?? 'session_not_reported'})`
+    )
+  }
+  if (args.source === 'terminal') {
+    throw new OrchestrationError(
+      'archive_unavailable',
+      `Dispatch ${args.dispatchId} keeps its transcript only; terminal output was released.`
+    )
+  }
+  return archive.kind === 'structured_journal'
+    ? readReleasedChatHistory(args, reference)
+    : readReleasedTranscript(args, reference)
+}
+
+async function readReleasedTranscript(
+  args: ReleasedWorkerReadArgs,
+  reference: WorkerOutputReference
+): Promise<OrchestrationWorkerReadResult> {
+  // Rows written before references existed point at the conversation saved for resume.
+  const resume = reference.sessionId
+    ? null
+    : readWorkerResumeSession({ resume_session: args.resource.resume_session ?? null })
+  const agent = reference.agent ?? resume?.agent
+  const sessionId = reference.sessionId ?? resume?.providerSession.id
+  if (!agent || !sessionId) {
+    throw outputUnavailable(args.dispatchId, 'its transcript was never located')
+  }
+  const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
+  if (cursor && (cursor.source !== 'transcript' || !cursor.boundaryCheckpoint)) {
+    throw sourceChanged()
+  }
+  const transcript = await readWorkerTranscript({
+    agent,
+    sessionId,
+    transcriptPath: reference.transcriptPath ?? resume?.providerSession.transcriptPath,
+    wslDistro: reference.wslDistro,
+    offset: cursor?.position,
+    expectedBoundaryCheckpoint: cursor?.boundaryCheckpoint ?? undefined,
+    limit: args.limit
+  })
+  if (!transcript.ok) {
+    if (transcript.reason === 'source_changed') {
+      throw sourceChanged()
     }
-    return readArchivedStructuredJournal({
+    throw outputUnavailable(args.dispatchId, `its transcript is gone (${transcript.reason})`)
+  }
+  const sourceIdentity = createWorkerOutputSourceIdentity([
+    'released-transcript',
+    args.resource.id,
+    reference.processIncarnation ?? '',
+    agent,
+    sessionId,
+    transcript.filePath,
+    transcript.sourceFingerprint
+  ])
+  if (cursor && cursor.sourceIdentity !== sourceIdentity) {
+    throw sourceChanged()
+  }
+  return {
+    ...workerTranscriptReadResult({
+      dispatchId: args.dispatchId,
+      sourceIdentity,
+      agent,
+      transcript,
+      status: releasedStatus(args)
+    }),
+    archived: true
+  }
+}
+
+async function readReleasedChatHistory(
+  args: ReleasedWorkerReadArgs,
+  reference: WorkerOutputReference
+): Promise<OrchestrationWorkerReadResult> {
+  const identity = resolveStructuredWorkerForDispatch(args.db, args.dispatchId)
+  if (!identity) {
+    throw outputUnavailable(args.dispatchId, 'its chat is no longer recorded')
+  }
+  const status = releasedStatus(args)
+  try {
+    return await readStructuredWorkerJournal({
+      identity,
       dispatchId: args.dispatchId,
       workerState: args.workerState,
-      resourceId: args.resource.id,
-      createdAt: archive.created_at,
-      releaseState: args.resource.release_state,
-      archive: JSON.parse(archive.content) as WorkerStructuredJournalArchive,
+      liveness: status.liveness,
+      agent: reference.agent ?? structuredWorkerAgent(identity),
+      archived: true,
       ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
       ...(args.limit === undefined ? {} : { limit: args.limit })
     })
-  }
-  if (archive.kind === 'transcript_pin') {
-    if (args.source === 'terminal') {
-      throw new OrchestrationError(
-        'archive_unavailable',
-        `Dispatch ${args.dispatchId} preserved transcript output only; terminal output was released.`
-      )
+  } catch (error) {
+    if (error instanceof OrchestrationError && error.code === 'source_changed') {
+      throw error
     }
-    return readFrozenTranscript(
-      args,
-      archive,
-      JSON.parse(archive.content) as WorkerTranscriptSnapshotArchive
-    )
-  }
-  if (args.source === 'transcript') {
-    throw new OrchestrationError(
-      'transcript_required',
-      `Structured output is unavailable for released Dispatch ${args.dispatchId}: the archive holds terminal output only.`
-    )
-  }
-  return readArchivedTerminalTail(args, archive)
-}
-
-function readFrozenTranscript(
-  args: Parameters<typeof readArchivedWorkerOutput>[0],
-  archive: WorkerTerminalArchiveRow,
-  snapshot: WorkerTranscriptSnapshotArchive
-): OrchestrationWorkerReadResult {
-  const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
-  const sourceIdentity = createWorkerOutputSourceIdentity([
-    'released-transcript-snapshot',
-    args.resource.id,
-    snapshot.processIncarnation,
-    archive.created_at
-  ])
-  if (cursor && (cursor.source !== 'transcript' || cursor.sourceIdentity !== sourceIdentity)) {
-    throw sourceChanged()
-  }
-  const start = Math.min(cursor?.position ?? 0, snapshot.messages.length)
-  const end = Math.min(start + clampWorkerTranscriptLimit(args.limit), snapshot.messages.length)
-  const nextCursor = encodeWorkerOutputCursor(args.dispatchId, 'transcript', sourceIdentity, end)
-  const status = archivedStatus(args)
-  const snapshotClipping = snapshot.clipping ?? (snapshot.limited ? ['archive_message_limit'] : [])
-  const clipping = [
-    ...(end < snapshot.messages.length ? ['message_limit'] : []),
-    ...snapshotClipping
-  ]
-  return {
-    dispatchId: args.dispatchId,
-    source: 'transcript',
-    sourceIdentity,
-    provider: snapshot.agent,
-    transcript: {
-      messages: snapshot.messages.slice(start, end),
-      nextCursor,
-      limited: snapshot.limited || end < snapshot.messages.length,
-      returnedMessageCount: end - start
-    },
-    cursor: nextCursor,
-    status,
-    fallbackReason: null,
-    sourceExact: true,
-    contentComplete: !snapshot.limited && end >= snapshot.messages.length,
-    ...(clipping.length > 0 ? { clipping: [...new Set(clipping)] } : {}),
-    warnings: [
-      ...snapshot.warnings,
-      ...(snapshotClipping.some((reason) => reason !== 'transcript_payload')
-        ? ['Older transcript messages were omitted from the bounded archive.']
-        : [])
-    ],
-    archived: true
+    throw outputUnavailable(args.dispatchId, 'its chat history could not be read')
   }
 }
 
-function readArchivedTerminalTail(
-  args: Parameters<typeof readArchivedWorkerOutput>[0],
-  archive: WorkerTerminalArchiveRow
-): OrchestrationWorkerReadResult {
-  const content = JSON.parse(archive.content) as WorkerTerminalTailArchive
-  const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
-  const sourceIdentity = createWorkerOutputSourceIdentity([
-    'released-terminal',
-    args.resource.id,
-    archive.created_at
-  ])
-  if (cursor && cursor.source !== 'terminal') {
-    throw sourceChanged()
-  }
-  if (cursor && (cursor.legacy || cursor.sourceIdentity !== sourceIdentity)) {
-    throw sourceChanged()
-  }
-  const start = Math.min(cursor?.position ?? 0, content.lines.length)
-  const pageSize = Math.max(1, Math.min(args.limit ?? ARCHIVED_TERMINAL_PAGE_LINES, 10_000))
-  const end = Math.min(start + pageSize, content.lines.length)
-  const tail = content.lines.slice(start, end)
-  const nextCursor =
-    end < content.lines.length
-      ? encodeWorkerOutputCursor(args.dispatchId, 'terminal', sourceIdentity, end)
-      : null
-  const status = archivedStatus(args)
-  return {
-    dispatchId: args.dispatchId,
-    source: 'terminal',
-    sourceIdentity,
-    terminal: {
-      handle: args.resource.terminal_handle,
-      status: status.terminal,
-      tail,
-      ...(!cursor && content.draft ? { draft: content.draft } : {}),
-      truncated: content.truncated,
-      nextCursor,
-      returnedLineCount: tail.length
-    },
-    cursor: nextCursor,
-    status,
-    fallbackReason: content.fallbackReason ?? null,
-    // An archived terminal tail is never the exact transcript source, and it is a bounded snapshot.
-    sourceExact: false,
-    contentComplete: false,
-    ...(content.clipping ? { clipping: content.clipping } : {}),
-    warnings: content.warnings,
-    archived: true
-  }
-}
-
-function archivedStatus(args: Parameters<typeof readArchivedWorkerOutput>[0]): {
+function releasedStatus(args: ReleasedWorkerReadArgs): {
   worker: string
   terminal: 'running' | 'exited' | 'unknown'
   liveness: PtyLivenessVerdict['status']
 } {
-  // Archive retention proves no exit; only a settled host-confirmed release does.
+  // Only a settled host-confirmed release proves exit.
   const liveness =
     args.liveness ?? (args.resource.release_state === 'released' ? 'exited' : 'unverifiable')
   return {
@@ -200,9 +164,9 @@ function archivedStatus(args: Parameters<typeof readArchivedWorkerOutput>[0]): {
   }
 }
 
-function sourceChanged(): OrchestrationError {
+function outputUnavailable(dispatchId: string, why: string): OrchestrationError {
   return new OrchestrationError(
-    'source_changed',
-    'The worker output source changed. Start a fresh worker-read without the old cursor.'
+    'archive_unavailable',
+    `The output of Dispatch ${dispatchId} is no longer available: ${why}. See its report (worker_done) or task result.`
   )
 }

@@ -1,6 +1,7 @@
 import type { RemoteDispatchAttachmentRow } from '../db/orchestration-records'
 import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
 import { readArchivedWorkerOutput } from '../../rpc/methods/orchestration/worker/worker-archive-read'
+import { OrchestrationError } from '../orchestration-error'
 
 export async function readRemoteAttachmentArchive(args: {
   runtime: WorkerTerminalReleaseRuntime
@@ -29,5 +30,17 @@ export async function readRemoteAttachmentArchive(args: {
     cursor: args.cursor,
     limit: args.limit,
     liveness: args.liveness
+  })
+}
+
+/** Release receipts carry the output only while its original is still readable. */
+export function readRemoteAttachmentOutputIfAvailable(
+  args: Parameters<typeof readRemoteAttachmentArchive>[0]
+): ReturnType<typeof readRemoteAttachmentArchive> {
+  return readRemoteAttachmentArchive(args).catch((error: unknown) => {
+    if (error instanceof OrchestrationError && error.code === 'archive_unavailable') {
+      return null
+    }
+    throw error
   })
 }

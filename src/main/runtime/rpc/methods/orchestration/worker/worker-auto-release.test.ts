@@ -13,6 +13,14 @@ const GRACE_MS = 2 * 60_000
 describe('orchestration worker automatic release', () => {
   const h = createOrchestrationWorkerReleaseHarness()
 
+  // This fixture's worker reports no transcript: release records that, and worker-read says so.
+  async function expectOutputReference(dispatchId: string): Promise<void> {
+    expect(h.db.getWorkerTerminalArchive(dispatchId)?.kind).toBe('terminal_tail')
+    await expect(
+      h.call('orchestration.workerRead', { dispatch: dispatchId })
+    ).rejects.toMatchObject({ code: 'archive_unavailable' })
+  }
+
   afterEach(() => {
     getWorkerTerminalAutoReleaseScheduler(h.runtime).clear()
     h.cleanup()
@@ -26,7 +34,7 @@ describe('orchestration worker automatic release', () => {
   }
 
   it.each(['succeeded', 'failed'] as const)(
-    'releases a %s worker once its grace period ends and keeps its output readable',
+    'releases a %s worker once its grace period ends and keeps where its output lives',
     async (outcome) => {
       setupWithFakeClock()
       const { dispatchId } = await h.startSettledWorker(outcome)
@@ -47,11 +55,7 @@ describe('orchestration worker automatic release', () => {
       )
       expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
       expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
-      await expect(
-        h.call('orchestration.workerRead', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        terminal: { tail: ['worker output line 1', 'worker output line 2'] }
-      })
+      await expectOutputReference(dispatchId)
     }
   )
 
@@ -261,14 +265,6 @@ describe('orchestration worker automatic release', () => {
       h.setup({ userDataDir })
     }
 
-    async function expectReadableArchive(dispatchId: string): Promise<void> {
-      await expect(
-        h.call('orchestration.workerRead', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        terminal: { tail: ['worker output line 1', 'worker output line 2'] }
-      })
-    }
-
     it('releases a deadline missed while the app was closed once, when the database reopens', async () => {
       setupFileBacked()
       const { dispatchId } = await h.startSettledWorker()
@@ -283,7 +279,7 @@ describe('orchestration worker automatic release', () => {
         expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
       )
       expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-      await expectReadableArchive(dispatchId)
+      await expectOutputReference(dispatchId)
 
       h.restart()
       await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
@@ -298,7 +294,7 @@ describe('orchestration worker automatic release', () => {
         // Hold the step after which a crash leaves the row in this state.
         const held =
           interruptedAt === 'requested'
-            ? vi.mocked(h.runtime.readTerminal).mockReturnValue(new Promise(() => {}))
+            ? vi.mocked(h.runtime.showTerminal).mockReturnValue(new Promise(() => {}))
             : vi.mocked(h.runtime.closeTerminal).mockReturnValue(new Promise(() => {}))
         await vi.advanceTimersByTimeAsync(GRACE_MS)
         await vi.waitFor(() => expect(held).toHaveBeenCalled())
@@ -310,7 +306,7 @@ describe('orchestration worker automatic release', () => {
 
         expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
         expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-        await expectReadableArchive(dispatchId)
+        await expectOutputReference(dispatchId)
       }
     )
   })

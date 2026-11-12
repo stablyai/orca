@@ -19,7 +19,7 @@ type WorkerTranscriptReadFailure = {
   warnings: string[]
 }
 
-type WorkerTranscriptReadSuccess = {
+export type WorkerTranscriptReadSuccess = {
   ok: true
   filePath: string
   sourceFingerprint: string

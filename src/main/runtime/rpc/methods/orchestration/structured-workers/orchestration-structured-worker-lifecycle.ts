@@ -7,12 +7,6 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
-  buildStructuredJournalArchive,
-  captureRetiredLineageArchive,
-  readStructuredLineageArchiveJournal,
-  type WorkerStructuredJournalArchive
-} from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
-import {
   readStructuredLineageJournalPage,
   type StructuredLineageJournalPage
 } from '../../../../orchestration/workers/archives/structured-worker-journal-page'
@@ -37,9 +31,7 @@ import {
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 
 import type { StructuredWorkerObservation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import { structuredWorkerOwned } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import type { WorkerTerminalReleaseState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
 import {
   closeStructuredAgentSessionChild,
@@ -148,6 +140,8 @@ export async function readStructuredWorkerJournal(args: {
   workerState: string
   liveness: StructuredWorkerObservation['status']
   agent: AgentType
+  /** A released worker's history, read from its closed session. */
+  archived?: boolean
   cursor?: string | number
   limit?: number
 }): Promise<OrchestrationWorkerReadTranscriptResult> {
@@ -186,7 +180,7 @@ export async function readStructuredWorkerJournal(args: {
     identityAt,
     start: cursor?.position ?? 0,
     limit: args.limit,
-    archived: false,
+    archived: args.archived ?? false,
     liveness: args.liveness
   })
 }
@@ -220,79 +214,6 @@ function structuredJournalPrefixIdentity(args: {
       .slice(0, args.position)
       .flatMap(({ index, revision }) => [itemKey(index), String(revision)])
   ])
-}
-
-/** Freezes the journal before the session is closed, so a released worker is still readable. */
-export async function captureStructuredWorkerArchive(
-  identity: StructuredWorkerIdentity,
-  agent: AgentType
-): Promise<WorkerStructuredJournalArchive> {
-  const running = requireRunningStructuredWorker(identity)
-  // Open resting journals too and preserve the whole /clear lineage.
-  const page = await readStructuredLineageArchiveJournal(running.lineage)
-  if (page) {
-    return buildStructuredJournalArchive({
-      agent,
-      processIncarnation: identity.processIncarnation,
-      items: page.items,
-      hasOlder: page.hasOlder
-    })
-  }
-  // Unreadable owned/unverifiable journals must retain evidence for later archive.
-  // Only proven-retired lineages may skip missing journals: a user-closed chat can never supply more evidence.
-  if (structuredWorkerOwned(running) !== false) {
-    throw new OrchestrationError(
-      'archive_failed',
-      'Output could not be preserved for this structured worker; the session was retained.'
-    )
-  }
-  // A retired lineage's unreadable sessions are gone for good; earlier ones may not be.
-  return captureRetiredLineageArchive({
-    agent,
-    processIncarnation: identity.processIncarnation,
-    lineage: running.lineage
-  })
-}
-
-export function readArchivedStructuredJournal(args: {
-  dispatchId: string
-  workerState: string
-  resourceId: string
-  createdAt: string
-  /** Only a SETTLED release proves the session is gone; `releasing` and `unknown` never do. */
-  releaseState: WorkerTerminalReleaseState
-  archive: WorkerStructuredJournalArchive
-  cursor?: string | number
-  limit?: number
-}): OrchestrationWorkerReadTranscriptResult {
-  const sourceIdentity = createWorkerOutputSourceIdentity([
-    'released-structured-journal',
-    args.resourceId,
-    args.archive.processIncarnation,
-    args.createdAt
-  ])
-  const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
-  if (cursor && (cursor.source !== 'transcript' || cursor.sourceIdentity !== sourceIdentity)) {
-    throw new OrchestrationError(
-      'source_changed',
-      'The worker output source changed. Start a fresh worker-read without the old cursor.'
-    )
-  }
-  return pageMessages({
-    messages: args.archive.messages,
-    warnings: args.archive.warnings,
-    limited: args.archive.limited,
-    dispatchId: args.dispatchId,
-    workerState: args.workerState,
-    agent: args.archive.agent,
-    // Frozen archives cannot revise under a cursor, so their identity is constant.
-    identityAt: () => sourceIdentity,
-    start: cursor?.position ?? 0,
-    limit: args.limit,
-    archived: true,
-    // Archives precede close and prove no exit; only settled release can certify death (docs/reference/ssh-execution-boundary.md).
-    liveness: args.releaseState === 'released' ? 'exited' : 'unverifiable'
-  })
 }
 
 function pageMessages(input: {
