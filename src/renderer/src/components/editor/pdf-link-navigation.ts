@@ -17,6 +17,15 @@ export type PdfViewerLinkHistory = Pick<PdfLinkHistory, 'getState' | 'subscribe'
   navigate: (direction: PdfLinkHistoryDirection) => void
 }
 
+/** The parts of pdf.js's PDFHistory that PDFLinkService calls. */
+export type PdfJsHistoryHooks = {
+  pushCurrentPosition: () => void
+  push: () => void
+  pushPage: () => void
+  back: () => void
+  forward: () => void
+}
+
 const PAGE_STEP_NAMED_ACTIONS = new Set(['NextPage', 'PrevPage', 'FirstPage', 'LastPage'])
 
 /** pdf.js passes `{ signal, internal }` only for its own one-shot listeners, such as link-target focus. */
@@ -94,8 +103,10 @@ export function attachPdfLinkHistory({
   isActive,
   onReaderMoved
 }: {
-  viewer: InstanceType<typeof PdfJsViewer>
-  linkService: HistoryAwarePdfLinkService
+  viewer: Pick<InstanceType<typeof PdfJsViewer>, 'update' | 'pagesCount' | 'scrollPageIntoView'>
+  linkService: Pick<HistoryAwarePdfLinkService, 'recordIfMoved'> & {
+    setHistory: (hooks: PdfJsHistoryHooks) => void
+  }
   cancelPendingLinkTargetFocus: () => void
   isActive: () => boolean
   onReaderMoved: () => void
@@ -108,17 +119,17 @@ export function attachPdfLinkHistory({
     viewer.update()
     return lastPosition
   }
-  const recordDeparture = (from: PdfViewPosition | null): void => {
-    // Why: goToDestination resolves its destination asynchronously and can land after teardown.
-    if (!isActive()) {
-      return
-    }
-    if (from) {
-      history.recordJump(from)
-    }
-    // pdf.js registers this jump's own target focus after this returns; drop only older ones.
+  /** The position a jump is about to leave; drops older link-target focus before pdf.js adds this jump's. */
+  const beginJump = (): PdfViewPosition | null => {
     cancelPendingLinkTargetFocus()
     onReaderMoved()
+    return capturePosition()
+  }
+  // Why: a self-link, a page step at the last page or an unparsable hash moves nothing and must keep Forward.
+  const recordIfLeft = (before: PdfViewPosition | null): void => {
+    if (isActive() && before && !samePdfViewPosition(before, capturePosition())) {
+      history.recordJump(before)
+    }
   }
   const navigate = (direction: PdfLinkHistoryDirection): void => {
     if (!isActive() || viewer.pagesCount < 1) {
@@ -135,22 +146,31 @@ export function attachPdfLinkHistory({
     viewer.scrollPageIntoView(buildPdfScrollDestination(clamped))
   }
 
-  // pdf.js calls these only after it accepts a destination, just before it scrolls,
-  // and routes the PDF's own GoBack/GoForward actions to back/forward.
+  // pdf.js calls these only after it accepts a destination, and routes the PDF's own
+  // GoBack/GoForward actions to back/forward.
   linkService.setHistory({
-    pushCurrentPosition: () => recordDeparture(capturePosition()),
+    pushCurrentPosition: () => {
+      // Why: goToDestination resolves its destination asynchronously and can land after teardown.
+      if (!isActive()) {
+        return
+      }
+      const before = beginJump()
+      // pdf.js scrolls right after this hook returns, in the same task; judge the jump once it has.
+      queueMicrotask(() => recordIfLeft(before))
+    },
     push: () => {},
     pushPage: () => {},
     back: () => navigate('back'),
     forward: () => navigate('forward')
   })
   linkService.recordIfMoved = (move): void => {
-    const before = capturePosition()
-    move()
-    // Why: a page step at the last page or an unparsable hash moves nothing and must keep Forward.
-    if (before && !samePdfViewPosition(before, capturePosition())) {
-      recordDeparture(before)
+    if (!isActive()) {
+      move()
+      return
     }
+    const before = beginJump()
+    move()
+    recordIfLeft(before)
   }
 
   return {
