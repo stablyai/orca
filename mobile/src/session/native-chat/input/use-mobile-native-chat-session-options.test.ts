@@ -235,7 +235,11 @@ describe('useMobileNativeChatSessionOptions', () => {
       const writeSuccessor = vi.fn()
       const initialModel = agent === 'grok' ? 'grok-4.7' : 'gpt-5.5'
       const successorModel = agent === 'grok' ? 'grok-4.7-fast' : 'gpt-5.5-mini'
-      mount({ agent, reportedModel: initialModel, writeSettings: writeOriginal })
+      const discoveredModels =
+        agent === 'grok'
+          ? [initialModel, successorModel].map((id) => ({ id, label: id, options: [] }))
+          : undefined
+      mount({ agent, reportedModel: initialModel, writeSettings: writeOriginal, discoveredModels })
       let accepted!: Promise<boolean>
       await act(async () => {
         accepted =
