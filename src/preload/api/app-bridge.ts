@@ -101,8 +101,8 @@ export const appApi = {
     ipcRenderer.on(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
     return () => ipcRenderer.removeListener(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
   },
-  setUnreadDockBadgeCount: (count: number): Promise<void> =>
-    ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
+  setUnreadDockBadgeCount: (count: number, needsInput?: boolean): Promise<void> =>
+    ipcRenderer.invoke('app:setUnreadDockBadgeCount', count, needsInput),
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
     ipcRenderer.invoke('app:getFloatingTerminalCwd', args),
   getFloatingMarkdownDirectory: (): Promise<string> =>
