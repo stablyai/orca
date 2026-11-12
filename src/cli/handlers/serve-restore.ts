@@ -1,5 +1,5 @@
 import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import type {
   AutomaticWorkMode,
   AutomaticWorkResumeResult,

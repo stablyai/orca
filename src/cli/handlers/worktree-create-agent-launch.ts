@@ -17,13 +17,14 @@ import {
   getAgentLaunchCapabilities,
   type CliAgentLaunch,
   SURFACE_UNSUPPORTED_MESSAGE
-} from '../agent-launch-request'
-import { formatWorktreeShow, printResult } from '../format'
+} from '../agents/agent-launch-request'
+import { formatWorktreeShow } from '../workspace-format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { printLineageSummary } from './worktree-lineage-summary'
 import { printHookWarning } from './worktree-removal-warnings'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
-import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
+import { withCliAgentLaunchRecovery } from '../agents/agent-launch-recovery'
 
 type WorktreeAgentLaunchResult = Pick<
   RuntimeWorktreeCreateResult,

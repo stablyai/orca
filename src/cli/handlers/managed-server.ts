@@ -12,7 +12,7 @@ import { MANAGED_SERVER_RUNTIME_CAPABILITY } from '../../shared/protocol-version
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getRequiredStringFlag } from '../flags'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 import { formatManagedServerStatus } from './managed-server-format'
 import { reportAfterClosedConnection } from './managed-server-reconnect'

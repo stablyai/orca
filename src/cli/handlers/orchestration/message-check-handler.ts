@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { refuseAgentServerRoute } from './agent-server-route'
-import { printResult } from '../../format'
+import { printResult } from '../../command-result-output'
 import { withReceiptNext } from './receipt-next-text'
 import { printOrchestrationResult } from './agent-view'
 import { checkView } from './message-agent-views'

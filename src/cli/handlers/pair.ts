@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../dispatch'
 import { getOptionalStringFlag } from '../flags'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 import { RuntimeClientError } from '../runtime/types'
 import {
   PAIRING_CREATE_OFFER_METHOD,

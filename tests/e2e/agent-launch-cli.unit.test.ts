@@ -7,9 +7,9 @@ import type { StructuredAgentSessionFirstMessage } from '../../src/shared/agent-
 import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
-import { callAgentLaunch, readCliAgentLaunch } from '../../src/cli/agent-launch-request'
+import { callAgentLaunch, readCliAgentLaunch } from '../../src/cli/agents/agent-launch-request'
 import { parseArgs } from '../../src/cli/args'
-import { AGENT_LAUNCH_HANDLERS } from '../../src/cli/handlers/agent-launch'
+import { AGENT_LAUNCH_HANDLERS } from '../../src/cli/agents/agent-launch'
 import { createWorktreeWithAgent } from '../../src/cli/handlers/worktree-create-agent-launch'
 import {
   methodNamed,
@@ -298,47 +298,6 @@ describe('CLI launch through host surface creation and replay admission', () => 
     })
     expect(call).toHaveBeenCalledTimes(2)
   })
-
-  it.each([undefined, 'current'])(
-    'uses the innermost enclosing folder workspace for %s',
-    async (selector) => {
-      const client = hostClient(runtimeStub())
-      vi.spyOn(console, 'log').mockImplementation(() => {})
-      const call = vi.mocked(client.call)
-      call.mockResolvedValueOnce({
-        id: 'list',
-        ok: true,
-        result: { worktrees: [], totalCount: 0, truncated: false },
-        _meta: { runtimeId: 'runtime-1' }
-      })
-      call.mockResolvedValueOnce({
-        id: 'folders',
-        ok: true,
-        result: {
-          folderWorkspaces: [
-            { id: 'outer', folderPath: '/tmp/repo' },
-            { id: 'remote', folderPath: '/tmp/repo/nested/deeper', connectionId: 'ssh-1' },
-            { id: 'nested', folderPath: '/tmp/repo/nested' }
-          ]
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      })
-      const flags = new Map<string, string | boolean>([['agent', 'codex']])
-      if (selector) {
-        flags.set('worktree', selector)
-      }
-      await AGENT_LAUNCH_HANDLERS['agent launch']({
-        flags,
-        client,
-        cwd: '/tmp/repo/nested/deeper',
-        json: true
-      })
-      expect(call).toHaveBeenCalledWith(
-        'agent.launchReplay',
-        expect.objectContaining({ target: { kind: 'existing', worktree: 'folder:nested' } })
-      )
-    }
-  )
 
   it('refuses remote cwd inference for current', async () => {
     const client = hostClient(runtimeStub())

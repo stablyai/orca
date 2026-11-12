@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 const originalExitCode = process.exitCode
-vi.mock('../format', async (importOriginal) => {
+vi.mock('../command-result-output', async (importOriginal) => {
   const original = await importOriginal<{ printResult: typeof printResult }>()
   return { printResult: vi.fn(original.printResult) }
 })
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
-import { printResult } from '../format'
+import { printResult } from '../command-result-output'
 
 import { RuntimeClient } from '../runtime-client'
 
