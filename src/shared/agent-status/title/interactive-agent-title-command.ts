@@ -7,15 +7,14 @@ import type { TerminalAgent } from '../identity/terminal-agent'
 const INFORMATIONAL_FLAGS = new Set(['--help', '-h', '--version', '-v', '-V'])
 
 // Claude subcommands that run a server, an installer, an auth flow or a one-shot report instead
-// of a session, so no composer ever follows (list read from `claude --help`, 2.1.322). `agents`
-// and `attach` are left out: they open an interactive view or session in the terminal.
+// of a session, so no composer ever follows (list read from `claude --help`, 2.1.322). `agents`,
+// `attach` and `import` are left out: they open an interactive view or session in the terminal.
 const NON_SESSION_SUBCOMMANDS: Partial<Record<TerminalAgent, ReadonlySet<string>>> = {
   claude: new Set([
     'auth',
     'auto-mode',
     'doctor',
     'gateway',
-    'import',
     'install',
     'kill',
     'logs',
