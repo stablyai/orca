@@ -213,6 +213,7 @@ export function CloudAgentSignInStrip({
         }
       }}
       data-cloud-sign-in-strip
+      data-pane-prevent-terminal-focus
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.stopPropagation()

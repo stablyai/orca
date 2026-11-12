@@ -1,4 +1,5 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import { pasteBelongsToPaneControl } from './paste-belongs-to-pane-control'
 import {
   claimTerminalRightClickPasteMouseDown,
   isTerminalRightClickPasteGesture
@@ -13,6 +14,10 @@ export function createTerminalRightClickPasteCapture({
 }) {
   const onMouseDownCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
     if (!isTerminalRightClickPasteGesture(event, rightClickToPaste)) {
+      return
+    }
+    // SETUP-PASTE: right-click paste is the terminal's only when the click is on the terminal.
+    if (pasteBelongsToPaneControl(event.target)) {
       return
     }
     const clickedPane = findClickedPane(event.target)
